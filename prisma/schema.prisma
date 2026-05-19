@@ -7,12 +7,194 @@ datasource db {
 }
 
 model Cliente {
-  id        Int      @id @default(autoincrement())
+  id          String        @id @default(cuid())
+  nome        String
+  telefone    String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  email       String?
+  cidade      String?
+  documento   String?
+  estado      String?
+  fazenda     String?
+  observacoes String?
+  empresaId   String?
+  status      ClienteStatus @default(ATIVO)
+
+  empresa       Empresa?       @relation(fields: [empresaId], references: [id])
+  contasReceber ContaReceber[]
+  pedidos       Pedido[]
+
+  @@index([empresaId])
+  @@index([nome])
+}
+
+model ContaReceber {
+  id         String      @id @default(cuid())
+  descricao  String
+  valor      Float
+  vencimento DateTime
+  status     ContaStatus @default(PENDENTE)
+  clienteId  String?
+  empresaId  String
+  pedidoId   String?     @unique
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  cliente Cliente? @relation(fields: [clienteId], references: [id])
+  empresa Empresa  @relation(fields: [empresaId], references: [id])
+  pedido  Pedido?  @relation(fields: [pedidoId], references: [id])
+
+  @@index([clienteId])
+  @@index([empresaId])
+  @@index([status])
+}
+
+model Empresa {
+  id        String   @id @default(cuid())
   nome      String
-  telefone  String
-  cidade    String
-  estado    String
-  tipo      String
+  email     String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  clientes             Cliente[]
+  contasReceber        ContaReceber[]
+  movimentacoesEstoque MovimentacaoEstoque[]
+  pedidos              Pedido[]
+  produtos             Produto[]
+  users                User[]
+}
+
+model ItemPedido {
+  id         String   @id @default(cuid())
+  pedidoId   String
+  produtoId  String
+  quantidade Int
+  preco      Float
+  subtotal   Float
+  createdAt  DateTime @default(now())
+
+  pedido  Pedido  @relation(fields: [pedidoId], references: [id])
+  produto Produto @relation(fields: [produtoId], references: [id])
+
+  @@index([pedidoId])
+  @@index([produtoId])
+}
+
+model MovimentacaoEstoque {
+  id         String                  @id @default(cuid())
+  tipo       TipoMovimentacaoEstoque
+  quantidade Int
+  observacao String?
+  produtoId  String
+  empresaId  String
+  usuarioId  String?
+  createdAt  DateTime                @default(now())
+
+  empresa Empresa @relation(fields: [empresaId], references: [id])
+  produto Produto @relation(fields: [produtoId], references: [id])
+  user    User?   @relation(fields: [usuarioId], references: [id])
+
+  @@index([createdAt])
+  @@index([empresaId])
+  @@index([produtoId])
+  @@index([tipo])
+}
+
+model Pedido {
+  id        String       @id @default(cuid())
+  numero    Int          @default(autoincrement())
+  status    PedidoStatus @default(PENDENTE)
+  total     Float        @default(0)
+  clienteId String
+  empresaId String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  contaReceber ContaReceber?
+  itens        ItemPedido[]
+  cliente      Cliente       @relation(fields: [clienteId], references: [id])
+  empresa      Empresa       @relation(fields: [empresaId], references: [id])
+
+  @@index([clienteId])
+  @@index([empresaId])
+  @@index([status])
+}
+
+model Produto {
+  id         String   @id @default(cuid())
+  nome       String
+  codigo     String?
+  descricao  String?
+  precoCusto Float?
+  precoVenda Float?
+  estoque    Int      @default(0)
+  categoria  String?
+  marca      String?
+  ativo      Boolean  @default(true)
+  empresaId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  itensPedido          ItemPedido[]
+  movimentacoesEstoque MovimentacaoEstoque[]
+  empresa              Empresa               @relation(fields: [empresaId], references: [id])
+
+  @@index([codigo])
+  @@index([empresaId])
+  @@index([nome])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  nome      String
+  email     String   @unique
+  senha     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  empresaId String?
+  role      String   @default("USER")
+
+  movimentacoesEstoque MovimentacaoEstoque[]
+  empresa              Empresa?              @relation(fields: [empresaId], references: [id])
+}
+
+model Auditoria {
+  id         String   @id @default(cuid())
+  entidade   String
+  entidadeId String?
+  acao       String
+  descricao  String?
+  usuarioId  String?
+  empresaId  String
+  createdAt  DateTime @default(now())
+
+  @@index([empresaId])
+  @@index([usuarioId])
+  @@index([entidade])
+  @@index([acao])
+}
+
+enum ClienteStatus {
+  ATIVO
+  INATIVO
+}
+
+enum ContaStatus {
+  PENDENTE
+  PAGO
+  ATRASADO
+}
+
+enum PedidoStatus {
+  PENDENTE
+  APROVADO
+  CANCELADO
+  FATURADO
+}
+
+enum TipoMovimentacaoEstoque {
+  ENTRADA
+  SAIDA
+  AJUSTE
 }
