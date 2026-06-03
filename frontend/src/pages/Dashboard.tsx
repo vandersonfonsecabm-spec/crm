@@ -30,6 +30,8 @@ import DashboardPortfolioInsights from "../components/dashboard/DashboardPortfol
 import DashboardClientsTable from "../components/dashboard/DashboardClientsTable";
 import DashboardQuickActions from "../components/dashboard/DashboardQuickActions";
 import ClientModal from "../components/dashboard/ClientModal";
+import DashboardCommandSearch from "../components/dashboard/DashboardCommandSearch";
+import DashboardFollowUpCalendar from "../components/dashboard/DashboardFollowUpCalendar";
 
 type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
 type SortBy = "score" | "value" | "name" | "status";
@@ -392,8 +394,6 @@ export default function Dashboard() {
   const [toast, setToast] = useState("");
   const [page, setPage] = useState(1);
   const [showQuickActions, setShowQuickActions] = useState(false);
-  const [commandSearch, setCommandSearch] = useState("");
-  const [showCommandResults, setShowCommandResults] = useState(false);
   const [recentViewedClients, setRecentViewedClients] = useState<number[]>([]);
   const [currentTime, setCurrentTime] = useState(
     new Date().toLocaleTimeString("pt-BR", {
@@ -434,39 +434,6 @@ export default function Dashboard() {
   useEffect(() => {
     const timeout = window.setTimeout(() => setIsBooting(false), 650);
     return () => window.clearTimeout(timeout);
-  }, []);
-
-  useEffect(() => {
-    function handleShortcuts(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      const isTyping =
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.tagName === "SELECT";
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setShowCommandResults(true);
-        window.setTimeout(() => document.getElementById("crm-command-search")?.focus(), 0);
-        return;
-      }
-
-      if (!isTyping && event.key === "/") {
-        event.preventDefault();
-        setShowCommandResults(true);
-        window.setTimeout(() => document.getElementById("crm-command-search")?.focus(), 0);
-        return;
-      }
-
-      if (event.key === "Escape") {
-        setShowCommandResults(false);
-        setShowQuickActions(false);
-        setCommandSearch("");
-      }
-    }
-
-    window.addEventListener("keydown", handleShortcuts);
-    return () => window.removeEventListener("keydown", handleShortcuts);
   }, []);
 
   const selectedClient = useMemo(() => clients.find((client) => client.id === selectedId) || null, [clients, selectedId]);
@@ -589,39 +556,6 @@ export default function Dashboard() {
       { label: "Depois", hint: "Nutrição", clients: later },
     ];
   }, [clients]);
-
-  const commandResults = useMemo(() => {
-    const term = commandSearch.toLowerCase().trim();
-
-    if (!term) {
-      return [];
-    }
-
-    const pages = [
-      { label: "Dashboard", type: "Página", action: () => setActivePage("dashboard") },
-      { label: "Clientes", type: "Página", action: () => setActivePage("clientes") },
-      { label: "Kanban", type: "Página", action: () => setActivePage("kanban") },
-      { label: "Automações", type: "Página", action: () => setActivePage("automacoes") },
-    ].filter((item) => item.label.toLowerCase().includes(term));
-
-    const clientResults = clients
-      .filter((client) =>
-        client.name.toLowerCase().includes(term) ||
-        client.company.toLowerCase().includes(term) ||
-        client.email.toLowerCase().includes(term)
-      )
-      .slice(0, 4)
-      .map((client) => ({
-        label: client.name,
-        type: client.company,
-        action: () => {
-          setSelectedId(client.id);
-          setActivePage("clientes");
-        },
-      }));
-
-    return [...pages, ...clientResults].slice(0, 6);
-  }, [clients, commandSearch]);
 
   const smartAlerts = useMemo(() => {
     const highRisk = clients.filter((client) => getRisk(client) === "Alto").length;
@@ -1106,61 +1040,12 @@ export default function Dashboard() {
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="relative hidden md:block">
-                <div className="flex w-64 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                  <Search size={13} className="text-slate-500" />
-
-                  <input
-                    id="crm-command-search"
-                    value={commandSearch}
-                    onChange={(event) => {
-                      setCommandSearch(event.target.value);
-                      setShowCommandResults(true);
-                    }}
-                    onFocus={() => setShowCommandResults(true)}
-                    placeholder="Buscar cliente, empresa ou página..."
-                    className="w-full select-text bg-transparent text-[11px] outline-none placeholder:text-slate-500"
-                  />
-
-                  <kbd className="rounded-md border border-white/10 bg-black/20 px-1.5 py-0.5 text-[9px] text-slate-600">
-                    Ctrl K
-                  </kbd>
-                </div>
-
-                {showCommandResults && commandSearch && (
-                  <div className="absolute right-0 top-11 z-40 w-64 rounded-2xl border border-white/10 bg-[#0d111a] p-2 shadow-2xl">
-                    {commandResults.length === 0 && (
-                      <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
-                        <p className="text-[11px] font-semibold text-slate-300">
-                          Nenhum resultado encontrado
-                        </p>
-                        <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                          Tente buscar pelo nome do cliente, empresa, email ou página do CRM.
-                        </p>
-                      </div>
-                    )}
-
-                    {commandResults.map((item) => (
-                      <button
-                        key={`${item.type}-${item.label}`}
-                        onClick={() => {
-                          item.action();
-                          setCommandSearch("");
-                          setShowCommandResults(false);
-                        }}
-                        className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/10"
-                      >
-                        <p className="text-[11px] font-medium text-slate-200">
-                          {item.label}
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-slate-500">
-                          {item.type}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <DashboardCommandSearch
+                clients={clients}
+                onSelectClient={setSelectedId}
+                onSetActivePage={setActivePage}
+                onCloseQuickActions={() => setShowQuickActions(false)}
+              />
 
               <div className="hidden rounded-xl border border-white/10 bg-black/20 px-3 py-1.5 lg:block">
                 <p className="text-[10px] text-slate-500">Agora</p>
@@ -1378,67 +1263,16 @@ export default function Dashboard() {
                 />
               )}
               {activePage === "dashboard" && (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold">Mini calendário de follow-up</p>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Próximas ações comerciais organizadas por urgência.
-                      </p>
-                    </div>
-
-                    <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[10px] text-slate-400">
-                      {analytics.todayFollowUps} hoje
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {followUpAgenda.map((group) => (
-                      <div key={group.label} className="rounded-2xl border border-white/10 bg-black/20 p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.035]">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-200">{group.label}</p>
-                            <p className="mt-0.5 text-[10px] text-slate-500">{group.hint}</p>
-                          </div>
-
-                          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">
-                            {group.clients.length}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 space-y-2">
-                          {group.clients.slice(0, 3).map((client) => (
-                            <button
-                              key={client.id}
-                              onClick={() => {
-                                setSelectedId(client.id);
-                                setActivePage("clientes");
-                              }}
-                              className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.07]"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="truncate text-[11px] font-semibold text-slate-200">{client.name}</p>
-                                <span className={`rounded-full border px-1.5 py-0.5 text-[9px] ${statusClass(client.status)}`}>
-                                  {client.status}
-                                </span>
-                              </div>
-
-                              <p className="mt-0.5 truncate text-[10px] text-slate-500">
-                                {client.company} • {money(client.value)}
-                              </p>
-                            </button>
-                          ))}
-
-                          {group.clients.length === 0 && (
-                            <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-3">
-                              <p className="text-[10px] text-slate-500">Nenhum follow-up nesta janela.</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <DashboardFollowUpCalendar
+                  todayFollowUps={analytics.todayFollowUps}
+                  followUpAgenda={followUpAgenda}
+                  money={money}
+                  statusClass={statusClass}
+                  onSelectClient={(clientId) => {
+                    setSelectedId(clientId);
+                    setActivePage("clientes");
+                  }}
+                />
               )}
 
               {activePage === "dashboard" && (
