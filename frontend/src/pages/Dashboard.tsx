@@ -1928,7 +1928,7 @@ export default function Dashboard() {
                             </p>
 
                             <p className="mt-1 text-2xl font-bold text-white">
-                              {money(analytics.forecast)}
+                              {money(analytics.forecastValue)}
                             </p>
 
                             <p className="mt-1 text-[10px] text-slate-500">
