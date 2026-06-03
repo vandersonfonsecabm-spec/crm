@@ -5,7 +5,6 @@ import {
   ArrowUpDown,
   BarChart3,
   Bell,
-  CalendarDays,
   CheckCircle2,
   Copy,
   Download,
@@ -21,11 +20,14 @@ import {
   StickyNote,
   Target,
   Trash2,
-  TrendingUp,
   Users,
   X,
   Zap,
 } from "lucide-react";
+import MetricCard from "../components/dashboard/MetricCard";
+import DashboardMetrics from "../components/dashboard/DashboardMetrics";
+import DashboardHeader from "../components/dashboard/DashboardHeader";
+import DashboardPortfolioInsights from "../components/dashboard/DashboardPortfolioInsights";
 
 type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
 type SortBy = "score" | "value" | "name" | "status";
@@ -1235,179 +1237,31 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <header className="mb-4">
-            <div className="mb-3 flex items-center gap-2 text-[11px] text-slate-500">
-              <span>CRM</span>
-
-              <span className="text-slate-700">/</span>
-
-              <span className="text-slate-300">
-                {activePage === "dashboard"
-                  ? "Dashboard"
-                  : activePage === "clientes"
-                    ? "Clientes"
-                    : activePage === "kanban"
-                      ? "Kanban"
-                      : "Automações"}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-                  Operação comercial
-                </p>
-
-                <h1 className="text-xl font-semibold">{pageTitle}</h1>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button className="rounded-xl border border-white/10 bg-white/5 p-2">
-                  <Bell size={15} />
-                </button>
-
-                <button
-                  onClick={() => setCreating({ ...emptyClient })}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 transition-all duration-200 hover:scale-[1.01] hover:bg-slate-100 text-xs font-semibold text-black"
-                >
-                  <Plus size={14} />
-                  Novo cliente
-                </button>
-              </div>
-            </div>
-          </header>
+          <DashboardHeader
+            activePage={activePage}
+            pageTitle={pageTitle}
+            onCreateClient={() => setCreating({ ...emptyClient })}
+          />
 
           {activePage === "dashboard" && (
-            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-              <MetricCard title="Pipeline" value={money(analytics.totalValue)} icon={<TrendingUp size={15} className="text-emerald-400" />} />
-              <MetricCard title="Ganho" value={money(analytics.wonValue)} icon={<CheckCircle2 size={15} className="text-sky-400" />} />
-              <MetricCard title="Forecast" value={money(analytics.forecastValue)} icon={<Target size={15} className="text-violet-400" />} />
-              <MetricCard title="Quentes" value={String(analytics.hotCount)} icon={<Flame size={15} className="text-rose-400" />} />
-              <MetricCard title="Follow-up hoje" value={String(analytics.todayFollowUps)} icon={<CalendarDays size={15} className="text-amber-400" />} />
-              <MetricCard title="Score médio" value={`${analytics.averageScore}/100`} icon={<Activity size={15} className="text-slate-300" />} />
-            </section>
+            <DashboardMetrics analytics={analytics} money={money} />
           )}
 
           {activePage === "dashboard" && (
-            <section className="mt-4 grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold">Qualidade da carteira</p>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                          Sinais rápidos de saúde comercial, prioridade e risco.
-                        </p>
-                      </div>
-
-                      <span className="rounded-full border border-emerald-400/10 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-200">
-                        padrão premium
-                      </span>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] text-slate-500">Carteira ativa</p>
-                          <Activity size={14} className="text-sky-300" />
-                        </div>
-
-                        <p className="mt-2 text-xl font-semibold">{clients.filter((client) => client.status !== "Perdido").length}</p>
-
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                          <div className="h-full rounded-full bg-sky-300" style={{ width: `${Math.min(100, (clients.filter((client) => client.status !== "Perdido").length / Math.max(clients.length, 1)) * 100)}%` }} />
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-rose-400/10 bg-rose-500/[0.04] p-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] text-rose-100/70">Alta atenção</p>
-                          <Flame size={14} className="text-rose-300" />
-                        </div>
-
-                        <p className="mt-2 text-xl font-semibold text-rose-50">{clients.filter((client) => client.hot || getPriority(client) === "Alta").length}</p>
-
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                          <div className="h-full rounded-full bg-rose-300" style={{ width: `${Math.min(100, clients.filter((client) => client.hot || getPriority(client) === "Alta").length * 14)}%` }} />
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-amber-400/10 bg-amber-500/[0.04] p-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] text-amber-100/70">Requer ação</p>
-                          <AlertTriangle size={14} className="text-amber-300" />
-                        </div>
-
-                        <p className="mt-2 text-xl font-semibold text-amber-50">{clients.filter((client) => getRisk(client) === "Alto").length}</p>
-
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                          <div className="h-full rounded-full bg-amber-300" style={{ width: `${Math.min(100, clients.filter((client) => getRisk(client) === "Alto").length * 18)}%` }} />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 grid gap-2 md:grid-cols-3">
-                      {clients
-                        .filter((client) => client.hot || getLeadScore(client) >= 80)
-                        .slice(0, 3)
-                        .map((client) => (
-                          <button
-                            key={client.id}
-                            onClick={() => setSelectedId(client.id)}
-                            className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="truncate text-xs font-semibold text-slate-100">{client.name}</p>
-                              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] text-slate-300">{getLeadScore(client)}</span>
-                            </div>
-
-                            <p className="mt-1 truncate text-[10px] text-slate-500">
-                              {client.company} • {money(client.value)}
-                            </p>
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm font-semibold">Sinais da carteira</p>
-                  <span className="text-[11px] text-slate-500">top leads</span>
-                </div>
-
-                <div className="space-y-2">
-                  {clients
-                    .slice()
-                    .sort((a, b) => getLeadScore(b) - getLeadScore(a))
-                    .slice(0, 3)
-                    .map((client) => (
-                      <button
-                        key={client.id}
-                        onClick={() => {
-                          setSelectedId(client.id);
-                          setActivePage("clientes");
-                        }}
-                        className="w-full rounded-xl border border-white/10 bg-black/20 p-2.5 text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.04]"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-xs font-semibold text-slate-100">{client.name}</p>
-                            <p className="mt-0.5 truncate text-[10px] text-slate-500">{client.company}</p>
-                          </div>
-
-                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] ${enterpriseHealthClass(client)}`}>
-                            {enterpriseHealthLabel(client)}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
-                          <span>{money(client.value)}</span>
-                          <span>{getLeadScore(client)}/100</span>
-                        </div>
-                      </button>
-                    ))}
-                </div>
-              </div>
-            </section>
+            <DashboardPortfolioInsights
+              clients={clients}
+              money={money}
+              getPriority={getPriority}
+              getRisk={getRisk}
+              getLeadScore={getLeadScore}
+              enterpriseHealthClass={enterpriseHealthClass}
+              enterpriseHealthLabel={enterpriseHealthLabel}
+              onSelectClient={setSelectedId}
+              onOpenClient={(clientId) => {
+                setSelectedId(clientId);
+                setActivePage("clientes");
+              }}
+            />
           )}
 
           {activePage === "clientes" && (
@@ -3448,24 +3302,6 @@ export default function Dashboard() {
   );
 }
 
-function MetricCard({ title, value, icon }: { title: string; value: string; icon: React.ReactNode }) {
-  return (
-    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_12px_30px_rgba(0,0,0,0.22)]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-medium text-slate-400">{title}</p>
-          <h2 className="mt-2 truncate text-lg font-semibold text-white">{value}</h2>
-        </div>
-
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/20">
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function ClientModal({
   title,

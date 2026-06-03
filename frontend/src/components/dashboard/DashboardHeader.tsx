@@ -17,7 +17,9 @@ export default function DashboardHeader({
     <header className="mb-4">
       <div className="mb-3 flex items-center gap-2 text-[11px] text-slate-500">
         <span>CRM</span>
+
         <span className="text-slate-700">/</span>
+
         <span className="text-slate-300">
           {activePage === "dashboard"
             ? "Dashboard"
@@ -45,7 +47,7 @@ export default function DashboardHeader({
 
           <button
             onClick={onCreateClient}
-            className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-black transition-all duration-200 hover:scale-[1.01] hover:bg-slate-100"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 transition-all duration-200 hover:scale-[1.01] hover:bg-slate-100 text-xs font-semibold text-black"
           >
             <Plus size={14} />
             Novo cliente
