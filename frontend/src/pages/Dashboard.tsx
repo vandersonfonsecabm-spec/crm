@@ -376,6 +376,7 @@ export default function Dashboard() {
   const [onlyRisk, setOnlyRisk] = useState(false);
   const [onlySilent, setOnlySilent] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("score");
+  const [kanbanOwnerFilter, setKanbanOwnerFilter] = useState<"Todos" | "Ana" | "Marco" | "Bia" | "Time">("Todos");
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null);
   const [isDraggingKanban, setIsDraggingKanban] = useState(false);
@@ -503,6 +504,42 @@ export default function Dashboard() {
     });
   }, [clients, onlyFavorites, onlyHot, onlyRisk, onlySilent, search, sortBy, statusFilter]);
 
+  const kanbanClients = useMemo(() => {
+    if (kanbanOwnerFilter === "Todos") {
+      return filteredClients;
+    }
+
+    return filteredClients.filter((client) => leadOwner(client) === kanbanOwnerFilter);
+  }, [filteredClients, kanbanOwnerFilter]);
+
+  const kanbanEnterpriseStats = useMemo(() => {
+    const totalValue = kanbanClients.reduce((sum, client) => sum + client.value, 0);
+    const forecastValue = kanbanClients
+      .filter((client) => client.status === "Novo" || client.status === "Contato" || client.status === "Proposta")
+      .reduce((sum, client) => sum + client.value, 0);
+    const wonValue = kanbanClients
+      .filter((client) => client.status === "Fechado")
+      .reduce((sum, client) => sum + client.value, 0);
+    const averageScore = Math.round(
+      kanbanClients.reduce((sum, client) => sum + getLeadScore(client), 0) / Math.max(1, kanbanClients.length)
+    );
+    const highRiskCount = kanbanClients.filter((client) => getRisk(client) === "Alto").length;
+    const todayFollowUps = kanbanClients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length;
+    const activePipeline = kanbanClients.filter((client) => client.status !== "Fechado" && client.status !== "Perdido").length;
+    const conversionRate = Math.round((wonValue / Math.max(1, totalValue)) * 100);
+
+    return {
+      totalValue,
+      forecastValue,
+      wonValue,
+      averageScore,
+      highRiskCount,
+      todayFollowUps,
+      activePipeline,
+      conversionRate,
+    };
+  }, [kanbanClients]);
+
   const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize));
   const paginatedClients = filteredClients.slice((page - 1) * pageSize, page * pageSize);
 
@@ -624,6 +661,7 @@ export default function Dashboard() {
     setOnlyRisk(false);
     setOnlySilent(false);
     setSortBy("score");
+    setKanbanOwnerFilter("Todos");
     setPage(1);
     showToast("Filtros limpos.");
   }
@@ -1383,11 +1421,11 @@ export default function Dashboard() {
 
           {activePage === "kanban" && (
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <MetricCard title="Novos leads" value={String(clients.filter((client) => client.status === "Novo").length)} icon={<Plus size={15} className="text-sky-400" />} />
-              <MetricCard title="Contatos" value={String(clients.filter((client) => client.status === "Contato").length)} icon={<Phone size={15} className="text-violet-400" />} />
-              <MetricCard title="Propostas" value={String(clients.filter((client) => client.status === "Proposta").length)} icon={<Target size={15} className="text-amber-400" />} />
-              <MetricCard title="Fechados" value={String(clients.filter((client) => client.status === "Fechado").length)} icon={<CheckCircle2 size={15} className="text-emerald-400" />} />
-              <MetricCard title="Perdidos" value={String(clients.filter((client) => client.status === "Perdido").length)} icon={<X size={15} className="text-rose-400" />} />
+              <MetricCard title="Novos leads" value={String(kanbanClients.filter((client) => client.status === "Novo").length)} icon={<Plus size={15} className="text-sky-400" />} />
+              <MetricCard title="Contatos" value={String(kanbanClients.filter((client) => client.status === "Contato").length)} icon={<Phone size={15} className="text-violet-400" />} />
+              <MetricCard title="Propostas" value={String(kanbanClients.filter((client) => client.status === "Proposta").length)} icon={<Target size={15} className="text-amber-400" />} />
+              <MetricCard title="Fechados" value={String(kanbanClients.filter((client) => client.status === "Fechado").length)} icon={<CheckCircle2 size={15} className="text-emerald-400" />} />
+              <MetricCard title="Perdidos" value={String(kanbanClients.filter((client) => client.status === "Perdido").length)} icon={<X size={15} className="text-rose-400" />} />
             </section>
           )}
 
@@ -1462,6 +1500,20 @@ export default function Dashboard() {
                   <option value="name">Ordenar por nome</option>
                   <option value="status">Ordenar por status</option>
                 </select>
+
+                {activePage === "kanban" && (
+                  <select
+                    value={kanbanOwnerFilter}
+                    onChange={(event) => setKanbanOwnerFilter(event.target.value as "Todos" | "Ana" | "Marco" | "Bia" | "Time")}
+                    className="rounded-xl border border-white/10 bg-[#0d111a] px-3 py-2 text-xs text-slate-200 outline-none"
+                  >
+                    <option value="Todos">Todos os vendedores</option>
+                    <option value="Ana">Ana</option>
+                    <option value="Marco">Marco</option>
+                    <option value="Bia">Bia</option>
+                    <option value="Time">Time</option>
+                  </select>
+                )}
 
                 <button onClick={() => setOnlyFavorites((value) => !value)} className={`rounded-xl border px-3 py-2 text-xs transition-all duration-200 ${onlyFavorites ? "border-amber-300/30 bg-amber-400/10 text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.08)]" : "border-white/10 bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10"}`}>
                   Favoritos
@@ -1776,7 +1828,7 @@ export default function Dashboard() {
                         <div className="mt-3">
                           <p className="text-lg font-semibold">
                             {money(
-                              clients
+                              kanbanClients
                                 .filter((client) => client.status === status)
                                 .reduce((sum, client) => sum + client.value, 0)
                             )}
@@ -2418,7 +2470,83 @@ export default function Dashboard() {
               )}
 
               {activePage === "kanban" && (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <div className="space-y-3">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold">Pipeline Kanban Enterprise</p>
+
+                          <span className="rounded-full border border-cyan-400/15 bg-cyan-500/[0.06] px-2 py-0.5 text-[9px] font-semibold text-cyan-100">
+                            visão executiva
+                          </span>
+                        </div>
+
+                        <p className="mt-0.5 text-[10px] text-slate-500">
+                          {kanbanClients.length} leads na visão atual • {kanbanOwnerFilter === "Todos" ? "todos os vendedores" : `vendedor ${kanbanOwnerFilter}`}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                        <div className="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2">
+                          <p className="text-[8px] uppercase tracking-[0.16em] text-slate-600">Pipeline</p>
+                          <p className="mt-1 text-[11px] font-semibold text-slate-100">{money(kanbanEnterpriseStats.totalValue)}</p>
+                        </div>
+
+                        <div className="rounded-xl border border-violet-400/10 bg-violet-500/[0.05] px-2.5 py-2">
+                          <p className="text-[8px] uppercase tracking-[0.16em] text-violet-200/50">Forecast</p>
+                          <p className="mt-1 text-[11px] font-semibold text-violet-100">{money(kanbanEnterpriseStats.forecastValue)}</p>
+                        </div>
+
+                        <div className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.05] px-2.5 py-2">
+                          <p className="text-[8px] uppercase tracking-[0.16em] text-emerald-200/50">Conversão</p>
+                          <p className="mt-1 text-[11px] font-semibold text-emerald-100">{kanbanEnterpriseStats.conversionRate}%</p>
+                        </div>
+
+                        <div className="rounded-xl border border-rose-400/10 bg-rose-500/[0.05] px-2.5 py-2">
+                          <p className="text-[8px] uppercase tracking-[0.16em] text-rose-200/50">Risco alto</p>
+                          <p className="mt-1 text-[11px] font-semibold text-rose-100">{kanbanEnterpriseStats.highRiskCount}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 md:grid-cols-3">
+                      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                        <div className="flex items-center justify-between text-[9px] text-slate-500">
+                          <span>Score médio</span>
+                          <span className="text-slate-300">{kanbanEnterpriseStats.averageScore}/100</span>
+                        </div>
+
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                          <div className="h-full rounded-full bg-cyan-300" style={{ width: `${kanbanEnterpriseStats.averageScore}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                        <div className="flex items-center justify-between text-[9px] text-slate-500">
+                          <span>Pipeline ativo</span>
+                          <span className="text-slate-300">{kanbanEnterpriseStats.activePipeline} leads</span>
+                        </div>
+
+                        <p className="mt-1 truncate text-[10px] text-slate-400">
+                          Leads ainda em negociação antes de fechamento ou perda.
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+                        <div className="flex items-center justify-between text-[9px] text-slate-500">
+                          <span>Follow-ups hoje</span>
+                          <span className="text-slate-300">{kanbanEnterpriseStats.todayFollowUps}</span>
+                        </div>
+
+                        <p className="mt-1 truncate text-[10px] text-slate-400">
+                          Ações que precisam de atenção imediata.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                 {statusList.map((status) => (
                   <div
                     key={status}
@@ -2456,12 +2584,12 @@ export default function Dashboard() {
 
                         <div className="shrink-0 text-right">
                           <span className="inline-flex min-w-5 justify-center rounded-full bg-black/20 px-1.5 py-0.5 text-[9px] text-slate-300">
-                            {clients.filter((client) => client.status === status).length}
+                            {kanbanClients.filter((client) => client.status === status).length}
                           </span>
 
                           <p className="mt-1 max-w-[92px] truncate text-[8px] font-medium text-slate-300">
                             {money(
-                              clients
+                              kanbanClients
                                 .filter((client) => client.status === status)
                                 .reduce((sum, client) => sum + client.value, 0)
                             )}
@@ -2473,8 +2601,36 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between text-[8px]">
                           <span className="text-slate-500">Saúde</span>
                           <span className="text-slate-300">
-                            {clients.filter((client) => client.status === status && getRisk(client) === "Alto").length === 0 ? "Saudável" : "Revisar"}
+                            {kanbanClients.filter((client) => client.status === status && getRisk(client) === "Alto").length === 0 ? "Saudável" : "Revisar"}
                           </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-px border-t border-white/10 bg-white/10 text-center">
+                        <div className="bg-black/20 px-1.5 py-1.5">
+                          <p className="text-[7px] text-slate-500">Score</p>
+                          <p className="mt-0.5 text-[9px] font-semibold text-slate-200">
+                            {Math.round(
+                              kanbanClients
+                                .filter((client) => client.status === status)
+                                .reduce((sum, client) => sum + getLeadScore(client), 0) /
+                                Math.max(1, kanbanClients.filter((client) => client.status === status).length)
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="bg-black/20 px-1.5 py-1.5">
+                          <p className="text-[7px] text-slate-500">Risco</p>
+                          <p className="mt-0.5 text-[9px] font-semibold text-slate-200">
+                            {kanbanClients.filter((client) => client.status === status && getRisk(client) === "Alto").length}
+                          </p>
+                        </div>
+
+                        <div className="bg-black/20 px-1.5 py-1.5">
+                          <p className="text-[7px] text-slate-500">Hoje</p>
+                          <p className="mt-0.5 text-[9px] font-semibold text-slate-200">
+                            {kanbanClients.filter((client) => client.status === status && client.nextFollowUp.toLowerCase() === "hoje").length}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -2486,7 +2642,7 @@ export default function Dashboard() {
                         <span>
                           {Math.min(
                             100,
-                            clients.filter((client) => client.status === status).length * 18
+                            kanbanClients.filter((client) => client.status === status).length * 18
                           )}%
                         </span>
                       </div>
@@ -2507,7 +2663,7 @@ export default function Dashboard() {
                           style={{
                             width: `${Math.min(
                               100,
-                              clients.filter((client) => client.status === status).length * 18
+                              kanbanClients.filter((client) => client.status === status).length * 18
                             )}%`,
                           }}
                         />
@@ -2515,7 +2671,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="space-y-2">
-                      {clients.filter((client) => client.status === status).length === 0 && (
+                      {kanbanClients.filter((client) => client.status === status).length === 0 && (
                         <div className="rounded-xl border border-dashed border-white/10 bg-black/10 p-3 text-center">
                           <p className="text-[11px] font-semibold text-slate-400">
                             Etapa vazia
@@ -2527,7 +2683,7 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {clients.filter((client) => client.status === status).map((client) => (
+                      {kanbanClients.filter((client) => client.status === status).map((client) => (
                         <div
                           key={client.id}
                           draggable
@@ -2693,6 +2849,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
+                  </div>
                 </div>
               )}
 
