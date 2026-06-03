@@ -29,6 +29,7 @@ import DashboardMetrics from "../components/dashboard/DashboardMetrics";
 import DashboardHeader from "../components/dashboard/DashboardHeader";
 import DashboardPortfolioInsights from "../components/dashboard/DashboardPortfolioInsights";
 import DashboardClientsTable from "../components/dashboard/DashboardClientsTable";
+import DashboardQuickActions from "../components/dashboard/DashboardQuickActions";
 
 type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
 type SortBy = "score" | "value" | "name" | "status";
@@ -1166,64 +1167,26 @@ export default function Dashboard() {
                 <p className="text-[11px] font-semibold">{currentTime}</p>
               </div>
 
-              <div className="relative">
-                <button
-                  onClick={() => setShowQuickActions((value) => !value)}
-                  className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-[11px] text-slate-300 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.07]"
-                  title="Esc fecha menus. Ctrl+K abre busca global."
-                >
-                  Ações
-                </button>
-
-                {showQuickActions && (
-                  <div className="absolute right-0 top-10 z-40 w-48 rounded-2xl border border-white/10 bg-[#0d111a] p-2 shadow-2xl">
-                    <button
-                      onClick={() => {
-                        setCreating({ ...emptyClient });
-                        setShowQuickActions(false);
-                      }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-[11px] text-slate-300 hover:bg-white/10"
-                    >
-                      Novo cliente
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setActivePage("clientes");
-                        setShowQuickActions(false);
-                      }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-[11px] text-slate-300 hover:bg-white/10"
-                    >
-                      Ir para clientes
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setActivePage("kanban");
-                        setShowQuickActions(false);
-                      }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-[11px] text-slate-300 hover:bg-white/10"
-                    >
-                      Abrir Kanban
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        exportCsv();
-                        setShowQuickActions(false);
-                      }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-[11px] text-slate-300 hover:bg-white/10"
-                    >
-                      Exportar CSV
-                    </button>
-
-                    <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                      <p className="text-[10px] font-semibold text-slate-400">Atalhos</p>
-                      <p className="mt-1 text-[10px] text-slate-600">Ctrl+K busca • Esc fecha menus</p>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <DashboardQuickActions
+                isOpen={showQuickActions}
+                onToggle={() => setShowQuickActions((value) => !value)}
+                onCreateClient={() => {
+                  setCreating({ ...emptyClient });
+                  setShowQuickActions(false);
+                }}
+                onGoToClients={() => {
+                  setActivePage("clientes");
+                  setShowQuickActions(false);
+                }}
+                onGoToKanban={() => {
+                  setActivePage("kanban");
+                  setShowQuickActions(false);
+                }}
+                onExportCsv={() => {
+                  exportCsv();
+                  setShowQuickActions(false);
+                }}
+              />
 
               <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-2 py-1.5">
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[11px] font-bold text-black">
