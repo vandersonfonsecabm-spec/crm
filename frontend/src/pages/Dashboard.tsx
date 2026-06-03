@@ -33,6 +33,8 @@ import ClientModal from "../components/dashboard/ClientModal";
 import DashboardCommandSearch from "../components/dashboard/DashboardCommandSearch";
 import DashboardFollowUpCalendar from "../components/dashboard/DashboardFollowUpCalendar";
 import DashboardRecentActivities from "../components/dashboard/DashboardRecentActivities";
+import DashboardPipelineOverview from "../components/dashboard/DashboardPipelineOverview";
+import DashboardRecentViews from "../components/dashboard/DashboardRecentViews";
 
 type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
 type SortBy = "score" | "value" | "name" | "status";
@@ -1312,91 +1314,26 @@ export default function Dashboard() {
               )}
 
               {activePage === "dashboard" && (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="text-sm font-semibold">Pipeline por etapa</p>
-                    <span className="text-[11px] text-slate-500">Distribuição comercial</span>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-5">
-                    {statusList.map((status) => (
-                      <div
-                        key={status}
-                        className="rounded-xl border border-white/10 bg-black/20 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.035] hover:shadow-lg hover:shadow-black/30"
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="text-[11px] text-slate-400">{status}</p>
-
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${statusClass(status)}`}>
-                            {clients.filter((client) => client.status === status).length}
-                          </span>
-                        </div>
-
-                        <div className="mt-3">
-                          <p className="text-lg font-semibold">
-                            {money(
-                              kanbanClients
-                                .filter((client) => client.status === status)
-                                .reduce((sum, client) => sum + client.value, 0)
-                            )}
-                          </p>
-
-                          <p className="mt-1 text-[10px] text-slate-500">
-                            Valor acumulado
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <DashboardPipelineOverview
+                  statusList={statusList}
+                  clients={clients}
+                  kanbanClients={kanbanClients}
+                  money={money}
+                  statusClass={statusClass}
+                />
               )}
 
               {activePage === "dashboard" && recentViewedClients.length > 0 && (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="text-sm font-semibold">Acessos recentes</p>
-
-                    <span className="text-[11px] text-slate-500">
-                      Retomar atendimento
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                    {recentViewedClients
-                      .map((id) => clients.find((client) => client.id === id))
-                      .filter(Boolean)
-                      .map((client) => (
-                        <button
-                          key={client!.id}
-                          onClick={() => {
-                            setSelectedId(client!.id);
-                            setActivePage("clientes");
-                          }}
-                          className="rounded-xl border border-white/10 bg-black/20 p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.035] text-left transition hover:bg-white/[0.05]"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="truncate text-xs font-semibold">
-                              {client!.name}
-                            </p>
-
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[9px] ${statusClass(client!.status)}`}
-                            >
-                              {client!.status}
-                            </span>
-                          </div>
-
-                          <p className="mt-1 truncate text-[10px] text-slate-500">
-                            {client!.company}
-                          </p>
-
-                          <p className="mt-3 text-[11px] font-semibold">
-                            {money(client!.value)}
-                          </p>
-                        </button>
-                      ))}
-                  </div>
-                </div>
+                <DashboardRecentViews
+                  recentViewedClients={recentViewedClients}
+                  clients={clients}
+                  money={money}
+                  statusClass={statusClass}
+                  onSelectClient={(clientId) => {
+                    setSelectedId(clientId);
+                    setActivePage("clientes");
+                  }}
+                />
               )}
 
               {activePage === "dashboard" && (
