@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   AlertTriangle,
   ArrowUpDown,
-  BarChart3,
   Bell,
   CheckCircle2,
-  Copy,
   Download,
-  Edit3,
   Flame,
-  KanbanSquare,
   MessageCircle,
   Phone,
   Plus,
@@ -35,6 +30,10 @@ import DashboardFollowUpCalendar from "../components/dashboard/DashboardFollowUp
 import DashboardRecentActivities from "../components/dashboard/DashboardRecentActivities";
 import DashboardPipelineOverview from "../components/dashboard/DashboardPipelineOverview";
 import DashboardRecentViews from "../components/dashboard/DashboardRecentViews";
+import DashboardExecutiveAnalytics from "../components/dashboard/DashboardExecutiveAnalytics";
+import DashboardKanbanSummary from "../components/dashboard/DashboardKanbanSummary";
+import DashboardCustomerDrawer from "../components/dashboard/DashboardCustomerDrawer";
+import DashboardSidebar from "../components/dashboard/DashboardSidebar";
 
 type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
 type SortBy = "score" | "value" | "name" | "status";
@@ -808,217 +807,19 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen select-none overflow-x-hidden bg-[#080b12] text-white">
       <div className="flex min-h-screen">
-        <aside className="hidden w-60 shrink-0 overflow-hidden border-r border-white/[0.06] bg-white/[0.03] p-4 lg:block">
-          <div className="mb-5 rounded-2xl border border-white/10 bg-black/20 p-3">
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-black">
-                <Sparkles size={16} />
-              </div>
-
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">CRM Enterprise</p>
-                <p className="truncate text-[11px] text-slate-500">Operação comercial</p>
-              </div>
-            </div>
-
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-400/10 bg-emerald-500/[0.05] px-2 py-1.5">
-              <span className="text-[10px] text-emerald-200/80">Ambiente</span>
-              <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-semibold text-emerald-100">estável</span>
-            </div>
-          </div>
-
-          <nav className="space-y-4">
-            <div>
-              <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Workspace
-              </p>
-
-              <div className="grid gap-1.5">
-                <button
-                  onClick={() => setActivePage("dashboard")}
-                  className={`relative mx-auto box-border flex h-10 w-[208px] shrink-0 items-center rounded-xl border border-white/[0.08] px-3 pr-9 text-left text-sm leading-none transition-colors duration-200 ${
-                    activePage === "dashboard"
-                      ? "bg-white/[0.115] text-white ring-1 ring-inset ring-white/70"
-                      : "bg-white/[0.035] text-slate-300 hover:bg-white/[0.055]"
-                  }`}
-                >
-                  <BarChart3 size={15} className="mr-2 shrink-0" />
-                  <span className="block min-w-0 flex-1 truncate">Dashboard</span>
-                  <span className={`absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${activePage === "dashboard" ? "bg-white" : "bg-white/15"}`} />
-                </button>
-
-                <button
-                  onClick={() => setActivePage("clientes")}
-                  className={`relative mx-auto box-border flex h-10 w-[208px] shrink-0 items-center rounded-xl border border-white/[0.08] px-3 pr-9 text-left text-sm leading-none transition-colors duration-200 ${
-                    activePage === "clientes"
-                      ? "bg-white/[0.115] text-white ring-1 ring-inset ring-white/70"
-                      : "bg-white/[0.035] text-slate-300 hover:bg-white/[0.055]"
-                  }`}
-                >
-                  <Users size={15} className="mr-2 shrink-0" />
-                  <span className="block min-w-0 flex-1 truncate">Clientes</span>
-                  <span className={`absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${activePage === "clientes" ? "bg-white" : "bg-white/15"}`} />
-                </button>
-
-                <button
-                  onClick={() => setActivePage("kanban")}
-                  className={`relative mx-auto box-border flex h-10 w-[208px] shrink-0 items-center rounded-xl border border-white/[0.08] px-3 pr-9 text-left text-sm leading-none transition-colors duration-200 ${
-                    activePage === "kanban"
-                      ? "bg-white/[0.115] text-white ring-1 ring-inset ring-white/70"
-                      : "bg-white/[0.035] text-slate-300 hover:bg-white/[0.055]"
-                  }`}
-                >
-                  <KanbanSquare size={15} className="mr-2 shrink-0" />
-                  <span className="block min-w-0 flex-1 truncate">Kanban</span>
-                  <span className={`absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${activePage === "kanban" ? "bg-white" : "bg-white/15"}`} />
-                </button>
-              </div>
-            </div>
-
-            <div className="border-t border-white/5 pt-3">
-              <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                Inteligência
-              </p>
-
-              <div className="grid gap-1.5">
-                <button
-                  onClick={() => setActivePage("automacoes")}
-                  className={`relative mx-auto box-border flex h-10 w-[208px] shrink-0 items-center rounded-xl border border-white/[0.08] px-3 pr-9 text-left text-sm leading-none transition-colors duration-200 ${
-                    activePage === "automacoes"
-                      ? "bg-white/[0.115] text-white ring-1 ring-inset ring-white/70"
-                      : "bg-white/[0.035] text-slate-300 hover:bg-white/[0.055]"
-                  }`}
-                >
-                  <Zap size={15} className="mr-2 shrink-0" />
-                  <span className="block min-w-0 flex-1 truncate">Automações</span>
-                  <span className={`absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${activePage === "automacoes" ? "bg-white" : "bg-white/15"}`} />
-                </button>
-              </div>
-            </div>
-          </nav>
-
-          <div className="mx-auto mt-6 w-full max-w-[208px] rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-            <p className="text-xs font-semibold">Atalhos operacionais</p>
-
-            <div className="mt-3 space-y-2">
-              {activePage === "dashboard" && (
-                <>
-                  <button onClick={() => setOnlyHot(true)} className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]">
-                    Clientes quentes
-                  </button>
-
-                  <button onClick={() => setStatusFilter("Proposta")} className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]">
-                    Propostas abertas
-                  </button>
-                </>
-              )}
-
-              {activePage === "clientes" && (
-                <>
-                  <button onClick={() => setCreating({ ...emptyClient })} className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]">
-                    Novo cliente
-                  </button>
-
-                  <button onClick={exportCsv} className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]">
-                    Exportar clientes
-                  </button>
-                </>
-              )}
-
-              {activePage === "kanban" && (
-                <>
-                  <button onClick={() => setOnlyHot(true)} className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]">
-                    Leads quentes
-                  </button>
-
-                  <button onClick={() => setStatusFilter("Proposta")} className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]">
-                    Focar propostas
-                  </button>
-                </>
-              )}
-
-              {activePage === "automacoes" && (
-                <>
-                  <button className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]">
-                    Criar regra
-                  </button>
-
-                  <button className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]">
-                    Ver templates
-                  </button>
-                </>
-              )}
-
-              <button onClick={clearFilters} className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]">
-                Resetar visão
-              </button>
-            </div>
-          </div>
-
-          {activePage !== "automacoes" && (
-            <>
-              <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-                <p className="text-xs font-semibold">Sinais comerciais</p>
-
-                <div className="mt-3 space-y-2">
-                  {smartAlerts.map((alert, index) => (
-                    <button
-                      key={alert}
-                      onClick={() => applySmartFilter(index === 0 ? "risk" : index === 1 ? "proposal" : "silent")}
-                      className="w-full rounded-xl bg-white/5 p-2 text-left transition-all duration-200 text-[11px] text-slate-300 hover:bg-white/[0.07]"
-                    >
-                      {alert}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {activePage === "clientes" && (
-                <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-                  <p className="text-xs font-semibold">Atividades recentes</p>
-
-                  <div className="mt-3 space-y-2">
-                    {recentActivities.length === 0 && (
-                      <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-3">
-                        <p className="text-[11px] font-semibold text-slate-300">
-                          Sem atividades registradas
-                        </p>
-                        <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                          As notas criadas no painel do cliente aparecem aqui como histórico rápido.
-                        </p>
-                      </div>
-                    )}
-
-                    {recentActivities.map((activity) => (
-                      <div key={activity.id} className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-                        <p className="text-[11px] text-slate-200">{activity.client}</p>
-                        <p className="mt-0.5 line-clamp-2 text-[10px] text-slate-500">{activity.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {activePage === "automacoes" && (
-            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-              <p className="text-xs font-semibold">Status operacional</p>
-
-              <div className="mt-3 space-y-2">
-                <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-                  <p className="text-[11px] text-slate-200">Automações frontend</p>
-                  <p className="mt-0.5 text-[10px] text-slate-500">Base pronta para regras comerciais.</p>
-                </div>
-
-                <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-                  <p className="text-[11px] text-slate-200">Próxima fase</p>
-                  <p className="mt-0.5 text-[10px] text-slate-500">Conectar ações com backend e banco real.</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </aside>
+        <DashboardSidebar
+          activePage={activePage}
+          smartAlerts={smartAlerts}
+          recentActivities={recentActivities}
+          emptyClient={emptyClient}
+          setActivePage={setActivePage}
+          setOnlyHot={setOnlyHot}
+          setStatusFilter={setStatusFilter}
+          setCreating={setCreating}
+          exportCsv={exportCsv}
+          clearFilters={clearFilters}
+          applySmartFilter={applySmartFilter}
+        />
 
         <main className="min-w-0 flex-1 overflow-x-hidden p-4">
           <div className="mb-3 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2">
@@ -1250,11 +1051,11 @@ export default function Dashboard() {
                   initials={initials}
                   tagClass={tagClass}
                   statusClass={statusClass}
-                  idleLabel={idleLabel}
-                  getPriority={getPriority}
+                      getPriority={getPriority}
                   getRisk={getRisk}
                   getLeadScore={getLeadScore}
                   forecastLabel={forecastLabel}
+                  idleLabel={idleLabel}
                   onSelectClient={setSelectedId}
                   onToggleFavorite={toggleFavorite}
                   onToggleHot={toggleHot}
@@ -1345,221 +1146,14 @@ export default function Dashboard() {
               )}
 
               {activePage === "dashboard" && (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold">Analytics Executive</p>
-                      <p className="mt-1 text-[11px] text-slate-500">
-                        Tendência comercial, conversão e performance do time.
-                      </p>
-                    </div>
-
-                    <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-200">
-                      Leitura executiva
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                      <div className="mb-3 flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-200">Performance semanal</p>
-                          <p className="mt-0.5 text-[10px] text-slate-500">
-                            Tendência, volume e qualidade do pipeline em visão executiva.
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-lg border border-emerald-400/10 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-200">
-                            +18%
-                          </span>
-
-                          <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-300">
-                            semana
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0f17]">
-                        <div className="flex items-start justify-between gap-3 border-b border-white/10 bg-white/[0.025] p-3">
-                          <div>
-                            <p className="text-[9px] uppercase tracking-[0.2em] text-slate-600">
-                              Pipeline previsto
-                            </p>
-
-                            <p className="mt-1 text-2xl font-bold text-white">
-                              {money(analytics.forecastValue)}
-                            </p>
-
-                            <p className="mt-1 text-[10px] text-slate-500">
-                              Comparativo visual dos últimos 7 dias.
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="rounded-xl border border-cyan-400/10 bg-cyan-500/[0.06] px-2.5 py-2 text-right">
-                              <p className="text-[9px] text-cyan-200/70">Pico</p>
-                              <p className="mt-1 text-xs font-semibold text-cyan-100">86%</p>
-                            </div>
-
-                            <div className="rounded-xl border border-violet-400/10 bg-violet-500/[0.06] px-2.5 py-2 text-right">
-                              <p className="text-[9px] text-violet-200/70">Média</p>
-                              <p className="mt-1 text-xs font-semibold text-violet-100">{analytics.averageScore}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="relative h-56 p-3">
-                          <div className="absolute inset-x-3 top-8 h-px bg-white/5" />
-                          <div className="absolute inset-x-3 top-20 h-px bg-white/5" />
-                          <div className="absolute inset-x-3 top-32 h-px bg-white/5" />
-                          <div className="absolute inset-x-3 top-44 h-px bg-white/5" />
-
-                          <div className="absolute inset-x-3 bottom-8 top-5 rounded-2xl bg-gradient-to-t from-cyan-500/10 via-cyan-400/[0.035] to-transparent" />
-
-                          <svg viewBox="0 0 700 180" className="relative z-10 h-[180px] w-full overflow-visible">
-                            <defs>
-                              <linearGradient id="pipelineGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="rgb(103 232 249)" stopOpacity="0.38" />
-                                <stop offset="100%" stopColor="rgb(103 232 249)" stopOpacity="0" />
-                              </linearGradient>
-
-                              <filter id="softGlow">
-                                <feGaussianBlur stdDeviation="4" result="coloredBlur" />
-                                <feMerge>
-                                  <feMergeNode in="coloredBlur" />
-                                  <feMergeNode in="SourceGraphic" />
-                                </feMerge>
-                              </filter>
-                            </defs>
-
-                            <path
-                              d="M 0 138 C 65 118, 90 92, 135 104 C 190 118, 205 58, 270 70 C 335 82, 340 48, 405 56 C 470 64, 500 30, 565 38 C 625 45, 650 28, 700 24 L 700 180 L 0 180 Z"
-                              fill="url(#pipelineGradient)"
-                            />
-
-                            <path
-                              d="M 0 138 C 65 118, 90 92, 135 104 C 190 118, 205 58, 270 70 C 335 82, 340 48, 405 56 C 470 64, 500 30, 565 38 C 625 45, 650 28, 700 24"
-                              fill="none"
-                              stroke="rgb(103 232 249)"
-                              strokeWidth="4"
-                              strokeLinecap="round"
-                              filter="url(#softGlow)"
-                            />
-
-                            {[
-                              { x: 0, y: 138, label: "S" },
-                              { x: 135, y: 104, label: "T" },
-                              { x: 270, y: 70, label: "Q" },
-                              { x: 405, y: 56, label: "Q" },
-                              { x: 565, y: 38, label: "S" },
-                              { x: 700, y: 24, label: "D" },
-                            ].map((point) => (
-                              <g key={`${point.x}-${point.y}`}>
-                                <circle cx={point.x} cy={point.y} r="6" fill="rgb(8 11 18)" stroke="rgb(103 232 249)" strokeWidth="3" />
-                                <circle cx={point.x} cy={point.y} r="2.5" fill="rgb(103 232 249)" />
-                              </g>
-                            ))}
-                          </svg>
-
-                          <div className="relative z-20 mt-1 grid grid-cols-7 text-center text-[9px] text-slate-600">
-                            {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((day) => (
-                              <span key={day}>{day}</span>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 border-t border-white/10 bg-white/[0.02] p-3">
-                          <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                            <p className="text-[9px] text-slate-500">Conversão</p>
-                            <p className="mt-1 text-xs font-semibold text-white">
-                              {Math.round((clients.filter((client) => client.status === "Fechado").length / Math.max(clients.length, 1)) * 100)}%
-                            </p>
-                          </div>
-
-                          <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                            <p className="text-[9px] text-slate-500">Oportunidades</p>
-                            <p className="mt-1 text-xs font-semibold text-white">{clients.length} leads</p>
-                          </div>
-
-                          <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                            <p className="text-[9px] text-slate-500">Qualidade</p>
-                            <p className="mt-1 text-xs font-semibold text-white">{analytics.averageScore}/100</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                      <div className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.05] p-3">
-                        <p className="text-[10px] text-emerald-200/70">Taxa de conversão</p>
-                        <div className="mt-2 flex items-center justify-between gap-3">
-                          <p className="text-lg font-semibold text-emerald-100">
-                            {Math.round((clients.filter((client) => client.status === "Fechado").length / Math.max(clients.length, 1)) * 100)}%
-                          </p>
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                            <div className="h-full rounded-full bg-emerald-300" style={{ width: `${Math.round((clients.filter((client) => client.status === "Fechado").length / Math.max(clients.length, 1)) * 100)}%` }} />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-sky-400/10 bg-sky-500/[0.05] p-3">
-                        <p className="text-[10px] text-sky-200/70">Velocidade comercial</p>
-                        <p className="mt-2 text-lg font-semibold text-sky-100">
-                          {clients.filter((client) => client.lastContactDays <= 2).length}/{clients.length}
-                        </p>
-                        <p className="mt-1 text-[10px] text-sky-200/60">leads movimentados recentemente</p>
-                      </div>
-
-                      <div className="rounded-xl border border-violet-400/10 bg-violet-500/[0.05] p-3">
-                        <p className="text-[10px] text-violet-200/70">Qualidade média</p>
-                        <p className="mt-2 text-lg font-semibold text-violet-100">{analytics.averageScore}/100</p>
-                        <p className="mt-1 text-[10px] text-violet-200/60">score consolidado da carteira</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    {["Ana", "Marco", "Bia"].map((seller) => {
-                      const sellerClients = clients.filter((client) => leadOwner(client) === seller);
-                      const sellerScore = sellerClients.length > 0
-                        ? Math.round(sellerClients.reduce((sum, client) => sum + getLeadScore(client), 0) / sellerClients.length)
-                        : 0;
-
-                      return (
-                        <div key={seller} className="rounded-xl border border-white/10 bg-black/20 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.035]">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold">
-                                {initials(seller)}
-                              </div>
-
-                              <div>
-                                <p className="text-xs font-semibold">{seller}</p>
-                                <p className="text-[10px] text-slate-500">Performance comercial</p>
-                              </div>
-                            </div>
-
-                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] text-slate-300">
-                              {sellerClients.length} leads
-                            </span>
-                          </div>
-
-                          <div className="mt-3">
-                            <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
-                              <span>Score</span>
-                              <span>{sellerScore}</span>
-                            </div>
-
-                            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                              <div className="h-full rounded-full bg-white" style={{ width: `${sellerScore}%` }} />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                <DashboardExecutiveAnalytics
+                  analytics={analytics}
+                  clients={clients}
+                  money={money}
+                  initials={initials}
+                  leadOwner={leadOwner}
+                  getLeadScore={getLeadScore}
+                />
               )}
 
               {activePage === "dashboard" && (
@@ -1879,80 +1473,12 @@ export default function Dashboard() {
 
               {activePage === "kanban" && (
                 <div className="space-y-3">
-                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold">Pipeline Kanban Enterprise</p>
-
-                          <span className="rounded-full border border-cyan-400/15 bg-cyan-500/[0.06] px-2 py-0.5 text-[9px] font-semibold text-cyan-100">
-                            visão executiva
-                          </span>
-                        </div>
-
-                        <p className="mt-0.5 text-[10px] text-slate-500">
-                          {kanbanClients.length} leads na visão atual • {kanbanOwnerFilter === "Todos" ? "todos os vendedores" : `vendedor ${kanbanOwnerFilter}`}
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                        <div className="rounded-xl border border-white/10 bg-black/20 px-2.5 py-2">
-                          <p className="text-[8px] uppercase tracking-[0.16em] text-slate-600">Pipeline</p>
-                          <p className="mt-1 text-[11px] font-semibold text-slate-100">{money(kanbanEnterpriseStats.totalValue)}</p>
-                        </div>
-
-                        <div className="rounded-xl border border-violet-400/10 bg-violet-500/[0.05] px-2.5 py-2">
-                          <p className="text-[8px] uppercase tracking-[0.16em] text-violet-200/50">Forecast</p>
-                          <p className="mt-1 text-[11px] font-semibold text-violet-100">{money(kanbanEnterpriseStats.forecastValue)}</p>
-                        </div>
-
-                        <div className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.05] px-2.5 py-2">
-                          <p className="text-[8px] uppercase tracking-[0.16em] text-emerald-200/50">Conversão</p>
-                          <p className="mt-1 text-[11px] font-semibold text-emerald-100">{kanbanEnterpriseStats.conversionRate}%</p>
-                        </div>
-
-                        <div className="rounded-xl border border-rose-400/10 bg-rose-500/[0.05] px-2.5 py-2">
-                          <p className="text-[8px] uppercase tracking-[0.16em] text-rose-200/50">Risco alto</p>
-                          <p className="mt-1 text-[11px] font-semibold text-rose-100">{kanbanEnterpriseStats.highRiskCount}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 grid gap-2 md:grid-cols-3">
-                      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                        <div className="flex items-center justify-between text-[9px] text-slate-500">
-                          <span>Score médio</span>
-                          <span className="text-slate-300">{kanbanEnterpriseStats.averageScore}/100</span>
-                        </div>
-
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                          <div className="h-full rounded-full bg-cyan-300" style={{ width: `${kanbanEnterpriseStats.averageScore}%` }} />
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                        <div className="flex items-center justify-between text-[9px] text-slate-500">
-                          <span>Pipeline ativo</span>
-                          <span className="text-slate-300">{kanbanEnterpriseStats.activePipeline} leads</span>
-                        </div>
-
-                        <p className="mt-1 truncate text-[10px] text-slate-400">
-                          Leads ainda em negociação antes de fechamento ou perda.
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-                        <div className="flex items-center justify-between text-[9px] text-slate-500">
-                          <span>Follow-ups hoje</span>
-                          <span className="text-slate-300">{kanbanEnterpriseStats.todayFollowUps}</span>
-                        </div>
-
-                        <p className="mt-1 truncate text-[10px] text-slate-400">
-                          Ações que precisam de atenção imediata.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <DashboardKanbanSummary
+                    kanbanClientsCount={kanbanClients.length}
+                    kanbanOwnerFilter={kanbanOwnerFilter}
+                    kanbanEnterpriseStats={kanbanEnterpriseStats}
+                    money={money}
+                  />
 
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                 {statusList.map((status) => (
@@ -2390,431 +1916,35 @@ export default function Dashboard() {
               )}
             </div>
 
-            {(activePage === "dashboard" || activePage === "clientes") && (
-               <aside className="w-[340px] shrink-0 space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-                <div className="mb-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">Central do cliente</p>
-                    <p className="mt-0.5 text-[10px] text-slate-500">Atendimento, sinais comerciais e próxima ação.</p>
-                  </div>
-                  {selectedClient && (
-                    <button onClick={() => setSelectedId(null)} className="rounded-lg p-1 text-slate-400 hover:bg-white/10">
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-
-                {selectedClient ? (
-                  <div>
-                    <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.035] hover:shadow-lg hover:shadow-black/30">
-                      <div className="border-b border-white/10 bg-white/[0.025] p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-[11px] font-bold text-black">
-                                {initials(selectedClient.name)}
-                              </div>
-
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold">{selectedClient.name}</p>
-                                <p className="truncate text-[11px] text-slate-400">{selectedClient.company}</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] ${statusClass(selectedClient.status)}`}>{selectedClient.status}</span>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-3 gap-2">
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <p className="text-[10px] text-slate-500">Valor</p>
-                            <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-200">{money(selectedClient.value)}</p>
-                          </div>
-
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <p className="text-[10px] text-slate-500">Fit</p>
-                            <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-200">{customerFitLabel(selectedClient)}</p>
-                          </div>
-
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <p className="text-[10px] text-slate-500">Dono</p>
-                            <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-200">{leadOwner(selectedClient)}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="p-3">
-                        <div className="rounded-xl border border-violet-400/10 bg-violet-500/[0.045] p-3">
-                          <div className="mb-2 flex items-center justify-between text-[11px]">
-                            <span className="font-semibold text-violet-100">Diagnóstico comercial</span>
-                            <span className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[9px] text-violet-100">prioridade</span>
-                          </div>
-
-                          <p className="text-[10px] leading-relaxed text-violet-100/65">
-                            {nextActionLabel(selectedClient)}
-                          </p>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-3 gap-2">
-                          <button
-                            onClick={() => copyText(selectedClient.phone, "Telefone copiado.")}
-                            className="rounded-xl border border-white/10 bg-white/[0.035] px-2 py-1.5 text-left transition hover:border-white/20 hover:bg-white/[0.07]"
-                          >
-                            <Phone size={13} className="mb-1 text-emerald-300" />
-                            <p className="text-[9px] font-semibold text-slate-300">Telefone</p>
-                          </button>
-
-                          <button
-                            onClick={() => copyText(whatsappMessage(selectedClient), "Mensagem copiada.")}
-                            className="rounded-xl border border-white/10 bg-white/[0.035] px-2 py-1.5 text-left transition hover:border-white/20 hover:bg-white/[0.07]"
-                          >
-                            <Copy size={13} className="mb-1 text-sky-300" />
-                            <p className="text-[9px] font-semibold text-slate-300">Mensagem</p>
-                          </button>
-
-                          <a
-                            href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.05] px-2 py-1.5 text-left transition hover:border-emerald-400/20 hover:bg-emerald-500/[0.08]"
-                          >
-                            <MessageCircle size={13} className="mb-1 text-emerald-300" />
-                            <p className="text-[9px] font-semibold text-emerald-100">WhatsApp</p>
-                          </a>
-                        </div>
-
-                        <div className="mt-3">
-                          <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
-                            <span>Score inteligente</span>
-                            <span>{getLeadScore(selectedClient)}/100</span>
-                          </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                            <div className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]" style={{ width: `${getLeadScore(selectedClient)}%` }} />
-                          </div>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-2">
-                            <p className="text-[10px] text-slate-500">Origem</p>
-                            <p className="mt-0.5 font-semibold text-slate-200">{selectedClient.source}</p>
-                          </div>
-
-                          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-2">
-                            <p className="text-[10px] text-slate-500">Follow-up</p>
-                            <p className="mt-0.5 font-semibold text-slate-200">{selectedClient.nextFollowUp}</p>
-                          </div>
-
-                          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-2">
-                            <p className="text-[10px] text-slate-500">Risco</p>
-                            <p className="mt-0.5 font-semibold text-slate-200">{getRisk(selectedClient)}</p>
-                          </div>
-
-                          <div className="rounded-lg border border-white/10 bg-white/[0.035] p-2">
-                            <p className="text-[10px] text-slate-500">SLA</p>
-                            <p className="mt-0.5 font-semibold text-slate-200">{slaLabel(selectedClient)}</p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-1">
-                          {selectedClient.tags.map((tag) => (
-                            <button key={tag} onClick={() => removeTagFromSelected(tag)} className={`rounded-full border px-2 py-1 text-[10px] ${tagClass(tag)}`}>{tag} ×</button>
-                          ))}
-                        </div>
-
-                        <div className="mt-3 flex gap-2">
-                          <input value={tagText} onChange={(event) => setTagText(event.target.value)} placeholder="Nova tag..." className="flex-1 select-text rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none placeholder:text-slate-500" />
-                          <button onClick={addTagToSelected} className="rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-black">Tag</button>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button onClick={() => setEditing(selectedClient)} className="inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-white/10"><Edit3 size={12} />Editar</button>
-                          <button onClick={() => copyText(selectedClient.phone, "Telefone copiado.")} className="inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-white/10"><Phone size={12} />Telefone</button>
-                          <button onClick={() => copyText(`${selectedClient.name} | ${selectedClient.company} | ${money(selectedClient.value)} | ${selectedClient.status}`, "Resumo copiado.")} className="inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-white/10"><Copy size={12} />Resumo</button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/20 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.035]">
-                      <div className="border-b border-white/10 bg-white/[0.025] p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-violet-300/20 bg-violet-500/10 text-violet-200">
-                              <StickyNote size={14} />
-                            </div>
-
-                            <div>
-                              <p className="text-xs font-semibold">Histórico comercial</p>
-                              <p className="mt-0.5 text-[10px] text-slate-500">Interações, SLA e cadência</p>
-                            </div>
-                          </div>
-
-                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-400">
-                            {selectedClient.notes.length} registros
-                          </span>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-3 gap-2">
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <p className="text-[10px] text-slate-500">Contato</p>
-                            <p className="mt-0.5 text-[11px] font-semibold text-slate-200">{idleLabel(selectedClient)}</p>
-                          </div>
-
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <p className="text-[10px] text-slate-500">SLA</p>
-                            <p className="mt-0.5 text-[11px] font-semibold text-slate-200">{slaLabel(selectedClient)}</p>
-                          </div>
-
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <p className="text-[10px] text-slate-500">Próxima</p>
-                            <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-200">{selectedClient.nextFollowUp}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="p-3">
-                        <div className="flex gap-2">
-                          <input value={noteText} onChange={(event) => setNoteText(event.target.value)} placeholder="Registrar nova interação..." className="flex-1 select-text rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none placeholder:text-slate-500" />
-                          <button onClick={addNote} className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-black"><Plus size={12} />Add</button>
-                        </div>
-
-                        <div className="mt-3 space-y-2">
-                          <div className="relative rounded-xl border border-emerald-400/10 bg-emerald-500/[0.045] p-3">
-                            <div className="absolute left-3 top-3 h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.55)]" />
-                            <div className="pl-5">
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-[11px] font-semibold text-emerald-100">Próxima ação recomendada</p>
-                                <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] text-emerald-100">ação</span>
-                              </div>
-                              <p className="mt-1 text-[10px] leading-relaxed text-emerald-100/65">
-                                {getLeadScore(selectedClient) >= 80
-                                  ? "Priorizar contato hoje e conduzir para fechamento."
-                                  : getRisk(selectedClient) === "Alto"
-                                    ? "Reativar com mensagem objetiva antes de mover para perdido."
-                                    : "Manter cadência de follow-up e registrar resposta do cliente."}
-                              </p>
-                            </div>
-                          </div>
-
-                          {selectedClient.notes.length === 0 && (
-                            <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-                              <p className="text-[11px] text-slate-500">Nenhuma nota adicionada ainda.</p>
-                              <p className="mt-1 text-[10px] text-slate-600">Use a timeline para registrar ligações, propostas, objeções e próximos passos.</p>
-                            </div>
-                          )}
-
-                          {selectedClient.notes.map((note, index) => (
-                            <div key={note.id} className="relative rounded-xl border border-white/10 bg-white/[0.035] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.055]">
-                              <div className="flex items-start gap-3">
-                                <div className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-[10px] ${index === 0 ? "border-sky-300/20 bg-sky-500/10 text-sky-200" : "border-white/10 bg-white/5 text-slate-400"}`}>
-                                  {index === 0 ? <Sparkles size={12} /> : <StickyNote size={12} />}
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <div className="mb-1 flex items-center justify-between gap-2">
-                                    <p className="text-[11px] font-semibold text-slate-200">{index === 0 ? "Última interação" : "Registro comercial"}</p>
-                                    <span className="shrink-0 text-[9px] text-slate-600">{note.date}</span>
-                                  </div>
-
-                                  <p className="text-[11px] leading-relaxed text-slate-400">{note.text}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500">Selecione um cliente na tabela ou no Kanban.</p>
-                )}
-              </div>
-              </aside>
-            )}
-
-            {activePage === "kanban" && (
-              <aside className="w-[340px] shrink-0 space-y-4">
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-                  <div className="border-b border-white/10 bg-gradient-to-br from-white/[0.08] to-transparent p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-violet-300/20 bg-violet-500/10 text-violet-200">
-                          <Sparkles size={15} />
-                        </div>
-
-                        <div>
-                          <p className="text-sm font-semibold">Inteligência do pipeline</p>
-                          <p className="text-[10px] text-slate-500">Leitura comercial</p>
-                        </div>
-                      </div>
-
-                      <span className="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-[9px] font-semibold text-emerald-200">
-                        Online
-                      </span>
-                    </div>
-
-                    <p className="mt-3 text-xs leading-relaxed text-slate-400">
-                      O painel cruza score, valor, risco e tempo sem contato para indicar onde agir primeiro.
-                    </p>
-                  </div>
-
-                  <div className="p-3">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                        <p className="text-[9px] text-slate-500">Pressão</p>
-                        <p className="mt-1 text-xs font-semibold">
-                          {clients.filter((client) => getRisk(client) !== "Baixo").length} leads
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                        <p className="text-[9px] text-slate-500">Hoje</p>
-                        <p className="mt-1 text-xs font-semibold">{analytics.todayFollowUps}</p>
-                      </div>
-
-                      <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                        <p className="text-[9px] text-slate-500">Score</p>
-                        <p className="mt-1 text-xs font-semibold">{analytics.averageScore}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      <button
-                        onClick={() => applySmartFilter("proposal")}
-                        className="group w-full rounded-xl border border-amber-300/10 bg-amber-500/[0.06] p-3 text-left transition-all duration-200 hover:border-amber-300/20 hover:bg-amber-500/[0.1]"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-semibold text-amber-100">Prioridade agora</p>
-                          <Target size={13} className="text-amber-200" />
-                        </div>
-                        <p className="mt-1 text-[10px] leading-relaxed text-amber-100/60">
-                          Revisar propostas quentes e acelerar fechamento antes de perder timing.
-                        </p>
-                      </button>
-
-                      <button
-                        onClick={() => applySmartFilter("silent")}
-                        className="group w-full rounded-xl border border-rose-300/10 bg-rose-500/[0.06] p-3 text-left transition-all duration-200 hover:border-rose-300/20 hover:bg-rose-500/[0.1]"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-semibold text-rose-100">Risco silencioso</p>
-                          <AlertTriangle size={13} className="text-rose-200" />
-                        </div>
-                        <p className="mt-1 text-[10px] leading-relaxed text-rose-100/60">
-                          Clientes parados há muitos dias precisam de ação para não esfriar.
-                        </p>
-                      </button>
-
-                      <button
-                        onClick={() => applySmartFilter("risk")}
-                        className="group w-full rounded-xl border border-sky-300/10 bg-sky-500/[0.06] p-3 text-left transition-all duration-200 hover:border-sky-300/20 hover:bg-sky-500/[0.1]"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-semibold text-sky-100">Limpeza inteligente</p>
-                          <Activity size={13} className="text-sky-200" />
-                        </div>
-                        <p className="mt-1 text-[10px] leading-relaxed text-sky-100/60">
-                          Separar leads em risco alto para decidir reativação, pausa ou descarte.
-                        </p>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {selectedClient && (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold">Lead em foco</p>
-                        <p className="text-[10px] text-slate-500">Próxima ação recomendada</p>
-                      </div>
-
-                      <span className={`rounded-full border px-2 py-1 text-[10px] ${statusClass(selectedClient.status)}`}>
-                        {selectedClient.status}
-                      </span>
-                    </div>
-
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold">{selectedClient.name}</p>
-                          <p className="mt-0.5 truncate text-[10px] text-slate-500">{selectedClient.company}</p>
-                        </div>
-
-                        <div className="text-right">
-                          <p className="text-[10px] text-slate-500">Valor</p>
-                          <p className="text-xs font-semibold">{money(selectedClient.value)}</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3">
-                        <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
-                          <span>Força comercial</span>
-                          <span>{getLeadScore(selectedClient)}%</span>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                          <div className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]" style={{ width: `${getLeadScore(selectedClient)}%` }} />
-                        </div>
-                      </div>
-
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
-                        <div className="rounded-lg bg-white/5 p-2">
-                          <p className="text-slate-500">Prioridade</p>
-                          <p className="mt-0.5 font-semibold text-slate-200">{priorityLabel(selectedClient)}</p>
-                        </div>
-
-                        <div className="rounded-lg bg-white/5 p-2">
-                          <p className="text-slate-500">SLA</p>
-                          <p className="mt-0.5 font-semibold text-slate-200">{slaLabel(selectedClient)}</p>
-                        </div>
-                      </div>
-
-                      <p className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-[10px] leading-relaxed text-slate-400">
-                        Sugestão: enviar mensagem curta pelo WhatsApp, confirmar interesse e registrar a resposta na timeline.
-                      </p>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <a
-                          href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-[11px] font-semibold text-black"
-                        >
-                          <MessageCircle size={12} /> WhatsApp
-                        </a>
-
-                        <button onClick={() => setEditing(selectedClient)} className="inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-white/10">
-                          <Edit3 size={12} /> Editar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-                  <div className="flex items-center gap-2">
-                    <KanbanSquare size={15} className="text-slate-400" />
-                    <p className="text-sm font-semibold">Pipeline visual</p>
-                  </div>
-
-                  <div className="mt-3 space-y-2">
-                    <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-                      <p className="text-[11px] text-slate-200">Dica rápida</p>
-                      <p className="mt-1 text-[10px] text-slate-500">
-                        Arraste clientes entre colunas para atualizar rapidamente o funil comercial.
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-                      <p className="text-[11px] text-slate-200">Fluxo recomendado</p>
-                      <p className="mt-1 text-[10px] text-slate-500">
-                        Novo → Contato → Proposta → Fechado.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </aside>
-            )}
+            <DashboardCustomerDrawer
+              activePage={activePage}
+              selectedClient={selectedClient}
+              noteText={noteText}
+              tagText={tagText}
+              clients={clients}
+              analytics={analytics}
+              money={money}
+              initials={initials}
+              statusClass={statusClass}
+              tagClass={tagClass}
+              customerFitLabel={customerFitLabel}
+              leadOwner={leadOwner}
+              nextActionLabel={nextActionLabel}
+              getLeadScore={getLeadScore}
+              getRisk={getRisk}
+              slaLabel={slaLabel}
+              priorityLabel={priorityLabel}
+              whatsappMessage={whatsappMessage}
+              onClearSelectedClient={() => setSelectedId(null)}
+              onSetNoteText={setNoteText}
+              onSetTagText={setTagText}
+              onAddNote={addNote}
+              onAddTagToSelected={addTagToSelected}
+              onRemoveTagFromSelected={removeTagFromSelected}
+              onEditClient={setEditing}
+              onCopyText={copyText}
+              onApplySmartFilter={applySmartFilter}
+            />
           </section>
         </main>
       </div>

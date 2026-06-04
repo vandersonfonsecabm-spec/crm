@@ -1,0 +1,48 @@
+
+> frontend@0.0.0 build
+> tsc -b && vite build
+
+src/components/dashboard/DashboardCustomerDrawer.tsx(75,3): error TS6133: 'clients' is declared but its value is never read.
+src/components/dashboard/DashboardCustomerDrawer.tsx(76,3): error TS6133: 'analytics' is declared but its value is never read.
+src/components/dashboard/DashboardCustomerDrawer.tsx(87,3): error TS6133: 'priorityLabel' is declared but its value is never read.
+src/components/dashboard/DashboardCustomerDrawer.tsx(97,3): error TS6133: 'onApplySmartFilter' is declared but its value is never read.
+src/components/dashboard/DashboardCustomerDrawer.tsx(253,32): error TS2304: Cannot find name 'StickyNote'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(270,93): error TS2304: Cannot find name 'idleLabel'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(320,51): error TS2304: Cannot find name 'Sparkles'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(320,76): error TS2304: Cannot find name 'StickyNote'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(345,14): error TS2304: Cannot find name 'activePage'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(352,28): error TS2304: Cannot find name 'Sparkles'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(376,28): error TS2304: Cannot find name 'clients'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(376,44): error TS7006: Parameter 'client' implicitly has an 'any' type.
+src/components/dashboard/DashboardCustomerDrawer.tsx(376,55): error TS2304: Cannot find name 'getRisk'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(382,68): error TS2304: Cannot find name 'analytics'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(387,68): error TS2304: Cannot find name 'analytics'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(393,40): error TS2304: Cannot find name 'onApplySmartFilter'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(398,28): error TS2304: Cannot find name 'Target'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(406,40): error TS2304: Cannot find name 'onApplySmartFilter'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(411,28): error TS2304: Cannot find name 'AlertTriangle'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(419,40): error TS2304: Cannot find name 'onApplySmartFilter'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(434,18): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(442,85): error TS2304: Cannot find name 'statusClass'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(442,97): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(443,26): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(450,74): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(451,86): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(456,65): error TS2304: Cannot find name 'money'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(456,71): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(463,34): error TS2304: Cannot find name 'getLeadScore'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(463,47): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(466,133): error TS2304: Cannot find name 'getLeadScore'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(466,146): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(473,79): error TS2304: Cannot find name 'priorityLabel'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(473,93): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(478,79): error TS2304: Cannot find name 'slaLabel'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(478,88): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(488,50): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(488,98): error TS2304: Cannot find name 'whatsappMessage'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(488,114): error TS2304: Cannot find name 'selectedClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(496,48): error TS2304: Cannot find name 'onEditClient'.
+src/components/dashboard/DashboardCustomerDrawer.tsx(496,61): error TS2304: Cannot find name 'selectedClient'.
+src/pages/Dashboard.tsx(3,3): error TS6133: 'Activity' is declared but its value is never read.
+src/pages/Dashboard.tsx(9,3): error TS6133: 'Copy' is declared but its value is never read.
+src/pages/Dashboard.tsx(11,3): error TS6133: 'Edit3' is declared but its value is never read.
