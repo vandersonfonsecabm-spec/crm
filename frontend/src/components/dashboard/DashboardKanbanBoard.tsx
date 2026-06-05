@@ -1,4 +1,5 @@
 import DashboardKanbanSummary from "./DashboardKanbanSummary";
+import KanbanLeadCard from "../kanban/KanbanLeadCard";
 
 type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
 type ActivePage = "dashboard" | "clientes" | "kanban" | "automacoes";
@@ -399,167 +400,25 @@ export default function DashboardKanbanBoard({
                       )}
 
                       {kanbanClients.filter((client) => client.status === status).map((client) => (
-                        <div
+                        <KanbanLeadCard
                           key={client.id}
-                          draggable
-                          onDragStart={(event) => {
-                            event.dataTransfer.setData("clientId", String(client.id));
-                            setIsDraggingKanban(true);
-                          }}
-                          onDragEnd={() => {
-                            setDragOverStatus(null);
-                            setIsDraggingKanban(false);
-                          }}
-                          onClick={() => setSelectedId(client.id)}
-                          className={`group relative min-w-0 cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-black/20 p-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_14px_38px_rgba(0,0,0,0.38)] ${
-                            selectedId === client.id
-                              ? "scale-[1.015] border-cyan-300/50 bg-cyan-500/[0.10] shadow-[0_0_24px_rgba(34,211,238,0.10)]"
-                              : `${smartCardBorderClass(client)} hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.06] hover:shadow-[0_14px_32px_rgba(0,0,0,0.30)]`
-                          }`}
-                        >
-                          <div
-                            className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] ${
-                              client.hot && getLeadScore(client) >= 80
-                                ? "bg-gradient-to-r from-transparent via-rose-300/70 to-transparent"
-                                : getRisk(client) === "Alto"
-                                  ? "bg-gradient-to-r from-transparent via-amber-300/60 to-transparent"
-                                  : "bg-gradient-to-r from-transparent via-white/20 to-transparent"
-                            }`}
-                          />
-
-                          <div className="flex min-w-0 items-start justify-between gap-2">
-                            <div className="flex min-w-0 items-start gap-2">
-                              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-[9px] font-bold text-white">
-                                {initials(client.name)}
-                              </div>
-
-                              <div className="min-w-0">
-                                <div className="flex min-w-0 items-center gap-1">
-                                  <p className="truncate text-xs font-medium">{client.name}</p>
-
-                                  {client.notes.length > 0 && (
-                                    <span className="shrink-0 rounded-full bg-white/10 px-1 py-0.5 text-[8px] text-slate-300">
-                                      {client.notes.length}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <p className="mt-1 truncate text-[10px] text-slate-500">
-                                  {client.company}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex shrink-0 items-center gap-1">
-                              {client.hot && (
-                                <span className="flex h-4 w-4 items-center justify-center rounded-full border border-rose-300/20 bg-rose-500/10">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-rose-300 shadow-[0_0_10px_rgba(251,113,133,0.85)]" />
-                                </span>
-                              )}
-
-                              <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[8px] text-slate-400">
-                                {getLeadScore(client)}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <p className="min-w-0 truncate text-[10px] font-semibold text-slate-300">
-                                {money(client.value)}
-                              </p>
-
-                              {selectedId === client.id && (
-                                <span className="shrink-0 rounded-full border border-cyan-400/20 bg-cyan-500/10 px-1.5 py-0.5 text-[8px] text-cyan-200">
-                                  Ativo
-                                </span>
-                              )}
-                            </div>
-
-                            <span
-                              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[8px] ${
-                                getLeadScore(client) >= 80
-                                  ? "bg-emerald-500/10 text-emerald-200"
-                                  : getLeadScore(client) >= 60
-                                    ? "bg-amber-500/10 text-amber-200"
-                                    : "bg-rose-500/10 text-rose-200"
-                              }`}
-                            >
-                              {forecastLabel(client)}
-                            </span>
-                          </div>
-
-                          <div className="mt-2.5 rounded-xl border border-white/5 bg-black/20 p-2">
-                            <div className="mb-1 flex items-center justify-between text-[8px] text-slate-500">
-                              <span>Intensidade</span>
-                              <span>{actionIntensity(client)}%</span>
-                            </div>
-
-                            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                              <div
-                                className={`h-full rounded-full ${
-                                  actionIntensity(client) >= 85
-                                    ? "bg-rose-300 shadow-[0_0_10px_rgba(251,113,133,0.70)]"
-                                    : actionIntensity(client) >= 65
-                                      ? "bg-amber-300"
-                                      : "bg-slate-400"
-                                }`}
-                                style={{ width: `${actionIntensity(client)}%` }}
-                              />
-                            </div>
-
-                            <div className="mt-1 flex items-center justify-between text-[8px]">
-                              <span className="text-slate-500">Próxima ação</span>
-                              <span className="font-medium text-slate-300">{client.nextFollowUp}</span>
-                            </div>
-                          </div>
-
-                          <div className="mt-2 rounded-lg border border-white/5 bg-white/[0.02] px-2 py-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1">
-                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-
-                                <span className="text-[8px] text-slate-400">
-                                  Última atividade
-                                </span>
-                              </div>
-
-                              <span className="text-[8px] text-slate-500">
-                                {idleLabel(client)}
-                              </span>
-                            </div>
-
-                            <p className="mt-1 truncate text-[9px] text-slate-300">
-                              {activitySignalLabel(client)} • {forecastLabel(client)}
-                            </p>
-                          </div>
-
-                          <div className="mt-2 flex items-center justify-between gap-2">
-                            <span
-                              className={`rounded-full px-1.5 py-0.5 text-[8px] ${
-                                client.lastContactDays >= 7
-                                  ? "bg-rose-500/10 text-rose-200"
-                                  : client.lastContactDays >= 3
-                                    ? "bg-amber-500/10 text-amber-200"
-                                    : "bg-emerald-500/10 text-emerald-200"
-                              }`}
-                            >
-                              SLA {slaLabel(client)}
-                            </span>
-
-                            <span
-                              className={`truncate rounded-full px-1.5 py-0.5 text-[8px] ${
-                                client.hot && getLeadScore(client) >= 80
-                                  ? "bg-rose-500/10 text-rose-100"
-                                  : getLeadScore(client) >= 60
-                                    ? "bg-violet-500/10 text-violet-100"
-                                    : "bg-white/5 text-slate-400"
-                              }`}
-                            >
-                              {priorityLabel(client)}
-                            </span>
-                          </div>
-                        </div>
+                          client={client}
+                          selectedId={selectedId}
+                          money={money}
+                          initials={initials}
+                          getLeadScore={getLeadScore}
+                          getRisk={getRisk}
+                          forecastLabel={forecastLabel}
+                          idleLabel={idleLabel}
+                          activitySignalLabel={activitySignalLabel}
+                          actionIntensity={actionIntensity}
+                          slaLabel={slaLabel}
+                          priorityLabel={priorityLabel}
+                          smartCardBorderClass={smartCardBorderClass}
+                          setSelectedId={setSelectedId}
+                          setIsDraggingKanban={setIsDraggingKanban}
+                          setDragOverStatus={setDragOverStatus}
+                        />
                       ))}
                     </div>
                   </div>

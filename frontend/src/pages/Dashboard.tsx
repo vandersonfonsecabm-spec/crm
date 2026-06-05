@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle2,
-  X,
-} from "lucide-react";
-import {
   actionIntensity,
   activitySignalLabel,
   customerFitLabel,
@@ -31,6 +27,8 @@ import DashboardMetricsSection from "../components/dashboard/DashboardMetricsSec
 import DashboardHeader from "../components/dashboard/DashboardHeader";
 import DashboardPortfolioInsights from "../components/dashboard/DashboardPortfolioInsights";
 import DashboardClientsTable from "../components/dashboard/DashboardClientsTable";
+import DashboardClientsInsights from "../components/dashboard/DashboardClientsInsights";
+import DashboardRecentLeads from "../components/dashboard/DashboardRecentLeads";
 import ClientModal from "../components/dashboard/ClientModal";
 import DashboardFollowUpCalendar from "../components/dashboard/DashboardFollowUpCalendar";
 import DashboardRecentActivities from "../components/dashboard/DashboardRecentActivities";
@@ -45,6 +43,7 @@ import DashboardCommandCenter from "../components/dashboard/DashboardCommandCent
 import DashboardExecutiveSummary from "../components/dashboard/DashboardExecutiveSummary";
 import DashboardKanbanBoard from "../components/dashboard/DashboardKanbanBoard";
 import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomationsPanel";
+import DashboardToast from "../components/dashboard/DashboardToast";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
 
@@ -371,30 +370,43 @@ export default function Dashboard() {
           <section className={`mt-4 grid gap-4 ${activePage === "kanban" ? "xl:grid-cols-[minmax(0,1fr)_340px]" : "xl:grid-cols-[minmax(0,1fr)_340px]"}`}>
             <div className="space-y-4">
               {activePage === "clientes" && (
-                <DashboardClientsTable
-                  paginatedClients={paginatedClients}
-                  filteredClientsCount={filteredClients.length}
-                  selectedId={selectedId}
-                  page={page}
-                  totalPages={totalPages}
-                  money={money}
-                  initials={initials}
-                  tagClass={tagClass}
-                  statusClass={statusClass}
-                      getPriority={getPriority}
-                  getRisk={getRisk}
-                  getLeadScore={getLeadScore}
-                  forecastLabel={forecastLabel}
-                  idleLabel={idleLabel}
-                  onSelectClient={setSelectedId}
-                  onToggleFavorite={toggleFavorite}
-                  onToggleHot={toggleHot}
-                  onEditClient={setEditing}
-                  onCopyText={copyText}
-                  whatsappMessage={whatsappMessage}
-                  onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
-                  onNextPage={() => setPage((current) => Math.min(totalPages, current + 1))}
-                />
+                <>
+                  <DashboardClientsTable
+                    paginatedClients={paginatedClients}
+                    filteredClientsCount={filteredClients.length}
+                    selectedId={selectedId}
+                    page={page}
+                    totalPages={totalPages}
+                    money={money}
+                    initials={initials}
+                    tagClass={tagClass}
+                    statusClass={statusClass}
+                    getPriority={getPriority}
+                    getRisk={getRisk}
+                    getLeadScore={getLeadScore}
+                    forecastLabel={forecastLabel}
+                    idleLabel={idleLabel}
+                    onSelectClient={setSelectedId}
+                    onToggleFavorite={toggleFavorite}
+                    onToggleHot={toggleHot}
+                    onEditClient={setEditing}
+                    onCopyText={copyText}
+                    whatsappMessage={whatsappMessage}
+                    onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
+                    onNextPage={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  />
+
+                  <DashboardClientsInsights
+                    clients={clients}
+                    filteredClients={filteredClients}
+                    statusList={statusList}
+                    money={money}
+                    statusClass={statusClass}
+                    getRisk={getRisk}
+                    getLeadScore={getLeadScore}
+                    onSelectClient={setSelectedId}
+                  />
+                </>
               )}
               {activePage === "dashboard" && (
                 <DashboardFollowUpCalendar
@@ -410,38 +422,13 @@ export default function Dashboard() {
               )}
 
               {activePage === "dashboard" && (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {clients.slice(0, 4).map((client) => (
-                    <div
-                      key={client.id}
-                      onClick={() => setSelectedId(client.id)}
-                      className="cursor-pointer rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] transition hover:bg-white/[0.05]"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold">{client.name}</p>
-                          <p className="mt-0.5 text-[11px] text-slate-500">{client.company}</p>
-                        </div>
-
-                        <span className={`rounded-full border px-2 py-1 text-[10px] ${statusClass(client.status)}`}>
-                          {client.status}
-                        </span>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] text-slate-500">Valor</p>
-                          <p className="text-sm font-semibold">{money(client.value)}</p>
-                        </div>
-
-                        <div className="text-right">
-                          <p className="text-[10px] text-slate-500">Score</p>
-                          <p className="text-sm font-semibold">{getLeadScore(client)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <DashboardRecentLeads
+                  clients={clients}
+                  money={money}
+                  statusClass={statusClass}
+                  getLeadScore={getLeadScore}
+                  onSelectClient={setSelectedId}
+                />
               )}
 
               {activePage === "dashboard" && (
@@ -536,7 +523,6 @@ export default function Dashboard() {
                 changeStatus={changeStatus}
               />
 
-
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
@@ -581,31 +567,7 @@ export default function Dashboard() {
         <ClientModal title="Novo cliente" client={creating} setClient={setCreating} onClose={() => setCreating(null)} onSave={createClient} saveLabel="Criar cliente" />
       )}
 
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50 w-[320px] overflow-hidden rounded-2xl border border-white/10 bg-[#0d111a]/95 shadow-2xl shadow-black/40 backdrop-blur">
-          <div className="flex items-start gap-3 p-3">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-500/10">
-              <CheckCircle2 size={16} className="text-emerald-300" />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-slate-100">Ação concluída</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{toast}</p>
-            </div>
-
-            <button
-              onClick={() => setToast("")}
-              className="rounded-lg p-1 text-slate-500 transition hover:bg-white/10 hover:text-slate-200"
-            >
-              <X size={13} />
-            </button>
-          </div>
-
-          <div className="h-0.5 w-full bg-white/10">
-            <div className="h-full w-2/3 rounded-full bg-emerald-300/70" />
-          </div>
-        </div>
-      )}
+      <DashboardToast toast={toast} onClose={() => setToast("")} />
     </div>
   );
 }

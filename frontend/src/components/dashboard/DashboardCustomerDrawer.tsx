@@ -142,144 +142,53 @@ export default function DashboardCustomerDrawer({
 
           <div className="p-3">
             <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                <p className="text-[9px] text-slate-500">Pressão</p>
-                <p className="mt-1 text-xs font-semibold">
-                  {clients.filter((client) => getRisk(client) !== "Baixo").length} leads
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                <p className="text-[9px] text-slate-500">Hoje</p>
-                <p className="mt-1 text-xs font-semibold">{analytics.todayFollowUps}</p>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                <p className="text-[9px] text-slate-500">Score</p>
-                <p className="mt-1 text-xs font-semibold">{analytics.averageScore}</p>
-              </div>
+              <InfoBox label="Pressão" value={`${clients.filter((client) => getRisk(client) !== "Baixo").length} leads`} />
+              <InfoBox label="Hoje" value={String(analytics.todayFollowUps)} />
+              <InfoBox label="Score" value={String(analytics.averageScore)} />
             </div>
 
             <div className="mt-3 space-y-2">
-              <button
+              <SmartFilterButton
+                tone="amber"
+                title="Prioridade agora"
+                description="Revisar propostas quentes e acelerar fechamento antes de perder timing."
+                icon={<Target size={13} className="text-amber-200" />}
                 onClick={() => onApplySmartFilter("proposal")}
-                className="group w-full rounded-xl border border-amber-300/10 bg-amber-500/[0.06] p-3 text-left transition-all duration-200 hover:border-amber-300/20 hover:bg-amber-500/[0.1]"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold text-amber-100">Prioridade agora</p>
-                  <Target size={13} className="text-amber-200" />
-                </div>
-                <p className="mt-1 text-[10px] leading-relaxed text-amber-100/60">
-                  Revisar propostas quentes e acelerar fechamento antes de perder timing.
-                </p>
-              </button>
+              />
 
-              <button
+              <SmartFilterButton
+                tone="rose"
+                title="Risco silencioso"
+                description="Clientes parados há muitos dias precisam de ação para não esfriar."
+                icon={<AlertTriangle size={13} className="text-rose-200" />}
                 onClick={() => onApplySmartFilter("silent")}
-                className="group w-full rounded-xl border border-rose-300/10 bg-rose-500/[0.06] p-3 text-left transition-all duration-200 hover:border-rose-300/20 hover:bg-rose-500/[0.1]"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold text-rose-100">Risco silencioso</p>
-                  <AlertTriangle size={13} className="text-rose-200" />
-                </div>
-                <p className="mt-1 text-[10px] leading-relaxed text-rose-100/60">
-                  Clientes parados há muitos dias precisam de ação para não esfriar.
-                </p>
-              </button>
+              />
 
-              <button
+              <SmartFilterButton
+                tone="sky"
+                title="Limpeza inteligente"
+                description="Separar leads em risco alto para decidir reativação, pausa ou descarte."
+                icon={<Activity size={13} className="text-sky-200" />}
                 onClick={() => onApplySmartFilter("risk")}
-                className="group w-full rounded-xl border border-sky-300/10 bg-sky-500/[0.06] p-3 text-left transition-all duration-200 hover:border-sky-300/20 hover:bg-sky-500/[0.1]"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold text-sky-100">Limpeza inteligente</p>
-                  <Activity size={13} className="text-sky-200" />
-                </div>
-                <p className="mt-1 text-[10px] leading-relaxed text-sky-100/60">
-                  Separar leads em risco alto para decidir reativação, pausa ou descarte.
-                </p>
-              </button>
+              />
             </div>
           </div>
         </div>
 
         {selectedClient && (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold">Lead em foco</p>
-                <p className="text-[10px] text-slate-500">Próxima ação recomendada</p>
-              </div>
-
-              <span className={`rounded-full border px-2 py-1 text-[10px] ${statusClass(selectedClient.status)}`}>
-                {selectedClient.status}
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold">{selectedClient.name}</p>
-                  <p className="mt-0.5 truncate text-[10px] text-slate-500">{selectedClient.company}</p>
-                </div>
-
-                <div className="text-right">
-                  <p className="text-[10px] text-slate-500">Valor</p>
-                  <p className="text-xs font-semibold">{money(selectedClient.value)}</p>
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
-                  <span>Força comercial</span>
-                  <span>{getLeadScore(selectedClient)}%</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]"
-                    style={{ width: `${getLeadScore(selectedClient)}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
-                <div className="rounded-lg bg-white/5 p-2">
-                  <p className="text-slate-500">Prioridade</p>
-                  <p className="mt-0.5 font-semibold text-slate-200">{priorityLabel(selectedClient)}</p>
-                </div>
-
-                <div className="rounded-lg bg-white/5 p-2">
-                  <p className="text-slate-500">SLA</p>
-                  <p className="mt-0.5 font-semibold text-slate-200">{slaLabel(selectedClient)}</p>
-                </div>
-              </div>
-
-              <p className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-[10px] leading-relaxed text-slate-400">
-                Sugestão: enviar mensagem curta pelo WhatsApp, confirmar interesse e registrar a resposta na timeline.
-              </p>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <a
-                  href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-[11px] font-semibold text-black"
-                >
-                  <MessageCircle size={12} /> WhatsApp
-                </a>
-
-                <button
-                  onClick={() => onEditClient(selectedClient)}
-                  className="inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-white/10"
-                >
-                  <Edit3 size={12} /> Editar
-                </button>
-              </div>
-            </div>
-          </div>
+          <FocusedLeadCard
+            selectedClient={selectedClient}
+            money={money}
+            statusClass={statusClass}
+            getLeadScore={getLeadScore}
+            slaLabel={slaLabel}
+            priorityLabel={priorityLabel}
+            whatsappMessage={whatsappMessage}
+            onEditClient={onEditClient}
+          />
         )}
 
-        <PipelineVisualCard />
+        <PipelineVisualCard clients={clients} analytics={analytics} money={money} getRisk={getRisk} />
       </aside>
     );
   }
@@ -291,71 +200,82 @@ export default function DashboardCustomerDrawer({
   }
 
   return (
-    <aside className="w-[340px] shrink-0 space-y-4">
+    <aside className="w-[340px] shrink-0 space-y-3">
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
         <div className="mb-3 flex items-center justify-between">
           <div>
             <p className="text-sm font-semibold">Central do cliente</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">
-              Atendimento, sinais comerciais e próxima ação.
-            </p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Resumo, ação e histórico comercial.</p>
           </div>
 
           {selectedClient && (
-            <button
-              onClick={onClearSelectedClient}
-              className="rounded-lg p-1 text-slate-400 hover:bg-white/10"
-            >
+            <button onClick={onClearSelectedClient} className="rounded-lg p-1 text-slate-400 hover:bg-white/10">
               <X size={14} />
             </button>
           )}
         </div>
 
         {selectedClient ? (
-          <div>
-            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.035] hover:shadow-lg hover:shadow-black/30">
+          <div className="space-y-3">
+            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.035]">
               <div className="border-b border-white/10 bg-white/[0.025] p-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-[11px] font-bold text-black">
-                        {initials(selectedClient.name)}
-                      </div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-[11px] font-bold text-black">
+                      {initials(selectedClient.name)}
+                    </div>
 
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{selectedClient.name}</p>
-                        <p className="truncate text-[11px] text-slate-400">{selectedClient.company}</p>
-                      </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{selectedClient.name}</p>
+                      <p className="truncate text-[11px] text-slate-400">{selectedClient.company}</p>
                     </div>
                   </div>
 
-                  <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] ${statusClass(selectedClient.status)}`}>
+                  <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] ${statusClass(selectedClient.status)}`}>
                     {selectedClient.status}
                   </span>
                 </div>
 
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <InfoBox label="Valor" value={money(selectedClient.value)} />
-                  <InfoBox label="Fit" value={customerFitLabel(selectedClient)} />
+                  <InfoBox label="Score" value={`${getLeadScore(selectedClient)}/100`} />
                   <InfoBox label="Dono" value={leadOwner(selectedClient)} />
                 </div>
               </div>
 
               <div className="p-3">
-                <div className="rounded-xl border border-violet-400/10 bg-violet-500/[0.045] p-3">
-                  <div className="mb-2 flex items-center justify-between text-[11px]">
-                    <span className="font-semibold text-violet-100">Diagnóstico comercial</span>
+                <div className="rounded-xl border border-violet-400/10 bg-violet-500/[0.045] p-2.5">
+                  <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px]">
+                    <span className="font-semibold text-violet-100">Próxima melhor ação</span>
                     <span className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[9px] text-violet-100">
                       prioridade
                     </span>
                   </div>
 
-                  <p className="text-[10px] leading-relaxed text-violet-100/65">
-                    {nextActionLabel(selectedClient)}
-                  </p>
+                  <p className="text-[10px] leading-relaxed text-violet-100/65">{nextActionLabel(selectedClient)}</p>
                 </div>
 
-                <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="mt-2.5">
+                  <div className="mb-1 flex items-center justify-between text-[10px] text-slate-400">
+                    <span>Força comercial</span>
+                    <span>{getLeadScore(selectedClient)}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]"
+                      style={{ width: `${getLeadScore(selectedClient)}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-2.5 grid grid-cols-2 gap-2 text-[11px]">
+                  <InfoBox label="Fit" value={customerFitLabel(selectedClient)} />
+                  <InfoBox label="Follow-up" value={selectedClient.nextFollowUp} />
+                  <InfoBox label="Risco" value={getRisk(selectedClient)} />
+                  <InfoBox label="SLA" value={slaLabel(selectedClient)} />
+                </div>
+
+                <div className="mt-2.5 grid grid-cols-3 gap-2">
                   <ActionButton
                     icon={<Phone size={13} className="mb-1 text-emerald-300" />}
                     label="Telefone"
@@ -379,56 +299,32 @@ export default function DashboardCustomerDrawer({
                   </a>
                 </div>
 
-                <div className="mt-3">
-                  <div className="mb-1 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>Score inteligente</span>
-                    <span>{getLeadScore(selectedClient)}/100</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]"
-                      style={{ width: `${getLeadScore(selectedClient)}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                  <InfoBox label="Origem" value={selectedClient.source} />
-                  <InfoBox label="Follow-up" value={selectedClient.nextFollowUp} />
-                  <InfoBox label="Risco" value={getRisk(selectedClient)} />
-                  <InfoBox label="SLA" value={slaLabel(selectedClient)} />
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-1">
+                <div className="mt-2.5 flex flex-wrap gap-1">
                   {selectedClient.tags.map((tag) => (
                     <button
                       key={tag}
                       onClick={() => onRemoveTagFromSelected(tag)}
-                      className={`rounded-full border px-2 py-1 text-[10px] ${tagClass(tag)}`}
+                      className={`rounded-full border px-2 py-0.5 text-[9px] ${tagClass(tag)}`}
                     >
                       {tag} ×
                     </button>
                   ))}
                 </div>
 
-                <div className="mt-3 flex gap-2">
+                <div className="mt-2.5 flex gap-2">
                   <input
                     value={tagText}
                     onChange={(event) => onSetTagText(event.target.value)}
                     placeholder="Nova tag..."
                     className="flex-1 select-text rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none placeholder:text-slate-500"
                   />
-                  <button
-                    onClick={onAddTagToSelected}
-                    className="rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-black"
-                  >
+                  <button onClick={onAddTagToSelected} className="rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-black">
                     Tag
                   </button>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-2.5 flex flex-wrap gap-2">
                   <SmallButton onClick={() => onEditClient(selectedClient)} icon={<Edit3 size={12} />} label="Editar" />
-                  <SmallButton onClick={() => onCopyText(selectedClient.phone, "Telefone copiado.")} icon={<Phone size={12} />} label="Telefone" />
                   <SmallButton
                     onClick={() =>
                       onCopyText(
@@ -443,7 +339,7 @@ export default function DashboardCustomerDrawer({
               </div>
             </div>
 
-            <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/20 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.035]">
+            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.035]">
               <div className="border-b border-white/10 bg-white/[0.025] p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -452,20 +348,16 @@ export default function DashboardCustomerDrawer({
                     </div>
 
                     <div>
-                      <p className="text-xs font-semibold">Histórico comercial</p>
-                      <p className="mt-0.5 text-[10px] text-slate-500">Interações, SLA e cadência</p>
+                      <p className="text-xs font-semibold">Timeline comercial</p>
+                      <p className="mt-0.5 text-[10px] text-slate-500">
+                        {localIdleLabel(selectedClient)} sem contato • próxima {selectedClient.nextFollowUp}
+                      </p>
                     </div>
                   </div>
 
                   <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-400">
-                    {selectedClient.notes.length} registros
+                    {selectedClient.notes.length}
                   </span>
-                </div>
-
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <InfoBox label="Contato" value={localIdleLabel(selectedClient)} />
-                  <InfoBox label="SLA" value={slaLabel(selectedClient)} />
-                  <InfoBox label="Próxima" value={selectedClient.nextFollowUp} />
                 </div>
               </div>
 
@@ -474,29 +366,22 @@ export default function DashboardCustomerDrawer({
                   <input
                     value={noteText}
                     onChange={(event) => onSetNoteText(event.target.value)}
-                    placeholder="Registrar nova interação..."
+                    placeholder="Registrar interação..."
                     className="flex-1 select-text rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none placeholder:text-slate-500"
                   />
-                  <button
-                    onClick={onAddNote}
-                    className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-black"
-                  >
+                  <button onClick={onAddNote} className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-black">
                     <Plus size={12} />
                     Add
                   </button>
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  <div className="relative rounded-xl border border-emerald-400/10 bg-emerald-500/[0.045] p-3">
+                  <div className="relative rounded-xl border border-emerald-400/10 bg-emerald-500/[0.045] p-2.5">
                     <div className="absolute left-3 top-3 h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.55)]" />
                     <div className="pl-5">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold text-emerald-100">
-                          Próxima ação recomendada
-                        </p>
-                        <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] text-emerald-100">
-                          ação
-                        </span>
+                        <p className="text-[11px] font-semibold text-emerald-100">Ação recomendada</p>
+                        <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] text-emerald-100">ação</span>
                       </div>
                       <p className="mt-1 text-[10px] leading-relaxed text-emerald-100/65">
                         {getLeadScore(selectedClient) >= 80
@@ -509,22 +394,18 @@ export default function DashboardCustomerDrawer({
                   </div>
 
                   {selectedClient.notes.length === 0 && (
-                    <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-                      <p className="text-[11px] text-slate-500">
-                        Nenhuma nota adicionada ainda.
-                      </p>
-                      <p className="mt-1 text-[10px] text-slate-600">
-                        Use a timeline para registrar ligações, propostas, objeções e próximos passos.
-                      </p>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5">
+                      <p className="text-[11px] text-slate-500">Nenhuma nota adicionada ainda.</p>
+                      <p className="mt-1 text-[10px] text-slate-600">Registre ligações, propostas, objeções e próximos passos.</p>
                     </div>
                   )}
 
                   {selectedClient.notes.map((note, index) => (
                     <div
                       key={note.id}
-                      className="relative rounded-xl border border-white/10 bg-white/[0.035] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.055]"
+                      className="relative rounded-xl border border-white/10 bg-white/[0.035] p-2.5 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.055]"
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-2.5">
                         <div
                           className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-[10px] ${
                             index === 0
@@ -540,14 +421,10 @@ export default function DashboardCustomerDrawer({
                             <p className="text-[11px] font-semibold text-slate-200">
                               {index === 0 ? "Última interação" : "Registro comercial"}
                             </p>
-                            <span className="shrink-0 text-[9px] text-slate-600">
-                              {note.date}
-                            </span>
+                            <span className="shrink-0 text-[9px] text-slate-600">{note.date}</span>
                           </div>
 
-                          <p className="text-[11px] leading-relaxed text-slate-400">
-                            {note.text}
-                          </p>
+                          <p className="text-[11px] leading-relaxed text-slate-400">{note.text}</p>
                         </div>
                       </div>
                     </div>
@@ -561,8 +438,104 @@ export default function DashboardCustomerDrawer({
         )}
       </div>
 
-      <PipelineVisualCard />
+      <PipelineVisualCard clients={clients} analytics={analytics} money={money} getRisk={getRisk} />
     </aside>
+  );
+}
+
+function FocusedLeadCard({
+  selectedClient,
+  money,
+  statusClass,
+  getLeadScore,
+  slaLabel,
+  priorityLabel,
+  whatsappMessage,
+  onEditClient,
+}: {
+  selectedClient: Client;
+  money: (value: number) => string;
+  statusClass: (status: Status) => string;
+  getLeadScore: (client: Client) => number;
+  slaLabel: (client: Client) => string;
+  priorityLabel: (client: Client) => string;
+  whatsappMessage: (client: Client) => string;
+  onEditClient: (client: Client) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold">Lead em foco</p>
+          <p className="text-[10px] text-slate-500">Próxima ação recomendada</p>
+        </div>
+
+        <span className={`rounded-full border px-2 py-1 text-[10px] ${statusClass(selectedClient.status)}`}>
+          {selectedClient.status}
+        </span>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold">{selectedClient.name}</p>
+            <p className="mt-0.5 truncate text-[10px] text-slate-500">{selectedClient.company}</p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-[10px] text-slate-500">Valor</p>
+            <p className="text-xs font-semibold">{money(selectedClient.value)}</p>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
+            <span>Força comercial</span>
+            <span>{getLeadScore(selectedClient)}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]"
+              style={{ width: `${getLeadScore(selectedClient)}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
+          <div className="rounded-lg bg-white/5 p-2">
+            <p className="text-slate-500">Prioridade</p>
+            <p className="mt-0.5 font-semibold text-slate-200">{priorityLabel(selectedClient)}</p>
+          </div>
+
+          <div className="rounded-lg bg-white/5 p-2">
+            <p className="text-slate-500">SLA</p>
+            <p className="mt-0.5 font-semibold text-slate-200">{slaLabel(selectedClient)}</p>
+          </div>
+        </div>
+
+        <p className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-[10px] leading-relaxed text-slate-400">
+          Sugestão: enviar mensagem curta pelo WhatsApp, confirmar interesse e registrar a resposta na timeline.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a
+            href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-[11px] font-semibold text-black"
+          >
+            <MessageCircle size={12} /> WhatsApp
+          </a>
+
+          <button
+            onClick={() => onEditClient(selectedClient)}
+            className="inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-white/10"
+          >
+            <Edit3 size={12} /> Editar
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -615,29 +588,146 @@ function SmallButton({
   );
 }
 
-function PipelineVisualCard() {
+function SmartFilterButton({
+  title,
+  description,
+  icon,
+  tone,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  tone: "amber" | "rose" | "sky";
+  onClick: () => void;
+}) {
+  const classes = {
+    amber: "border-amber-300/10 bg-amber-500/[0.06] text-amber-100 hover:border-amber-300/20 hover:bg-amber-500/[0.1]",
+    rose: "border-rose-300/10 bg-rose-500/[0.06] text-rose-100 hover:border-rose-300/20 hover:bg-rose-500/[0.1]",
+    sky: "border-sky-300/10 bg-sky-500/[0.06] text-sky-100 hover:border-sky-300/20 hover:bg-sky-500/[0.1]",
+  };
+
+  return (
+    <button onClick={onClick} className={`group w-full rounded-xl border p-3 text-left transition-all duration-200 ${classes[tone]}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold">{title}</p>
+        {icon}
+      </div>
+      <p className="mt-1 text-[10px] leading-relaxed opacity-60">{description}</p>
+    </button>
+  );
+}
+
+function PipelineVisualCard({
+  clients,
+  analytics,
+  money,
+  getRisk,
+}: {
+  clients: Client[];
+  analytics: Analytics;
+  money: (value: number) => string;
+  getRisk: (client: Client) => string;
+}) {
+  const hotOpportunities = clients.filter((client) => client.hot || client.value >= 12000);
+  const silentClients = clients.filter((client) => client.lastContactDays >= 7);
+  const highRiskClients = clients.filter((client) => getRisk(client) === "Alto");
+  const proposalValue = clients
+    .filter((client) => client.status === "Proposta")
+    .reduce((sum, client) => sum + client.value, 0);
+
+  const topOpportunity = [...clients].sort((a, b) => b.value - a.value)[0];
+
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-      <div className="flex items-center gap-2">
-        <KanbanSquare size={15} className="text-slate-400" />
-        <p className="text-sm font-semibold">Pipeline visual</p>
-      </div>
-
-      <div className="mt-3 space-y-2">
-        <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-          <p className="text-[11px] text-slate-200">Dica rápida</p>
-          <p className="mt-1 text-[10px] text-slate-500">
-            Arraste clientes entre colunas para atualizar rapidamente o funil comercial.
-          </p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <KanbanSquare size={15} className="text-slate-400" />
+          <div>
+            <p className="text-sm font-semibold">Radar comercial</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Prioridades rápidas do funil</p>
+          </div>
         </div>
 
-        <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-          <p className="text-[11px] text-slate-200">Fluxo recomendado</p>
-          <p className="mt-1 text-[10px] text-slate-500">
-            Novo → Contato → Proposta → Fechado.
-          </p>
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] text-slate-400">ao vivo</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <RadarMetric label="Risco alto" value={`${highRiskClients.length} leads`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
+        <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
+        <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
+        <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-violet-200" />} />
+      </div>
+
+      <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold text-slate-200">Ação sugerida</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+              {highRiskClients.length > 0
+                ? "Reativar clientes em risco antes de criar novas oportunidades."
+                : analytics.todayFollowUps > 0
+                  ? "Priorizar follow-ups de hoje e propostas abertas."
+                  : "Revisar oportunidades quentes e manter cadência comercial."}
+            </p>
+          </div>
+
+          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] text-slate-400">
+            prioridade
+          </span>
         </div>
       </div>
+
+      {topOpportunity && (
+        <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.035] p-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-semibold text-slate-200">{topOpportunity.name}</p>
+              <p className="mt-0.5 truncate text-[9px] text-slate-500">{topOpportunity.company}</p>
+            </div>
+
+            <div className="shrink-0 text-right">
+              <p className="text-[9px] text-slate-500">Maior ticket</p>
+              <p className="text-[10px] font-semibold text-slate-200">{money(topOpportunity.value)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {silentClients.length > 0 && (
+        <p className="mt-2 rounded-xl border border-white/10 bg-white/[0.025] px-2 py-1.5 text-[10px] text-slate-500">
+          {silentClients.length} cliente(s) sem contato recente pedem atenção.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function RadarMetric({
+  label,
+  value,
+  tone,
+  icon,
+}: {
+  label: string;
+  value: string;
+  tone: "rose" | "amber" | "sky" | "violet";
+  icon: React.ReactNode;
+}) {
+  const classes = {
+    rose: "border-rose-400/10 bg-rose-500/[0.055] text-rose-100",
+    amber: "border-amber-400/10 bg-amber-500/[0.055] text-amber-100",
+    sky: "border-sky-400/10 bg-sky-500/[0.055] text-sky-100",
+    violet: "border-violet-400/10 bg-violet-500/[0.055] text-violet-100",
+  };
+
+  return (
+    <div className={`rounded-xl border p-2 ${classes[tone]}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[9px] opacity-65">{label}</p>
+        {icon}
+      </div>
+      <p className="mt-1 truncate text-xs font-semibold">{value}</p>
     </div>
   );
 }
