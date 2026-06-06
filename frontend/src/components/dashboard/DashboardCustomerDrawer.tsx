@@ -113,233 +113,184 @@ export default function DashboardCustomerDrawer({
     return null;
   }
 
-  if (activePage === "kanban") {
-    return (
-      <aside className="w-[340px] shrink-0 space-y-4">
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-          <div className="border-b border-white/10 bg-gradient-to-br from-white/[0.08] to-transparent p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-violet-300/20 bg-violet-500/10 text-violet-200">
-                  <Sparkles size={15} />
-                </div>
-
-                <div>
-                  <p className="text-sm font-semibold">Inteligência do pipeline</p>
-                  <p className="text-[10px] text-slate-500">Leitura comercial</p>
-                </div>
-              </div>
-
-              <span className="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-[9px] font-semibold text-emerald-200">
-                Online
-              </span>
-            </div>
-
-            <p className="mt-3 text-xs leading-relaxed text-slate-400">
-              O painel cruza score, valor, risco e tempo sem contato para indicar onde agir primeiro.
-            </p>
-          </div>
-
-          <div className="p-3">
-            <div className="grid grid-cols-3 gap-2">
-              <InfoBox label="Pressão" value={`${clients.filter((client) => getRisk(client) !== "Baixo").length} leads`} />
-              <InfoBox label="Hoje" value={String(analytics.todayFollowUps)} />
-              <InfoBox label="Score" value={String(analytics.averageScore)} />
-            </div>
-
-            <div className="mt-3 space-y-2">
-              <SmartFilterButton
-                tone="amber"
-                title="Prioridade agora"
-                description="Revisar propostas quentes e acelerar fechamento antes de perder timing."
-                icon={<Target size={13} className="text-amber-200" />}
-                onClick={() => onApplySmartFilter("proposal")}
-              />
-
-              <SmartFilterButton
-                tone="rose"
-                title="Risco silencioso"
-                description="Clientes parados há muitos dias precisam de ação para não esfriar."
-                icon={<AlertTriangle size={13} className="text-rose-200" />}
-                onClick={() => onApplySmartFilter("silent")}
-              />
-
-              <SmartFilterButton
-                tone="sky"
-                title="Limpeza inteligente"
-                description="Separar leads em risco alto para decidir reativação, pausa ou descarte."
-                icon={<Activity size={13} className="text-sky-200" />}
-                onClick={() => onApplySmartFilter("risk")}
-              />
-            </div>
-          </div>
-        </div>
-
-        {selectedClient && (
-          <FocusedLeadCard
-            selectedClient={selectedClient}
-            money={money}
-            statusClass={statusClass}
-            getLeadScore={getLeadScore}
-            slaLabel={slaLabel}
-            priorityLabel={priorityLabel}
-            whatsappMessage={whatsappMessage}
-            onEditClient={onEditClient}
-          />
-        )}
-
-        <PipelineVisualCard clients={clients} analytics={analytics} money={money} getRisk={getRisk} />
-      </aside>
-    );
-  }
-
   function localIdleLabel(client: Client) {
     if (client.lastContactDays === 0) return "Hoje";
     if (client.lastContactDays === 1) return "1 dia";
     return `${client.lastContactDays} dias`;
   }
 
-  return (
-    <aside className="w-[340px] shrink-0 space-y-3">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">Central do cliente</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Resumo, ação e histórico comercial.</p>
-          </div>
+  if (activePage === "kanban") {
+    return (
+      <aside className="w-[380px] shrink-0 space-y-3">
+        <CommercialDecisionCenter
+          selectedClient={selectedClient}
+          clients={clients}
+          analytics={analytics}
+          money={money}
+          statusClass={statusClass}
+          getLeadScore={getLeadScore}
+          getRisk={getRisk}
+          slaLabel={slaLabel}
+          priorityLabel={priorityLabel}
+          nextActionLabel={nextActionLabel}
+          whatsappMessage={whatsappMessage}
+          onEditClient={onEditClient}
+          onCopyText={onCopyText}
+          onApplySmartFilter={onApplySmartFilter}
+          mode="kanban"
+        />
+      </aside>
+    );
+  }
 
-          {selectedClient && (
-            <button onClick={onClearSelectedClient} className="rounded-lg p-1 text-slate-400 hover:bg-white/10">
-              <X size={14} />
-            </button>
-          )}
+  return (
+    <aside className="w-[380px] shrink-0 space-y-3">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-[0_20px_60px_rgba(0,0,0,0.22)] transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+        <div className="border-b border-white/10 bg-gradient-to-br from-white/[0.09] via-white/[0.035] to-transparent p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Central de decisão</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Lead, ação, risco e histórico em um único painel.</p>
+            </div>
+
+            {selectedClient && (
+              <button
+                onClick={onClearSelectedClient}
+                className="rounded-lg p-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         {selectedClient ? (
-          <div className="space-y-3">
-            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.035]">
-              <div className="border-b border-white/10 bg-white/[0.025] p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-[11px] font-bold text-black">
-                      {initials(selectedClient.name)}
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{selectedClient.name}</p>
-                      <p className="truncate text-[11px] text-slate-400">{selectedClient.company}</p>
-                    </div>
+          <div className="p-3">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-xs font-black text-black shadow-[0_0_22px_rgba(255,255,255,0.12)]">
+                    {initials(selectedClient.name)}
                   </div>
 
-                  <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] ${statusClass(selectedClient.status)}`}>
-                    {selectedClient.status}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-100">{selectedClient.name}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-slate-500">{selectedClient.company}</p>
+                  </div>
+                </div>
+
+                <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] ${statusClass(selectedClient.status)}`}>
+                  {selectedClient.status}
+                </span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-[1fr_86px] gap-2">
+                <div className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.045] p-2.5">
+                  <p className="text-[9px] uppercase tracking-[0.14em] text-emerald-100/50">Valor potencial</p>
+                  <p className="mt-1 text-sm font-semibold text-emerald-100">{money(selectedClient.value)}</p>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5 text-center">
+                  <p className="text-[9px] text-slate-500">Score</p>
+                  <p className="mt-0.5 text-xl font-black leading-none text-slate-100">{getLeadScore(selectedClient)}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-violet-400/10 bg-violet-500/[0.055] p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold text-violet-100">Próxima melhor ação</p>
+                  <span className="rounded-full border border-violet-300/10 bg-violet-400/10 px-2 py-0.5 text-[9px] text-violet-100">
+                    decisão
                   </span>
                 </div>
 
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <InfoBox label="Valor" value={money(selectedClient.value)} />
-                  <InfoBox label="Score" value={`${getLeadScore(selectedClient)}/100`} />
-                  <InfoBox label="Dono" value={leadOwner(selectedClient)} />
+                <p className="text-[10px] leading-relaxed text-violet-100/70">{nextActionLabel(selectedClient)}</p>
+              </div>
+
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                <DecisionMini label="Fit" value={customerFitLabel(selectedClient)} />
+                <DecisionMini label="Dono" value={leadOwner(selectedClient)} />
+                <DecisionMini label="Risco" value={getRisk(selectedClient)} />
+                <DecisionMini label="SLA" value={slaLabel(selectedClient)} />
+              </div>
+
+              <div className="mt-3">
+                <div className="mb-1 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>Força comercial</span>
+                  <span>{getLeadScore(selectedClient)}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]"
+                    style={{ width: `${getLeadScore(selectedClient)}%` }}
+                  />
                 </div>
               </div>
 
-              <div className="p-3">
-                <div className="rounded-xl border border-violet-400/10 bg-violet-500/[0.045] p-2.5">
-                  <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px]">
-                    <span className="font-semibold text-violet-100">Próxima melhor ação</span>
-                    <span className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[9px] text-violet-100">
-                      prioridade
-                    </span>
-                  </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <a
+                  href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-xl bg-white px-2 py-2 text-left text-black transition hover:opacity-90"
+                >
+                  <MessageCircle size={14} className="mb-1" />
+                  <p className="text-[10px] font-black">WhatsApp</p>
+                </a>
 
-                  <p className="text-[10px] leading-relaxed text-violet-100/65">{nextActionLabel(selectedClient)}</p>
-                </div>
+                <ActionButton
+                  icon={<Phone size={13} className="mb-1 text-emerald-300" />}
+                  label="Telefone"
+                  onClick={() => onCopyText(selectedClient.phone, "Telefone copiado.")}
+                />
 
-                <div className="mt-2.5">
-                  <div className="mb-1 flex items-center justify-between text-[10px] text-slate-400">
-                    <span>Força comercial</span>
-                    <span>{getLeadScore(selectedClient)}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]"
-                      style={{ width: `${getLeadScore(selectedClient)}%` }}
-                    />
-                  </div>
-                </div>
+                <ActionButton
+                  icon={<Copy size={13} className="mb-1 text-sky-300" />}
+                  label="Mensagem"
+                  onClick={() => onCopyText(whatsappMessage(selectedClient), "Mensagem copiada.")}
+                />
+              </div>
 
-                <div className="mt-2.5 grid grid-cols-2 gap-2 text-[11px]">
-                  <InfoBox label="Fit" value={customerFitLabel(selectedClient)} />
-                  <InfoBox label="Follow-up" value={selectedClient.nextFollowUp} />
-                  <InfoBox label="Risco" value={getRisk(selectedClient)} />
-                  <InfoBox label="SLA" value={slaLabel(selectedClient)} />
-                </div>
-
-                <div className="mt-2.5 grid grid-cols-3 gap-2">
-                  <ActionButton
-                    icon={<Phone size={13} className="mb-1 text-emerald-300" />}
-                    label="Telefone"
-                    onClick={() => onCopyText(selectedClient.phone, "Telefone copiado.")}
-                  />
-
-                  <ActionButton
-                    icon={<Copy size={13} className="mb-1 text-sky-300" />}
-                    label="Mensagem"
-                    onClick={() => onCopyText(whatsappMessage(selectedClient), "Mensagem copiada.")}
-                  />
-
-                  <a
-                    href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.05] px-2 py-1.5 text-left transition hover:border-emerald-400/20 hover:bg-emerald-500/[0.08]"
+              <div className="mt-3 flex flex-wrap gap-1">
+                {selectedClient.tags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => onRemoveTagFromSelected(tag)}
+                    className={`rounded-full border px-2 py-0.5 text-[9px] ${tagClass(tag)}`}
                   >
-                    <MessageCircle size={13} className="mb-1 text-emerald-300" />
-                    <p className="text-[9px] font-semibold text-emerald-100">WhatsApp</p>
-                  </a>
-                </div>
-
-                <div className="mt-2.5 flex flex-wrap gap-1">
-                  {selectedClient.tags.map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => onRemoveTagFromSelected(tag)}
-                      className={`rounded-full border px-2 py-0.5 text-[9px] ${tagClass(tag)}`}
-                    >
-                      {tag} ×
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-2.5 flex gap-2">
-                  <input
-                    value={tagText}
-                    onChange={(event) => onSetTagText(event.target.value)}
-                    placeholder="Nova tag..."
-                    className="flex-1 select-text rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none placeholder:text-slate-500"
-                  />
-                  <button onClick={onAddTagToSelected} className="rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-black">
-                    Tag
+                    {tag} ×
                   </button>
-                </div>
+                ))}
+              </div>
 
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  <SmallButton onClick={() => onEditClient(selectedClient)} icon={<Edit3 size={12} />} label="Editar" />
-                  <SmallButton
-                    onClick={() =>
-                      onCopyText(
-                        `${selectedClient.name} | ${selectedClient.company} | ${money(selectedClient.value)} | ${selectedClient.status}`,
-                        "Resumo copiado."
-                      )
-                    }
-                    icon={<Copy size={12} />}
-                    label="Resumo"
-                  />
-                </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={tagText}
+                  onChange={(event) => onSetTagText(event.target.value)}
+                  placeholder="Nova tag..."
+                  className="flex-1 select-text rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none placeholder:text-slate-500"
+                />
+                <button onClick={onAddTagToSelected} className="rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-black">
+                  Tag
+                </button>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <SmallButton onClick={() => onEditClient(selectedClient)} icon={<Edit3 size={12} />} label="Editar" />
+                <SmallButton
+                  onClick={() =>
+                    onCopyText(
+                      `${selectedClient.name} | ${selectedClient.company} | ${money(selectedClient.value)} | ${selectedClient.status}`,
+                      "Resumo copiado."
+                    )
+                  }
+                  icon={<Copy size={12} />}
+                  label="Resumo"
+                />
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.035]">
+            <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
               <div className="border-b border-white/10 bg-white/[0.025] p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -434,116 +385,277 @@ export default function DashboardCustomerDrawer({
             </div>
           </div>
         ) : (
-          <p className="text-xs text-slate-500">Selecione um cliente na tabela ou no Kanban.</p>
+          <EmptyDecisionState />
         )}
       </div>
 
-      <PipelineVisualCard clients={clients} analytics={analytics} money={money} getRisk={getRisk} />
+      <ExecutiveRadar clients={clients} analytics={analytics} money={money} getRisk={getRisk} onApplySmartFilter={onApplySmartFilter} />
     </aside>
   );
 }
 
-function FocusedLeadCard({
+function CommercialDecisionCenter({
   selectedClient,
+  clients,
+  analytics,
   money,
   statusClass,
   getLeadScore,
+  getRisk,
   slaLabel,
   priorityLabel,
+  nextActionLabel,
   whatsappMessage,
   onEditClient,
+  onCopyText,
+  onApplySmartFilter,
+  mode,
 }: {
-  selectedClient: Client;
+  selectedClient: Client | null;
+  clients: Client[];
+  analytics: Analytics;
   money: (value: number) => string;
   statusClass: (status: Status) => string;
   getLeadScore: (client: Client) => number;
+  getRisk: (client: Client) => string;
   slaLabel: (client: Client) => string;
   priorityLabel: (client: Client) => string;
+  nextActionLabel: (client: Client) => string;
   whatsappMessage: (client: Client) => string;
   onEditClient: (client: Client) => void;
+  onCopyText: (text: string, message: string) => void;
+  onApplySmartFilter: (type: SmartFilterType) => void;
+  mode: "kanban" | "default";
 }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold">Lead em foco</p>
-          <p className="text-[10px] text-slate-500">Próxima ação recomendada</p>
-        </div>
+  const highRiskClients = clients.filter((client) => getRisk(client) === "Alto");
+  const hotOpportunities = clients.filter((client) => client.hot || client.value >= 12000);
+  const proposalValue = clients
+    .filter((client) => client.status === "Proposta")
+    .reduce((sum, client) => sum + client.value, 0);
 
-        <span className={`rounded-full border px-2 py-1 text-[10px] ${statusClass(selectedClient.status)}`}>
-          {selectedClient.status}
-        </span>
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-[0_20px_70px_rgba(0,0,0,0.25)] transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+      <div className="border-b border-white/10 bg-gradient-to-br from-white/[0.09] via-white/[0.035] to-transparent p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-violet-300/20 bg-violet-500/10 text-violet-200">
+              <Sparkles size={15} />
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold">Central comercial</p>
+              <p className="text-[10px] text-slate-500">Decisão, risco e ação imediata</p>
+            </div>
+          </div>
+
+          <span className="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-2 py-1 text-[9px] font-semibold text-emerald-200">
+            Online
+          </span>
+        </div>
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-xs font-semibold">{selectedClient.name}</p>
-            <p className="mt-0.5 truncate text-[10px] text-slate-500">{selectedClient.company}</p>
-          </div>
+      <div className="p-3">
+        {selectedClient ? (
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-100">{selectedClient.name}</p>
+                <p className="mt-0.5 truncate text-[10px] text-slate-500">{selectedClient.company}</p>
+              </div>
 
-          <div className="text-right">
-            <p className="text-[10px] text-slate-500">Valor</p>
-            <p className="text-xs font-semibold">{money(selectedClient.value)}</p>
+              <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] ${statusClass(selectedClient.status)}`}>
+                {selectedClient.status}
+              </span>
+            </div>
+
+            <div className="mt-3 grid grid-cols-[1fr_74px] gap-2">
+              <div className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.045] p-2.5">
+                <p className="text-[9px] uppercase tracking-[0.14em] text-emerald-100/50">Ticket em foco</p>
+                <p className="mt-1 text-sm font-semibold text-emerald-100">{money(selectedClient.value)}</p>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5 text-center">
+                <p className="text-[9px] text-slate-500">Score</p>
+                <p className="mt-0.5 text-xl font-black leading-none text-slate-100">{getLeadScore(selectedClient)}</p>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-violet-400/10 bg-violet-500/[0.055] p-2.5">
+              <div className="mb-1 flex items-center justify-between text-[10px]">
+                <span className="font-semibold text-violet-100">Ação recomendada</span>
+                <span className="rounded-full bg-violet-400/10 px-2 py-0.5 text-[9px] text-violet-100">agora</span>
+              </div>
+              <p className="text-[10px] leading-relaxed text-violet-100/65">{nextActionLabel(selectedClient)}</p>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
+              <DecisionMini label="Prioridade" value={priorityLabel(selectedClient)} />
+              <DecisionMini label="SLA" value={slaLabel(selectedClient)} />
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <a
+                href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-xl bg-white px-2 py-2 text-left text-black transition hover:opacity-90"
+              >
+                <MessageCircle size={14} className="mb-1" />
+                <p className="text-[10px] font-black">WhatsApp</p>
+              </a>
+
+              <ActionButton
+                icon={<Phone size={13} className="mb-1 text-emerald-300" />}
+                label="Telefone"
+                onClick={() => onCopyText(selectedClient.phone, "Telefone copiado.")}
+              />
+
+              <ActionButton
+                icon={<Edit3 size={13} className="mb-1 text-sky-300" />}
+                label="Editar"
+                onClick={() => onEditClient(selectedClient)}
+              />
+            </div>
           </div>
+        ) : (
+          <EmptyDecisionState />
+        )}
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <RadarMetric label="Risco alto" value={`${highRiskClients.length} leads`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
+          <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
+          <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
+          <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-violet-200" />} />
         </div>
 
-        <div className="mt-3">
-          <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
-            <span>Força comercial</span>
-            <span>{getLeadScore(selectedClient)}%</span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-            <div
-              className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]"
-              style={{ width: `${getLeadScore(selectedClient)}%` }}
-            />
-          </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <FilterAction tone="amber" label="Propostas" onClick={() => onApplySmartFilter("proposal")} />
+          <FilterAction tone="rose" label="Silenciosos" onClick={() => onApplySmartFilter("silent")} />
+          <FilterAction tone="sky" label="Risco" onClick={() => onApplySmartFilter("risk")} />
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
-          <div className="rounded-lg bg-white/5 p-2">
-            <p className="text-slate-500">Prioridade</p>
-            <p className="mt-0.5 font-semibold text-slate-200">{priorityLabel(selectedClient)}</p>
-          </div>
-
-          <div className="rounded-lg bg-white/5 p-2">
-            <p className="text-slate-500">SLA</p>
-            <p className="mt-0.5 font-semibold text-slate-200">{slaLabel(selectedClient)}</p>
-          </div>
-        </div>
-
-        <p className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-[10px] leading-relaxed text-slate-400">
-          Sugestão: enviar mensagem curta pelo WhatsApp, confirmar interesse e registrar a resposta na timeline.
-        </p>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <a
-            href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-[11px] font-semibold text-black"
-          >
-            <MessageCircle size={12} /> WhatsApp
-          </a>
-
-          <button
-            onClick={() => onEditClient(selectedClient)}
-            className="inline-flex items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-[11px] text-slate-300 hover:bg-white/10"
-          >
-            <Edit3 size={12} /> Editar
-          </button>
-        </div>
+        {mode === "kanban" && (
+          <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] px-2 py-1.5 text-[10px] leading-relaxed text-slate-500">
+            Arraste leads entre etapas e use esta central para decidir onde agir primeiro.
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-function InfoBox({ label, value }: { label: string; value: string }) {
+function ExecutiveRadar({
+  clients,
+  analytics,
+  money,
+  getRisk,
+  onApplySmartFilter,
+}: {
+  clients: Client[];
+  analytics: Analytics;
+  money: (value: number) => string;
+  getRisk: (client: Client) => string;
+  onApplySmartFilter: (type: SmartFilterType) => void;
+}) {
+  const hotOpportunities = clients.filter((client) => client.hot || client.value >= 12000);
+  const silentClients = clients.filter((client) => client.lastContactDays >= 7);
+  const highRiskClients = clients.filter((client) => getRisk(client) === "Alto");
+  const proposalValue = clients
+    .filter((client) => client.status === "Proposta")
+    .reduce((sum, client) => sum + client.value, 0);
+
+  const topOpportunity = [...clients].sort((a, b) => b.value - a.value)[0];
+
   return (
-    <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-      <p className="text-[10px] text-slate-500">{label}</p>
-      <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-200">{value}</p>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <KanbanSquare size={15} className="text-slate-400" />
+          <div>
+            <p className="text-sm font-semibold">Radar executivo</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Prioridades rápidas do funil</p>
+          </div>
+        </div>
+
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] text-slate-400">ao vivo</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <RadarMetric label="Risco alto" value={`${highRiskClients.length} leads`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
+        <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
+        <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
+        <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-violet-200" />} />
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <FilterAction tone="amber" label="Propostas" onClick={() => onApplySmartFilter("proposal")} />
+        <FilterAction tone="rose" label="Silenciosos" onClick={() => onApplySmartFilter("silent")} />
+        <FilterAction tone="sky" label="Risco" onClick={() => onApplySmartFilter("risk")} />
+      </div>
+
+      <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold text-slate-200">Ação sugerida</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+              {highRiskClients.length > 0
+                ? "Reativar clientes em risco antes de criar novas oportunidades."
+                : analytics.todayFollowUps > 0
+                  ? "Priorizar follow-ups de hoje e propostas abertas."
+                  : "Revisar oportunidades quentes e manter cadência comercial."}
+            </p>
+          </div>
+
+          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] text-slate-400">
+            prioridade
+          </span>
+        </div>
+      </div>
+
+      {topOpportunity && (
+        <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.035] p-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-semibold text-slate-200">{topOpportunity.name}</p>
+              <p className="mt-0.5 truncate text-[9px] text-slate-500">{topOpportunity.company}</p>
+            </div>
+
+            <div className="shrink-0 text-right">
+              <p className="text-[9px] text-slate-500">Maior ticket</p>
+              <p className="text-[10px] font-semibold text-slate-200">{money(topOpportunity.value)}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {silentClients.length > 0 && (
+        <p className="mt-2 rounded-xl border border-white/10 bg-white/[0.025] px-2 py-1.5 text-[10px] text-slate-500">
+          {silentClients.length} cliente(s) sem contato recente pedem atenção.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function EmptyDecisionState() {
+  return (
+    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-center">
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-slate-400">
+        <Sparkles size={16} />
+      </div>
+      <p className="mt-3 text-sm font-semibold text-slate-300">Selecione um lead</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+        Clique em um cliente na tabela ou no Kanban para abrir a central de decisão comercial.
+      </p>
+    </div>
+  );
+}
+
+function DecisionMini({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.035] p-2">
+      <p className="text-[9px] text-slate-500">{label}</p>
+      <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-200">{value}</p>
     </div>
   );
 }
@@ -588,118 +700,25 @@ function SmallButton({
   );
 }
 
-function SmartFilterButton({
-  title,
-  description,
-  icon,
+function FilterAction({
+  label,
   tone,
   onClick,
 }: {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
+  label: string;
   tone: "amber" | "rose" | "sky";
   onClick: () => void;
 }) {
   const classes = {
-    amber: "border-amber-300/10 bg-amber-500/[0.06] text-amber-100 hover:border-amber-300/20 hover:bg-amber-500/[0.1]",
-    rose: "border-rose-300/10 bg-rose-500/[0.06] text-rose-100 hover:border-rose-300/20 hover:bg-rose-500/[0.1]",
-    sky: "border-sky-300/10 bg-sky-500/[0.06] text-sky-100 hover:border-sky-300/20 hover:bg-sky-500/[0.1]",
+    amber: "border-amber-300/10 bg-amber-500/[0.06] text-amber-100 hover:bg-amber-500/[0.10]",
+    rose: "border-rose-300/10 bg-rose-500/[0.06] text-rose-100 hover:bg-rose-500/[0.10]",
+    sky: "border-sky-300/10 bg-sky-500/[0.06] text-sky-100 hover:bg-sky-500/[0.10]",
   };
 
   return (
-    <button onClick={onClick} className={`group w-full rounded-xl border p-3 text-left transition-all duration-200 ${classes[tone]}`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold">{title}</p>
-        {icon}
-      </div>
-      <p className="mt-1 text-[10px] leading-relaxed opacity-60">{description}</p>
+    <button onClick={onClick} className={`rounded-xl border px-2 py-2 text-[10px] font-semibold transition ${classes[tone]}`}>
+      {label}
     </button>
-  );
-}
-
-function PipelineVisualCard({
-  clients,
-  analytics,
-  money,
-  getRisk,
-}: {
-  clients: Client[];
-  analytics: Analytics;
-  money: (value: number) => string;
-  getRisk: (client: Client) => string;
-}) {
-  const hotOpportunities = clients.filter((client) => client.hot || client.value >= 12000);
-  const silentClients = clients.filter((client) => client.lastContactDays >= 7);
-  const highRiskClients = clients.filter((client) => getRisk(client) === "Alto");
-  const proposalValue = clients
-    .filter((client) => client.status === "Proposta")
-    .reduce((sum, client) => sum + client.value, 0);
-
-  const topOpportunity = [...clients].sort((a, b) => b.value - a.value)[0];
-
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <KanbanSquare size={15} className="text-slate-400" />
-          <div>
-            <p className="text-sm font-semibold">Radar comercial</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Prioridades rápidas do funil</p>
-          </div>
-        </div>
-
-        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] text-slate-400">ao vivo</span>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <RadarMetric label="Risco alto" value={`${highRiskClients.length} leads`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
-        <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
-        <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
-        <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-violet-200" />} />
-      </div>
-
-      <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold text-slate-200">Ação sugerida</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-              {highRiskClients.length > 0
-                ? "Reativar clientes em risco antes de criar novas oportunidades."
-                : analytics.todayFollowUps > 0
-                  ? "Priorizar follow-ups de hoje e propostas abertas."
-                  : "Revisar oportunidades quentes e manter cadência comercial."}
-            </p>
-          </div>
-
-          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] text-slate-400">
-            prioridade
-          </span>
-        </div>
-      </div>
-
-      {topOpportunity && (
-        <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.035] p-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate text-[10px] font-semibold text-slate-200">{topOpportunity.name}</p>
-              <p className="mt-0.5 truncate text-[9px] text-slate-500">{topOpportunity.company}</p>
-            </div>
-
-            <div className="shrink-0 text-right">
-              <p className="text-[9px] text-slate-500">Maior ticket</p>
-              <p className="text-[10px] font-semibold text-slate-200">{money(topOpportunity.value)}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {silentClients.length > 0 && (
-        <p className="mt-2 rounded-xl border border-white/10 bg-white/[0.025] px-2 py-1.5 text-[10px] text-slate-500">
-          {silentClients.length} cliente(s) sem contato recente pedem atenção.
-        </p>
-      )}
-    </div>
   );
 }
 
