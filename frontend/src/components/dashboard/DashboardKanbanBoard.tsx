@@ -1,31 +1,8 @@
+import { useMemo, useState } from "react";
+import DashboardKanbanCommandBar from "./DashboardKanbanCommandBar";
 import DashboardKanbanSummary from "./DashboardKanbanSummary";
 import KanbanLeadCard from "../kanban/KanbanLeadCard";
-
-type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
-type ActivePage = "dashboard" | "clientes" | "kanban" | "automacoes";
-
-type Note = {
-  id: number;
-  text: string;
-  date: string;
-};
-
-type Client = {
-  id: number;
-  name: string;
-  company: string;
-  phone: string;
-  email: string;
-  value: number;
-  status: Status;
-  source: string;
-  favorite: boolean;
-  hot: boolean;
-  lastContactDays: number;
-  nextFollowUp: string;
-  tags: string[];
-  notes: Note[];
-};
+import type { ActivePage, Client, KanbanOwner, Status } from "../../types/dashboard";
 
 type KanbanEnterpriseStats = {
   totalValue: number;
@@ -42,7 +19,7 @@ type DashboardKanbanBoardProps = {
   activePage: ActivePage;
   clients: Client[];
   kanbanClients: Client[];
-  kanbanOwnerFilter: "Todos" | "Ana" | "Marco" | "Bia" | "Time";
+  kanbanOwnerFilter: KanbanOwner;
   kanbanEnterpriseStats: KanbanEnterpriseStats;
   statusList: Status[];
   dragOverStatus: Status | null;
@@ -95,59 +72,27 @@ export default function DashboardKanbanBoard({
   setIsDraggingKanban,
   changeStatus,
 }: DashboardKanbanBoardProps) {
+  const [stageGroup, setStageGroup] = useState<"pipeline" | "resultado">("pipeline");
+
+  const groupedStatuses = useMemo(() => {
+    const pipeline = statusList.filter((status) => ["Novo", "Contato", "Proposta"].includes(status));
+    const resultado = statusList.filter((status) => ["Fechado", "Perdido"].includes(status));
+
+    return {
+      pipeline,
+      resultado,
+    };
+  }, [statusList]);
+
+  const visibleStatuses = groupedStatuses[stageGroup];
+
   if (activePage !== "kanban") {
     return null;
   }
 
-  const hotLeads = clients.filter((client) => client.hot || getLeadScore(client) >= 80).length;
-  const proposalLeads = clients.filter((client) => client.status === "Proposta").length;
-  const stalledLeads = clients.filter((client) => client.lastContactDays >= 7).length;
-  const biggestBottleneck =
-    clients.filter((client) => client.status === "Contato").length >=
-    clients.filter((client) => client.status === "Proposta").length
-      ? "Contato"
-      : "Proposta";
-
   return (
     <>
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold">Comando do Kanban</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Leitura executiva do funil sem ocupar espaço das colunas.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <KanbanCommandPill label="Gargalo" value={biggestBottleneck} tone="default" />
-            <KanbanCommandPill label="Prioridade" value={`${hotLeads} leads`} tone="amber" />
-            <KanbanCommandPill label="Propostas" value={`${proposalLeads} abertas`} tone="violet" />
-            <KanbanCommandPill label="Silenciosos" value={`${stalledLeads} leads`} tone="rose" />
-            <KanbanCommandPill
-              label="Receita prevista"
-              value={money(
-                clients
-                  .filter((client) => client.status === "Proposta" || client.status === "Fechado")
-                  .reduce((sum, client) => sum + client.value, 0)
-              )}
-              tone="emerald"
-            />
-            <KanbanCommandPill
-              label="Conversão"
-              value={`${Math.max(
-                1,
-                Math.round(
-                  (clients.filter((client) => client.status === "Fechado").length /
-                    Math.max(clients.length, 1)) *
-                    100
-                )
-              )}%`}
-              tone="sky"
-            />
-          </div>
-        </div>
-      </div>
+      <DashboardKanbanCommandBar clients={clients} money={money} getLeadScore={getLeadScore} />
 
       <div className="space-y-3">
         <DashboardKanbanSummary
@@ -157,18 +102,45 @@ export default function DashboardKanbanBoard({
           money={money}
         />
 
-        <div className="flex gap-3 overflow-x-auto pb-2 pr-1 [scrollbar-width:thin]">
-          {statusList.map((status) => {
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
+          <div>
+            <p className="text-sm font-semibold">Etapas do Kanban</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Navegue por grupos sem barra horizontal.</p>
+          </div>
+
+          <div className="flex rounded-xl border border-white/10 bg-white/[0.035] p-1">
+            <button
+              onClick={() => setStageGroup("pipeline")}
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
+                stageGroup === "pipeline"
+                  ? "bg-white text-black"
+                  : "text-slate-400 hover:bg-white/10 hover:text-slate-200"
+              }`}
+            >
+              Fluxo comercial
+            </button>
+            <button
+              onClick={() => setStageGroup("resultado")}
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
+                stageGroup === "resultado"
+                  ? "bg-white text-black"
+                  : "text-slate-400 hover:bg-white/10 hover:text-slate-200"
+              }`}
+            >
+              Resultado
+            </button>
+          </div>
+        </div>
+
+        <div className={`grid gap-3 ${visibleStatuses.length === 2 ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
+          {visibleStatuses.map((status) => {
             const stageClients = kanbanClients.filter((client) => client.status === status);
             const stageValue = stageClients.reduce((sum, client) => sum + client.value, 0);
             const stageScore = Math.round(
-              stageClients.reduce((sum, client) => sum + getLeadScore(client), 0) /
-                Math.max(1, stageClients.length)
+              stageClients.reduce((sum, client) => sum + getLeadScore(client), 0) / Math.max(1, stageClients.length)
             );
             const stageRiskCount = stageClients.filter((client) => getRisk(client) === "Alto").length;
-            const stageTodayCount = stageClients.filter(
-              (client) => client.nextFollowUp.toLowerCase() === "hoje"
-            ).length;
+            const stageTodayCount = stageClients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length;
             const isDropTarget = dragOverStatus === status;
 
             return (
@@ -186,7 +158,7 @@ export default function DashboardKanbanBoard({
                   setDragOverStatus(null);
                   setIsDraggingKanban(false);
                 }}
-                className={`w-[292px] shrink-0 rounded-2xl border p-2.5 transition-all duration-300 hover:shadow-[0_16px_45px_rgba(0,0,0,0.25)] ${
+                className={`min-w-0 rounded-2xl border p-2.5 transition-all duration-300 hover:shadow-[0_16px_45px_rgba(0,0,0,0.25)] ${
                   isDropTarget
                     ? "scale-[1.01] border-cyan-400/50 bg-cyan-500/[0.08] shadow-[0_0_35px_rgba(34,211,238,0.18)]"
                     : "border-white/10 bg-white/[0.03]"
@@ -278,32 +250,6 @@ export default function DashboardKanbanBoard({
         </div>
       </div>
     </>
-  );
-}
-
-function KanbanCommandPill({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "default" | "amber" | "violet" | "rose" | "emerald" | "sky";
-}) {
-  const tones = {
-    default: "border-white/10 bg-black/20 text-slate-200",
-    amber: "border-amber-400/10 bg-amber-500/[0.055] text-amber-100",
-    violet: "border-violet-400/10 bg-violet-500/[0.055] text-violet-100",
-    rose: "border-rose-400/10 bg-rose-500/[0.055] text-rose-100",
-    emerald: "border-emerald-400/10 bg-emerald-500/[0.055] text-emerald-100",
-    sky: "border-sky-400/10 bg-sky-500/[0.055] text-sky-100",
-  };
-
-  return (
-    <div className={`rounded-xl border px-3 py-2 ${tones[tone]}`}>
-      <p className="text-[9px] opacity-65">{label}</p>
-      <p className="mt-0.5 truncate text-xs font-semibold">{value}</p>
-    </div>
   );
 }
 

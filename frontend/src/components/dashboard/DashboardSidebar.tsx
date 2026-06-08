@@ -1,46 +1,13 @@
 import {
   BarChart3,
+  BriefcaseBusiness,
   KanbanSquare,
   Sparkles,
   Users,
   Zap,
 } from "lucide-react";
 import DashboardSmartAlerts from "./DashboardSmartAlerts";
-
-type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
-type ActivePage = "dashboard" | "clientes" | "kanban" | "automacoes";
-
-type Note = {
-  id: number;
-  text: string;
-  date: string;
-};
-
-type Client = {
-  id: number;
-  name: string;
-  company: string;
-  phone: string;
-  email: string;
-  value: number;
-  status: Status;
-  source: string;
-  favorite: boolean;
-  hot: boolean;
-  lastContactDays: number;
-  nextFollowUp: string;
-  tags: string[];
-  notes: Note[];
-};
-
-type RecentActivity = {
-  id: string;
-  client: string;
-  text: string;
-  date: string;
-};
-
-type SmartFilterType = "risk" | "proposal" | "silent";
+import type { ActivePage, Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
 
 type DashboardSidebarProps = {
   activePage: ActivePage;
@@ -106,6 +73,13 @@ export default function DashboardSidebar({
             />
 
             <SidebarButton
+              active={activePage === "comercial"}
+              icon={<BriefcaseBusiness size={15} className="mr-2 shrink-0" />}
+              label="Comercial"
+              onClick={() => setActivePage("comercial")}
+            />
+
+            <SidebarButton
               active={activePage === "clientes"}
               icon={<Users size={15} className="mr-2 shrink-0" />}
               label="Clientes"
@@ -145,6 +119,13 @@ export default function DashboardSidebar({
             <>
               <ActionButton onClick={() => setOnlyHot(true)} label="Clientes quentes" />
               <ActionButton onClick={() => setStatusFilter("Proposta")} label="Propostas abertas" />
+            </>
+          )}
+
+          {activePage === "comercial" && (
+            <>
+              <ActionButton onClick={() => setOnlyHot(true)} label="Fila quente" />
+              <ActionButton onClick={() => setStatusFilter("Proposta")} label="Focar propostas" />
             </>
           )}
 

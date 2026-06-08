@@ -1,4 +1,4 @@
-type SmartFilterType = "risk" | "proposal" | "silent";
+import type { SmartFilterType } from "../../types/dashboard";
 
 type DashboardSmartAlertsProps = {
   smartAlerts: string[];

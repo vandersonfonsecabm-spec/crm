@@ -1,31 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-
-type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
-type ActivePage = "dashboard" | "clientes" | "kanban" | "automacoes";
-
-type Note = {
-  id: number;
-  text: string;
-  date: string;
-};
-
-type Client = {
-  id: number;
-  name: string;
-  company: string;
-  phone: string;
-  email: string;
-  value: number;
-  status: Status;
-  source: string;
-  favorite: boolean;
-  hot: boolean;
-  lastContactDays: number;
-  nextFollowUp: string;
-  tags: string[];
-  notes: Note[];
-};
+import type { ActivePage, Client } from "../../types/dashboard";
 
 type DashboardCommandSearchProps = {
   clients: Client[];
@@ -85,6 +60,7 @@ export default function DashboardCommandSearch({
 
     const pages = [
       { label: "Dashboard", type: "Página", action: () => onSetActivePage("dashboard") },
+      { label: "Comercial", type: "Página", action: () => onSetActivePage("comercial") },
       { label: "Clientes", type: "Página", action: () => onSetActivePage("clientes") },
       { label: "Kanban", type: "Página", action: () => onSetActivePage("kanban") },
       { label: "Automações", type: "Página", action: () => onSetActivePage("automacoes") },

@@ -14,32 +14,7 @@ import {
   Zap,
 } from "lucide-react";
 import MetricCard from "./MetricCard";
-
-type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
-type ActivePage = "dashboard" | "clientes" | "kanban" | "automacoes";
-
-type Note = {
-  id: number;
-  text: string;
-  date: string;
-};
-
-type Client = {
-  id: number;
-  name: string;
-  company: string;
-  phone: string;
-  email: string;
-  value: number;
-  status: Status;
-  source: string;
-  favorite: boolean;
-  hot: boolean;
-  lastContactDays: number;
-  nextFollowUp: string;
-  tags: string[];
-  notes: Note[];
-};
+import type { ActivePage, Client } from "../../types/dashboard";
 
 type DashboardMetricsSectionProps = {
   activePage: ActivePage;
@@ -54,6 +29,17 @@ export default function DashboardMetricsSection({
   kanbanClients,
   getRisk,
 }: DashboardMetricsSectionProps) {
+  if (activePage === "comercial") {
+    return (
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Propostas abertas" value={String(clients.filter((client) => client.status === "Proposta").length)} icon={<Target size={15} className="text-amber-400" />} />
+        <MetricCard title="Clientes quentes" value={String(clients.filter((client) => client.hot).length)} icon={<Zap size={15} className="text-emerald-400" />} />
+        <MetricCard title="Em risco" value={String(clients.filter((client) => getRisk(client) === "Alto").length)} icon={<AlertTriangle size={15} className="text-rose-400" />} />
+        <MetricCard title="Sem contato" value={String(clients.filter((client) => client.lastContactDays >= 7).length)} icon={<Bell size={15} className="text-sky-400" />} />
+      </section>
+    );
+  }
+
   if (activePage === "clientes") {
     return (
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

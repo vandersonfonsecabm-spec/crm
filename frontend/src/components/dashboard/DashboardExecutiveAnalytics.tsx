@@ -1,39 +1,7 @@
-type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
-
-type Note = {
-  id: number;
-  text: string;
-  date: string;
-};
-
-type Client = {
-  id: number;
-  name: string;
-  company: string;
-  phone: string;
-  email: string;
-  value: number;
-  status: Status;
-  source: string;
-  favorite: boolean;
-  hot: boolean;
-  lastContactDays: number;
-  nextFollowUp: string;
-  tags: string[];
-  notes: Note[];
-};
-
-type DashboardAnalytics = {
-  totalValue: number;
-  wonValue: number;
-  forecastValue: number;
-  hotCount: number;
-  averageScore: number;
-  todayFollowUps: number;
-};
+import type { Analytics, Client } from "../../types/dashboard";
 
 type DashboardExecutiveAnalyticsProps = {
-  analytics: DashboardAnalytics;
+  analytics: Analytics;
   clients: Client[];
   money: (value: number) => string;
   initials: (name: string) => string;

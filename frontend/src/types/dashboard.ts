@@ -1,6 +1,8 @@
 export type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
 export type SortBy = "score" | "value" | "name" | "status";
-export type ActivePage = "dashboard" | "clientes" | "kanban" | "automacoes";
+export type ActivePage = "dashboard" | "comercial" | "clientes" | "kanban" | "automacoes";
+export type SmartFilterType = "risk" | "proposal" | "silent";
+export type KanbanOwner = "Todos" | "Ana" | "Marco" | "Bia" | "Time";
 
 export type Note = {
   id: number;
@@ -23,4 +25,20 @@ export type Client = {
   nextFollowUp: string;
   tags: string[];
   notes: Note[];
+};
+
+export type Analytics = {
+  totalValue: number;
+  wonValue: number;
+  forecastValue: number;
+  hotCount: number;
+  averageScore: number;
+  todayFollowUps: number;
+};
+
+export type RecentActivity = {
+  id: string;
+  client: string;
+  text: string;
+  date: string;
 };

@@ -31,16 +31,13 @@ import DashboardClientsInsights from "../components/dashboard/DashboardClientsIn
 import DashboardRecentLeads from "../components/dashboard/DashboardRecentLeads";
 import ClientModal from "../components/dashboard/ClientModal";
 import DashboardFollowUpCalendar from "../components/dashboard/DashboardFollowUpCalendar";
-import DashboardRecentActivities from "../components/dashboard/DashboardRecentActivities";
 import DashboardPipelineOverview from "../components/dashboard/DashboardPipelineOverview";
-import DashboardRecentViews from "../components/dashboard/DashboardRecentViews";
-import DashboardExecutiveAnalytics from "../components/dashboard/DashboardExecutiveAnalytics";
 import DashboardCustomerDrawer from "../components/dashboard/DashboardCustomerDrawer";
 import DashboardSidebar from "../components/dashboard/DashboardSidebar";
 import DashboardTopbar from "../components/dashboard/DashboardTopbar";
 import DashboardOperationalSearch from "../components/dashboard/DashboardOperationalSearch";
-import DashboardCommandCenter from "../components/dashboard/DashboardCommandCenter";
-import DashboardExecutiveSummary from "../components/dashboard/DashboardExecutiveSummary";
+import DashboardExecutiveCenter from "../components/dashboard/DashboardExecutiveCenter";
+import DashboardControlCenter from "../components/dashboard/DashboardControlCenter";
 import DashboardKanbanBoard from "../components/dashboard/DashboardKanbanBoard";
 import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomationsPanel";
 import DashboardToast from "../components/dashboard/DashboardToast";
@@ -49,7 +46,7 @@ import useDashboardActions from "../hooks/useDashboardActions";
 
 import { emptyClient, loadClients, statusList } from "../data/mockClients";
 
-import type { ActivePage, Client, SortBy, Status } from "../types/dashboard";
+import type { ActivePage, Client, KanbanOwner, SortBy, Status } from "../types/dashboard";
 
 export default function Dashboard() {
   const [clients, setClients] = useState<Client[]>(loadClients);
@@ -60,7 +57,7 @@ export default function Dashboard() {
   const [onlyRisk, setOnlyRisk] = useState(false);
   const [onlySilent, setOnlySilent] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("score");
-  const [kanbanOwnerFilter, setKanbanOwnerFilter] = useState<"Todos" | "Ana" | "Marco" | "Bia" | "Time">("Todos");
+  const [kanbanOwnerFilter, setKanbanOwnerFilter] = useState<KanbanOwner>("Todos");
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null);
   const [isDraggingKanban, setIsDraggingKanban] = useState(false);
@@ -85,11 +82,13 @@ export default function Dashboard() {
   const pageTitle =
     activePage === "dashboard"
       ? "Visão geral"
-      : activePage === "clientes"
-        ? "Clientes"
-        : activePage === "kanban"
-          ? "Kanban"
-          : "Automações";
+      : activePage === "comercial"
+        ? "Central comercial"
+        : activePage === "clientes"
+          ? "Clientes"
+          : activePage === "kanban"
+            ? "Kanban"
+            : "Automações";
 
   useEffect(() => {
     localStorage.setItem("crm-premium-clients", JSON.stringify(clients));
@@ -118,10 +117,14 @@ export default function Dashboard() {
   useEffect(() => {
     if (!selectedId) return;
 
-    setRecentViewedClients((current) => {
-      const filtered = current.filter((id) => id !== selectedId);
-      return [selectedId, ...filtered].slice(0, 5);
-    });
+    const timeout = window.setTimeout(() => {
+      setRecentViewedClients((current) => {
+        const filtered = current.filter((id) => id !== selectedId);
+        return [selectedId, ...filtered].slice(0, 5);
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [selectedId]);
 
   const filteredClients = useMemo(() => {
@@ -345,29 +348,39 @@ export default function Dashboard() {
             getRisk={getRisk}
           />
 
-          <DashboardOperationalSearch
-            activePage={activePage}
-            filteredClientsCount={filteredClients.length}
-            activeFiltersCount={activeFiltersCount}
-            search={search}
-            statusFilter={statusFilter}
-            statusList={statusList}
-            sortBy={sortBy}
-            kanbanOwnerFilter={kanbanOwnerFilter}
-            onlyFavorites={onlyFavorites}
-            onlyHot={onlyHot}
-            setSearch={setSearch}
-            setPage={setPage}
-            setStatusFilter={setStatusFilter}
-            setSortBy={setSortBy}
-            setKanbanOwnerFilter={setKanbanOwnerFilter}
-            setOnlyFavorites={setOnlyFavorites}
-            setOnlyHot={setOnlyHot}
-            exportCsv={exportCsv}
-            clearFilters={clearFilters}
-          />
+          {activePage !== "comercial" && (
+            <DashboardOperationalSearch
+              activePage={activePage}
+              filteredClientsCount={filteredClients.length}
+              activeFiltersCount={activeFiltersCount}
+              search={search}
+              statusFilter={statusFilter}
+              statusList={statusList}
+              sortBy={sortBy}
+              kanbanOwnerFilter={kanbanOwnerFilter}
+              onlyFavorites={onlyFavorites}
+              onlyHot={onlyHot}
+              setSearch={setSearch}
+              setPage={setPage}
+              setStatusFilter={setStatusFilter}
+              setSortBy={setSortBy}
+              setKanbanOwnerFilter={setKanbanOwnerFilter}
+              setOnlyFavorites={setOnlyFavorites}
+              setOnlyHot={setOnlyHot}
+              exportCsv={exportCsv}
+              clearFilters={clearFilters}
+            />
+          )}
 
-          <section className={`mt-4 grid gap-4 ${activePage === "kanban" ? "xl:grid-cols-[minmax(0,1fr)_340px]" : "xl:grid-cols-[minmax(0,1fr)_340px]"}`}>
+          <section
+            className={`mt-4 ${
+              activePage === "comercial"
+                ? "space-y-4"
+                : activePage === "dashboard"
+                  ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"
+                  : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
+            }`}
+          >
             <div className="space-y-4">
               {activePage === "clientes" && (
                 <>
@@ -424,6 +437,7 @@ export default function Dashboard() {
               {activePage === "dashboard" && (
                 <DashboardRecentLeads
                   clients={clients}
+                  recentViewedClients={recentViewedClients}
                   money={money}
                   statusClass={statusClass}
                   getLeadScore={getLeadScore}
@@ -441,29 +455,8 @@ export default function Dashboard() {
                 />
               )}
 
-              {activePage === "dashboard" && recentViewedClients.length > 0 && (
-                <DashboardRecentViews
-                  recentViewedClients={recentViewedClients}
-                  clients={clients}
-                  money={money}
-                  statusClass={statusClass}
-                  onSelectClient={(clientId) => {
-                    setSelectedId(clientId);
-                    setActivePage("clientes");
-                  }}
-                />
-              )}
-
               {activePage === "dashboard" && (
-                <DashboardRecentActivities
-                  smartAlerts={smartAlerts}
-                  recentActivities={recentActivities}
-                  onApplySmartFilter={applySmartFilter}
-                />
-              )}
-
-              {activePage === "dashboard" && (
-                <DashboardExecutiveAnalytics
+                <DashboardExecutiveCenter
                   analytics={analytics}
                   clients={clients}
                   money={money}
@@ -473,10 +466,12 @@ export default function Dashboard() {
                 />
               )}
 
-              {activePage === "dashboard" && (
-                <DashboardCommandCenter
+              {activePage === "comercial" && (
+                <DashboardControlCenter
                   clients={clients}
                   analytics={analytics}
+                  smartAlerts={smartAlerts}
+                  recentActivities={recentActivities}
                   emptyClient={emptyClient}
                   money={money}
                   statusClass={statusClass}
@@ -487,10 +482,6 @@ export default function Dashboard() {
                   setCreating={setCreating}
                   applySmartFilter={applySmartFilter}
                 />
-              )}
-
-              {activePage === "dashboard" && (
-                <DashboardExecutiveSummary analytics={analytics} />
               )}
 
               <DashboardKanbanBoard
@@ -526,35 +517,37 @@ export default function Dashboard() {
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
-            <DashboardCustomerDrawer
-              activePage={activePage}
-              selectedClient={selectedClient}
-              noteText={noteText}
-              tagText={tagText}
-              clients={clients}
-              analytics={analytics}
-              money={money}
-              initials={initials}
-              statusClass={statusClass}
-              tagClass={tagClass}
-              customerFitLabel={customerFitLabel}
-              leadOwner={leadOwner}
-              nextActionLabel={nextActionLabel}
-              getLeadScore={getLeadScore}
-              getRisk={getRisk}
-              slaLabel={slaLabel}
-              priorityLabel={priorityLabel}
-              whatsappMessage={whatsappMessage}
-              onClearSelectedClient={() => setSelectedId(null)}
-              onSetNoteText={setNoteText}
-              onSetTagText={setTagText}
-              onAddNote={addNote}
-              onAddTagToSelected={addTagToSelected}
-              onRemoveTagFromSelected={removeTagFromSelected}
-              onEditClient={setEditing}
-              onCopyText={copyText}
-              onApplySmartFilter={applySmartFilter}
-            />
+            {activePage !== "comercial" && (
+              <DashboardCustomerDrawer
+                activePage={activePage}
+                selectedClient={selectedClient}
+                noteText={noteText}
+                tagText={tagText}
+                clients={clients}
+                analytics={analytics}
+                money={money}
+                initials={initials}
+                statusClass={statusClass}
+                tagClass={tagClass}
+                customerFitLabel={customerFitLabel}
+                leadOwner={leadOwner}
+                nextActionLabel={nextActionLabel}
+                getLeadScore={getLeadScore}
+                getRisk={getRisk}
+                slaLabel={slaLabel}
+                priorityLabel={priorityLabel}
+                whatsappMessage={whatsappMessage}
+                onClearSelectedClient={() => setSelectedId(null)}
+                onSetNoteText={setNoteText}
+                onSetTagText={setTagText}
+                onAddNote={addNote}
+                onAddTagToSelected={addTagToSelected}
+                onRemoveTagFromSelected={removeTagFromSelected}
+                onEditClient={setEditing}
+                onCopyText={copyText}
+                onApplySmartFilter={applySmartFilter}
+              />
+            )}
           </section>
         </main>
       </div>

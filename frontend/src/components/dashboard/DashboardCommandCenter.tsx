@@ -1,38 +1,5 @@
 import { AlertTriangle, Plus, Target } from "lucide-react";
-
-type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
-
-type Note = {
-  id: number;
-  text: string;
-  date: string;
-};
-
-type Client = {
-  id: number;
-  name: string;
-  company: string;
-  phone: string;
-  email: string;
-  value: number;
-  status: Status;
-  source: string;
-  favorite: boolean;
-  hot: boolean;
-  lastContactDays: number;
-  nextFollowUp: string;
-  tags: string[];
-  notes: Note[];
-};
-
-type Analytics = {
-  totalValue: number;
-  wonValue: number;
-  forecastValue: number;
-  hotCount: number;
-  averageScore: number;
-  todayFollowUps: number;
-};
+import type { Analytics, Client, Status } from "../../types/dashboard";
 
 type DashboardCommandCenterProps = {
   clients: Client[];

@@ -1,9 +1,5 @@
 import { ArrowUpDown, Download, Search, X } from "lucide-react";
-
-type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
-type SortBy = "score" | "value" | "name" | "status";
-type ActivePage = "dashboard" | "clientes" | "kanban" | "automacoes";
-type KanbanOwner = "Todos" | "Ana" | "Marco" | "Bia" | "Time";
+import type { ActivePage, KanbanOwner, SortBy, Status } from "../../types/dashboard";
 
 type DashboardOperationalSearchProps = {
   activePage: ActivePage;

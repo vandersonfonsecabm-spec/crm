@@ -1,6 +1,5 @@
 import { Bell, Plus } from "lucide-react";
-
-type ActivePage = "dashboard" | "clientes" | "kanban" | "automacoes";
+import type { ActivePage } from "../../types/dashboard";
 
 type DashboardHeaderProps = {
   activePage: ActivePage;
@@ -13,30 +12,25 @@ export default function DashboardHeader({
   pageTitle,
   onCreateClient,
 }: DashboardHeaderProps) {
+  const breadcrumbLabel = {
+    dashboard: "Dashboard",
+    comercial: "Comercial",
+    clientes: "Clientes",
+    kanban: "Kanban",
+    automacoes: "Automações",
+  }[activePage];
+
   return (
     <header className="mb-4">
       <div className="mb-3 flex items-center gap-2 text-[11px] text-slate-500">
         <span>CRM</span>
-
         <span className="text-slate-700">/</span>
-
-        <span className="text-slate-300">
-          {activePage === "dashboard"
-            ? "Dashboard"
-            : activePage === "clientes"
-              ? "Clientes"
-              : activePage === "kanban"
-                ? "Kanban"
-                : "Automações"}
-        </span>
+        <span className="text-slate-300">{breadcrumbLabel}</span>
       </div>
 
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">
-            Operação comercial
-          </p>
-
+          <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Operação comercial</p>
           <h1 className="text-xl font-semibold">{pageTitle}</h1>
         </div>
 
@@ -47,7 +41,7 @@ export default function DashboardHeader({
 
           <button
             onClick={onCreateClient}
-            className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 transition-all duration-200 hover:scale-[1.01] hover:bg-slate-100 text-xs font-semibold text-black"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-black transition-all duration-200 hover:scale-[1.01] hover:bg-slate-100"
           >
             <Plus size={14} />
             Novo cliente

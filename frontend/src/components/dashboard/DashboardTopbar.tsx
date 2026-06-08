@@ -1,31 +1,6 @@
 import DashboardCommandSearch from "./DashboardCommandSearch";
 import DashboardQuickActions from "./DashboardQuickActions";
-
-type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
-type ActivePage = "dashboard" | "clientes" | "kanban" | "automacoes";
-
-type Note = {
-  id: number;
-  text: string;
-  date: string;
-};
-
-type Client = {
-  id: number;
-  name: string;
-  company: string;
-  phone: string;
-  email: string;
-  value: number;
-  status: Status;
-  source: string;
-  favorite: boolean;
-  hot: boolean;
-  lastContactDays: number;
-  nextFollowUp: string;
-  tags: string[];
-  notes: Note[];
-};
+import type { ActivePage, Client } from "../../types/dashboard";
 
 type DashboardTopbarProps = {
   clients: Client[];

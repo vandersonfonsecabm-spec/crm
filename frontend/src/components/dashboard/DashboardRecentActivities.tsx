@@ -1,11 +1,4 @@
-type RecentActivity = {
-  id: string;
-  client: string;
-  text: string;
-  date: string;
-};
-
-type SmartFilterType = "risk" | "proposal" | "silent";
+import type { RecentActivity, SmartFilterType } from "../../types/dashboard";
 
 type DashboardRecentActivitiesProps = {
   smartAlerts: string[];
