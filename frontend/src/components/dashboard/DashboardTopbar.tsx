@@ -26,12 +26,12 @@ export default function DashboardTopbar({
   exportCsv,
 }: DashboardTopbarProps) {
   return (
-    <div className="premium-panel mb-4 flex items-center justify-between rounded-2xl px-4 py-2.5">
+    <div className="identity-panel mb-4 flex items-center justify-between rounded-2xl px-4 py-2.5">
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/[0.09] px-2.5 py-1 shadow-[0_0_22px_rgba(16,185,129,0.08)]">
-          <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.45)]" />
+        <div className="flex items-center gap-2 rounded-full border border-lime-300/25 bg-lime-300/[0.10] px-2.5 py-1 shadow-[0_0_22px_rgba(185,242,39,0.10)]">
+          <div className="h-1.5 w-1.5 rounded-full bg-lime-300 shadow-[0_0_12px_rgba(185,242,39,0.75)]" />
 
-          <span className="text-[10px] font-semibold text-emerald-100">
+          <span className="text-[10px] font-semibold text-lime-50">
             Operação estável
           </span>
         </div>
@@ -42,8 +42,8 @@ export default function DashboardTopbar({
           CRM Agro SaaS • Consistência Visual
         </p>
 
-        <span className="hidden rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-2 py-1 text-[10px] text-cyan-100/80 lg:inline-flex">
-          premium pass
+        <span className="hidden rounded-full border border-amber-300/20 bg-amber-300/[0.08] px-2 py-1 text-[10px] text-amber-100/90 lg:inline-flex">
+          command skin
         </span>
       </div>
 

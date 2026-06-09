@@ -8,23 +8,37 @@
 
 :root {
   color-scheme: dark;
-  --surface-strong: rgba(15, 23, 42, 0.78);
-  --surface-soft: rgba(15, 23, 42, 0.46);
-  --line-soft: rgba(148, 163, 184, 0.14);
-  --line-strong: rgba(226, 232, 240, 0.2);
+  --brand-lime: #b9f227;
+  --brand-cyan: #22d3ee;
+  --brand-amber: #f5b82e;
+  --brand-coral: #fb7185;
+  --surface-strong: rgba(11, 18, 30, 0.9);
+  --surface-soft: rgba(13, 21, 35, 0.62);
+  --line-soft: rgba(148, 163, 184, 0.18);
+  --line-strong: rgba(185, 242, 39, 0.32);
 }
 
 html {
-  background: #050812;
+  background: #03060d;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at 18% -10%, rgba(20, 184, 166, 0.13), transparent 30%),
-    radial-gradient(circle at 82% 0%, rgba(245, 158, 11, 0.08), transparent 28%),
-    linear-gradient(135deg, #050812 0%, #080b12 42%, #0b1018 100%);
+    linear-gradient(90deg, rgba(185, 242, 39, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(34, 211, 238, 0.026) 1px, transparent 1px),
+    radial-gradient(circle at 15% -12%, rgba(185, 242, 39, 0.22), transparent 30%),
+    radial-gradient(circle at 75% 4%, rgba(34, 211, 238, 0.16), transparent 32%),
+    radial-gradient(circle at 92% 38%, rgba(245, 184, 46, 0.1), transparent 28%),
+    linear-gradient(135deg, #03060d 0%, #07111a 38%, #070a12 100%);
+  background-size:
+    34px 34px,
+    34px 34px,
+    auto,
+    auto,
+    auto,
+    auto;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -70,8 +84,9 @@ button {
 @layer components {
   .premium-shell {
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 260px),
-      radial-gradient(circle at 54% 0%, rgba(56, 189, 248, 0.07), transparent 34%),
+      linear-gradient(180deg, rgba(185, 242, 39, 0.05), transparent 235px),
+      radial-gradient(circle at 44% 0%, rgba(34, 211, 238, 0.12), transparent 38%),
+      linear-gradient(90deg, rgba(185, 242, 39, 0.06), transparent 24%, transparent 76%, rgba(245, 184, 46, 0.04)),
       transparent;
   }
 
@@ -80,10 +95,10 @@ button {
     overflow: hidden;
     border: 1px solid var(--line-soft);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.024)),
-      rgba(2, 6, 23, 0.32);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.026)),
+      rgba(4, 10, 20, 0.54);
     box-shadow:
-      0 18px 52px rgba(0, 0, 0, 0.28),
+      0 20px 58px rgba(0, 0, 0, 0.34),
       inset 0 1px 0 rgba(255, 255, 255, 0.045);
     backdrop-filter: blur(18px);
   }
@@ -95,8 +110,52 @@ button {
     inset: 0;
     border-radius: inherit;
     background:
-      linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent) top /
+      linear-gradient(90deg, transparent, rgba(185, 242, 39, 0.18), rgba(34, 211, 238, 0.1), transparent) top /
         100% 1px no-repeat;
+  }
+
+  .identity-panel {
+    border: 1px solid rgba(185, 242, 39, 0.26);
+    background:
+      radial-gradient(circle at 8% 12%, rgba(185, 242, 39, 0.18), transparent 34%),
+      radial-gradient(circle at 92% 0%, rgba(34, 211, 238, 0.16), transparent 30%),
+      linear-gradient(135deg, rgba(11, 24, 26, 0.94), rgba(4, 8, 18, 0.9));
+    box-shadow:
+      0 24px 70px rgba(0, 0, 0, 0.36),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 0 0 1px rgba(185, 242, 39, 0.04);
+  }
+
+  .metric-pipeline {
+    border-color: rgba(185, 242, 39, 0.28);
+    background:
+      radial-gradient(circle at 95% 12%, rgba(185, 242, 39, 0.19), transparent 30%),
+      linear-gradient(180deg, rgba(185, 242, 39, 0.085), rgba(255, 255, 255, 0.025)),
+      rgba(4, 10, 20, 0.58);
+  }
+
+  .metric-revenue {
+    border-color: rgba(34, 211, 238, 0.24);
+    background:
+      radial-gradient(circle at 95% 12%, rgba(34, 211, 238, 0.17), transparent 30%),
+      linear-gradient(180deg, rgba(34, 211, 238, 0.078), rgba(255, 255, 255, 0.025)),
+      rgba(4, 10, 20, 0.58);
+  }
+
+  .metric-forecast {
+    border-color: rgba(245, 184, 46, 0.26);
+    background:
+      radial-gradient(circle at 95% 12%, rgba(245, 184, 46, 0.18), transparent 30%),
+      linear-gradient(180deg, rgba(245, 184, 46, 0.08), rgba(255, 255, 255, 0.025)),
+      rgba(4, 10, 20, 0.58);
+  }
+
+  .metric-risk {
+    border-color: rgba(251, 113, 133, 0.24);
+    background:
+      radial-gradient(circle at 95% 12%, rgba(251, 113, 133, 0.17), transparent 30%),
+      linear-gradient(180deg, rgba(251, 113, 133, 0.075), rgba(255, 255, 255, 0.025)),
+      rgba(4, 10, 20, 0.58);
   }
 
   .premium-button {
