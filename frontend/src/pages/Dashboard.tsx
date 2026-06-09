@@ -43,6 +43,7 @@ import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomati
 import DashboardToast from "../components/dashboard/DashboardToast";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
+import { fetchClientesFromBackend } from "../services/crmApi";
 
 import { emptyClient, loadClients, statusList } from "../data/mockClients";
 
@@ -76,6 +77,7 @@ export default function Dashboard() {
     })
   );
   const [isBooting, setIsBooting] = useState(true);
+  const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
 
   const pageSize = 4;
 
@@ -91,8 +93,33 @@ export default function Dashboard() {
             : "Automações";
 
   useEffect(() => {
-    localStorage.setItem("crm-premium-clients", JSON.stringify(clients));
-  }, [clients]);
+    if (dataSource === "offline") {
+      localStorage.setItem("crm-premium-clients", JSON.stringify(clients));
+    }
+  }, [clients, dataSource]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadBackendClients() {
+      try {
+        const backendClients = await fetchClientesFromBackend();
+        if (!backendClients || ignore) return;
+
+        setClients(backendClients);
+        setSelectedId(backendClients[0]?.id ?? null);
+        setDataSource("backend");
+      } catch {
+        setDataSource("offline");
+      }
+    }
+
+    void loadBackendClients();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -205,6 +232,7 @@ export default function Dashboard() {
   } = useDashboardActions({
     clients,
     setClients,
+    dataSource,
     selectedClient,
     selectedId,
     setSelectedId,

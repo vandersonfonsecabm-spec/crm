@@ -1,9 +1,10 @@
 import { useState } from "react";
 import Dashboard from "./pages/Dashboard";
 import { Login } from "./pages/Login";
+import { getAuthToken } from "./services/crmApi";
 
 function App() {
-  const [autenticado, setAutenticado] = useState(false);
+  const [autenticado, setAutenticado] = useState(() => Boolean(getAuthToken()));
 
   function entrar() {
     setAutenticado(true);

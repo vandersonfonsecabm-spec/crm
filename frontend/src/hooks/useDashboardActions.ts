@@ -1,11 +1,18 @@
 import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import {
+  createNotaOnBackend,
+  createClienteOnBackend,
+  deleteClienteOnBackend,
+  updateClienteOnBackend,
+} from "../services/crmApi";
 import { getLeadScore, getPriority, getRisk } from "../utils/dashboardHelpers";
 import type { Client, Note, SortBy, Status } from "../types/dashboard";
 
 type UseDashboardActionsParams = {
   clients: Client[];
   setClients: Dispatch<SetStateAction<Client[]>>;
+  dataSource: "offline" | "backend";
   selectedClient: Client | null;
   selectedId: number | null;
   setSelectedId: Dispatch<SetStateAction<number | null>>;
@@ -31,6 +38,7 @@ type UseDashboardActionsParams = {
 export default function useDashboardActions({
   clients,
   setClients,
+  dataSource,
   selectedClient,
   selectedId,
   setSelectedId,
@@ -77,30 +85,105 @@ export default function useDashboardActions({
     showToast("Filtros limpos.");
   }
 
-  function toggleFavorite(id: number) {
-    setClients((current) => current.map((client) => (client.id === id ? { ...client, favorite: !client.favorite } : client)));
+  async function toggleFavorite(id: number) {
+    const target = clients.find((client) => client.id === id);
+    if (!target) return;
+
+    const updatedClient = { ...target, favorite: !target.favorite };
+    setClients((current) => current.map((client) => (client.id === id ? updatedClient : client)));
+
+    try {
+      const syncedClient = dataSource === "backend" ? await updateClienteOnBackend(updatedClient) : null;
+      if (syncedClient) {
+        setClients((current) => current.map((client) => (client.id === id ? syncedClient : client)));
+      }
+    } catch {
+      showToast("Favorito alterado na tela. Backend nao confirmou.");
+    }
   }
 
-  function toggleHot(id: number) {
-    setClients((current) => current.map((client) => (client.id === id ? { ...client, hot: !client.hot } : client)));
+  async function toggleHot(id: number) {
+    const target = clients.find((client) => client.id === id);
+    if (!target) return;
+
+    const updatedClient = { ...target, hot: !target.hot };
+    setClients((current) => current.map((client) => (client.id === id ? updatedClient : client)));
+
+    try {
+      const syncedClient = dataSource === "backend" ? await updateClienteOnBackend(updatedClient) : null;
+      if (syncedClient) {
+        setClients((current) => current.map((client) => (client.id === id ? syncedClient : client)));
+      }
+    } catch {
+      showToast("Marcacao quente alterada na tela. Backend nao confirmou.");
+    }
   }
 
-  function changeStatus(id: number, status: Status) {
-    setClients((current) =>
-      current.map((client) => (client.id === id ? { ...client, status, lastContactDays: 0 } : client))
-    );
-    showToast("Status atualizado.");
+  async function changeStatus(id: number, status: Status) {
+    const target = clients.find((client) => client.id === id);
+    if (!target) return;
+    if (target.status === status) {
+      showToast("Cliente ja esta nessa etapa.");
+      return;
+    }
+
+    const note: Note = {
+      id: Date.now(),
+      text: `Status alterado de ${target.status} para ${status}.`,
+      date: new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }),
+      createdAt: Date.now(),
+    };
+
+    const updatedClient: Client = {
+      ...target,
+      status,
+      lastContactDays: 0,
+      notes: [note, ...target.notes],
+    };
+
+    setClients((current) => current.map((client) => (client.id === id ? updatedClient : client)));
+
+    try {
+      const syncedClient = dataSource === "backend" ? await updateClienteOnBackend(updatedClient) : null;
+      const syncedNote = dataSource === "backend" ? await createNotaOnBackend(updatedClient, note.text) : null;
+
+      if (syncedClient) {
+        const nextClient = {
+          ...syncedClient,
+          notes: syncedNote ? [syncedNote, ...updatedClient.notes.filter((item) => item.id !== note.id)] : updatedClient.notes,
+        };
+
+        setClients((current) => current.map((client) => (client.id === id ? nextClient : client)));
+        showToast(syncedNote ? "Status e historico salvos no backend." : "Status salvo no backend.");
+        return;
+      }
+
+      showToast("Status atualizado.");
+    } catch {
+      showToast("Status atualizado na tela. Backend não confirmou.");
+    }
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (!editing) return;
-    setClients((current) => current.map((client) => (client.id === editing.id ? editing : client)));
-    setSelectedId(editing.id);
-    setEditing(null);
-    showToast("Cliente atualizado.");
+
+    try {
+      const syncedClient = dataSource === "backend" ? await updateClienteOnBackend(editing) : null;
+      const nextClient = syncedClient ?? editing;
+
+      setClients((current) => current.map((client) => (client.id === editing.id ? nextClient : client)));
+      setSelectedId(nextClient.id);
+      setEditing(null);
+      showToast(syncedClient ? "Cliente atualizado no backend." : "Cliente atualizado.");
+    } catch {
+      setClients((current) => current.map((client) => (client.id === editing.id ? editing : client)));
+      setSelectedId(editing.id);
+      setEditing(null);
+      showToast("Cliente salvo localmente. Backend indisponível.");
+    }
   }
 
-  function createClient() {
+  async function createClient() {
     if (!creating || !creating.name.trim()) {
       showToast("Informe o nome do cliente.");
       return;
@@ -113,64 +196,120 @@ export default function useDashboardActions({
       notes: [],
     };
 
-    setClients((current) => [newClient, ...current]);
-    setSelectedId(newClient.id);
-    setCreating(null);
-    showToast("Cliente criado.");
+    try {
+      const syncedClient = dataSource === "backend" ? await createClienteOnBackend(newClient) : null;
+      const nextClient = syncedClient ?? newClient;
+
+      setClients((current) => [nextClient, ...current]);
+      setSelectedId(nextClient.id);
+      setCreating(null);
+      showToast(syncedClient ? "Cliente criado no backend." : "Cliente criado.");
+    } catch {
+      setClients((current) => [newClient, ...current]);
+      setSelectedId(newClient.id);
+      setCreating(null);
+      showToast("Cliente criado localmente. Backend indisponível.");
+    }
   }
 
-  function deleteClient(id: number) {
+  async function deleteClient(id: number) {
+    const target = clients.find((client) => client.id === id);
+
+    try {
+      if (dataSource === "backend" && target) {
+        await deleteClienteOnBackend(target);
+      }
+    } catch {
+      showToast("Removido da tela, mas o backend não confirmou.");
+    }
+
     setClients((current) => current.filter((client) => client.id !== id));
     if (selectedId === id) setSelectedId(null);
     setEditing(null);
-    showToast("Cliente removido.");
+    showToast(dataSource === "backend" ? "Cliente removido do backend." : "Cliente removido.");
   }
 
-  function addNote() {
+  async function addNote() {
     if (!selectedClient || !noteText.trim()) return;
 
     const note: Note = {
       id: Date.now(),
       text: noteText.trim(),
       date: new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }),
+      createdAt: Date.now(),
     };
 
-    setClients((current) =>
-      current.map((client) =>
-        client.id === selectedClient.id ? { ...client, notes: [note, ...client.notes], lastContactDays: 0 } : client
-      )
-    );
+    const updatedClient = { ...selectedClient, notes: [note, ...selectedClient.notes], lastContactDays: 0 };
+
+    setClients((current) => current.map((client) => (client.id === selectedClient.id ? updatedClient : client)));
 
     setNoteText("");
-    showToast("Nota adicionada.");
+
+    try {
+      const syncedNote =
+        dataSource === "backend" ? await createNotaOnBackend(selectedClient, note.text) : null;
+      const syncedClient = dataSource === "backend" ? await updateClienteOnBackend(updatedClient) : null;
+
+      if (syncedNote) {
+        setClients((current) =>
+          current.map((client) =>
+            client.id === selectedClient.id
+              ? {
+                  ...(syncedClient ?? client),
+                  notes: [syncedNote, ...client.notes.filter((item) => item.id !== note.id)],
+                  lastContactDays: 0,
+                }
+              : client
+          )
+        );
+        showToast("Nota salva no backend.");
+        return;
+      }
+
+      showToast("Nota adicionada.");
+    } catch {
+      showToast("Nota adicionada na tela. Backend não confirmou.");
+    }
   }
 
-  function addTagToSelected() {
+  async function addTagToSelected() {
     if (!selectedClient || !tagText.trim()) return;
     const tag = tagText.trim();
+    if (selectedClient.tags.includes(tag)) return;
 
-    setClients((current) =>
-      current.map((client) =>
-        client.id === selectedClient.id && !client.tags.includes(tag)
-          ? { ...client, tags: [...client.tags, tag] }
-          : client
-      )
-    );
+    const updatedClient = { ...selectedClient, tags: [...selectedClient.tags, tag] };
+
+    setClients((current) => current.map((client) => (client.id === selectedClient.id ? updatedClient : client)));
 
     setTagText("");
-    showToast("Tag adicionada.");
+
+    try {
+      const syncedClient = dataSource === "backend" ? await updateClienteOnBackend(updatedClient) : null;
+      if (syncedClient) {
+        setClients((current) => current.map((client) => (client.id === selectedClient.id ? syncedClient : client)));
+      }
+      showToast(syncedClient ? "Tag salva no backend." : "Tag adicionada.");
+    } catch {
+      showToast("Tag adicionada na tela. Backend nao confirmou.");
+    }
   }
 
-  function removeTagFromSelected(tag: string) {
+  async function removeTagFromSelected(tag: string) {
     if (!selectedClient) return;
 
-    setClients((current) =>
-      current.map((client) =>
-        client.id === selectedClient.id ? { ...client, tags: client.tags.filter((item) => item !== tag) } : client
-      )
-    );
+    const updatedClient = { ...selectedClient, tags: selectedClient.tags.filter((item) => item !== tag) };
 
-    showToast("Tag removida.");
+    setClients((current) => current.map((client) => (client.id === selectedClient.id ? updatedClient : client)));
+
+    try {
+      const syncedClient = dataSource === "backend" ? await updateClienteOnBackend(updatedClient) : null;
+      if (syncedClient) {
+        setClients((current) => current.map((client) => (client.id === selectedClient.id ? syncedClient : client)));
+      }
+      showToast(syncedClient ? "Tag removida do backend." : "Tag removida.");
+    } catch {
+      showToast("Tag removida na tela. Backend nao confirmou.");
+    }
   }
 
   function exportCsv() {

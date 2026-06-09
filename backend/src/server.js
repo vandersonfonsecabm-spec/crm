@@ -12,6 +12,13 @@ app.use(cors());
 app.get("/clientes", async (req, res) => {
   try {
     const clientes = await prisma.cliente.findMany({
+      include: {
+        notas: {
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+      },
       orderBy: {
         id: "desc",
       },
@@ -27,14 +34,12 @@ app.get("/clientes", async (req, res) => {
 
 app.post("/clientes", async (req, res) => {
   try {
-    const { nome, telefone, interesse, status } = req.body;
+    const data = clientePayload(req.body);
 
     const cliente = await prisma.cliente.create({
-      data: {
-        nome,
-        telefone: telefone || "",
-        interesse: interesse || "",
-        status: status || "Lead",
+      data,
+      include: {
+        notas: true,
       },
     });
 
@@ -51,18 +56,19 @@ app.post("/clientes", async (req, res) => {
 app.put("/clientes/:id", async (req, res) => {
   try {
     const { id } = req.params;
-
-    const { nome, telefone, interesse, status } = req.body;
+    const data = clientePayload(req.body);
 
     const clienteAtualizado = await prisma.cliente.update({
       where: {
         id: Number(id),
       },
-      data: {
-        nome,
-        telefone: telefone || "",
-        interesse: interesse || "",
-        status: status || "Lead",
+      data,
+      include: {
+        notas: {
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
       },
     });
 
@@ -97,6 +103,91 @@ app.delete("/clientes/:id", async (req, res) => {
     });
   }
 });
+
+app.get("/clientes/:id/notas", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const notas = await prisma.nota.findMany({
+      where: {
+        clienteId: Number(id),
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    res.json(notas);
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).json({
+      erro: "Erro ao buscar notas",
+    });
+  }
+});
+
+app.post("/clientes/:id/notas", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { texto, tipo } = req.body;
+
+    if (!texto || !String(texto).trim()) {
+      return res.status(400).json({
+        erro: "Texto da nota é obrigatório",
+      });
+    }
+
+    const nota = await prisma.nota.create({
+      data: {
+        clienteId: Number(id),
+        texto: String(texto).trim(),
+        tipo: tipo || "nota",
+      },
+    });
+
+    res.json(nota);
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).json({
+      erro: "Erro ao criar nota",
+    });
+  }
+});
+
+function clientePayload(body) {
+  const tags = Array.isArray(body.tags)
+    ? body.tags
+    : typeof body.tags === "string"
+      ? safeParseTags(body.tags)
+      : [];
+
+  return {
+    nome: String(body.nome || "").trim(),
+    telefone: String(body.telefone || "").trim(),
+    email: String(body.email || "").trim(),
+    empresa: String(body.empresa || "").trim(),
+    interesse: String(body.interesse || "").trim(),
+    status: String(body.status || "Lead").trim(),
+    valor: Number.isFinite(Number(body.valor)) ? Number(body.valor) : 0,
+    origem: String(body.origem || "Manual").trim(),
+    favorito: Boolean(body.favorito),
+    quente: Boolean(body.quente),
+    ultimoContato: Number.isFinite(Number(body.ultimoContato)) ? Number(body.ultimoContato) : 0,
+    proximoFollowUp: String(body.proximoFollowUp || "Hoje").trim(),
+    tags: JSON.stringify(tags),
+  };
+}
+
+function safeParseTags(value) {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
 
 app.listen(3001, () => {
   console.log("Servidor rodando na porta 3001");

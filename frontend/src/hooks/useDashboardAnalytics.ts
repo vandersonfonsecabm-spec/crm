@@ -70,13 +70,18 @@ export default function useDashboardAnalytics({
     return clients
       .flatMap((client) =>
         client.notes.map((note) => ({
-          id: `${client.id}-${note.id}`,
-          client: client.name,
-          text: note.text,
-          date: note.date,
+          activity: {
+            id: `${client.id}-${note.id}`,
+            client: client.name,
+            text: note.text,
+            date: note.date,
+          },
+          timestamp: note.createdAt ?? 0,
         }))
       )
-      .slice(0, 5);
+      .sort((first, second) => second.timestamp - first.timestamp)
+      .slice(0, 5)
+      .map((item) => item.activity);
   }, [clients]);
 
   const followUpAgenda = useMemo(() => {

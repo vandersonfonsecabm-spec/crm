@@ -8,10 +8,31 @@ datasource db {
 }
 
 model Cliente {
-  id         Int      @id @default(autoincrement())
-  nome       String
-  telefone   String   @default("")
-  interesse  String   @default("")
-  status     String   @default("Lead")
-  createdAt  DateTime @default(now())
+  id              Int      @id @default(autoincrement())
+  nome            String
+  telefone        String   @default("")
+  email           String   @default("")
+  empresa         String   @default("")
+  interesse       String   @default("")
+  status          String   @default("Lead")
+  valor           Int      @default(0)
+  origem          String   @default("Manual")
+  favorito        Boolean  @default(false)
+  quente          Boolean  @default(false)
+  ultimoContato   Int      @default(0)
+  proximoFollowUp String   @default("Hoje")
+  tags            String   @default("[]")
+  createdAt       DateTime @default(now())
+  notas           Nota[]
+}
+
+model Nota {
+  id        Int      @id @default(autoincrement())
+  texto     String
+  tipo      String   @default("nota")
+  createdAt DateTime @default(now())
+  clienteId Int
+  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
 }

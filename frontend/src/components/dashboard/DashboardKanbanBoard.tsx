@@ -42,7 +42,7 @@ type DashboardKanbanBoardProps = {
   setSelectedId: (clientId: number | null) => void;
   setDragOverStatus: (status: Status | null) => void;
   setIsDraggingKanban: (isDragging: boolean) => void;
-  changeStatus: (clientId: number, status: Status) => void;
+  changeStatus: (clientId: number, status: Status) => void | Promise<void>;
 };
 
 export default function DashboardKanbanBoard({
@@ -154,7 +154,7 @@ export default function DashboardKanbanBoard({
                 onDrop={(event) => {
                   event.preventDefault();
                   const id = Number(event.dataTransfer.getData("clientId"));
-                  if (id) changeStatus(id, status);
+                  if (id) void changeStatus(id, status);
                   setDragOverStatus(null);
                   setIsDraggingKanban(false);
                 }}

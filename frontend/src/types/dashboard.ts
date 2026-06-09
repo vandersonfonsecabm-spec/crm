@@ -8,10 +8,13 @@ export type Note = {
   id: number;
   text: string;
   date: string;
+  createdAt?: number;
 };
 
 export type Client = {
   id: number;
+  backendId?: string;
+  synced?: boolean;
   name: string;
   company: string;
   phone: string;
