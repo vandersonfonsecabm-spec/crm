@@ -45,7 +45,7 @@ export default function DashboardAgendaPanel({
   return (
     <div className="space-y-4">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="premium-panel rounded-2xl p-4">
           <PanelTitle icon={<Clock size={15} className="text-sky-300" />} title="Janelas de follow-up" hint="Agenda comercial por urgência e próxima ação." />
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -111,7 +111,7 @@ export default function DashboardAgendaPanel({
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="premium-panel rounded-2xl p-4">
             <PanelTitle icon={<AlertTriangle size={15} className="text-rose-300" />} title="Alertas operacionais" hint="Sinais que pedem ação antes de virar perda." />
 
             <div className="mt-4 space-y-2">
@@ -128,7 +128,7 @@ export default function DashboardAgendaPanel({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="premium-panel rounded-2xl p-4">
             <PanelTitle icon={<Bell size={15} className="text-amber-300" />} title="Clientes silenciosos" hint="Contatos parados para retomada." />
 
             <div className="mt-4 space-y-2">
@@ -151,7 +151,7 @@ export default function DashboardAgendaPanel({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <section className="premium-panel rounded-2xl p-4">
         <PanelTitle icon={<StickyNote size={15} className="text-violet-300" />} title="Atividades recentes" hint="Notas e registros comerciais mais recentes." />
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">

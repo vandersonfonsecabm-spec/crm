@@ -38,10 +38,10 @@ export default function DashboardSidebar({
   applySmartFilter,
 }: DashboardSidebarProps) {
   return (
-    <aside className="hidden w-60 shrink-0 overflow-hidden border-r border-white/[0.06] bg-white/[0.03] p-4 lg:block">
-      <div className="mb-5 rounded-2xl border border-white/10 bg-black/20 p-3">
+    <aside className="hidden w-64 shrink-0 overflow-hidden border-r border-white/[0.08] bg-[#080c14]/82 p-4 shadow-[18px_0_55px_rgba(0,0,0,0.22)] backdrop-blur-xl lg:block">
+      <div className="premium-panel mb-5 rounded-2xl p-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-black">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 text-cyan-100 shadow-[0_0_30px_rgba(34,211,238,0.12)]">
             <Sparkles size={16} />
           </div>
 
@@ -119,7 +119,7 @@ export default function DashboardSidebar({
         </div>
       </nav>
 
-      <div className="mx-auto mt-6 w-full max-w-[208px] rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+      <div className="premium-panel mx-auto mt-6 w-full max-w-[224px] rounded-2xl p-3 transition-all duration-200 hover:border-white/20">
         <p className="text-xs font-semibold">Atalhos operacionais</p>
 
         <div className="mt-3 space-y-2">
@@ -177,7 +177,7 @@ export default function DashboardSidebar({
           />
 
           {activePage === "clientes" && (
-            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+            <div className="premium-panel mt-3 rounded-2xl p-3 transition-all duration-200 hover:border-white/20">
               <p className="text-xs font-semibold">Atividades recentes</p>
 
               <div className="mt-3 space-y-2">
@@ -210,7 +210,7 @@ export default function DashboardSidebar({
       )}
 
       {activePage === "automacoes" && (
-        <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+        <div className="premium-panel mt-3 rounded-2xl p-3 transition-all duration-200 hover:border-white/20">
           <p className="text-xs font-semibold">Status operacional</p>
 
           <div className="mt-3 space-y-2">
@@ -248,17 +248,17 @@ function SidebarButton({
   return (
     <button
       onClick={onClick}
-      className={`relative mx-auto box-border flex h-10 w-[208px] shrink-0 items-center rounded-xl border border-white/[0.08] px-3 pr-9 text-left text-sm leading-none transition-colors duration-200 ${
+      className={`relative mx-auto box-border flex h-10 w-[224px] shrink-0 items-center rounded-xl border px-3 pr-9 text-left text-sm leading-none transition-all duration-200 ${
         active
-          ? "bg-white/[0.115] text-white ring-1 ring-inset ring-white/70"
-          : "bg-white/[0.035] text-slate-300 hover:bg-white/[0.055]"
+          ? "border-cyan-300/30 bg-cyan-300/[0.10] text-white shadow-[0_0_24px_rgba(34,211,238,0.10)] ring-1 ring-inset ring-cyan-200/35"
+          : "border-white/[0.07] bg-white/[0.032] text-slate-300 hover:border-white/15 hover:bg-white/[0.055] hover:text-white"
       }`}
     >
       {icon}
       <span className="block min-w-0 flex-1 truncate">{label}</span>
       <span
         className={`absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${
-          active ? "bg-white" : "bg-white/15"
+          active ? "bg-cyan-200 shadow-[0_0_12px_rgba(103,232,249,0.75)]" : "bg-white/15"
         }`}
       />
     </button>
@@ -275,7 +275,7 @@ function ActionButton({
   return (
     <button
       onClick={onClick}
-      className="box-border h-9 w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-white/10 hover:bg-white/[0.07]"
+      className="box-border h-9 w-full rounded-xl border border-white/[0.07] bg-white/[0.045] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-cyan-200/20 hover:bg-cyan-300/[0.06] hover:text-slate-100"
     >
       {label}
     </button>

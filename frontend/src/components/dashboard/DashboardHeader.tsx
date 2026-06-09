@@ -29,20 +29,20 @@ export default function DashboardHeader({
         <span className="text-slate-300">{breadcrumbLabel}</span>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-end justify-between gap-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Operação comercial</p>
-          <h1 className="text-xl font-semibold">{pageTitle}</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-normal text-slate-50">{pageTitle}</h1>
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="rounded-xl border border-white/10 bg-white/5 p-2">
+          <button className="premium-ghost rounded-xl p-2 text-slate-300 transition hover:border-cyan-200/20 hover:bg-cyan-300/[0.06] hover:text-white">
             <Bell size={15} />
           </button>
 
           <button
             onClick={onCreateClient}
-            className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-semibold text-black transition-all duration-200 hover:scale-[1.01] hover:bg-slate-100"
+            className="premium-button inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all duration-200 hover:-translate-y-px hover:brightness-105"
           >
             <Plus size={14} />
             Novo cliente

@@ -247,9 +247,9 @@ export default function Dashboard() {
 
   if (isBooting) {
     return (
-      <div className="min-h-screen bg-[#080b12] p-4 text-white">
+      <div className="min-h-screen bg-[#050812] p-4 text-white">
         <div className="flex min-h-[calc(100vh-32px)] min-w-0 gap-4 overflow-x-hidden">
-          <div className="hidden w-60 rounded-2xl border border-white/10 bg-white/[0.03] p-4 lg:block">
+          <div className="premium-panel hidden w-60 rounded-2xl p-4 lg:block">
             <div className="mb-6 flex items-center gap-2">
               <div className="h-8 w-8 animate-pulse rounded-xl bg-white/10" />
               <div className="space-y-2">
@@ -303,7 +303,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen select-none overflow-x-hidden bg-[#080b12] text-white">
+    <div className="premium-shell min-h-screen select-none overflow-x-hidden text-white">
       <div className="flex min-h-screen">
         <DashboardSidebar
           activePage={activePage}
@@ -319,7 +319,7 @@ export default function Dashboard() {
           applySmartFilter={applySmartFilter}
         />
 
-        <main className="min-w-0 flex-1 overflow-x-hidden p-4">
+        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-4 xl:px-5">
           <DashboardTopbar
             clients={clients}
             currentTime={currentTime}

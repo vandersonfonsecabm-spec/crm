@@ -10,7 +10,7 @@ export default function DashboardSmartAlerts({
   onApplySmartFilter,
 }: DashboardSmartAlertsProps) {
   return (
-    <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+    <div className="premium-panel mt-3 rounded-2xl p-3 transition-all duration-300 hover:border-cyan-200/18">
       <p className="text-xs font-semibold">Sinais comerciais</p>
 
       <div className="mt-3 space-y-2">

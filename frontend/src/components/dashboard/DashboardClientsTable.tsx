@@ -49,10 +49,10 @@ export default function DashboardClientsTable({
   onNextPage,
 }: DashboardClientsTableProps) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03]">
+    <section className="premium-panel rounded-2xl">
       <ClientsHeader filteredClientsCount={filteredClientsCount} page={page} totalPages={totalPages} />
 
-      <div className="grid gap-2 p-3">
+      <div className="grid gap-2.5 p-3">
         {paginatedClients.map((client) => (
           <ClientRowCard
             key={client.id}
@@ -100,17 +100,17 @@ function ClientsHeader({
   totalPages: number;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-black/10 px-3 py-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-black/15 px-3 py-2.5">
       <div>
         <p className="text-sm font-semibold">Clientes</p>
         <p className="mt-0.5 text-[10px] text-slate-500">Carteira priorizada sem barra horizontal.</p>
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-slate-400">
+          <span className="rounded-full border border-white/10 bg-white/[0.045] px-2 py-1 text-[10px] text-slate-400">
           {filteredClientsCount} registros
         </span>
-        <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-slate-400">
+          <span className="rounded-full border border-white/10 bg-white/[0.045] px-2 py-1 text-[10px] text-slate-400">
           Página {page}/{totalPages}
         </span>
       </div>
@@ -159,15 +159,15 @@ function ClientRowCard({
 
   return (
     <article
-      className={`grid min-w-0 gap-3 rounded-xl border p-3 transition-all duration-200 md:grid-cols-[minmax(0,1.2fr)_minmax(150px,0.6fr)_minmax(160px,0.65fr)_auto] ${
+      className={`grid min-w-0 gap-3 rounded-xl border p-3 transition-all duration-250 md:grid-cols-[minmax(0,1.2fr)_minmax(150px,0.6fr)_minmax(160px,0.65fr)_auto] ${
         selected
-          ? "border-cyan-300/30 bg-cyan-500/[0.055] shadow-[inset_2px_0_0_rgba(103,232,249,0.35)]"
-          : "border-white/10 bg-black/15 hover:border-white/20 hover:bg-white/[0.04]"
+          ? "border-cyan-300/35 bg-cyan-500/[0.07] shadow-[inset_2px_0_0_rgba(103,232,249,0.45),0_16px_36px_rgba(0,0,0,0.18)]"
+          : "border-white/10 bg-black/18 hover:-translate-y-px hover:border-cyan-200/18 hover:bg-white/[0.045] hover:shadow-[0_14px_34px_rgba(0,0,0,0.18)]"
       }`}
     >
       <button onClick={() => onSelectClient(client.id)} className="min-w-0 text-left">
         <div className="flex min-w-0 items-start gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-black/25 text-[9px] font-bold text-slate-300">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.055] text-[9px] font-bold text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             {initials(client.name)}
           </div>
 
@@ -249,7 +249,7 @@ function CompactInfo({ label, value, hint }: { label: string; value: string; hin
 
 function ScorePill({ score, forecast }: { score: number; forecast: string }) {
   return (
-    <div className="w-24 shrink-0 rounded-lg border border-white/5 bg-black/15 p-1.5">
+    <div className="w-24 shrink-0 rounded-lg border border-white/8 bg-black/20 p-1.5">
       <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
         <span>Score</span>
         <span>{score}</span>

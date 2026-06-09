@@ -29,8 +29,8 @@ export default function DashboardPortfolioInsights({
   const highRiskCount = clients.filter((client) => getRisk(client) === "Alto").length;
 
   return (
-    <section className="mt-4 grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+    <section className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="premium-panel rounded-2xl p-4 transition-all duration-300 hover:border-cyan-200/18">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold">Qualidade da carteira</p>
@@ -45,7 +45,7 @@ export default function DashboardPortfolioInsights({
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="rounded-xl border border-sky-300/12 bg-sky-300/[0.045] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <div className="flex items-center justify-between">
               <p className="text-[10px] text-slate-500">Carteira ativa</p>
               <Activity size={14} className="text-sky-300" />
@@ -63,7 +63,7 @@ export default function DashboardPortfolioInsights({
             </div>
           </div>
 
-          <div className="rounded-xl border border-rose-400/10 bg-rose-500/[0.04] p-3">
+          <div className="rounded-xl border border-rose-400/12 bg-rose-500/[0.05] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <div className="flex items-center justify-between">
               <p className="text-[10px] text-rose-100/70">Alta atenção</p>
               <Flame size={14} className="text-rose-300" />
@@ -79,7 +79,7 @@ export default function DashboardPortfolioInsights({
             </div>
           </div>
 
-          <div className="rounded-xl border border-amber-400/10 bg-amber-500/[0.04] p-3">
+          <div className="rounded-xl border border-amber-400/12 bg-amber-500/[0.05] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <div className="flex items-center justify-between">
               <p className="text-[10px] text-amber-100/70">Requer ação</p>
               <AlertTriangle size={14} className="text-amber-300" />
@@ -104,7 +104,7 @@ export default function DashboardPortfolioInsights({
               <button
                 key={client.id}
                 onClick={() => onSelectClient(client.id)}
-                className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]"
+                className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left transition-all duration-200 hover:-translate-y-px hover:border-cyan-200/18 hover:bg-cyan-300/[0.045]"
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-xs font-semibold text-slate-100">{client.name}</p>
@@ -121,7 +121,7 @@ export default function DashboardPortfolioInsights({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+      <div className="premium-panel rounded-2xl p-4 transition-all duration-300 hover:border-cyan-200/18">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-semibold">Sinais da carteira</p>
           <span className="text-[11px] text-slate-500">top leads</span>
@@ -136,7 +136,7 @@ export default function DashboardPortfolioInsights({
               <button
                 key={client.id}
                 onClick={() => onOpenClient(client.id)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 p-2.5 text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.04]"
+                className="w-full rounded-xl border border-white/10 bg-black/20 p-2.5 text-left transition-all duration-200 hover:-translate-y-px hover:border-cyan-200/18 hover:bg-cyan-300/[0.04]"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">

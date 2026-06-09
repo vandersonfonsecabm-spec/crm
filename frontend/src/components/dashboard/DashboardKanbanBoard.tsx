@@ -102,18 +102,18 @@ export default function DashboardKanbanBoard({
           money={money}
         />
 
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
+        <div className="premium-panel flex flex-wrap items-center justify-between gap-2 rounded-2xl px-3 py-2.5">
           <div>
             <p className="text-sm font-semibold">Etapas do Kanban</p>
             <p className="mt-0.5 text-[10px] text-slate-500">Navegue por grupos sem barra horizontal.</p>
           </div>
 
-          <div className="flex rounded-xl border border-white/10 bg-white/[0.035] p-1">
+          <div className="flex rounded-xl border border-white/10 bg-black/20 p-1">
             <button
               onClick={() => setStageGroup("pipeline")}
               className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
                 stageGroup === "pipeline"
-                  ? "bg-white text-black"
+                  ? "bg-slate-50 text-slate-950 shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
                   : "text-slate-400 hover:bg-white/10 hover:text-slate-200"
               }`}
             >
@@ -123,7 +123,7 @@ export default function DashboardKanbanBoard({
               onClick={() => setStageGroup("resultado")}
               className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
                 stageGroup === "resultado"
-                  ? "bg-white text-black"
+                  ? "bg-slate-50 text-slate-950 shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
                   : "text-slate-400 hover:bg-white/10 hover:text-slate-200"
               }`}
             >
@@ -158,10 +158,10 @@ export default function DashboardKanbanBoard({
                   setDragOverStatus(null);
                   setIsDraggingKanban(false);
                 }}
-                className={`min-w-0 rounded-2xl border p-2.5 transition-all duration-300 hover:shadow-[0_16px_45px_rgba(0,0,0,0.25)] ${
+                className={`min-w-0 rounded-2xl border p-2.5 transition-all duration-300 hover:shadow-[0_20px_52px_rgba(0,0,0,0.28)] ${
                   isDropTarget
                     ? "scale-[1.01] border-cyan-400/50 bg-cyan-500/[0.08] shadow-[0_0_35px_rgba(34,211,238,0.18)]"
-                    : "border-white/10 bg-white/[0.03]"
+                    : "border-white/10 bg-white/[0.035]"
                 }`}
               >
                 <div className={`mb-2 overflow-hidden rounded-xl border ${kanbanHeaderClass(status)}`}>

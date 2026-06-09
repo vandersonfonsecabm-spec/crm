@@ -25,7 +25,7 @@ export default function DashboardKanbanSummary({
   money,
 }: DashboardKanbanSummaryProps) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+    <div className="premium-panel rounded-2xl p-3 transition-all duration-300 hover:border-cyan-200/18">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">

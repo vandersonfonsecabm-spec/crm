@@ -26,9 +26,9 @@ export default function DashboardTopbar({
   exportCsv,
 }: DashboardTopbarProps) {
   return (
-    <div className="mb-3 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2">
+    <div className="premium-panel mb-4 flex items-center justify-between rounded-2xl px-4 py-2.5">
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-500/[0.07] px-2.5 py-1">
+        <div className="flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/[0.09] px-2.5 py-1 shadow-[0_0_22px_rgba(16,185,129,0.08)]">
           <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.45)]" />
 
           <span className="text-[10px] font-semibold text-emerald-100">
@@ -42,8 +42,8 @@ export default function DashboardTopbar({
           CRM Agro SaaS • Consistência Visual
         </p>
 
-        <span className="hidden rounded-full border border-white/10 bg-white/[0.035] px-2 py-1 text-[10px] text-slate-400 lg:inline-flex">
-          v1 refinamento
+        <span className="hidden rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-2 py-1 text-[10px] text-cyan-100/80 lg:inline-flex">
+          premium pass
         </span>
       </div>
 
@@ -55,7 +55,7 @@ export default function DashboardTopbar({
           onCloseQuickActions={() => setShowQuickActions(false)}
         />
 
-        <div className="hidden rounded-xl border border-white/10 bg-black/20 px-3 py-1.5 lg:block">
+        <div className="premium-ghost hidden rounded-xl px-3 py-1.5 lg:block">
           <p className="text-[10px] text-slate-500">Agora</p>
           <p className="text-[11px] font-semibold">{currentTime}</p>
         </div>
@@ -81,8 +81,8 @@ export default function DashboardTopbar({
           }}
         />
 
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-2 py-1.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[11px] font-bold text-black">
+        <div className="premium-ghost flex items-center gap-2 rounded-xl px-2 py-1.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-50 text-[11px] font-bold text-slate-950 shadow-[0_0_18px_rgba(255,255,255,0.12)]">
             MA
           </div>
 

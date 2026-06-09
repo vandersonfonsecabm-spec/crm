@@ -109,7 +109,7 @@ export default function DashboardCustomerDrawer({
 
   return (
     <aside key={`${activePage}-${selectedClient?.id ?? "empty"}`} className={drawerShellClass(activePage)}>
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-[0_20px_60px_rgba(0,0,0,0.22)] transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+      <div className="premium-panel rounded-2xl transition-all duration-300 hover:border-cyan-200/18">
         <div className="border-b border-white/10 bg-gradient-to-br from-white/[0.09] via-white/[0.035] to-transparent p-3">
           <div className="flex items-center justify-between gap-3">
             <div>

@@ -47,7 +47,7 @@ export default function DashboardOperationalSearch({
   if (activePage === "automacoes") return null;
 
   return (
-    <section className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+    <section className="premium-panel mt-4 rounded-2xl p-3 transition-all duration-300 hover:border-cyan-200/18">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-xs font-semibold text-slate-200">Busca operacional</p>
