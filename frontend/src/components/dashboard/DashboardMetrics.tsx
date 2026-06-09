@@ -25,21 +25,21 @@ export default function DashboardMetrics({
   money,
 }: DashboardMetricsProps) {
   return (
-    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-      <div className="identity-panel rounded-2xl p-4 md:col-span-2 xl:col-span-2">
+    <section className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-6">
+      <div className="identity-panel self-start rounded-2xl p-3.5 md:col-span-2 xl:col-span-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-100/70">Pipeline comercial</p>
-            <h2 className="mt-2 truncate text-2xl font-bold text-white">{money(analytics.totalValue)}</h2>
+            <h2 className="mt-2 truncate text-[clamp(1.35rem,2vw,1.55rem)] font-semibold text-white">{money(analytics.totalValue)}</h2>
             <p className="mt-1 text-[11px] text-slate-400">Receita potencial com foco em follow-up e fechamento.</p>
           </div>
 
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/[0.08] text-teal-100">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-teal-300/18 bg-teal-300/[0.065] text-teal-100">
             <TrendingUp size={18} />
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2">
           <MiniSignal label="Quentes" value={String(analytics.hotCount)} />
           <MiniSignal label="Hoje" value={String(analytics.todayFollowUps)} />
           <MiniSignal label="Score" value={String(analytics.averageScore)} />
@@ -49,6 +49,7 @@ export default function DashboardMetrics({
       <MetricCard
         title="Ganho"
         value={money(analytics.wonValue)}
+        caption="Receita confirmada"
         icon={<CheckCircle2 size={16} className="text-cyan-300" />}
         tone="revenue"
       />
@@ -56,6 +57,7 @@ export default function DashboardMetrics({
       <MetricCard
         title="Forecast"
         value={money(analytics.forecastValue)}
+        caption="Previsão em aberto"
         icon={<Target size={16} className="text-amber-300" />}
         tone="forecast"
       />
@@ -63,6 +65,7 @@ export default function DashboardMetrics({
       <MetricCard
         title="Quentes"
         value={String(analytics.hotCount)}
+        caption="Prioridade ativa"
         icon={<Flame size={16} className="text-rose-300" />}
         tone="risk"
       />
@@ -70,6 +73,7 @@ export default function DashboardMetrics({
       <MetricCard
         title="Follow-up"
         value={String(analytics.todayFollowUps)}
+        caption="Agenda de hoje"
         icon={<CalendarDays size={16} className="text-emerald-300" />}
         tone="pipeline"
       />
@@ -79,7 +83,7 @@ export default function DashboardMetrics({
 
 function MiniSignal({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/20 px-2 py-2">
+    <div className="rounded-lg border border-white/[0.08] bg-black/[0.16] px-2 py-1.5">
       <p className="text-[9px] text-slate-500">{label}</p>
       <p className="mt-1 text-sm font-semibold text-slate-100">{value}</p>
     </div>

@@ -116,35 +116,39 @@ button {
   }
 
   .metric-pipeline {
-    border-color: rgba(16, 185, 129, 0.2);
+    border-color: rgba(148, 163, 184, 0.14);
+    border-left-width: 2px;
+    border-left-color: rgba(16, 185, 129, 0.55);
     background:
-      radial-gradient(circle at 95% 12%, rgba(16, 185, 129, 0.09), transparent 30%),
-      linear-gradient(180deg, rgba(16, 185, 129, 0.055), rgba(255, 255, 255, 0.022)),
-      rgba(8, 13, 22, 0.64);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.02)),
+      rgba(8, 13, 22, 0.68);
   }
 
   .metric-revenue {
-    border-color: rgba(56, 189, 248, 0.18);
+    border-color: rgba(148, 163, 184, 0.14);
+    border-left-width: 2px;
+    border-left-color: rgba(56, 189, 248, 0.52);
     background:
-      radial-gradient(circle at 95% 12%, rgba(56, 189, 248, 0.075), transparent 30%),
-      linear-gradient(180deg, rgba(56, 189, 248, 0.05), rgba(255, 255, 255, 0.022)),
-      rgba(8, 13, 22, 0.64);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.02)),
+      rgba(8, 13, 22, 0.68);
   }
 
   .metric-forecast {
-    border-color: rgba(214, 162, 58, 0.2);
+    border-color: rgba(148, 163, 184, 0.14);
+    border-left-width: 2px;
+    border-left-color: rgba(214, 162, 58, 0.55);
     background:
-      radial-gradient(circle at 95% 12%, rgba(214, 162, 58, 0.08), transparent 30%),
-      linear-gradient(180deg, rgba(214, 162, 58, 0.052), rgba(255, 255, 255, 0.022)),
-      rgba(8, 13, 22, 0.64);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.02)),
+      rgba(8, 13, 22, 0.68);
   }
 
   .metric-risk {
-    border-color: rgba(224, 105, 123, 0.18);
+    border-color: rgba(148, 163, 184, 0.14);
+    border-left-width: 2px;
+    border-left-color: rgba(224, 105, 123, 0.55);
     background:
-      radial-gradient(circle at 95% 12%, rgba(224, 105, 123, 0.075), transparent 30%),
-      linear-gradient(180deg, rgba(224, 105, 123, 0.048), rgba(255, 255, 255, 0.022)),
-      rgba(8, 13, 22, 0.64);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.02)),
+      rgba(8, 13, 22, 0.68);
   }
 
   .premium-button {
