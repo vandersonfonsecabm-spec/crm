@@ -9,7 +9,6 @@ type DashboardClientsTableProps = {
   totalPages: number;
   money: (value: number) => string;
   initials: (name: string) => string;
-  tagClass: (tag: string) => string;
   statusClass: (status: Status) => string;
   idleLabel: (client: Client) => string;
   getPriority: (client: Client) => string;
@@ -34,7 +33,6 @@ export default function DashboardClientsTable({
   totalPages,
   money,
   initials,
-  tagClass,
   statusClass,
   idleLabel,
   getPriority,
@@ -62,7 +60,6 @@ export default function DashboardClientsTable({
             selected={selectedId === client.id}
             money={money}
             initials={initials}
-            tagClass={tagClass}
             statusClass={statusClass}
             idleLabel={idleLabel}
             getPriority={getPriority}
@@ -126,7 +123,6 @@ function ClientRowCard({
   selected,
   money,
   initials,
-  tagClass,
   statusClass,
   idleLabel,
   getPriority,
@@ -144,7 +140,6 @@ function ClientRowCard({
   selected: boolean;
   money: (value: number) => string;
   initials: (name: string) => string;
-  tagClass: (tag: string) => string;
   statusClass: (status: Status) => string;
   idleLabel: (client: Client) => string;
   getPriority: (client: Client) => string;
@@ -181,23 +176,10 @@ function ClientRowCard({
               <p className="truncate text-sm font-semibold text-slate-100">{client.name}</p>
               {client.favorite && <Star size={12} className="shrink-0 fill-amber-300 text-amber-300" />}
               {client.hot && <Flame size={12} className="shrink-0 text-rose-400" />}
-              {client.notes.length > 0 && (
-                <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] text-slate-300">
-                  {client.notes.length}
-                </span>
-              )}
             </div>
 
             <p className="mt-0.5 truncate text-[11px] text-slate-500">{client.company}</p>
-            <p className="mt-0.5 truncate text-[10px] text-slate-600">{client.email}</p>
 
-            <div className="mt-1 flex flex-wrap gap-1">
-              {client.tags.slice(0, 3).map((tag) => (
-                <span key={tag} className={`rounded-full border px-1.5 py-0.5 text-[9px] ${tagClass(tag)}`}>
-                  {tag}
-                </span>
-              ))}
-            </div>
           </div>
         </div>
       </button>
@@ -219,7 +201,7 @@ function ClientRowCard({
             {priority}
           </span>
           <span className={`rounded-full border px-2 py-1 text-[10px] ${riskClass(risk)}`}>
-            Risco {risk}
+            {risk}
           </span>
         </div>
       </div>

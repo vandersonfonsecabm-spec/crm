@@ -154,7 +154,7 @@ export default function DashboardSidebar({
         </div>
       </div>
 
-      {activePage !== "automacoes" && (
+      {activePage !== "automacoes" && activePage !== "dashboard" && (
         <>
           <DashboardSmartAlerts
             smartAlerts={smartAlerts}

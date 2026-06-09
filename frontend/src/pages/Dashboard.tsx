@@ -28,15 +28,12 @@ import DashboardHeader from "../components/dashboard/DashboardHeader";
 import DashboardPortfolioInsights from "../components/dashboard/DashboardPortfolioInsights";
 import DashboardClientsTable from "../components/dashboard/DashboardClientsTable";
 import DashboardClientsInsights from "../components/dashboard/DashboardClientsInsights";
-import DashboardRecentLeads from "../components/dashboard/DashboardRecentLeads";
 import ClientModal from "../components/dashboard/ClientModal";
 import DashboardFollowUpCalendar from "../components/dashboard/DashboardFollowUpCalendar";
-import DashboardPipelineOverview from "../components/dashboard/DashboardPipelineOverview";
 import DashboardCustomerDrawer from "../components/dashboard/DashboardCustomerDrawer";
 import DashboardSidebar from "../components/dashboard/DashboardSidebar";
 import DashboardTopbar from "../components/dashboard/DashboardTopbar";
 import DashboardOperationalSearch from "../components/dashboard/DashboardOperationalSearch";
-import DashboardExecutiveCenter from "../components/dashboard/DashboardExecutiveCenter";
 import DashboardControlCenter from "../components/dashboard/DashboardControlCenter";
 import DashboardKanbanBoard from "../components/dashboard/DashboardKanbanBoard";
 import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomationsPanel";
@@ -69,7 +66,6 @@ export default function Dashboard() {
   const [tagText, setTagText] = useState("");
   const [page, setPage] = useState(1);
   const [showQuickActions, setShowQuickActions] = useState(false);
-  const [recentViewedClients, setRecentViewedClients] = useState<number[]>([]);
   const [currentTime, setCurrentTime] = useState(
     new Date().toLocaleTimeString("pt-BR", {
       hour: "2-digit",
@@ -144,19 +140,6 @@ export default function Dashboard() {
   }, [activePage]);
 
   const selectedClient = useMemo(() => clients.find((client) => client.id === selectedId) || null, [clients, selectedId]);
-
-  useEffect(() => {
-    if (!selectedId) return;
-
-    const timeout = window.setTimeout(() => {
-      setRecentViewedClients((current) => {
-        const filtered = current.filter((id) => id !== selectedId);
-        return [selectedId, ...filtered].slice(0, 5);
-      });
-    }, 0);
-
-    return () => window.clearTimeout(timeout);
-  }, [selectedId]);
 
   const filteredClients = useMemo(() => {
     const result = clients.filter((client) => {
@@ -380,7 +363,7 @@ export default function Dashboard() {
             getRisk={getRisk}
           />
 
-          {activePage !== "comercial" && (
+          {activePage !== "comercial" && activePage !== "dashboard" && (
             <DashboardOperationalSearch
               activePage={activePage}
               filteredClientsCount={filteredClients.length}
@@ -424,7 +407,6 @@ export default function Dashboard() {
                     totalPages={totalPages}
                     money={money}
                     initials={initials}
-                    tagClass={tagClass}
                     statusClass={statusClass}
                     getPriority={getPriority}
                     getRisk={getRisk}
@@ -463,38 +445,6 @@ export default function Dashboard() {
                     setSelectedId(clientId);
                     setActivePage("clientes");
                   }}
-                />
-              )}
-
-              {activePage === "dashboard" && (
-                <DashboardRecentLeads
-                  clients={clients}
-                  recentViewedClients={recentViewedClients}
-                  money={money}
-                  statusClass={statusClass}
-                  getLeadScore={getLeadScore}
-                  onSelectClient={setSelectedId}
-                />
-              )}
-
-              {activePage === "dashboard" && (
-                <DashboardPipelineOverview
-                  statusList={statusList}
-                  clients={clients}
-                  kanbanClients={kanbanClients}
-                  money={money}
-                  statusClass={statusClass}
-                />
-              )}
-
-              {activePage === "dashboard" && (
-                <DashboardExecutiveCenter
-                  analytics={analytics}
-                  clients={clients}
-                  money={money}
-                  initials={initials}
-                  leadOwner={leadOwner}
-                  getLeadScore={getLeadScore}
                 />
               )}
 
