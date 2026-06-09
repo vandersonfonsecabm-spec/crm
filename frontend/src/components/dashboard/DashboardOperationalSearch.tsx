@@ -71,7 +71,7 @@ export default function DashboardOperationalSearch({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex min-w-[260px] flex-1 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 transition-all duration-200 focus-within:border-white/25 focus-within:bg-white/[0.06]">
+        <div className="flex min-w-[280px] flex-[1_1_420px] items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 transition-all duration-200 focus-within:border-white/25 focus-within:bg-white/[0.06]">
           <Search size={14} className="text-slate-500" />
 
           <input

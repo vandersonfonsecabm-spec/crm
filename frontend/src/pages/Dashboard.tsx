@@ -139,6 +139,10 @@ export default function Dashboard() {
     return () => window.clearTimeout(timeout);
   }, []);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [activePage]);
+
   const selectedClient = useMemo(() => clients.find((client) => client.id === selectedId) || null, [clients, selectedId]);
 
   useEffect(() => {

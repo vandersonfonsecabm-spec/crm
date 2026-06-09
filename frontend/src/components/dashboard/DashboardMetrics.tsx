@@ -26,7 +26,7 @@ export default function DashboardMetrics({
   money,
 }: DashboardMetricsProps) {
   return (
-    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
       <MetricCard
         title="Pipeline"
         value={money(analytics.totalValue)}
