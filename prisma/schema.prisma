@@ -19,14 +19,37 @@ model Cliente {
   fazenda     String?
   observacoes String?
   empresaId   String?
-  status      ClienteStatus @default(ATIVO)
+  status      String        @default("Novo")
+  valor       Float?
+  origem      String?
+  favorito    Boolean       @default(false)
+  quente      Boolean       @default(false)
+  ultimoContato Int         @default(0)
+  proximoFollowUp String?
+  tags        String[]      @default([])
 
   empresa       Empresa?       @relation(fields: [empresaId], references: [id])
   contasReceber ContaReceber[]
+  notas         ClienteNota[]
   pedidos       Pedido[]
 
   @@index([empresaId])
   @@index([nome])
+}
+
+model ClienteNota {
+  id        Int      @id @default(autoincrement())
+  texto     String
+  tipo      String   @default("nota")
+  clienteId String
+  empresaId String?
+  createdAt DateTime @default(now())
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@index([empresaId])
+  @@index([createdAt])
 }
 
 model ContaReceber {
@@ -173,11 +196,6 @@ model Auditoria {
   @@index([usuarioId])
   @@index([entidade])
   @@index([acao])
-}
-
-enum ClienteStatus {
-  ATIVO
-  INATIVO
 }
 
 enum ContaStatus {

@@ -14,6 +14,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 import { ClientesService } from './clientes.service';
 
+import { CreateClienteNotaDto } from './dto/create-cliente-nota.dto';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
 
@@ -49,5 +50,19 @@ export class ClientesController {
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: any) {
     return this.clientesService.remove(id, user.empresaId);
+  }
+
+  @Get(':id/notas')
+  findNotas(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.clientesService.findNotas(id, user.empresaId);
+  }
+
+  @Post(':id/notas')
+  createNota(
+    @Param('id') id: string,
+    @Body() data: CreateClienteNotaDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.clientesService.createNota(id, data, user.empresaId);
   }
 }
