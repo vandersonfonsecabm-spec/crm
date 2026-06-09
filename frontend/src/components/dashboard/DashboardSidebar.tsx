@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BriefcaseBusiness,
+  CalendarCheck,
   KanbanSquare,
   Sparkles,
   Users,
@@ -92,6 +93,13 @@ export default function DashboardSidebar({
               label="Kanban"
               onClick={() => setActivePage("kanban")}
             />
+
+            <SidebarButton
+              active={activePage === "agenda"}
+              icon={<CalendarCheck size={15} className="mr-2 shrink-0" />}
+              label="Agenda"
+              onClick={() => setActivePage("agenda")}
+            />
           </div>
         </div>
 
@@ -140,6 +148,13 @@ export default function DashboardSidebar({
             <>
               <ActionButton onClick={() => setOnlyHot(true)} label="Leads quentes" />
               <ActionButton onClick={() => setStatusFilter("Proposta")} label="Focar propostas" />
+            </>
+          )}
+
+          {activePage === "agenda" && (
+            <>
+              <ActionButton onClick={() => applySmartFilter("silent")} label="Sem contato" />
+              <ActionButton onClick={() => applySmartFilter("proposal")} label="Propostas hoje" />
             </>
           )}
 

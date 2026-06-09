@@ -17,6 +17,7 @@ export default function DashboardHeader({
     comercial: "Comercial",
     clientes: "Clientes",
     kanban: "Kanban",
+    agenda: "Agenda",
     automacoes: "Automações",
   }[activePage];
 

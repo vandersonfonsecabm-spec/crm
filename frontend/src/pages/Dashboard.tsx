@@ -37,6 +37,7 @@ import DashboardOperationalSearch from "../components/dashboard/DashboardOperati
 import DashboardControlCenter from "../components/dashboard/DashboardControlCenter";
 import DashboardKanbanBoard from "../components/dashboard/DashboardKanbanBoard";
 import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomationsPanel";
+import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
 import DashboardToast from "../components/dashboard/DashboardToast";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
@@ -86,7 +87,9 @@ export default function Dashboard() {
           ? "Clientes"
           : activePage === "kanban"
             ? "Kanban"
-            : "Automações";
+            : activePage === "agenda"
+              ? "Agenda"
+              : "Automações";
 
   useEffect(() => {
     if (dataSource === "offline") {
@@ -363,7 +366,7 @@ export default function Dashboard() {
             getRisk={getRisk}
           />
 
-          {activePage !== "comercial" && activePage !== "dashboard" && (
+          {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && (
             <DashboardOperationalSearch
               activePage={activePage}
               filteredClientsCount={filteredClients.length}
@@ -391,6 +394,8 @@ export default function Dashboard() {
             className={`mt-4 ${
               activePage === "comercial"
                 ? "space-y-4"
+                : activePage === "agenda"
+                  ? "space-y-4"
                 : activePage === "dashboard"
                   ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"
                   : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
@@ -466,6 +471,22 @@ export default function Dashboard() {
                 />
               )}
 
+              {activePage === "agenda" && (
+                <DashboardAgendaPanel
+                  clients={clients}
+                  followUpAgenda={followUpAgenda}
+                  recentActivities={recentActivities}
+                  smartAlerts={smartAlerts}
+                  money={money}
+                  statusClass={statusClass}
+                  onSelectClient={(clientId) => {
+                    setSelectedId(clientId);
+                    setActivePage("clientes");
+                  }}
+                  onApplySmartFilter={applySmartFilter}
+                />
+              )}
+
               <DashboardKanbanBoard
                 activePage={activePage}
                 clients={clients}
@@ -499,7 +520,7 @@ export default function Dashboard() {
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
-            {activePage !== "comercial" && (
+            {activePage !== "comercial" && activePage !== "agenda" && (
               <DashboardCustomerDrawer
                 activePage={activePage}
                 selectedClient={selectedClient}

@@ -63,6 +63,17 @@ export default function DashboardMetricsSection({
     );
   }
 
+  if (activePage === "agenda") {
+    return (
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard title="Follow-ups hoje" value={String(clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length)} icon={<Bell size={15} className="text-sky-400" />} />
+        <MetricCard title="Sem contato" value={String(clients.filter((client) => client.lastContactDays >= 7).length)} icon={<AlertTriangle size={15} className="text-rose-400" />} />
+        <MetricCard title="Propostas" value={String(clients.filter((client) => client.status === "Proposta").length)} icon={<Target size={15} className="text-amber-400" />} />
+        <MetricCard title="Notas recentes" value={String(clients.reduce((sum, client) => sum + client.notes.length, 0))} icon={<StickyNote size={15} className="text-violet-400" />} />
+      </section>
+    );
+  }
+
   if (activePage === "automacoes") {
     return (
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
