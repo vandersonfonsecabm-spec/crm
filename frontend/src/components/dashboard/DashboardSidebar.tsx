@@ -38,10 +38,10 @@ export default function DashboardSidebar({
   applySmartFilter,
 }: DashboardSidebarProps) {
   return (
-    <aside className="hidden w-64 shrink-0 overflow-hidden border-r border-lime-300/[0.10] bg-[#050a11]/90 p-4 shadow-[22px_0_70px_rgba(0,0,0,0.34)] backdrop-blur-xl lg:block">
+    <aside className="hidden w-64 shrink-0 overflow-hidden border-r border-slate-700/45 bg-[#070c14]/92 p-4 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:block">
       <div className="identity-panel mb-5 rounded-2xl p-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-lime-300/30 bg-lime-300/12 text-lime-100 shadow-[0_0_34px_rgba(185,242,39,0.18)]">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/20 bg-teal-300/[0.08] text-teal-100">
             <Sparkles size={16} />
           </div>
 
@@ -51,9 +51,9 @@ export default function DashboardSidebar({
           </div>
         </div>
 
-        <div className="mt-3 flex items-center justify-between rounded-xl border border-lime-300/20 bg-lime-300/[0.08] px-2 py-1.5">
-          <span className="text-[10px] text-lime-100/80">Ambiente</span>
-          <span className="rounded-full bg-lime-300/15 px-2 py-0.5 text-[9px] font-semibold text-lime-50">
+        <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-300/16 bg-emerald-300/[0.055] px-2 py-1.5">
+          <span className="text-[10px] text-slate-300">Ambiente</span>
+          <span className="rounded-full bg-emerald-300/[0.12] px-2 py-0.5 text-[9px] font-semibold text-emerald-50">
             estável
           </span>
         </div>
@@ -250,7 +250,7 @@ function SidebarButton({
       onClick={onClick}
       className={`relative mx-auto box-border flex h-10 w-[224px] shrink-0 items-center rounded-xl border px-3 pr-9 text-left text-sm leading-none transition-all duration-200 ${
         active
-          ? "border-lime-300/45 bg-lime-300/[0.12] text-white shadow-[0_0_26px_rgba(185,242,39,0.16)] ring-1 ring-inset ring-lime-200/40"
+          ? "border-teal-300/30 bg-teal-300/[0.09] text-white ring-1 ring-inset ring-teal-100/20"
           : "border-white/[0.07] bg-white/[0.032] text-slate-300 hover:border-white/15 hover:bg-white/[0.055] hover:text-white"
       }`}
     >
@@ -258,7 +258,7 @@ function SidebarButton({
       <span className="block min-w-0 flex-1 truncate">{label}</span>
       <span
         className={`absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${
-          active ? "bg-lime-200 shadow-[0_0_14px_rgba(185,242,39,0.8)]" : "bg-white/15"
+          active ? "bg-teal-200" : "bg-white/15"
         }`}
       />
     </button>

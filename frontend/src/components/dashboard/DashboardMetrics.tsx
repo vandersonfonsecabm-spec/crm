@@ -29,12 +29,12 @@ export default function DashboardMetrics({
       <div className="identity-panel rounded-2xl p-4 md:col-span-2 xl:col-span-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-lime-100/70">Pipeline vivo</p>
-            <h2 className="mt-2 truncate text-2xl font-black text-white">{money(analytics.totalValue)}</h2>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-100/70">Pipeline comercial</p>
+            <h2 className="mt-2 truncate text-2xl font-bold text-white">{money(analytics.totalValue)}</h2>
             <p className="mt-1 text-[11px] text-slate-400">Receita potencial com foco em follow-up e fechamento.</p>
           </div>
 
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-lime-300/25 bg-lime-300/10 text-lime-100 shadow-[0_0_28px_rgba(185,242,39,0.14)]">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/[0.08] text-teal-100">
             <TrendingUp size={18} />
           </div>
         </div>
@@ -70,10 +70,9 @@ export default function DashboardMetrics({
       <MetricCard
         title="Follow-up"
         value={String(analytics.todayFollowUps)}
-        icon={<CalendarDays size={16} className="text-lime-300" />}
+        icon={<CalendarDays size={16} className="text-emerald-300" />}
         tone="pipeline"
       />
-
     </section>
   );
 }
@@ -82,7 +81,7 @@ function MiniSignal({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-black/20 px-2 py-2">
       <p className="text-[9px] text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-black text-lime-100">{value}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-100">{value}</p>
     </div>
   );
 }

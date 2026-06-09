@@ -8,37 +8,28 @@
 
 :root {
   color-scheme: dark;
-  --brand-lime: #b9f227;
-  --brand-cyan: #22d3ee;
-  --brand-amber: #f5b82e;
-  --brand-coral: #fb7185;
-  --surface-strong: rgba(11, 18, 30, 0.9);
-  --surface-soft: rgba(13, 21, 35, 0.62);
-  --line-soft: rgba(148, 163, 184, 0.18);
-  --line-strong: rgba(185, 242, 39, 0.32);
+  --brand-primary: #2dd4bf;
+  --brand-secondary: #38bdf8;
+  --brand-amber: #d6a23a;
+  --brand-coral: #e0697b;
+  --surface-strong: rgba(13, 20, 31, 0.92);
+  --surface-soft: rgba(15, 23, 42, 0.64);
+  --line-soft: rgba(148, 163, 184, 0.16);
+  --line-strong: rgba(45, 212, 191, 0.2);
 }
 
 html {
-  background: #03060d;
+  background: #060b12;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   background:
-    linear-gradient(90deg, rgba(185, 242, 39, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(34, 211, 238, 0.026) 1px, transparent 1px),
-    radial-gradient(circle at 15% -12%, rgba(185, 242, 39, 0.22), transparent 30%),
-    radial-gradient(circle at 75% 4%, rgba(34, 211, 238, 0.16), transparent 32%),
-    radial-gradient(circle at 92% 38%, rgba(245, 184, 46, 0.1), transparent 28%),
-    linear-gradient(135deg, #03060d 0%, #07111a 38%, #070a12 100%);
-  background-size:
-    34px 34px,
-    34px 34px,
-    auto,
-    auto,
-    auto,
-    auto;
+    radial-gradient(circle at 12% -8%, rgba(45, 212, 191, 0.1), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(56, 189, 248, 0.08), transparent 30%),
+    radial-gradient(circle at 95% 40%, rgba(214, 162, 58, 0.055), transparent 30%),
+    linear-gradient(135deg, #060b12 0%, #0a1019 45%, #080b12 100%);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -84,9 +75,8 @@ button {
 @layer components {
   .premium-shell {
     background:
-      linear-gradient(180deg, rgba(185, 242, 39, 0.05), transparent 235px),
-      radial-gradient(circle at 44% 0%, rgba(34, 211, 238, 0.12), transparent 38%),
-      linear-gradient(90deg, rgba(185, 242, 39, 0.06), transparent 24%, transparent 76%, rgba(245, 184, 46, 0.04)),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 240px),
+      radial-gradient(circle at 48% 0%, rgba(45, 212, 191, 0.055), transparent 40%),
       transparent;
   }
 
@@ -95,11 +85,11 @@ button {
     overflow: hidden;
     border: 1px solid var(--line-soft);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.026)),
-      rgba(4, 10, 20, 0.54);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.022)),
+      rgba(8, 13, 22, 0.62);
     box-shadow:
-      0 20px 58px rgba(0, 0, 0, 0.34),
-      inset 0 1px 0 rgba(255, 255, 255, 0.045);
+      0 16px 44px rgba(0, 0, 0, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
     backdrop-filter: blur(18px);
   }
 
@@ -110,52 +100,51 @@ button {
     inset: 0;
     border-radius: inherit;
     background:
-      linear-gradient(90deg, transparent, rgba(185, 242, 39, 0.18), rgba(34, 211, 238, 0.1), transparent) top /
+      linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), rgba(45, 212, 191, 0.08), transparent) top /
         100% 1px no-repeat;
   }
 
   .identity-panel {
-    border: 1px solid rgba(185, 242, 39, 0.26);
+    border: 1px solid rgba(45, 212, 191, 0.18);
     background:
-      radial-gradient(circle at 8% 12%, rgba(185, 242, 39, 0.18), transparent 34%),
-      radial-gradient(circle at 92% 0%, rgba(34, 211, 238, 0.16), transparent 30%),
-      linear-gradient(135deg, rgba(11, 24, 26, 0.94), rgba(4, 8, 18, 0.9));
+      radial-gradient(circle at 8% 12%, rgba(45, 212, 191, 0.08), transparent 34%),
+      radial-gradient(circle at 92% 0%, rgba(56, 189, 248, 0.055), transparent 30%),
+      linear-gradient(135deg, rgba(10, 18, 27, 0.94), rgba(7, 11, 18, 0.92));
     box-shadow:
-      0 24px 70px rgba(0, 0, 0, 0.36),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      0 0 0 1px rgba(185, 242, 39, 0.04);
+      0 18px 52px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.065);
   }
 
   .metric-pipeline {
-    border-color: rgba(185, 242, 39, 0.28);
+    border-color: rgba(16, 185, 129, 0.2);
     background:
-      radial-gradient(circle at 95% 12%, rgba(185, 242, 39, 0.19), transparent 30%),
-      linear-gradient(180deg, rgba(185, 242, 39, 0.085), rgba(255, 255, 255, 0.025)),
-      rgba(4, 10, 20, 0.58);
+      radial-gradient(circle at 95% 12%, rgba(16, 185, 129, 0.09), transparent 30%),
+      linear-gradient(180deg, rgba(16, 185, 129, 0.055), rgba(255, 255, 255, 0.022)),
+      rgba(8, 13, 22, 0.64);
   }
 
   .metric-revenue {
-    border-color: rgba(34, 211, 238, 0.24);
+    border-color: rgba(56, 189, 248, 0.18);
     background:
-      radial-gradient(circle at 95% 12%, rgba(34, 211, 238, 0.17), transparent 30%),
-      linear-gradient(180deg, rgba(34, 211, 238, 0.078), rgba(255, 255, 255, 0.025)),
-      rgba(4, 10, 20, 0.58);
+      radial-gradient(circle at 95% 12%, rgba(56, 189, 248, 0.075), transparent 30%),
+      linear-gradient(180deg, rgba(56, 189, 248, 0.05), rgba(255, 255, 255, 0.022)),
+      rgba(8, 13, 22, 0.64);
   }
 
   .metric-forecast {
-    border-color: rgba(245, 184, 46, 0.26);
+    border-color: rgba(214, 162, 58, 0.2);
     background:
-      radial-gradient(circle at 95% 12%, rgba(245, 184, 46, 0.18), transparent 30%),
-      linear-gradient(180deg, rgba(245, 184, 46, 0.08), rgba(255, 255, 255, 0.025)),
-      rgba(4, 10, 20, 0.58);
+      radial-gradient(circle at 95% 12%, rgba(214, 162, 58, 0.08), transparent 30%),
+      linear-gradient(180deg, rgba(214, 162, 58, 0.052), rgba(255, 255, 255, 0.022)),
+      rgba(8, 13, 22, 0.64);
   }
 
   .metric-risk {
-    border-color: rgba(251, 113, 133, 0.24);
+    border-color: rgba(224, 105, 123, 0.18);
     background:
-      radial-gradient(circle at 95% 12%, rgba(251, 113, 133, 0.17), transparent 30%),
-      linear-gradient(180deg, rgba(251, 113, 133, 0.075), rgba(255, 255, 255, 0.025)),
-      rgba(4, 10, 20, 0.58);
+      radial-gradient(circle at 95% 12%, rgba(224, 105, 123, 0.075), transparent 30%),
+      linear-gradient(180deg, rgba(224, 105, 123, 0.048), rgba(255, 255, 255, 0.022)),
+      rgba(8, 13, 22, 0.64);
   }
 
   .premium-button {
