@@ -97,7 +97,7 @@ export async function loginDemoWithBackend() {
     return {
       access_token: DEMO_TOKEN,
       user: {
-        nome: "Demo SQLite",
+        nome: "Demo local",
         email: "demo@crm.com",
       },
     };
