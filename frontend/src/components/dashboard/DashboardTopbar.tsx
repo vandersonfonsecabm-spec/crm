@@ -26,7 +26,7 @@ export default function DashboardTopbar({
   exportCsv,
 }: DashboardTopbarProps) {
   return (
-    <div className="premium-panel mb-4 flex items-center justify-between rounded-2xl px-4 py-2.5">
+    <div className="premium-panel relative z-30 mb-4 flex items-center justify-between overflow-visible rounded-2xl px-4 py-2.5">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/[0.07] px-2.5 py-1">
           <div className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
