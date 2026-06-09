@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Dashboard from "./pages/Dashboard";
 import { Login } from "./pages/Login";
-import { getAuthToken } from "./services/crmApi";
+import { clearAuthSession, getAuthToken } from "./services/crmApi";
 
 function App() {
   const [autenticado, setAutenticado] = useState(() => Boolean(getAuthToken()));
@@ -10,11 +10,16 @@ function App() {
     setAutenticado(true);
   }
 
+  function sair() {
+    clearAuthSession();
+    setAutenticado(false);
+  }
+
   if (!autenticado) {
     return <Login onLogin={entrar} />;
   }
 
-  return <Dashboard />;
+  return <Dashboard onLogout={sair} />;
 }
 
 export default App;

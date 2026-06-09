@@ -47,7 +47,11 @@ import { emptyClient, loadClients, statusList } from "../data/mockClients";
 
 import type { ActivePage, Client, KanbanOwner, SortBy, Status } from "../types/dashboard";
 
-export default function Dashboard() {
+type DashboardProps = {
+  onLogout: () => void;
+};
+
+export default function Dashboard({ onLogout }: DashboardProps) {
   const [clients, setClients] = useState<Client[]>(loadClients);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
@@ -330,6 +334,7 @@ export default function Dashboard() {
             setShowQuickActions={setShowQuickActions}
             setCreating={setCreating}
             exportCsv={exportCsv}
+            onLogout={onLogout}
           />
 
           <DashboardHeader

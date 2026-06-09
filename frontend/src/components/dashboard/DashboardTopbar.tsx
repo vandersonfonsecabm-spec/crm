@@ -1,3 +1,4 @@
+import { LogOut } from "lucide-react";
 import DashboardCommandSearch from "./DashboardCommandSearch";
 import DashboardQuickActions from "./DashboardQuickActions";
 import type { ActivePage, Client } from "../../types/dashboard";
@@ -12,6 +13,7 @@ type DashboardTopbarProps = {
   setShowQuickActions: (value: boolean | ((current: boolean) => boolean)) => void;
   setCreating: (client: Client | null) => void;
   exportCsv: () => void;
+  onLogout: () => void;
 };
 
 export default function DashboardTopbar({
@@ -24,6 +26,7 @@ export default function DashboardTopbar({
   setShowQuickActions,
   setCreating,
   exportCsv,
+  onLogout,
 }: DashboardTopbarProps) {
   return (
     <div className="premium-panel relative z-30 mb-4 flex items-center justify-between overflow-visible rounded-2xl px-4 py-2.5">
@@ -90,6 +93,16 @@ export default function DashboardTopbar({
             <p className="text-[11px] font-medium">Marco Admin</p>
             <p className="text-[10px] text-slate-500">Administrador</p>
           </div>
+
+          <button
+            onClick={onLogout}
+            className="ml-1 inline-flex items-center gap-1.5 rounded-lg border border-slate-600/35 bg-slate-950/35 px-2 py-1.5 text-[10px] font-semibold text-slate-300 transition hover:border-rose-300/35 hover:bg-rose-500/10 hover:text-rose-100"
+            title="Sair da conta"
+            type="button"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline">Sair</span>
+          </button>
         </div>
       </div>
     </div>

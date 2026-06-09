@@ -2,6 +2,7 @@ import type { Client, Note, Status } from "../types/dashboard";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 const TOKEN_KEY = "crm-auth-token";
+const USER_KEY = "crm-auth-user";
 const DEMO_TOKEN = "demo-sqlite";
 
 type ApiAuthResponse = {
@@ -71,6 +72,20 @@ export function clearAuthToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+function setAuthUser(user?: ApiAuthResponse["user"]) {
+  if (user) {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    return;
+  }
+
+  localStorage.removeItem(USER_KEY);
+}
+
+export function clearAuthSession() {
+  clearAuthToken();
+  localStorage.removeItem(USER_KEY);
+}
+
 export async function loginWithBackend(email: string, senha: string) {
   const response = await fetch(`${API_URL}/auth/login`, {
     method: "POST",
@@ -86,6 +101,7 @@ export async function loginWithBackend(email: string, senha: string) {
 
   const data = (await response.json()) as ApiAuthResponse;
   setAuthToken(data.access_token);
+  setAuthUser(data.user);
   return data;
 }
 
@@ -94,6 +110,11 @@ export async function loginDemoWithBackend() {
     return await loginWithBackend("demo@crm.com", "123456");
   } catch {
     setAuthToken(DEMO_TOKEN);
+    setAuthUser({
+      nome: "Demo local",
+      email: "demo@crm.com",
+    });
+
     return {
       access_token: DEMO_TOKEN,
       user: {
