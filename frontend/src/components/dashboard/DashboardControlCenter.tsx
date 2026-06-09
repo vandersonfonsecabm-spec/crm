@@ -46,10 +46,10 @@ export default function DashboardControlCenter({
 
   return (
     <section className="space-y-3">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
+      <div className="saas-panel rounded-2xl px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-300/20 bg-sky-500/10 text-sky-200">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-teal-300/18 bg-teal-300/[0.06] text-teal-100">
               <Command size={16} />
             </div>
 
@@ -69,14 +69,14 @@ export default function DashboardControlCenter({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+      <div className="saas-panel rounded-2xl p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-sm font-semibold">Sinais críticos</p>
             <p className="mt-0.5 text-[10px] text-slate-500">Alertas que alimentam a central de decisão.</p>
           </div>
 
-          <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[9px] text-slate-300">
+          <span className="saas-chip rounded-full px-2 py-1 text-[9px]">
             leitura rápida
           </span>
         </div>
@@ -86,7 +86,7 @@ export default function DashboardControlCenter({
             <button
               key={alert}
               onClick={() => applySmartFilter(index === 0 ? "risk" : index === 1 ? "proposal" : "silent")}
-              className="min-w-0 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2 text-left transition hover:border-white/20 hover:bg-white/[0.055]"
+              className="saas-row min-w-0 rounded-xl px-3 py-2 text-left"
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="truncate text-[11px] font-semibold text-slate-200">{alert}</p>
@@ -99,7 +99,7 @@ export default function DashboardControlCenter({
       </div>
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
-        <div className="min-w-0 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+        <div className="saas-panel min-w-0 rounded-2xl p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-base font-semibold">Central de decisão</p>
@@ -123,10 +123,10 @@ export default function DashboardControlCenter({
                     setSelectedId(client.id);
                     setActivePage("clientes");
                   }}
-                  className="grid min-w-0 gap-3 rounded-xl border border-white/10 bg-black/20 p-3 text-left transition hover:border-white/20 hover:bg-white/[0.055] md:grid-cols-[minmax(0,1fr)_120px]"
+                  className="saas-row grid min-w-0 gap-3 rounded-xl p-3 text-left md:grid-cols-[minmax(0,1fr)_120px]"
                 >
                   <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-[11px] font-bold text-slate-200">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-500/16 bg-slate-900/70 text-[11px] font-bold text-slate-200">
                       {index + 1}
                     </div>
 
@@ -158,14 +158,14 @@ export default function DashboardControlCenter({
         </div>
 
         <div className="min-w-0 space-y-3">
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+          <div className="saas-panel rounded-2xl p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold">Ações rápidas</p>
                 <p className="mt-0.5 text-[10px] text-slate-500">Comandos diretos para a carteira.</p>
               </div>
 
-              <span className="rounded-full border border-sky-400/15 bg-sky-500/[0.06] px-2 py-1 text-[9px] text-sky-100">
+              <span className="saas-chip rounded-full px-2 py-1 text-[9px]">
                 assistido
               </span>
             </div>
@@ -195,7 +195,7 @@ export default function DashboardControlCenter({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+          <div className="saas-panel rounded-2xl p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-slate-200">Últimas atividades</p>
@@ -210,12 +210,12 @@ export default function DashboardControlCenter({
 
             <div className="mt-3 space-y-2">
               {recentActivities.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-white/10 bg-black/10 px-3 py-2 text-[10px] text-slate-500">
+                <p className="rounded-xl border border-dashed border-slate-500/18 bg-slate-950/20 px-3 py-2 text-[10px] text-slate-500">
                   Nenhuma atividade recente registrada.
                 </p>
               ) : (
                 recentActivities.slice(0, 3).map((activity) => (
-                  <div key={activity.id} className="rounded-xl border border-white/10 bg-black/15 px-3 py-2">
+                  <div key={activity.id} className="saas-row rounded-xl px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-[11px] font-semibold text-slate-200">{activity.client}</p>
                       <span className="shrink-0 text-[9px] text-slate-600">{activity.date}</span>
@@ -244,9 +244,9 @@ function ControlSignal({
   tone: "rose" | "amber" | "sky";
 }) {
   const classes = {
-    rose: "border-rose-400/10 bg-rose-500/[0.055] text-rose-100",
-    amber: "border-amber-400/10 bg-amber-500/[0.055] text-amber-100",
-    sky: "border-sky-400/10 bg-sky-500/[0.055] text-sky-100",
+    rose: "border-slate-500/16 bg-slate-950/25 text-rose-100 shadow-[inset_2px_0_0_rgba(224,105,123,0.42)]",
+    amber: "border-slate-500/16 bg-slate-950/25 text-amber-100 shadow-[inset_2px_0_0_rgba(214,162,58,0.44)]",
+    sky: "border-slate-500/16 bg-slate-950/25 text-sky-100 shadow-[inset_2px_0_0_rgba(56,189,248,0.42)]",
   };
 
   return (
@@ -255,7 +255,7 @@ function ControlSignal({
         <span className="text-[8px] uppercase tracking-[0.12em]">{label}</span>
         {icon}
       </div>
-      <p className="mt-0.5 text-sm font-black leading-none">{value}</p>
+      <p className="mt-0.5 text-sm font-semibold leading-none">{value}</p>
     </div>
   );
 }
@@ -270,10 +270,10 @@ function QueueBadge({
   tone: "default" | "rose" | "amber" | "sky";
 }) {
   const classes = {
-    default: "border-white/10 bg-white/5 text-slate-300",
-    rose: "border-rose-400/10 bg-rose-500/[0.055] text-rose-100",
-    amber: "border-amber-400/10 bg-amber-500/[0.055] text-amber-100",
-    sky: "border-sky-400/10 bg-sky-500/[0.055] text-sky-100",
+    default: "border-slate-500/16 bg-slate-950/25 text-slate-300",
+    rose: "border-slate-500/16 bg-slate-950/25 text-rose-100",
+    amber: "border-slate-500/16 bg-slate-950/25 text-amber-100",
+    sky: "border-slate-500/16 bg-slate-950/25 text-sky-100",
   };
 
   return (
@@ -297,14 +297,14 @@ function CommandAction({
   onClick: () => void;
 }) {
   const classes = {
-    amber: "border-amber-400/10 bg-amber-500/[0.045] text-amber-100 hover:border-amber-300/20 hover:bg-amber-500/[0.08]",
-    rose: "border-rose-400/10 bg-rose-500/[0.045] text-rose-100 hover:border-rose-300/20 hover:bg-rose-500/[0.08]",
-    emerald: "border-emerald-400/10 bg-emerald-500/[0.045] text-emerald-100 hover:border-emerald-300/20 hover:bg-emerald-500/[0.08]",
+    amber: "saas-accent-amber text-amber-100",
+    rose: "saas-accent-rose text-rose-100",
+    emerald: "saas-accent-emerald text-emerald-100",
   };
 
   return (
-    <button onClick={onClick} className={`flex w-full items-start gap-3 rounded-xl border p-2.5 text-left transition ${classes[tone]}`}>
-      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/20">
+    <button onClick={onClick} className={`saas-action flex w-full items-start gap-3 rounded-xl p-2.5 text-left ${classes[tone]}`}>
+      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-950/25">
         {icon}
       </div>
       <div className="min-w-0">

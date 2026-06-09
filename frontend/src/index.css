@@ -164,4 +164,100 @@ button {
     background: rgba(255, 255, 255, 0.045);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
+
+  .saas-panel {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.018)),
+      rgba(9, 14, 23, 0.72);
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.045);
+    backdrop-filter: blur(16px);
+  }
+
+  .saas-panel::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.11), rgba(45, 212, 191, 0.055), transparent) top /
+        100% 1px no-repeat;
+  }
+
+  .saas-card {
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.014)),
+      rgba(11, 17, 28, 0.68);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  }
+
+  .saas-tile {
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(15, 23, 42, 0.46);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  }
+
+  .saas-row {
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(8, 13, 22, 0.56);
+    box-shadow: inset 2px 0 0 rgba(148, 163, 184, 0.1);
+    transition:
+      border-color 180ms ease,
+      background-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
+
+  .saas-row:hover {
+    border-color: rgba(148, 163, 184, 0.22);
+    background: rgba(15, 23, 42, 0.58);
+    box-shadow:
+      inset 2px 0 0 rgba(45, 212, 191, 0.26),
+      0 14px 32px rgba(0, 0, 0, 0.18);
+    transform: translateY(-1px);
+  }
+
+  .saas-chip {
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    background: rgba(15, 23, 42, 0.56);
+    color: rgba(203, 213, 225, 0.86);
+  }
+
+  .saas-action {
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    background: rgba(15, 23, 42, 0.48);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    transition:
+      border-color 180ms ease,
+      background-color 180ms ease,
+      transform 180ms ease;
+  }
+
+  .saas-action:hover {
+    border-color: rgba(45, 212, 191, 0.2);
+    background: rgba(15, 23, 42, 0.68);
+    transform: translateY(-1px);
+  }
+
+  .saas-accent-sky {
+    box-shadow: inset 2px 0 0 rgba(56, 189, 248, 0.42);
+  }
+
+  .saas-accent-amber {
+    box-shadow: inset 2px 0 0 rgba(214, 162, 58, 0.46);
+  }
+
+  .saas-accent-rose {
+    box-shadow: inset 2px 0 0 rgba(224, 105, 123, 0.44);
+  }
+
+  .saas-accent-emerald {
+    box-shadow: inset 2px 0 0 rgba(16, 185, 129, 0.44);
+  }
 }

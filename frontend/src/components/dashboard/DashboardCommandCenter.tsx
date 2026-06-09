@@ -29,7 +29,7 @@ export default function DashboardCommandCenter({
   applySmartFilter,
 }: DashboardCommandCenterProps) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
+    <div className="saas-panel rounded-2xl p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold">Centro de Comando Comercial</p>
@@ -38,20 +38,20 @@ export default function DashboardCommandCenter({
           </p>
         </div>
 
-        <span className="rounded-full border border-sky-400/20 bg-sky-500/10 px-2 py-1 text-[10px] font-medium text-sky-200">
+        <span className="saas-chip rounded-full px-2 py-1 text-[10px] font-medium">
           Operação assistida
         </span>
       </div>
 
       <div className="grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+        <div className="saas-card rounded-xl p-3">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-200">Fila de prioridade</p>
               <p className="mt-0.5 text-[10px] text-slate-500">Leads com maior urgência comercial agora</p>
             </div>
 
-            <div className="rounded-lg bg-white/5 px-2 py-1 text-[10px] text-slate-300">
+            <div className="saas-chip rounded-lg px-2 py-1 text-[10px]">
               {clients.filter((client) => getPriority(client) === "Alta").length} críticos
             </div>
           </div>
@@ -67,11 +67,11 @@ export default function DashboardCommandCenter({
                     setSelectedId(client.id);
                     setActivePage("clientes");
                   }}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.025] p-2 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.05]"
+                  className="saas-row w-full rounded-xl p-2 text-left"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-500/16 bg-slate-900/70 text-[10px] font-bold">
                         {index + 1}
                       </div>
 
@@ -102,7 +102,7 @@ export default function DashboardCommandCenter({
         <div className="grid gap-3 md:grid-cols-3">
           <button
             onClick={() => applySmartFilter("proposal")}
-            className="rounded-xl border border-amber-400/10 bg-amber-500/[0.05] p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300/20 hover:bg-amber-500/[0.08]"
+            className="saas-action saas-accent-amber rounded-xl p-3 text-left"
           >
             <div className="mb-3 flex items-center justify-between">
               <Target size={15} className="text-amber-300" />
@@ -114,7 +114,7 @@ export default function DashboardCommandCenter({
 
           <button
             onClick={() => applySmartFilter("risk")}
-            className="rounded-xl border border-rose-400/10 bg-rose-500/[0.05] p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-rose-300/20 hover:bg-rose-500/[0.08]"
+            className="saas-action saas-accent-rose rounded-xl p-3 text-left"
           >
             <div className="mb-3 flex items-center justify-between">
               <AlertTriangle size={15} className="text-rose-300" />
@@ -126,7 +126,7 @@ export default function DashboardCommandCenter({
 
           <button
             onClick={() => setCreating({ ...emptyClient })}
-            className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.05] p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-300/20 hover:bg-emerald-500/[0.08]"
+            className="saas-action saas-accent-emerald rounded-xl p-3 text-left"
           >
             <div className="mb-3 flex items-center justify-between">
               <Plus size={15} className="text-emerald-300" />
@@ -136,7 +136,7 @@ export default function DashboardCommandCenter({
             <p className="mt-1 text-[10px] text-emerald-100/60">Cria um novo lead sem sair do fluxo comercial.</p>
           </button>
 
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3 md:col-span-3">
+          <div className="saas-card rounded-xl p-3 md:col-span-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold text-slate-200">Leitura executiva do dia</p>
@@ -146,13 +146,13 @@ export default function DashboardCommandCenter({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300">
+                <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
                   {analytics.todayFollowUps} follow-ups
                 </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300">
+                <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
                   {clients.filter((client) => client.lastContactDays >= 7).length} silenciosos
                 </span>
-                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300">
+                <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
                   {analytics.hotCount} quentes
                 </span>
               </div>

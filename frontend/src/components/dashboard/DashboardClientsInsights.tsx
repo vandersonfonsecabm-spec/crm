@@ -35,7 +35,7 @@ export default function DashboardClientsInsights({
 
   return (
     <section className="grid gap-3 xl:grid-cols-[1fr_1fr]">
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+      <div className="saas-panel rounded-2xl p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold">Resumo da carteira</p>
@@ -44,13 +44,13 @@ export default function DashboardClientsInsights({
             </p>
           </div>
 
-          <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[10px] text-slate-400">
+          <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
             {baseClients.length} analisados
           </span>
         </div>
 
         <div className="grid gap-2 md:grid-cols-2">
-          <div className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.045] p-3">
+          <div className="saas-tile saas-accent-emerald rounded-xl p-3">
             <div className="mb-2 flex items-center justify-between">
               <Target size={14} className="text-emerald-300" />
               <span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[9px] text-emerald-100">Potencial</span>
@@ -59,7 +59,7 @@ export default function DashboardClientsInsights({
             <p className="mt-1 text-sm font-semibold text-emerald-100">{money(totalPotential)}</p>
           </div>
 
-          <div className="rounded-xl border border-rose-400/10 bg-rose-500/[0.045] p-3">
+          <div className="saas-tile saas-accent-rose rounded-xl p-3">
             <div className="mb-2 flex items-center justify-between">
               <Flame size={14} className="text-rose-300" />
               <span className="rounded-full bg-rose-300/10 px-2 py-0.5 text-[9px] text-rose-100">Quentes</span>
@@ -68,7 +68,7 @@ export default function DashboardClientsInsights({
             <p className="mt-1 text-sm font-semibold text-rose-100">{hotClients.length} clientes</p>
           </div>
 
-          <div className="rounded-xl border border-amber-400/10 bg-amber-500/[0.045] p-3">
+          <div className="saas-tile saas-accent-amber rounded-xl p-3">
             <div className="mb-2 flex items-center justify-between">
               <AlertTriangle size={14} className="text-amber-300" />
               <span className="rounded-full bg-amber-300/10 px-2 py-0.5 text-[9px] text-amber-100">Atenção</span>
@@ -77,7 +77,7 @@ export default function DashboardClientsInsights({
             <p className="mt-1 text-sm font-semibold text-amber-100">{riskClients.length} clientes</p>
           </div>
 
-          <div className="rounded-xl border border-sky-400/10 bg-sky-500/[0.045] p-3">
+          <div className="saas-tile saas-accent-sky rounded-xl p-3">
             <div className="mb-2 flex items-center justify-between">
               <Users size={14} className="text-sky-300" />
               <span className="rounded-full bg-sky-300/10 px-2 py-0.5 text-[9px] text-sky-100">Hoje</span>
@@ -88,7 +88,7 @@ export default function DashboardClientsInsights({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+      <div className="saas-panel rounded-2xl p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold">Inteligência comercial</p>
@@ -97,7 +97,7 @@ export default function DashboardClientsInsights({
             </p>
           </div>
 
-          <span className="rounded-full border border-violet-400/10 bg-violet-500/[0.06] px-2 py-1 text-[10px] text-violet-100">
+          <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
             Conversão {conversionRate}%
           </span>
         </div>
@@ -107,7 +107,7 @@ export default function DashboardClientsInsights({
             {topOpportunity && (
               <button
                 onClick={() => onSelectClient(topOpportunity.id)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.04]"
+                className="saas-row w-full rounded-xl p-3 text-left"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -131,7 +131,7 @@ export default function DashboardClientsInsights({
             {bestScore && (
               <button
                 onClick={() => onSelectClient(bestScore.id)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.04]"
+                className="saas-row w-full rounded-xl p-3 text-left"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -140,7 +140,7 @@ export default function DashboardClientsInsights({
                     <p className="mt-0.5 truncate text-[10px] text-slate-500">{bestScore.company}</p>
                   </div>
 
-                  <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] text-slate-200">
+                  <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
                     {getLeadScore(bestScore)}
                   </span>
                 </div>
@@ -148,7 +148,7 @@ export default function DashboardClientsInsights({
             )}
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="saas-card rounded-xl p-3">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-xs font-semibold text-slate-200">Distribuição por status</p>
               <span className="text-[10px] text-slate-500">{clients.length} total</span>

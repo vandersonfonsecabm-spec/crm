@@ -49,7 +49,7 @@ export default function DashboardClientsTable({
   onNextPage,
 }: DashboardClientsTableProps) {
   return (
-    <section className="premium-panel rounded-2xl">
+    <section className="saas-panel rounded-2xl">
       <ClientsHeader filteredClientsCount={filteredClientsCount} page={page} totalPages={totalPages} />
 
       <div className="grid gap-2.5 p-3">
@@ -100,17 +100,17 @@ function ClientsHeader({
   totalPages: number;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-black/15 px-3 py-2.5">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/40 bg-slate-950/20 px-4 py-3">
       <div>
         <p className="text-sm font-semibold">Clientes</p>
         <p className="mt-0.5 text-[10px] text-slate-500">Carteira priorizada sem barra horizontal.</p>
       </div>
 
       <div className="flex items-center gap-2">
-          <span className="rounded-full border border-white/10 bg-white/[0.045] px-2 py-1 text-[10px] text-slate-400">
+          <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
           {filteredClientsCount} registros
         </span>
-          <span className="rounded-full border border-white/10 bg-white/[0.045] px-2 py-1 text-[10px] text-slate-400">
+          <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
           Página {page}/{totalPages}
         </span>
       </div>
@@ -159,15 +159,15 @@ function ClientRowCard({
 
   return (
     <article
-      className={`grid min-w-0 gap-3 rounded-xl border p-3 transition-all duration-250 md:grid-cols-[minmax(0,1.2fr)_minmax(150px,0.6fr)_minmax(160px,0.65fr)_auto] ${
+      className={`saas-row grid min-w-0 gap-3 rounded-xl p-3 md:grid-cols-[minmax(0,1.2fr)_minmax(150px,0.6fr)_minmax(160px,0.65fr)_auto] ${
         selected
-          ? "border-cyan-300/35 bg-cyan-500/[0.07] shadow-[inset_2px_0_0_rgba(103,232,249,0.45),0_16px_36px_rgba(0,0,0,0.18)]"
-          : "border-white/10 bg-black/18 hover:-translate-y-px hover:border-cyan-200/18 hover:bg-white/[0.045] hover:shadow-[0_14px_34px_rgba(0,0,0,0.18)]"
+          ? "border-teal-300/32 bg-teal-300/[0.055] shadow-[inset_2px_0_0_rgba(45,212,191,0.42),0_14px_32px_rgba(0,0,0,0.18)]"
+          : ""
       }`}
     >
       <button onClick={() => onSelectClient(client.id)} className="min-w-0 text-left">
         <div className="flex min-w-0 items-start gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.055] text-[9px] font-bold text-slate-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-500/16 bg-slate-900/70 text-[9px] font-bold text-slate-200">
             {initials(client.name)}
           </div>
 
@@ -249,7 +249,7 @@ function CompactInfo({ label, value, hint }: { label: string; value: string; hin
 
 function ScorePill({ score, forecast }: { score: number; forecast: string }) {
   return (
-    <div className="w-24 shrink-0 rounded-lg border border-white/8 bg-black/20 p-1.5">
+    <div className="saas-card w-24 shrink-0 rounded-lg p-1.5">
       <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
         <span>Score</span>
         <span>{score}</span>
@@ -275,7 +275,7 @@ function IconButton({
     <button
       title={title}
       onClick={onClick}
-      className="rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-sky-200"
+      className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-700/45 hover:text-slate-100"
     >
       {children}
     </button>
@@ -284,7 +284,7 @@ function IconButton({
 
 function EmptyClientsState() {
   return (
-    <div className="mx-auto w-full max-w-sm rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-center">
+    <div className="mx-auto w-full max-w-sm rounded-2xl border border-dashed border-slate-500/20 bg-slate-950/25 p-4 text-center">
       <p className="text-sm font-semibold text-slate-300">Nenhum cliente encontrado</p>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
         Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar o pipeline.
@@ -309,7 +309,7 @@ function ClientsFooter({
   onNextPage: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between border-t border-white/10 bg-black/10 px-3 py-2">
+    <div className="flex items-center justify-between border-t border-slate-700/40 bg-slate-950/16 px-4 py-3">
       <button
         onClick={onPreviousPage}
         disabled={page === 1}
@@ -335,15 +335,15 @@ function ClientsFooter({
 }
 
 function priorityClass(priority: string) {
-  if (priority === "Alta") return "border-rose-400/20 bg-rose-500/10 text-rose-200";
-  if (priority !== "Baixa") return "border-amber-400/20 bg-amber-500/10 text-amber-200";
-  return "border-slate-400/20 bg-slate-500/10 text-slate-300";
+  if (priority === "Alta") return "border-rose-300/20 bg-slate-950/25 text-rose-200";
+  if (priority !== "Baixa") return "border-amber-300/20 bg-slate-950/25 text-amber-200";
+  return "border-slate-400/20 bg-slate-950/25 text-slate-300";
 }
 
 function riskClass(risk: string) {
-  if (risk === "Alto") return "border-rose-400/20 bg-rose-500/10 text-rose-200";
-  if (risk === "Médio") return "border-amber-400/20 bg-amber-500/10 text-amber-200";
-  return "border-emerald-400/20 bg-emerald-500/10 text-emerald-200";
+  if (risk === "Alto") return "border-rose-300/20 bg-slate-950/25 text-rose-200";
+  if (risk === "Médio") return "border-amber-300/20 bg-slate-950/25 text-amber-200";
+  return "border-emerald-300/20 bg-slate-950/25 text-emerald-200";
 }
 
 function scoreClass(score: number) {
