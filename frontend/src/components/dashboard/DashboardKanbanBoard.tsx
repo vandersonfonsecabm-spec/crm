@@ -102,19 +102,19 @@ export default function DashboardKanbanBoard({
           money={money}
         />
 
-        <div className="premium-panel flex flex-wrap items-center justify-between gap-2 rounded-2xl px-3 py-2.5">
+        <div className="saas-panel flex flex-wrap items-center justify-between gap-2 rounded-2xl px-3 py-2.5">
           <div>
             <p className="text-sm font-semibold">Etapas do Kanban</p>
             <p className="mt-0.5 text-[10px] text-slate-500">Navegue por grupos sem barra horizontal.</p>
           </div>
 
-          <div className="flex rounded-xl border border-white/10 bg-black/20 p-1">
+          <div className="flex rounded-xl border border-slate-500/16 bg-slate-950/25 p-1">
             <button
               onClick={() => setStageGroup("pipeline")}
               className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
                 stageGroup === "pipeline"
-                  ? "bg-slate-50 text-slate-950 shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
-                  : "text-slate-400 hover:bg-white/10 hover:text-slate-200"
+                  ? "bg-slate-100 text-slate-950 shadow-[0_8px_20px_rgba(0,0,0,0.18)]"
+                  : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-200"
               }`}
             >
               Fluxo comercial
@@ -123,8 +123,8 @@ export default function DashboardKanbanBoard({
               onClick={() => setStageGroup("resultado")}
               className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
                 stageGroup === "resultado"
-                  ? "bg-slate-50 text-slate-950 shadow-[0_8px_20px_rgba(0,0,0,0.2)]"
-                  : "text-slate-400 hover:bg-white/10 hover:text-slate-200"
+                  ? "bg-slate-100 text-slate-950 shadow-[0_8px_20px_rgba(0,0,0,0.18)]"
+                  : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-200"
               }`}
             >
               Resultado
@@ -158,10 +158,10 @@ export default function DashboardKanbanBoard({
                   setDragOverStatus(null);
                   setIsDraggingKanban(false);
                 }}
-                className={`min-w-0 rounded-2xl border p-2.5 transition-all duration-300 hover:shadow-[0_20px_52px_rgba(0,0,0,0.28)] ${
+                className={`saas-panel min-w-0 rounded-2xl p-2.5 transition-all duration-300 ${
                   isDropTarget
-                    ? "scale-[1.01] border-cyan-400/50 bg-cyan-500/[0.08] shadow-[0_0_35px_rgba(34,211,238,0.18)]"
-                    : "border-white/10 bg-white/[0.035]"
+                    ? "scale-[1.01] border-teal-300/40 bg-teal-300/[0.07] shadow-[0_18px_42px_rgba(0,0,0,0.22)]"
+                    : ""
                 }`}
               >
                 <div className={`mb-2 overflow-hidden rounded-xl border ${kanbanHeaderClass(status)}`}>
@@ -169,11 +169,11 @@ export default function DashboardKanbanBoard({
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
                         <div
-                          className={`h-1.5 w-1.5 shrink-0 rounded-full shadow-[0_0_14px_rgba(255,255,255,0.25)] ${
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
                             status === "Novo"
                               ? "bg-sky-300"
                               : status === "Contato"
-                                ? "bg-violet-300"
+                                ? "bg-slate-300"
                                 : status === "Proposta"
                                   ? "bg-amber-300"
                                   : status === "Fechado"
@@ -191,7 +191,7 @@ export default function DashboardKanbanBoard({
                     </div>
 
                     <div className="shrink-0 text-right">
-                      <span className="inline-flex min-w-6 justify-center rounded-full bg-black/25 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                      <span className="saas-chip inline-flex min-w-6 justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold">
                         {stageClients.length}
                       </span>
 
@@ -210,7 +210,7 @@ export default function DashboardKanbanBoard({
 
                 <div className="space-y-1.5">
                   {stageClients.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-white/10 bg-black/10 p-3 text-center">
+                    <div className="rounded-xl border border-dashed border-slate-500/18 bg-slate-950/20 p-3 text-center">
                       <p className="text-[11px] font-semibold text-slate-400">Etapa vazia</p>
                       <p className="mt-1 text-[9px] text-slate-600">Arraste um lead para esta coluna</p>
                     </div>
@@ -255,7 +255,7 @@ export default function DashboardKanbanBoard({
 
 function StageMini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-black/20 px-1.5 py-1.5">
+    <div className="bg-slate-950/22 px-1.5 py-1.5">
       <p className="text-[7px] text-slate-500">{label}</p>
       <p className="mt-0.5 text-[9px] font-semibold text-slate-200">{value}</p>
     </div>

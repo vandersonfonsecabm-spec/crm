@@ -27,7 +27,7 @@ export default function DashboardExecutiveRadar({
   const topOpportunity = [...clients].sort((a, b) => b.value - a.value)[0];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045]">
+    <div className="saas-panel rounded-2xl p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <KanbanSquare size={15} className="text-slate-400" />
@@ -37,14 +37,14 @@ export default function DashboardExecutiveRadar({
           </div>
         </div>
 
-        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] text-slate-400">ao vivo</span>
+        <span className="saas-chip rounded-full px-2 py-1 text-[9px]">ao vivo</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <RadarMetric label="Risco alto" value={`${highRiskClients.length} leads`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
         <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
         <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} acoes`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
-        <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-violet-200" />} />
+        <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-slate-300" />} />
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2">
@@ -53,10 +53,10 @@ export default function DashboardExecutiveRadar({
         <FilterAction tone="sky" label="Risco" onClick={() => onApplySmartFilter("risk")} />
       </div>
 
-      <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2">
+      <div className="saas-card mt-2 rounded-xl p-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold text-slate-200">Acao sugerida</p>
+            <p className="text-[10px] font-semibold text-slate-200">Ação sugerida</p>
             <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
               {highRiskClients.length > 0
                 ? "Reativar clientes em risco antes de criar novas oportunidades."
@@ -66,14 +66,14 @@ export default function DashboardExecutiveRadar({
             </p>
           </div>
 
-          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] text-slate-400">
+          <span className="saas-chip shrink-0 rounded-full px-2 py-0.5 text-[9px]">
             prioridade
           </span>
         </div>
       </div>
 
       {topOpportunity && (
-        <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.035] p-2">
+        <div className="saas-card mt-2 rounded-xl p-2">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-[10px] font-semibold text-slate-200">{topOpportunity.name}</p>
@@ -89,8 +89,8 @@ export default function DashboardExecutiveRadar({
       )}
 
       {silentClients.length > 0 && (
-        <p className="mt-2 rounded-xl border border-white/10 bg-white/[0.025] px-2 py-1.5 text-[10px] text-slate-500">
-          {silentClients.length} cliente(s) sem contato recente pedem atencao.
+        <p className="saas-card mt-2 rounded-xl px-2 py-1.5 text-[10px] text-slate-500">
+          {silentClients.length} cliente(s) sem contato recente pedem atenção.
         </p>
       )}
     </div>

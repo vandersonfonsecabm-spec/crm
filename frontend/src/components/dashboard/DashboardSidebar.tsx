@@ -224,7 +224,7 @@ export default function DashboardSidebar({
             <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
               <p className="text-[11px] text-slate-200">Próxima fase</p>
               <p className="mt-0.5 text-[10px] text-slate-500">
-                Conectar ações com backend e banco real.
+                Revisar ações automáticas e prioridades comerciais.
               </p>
             </div>
           </div>

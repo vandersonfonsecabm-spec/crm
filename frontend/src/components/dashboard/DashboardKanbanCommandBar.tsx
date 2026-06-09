@@ -26,19 +26,19 @@ export default function DashboardKanbanCommandBar({
   );
 
   return (
-    <div className="premium-panel rounded-2xl p-3 transition-all duration-300 hover:border-cyan-200/18">
+    <div className="saas-panel rounded-2xl p-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold">Comando do Kanban</p>
           <p className="mt-1 text-[11px] text-slate-500">
-            Leitura executiva do funil sem ocupar espaco das colunas.
+            Leitura executiva do funil sem ocupar espaço das colunas.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <KanbanCommandPill label="Gargalo" value={biggestBottleneck} tone="default" />
           <KanbanCommandPill label="Prioridade" value={`${hotLeads} leads`} tone="amber" />
-          <KanbanCommandPill label="Propostas" value={`${proposalLeads} abertas`} tone="violet" />
+          <KanbanCommandPill label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
           <KanbanCommandPill label="Silenciosos" value={`${stalledLeads} leads`} tone="rose" />
           <KanbanCommandPill label="Receita prevista" value={money(expectedRevenue)} tone="emerald" />
           <KanbanCommandPill label="Conversao" value={`${conversionRate}%`} tone="sky" />
@@ -58,12 +58,12 @@ function KanbanCommandPill({
   tone: "default" | "amber" | "violet" | "rose" | "emerald" | "sky";
 }) {
   const tones = {
-    default: "border-white/10 bg-black/20 text-slate-200",
-    amber: "border-amber-400/10 bg-amber-500/[0.055] text-amber-100",
-    violet: "border-violet-400/10 bg-violet-500/[0.055] text-violet-100",
-    rose: "border-rose-400/10 bg-rose-500/[0.055] text-rose-100",
-    emerald: "border-emerald-400/10 bg-emerald-500/[0.055] text-emerald-100",
-    sky: "border-sky-400/10 bg-sky-500/[0.055] text-sky-100",
+    default: "border-slate-500/16 bg-slate-950/25 text-slate-200",
+    amber: "border-slate-500/16 bg-slate-950/25 text-amber-100 shadow-[inset_2px_0_0_rgba(214,162,58,0.42)]",
+    violet: "border-slate-500/16 bg-slate-950/25 text-slate-200",
+    rose: "border-slate-500/16 bg-slate-950/25 text-rose-100 shadow-[inset_2px_0_0_rgba(224,105,123,0.4)]",
+    emerald: "border-slate-500/16 bg-slate-950/25 text-emerald-100 shadow-[inset_2px_0_0_rgba(16,185,129,0.42)]",
+    sky: "border-slate-500/16 bg-slate-950/25 text-sky-100 shadow-[inset_2px_0_0_rgba(56,189,248,0.38)]",
   };
 
   return (

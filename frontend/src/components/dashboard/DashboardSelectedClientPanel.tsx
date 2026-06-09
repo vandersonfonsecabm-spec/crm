@@ -54,10 +54,10 @@ export default function DashboardSelectedClientPanel({
 
   return (
     <div className="p-3">
-      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+      <div className="saas-card rounded-2xl p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-xs font-black text-black shadow-[0_0_22px_rgba(255,255,255,0.12)]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-100 text-xs font-bold text-slate-950">
               {initials(selectedClient.name)}
             </div>
 
@@ -73,26 +73,26 @@ export default function DashboardSelectedClientPanel({
         </div>
 
         <div className="mt-3 grid grid-cols-[1fr_86px] gap-2">
-          <div className="rounded-xl border border-emerald-400/10 bg-emerald-500/[0.045] p-2.5">
+          <div className="saas-tile saas-accent-emerald rounded-xl p-2.5">
             <p className="text-[9px] uppercase tracking-[0.14em] text-emerald-100/50">Valor potencial</p>
             <p className="mt-1 text-sm font-semibold text-emerald-100">{money(selectedClient.value)}</p>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-2.5 text-center">
+          <div className="saas-tile rounded-xl p-2.5 text-center">
             <p className="text-[9px] text-slate-500">Score</p>
-            <p className="mt-0.5 text-xl font-black leading-none text-slate-100">{leadScore}</p>
+            <p className="mt-0.5 text-xl font-semibold leading-none text-slate-100">{leadScore}</p>
           </div>
         </div>
 
-        <div className="mt-3 rounded-xl border border-violet-400/10 bg-violet-500/[0.055] p-3">
+        <div className="saas-tile mt-3 rounded-xl p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold text-violet-100">Proxima melhor acao</p>
-            <span className="rounded-full border border-violet-300/10 bg-violet-400/10 px-2 py-0.5 text-[9px] text-violet-100">
-              decisao
+            <p className="text-[11px] font-semibold text-slate-100">Próxima melhor ação</p>
+            <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">
+              decisão
             </span>
           </div>
 
-          <p className="text-[10px] leading-relaxed text-violet-100/70">{nextActionLabel(selectedClient)}</p>
+          <p className="text-[10px] leading-relaxed text-slate-400">{nextActionLabel(selectedClient)}</p>
         </div>
 
         <div className="mt-3 grid grid-cols-4 gap-2">
@@ -109,7 +109,7 @@ export default function DashboardSelectedClientPanel({
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.35)]"
+              className="h-full rounded-full bg-slate-300"
               style={{ width: `${leadScore}%` }}
             />
           </div>
@@ -120,10 +120,10 @@ export default function DashboardSelectedClientPanel({
             href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-xl bg-white px-2 py-2 text-left text-black transition hover:opacity-90"
+            className="rounded-xl bg-slate-100 px-2 py-2 text-left text-slate-950 transition hover:bg-white"
           >
             <MessageCircle size={14} className="mb-1" />
-            <p className="text-[10px] font-black">WhatsApp</p>
+            <p className="text-[10px] font-semibold">WhatsApp</p>
           </a>
 
           <ActionButton
@@ -156,9 +156,9 @@ export default function DashboardSelectedClientPanel({
             value={tagText}
             onChange={(event) => onSetTagText(event.target.value)}
             placeholder="Nova tag..."
-            className="flex-1 select-text rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs outline-none placeholder:text-slate-500"
+            className="flex-1 select-text rounded-lg border border-slate-500/16 bg-slate-950/25 px-2 py-1.5 text-xs outline-none placeholder:text-slate-500 focus:border-teal-300/24"
           />
-          <button onClick={onAddTagToSelected} className="rounded-lg bg-white px-2 py-1.5 text-xs font-semibold text-black">
+          <button onClick={onAddTagToSelected} className="rounded-lg bg-slate-100 px-2 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-white">
             Tag
           </button>
         </div>

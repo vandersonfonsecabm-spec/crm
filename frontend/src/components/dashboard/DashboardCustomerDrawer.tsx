@@ -109,18 +109,18 @@ export default function DashboardCustomerDrawer({
 
   return (
     <aside key={`${activePage}-${selectedClient?.id ?? "empty"}`} className={drawerShellClass(activePage)}>
-      <div className="premium-panel rounded-2xl transition-all duration-300 hover:border-cyan-200/18">
-        <div className="border-b border-white/10 bg-gradient-to-br from-white/[0.09] via-white/[0.035] to-transparent p-3">
+      <div className="saas-panel rounded-2xl">
+        <div className="border-b border-slate-700/40 bg-slate-950/18 p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold">Central de decisao</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">Lead, acao, risco e historico em um unico painel.</p>
+              <p className="text-sm font-semibold">Central de decisão</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Lead, ação, risco e histórico em um único painel.</p>
             </div>
 
             {selectedClient && (
               <button
                 onClick={onClearSelectedClient}
-                className="rounded-lg p-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
+                className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200"
               >
                 <X size={14} />
               </button>
