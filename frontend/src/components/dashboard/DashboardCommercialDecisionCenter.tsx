@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Edit3, MessageCircle, Phone, Sparkles, Target } from "lucide-react";
+import { Activity, AlertTriangle, Edit3, MessageCircle, Phone, ShieldCheck, Sparkles, Target } from "lucide-react";
 import type { Analytics, Client, SmartFilterType, Status } from "../../types/dashboard";
 import { ActionButton, DecisionMini, EmptyDecisionState, FilterAction, RadarMetric } from "./DashboardDrawerPrimitives";
 
@@ -43,24 +43,24 @@ export default function DashboardCommercialDecisionCenter({
     .filter((client) => client.status === "Proposta")
     .reduce((sum, client) => sum + client.value, 0);
 
+  const leadScore = selectedClient ? getLeadScore(selectedClient) : 0;
+
   return (
     <div className="saas-panel rounded-2xl">
       <div className="border-b border-slate-700/40 bg-slate-950/18 p-3">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-teal-300/18 bg-teal-300/[0.06] text-teal-100">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.07] text-teal-100">
               <Sparkles size={15} />
             </div>
 
-            <div>
-              <p className="text-sm font-semibold">Central comercial</p>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-100">Central comercial</p>
               <p className="text-[10px] text-slate-500">Decisao, risco e acao imediata</p>
             </div>
           </div>
 
-          <span className="saas-chip rounded-full px-2 py-1 text-[9px] font-semibold">
-            Ativo
-          </span>
+          <span className="saas-chip shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold">Ativo</span>
         </div>
       </div>
 
@@ -78,29 +78,45 @@ export default function DashboardCommercialDecisionCenter({
               </span>
             </div>
 
-            <div className="mt-3 grid grid-cols-[1fr_74px] gap-2">
-              <div className="saas-tile saas-accent-emerald rounded-xl p-2.5">
-                <p className="text-[9px] uppercase tracking-[0.14em] text-emerald-100/50">Ticket em foco</p>
-                <p className="mt-1 text-sm font-semibold text-emerald-100">{money(selectedClient.value)}</p>
+            <div className="mt-3 grid grid-cols-[minmax(0,1fr)_78px] gap-2">
+              <div className="metric-card metric-pipeline rounded-xl p-2.5">
+                <p className="text-[9px] uppercase tracking-[0.14em] text-teal-100/55">Ticket em foco</p>
+                <p className="mt-1 truncate text-sm font-semibold text-teal-100">{money(selectedClient.value)}</p>
               </div>
 
-              <div className="saas-tile rounded-xl p-2.5 text-center">
+              <div className="metric-card rounded-xl p-2.5 text-center">
                 <p className="text-[9px] text-slate-500">Score</p>
-                <p className="mt-0.5 text-xl font-semibold leading-none text-slate-100">{getLeadScore(selectedClient)}</p>
+                <p className="mt-0.5 text-xl font-semibold leading-none text-slate-100">{leadScore}</p>
               </div>
             </div>
 
-            <div className="saas-tile mt-3 rounded-xl p-2.5">
-              <div className="mb-1 flex items-center justify-between text-[10px]">
-                <span className="font-semibold text-slate-100">Ação recomendada</span>
-                <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">agora</span>
+            <div className="saas-tile mt-3 rounded-xl p-3">
+              <div className="mb-2 flex items-center justify-between gap-2 text-[10px]">
+                <span className="font-semibold text-slate-100">Acao recomendada</span>
+                <span className="saas-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]">
+                  <ShieldCheck size={10} />
+                  agora
+                </span>
               </div>
               <p className="text-[10px] leading-relaxed text-slate-400">{nextActionLabel(selectedClient)}</p>
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
               <DecisionMini label="Prioridade" value={priorityLabel(selectedClient)} />
-              <DecisionMini label="Saúde" value={slaLabel(selectedClient)} />
+              <DecisionMini label="Saude" value={slaLabel(selectedClient)} />
+            </div>
+
+            <div className="mt-3">
+              <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
+                <span>Forca comercial</span>
+                <span>{leadScore}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className={`h-full rounded-full ${leadScore >= 80 ? "bg-emerald-300" : leadScore >= 60 ? "bg-amber-300" : "bg-slate-400"}`}
+                  style={{ width: `${leadScore}%` }}
+                />
+              </div>
             </div>
 
             <div className="mt-3 grid grid-cols-3 gap-2">
@@ -135,7 +151,7 @@ export default function DashboardCommercialDecisionCenter({
           <div className="mt-3 grid grid-cols-2 gap-2">
             <RadarMetric label="Risco alto" value={`${highRiskClients.length} leads`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
             <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
-            <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
+            <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} acoes`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
             <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-slate-300" />} />
           </div>
         )}

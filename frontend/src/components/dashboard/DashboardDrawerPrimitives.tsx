@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 
 export function EmptyDecisionState() {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-500/20 bg-slate-950/25 p-4 text-center">
-      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/70 text-slate-400">
+    <div className="metric-card rounded-2xl border-dashed p-4 text-center">
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-teal-300/14 bg-teal-300/[0.06] text-teal-100">
         <Sparkles size={16} />
       </div>
       <p className="mt-3 text-sm font-semibold text-slate-300">Selecione um lead</p>
@@ -17,8 +17,8 @@ export function EmptyDecisionState() {
 
 export function DecisionMini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="saas-tile rounded-xl p-2">
-      <p className="text-[9px] text-slate-500">{label}</p>
+    <div className="metric-card rounded-xl p-2">
+      <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">{label}</p>
       <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-200">{value}</p>
     </div>
   );
@@ -105,9 +105,9 @@ export function RadarMetric({
   };
 
   return (
-    <div className={`saas-tile rounded-xl p-2 ${classes[tone]}`}>
+    <div className={`metric-card rounded-xl p-2 ${classes[tone]}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[9px] opacity-65">{label}</p>
+        <p className="text-[9px] uppercase tracking-[0.12em] opacity-65">{label}</p>
         {icon}
       </div>
       <p className="mt-1 truncate text-xs font-semibold">{value}</p>
