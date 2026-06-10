@@ -1,4 +1,16 @@
-import { Edit3, Flame, MessageCircle, Phone, Star } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  Flame,
+  Mail,
+  MessageCircle,
+  Phone,
+  Star,
+  Tag,
+  UserCheck,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import type { Client, Status } from "../../types/dashboard";
 
 type DashboardClientsTableProps = {
@@ -100,18 +112,24 @@ function ClientsHeader({
   totalPages: number;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/40 bg-slate-950/20 px-4 py-3">
-      <div>
-        <p className="text-sm font-semibold">Clientes</p>
-        <p className="mt-0.5 text-[10px] text-slate-500">Carteira priorizada sem barra horizontal.</p>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/40 bg-slate-950/20 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.07] text-teal-100">
+          <UserCheck size={16} />
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">Carteira de clientes</p>
+          <p className="mt-0.5 text-[10px] text-slate-500">Lista priorizada por valor, score e proxima acao.</p>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
-          <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
+        <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
           {filteredClientsCount} registros
         </span>
-          <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
-          Página {page}/{totalPages}
+        <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
+          Pagina {page}/{totalPages}
         </span>
       </div>
     </div>
@@ -156,10 +174,12 @@ function ClientRowCard({
   const score = getLeadScore(client);
   const priority = getPriority(client);
   const risk = getRisk(client);
+  const visibleTags = client.tags.slice(0, 2);
+  const hiddenTags = Math.max(0, client.tags.length - visibleTags.length);
 
   return (
     <article
-      className={`saas-row grid min-w-0 gap-3 rounded-xl p-3 md:grid-cols-[minmax(0,1.2fr)_minmax(150px,0.6fr)_minmax(160px,0.65fr)_auto] ${
+      className={`saas-row grid min-w-0 gap-3 rounded-xl p-3 md:grid-cols-[minmax(0,1.25fr)_minmax(150px,0.58fr)_minmax(170px,0.72fr)_auto] ${
         selected
           ? "border-teal-300/32 bg-teal-300/[0.055] shadow-[inset_2px_0_0_rgba(45,212,191,0.42),0_14px_32px_rgba(0,0,0,0.18)]"
           : ""
@@ -167,7 +187,13 @@ function ClientRowCard({
     >
       <button onClick={() => onSelectClient(client.id)} className="min-w-0 text-left">
         <div className="flex min-w-0 items-start gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-500/16 bg-slate-900/70 text-[9px] font-bold text-slate-200">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-[10px] font-bold ${
+              selected
+                ? "border-teal-300/24 bg-teal-300/[0.09] text-teal-100"
+                : "border-slate-500/16 bg-slate-900/70 text-slate-200"
+            }`}
+          >
             {initials(client.name)}
           </div>
 
@@ -180,12 +206,25 @@ function ClientRowCard({
 
             <p className="mt-0.5 truncate text-[11px] text-slate-500">{client.company}</p>
 
+            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+              {visibleTags.map((tag) => (
+                <span key={tag} className="saas-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]">
+                  <Tag size={10} />
+                  {tag}
+                </span>
+              ))}
+              {hiddenTags > 0 && (
+                <span className="rounded-full bg-slate-900/60 px-2 py-0.5 text-[9px] text-slate-500">
+                  +{hiddenTags}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </button>
 
       <div className="grid min-w-0 grid-cols-2 gap-2 md:block md:space-y-2">
-        <CompactInfo label="Valor" value={money(client.value)} />
+        <CompactInfo label="Valor" value={money(client.value)} strong />
         <div>
           <p className="text-[9px] text-slate-500">Status</p>
           <span className={`mt-1 inline-flex rounded-full border px-2 py-1 text-[10px] ${statusClass(client.status)}`}>
@@ -196,6 +235,10 @@ function ClientRowCard({
 
       <div className="grid min-w-0 grid-cols-2 gap-2 md:block md:space-y-2">
         <CompactInfo label="Follow-up" value={client.nextFollowUp} hint={`Inativo: ${idleLabel(client)}`} />
+        <div className="grid grid-cols-2 gap-1.5">
+          <CompactContact icon={<Phone size={11} />} value={client.phone} />
+          <CompactContact icon={<Mail size={11} />} value={client.email || "sem email"} />
+        </div>
         <div className="grid grid-cols-2 gap-1.5">
           <span className={`rounded-full border px-2 py-1 text-[10px] ${priorityClass(priority)}`}>
             {priority}
@@ -237,19 +280,40 @@ function ClientRowCard({
   );
 }
 
-function CompactInfo({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function CompactInfo({
+  label,
+  value,
+  hint,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  strong?: boolean;
+}) {
   return (
     <div className="min-w-0">
       <p className="text-[9px] text-slate-500">{label}</p>
-      <p className="mt-0.5 truncate text-xs font-semibold text-slate-200">{value}</p>
+      <p className={`mt-0.5 truncate text-xs font-semibold ${strong ? "text-teal-100" : "text-slate-200"}`}>
+        {value}
+      </p>
       {hint && <p className="mt-0.5 truncate text-[9px] text-slate-600">{hint}</p>}
+    </div>
+  );
+}
+
+function CompactContact({ icon, value }: { icon: ReactNode; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1 rounded-lg border border-slate-500/12 bg-slate-950/20 px-2 py-1 text-[9px] text-slate-500">
+      <span className="shrink-0 text-slate-600">{icon}</span>
+      <span className="truncate">{value}</span>
     </div>
   );
 }
 
 function ScorePill({ score, forecast }: { score: number; forecast: string }) {
   return (
-    <div className="saas-card w-24 shrink-0 rounded-lg p-1.5">
+    <div className={`metric-card w-28 shrink-0 rounded-lg p-1.5 ${score >= 80 ? "metric-pipeline" : score >= 60 ? "metric-forecast" : ""}`}>
       <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
         <span>Score</span>
         <span>{score}</span>
@@ -269,7 +333,7 @@ function IconButton({
 }: {
   title: string;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -284,8 +348,11 @@ function IconButton({
 
 function EmptyClientsState() {
   return (
-    <div className="mx-auto w-full max-w-sm rounded-2xl border border-dashed border-slate-500/20 bg-slate-950/25 p-4 text-center">
-      <p className="text-sm font-semibold text-slate-300">Nenhum cliente encontrado</p>
+    <div className="metric-card mx-auto w-full max-w-sm rounded-2xl p-5 text-center">
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/70 text-slate-400">
+        <UserCheck size={16} />
+      </div>
+      <p className="mt-3 text-sm font-semibold text-slate-300">Nenhum cliente encontrado</p>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
         Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar o pipeline.
       </p>
@@ -313,22 +380,24 @@ function ClientsFooter({
       <button
         onClick={onPreviousPage}
         disabled={page === 1}
-        className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
       >
+        <ChevronLeft size={13} />
         Anterior
       </button>
 
       <p className="text-[11px] text-slate-500">
-        Página <span className="font-semibold text-slate-300">{page}</span> de {totalPages} •{" "}
+        Pagina <span className="font-semibold text-slate-300">{page}</span> de {totalPages} -{" "}
         <span className="font-semibold text-slate-300">{visibleClientsCount}</span> de {filteredClientsCount}
       </p>
 
       <button
         onClick={onNextPage}
         disabled={page === totalPages}
-        className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 disabled:opacity-40"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        Próxima
+        Proxima
+        <ChevronRight size={13} />
       </button>
     </div>
   );
@@ -342,7 +411,7 @@ function priorityClass(priority: string) {
 
 function riskClass(risk: string) {
   if (risk === "Alto") return "border-rose-300/20 bg-slate-950/25 text-rose-200";
-  if (risk === "Médio") return "border-amber-300/20 bg-slate-950/25 text-amber-200";
+  if (risk === "Medio" || risk === "Médio") return "border-amber-300/20 bg-slate-950/25 text-amber-200";
   return "border-emerald-300/20 bg-slate-950/25 text-emerald-200";
 }
 

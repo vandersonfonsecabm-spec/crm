@@ -1,4 +1,5 @@
-import { Copy, Edit3, MessageCircle, Phone } from "lucide-react";
+import { Copy, Edit3, Mail, MessageCircle, Phone, ShieldCheck } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Client, Status } from "../../types/dashboard";
 import DashboardClientTimeline from "./DashboardClientTimeline";
 import { ActionButton, DecisionMini, SmallButton } from "./DashboardDrawerPrimitives";
@@ -57,7 +58,7 @@ export default function DashboardSelectedClientPanel({
       <div className="saas-card rounded-2xl p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-100 text-xs font-bold text-slate-950">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.08] text-xs font-bold text-teal-100">
               {initials(selectedClient.name)}
             </div>
 
@@ -72,13 +73,18 @@ export default function DashboardSelectedClientPanel({
           </span>
         </div>
 
+        <div className="mt-3 grid gap-2">
+          <ContactLine icon={<Phone size={12} />} value={selectedClient.phone} />
+          <ContactLine icon={<Mail size={12} />} value={selectedClient.email || "Email nao informado"} />
+        </div>
+
         <div className="mt-3 grid grid-cols-[1fr_86px] gap-2">
-          <div className="saas-tile saas-accent-emerald rounded-xl p-2.5">
-            <p className="text-[9px] uppercase tracking-[0.14em] text-emerald-100/50">Valor potencial</p>
-            <p className="mt-1 text-sm font-semibold text-emerald-100">{money(selectedClient.value)}</p>
+          <div className="metric-card metric-pipeline rounded-xl p-2.5">
+            <p className="text-[9px] uppercase tracking-[0.14em] text-teal-100/55">Valor potencial</p>
+            <p className="mt-1 text-sm font-semibold text-teal-100">{money(selectedClient.value)}</p>
           </div>
 
-          <div className="saas-tile rounded-xl p-2.5 text-center">
+          <div className="metric-card rounded-xl p-2.5 text-center">
             <p className="text-[9px] text-slate-500">Score</p>
             <p className="mt-0.5 text-xl font-semibold leading-none text-slate-100">{leadScore}</p>
           </div>
@@ -86,9 +92,10 @@ export default function DashboardSelectedClientPanel({
 
         <div className="saas-tile mt-3 rounded-xl p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold text-slate-100">Próxima melhor ação</p>
-            <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">
-              decisão
+            <p className="text-[11px] font-semibold text-slate-100">Proxima melhor acao</p>
+            <span className="saas-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]">
+              <ShieldCheck size={10} />
+              decisao
             </span>
           </div>
 
@@ -109,7 +116,7 @@ export default function DashboardSelectedClientPanel({
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full bg-slate-300"
+              className={`h-full rounded-full ${leadScore >= 80 ? "bg-emerald-300" : leadScore >= 60 ? "bg-amber-300" : "bg-slate-400"}`}
               style={{ width: `${leadScore}%` }}
             />
           </div>
@@ -186,6 +193,15 @@ export default function DashboardSelectedClientPanel({
         onSetNoteText={onSetNoteText}
         onAddNote={onAddNote}
       />
+    </div>
+  );
+}
+
+function ContactLine({ icon, value }: { icon: ReactNode; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-500/12 bg-slate-950/24 px-2.5 py-2 text-[10px] text-slate-400">
+      <span className="shrink-0 text-slate-500">{icon}</span>
+      <span className="truncate">{value}</span>
     </div>
   );
 }
