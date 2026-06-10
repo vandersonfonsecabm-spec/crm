@@ -41,7 +41,8 @@ import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
 import DashboardToast from "../components/dashboard/DashboardToast";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
-import { fetchClientesFromBackend } from "../services/crmApi";
+import { fetchClientesFromBackend, fetchDashboardSummaryFromBackend } from "../services/crmApi";
+import type { ApiDashboardSummary } from "../services/crmApi";
 
 import { emptyClient, loadClients, statusList } from "../data/mockClients";
 
@@ -79,6 +80,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   );
   const [isBooting, setIsBooting] = useState(true);
   const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
+  const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
 
   const pageSize = 4;
 
@@ -112,8 +114,16 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         setClients(backendClients);
         setSelectedId(backendClients[0]?.id ?? null);
         setDataSource("backend");
+
+        try {
+          const summary = await fetchDashboardSummaryFromBackend();
+          if (!ignore) setDashboardSummary(summary);
+        } catch {
+          if (!ignore) setDashboardSummary(null);
+        }
       } catch {
         setDataSource("offline");
+        setDashboardSummary(null);
       }
     }
 
@@ -340,6 +350,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           <DashboardHeader
             activePage={activePage}
             pageTitle={pageTitle}
+            backendCaption={
+              dashboardSummary
+                ? `${dashboardSummary.indicadores.clientes} clientes no backend`
+                : dataSource === "backend"
+                  ? "Backend sincronizado"
+                  : "Modo offline"
+            }
             onCreateClient={() => setCreating({ ...emptyClient })}
           />
 

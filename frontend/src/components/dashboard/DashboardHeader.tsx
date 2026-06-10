@@ -4,12 +4,14 @@ import type { ActivePage } from "../../types/dashboard";
 type DashboardHeaderProps = {
   activePage: ActivePage;
   pageTitle: string;
+  backendCaption: string;
   onCreateClient: () => void;
 };
 
 export default function DashboardHeader({
   activePage,
   pageTitle,
+  backendCaption,
   onCreateClient,
 }: DashboardHeaderProps) {
   const breadcrumbLabel = {
@@ -36,6 +38,10 @@ export default function DashboardHeader({
         </div>
 
         <div className="flex items-center gap-2">
+          <span className="hidden rounded-xl border border-slate-500/14 bg-slate-950/24 px-3 py-2 text-[10px] font-semibold text-slate-400 sm:inline-flex">
+            {backendCaption}
+          </span>
+
           <button className="premium-ghost rounded-xl p-2 text-slate-300 transition hover:border-cyan-200/20 hover:bg-cyan-300/[0.06] hover:text-white">
             <Bell size={15} />
           </button>

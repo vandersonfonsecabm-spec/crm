@@ -60,6 +60,20 @@ type ClientePayload = {
   tags?: string[];
 };
 
+export type ApiDashboardSummary = {
+  indicadores: {
+    clientes: number;
+    produtos: number;
+    pedidos: number;
+    contasPendentes: number;
+    faturamento: number;
+  };
+  estoqueBaixo: unknown[];
+  pedidosRecentes: unknown[];
+  contasVencidas: unknown[];
+  produtosMaisVendidos: unknown[];
+};
+
 export function getAuthToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -139,6 +153,21 @@ export async function fetchClientesFromBackend() {
 
   const clientes = (await response.json()) as ApiCliente[];
   return clientes.map((cliente) => mapApiClienteToClient(cliente));
+}
+
+export async function fetchDashboardSummaryFromBackend() {
+  const token = getAuthToken();
+  if (!token || token === DEMO_TOKEN) return null;
+
+  const response = await fetch(`${API_URL}/dashboard`, {
+    headers: buildHeaders(token),
+  });
+
+  if (!response.ok) {
+    throw new Error("Nao foi possivel carregar o resumo do backend.");
+  }
+
+  return (await response.json()) as ApiDashboardSummary;
 }
 
 export async function createClienteOnBackend(client: Client) {
