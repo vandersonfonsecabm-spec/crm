@@ -248,14 +248,14 @@ function SidebarButton({
   return (
     <button
       onClick={onClick}
-      className={`relative mx-auto box-border flex h-10 w-[224px] shrink-0 items-center rounded-xl border px-3 pr-9 text-left text-sm leading-none transition-all duration-200 ${
+      className={`relative mx-auto box-border flex h-10 w-[224px] shrink-0 items-center rounded-xl border px-3 pr-9 text-left text-sm leading-5 transition-all duration-200 ${
         active
           ? "border-teal-300/30 bg-teal-300/[0.09] text-white ring-1 ring-inset ring-teal-100/20"
           : "border-white/[0.07] bg-white/[0.032] text-slate-300 hover:border-white/15 hover:bg-white/[0.055] hover:text-white"
       }`}
     >
       {icon}
-      <span className="block min-w-0 flex-1 truncate">{label}</span>
+      <span className="block min-w-0 flex-1 truncate leading-5">{label}</span>
       <span
         className={`absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${
           active ? "bg-teal-200" : "bg-white/15"
