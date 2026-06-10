@@ -83,7 +83,7 @@ export default function DashboardMetrics({
 
 function MiniSignal({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/[0.08] bg-black/[0.16] px-2 py-1.5">
+    <div className="metric-card rounded-lg px-2 py-1.5">
       <p className="text-[9px] text-slate-500">{label}</p>
       <p className="mt-1 text-sm font-semibold text-slate-100">{value}</p>
     </div>

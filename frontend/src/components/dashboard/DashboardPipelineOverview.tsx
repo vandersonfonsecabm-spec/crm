@@ -22,8 +22,8 @@ export default function DashboardPipelineOverview({
     .reduce((sum, client) => sum + client.value, 0);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-all duration-200 hover:border-white/20 hover:bg-white/[0.045] hover:shadow-[0_0_25px_rgba(255,255,255,0.03)]">
-      <div className="border-b border-white/10 bg-gradient-to-br from-white/[0.06] to-transparent px-3 py-2.5">
+    <div className="saas-panel rounded-2xl">
+      <div className="border-b border-slate-700/40 bg-slate-950/18 px-3 py-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -55,7 +55,7 @@ export default function DashboardPipelineOverview({
             return (
               <div
                 key={status}
-                className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-2.5 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-black/25"
+                className="metric-card min-w-0 rounded-xl p-2.5 transition-all duration-200 hover:border-slate-400/24 hover:shadow-lg hover:shadow-black/25"
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-[11px] font-semibold text-slate-300">{status}</p>
@@ -98,11 +98,11 @@ function PipelineSignal({
 }) {
   const classes =
     tone === "emerald"
-      ? "border-emerald-400/10 bg-emerald-500/[0.045] text-emerald-100"
-      : "border-white/10 bg-black/20 text-slate-100";
+      ? "metric-pipeline text-emerald-100"
+      : "text-slate-100";
 
   return (
-    <div className={`rounded-xl border px-3 py-1.5 text-right ${classes}`}>
+    <div className={`metric-card rounded-xl border px-3 py-1.5 text-right ${classes}`}>
       <p className="text-[9px] text-slate-500">{label}</p>
       <p className="text-xs font-semibold">{value}</p>
     </div>

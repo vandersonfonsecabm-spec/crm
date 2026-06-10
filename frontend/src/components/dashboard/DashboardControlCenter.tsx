@@ -244,9 +244,9 @@ function ControlSignal({
   tone: "rose" | "amber" | "sky";
 }) {
   const classes = {
-    rose: "border-slate-500/16 bg-slate-950/25 text-rose-100 shadow-[inset_2px_0_0_rgba(224,105,123,0.42)]",
-    amber: "border-slate-500/16 bg-slate-950/25 text-amber-100 shadow-[inset_2px_0_0_rgba(214,162,58,0.44)]",
-    sky: "border-slate-500/16 bg-slate-950/25 text-sky-100 shadow-[inset_2px_0_0_rgba(56,189,248,0.42)]",
+    rose: "metric-card metric-risk text-rose-100",
+    amber: "metric-card metric-forecast text-amber-100",
+    sky: "metric-card metric-revenue text-sky-100",
   };
 
   return (
@@ -270,10 +270,10 @@ function QueueBadge({
   tone: "default" | "rose" | "amber" | "sky";
 }) {
   const classes = {
-    default: "border-slate-500/16 bg-slate-950/25 text-slate-300",
-    rose: "border-slate-500/16 bg-slate-950/25 text-rose-100",
-    amber: "border-slate-500/16 bg-slate-950/25 text-amber-100",
-    sky: "border-slate-500/16 bg-slate-950/25 text-sky-100",
+    default: "metric-card text-slate-300",
+    rose: "metric-card metric-risk text-rose-100",
+    amber: "metric-card metric-forecast text-amber-100",
+    sky: "metric-card metric-revenue text-sky-100",
   };
 
   return (

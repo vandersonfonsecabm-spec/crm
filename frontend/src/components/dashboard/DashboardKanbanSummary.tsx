@@ -43,28 +43,28 @@ export default function DashboardKanbanSummary({
         </div>
 
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <div className="saas-card rounded-xl px-2.5 py-2">
+          <div className="metric-card rounded-xl px-2.5 py-2">
             <p className="text-[8px] uppercase tracking-[0.16em] text-slate-600">Pipeline</p>
             <p className="mt-1 text-[11px] font-semibold text-slate-100">
               {money(kanbanEnterpriseStats.totalValue)}
             </p>
           </div>
 
-          <div className="saas-card rounded-xl px-2.5 py-2">
+          <div className="metric-card rounded-xl px-2.5 py-2">
             <p className="text-[8px] uppercase tracking-[0.16em] text-slate-600">Forecast</p>
             <p className="mt-1 text-[11px] font-semibold text-slate-100">
               {money(kanbanEnterpriseStats.forecastValue)}
             </p>
           </div>
 
-          <div className="saas-card saas-accent-emerald rounded-xl px-2.5 py-2">
+          <div className="metric-card saas-accent-emerald rounded-xl px-2.5 py-2">
             <p className="text-[8px] uppercase tracking-[0.16em] text-emerald-200/50">Ganho</p>
             <p className="mt-1 text-[11px] font-semibold text-emerald-100">
               {money(kanbanEnterpriseStats.wonValue)}
             </p>
           </div>
 
-          <div className="saas-card saas-accent-rose rounded-xl px-2.5 py-2">
+          <div className="metric-card saas-accent-rose rounded-xl px-2.5 py-2">
             <p className="text-[8px] uppercase tracking-[0.16em] text-rose-200/50">Risco</p>
             <p className="mt-1 text-[11px] font-semibold text-rose-100">
               {kanbanEnterpriseStats.highRiskCount} leads
@@ -74,7 +74,7 @@ export default function DashboardKanbanSummary({
       </div>
 
       <div className="mt-3 grid gap-2 md:grid-cols-4">
-        <div className="saas-card rounded-xl px-3 py-2">
+        <div className="metric-card rounded-xl px-3 py-2">
           <div className="flex items-center justify-between text-[9px] text-slate-500">
             <span>Conversão</span>
             <span className="text-slate-300">{kanbanEnterpriseStats.conversionRate}%</span>
@@ -88,7 +88,7 @@ export default function DashboardKanbanSummary({
           </div>
         </div>
 
-        <div className="saas-card rounded-xl px-3 py-2">
+        <div className="metric-card rounded-xl px-3 py-2">
           <div className="flex items-center justify-between text-[9px] text-slate-500">
             <span>Score médio</span>
             <span className="text-slate-300">{kanbanEnterpriseStats.averageScore}/100</span>
@@ -102,7 +102,7 @@ export default function DashboardKanbanSummary({
           </div>
         </div>
 
-        <div className="saas-card rounded-xl px-3 py-2">
+        <div className="metric-card rounded-xl px-3 py-2">
           <div className="flex items-center justify-between text-[9px] text-slate-500">
             <span>Pipeline ativo</span>
             <span className="text-slate-300">{kanbanEnterpriseStats.activePipeline} leads</span>
@@ -113,7 +113,7 @@ export default function DashboardKanbanSummary({
           </p>
         </div>
 
-        <div className="saas-card rounded-xl px-3 py-2">
+        <div className="metric-card rounded-xl px-3 py-2">
           <div className="flex items-center justify-between text-[9px] text-slate-500">
             <span>Follow-ups hoje</span>
             <span className="text-slate-300">{kanbanEnterpriseStats.todayFollowUps}</span>
