@@ -9,6 +9,88 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+const DEMO_EMAIL = "demo@crm.com";
+const DEMO_PASSWORD = "123456";
+const DEMO_TOKEN = "demo-sqlite-backend";
+
+app.post("/auth/login", (req, res) => {
+  const { email, senha } = req.body || {};
+
+  if (email !== DEMO_EMAIL || senha !== DEMO_PASSWORD) {
+    return res.status(401).json({
+      message: "Email ou senha invalidos.",
+      statusCode: 401,
+    });
+  }
+
+  return res.json({
+    access_token: DEMO_TOKEN,
+    user: {
+      id: 1,
+      nome: "Marco Admin",
+      email: DEMO_EMAIL,
+      role: "ADMIN",
+    },
+    empresa: {
+      id: 1,
+      nome: "CRM Agro Demo",
+    },
+  });
+});
+
+app.post("/auth/demo", (req, res) => {
+  return res.json({
+    access_token: DEMO_TOKEN,
+    user: {
+      id: 1,
+      nome: "Marco Admin",
+      email: DEMO_EMAIL,
+      role: "ADMIN",
+    },
+    empresa: {
+      id: 1,
+      nome: "CRM Agro Demo",
+    },
+  });
+});
+
+app.get("/dashboard", async (req, res) => {
+  try {
+    const clientes = await prisma.cliente.findMany({
+      include: {
+        notas: true,
+      },
+    });
+
+    const totalValue = clientes.reduce((sum, cliente) => sum + Number(cliente.valor || 0), 0);
+    const propostas = clientes.filter((cliente) => cliente.status === "Proposta");
+    const fechados = clientes.filter((cliente) => cliente.status === "Fechado");
+    const quentes = clientes.filter((cliente) => cliente.quente);
+
+    res.json({
+      indicadores: {
+        clientes: clientes.length,
+        produtos: 0,
+        pedidos: propostas.length + fechados.length,
+        contasPendentes: propostas.reduce((sum, cliente) => sum + Number(cliente.valor || 0), 0),
+        faturamento: fechados.reduce((sum, cliente) => sum + Number(cliente.valor || 0), 0),
+        pipeline: totalValue,
+        quentes: quentes.length,
+      },
+      estoqueBaixo: [],
+      pedidosRecentes: propostas.slice(0, 5),
+      contasVencidas: clientes.filter((cliente) => Number(cliente.ultimoContato || 0) >= 7),
+      produtosMaisVendidos: [],
+    });
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).json({
+      erro: "Erro ao buscar dashboard",
+    });
+  }
+});
+
 app.get("/clientes", async (req, res) => {
   try {
     const clientes = await prisma.cliente.findMany({
@@ -54,6 +136,14 @@ app.post("/clientes", async (req, res) => {
 });
 
 app.put("/clientes/:id", async (req, res) => {
+  return updateCliente(req, res);
+});
+
+app.patch("/clientes/:id", async (req, res) => {
+  return updateCliente(req, res);
+});
+
+async function updateCliente(req, res) {
   try {
     const { id } = req.params;
     const data = clientePayload(req.body);
@@ -80,7 +170,7 @@ app.put("/clientes/:id", async (req, res) => {
       erro: "Erro ao atualizar cliente",
     });
   }
-});
+}
 
 app.delete("/clientes/:id", async (req, res) => {
   try {
