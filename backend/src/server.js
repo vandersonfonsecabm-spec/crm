@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const { PrismaClient } = require("@prisma/client");
@@ -5,6 +7,7 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 const app = express();
+const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 app.use(cors());
@@ -279,6 +282,13 @@ function safeParseTags(value) {
   }
 }
 
-app.listen(3001, () => {
-  console.log("Servidor rodando na porta 3001");
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    service: "crm-agro-demo-api",
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
