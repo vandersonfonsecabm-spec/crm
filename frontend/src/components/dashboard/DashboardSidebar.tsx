@@ -38,7 +38,7 @@ export default function DashboardSidebar({
   applySmartFilter,
 }: DashboardSidebarProps) {
   return (
-    <aside className="hidden w-64 shrink-0 overflow-hidden border-r border-slate-700/45 bg-[#070c14]/92 p-4 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:block">
+    <aside className="hidden h-screen w-64 shrink-0 overflow-x-hidden overflow-y-auto border-r border-slate-700/45 bg-[#070c14]/92 p-4 pb-6 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:sticky lg:top-0 lg:block">
       <div className="identity-panel mb-5 rounded-2xl p-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/20 bg-teal-300/[0.08] text-teal-100">
