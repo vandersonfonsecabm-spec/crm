@@ -1,4 +1,5 @@
 import { Activity, AlertTriangle, Flame } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Client } from "../../types/dashboard";
 
 type DashboardPortfolioInsightsProps = {
@@ -30,70 +31,38 @@ export default function DashboardPortfolioInsights({
 
   return (
     <section className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-      <div className="premium-panel rounded-2xl p-4 transition-all duration-300 hover:border-cyan-200/18">
+      <div className="saas-panel rounded-2xl p-4">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold">Qualidade da carteira</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Sinais rápidos de saúde comercial, prioridade e risco.
-            </p>
+            <p className="text-sm font-semibold text-slate-100">Qualidade da carteira</p>
+            <p className="mt-1 text-[11px] text-slate-500">Saude comercial, prioridade e risco em leitura rapida.</p>
           </div>
 
-          <span className="rounded-full border border-emerald-400/10 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-200">
-            padrão premium
-          </span>
+          <span className="saas-chip rounded-full px-2 py-1 text-[10px] font-semibold">padrao premium</span>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-sky-300/12 bg-sky-300/[0.045] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-slate-500">Carteira ativa</p>
-              <Activity size={14} className="text-sky-300" />
-            </div>
-
-            <p className="mt-2 text-xl font-semibold">{activeClientsCount}</p>
-
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-sky-300"
-                style={{
-                  width: `${Math.min(100, (activeClientsCount / Math.max(clients.length, 1)) * 100)}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-rose-400/12 bg-rose-500/[0.05] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-rose-100/70">Alta atenção</p>
-              <Flame size={14} className="text-rose-300" />
-            </div>
-
-            <p className="mt-2 text-xl font-semibold text-rose-50">{highAttentionCount}</p>
-
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-rose-300"
-                style={{ width: `${Math.min(100, highAttentionCount * 14)}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-amber-400/12 bg-amber-500/[0.05] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-amber-100/70">Requer ação</p>
-              <AlertTriangle size={14} className="text-amber-300" />
-            </div>
-
-            <p className="mt-2 text-xl font-semibold text-amber-50">{highRiskCount}</p>
-
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-amber-300"
-                style={{ width: `${Math.min(100, highRiskCount * 18)}%` }}
-              />
-            </div>
-          </div>
+          <InsightMetric
+            icon={<Activity size={14} className="text-sky-300" />}
+            label="Carteira ativa"
+            value={String(activeClientsCount)}
+            progress={Math.min(100, (activeClientsCount / Math.max(clients.length, 1)) * 100)}
+            tone="sky"
+          />
+          <InsightMetric
+            icon={<Flame size={14} className="text-rose-300" />}
+            label="Alta atencao"
+            value={String(highAttentionCount)}
+            progress={Math.min(100, highAttentionCount * 14)}
+            tone="rose"
+          />
+          <InsightMetric
+            icon={<AlertTriangle size={14} className="text-amber-300" />}
+            label="Requer acao"
+            value={String(highRiskCount)}
+            progress={Math.min(100, highRiskCount * 18)}
+            tone="amber"
+          />
         </div>
 
         <div className="mt-3 grid gap-2 md:grid-cols-3">
@@ -104,26 +73,24 @@ export default function DashboardPortfolioInsights({
               <button
                 key={client.id}
                 onClick={() => onSelectClient(client.id)}
-                className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left transition-all duration-200 hover:-translate-y-px hover:border-cyan-200/18 hover:bg-cyan-300/[0.045]"
+                className="saas-row rounded-xl px-3 py-2 text-left"
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-xs font-semibold text-slate-100">{client.name}</p>
-                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] text-slate-300">
-                    {getLeadScore(client)}
-                  </span>
+                  <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">{getLeadScore(client)}</span>
                 </div>
 
                 <p className="mt-1 truncate text-[10px] text-slate-500">
-                  {client.company} • {money(client.value)}
+                  {client.company} | {money(client.value)}
                 </p>
               </button>
             ))}
         </div>
       </div>
 
-      <div className="premium-panel rounded-2xl p-4 transition-all duration-300 hover:border-cyan-200/18">
+      <div className="saas-panel rounded-2xl p-4">
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-semibold">Sinais da carteira</p>
+          <p className="text-sm font-semibold text-slate-100">Sinais da carteira</p>
           <span className="text-[11px] text-slate-500">top leads</span>
         </div>
 
@@ -136,7 +103,7 @@ export default function DashboardPortfolioInsights({
               <button
                 key={client.id}
                 onClick={() => onOpenClient(client.id)}
-                className="w-full rounded-xl border border-white/10 bg-black/20 p-2.5 text-left transition-all duration-200 hover:-translate-y-px hover:border-cyan-200/18 hover:bg-cyan-300/[0.04]"
+                className="saas-row w-full rounded-xl p-2.5 text-left"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
@@ -158,5 +125,46 @@ export default function DashboardPortfolioInsights({
         </div>
       </div>
     </section>
+  );
+}
+
+function InsightMetric({
+  icon,
+  label,
+  value,
+  progress,
+  tone,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  progress: number;
+  tone: "sky" | "rose" | "amber";
+}) {
+  const classes = {
+    sky: "metric-revenue text-sky-100",
+    rose: "metric-risk text-rose-100",
+    amber: "metric-forecast text-amber-100",
+  };
+
+  const barClasses = {
+    sky: "bg-sky-300",
+    rose: "bg-rose-300",
+    amber: "bg-amber-300",
+  };
+
+  return (
+    <div className={`metric-card rounded-xl p-3 ${classes[tone]}`}>
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-[0.12em] opacity-70">{label}</p>
+        {icon}
+      </div>
+
+      <p className="mt-2 text-xl font-semibold">{value}</p>
+
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div className={`h-full rounded-full ${barClasses[tone]}`} style={{ width: `${progress}%` }} />
+      </div>
+    </div>
   );
 }

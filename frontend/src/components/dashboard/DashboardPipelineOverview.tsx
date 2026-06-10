@@ -27,7 +27,7 @@ export default function DashboardPipelineOverview({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold">Pipeline por etapa</p>
+              <p className="text-sm font-semibold text-slate-100">Pipeline por etapa</p>
               <span className="rounded-full border border-sky-400/15 bg-sky-500/[0.06] px-2 py-0.5 text-[9px] font-semibold text-sky-100">
                 {activeClients} ativos
               </span>
@@ -55,10 +55,10 @@ export default function DashboardPipelineOverview({
             return (
               <div
                 key={status}
-                className="metric-card min-w-0 rounded-xl p-2.5 transition-all duration-200 hover:border-slate-400/24 hover:shadow-lg hover:shadow-black/25"
+                className="metric-card min-w-0 rounded-xl p-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-400/24 hover:shadow-lg hover:shadow-black/25"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-[11px] font-semibold text-slate-300">{status}</p>
+                  <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">{status}</p>
 
                   <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] ${statusClass(status)}`}>
                     {clientCount}
@@ -69,7 +69,7 @@ export default function DashboardPipelineOverview({
                   <p className="truncate text-sm font-semibold text-slate-100">{money(statusValue)}</p>
 
                   <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full rounded-full bg-white/70" style={{ width: `${share}%` }} />
+                    <div className="h-full rounded-full bg-teal-200/80" style={{ width: `${share}%` }} />
                   </div>
                 </div>
 
@@ -103,7 +103,7 @@ function PipelineSignal({
 
   return (
     <div className={`metric-card rounded-xl border px-3 py-1.5 text-right ${classes}`}>
-      <p className="text-[9px] text-slate-500">{label}</p>
+      <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">{label}</p>
       <p className="text-xs font-semibold">{value}</p>
     </div>
   );

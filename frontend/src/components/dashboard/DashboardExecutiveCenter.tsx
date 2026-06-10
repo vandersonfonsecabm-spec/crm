@@ -29,7 +29,7 @@ export default function DashboardExecutiveCenter({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold">Centro executivo</p>
+              <p className="text-sm font-semibold text-slate-100">Centro executivo</p>
 
               <span className="rounded-full border border-emerald-300/15 bg-emerald-500/[0.06] px-2 py-0.5 text-[9px] font-semibold text-emerald-100">
                 visão consolidada
@@ -68,7 +68,7 @@ export default function DashboardExecutiveCenter({
 function ExecutiveSignal({ label, value }: { label: string; value: string }) {
   return (
     <div className="metric-card rounded-xl px-2.5 py-2 text-right">
-      <p className="text-[8px] uppercase tracking-[0.14em] text-slate-600">{label}</p>
+      <p className="text-[8px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
       <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-200">{value}</p>
     </div>
   );

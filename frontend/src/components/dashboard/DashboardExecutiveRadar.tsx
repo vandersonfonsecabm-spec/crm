@@ -25,19 +25,27 @@ export default function DashboardExecutiveRadar({
     .reduce((sum, client) => sum + client.value, 0);
 
   const topOpportunity = [...clients].sort((a, b) => b.value - a.value)[0];
+  const suggestedAction =
+    highRiskClients.length > 0
+      ? "Reativar clientes em risco antes de criar novas oportunidades."
+      : analytics.todayFollowUps > 0
+        ? "Priorizar follow-ups de hoje e propostas abertas."
+        : "Revisar oportunidades quentes e manter cadencia comercial.";
 
   return (
     <div className="saas-panel rounded-2xl p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <KanbanSquare size={15} className="text-slate-400" />
-          <div>
-            <p className="text-sm font-semibold">Radar executivo</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.06] text-teal-100">
+            <KanbanSquare size={15} />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-100">Radar executivo</p>
             <p className="mt-0.5 text-[10px] text-slate-500">Prioridades rapidas do funil</p>
           </div>
         </div>
 
-        <span className="saas-chip rounded-full px-2 py-1 text-[9px]">ao vivo</span>
+        <span className="saas-chip shrink-0 rounded-full px-2 py-1 text-[9px]">ao vivo</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -53,27 +61,23 @@ export default function DashboardExecutiveRadar({
         <FilterAction tone="sky" label="Risco" onClick={() => onApplySmartFilter("risk")} />
       </div>
 
-      <div className="saas-card mt-2 rounded-xl p-2">
+      <div className="metric-card mt-2 rounded-xl p-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold text-slate-200">Ação sugerida</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-              {highRiskClients.length > 0
-                ? "Reativar clientes em risco antes de criar novas oportunidades."
-                : analytics.todayFollowUps > 0
-                  ? "Priorizar follow-ups de hoje e propostas abertas."
-                  : "Revisar oportunidades quentes e manter cadencia comercial."}
-            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Acao sugerida</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">{suggestedAction}</p>
           </div>
 
-          <span className="saas-chip shrink-0 rounded-full px-2 py-0.5 text-[9px]">
-            prioridade
-          </span>
+          <span className="saas-chip shrink-0 rounded-full px-2 py-0.5 text-[9px]">prioridade</span>
         </div>
       </div>
 
       {topOpportunity && (
-        <div className="saas-card mt-2 rounded-xl p-2">
+        <button
+          type="button"
+          className="saas-row mt-2 w-full rounded-xl p-2 text-left"
+          onClick={() => onApplySmartFilter("proposal")}
+        >
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-[10px] font-semibold text-slate-200">{topOpportunity.name}</p>
@@ -81,16 +85,16 @@ export default function DashboardExecutiveRadar({
             </div>
 
             <div className="shrink-0 text-right">
-              <p className="text-[9px] text-slate-500">Maior ticket</p>
+              <p className="text-[9px] uppercase tracking-[0.12em] text-slate-600">Maior ticket</p>
               <p className="text-[10px] font-semibold text-slate-200">{money(topOpportunity.value)}</p>
             </div>
           </div>
-        </div>
+        </button>
       )}
 
       {silentClients.length > 0 && (
-        <p className="saas-card mt-2 rounded-xl px-2 py-1.5 text-[10px] text-slate-500">
-          {silentClients.length} cliente(s) sem contato recente pedem atenção.
+        <p className="metric-card mt-2 rounded-xl px-2 py-1.5 text-[10px] text-slate-500">
+          {silentClients.length} cliente(s) sem contato recente pedem atencao.
         </p>
       )}
     </div>
