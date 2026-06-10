@@ -30,7 +30,7 @@ export default function DashboardMetrics({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-100/70">Pipeline comercial</p>
-            <h2 className="mt-2 truncate text-[clamp(1.35rem,2vw,1.55rem)] font-semibold text-white">{money(analytics.totalValue)}</h2>
+            <h2 className="mt-2 max-w-full whitespace-nowrap text-2xl font-semibold leading-tight text-white">{money(analytics.totalValue)}</h2>
             <p className="mt-1 text-[11px] text-slate-400">Receita potencial com foco em follow-up e fechamento.</p>
           </div>
 
