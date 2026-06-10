@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, Clock, StickyNote } from "lucide-react";
+import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock, StickyNote } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
 
@@ -42,11 +42,50 @@ export default function DashboardAgendaPanel({
     }))
   );
 
+  const todayClients = agendaClients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje");
+  const totalAgendaValue = agendaClients.reduce((sum, client) => sum + client.value, 0);
+  const urgentClients = agendaClients
+    .sort((first, second) => {
+      if (first.nextFollowUp.toLowerCase() === "hoje" && second.nextFollowUp.toLowerCase() !== "hoje") return -1;
+      if (first.nextFollowUp.toLowerCase() !== "hoje" && second.nextFollowUp.toLowerCase() === "hoje") return 1;
+      if (first.lastContactDays !== second.lastContactDays) return second.lastContactDays - first.lastContactDays;
+      return second.value - first.value;
+    })
+    .slice(0, 8);
+
   return (
     <div className="space-y-4 pb-8">
+      <section className="grid gap-3 md:grid-cols-3">
+        <AgendaMetric
+          icon={<CalendarDays size={15} />}
+          title="Hoje"
+          value={`${todayClients.length} follow-ups`}
+          caption="Acoes do dia"
+          tone="revenue"
+        />
+        <AgendaMetric
+          icon={<AlertTriangle size={15} />}
+          title="Silenciosos"
+          value={`${silentClients.length} clientes`}
+          caption="Retomar contato"
+          tone="risk"
+        />
+        <AgendaMetric
+          icon={<CheckCircle2 size={15} />}
+          title="Valor agendado"
+          value={money(totalAgendaValue)}
+          caption="Pipeline em agenda"
+          tone="pipeline"
+        />
+      </section>
+
       <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
         <div className="saas-panel min-w-0 rounded-2xl p-4">
-          <PanelTitle icon={<Clock size={15} className="text-sky-300" />} title="Janelas de follow-up" hint="Agenda comercial por urgência e próxima ação." />
+          <PanelTitle
+            icon={<Clock size={15} className="text-sky-300" />}
+            title="Janelas de follow-up"
+            hint="Prioridade por prazo, urgencia e valor comercial."
+          />
 
           <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-3">
             {followUpAgenda.map((group) => {
@@ -66,7 +105,7 @@ export default function DashboardAgendaPanel({
                       <p className="mt-0.5 truncate text-[10px] text-slate-500">{group.hint}</p>
                     </div>
 
-                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+                    <span className="saas-chip rounded-full px-2 py-0.5 text-[10px] font-semibold">
                       {group.clients.length}
                     </span>
                   </div>
@@ -82,14 +121,17 @@ export default function DashboardAgendaPanel({
 
           <div className="saas-card mt-4 rounded-xl p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold text-slate-200">Fila do dia</p>
-              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-400">
+              <div>
+                <p className="text-xs font-semibold text-slate-200">Fila operacional</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">Clientes ordenados para acao rapida.</p>
+              </div>
+              <span className="saas-chip rounded-full px-2 py-0.5 text-[10px]">
                 {agendaClients.length} itens
               </span>
             </div>
 
             <div className="grid gap-2 md:grid-cols-2">
-              {agendaClients.slice(0, 6).map((client) => (
+              {urgentClients.map((client) => (
                 <button
                   key={`${client.agendaLabel}-${client.id}`}
                   onClick={() => onSelectClient(client.id)}
@@ -112,7 +154,11 @@ export default function DashboardAgendaPanel({
 
         <div className="min-w-0 space-y-4">
           <div className="saas-panel rounded-2xl p-4">
-            <PanelTitle icon={<AlertTriangle size={15} className="text-rose-300" />} title="Alertas operacionais" hint="Sinais que pedem ação antes de virar perda." />
+            <PanelTitle
+              icon={<AlertTriangle size={15} className="text-rose-300" />}
+              title="Alertas operacionais"
+              hint="Sinais que pedem acao antes de virar perda."
+            />
 
             <div className="mt-4 space-y-2">
               {smartAlerts.map((alert, index) => (
@@ -129,7 +175,11 @@ export default function DashboardAgendaPanel({
           </div>
 
           <div className="saas-panel rounded-2xl p-4">
-            <PanelTitle icon={<Bell size={15} className="text-amber-300" />} title="Clientes silenciosos" hint="Contatos parados para retomada." />
+            <PanelTitle
+              icon={<Bell size={15} className="text-amber-300" />}
+              title="Clientes silenciosos"
+              hint="Contatos parados para retomada."
+            />
 
             <div className="mt-4 space-y-2">
               {silentClients.length === 0 && <EmptyLine text="Nenhum cliente parado no momento." />}
@@ -152,12 +202,16 @@ export default function DashboardAgendaPanel({
       </section>
 
       <section className="saas-panel min-w-0 rounded-2xl p-4">
-        <PanelTitle icon={<StickyNote size={15} className="text-violet-300" />} title="Atividades recentes" hint="Notas e registros comerciais mais recentes." />
+        <PanelTitle
+          icon={<StickyNote size={15} className="text-slate-300" />}
+          title="Atividades recentes"
+          hint="Notas e registros comerciais mais recentes."
+        />
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {recentActivities.length === 0 && <EmptyLine text="Nenhuma atividade recente registrada." />}
           {recentActivities.slice(0, 6).map((activity) => (
-            <div key={activity.id} className="saas-card rounded-xl p-3">
+            <div key={activity.id} className="metric-card rounded-xl p-3">
               <div className="flex items-start justify-between gap-2">
                 <p className="truncate text-xs font-semibold text-slate-100">{activity.client}</p>
                 <span className="shrink-0 text-[10px] text-slate-500">{activity.date}</span>
@@ -167,6 +221,41 @@ export default function DashboardAgendaPanel({
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function AgendaMetric({
+  icon,
+  title,
+  value,
+  caption,
+  tone,
+}: {
+  icon: ReactNode;
+  title: string;
+  value: string;
+  caption: string;
+  tone: "pipeline" | "revenue" | "risk";
+}) {
+  const toneClass = {
+    pipeline: "metric-pipeline text-teal-100",
+    revenue: "metric-revenue text-sky-100",
+    risk: "metric-risk text-rose-100",
+  };
+
+  return (
+    <div className={`metric-card rounded-2xl p-3 ${toneClass[tone]}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] opacity-70">{title}</p>
+          <p className="mt-1.5 truncate text-base font-semibold">{value}</p>
+          <p className="mt-1 truncate text-[11px] text-slate-500">{caption}</p>
+        </div>
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.11] bg-white/[0.045]">
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }
