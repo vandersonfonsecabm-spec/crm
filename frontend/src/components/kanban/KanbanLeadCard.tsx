@@ -1,3 +1,4 @@
+import { GripVertical, MessageSquareText, Timer } from "lucide-react";
 import type { Client, Status } from "../../types/dashboard";
 
 type KanbanLeadCardProps = {
@@ -26,6 +27,7 @@ export default function KanbanLeadCard({
   initials,
   getLeadScore,
   getRisk,
+  forecastLabel,
   actionIntensity,
   slaLabel,
   priorityLabel,
@@ -85,7 +87,7 @@ export default function KanbanLeadCard({
         setIsDraggingKanban(false);
       }}
       onClick={() => setSelectedId(client.id)}
-      className={`saas-row group relative min-w-0 cursor-pointer overflow-hidden rounded-xl p-2.5 ${
+      className={`metric-card group relative min-w-0 cursor-grab overflow-hidden rounded-xl p-2.5 transition active:cursor-grabbing ${
         isSelected
           ? "border-teal-300/32 bg-teal-300/[0.055] shadow-[inset_2px_0_0_rgba(45,212,191,0.42),0_14px_32px_rgba(0,0,0,0.18)]"
           : ""
@@ -103,7 +105,7 @@ export default function KanbanLeadCard({
 
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-2">
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-500/16 bg-slate-900/70 text-[8px] font-bold text-slate-100">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-500/16 bg-slate-900/70 text-[8px] font-bold text-slate-100">
             {initials(client.name)}
           </div>
 
@@ -114,7 +116,8 @@ export default function KanbanLeadCard({
               </p>
 
               {client.notes.length > 0 && (
-                <span className="saas-chip shrink-0 rounded-full px-1 py-0.5 text-[8px]">
+                <span className="saas-chip inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px]">
+                  <MessageSquareText size={9} />
                   {client.notes.length}
                 </span>
               )}
@@ -126,9 +129,12 @@ export default function KanbanLeadCard({
           </div>
         </div>
 
-        <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8px] font-semibold ${scoreTone}`}>
-          {score}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className={`rounded-full border px-1.5 py-0.5 text-[8px] font-semibold ${scoreTone}`}>
+            {score}
+          </span>
+          <GripVertical size={12} className="text-slate-600 opacity-0 transition group-hover:opacity-100" />
+        </div>
       </div>
 
       <div className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2">
@@ -137,7 +143,7 @@ export default function KanbanLeadCard({
             {money(client.value)}
           </p>
           <p className="mt-0.5 truncate text-[8px] text-slate-500">
-            {interactionLabel}
+            {forecastLabel(client)}
           </p>
         </div>
 
@@ -147,8 +153,9 @@ export default function KanbanLeadCard({
       </div>
 
       <div className="mt-2 grid grid-cols-2 gap-1.5 text-[8px]">
-        <span className={`truncate rounded-full border px-1.5 py-0.5 font-medium ${slaTone}`}>
-          SLA {slaLabel(client)}
+        <span className={`inline-flex items-center gap-1 truncate rounded-full border px-1.5 py-0.5 font-medium ${slaTone}`}>
+          <Timer size={9} />
+          {slaLabel(client)}
         </span>
 
         <span className="truncate rounded-full border border-slate-500/16 bg-slate-950/25 px-1.5 py-0.5 font-medium text-slate-300">
@@ -157,7 +164,7 @@ export default function KanbanLeadCard({
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-2">
-        <div className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/10">
+        <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
           <div
             className={`h-full rounded-full ${
               intensity >= 85
@@ -171,7 +178,7 @@ export default function KanbanLeadCard({
         </div>
 
         <span className="shrink-0 truncate text-[8px] font-medium text-slate-500">
-          {priorityLabel(client)}
+          {priorityLabel(client)} - {interactionLabel}
         </span>
       </div>
     </div>

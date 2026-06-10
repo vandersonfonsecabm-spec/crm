@@ -105,7 +105,7 @@ export default function DashboardKanbanBoard({
         <div className="saas-panel flex flex-wrap items-center justify-between gap-2 rounded-2xl px-3 py-2.5">
           <div>
             <p className="text-sm font-semibold">Etapas do Kanban</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Navegue por grupos sem barra horizontal.</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Movimente leads por etapa e acompanhe gargalos sem barra horizontal.</p>
           </div>
 
           <div className="flex rounded-xl border border-slate-500/16 bg-slate-950/25 p-1">
@@ -160,7 +160,7 @@ export default function DashboardKanbanBoard({
                 }}
                 className={`saas-panel min-w-0 rounded-2xl p-2.5 transition-all duration-300 ${
                   isDropTarget
-                    ? "scale-[1.01] border-teal-300/40 bg-teal-300/[0.07] shadow-[0_18px_42px_rgba(0,0,0,0.22)]"
+                    ? "scale-[1.01] border-teal-300/40 bg-teal-300/[0.08] shadow-[0_18px_42px_rgba(0,0,0,0.24),inset_0_0_0_1px_rgba(45,212,191,0.16)]"
                     : ""
                 }`}
               >
@@ -210,9 +210,11 @@ export default function DashboardKanbanBoard({
 
                 <div className="space-y-1.5">
                   {stageClients.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-slate-500/18 bg-slate-950/20 p-3 text-center">
-                      <p className="text-[11px] font-semibold text-slate-400">Etapa vazia</p>
-                      <p className="mt-1 text-[9px] text-slate-600">Arraste um lead para esta coluna</p>
+                    <div className="metric-card rounded-xl border-dashed p-4 text-center">
+                      <p className="text-[11px] font-semibold text-slate-300">Etapa vazia</p>
+                      <p className="mt-1 text-[9px] text-slate-600">
+                        {isDraggingKanban ? "Solte aqui para mover o lead" : "Sem leads nesta etapa"}
+                      </p>
                     </div>
                   )}
 

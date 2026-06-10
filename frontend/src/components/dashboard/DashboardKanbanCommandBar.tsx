@@ -1,3 +1,5 @@
+import { AlertTriangle, BadgeDollarSign, Flame, GitBranch, Target, TrendingUp } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Client } from "../../types/dashboard";
 
 type DashboardKanbanCommandBarProps = {
@@ -28,20 +30,26 @@ export default function DashboardKanbanCommandBar({
   return (
     <div className="saas-panel rounded-2xl p-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold">Comando do Kanban</p>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Leitura executiva do funil sem ocupar espaço das colunas.
-          </p>
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.07] text-teal-100">
+            <GitBranch size={16} />
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">Comando do Kanban</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Leitura executiva do funil sem ocupar espaco das colunas.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <KanbanCommandPill label="Gargalo" value={biggestBottleneck} tone="default" />
-          <KanbanCommandPill label="Prioridade" value={`${hotLeads} leads`} tone="amber" />
-          <KanbanCommandPill label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
-          <KanbanCommandPill label="Silenciosos" value={`${stalledLeads} leads`} tone="rose" />
-          <KanbanCommandPill label="Receita prevista" value={money(expectedRevenue)} tone="emerald" />
-          <KanbanCommandPill label="Conversao" value={`${conversionRate}%`} tone="sky" />
+        <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto xl:grid-cols-6">
+          <KanbanCommandPill icon={<Target size={12} />} label="Gargalo" value={biggestBottleneck} tone="default" />
+          <KanbanCommandPill icon={<Flame size={12} />} label="Prioridade" value={`${hotLeads} leads`} tone="amber" />
+          <KanbanCommandPill icon={<GitBranch size={12} />} label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
+          <KanbanCommandPill icon={<AlertTriangle size={12} />} label="Silenciosos" value={`${stalledLeads} leads`} tone="rose" />
+          <KanbanCommandPill icon={<BadgeDollarSign size={12} />} label="Receita prevista" value={money(expectedRevenue)} tone="emerald" />
+          <KanbanCommandPill icon={<TrendingUp size={12} />} label="Conversao" value={`${conversionRate}%`} tone="sky" />
         </div>
       </div>
     </div>
@@ -49,26 +57,31 @@ export default function DashboardKanbanCommandBar({
 }
 
 function KanbanCommandPill({
+  icon,
   label,
   value,
   tone,
 }: {
+  icon: ReactNode;
   label: string;
   value: string;
   tone: "default" | "amber" | "violet" | "rose" | "emerald" | "sky";
 }) {
   const tones = {
-    default: "border-slate-500/16 bg-slate-950/25 text-slate-200",
-    amber: "border-slate-500/16 bg-slate-950/25 text-amber-100 shadow-[inset_2px_0_0_rgba(214,162,58,0.42)]",
-    violet: "border-slate-500/16 bg-slate-950/25 text-slate-200",
-    rose: "border-slate-500/16 bg-slate-950/25 text-rose-100 shadow-[inset_2px_0_0_rgba(224,105,123,0.4)]",
-    emerald: "border-slate-500/16 bg-slate-950/25 text-emerald-100 shadow-[inset_2px_0_0_rgba(16,185,129,0.42)]",
-    sky: "border-slate-500/16 bg-slate-950/25 text-sky-100 shadow-[inset_2px_0_0_rgba(56,189,248,0.38)]",
+    default: "metric-card text-slate-200",
+    amber: "metric-card metric-forecast text-amber-100",
+    violet: "metric-card text-slate-200",
+    rose: "metric-card metric-risk text-rose-100",
+    emerald: "metric-card metric-pipeline text-emerald-100",
+    sky: "metric-card metric-revenue text-sky-100",
   };
 
   return (
-    <div className={`rounded-xl border px-3 py-2 ${tones[tone]}`}>
-      <p className="text-[9px] opacity-65">{label}</p>
+    <div className={`rounded-xl px-3 py-2 ${tones[tone]}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[9px] opacity-65">{label}</p>
+        {icon}
+      </div>
       <p className="mt-0.5 truncate text-xs font-semibold">{value}</p>
     </div>
   );
