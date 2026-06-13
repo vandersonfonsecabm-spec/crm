@@ -352,10 +352,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             pageTitle={pageTitle}
             backendCaption={
               dashboardSummary
-                ? `${dashboardSummary.indicadores.clientes} clientes no backend`
+                ? `${dashboardSummary.indicadores.clientes} clientes sincronizados`
                 : dataSource === "backend"
-                  ? "Backend sincronizado"
-                  : "Modo offline"
+                  ? "Dados sincronizados"
+                  : "Dados locais"
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
           />

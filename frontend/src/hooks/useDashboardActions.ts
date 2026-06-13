@@ -98,7 +98,7 @@ export default function useDashboardActions({
         setClients((current) => current.map((client) => (client.id === id ? syncedClient : client)));
       }
     } catch {
-      showToast("Favorito alterado na tela. Backend nao confirmou.");
+      showToast("Favorito alterado na tela. A sincronização não foi confirmada.");
     }
   }
 
@@ -115,7 +115,7 @@ export default function useDashboardActions({
         setClients((current) => current.map((client) => (client.id === id ? syncedClient : client)));
       }
     } catch {
-      showToast("Marcacao quente alterada na tela. Backend nao confirmou.");
+      showToast("Marcação quente alterada na tela. A sincronização não foi confirmada.");
     }
   }
 
@@ -123,7 +123,7 @@ export default function useDashboardActions({
     const target = clients.find((client) => client.id === id);
     if (!target) return;
     if (target.status === status) {
-      showToast("Cliente ja esta nessa etapa.");
+      showToast("Cliente já está nessa etapa.");
       return;
     }
 
@@ -154,13 +154,13 @@ export default function useDashboardActions({
         };
 
         setClients((current) => current.map((client) => (client.id === id ? nextClient : client)));
-        showToast(syncedNote ? "Status e historico salvos no backend." : "Status salvo no backend.");
+        showToast(syncedNote ? "Status e histórico sincronizados." : "Status sincronizado.");
         return;
       }
 
       showToast("Status atualizado.");
     } catch {
-      showToast("Status atualizado na tela. Backend não confirmou.");
+      showToast("Status atualizado na tela. A sincronização não foi confirmada.");
     }
   }
 
@@ -174,12 +174,12 @@ export default function useDashboardActions({
       setClients((current) => current.map((client) => (client.id === editing.id ? nextClient : client)));
       setSelectedId(nextClient.id);
       setEditing(null);
-      showToast(syncedClient ? "Cliente atualizado no backend." : "Cliente atualizado.");
+      showToast(syncedClient ? "Cliente atualizado e sincronizado." : "Cliente atualizado.");
     } catch {
       setClients((current) => current.map((client) => (client.id === editing.id ? editing : client)));
       setSelectedId(editing.id);
       setEditing(null);
-      showToast("Cliente salvo localmente. Backend indisponível.");
+      showToast("Cliente salvo neste navegador. Sincronização indisponível.");
     }
   }
 
@@ -203,12 +203,12 @@ export default function useDashboardActions({
       setClients((current) => [nextClient, ...current]);
       setSelectedId(nextClient.id);
       setCreating(null);
-      showToast(syncedClient ? "Cliente criado no backend." : "Cliente criado.");
+      showToast(syncedClient ? "Cliente criado e sincronizado." : "Cliente criado.");
     } catch {
       setClients((current) => [newClient, ...current]);
       setSelectedId(newClient.id);
       setCreating(null);
-      showToast("Cliente criado localmente. Backend indisponível.");
+      showToast("Cliente criado neste navegador. Sincronização indisponível.");
     }
   }
 
@@ -220,13 +220,13 @@ export default function useDashboardActions({
         await deleteClienteOnBackend(target);
       }
     } catch {
-      showToast("Removido da tela, mas o backend não confirmou.");
+      showToast("Removido da tela, mas a sincronização não foi confirmada.");
     }
 
     setClients((current) => current.filter((client) => client.id !== id));
     if (selectedId === id) setSelectedId(null);
     setEditing(null);
-    showToast(dataSource === "backend" ? "Cliente removido do backend." : "Cliente removido.");
+    showToast(dataSource === "backend" ? "Cliente removido e sincronizado." : "Cliente removido.");
   }
 
   async function addNote() {
@@ -262,13 +262,13 @@ export default function useDashboardActions({
               : client
           )
         );
-        showToast("Nota salva no backend.");
+        showToast("Nota sincronizada.");
         return;
       }
 
       showToast("Nota adicionada.");
     } catch {
-      showToast("Nota adicionada na tela. Backend não confirmou.");
+      showToast("Nota adicionada na tela. A sincronização não foi confirmada.");
     }
   }
 
@@ -288,9 +288,9 @@ export default function useDashboardActions({
       if (syncedClient) {
         setClients((current) => current.map((client) => (client.id === selectedClient.id ? syncedClient : client)));
       }
-      showToast(syncedClient ? "Tag salva no backend." : "Tag adicionada.");
+      showToast(syncedClient ? "Tag salva e sincronizada." : "Tag adicionada.");
     } catch {
-      showToast("Tag adicionada na tela. Backend nao confirmou.");
+      showToast("Tag adicionada na tela. A sincronização não foi confirmada.");
     }
   }
 
@@ -306,13 +306,22 @@ export default function useDashboardActions({
       if (syncedClient) {
         setClients((current) => current.map((client) => (client.id === selectedClient.id ? syncedClient : client)));
       }
-      showToast(syncedClient ? "Tag removida do backend." : "Tag removida.");
+      showToast(syncedClient ? "Tag removida e sincronizada." : "Tag removida.");
     } catch {
-      showToast("Tag removida na tela. Backend nao confirmou.");
+      showToast("Tag removida na tela. A sincronização não foi confirmada.");
     }
   }
 
   function exportCsv() {
+    const confirmed = window.confirm(
+      "O CSV contém dados pessoais de clientes. Exporte apenas se houver finalidade comercial legítima e armazenamento seguro."
+    );
+
+    if (!confirmed) {
+      showToast("Exportação cancelada.");
+      return;
+    }
+
     const header = ["Nome", "Empresa", "Telefone", "Email", "Valor", "Status", "Origem", "Prioridade", "Risco", "Score"];
     const rows = clients.map((client) => [
       client.name,

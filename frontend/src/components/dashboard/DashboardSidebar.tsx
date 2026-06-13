@@ -46,7 +46,7 @@ export default function DashboardSidebar({
           </div>
 
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">CRM Agro</p>
+            <p className="truncate text-sm font-semibold">CRM Agro SaaS</p>
             <p className="truncate text-[11px] text-slate-500">Operação comercial</p>
           </div>
         </div>
@@ -215,16 +215,16 @@ export default function DashboardSidebar({
 
           <div className="mt-3 space-y-2">
             <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-              <p className="text-[11px] text-slate-200">Automações frontend</p>
+              <p className="text-[11px] text-slate-200">Automações</p>
               <p className="mt-0.5 text-[10px] text-slate-500">
-                Base pronta para regras comerciais.
+                Regras comerciais prontas para acompanhamento.
               </p>
             </div>
 
             <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-              <p className="text-[11px] text-slate-200">Próxima fase</p>
+              <p className="text-[11px] text-slate-200">Operação assistida</p>
               <p className="mt-0.5 text-[10px] text-slate-500">
-                Revisar ações automáticas e prioridades comerciais.
+                Ações automáticas acompanhadas pelo time comercial.
               </p>
             </div>
           </div>

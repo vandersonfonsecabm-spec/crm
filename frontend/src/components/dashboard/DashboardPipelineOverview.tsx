@@ -33,7 +33,7 @@ export default function DashboardPipelineOverview({
               </span>
             </div>
 
-            <p className="mt-0.5 text-[10px] text-slate-500">Distribuicao compacta de valor, volume e conversao.</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Distribuição compacta de valor, volume e conversão.</p>
           </div>
 
           <div className="flex items-center gap-2">

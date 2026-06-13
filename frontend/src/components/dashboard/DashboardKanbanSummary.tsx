@@ -40,12 +40,12 @@ export default function DashboardKanbanSummary({
               <p className="text-sm font-semibold">Pipeline Kanban</p>
 
               <span className="saas-chip rounded-full px-2 py-0.5 text-[9px] font-semibold">
-                visao executiva
+                visão executiva
               </span>
             </div>
 
             <p className="mt-0.5 text-[10px] text-slate-500">
-              {kanbanClientsCount} leads na visao atual -{" "}
+              {kanbanClientsCount} leads na visão atual -{" "}
               {kanbanOwnerFilter === "Todos" ? "todos os vendedores" : `vendedor ${kanbanOwnerFilter}`}
             </p>
           </div>
@@ -62,7 +62,7 @@ export default function DashboardKanbanSummary({
       <div className="mt-3 grid gap-2 md:grid-cols-4">
         <ProgressSignal
           icon={<TrendingUp size={12} />}
-          label="Conversao"
+          label="Conversão"
           value={`${kanbanEnterpriseStats.conversionRate}%`}
           progress={Math.min(100, kanbanEnterpriseStats.conversionRate)}
           tone="emerald"
@@ -70,7 +70,7 @@ export default function DashboardKanbanSummary({
 
         <ProgressSignal
           icon={<Gauge size={12} />}
-          label="Score medio"
+          label="Score médio"
           value={`${kanbanEnterpriseStats.averageScore}/100`}
           progress={kanbanEnterpriseStats.averageScore}
           tone="sky"
@@ -80,14 +80,14 @@ export default function DashboardKanbanSummary({
           icon={<GitBranch size={12} />}
           label="Pipeline ativo"
           value={`${kanbanEnterpriseStats.activePipeline} leads`}
-          hint="Leads ainda em negociacao antes de fechamento ou perda."
+          hint="Leads ainda em negociação antes de fechamento ou perda."
         />
 
         <TextSignal
           icon={<CalendarDays size={12} />}
           label="Follow-ups hoje"
           value={String(kanbanEnterpriseStats.todayFollowUps)}
-          hint="Acoes que precisam de atencao imediata."
+          hint="Ações que precisam de atenção imediata."
         />
       </div>
     </div>

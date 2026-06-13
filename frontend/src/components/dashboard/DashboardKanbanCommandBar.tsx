@@ -38,7 +38,7 @@ export default function DashboardKanbanCommandBar({
           <div className="min-w-0">
             <p className="text-sm font-semibold">Comando do Kanban</p>
             <p className="mt-1 text-[11px] text-slate-500">
-              Leitura executiva do funil sem ocupar espaco das colunas.
+              Leitura executiva do funil sem ocupar espaço das colunas.
             </p>
           </div>
         </div>
@@ -49,7 +49,7 @@ export default function DashboardKanbanCommandBar({
           <KanbanCommandPill icon={<GitBranch size={12} />} label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
           <KanbanCommandPill icon={<AlertTriangle size={12} />} label="Silenciosos" value={`${stalledLeads} leads`} tone="rose" />
           <KanbanCommandPill icon={<BadgeDollarSign size={12} />} label="Receita prevista" value={money(expectedRevenue)} tone="emerald" />
-          <KanbanCommandPill icon={<TrendingUp size={12} />} label="Conversao" value={`${conversionRate}%`} tone="sky" />
+          <KanbanCommandPill icon={<TrendingUp size={12} />} label="Conversão" value={`${conversionRate}%`} tone="sky" />
         </div>
       </div>
     </div>

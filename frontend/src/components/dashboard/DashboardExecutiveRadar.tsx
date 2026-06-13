@@ -30,7 +30,7 @@ export default function DashboardExecutiveRadar({
       ? "Reativar clientes em risco antes de criar novas oportunidades."
       : analytics.todayFollowUps > 0
         ? "Priorizar follow-ups de hoje e propostas abertas."
-        : "Revisar oportunidades quentes e manter cadencia comercial.";
+        : "Revisar oportunidades quentes e manter cadência comercial.";
 
   return (
     <div className="saas-panel rounded-2xl p-3">
@@ -41,7 +41,7 @@ export default function DashboardExecutiveRadar({
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-100">Radar executivo</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Prioridades rapidas do funil</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Prioridades rápidas do funil</p>
           </div>
         </div>
 
@@ -51,7 +51,7 @@ export default function DashboardExecutiveRadar({
       <div className="grid grid-cols-2 gap-2">
         <RadarMetric label="Risco alto" value={`${highRiskClients.length} leads`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
         <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
-        <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} acoes`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
+        <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
         <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-slate-300" />} />
       </div>
 
@@ -64,7 +64,7 @@ export default function DashboardExecutiveRadar({
       <div className="metric-card mt-2 rounded-xl p-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Acao sugerida</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Ação sugerida</p>
             <p className="mt-1 text-[10px] leading-relaxed text-slate-500">{suggestedAction}</p>
           </div>
 
@@ -94,7 +94,7 @@ export default function DashboardExecutiveRadar({
 
       {silentClients.length > 0 && (
         <p className="metric-card mt-2 rounded-xl px-2 py-1.5 text-[10px] text-slate-500">
-          {silentClients.length} cliente(s) sem contato recente pedem atencao.
+          {silentClients.length} cliente(s) sem contato recente pedem atenção.
         </p>
       )}
     </div>

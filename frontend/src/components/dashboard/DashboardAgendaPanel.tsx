@@ -60,7 +60,7 @@ export default function DashboardAgendaPanel({
           icon={<CalendarDays size={15} />}
           title="Hoje"
           value={`${todayClients.length} follow-ups`}
-          caption="Acoes do dia"
+          caption="Ações do dia"
           tone="revenue"
         />
         <AgendaMetric
@@ -84,7 +84,7 @@ export default function DashboardAgendaPanel({
           <PanelTitle
             icon={<Clock size={15} className="text-sky-300" />}
             title="Janelas de follow-up"
-            hint="Prioridade por prazo, urgencia e valor comercial."
+            hint="Prioridade por prazo, urgência e valor comercial."
           />
 
           <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-3">
@@ -123,7 +123,7 @@ export default function DashboardAgendaPanel({
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold text-slate-200">Fila operacional</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Clientes ordenados para acao rapida.</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">Clientes ordenados para ação rápida.</p>
               </div>
               <span className="saas-chip rounded-full px-2 py-0.5 text-[10px]">
                 {agendaClients.length} itens
@@ -157,7 +157,7 @@ export default function DashboardAgendaPanel({
             <PanelTitle
               icon={<AlertTriangle size={15} className="text-rose-300" />}
               title="Alertas operacionais"
-              hint="Sinais que pedem acao antes de virar perda."
+              hint="Sinais que pedem ação antes de virar perda."
             />
 
             <div className="mt-4 space-y-2">

@@ -70,7 +70,7 @@ export default function DashboardClientTimeline({
                   ? "Priorizar contato hoje e conduzir para fechamento."
                   : getRisk(selectedClient) === "Alto"
                     ? "Reativar com mensagem objetiva antes de mover para perdido."
-                    : "Manter cadencia de follow-up e registrar resposta do cliente."}
+                    : "Manter cadência de follow-up e registrar resposta do cliente."}
               </p>
             </div>
           </div>

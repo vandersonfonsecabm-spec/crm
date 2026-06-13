@@ -35,10 +35,10 @@ export default function DashboardPortfolioInsights({
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-slate-100">Qualidade da carteira</p>
-            <p className="mt-1 text-[11px] text-slate-500">Saude comercial, prioridade e risco em leitura rapida.</p>
+            <p className="mt-1 text-[11px] text-slate-500">Saúde comercial, prioridade e risco em leitura rápida.</p>
           </div>
 
-          <span className="saas-chip rounded-full px-2 py-1 text-[10px] font-semibold">padrao premium</span>
+          <span className="saas-chip rounded-full px-2 py-1 text-[10px] font-semibold">carteira ativa</span>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -51,14 +51,14 @@ export default function DashboardPortfolioInsights({
           />
           <InsightMetric
             icon={<Flame size={14} className="text-rose-300" />}
-            label="Alta atencao"
+            label="Alta atenção"
             value={String(highAttentionCount)}
             progress={Math.min(100, highAttentionCount * 14)}
             tone="rose"
           />
           <InsightMetric
             icon={<AlertTriangle size={14} className="text-amber-300" />}
-            label="Requer acao"
+            label="Requer ação"
             value={String(highRiskCount)}
             progress={Math.min(100, highRiskCount * 18)}
             tone="amber"

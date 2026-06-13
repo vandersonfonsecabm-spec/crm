@@ -15,7 +15,7 @@ export function Login({ onLogin }: LoginProps) {
 
   async function handleBackendLogin() {
     if (!email.trim() || !senha.trim()) {
-      setMessage("Informe email e senha para conectar ao backend.");
+      setMessage("Informe e-mail e senha para acessar.");
       return;
     }
 
@@ -26,7 +26,7 @@ export function Login({ onLogin }: LoginProps) {
       await loginWithBackend(email.trim(), senha);
       onLogin();
     } catch {
-      setMessage("Nao foi possivel entrar pelo backend. Use o modo demo ou confira a API.");
+      setMessage("Não foi possível conectar com estes dados. Revise o acesso ou use o fluxo comercial guiado.");
     } finally {
       setIsLoading(false);
     }
@@ -40,7 +40,7 @@ export function Login({ onLogin }: LoginProps) {
       await loginDemoWithBackend();
       onLogin();
     } catch {
-      setMessage("Demo indisponivel. Rode o seed/backend ou entre offline por enquanto.");
+      setMessage("Demonstração indisponível no momento. Tente novamente em instantes.");
     } finally {
       setIsLoading(false);
     }
@@ -63,21 +63,21 @@ export function Login({ onLogin }: LoginProps) {
 
             <div className="mt-10 max-w-xl">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Operacao comercial
+                Operação comercial
               </p>
               <h1 className="mt-3 text-4xl font-semibold leading-tight text-slate-50">
                 Acesso seguro ao painel de vendas e atendimento.
               </h1>
               <p className="mt-4 max-w-lg text-sm leading-6 text-slate-400">
-                Carteira, pipeline, agenda e decisao comercial em um ambiente unico para o time operar com clareza.
+                Carteira, pipeline, agenda e decisão comercial em um ambiente único para o time operar com clareza.
               </p>
             </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
-            <LoginSignal icon={<ShieldCheck size={15} />} label="Sessao" value="Protegida" tone="pipeline" />
+            <LoginSignal icon={<ShieldCheck size={15} />} label="Sessão" value="Protegida" tone="pipeline" />
             <LoginSignal icon={<Database size={15} />} label="Dados" value="Backend" tone="revenue" />
-            <LoginSignal icon={<Wifi size={15} />} label="Demo" value="Disponivel" tone="forecast" />
+            <LoginSignal icon={<Wifi size={15} />} label="Acesso" value="Disponível" tone="forecast" />
           </div>
         </div>
 
@@ -89,7 +89,7 @@ export function Login({ onLogin }: LoginProps) {
               </div>
 
               <div className="min-w-0">
-                <p className="text-base font-semibold leading-tight">CRM Enterprise</p>
+                <p className="text-base font-semibold leading-tight">CRM Agro SaaS</p>
                 <p className="mt-1 text-[11px] text-slate-500">Acesso operacional</p>
               </div>
             </div>
@@ -108,14 +108,14 @@ export function Login({ onLogin }: LoginProps) {
           >
             <label className="block">
               <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                Email
+                E-mail
               </span>
               <div className="flex items-center gap-2 rounded-xl border border-slate-500/16 bg-slate-950/35 px-3 py-2.5 transition focus-within:border-teal-300/28 focus-within:bg-slate-900/70">
                 <Mail size={15} className="shrink-0 text-slate-500" />
                 <input
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="demo@crm.com"
+                  placeholder="contato@crmagro.com.br"
                   autoComplete="email"
                   className="min-w-0 flex-1 bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-600"
                 />
@@ -150,7 +150,7 @@ export function Login({ onLogin }: LoginProps) {
               disabled={isLoading}
               className="premium-button mt-1 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isLoading ? "Conectando..." : "Entrar com backend"}
+              {isLoading ? "Conectando..." : "Entrar com acesso conectado"}
               {!isLoading && <ArrowRight size={15} />}
             </button>
           </form>
@@ -162,8 +162,8 @@ export function Login({ onLogin }: LoginProps) {
               disabled={isLoading}
               className="saas-action rounded-xl px-3 py-3 text-left text-xs font-semibold text-teal-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span className="block">Entrar demo</span>
-              <span className="mt-0.5 block text-[10px] font-normal text-slate-500">Base pronta para teste</span>
+              <span className="block">Conhecer fluxo comercial</span>
+              <span className="mt-0.5 block text-[10px] font-normal text-slate-500">Acesso comercial guiado</span>
             </button>
 
             <button
@@ -172,8 +172,8 @@ export function Login({ onLogin }: LoginProps) {
               disabled={isLoading}
               className="saas-action rounded-xl px-3 py-3 text-left text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span className="block">Entrar offline</span>
-              <span className="mt-0.5 block text-[10px] font-normal text-slate-500">Usar dados locais</span>
+              <span className="block">Continuar com dados locais</span>
+              <span className="mt-0.5 block text-[10px] font-normal text-slate-500">Abrir carteira salva neste navegador</span>
             </button>
           </div>
 
@@ -185,7 +185,7 @@ export function Login({ onLogin }: LoginProps) {
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold text-slate-200">Ambiente de acesso</p>
                 <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                  Use backend para sessao real, demo para validar rapidamente ou offline durante ajustes locais.
+                  Use o acesso principal para operação conectada ou o fluxo guiado para conhecer a experiência comercial.
                 </p>
               </div>
             </div>

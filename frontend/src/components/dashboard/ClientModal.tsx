@@ -82,7 +82,7 @@ export default function ClientModal({
           </div>
 
           <div>
-            <label className={fieldLabelClass}>Email</label>
+            <label className={fieldLabelClass}>E-mail</label>
             <input
               value={client.email}
               onChange={(event) => setClient({ ...client, email: event.target.value })}

@@ -55,7 +55,7 @@ export default function DashboardTopbar({
         <div className="hidden h-4 w-px bg-white/10 md:block" />
 
         <span className="hidden rounded-full border border-slate-500/14 bg-slate-950/30 px-2 py-1 text-[10px] text-slate-400 xl:inline-flex">
-          vers&atilde;o demo
+          ambiente comercial
         </span>
       </div>
 

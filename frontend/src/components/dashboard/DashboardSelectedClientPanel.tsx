@@ -100,11 +100,11 @@ export default function DashboardSelectedClientPanel({
           />
           <ContactRow
             icon={<Mail size={12} />}
-            label="Email"
-            value={selectedClient.email || "Email não informado"}
+            label="E-mail"
+            value={selectedClient.email || "E-mail não informado"}
             onCopy={
               selectedClient.email
-                ? () => onCopyText(selectedClient.email, "Email copiado.")
+                ? () => onCopyText(selectedClient.email, "E-mail copiado.")
                 : undefined
             }
           />

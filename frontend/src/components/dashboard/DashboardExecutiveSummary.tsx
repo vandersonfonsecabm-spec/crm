@@ -20,7 +20,7 @@ export default function DashboardExecutiveSummary({ analytics }: DashboardExecut
       <div className="grid gap-3 md:grid-cols-3">
         <SummaryCard
           icon={<CalendarCheck size={14} className="text-sky-300" />}
-          label="Proximas acoes"
+          label="Próximas ações"
           value={`${analytics.todayFollowUps} follow-ups`}
           helper="Agenda de hoje"
           tone="sky"
@@ -34,7 +34,7 @@ export default function DashboardExecutiveSummary({ analytics }: DashboardExecut
         />
         <SummaryCard
           icon={<Gauge size={14} className="text-emerald-300" />}
-          label="Score medio"
+          label="Score médio"
           value={`${analytics.averageScore}/100`}
           helper="Qualidade geral"
           tone="emerald"

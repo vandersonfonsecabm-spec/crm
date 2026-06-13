@@ -56,7 +56,7 @@ export default function DashboardCommercialDecisionCenter({
 
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-100">Central comercial</p>
-              <p className="text-[10px] text-slate-500">Decisao, risco e acao imediata</p>
+              <p className="text-[10px] text-slate-500">Decisão, risco e ação imediata</p>
             </div>
           </div>
 
@@ -92,7 +92,7 @@ export default function DashboardCommercialDecisionCenter({
 
             <div className="saas-tile mt-3 rounded-xl p-3">
               <div className="mb-2 flex items-center justify-between gap-2 text-[10px]">
-                <span className="font-semibold text-slate-100">Acao recomendada</span>
+                <span className="font-semibold text-slate-100">Ação recomendada</span>
                 <span className="saas-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]">
                   <ShieldCheck size={10} />
                   agora
@@ -103,12 +103,12 @@ export default function DashboardCommercialDecisionCenter({
 
             <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
               <DecisionMini label="Prioridade" value={priorityLabel(selectedClient)} />
-              <DecisionMini label="Saude" value={slaLabel(selectedClient)} />
+              <DecisionMini label="Saúde" value={slaLabel(selectedClient)} />
             </div>
 
             <div className="mt-3">
               <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
-                <span>Forca comercial</span>
+                <span>Força comercial</span>
                 <span>{leadScore}%</span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -151,7 +151,7 @@ export default function DashboardCommercialDecisionCenter({
           <div className="mt-3 grid grid-cols-2 gap-2">
             <RadarMetric label="Risco alto" value={`${highRiskClients.length} leads`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
             <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
-            <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} acoes`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
+            <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
             <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-slate-300" />} />
           </div>
         )}

@@ -110,7 +110,7 @@ export async function loginWithBackend(email: string, senha: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Login inválido ou backend indisponível.");
+    throw new Error("Login inválido ou sincronização indisponível.");
   }
 
   const data = (await response.json()) as ApiAuthResponse;
@@ -125,15 +125,15 @@ export async function loginDemoWithBackend() {
   } catch {
     setAuthToken(DEMO_TOKEN);
     setAuthUser({
-      nome: "Demo local",
-      email: "demo@crm.com",
+      nome: "Acesso guiado",
+      email: "marco@crmagro.com.br",
     });
 
     return {
       access_token: DEMO_TOKEN,
       user: {
-        nome: "Demo local",
-        email: "demo@crm.com",
+        nome: "Acesso guiado",
+        email: "marco@crmagro.com.br",
       },
     };
   }
@@ -148,7 +148,7 @@ export async function fetchClientesFromBackend() {
   });
 
   if (!response.ok) {
-    throw new Error("Não foi possível carregar clientes do backend.");
+    throw new Error("Não foi possível carregar clientes sincronizados.");
   }
 
   const clientes = (await response.json()) as ApiCliente[];
@@ -164,7 +164,7 @@ export async function fetchDashboardSummaryFromBackend() {
   });
 
   if (!response.ok) {
-    throw new Error("Nao foi possivel carregar o resumo do backend.");
+    throw new Error("Não foi possível carregar o resumo sincronizado.");
   }
 
   return (await response.json()) as ApiDashboardSummary;
@@ -209,7 +209,7 @@ export async function createNotaOnBackend(client: Client, text: string) {
   });
 
   if (!response.ok) {
-    throw new Error("Não foi possível criar nota no backend.");
+    throw new Error("Não foi possível sincronizar a nota.");
   }
 
   const nota = (await response.json()) as ApiNota;
@@ -234,7 +234,7 @@ async function requestCliente(method: "POST" | "PATCH" | "PUT" | "DELETE", path:
   });
 
   if (!response.ok) {
-    throw new Error("Operação no backend falhou.");
+    throw new Error("A sincronização não foi concluída.");
   }
 
   if (method === "DELETE") return null;
@@ -270,7 +270,7 @@ function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
     email: cliente.email ?? "",
     value,
     status,
-    source: fallback?.source ?? cliente.origem ?? "Backend",
+    source: fallback?.source ?? cliente.origem ?? "Sincronizado",
     favorite: fallback?.favorite ?? Boolean(cliente.favorito),
     hot: fallback?.hot ?? (Boolean(cliente.quente) || value >= 12000 || status === "Proposta"),
     lastContactDays: fallback?.lastContactDays ?? cliente.ultimoContato ?? 0,
@@ -329,13 +329,13 @@ function extractCompany(cliente: ApiCliente) {
 
 function parseTags(tags?: string[] | string | null) {
   if (Array.isArray(tags)) return tags.map(String);
-  if (!tags) return ["Backend"];
+  if (!tags) return ["Sincronizado"];
 
   try {
     const parsed = JSON.parse(tags);
-    return Array.isArray(parsed) ? parsed.map(String) : ["Backend"];
+    return Array.isArray(parsed) ? parsed.map(String) : ["Sincronizado"];
   } catch {
-    return ["Backend"];
+    return ["Sincronizado"];
   }
 }
 
@@ -351,7 +351,7 @@ function buildNotes(cliente: ApiCliente): Note[] {
     {
       id: 1,
       text,
-      date: "Registro do backend",
+      date: "Registro sincronizado",
       createdAt: cliente.createdAt ? new Date(cliente.createdAt).getTime() : undefined,
     },
   ];

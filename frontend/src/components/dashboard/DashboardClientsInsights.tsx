@@ -41,7 +41,7 @@ export default function DashboardClientsInsights({
           <div>
             <p className="text-sm font-semibold">Resumo da carteira</p>
             <p className="mt-0.5 text-[10px] text-slate-500">
-              Leitura rapida da carteira atual, sem disputar atencao com a lista.
+              Leitura rápida da carteira atual, sem disputar atenção com a lista.
             </p>
           </div>
 
@@ -52,23 +52,23 @@ export default function DashboardClientsInsights({
 
         <div className="grid gap-2 md:grid-cols-2">
           <MetricCard compact title="Potencial" value={money(totalPotential)} caption="Receita em carteira" icon={<Target size={14} />} tone="pipeline" />
-          <MetricCard compact title="Quentes" value={`${hotClients.length} clientes`} caption="Oportunidades prioritarias" icon={<Flame size={14} />} tone="risk" />
-          <MetricCard compact title="Atencao" value={`${riskClients.length} clientes`} caption="Risco alto" icon={<AlertTriangle size={14} />} tone="forecast" />
-          <MetricCard compact title="Hoje" value={`${todayFollowUps.length} acoes`} caption="Follow-ups do dia" icon={<Users size={14} />} tone="revenue" />
+          <MetricCard compact title="Quentes" value={`${hotClients.length} clientes`} caption="Oportunidades prioritárias" icon={<Flame size={14} />} tone="risk" />
+          <MetricCard compact title="Atenção" value={`${riskClients.length} clientes`} caption="Risco alto" icon={<AlertTriangle size={14} />} tone="forecast" />
+          <MetricCard compact title="Hoje" value={`${todayFollowUps.length} ações`} caption="Follow-ups do dia" icon={<Users size={14} />} tone="revenue" />
         </div>
       </div>
 
       <div className="saas-panel rounded-2xl p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold">Inteligencia comercial</p>
+            <p className="text-sm font-semibold">Inteligência comercial</p>
             <p className="mt-0.5 text-[10px] text-slate-500">
-              Destaques automaticos da carteira atual.
+              Destaques automáticos da carteira atual.
             </p>
           </div>
 
           <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
-            Conversao {conversionRate}%
+            Conversão {conversionRate}%
           </span>
         </div>
 
@@ -103,7 +103,7 @@ export default function DashboardClientsInsights({
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Gauge size={14} className="text-slate-500" />
-                <p className="text-xs font-semibold text-slate-200">Distribuicao por status</p>
+                <p className="text-xs font-semibold text-slate-200">Distribuição por status</p>
               </div>
               <span className="text-[10px] text-slate-500">{clients.length} total</span>
             </div>

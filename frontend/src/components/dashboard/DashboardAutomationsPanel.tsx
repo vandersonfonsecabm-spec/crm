@@ -15,7 +15,7 @@ type AutomationCardItem = {
 
 const automationCards: AutomationCardItem[] = [
   {
-    title: "Follow-up automatico",
+    title: "Follow-up automático",
     desc: "Agenda lembretes por etapa, prioridade e tempo sem contato.",
     badge: "Ativo",
     tone: "sky",
@@ -33,21 +33,21 @@ const automationCards: AutomationCardItem[] = [
     icon: <Flame size={14} className="text-rose-300" />,
   },
   {
-    title: "Mensagens rapidas",
+    title: "Mensagens rápidas",
     desc: "Organiza modelos para WhatsApp, retomada e proposta.",
     badge: "Template",
     tone: "emerald",
     progress: "64%",
-    impact: "Medio",
+    impact: "Médio",
     icon: <MessageCircle size={14} className="text-emerald-300" />,
   },
 ];
 
 const journeyRules = [
-  { title: "Novo lead recebido", desc: "Criar tarefa de primeiro contato em ate 15 minutos.", status: "Ligado" },
-  { title: "Proposta sem resposta", desc: "Sugerir retomada apos 2 dias sem atividade.", status: "Ligado" },
-  { title: "Cliente em risco", desc: "Alertar vendedor apos 7 dias sem contato.", status: "Ligado" },
-  { title: "Lead perdido", desc: "Agendar reativacao comercial em 30 dias.", status: "Rascunho" },
+  { title: "Novo lead recebido", desc: "Criar tarefa de primeiro contato em até 15 minutos.", status: "Ligado" },
+  { title: "Proposta sem resposta", desc: "Sugerir retomada após 2 dias sem atividade.", status: "Ligado" },
+  { title: "Cliente em risco", desc: "Alertar vendedor após 7 dias sem contato.", status: "Ligado" },
+  { title: "Lead perdido", desc: "Agendar reativação comercial em 30 dias.", status: "Rascunho" },
 ];
 
 export default function DashboardAutomationsPanel() {
@@ -64,7 +64,7 @@ export default function DashboardAutomationsPanel() {
               </div>
 
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-100">Central de automacoes</p>
+                <p className="text-sm font-semibold text-slate-100">Central de automações</p>
                 <p className="mt-0.5 text-[11px] text-slate-500">Regras para acelerar atendimento, retomada e follow-up.</p>
               </div>
             </div>
@@ -93,7 +93,7 @@ export default function DashboardAutomationsPanel() {
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-slate-100">Jornadas comerciais</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">Regras prontas para operar com supervisao humana.</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Regras prontas para operar com supervisão humana.</p>
             </div>
             <span className="saas-chip rounded-full px-2 py-1 text-[10px]">{journeyRules.length} regras</span>
           </div>
@@ -131,7 +131,7 @@ export default function DashboardAutomationsPanel() {
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-slate-100">Leitura inteligente</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">Proxima automacao sugerida.</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Próxima automação sugerida.</p>
             </div>
             <Sparkles size={15} className="text-slate-300" />
           </div>
@@ -162,7 +162,7 @@ export default function DashboardAutomationsPanel() {
             </div>
 
             <button className="saas-action flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] text-slate-300">
-              <span>Preparar proxima automacao</span>
+              <span>Preparar próxima automação</span>
               <Clock3 size={13} className="text-slate-500" />
             </button>
           </div>

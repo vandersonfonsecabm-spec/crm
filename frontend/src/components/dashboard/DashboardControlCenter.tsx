@@ -69,7 +69,7 @@ export default function DashboardControlCenter({
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-100">Comercial</p>
               <p className="mt-0.5 text-[11px] text-slate-500">
-                Prioridades, oportunidades e proximas acoes em um painel limpo.
+                Prioridades, oportunidades e próximas ações em um painel limpo.
               </p>
             </div>
           </div>
@@ -88,11 +88,11 @@ export default function DashboardControlCenter({
           <div className="saas-panel rounded-2xl p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-slate-100">Sinais criticos</p>
+                <p className="text-sm font-semibold text-slate-100">Sinais críticos</p>
                 <p className="mt-0.5 text-[10px] text-slate-500">Filtros inteligentes para decidir onde agir primeiro.</p>
               </div>
 
-              <span className="saas-chip rounded-full px-2 py-1 text-[9px]">leitura rapida</span>
+              <span className="saas-chip rounded-full px-2 py-1 text-[9px]">leitura rápida</span>
             </div>
 
             <div className="grid gap-2 md:grid-cols-3">
@@ -116,11 +116,11 @@ export default function DashboardControlCenter({
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-base font-semibold text-slate-100">Fila comercial</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Leads ordenados por urgencia, score e potencial de receita.</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">Leads ordenados por urgência, score e potencial de receita.</p>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <QueueBadge label="Criticos" value={String(highPriorityCount)} tone="rose" />
+                <QueueBadge label="Críticos" value={String(highPriorityCount)} tone="rose" />
                 <QueueBadge label="Propostas" value={String(proposalCount)} tone="amber" />
               </div>
             </div>
@@ -181,7 +181,7 @@ export default function DashboardControlCenter({
           <div className="saas-panel rounded-2xl p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-slate-100">Acoes rapidas</p>
+                <p className="text-sm font-semibold text-slate-100">Ações rápidas</p>
                 <p className="mt-0.5 text-[10px] text-slate-500">Comandos diretos para limpar a fila.</p>
               </div>
 
@@ -216,7 +216,7 @@ export default function DashboardControlCenter({
           <div className="saas-panel rounded-2xl p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-100">Ultimas atividades</p>
+                <p className="text-sm font-semibold text-slate-100">Últimas atividades</p>
                 <p className="mt-0.5 text-[10px] text-slate-500">Movimentos recentes da carteira.</p>
               </div>
 

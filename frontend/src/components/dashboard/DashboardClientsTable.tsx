@@ -120,7 +120,7 @@ function ClientsHeader({
 
         <div className="min-w-0">
           <p className="text-sm font-semibold">Carteira de clientes</p>
-          <p className="mt-0.5 text-[10px] text-slate-500">Lista priorizada por valor, score e proxima acao.</p>
+          <p className="mt-0.5 text-[10px] text-slate-500">Lista priorizada por valor, score e próxima ação.</p>
         </div>
       </div>
 
@@ -129,7 +129,7 @@ function ClientsHeader({
           {filteredClientsCount} registros
         </span>
         <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
-          Pagina {page}/{totalPages}
+          Página {page}/{totalPages}
         </span>
       </div>
     </div>
@@ -236,8 +236,8 @@ function ClientRowCard({
       <div className="grid min-w-0 grid-cols-2 gap-2 md:block md:space-y-2">
         <CompactInfo label="Follow-up" value={client.nextFollowUp} hint={`Inativo: ${idleLabel(client)}`} />
         <div className="grid grid-cols-2 gap-1.5">
-          <CompactContact icon={<Phone size={11} />} value={client.phone} />
-          <CompactContact icon={<Mail size={11} />} value={client.email || "sem email"} />
+          <CompactContact icon={<Phone size={11} />} value={maskPhone(client.phone)} />
+          <CompactContact icon={<Mail size={11} />} value={maskEmail(client.email)} />
         </div>
         <div className="grid grid-cols-2 gap-1.5">
           <span className={`rounded-full border px-2 py-1 text-[10px] ${priorityClass(priority)}`}>
@@ -387,7 +387,7 @@ function ClientsFooter({
       </button>
 
       <p className="text-[11px] text-slate-500">
-        Pagina <span className="font-semibold text-slate-300">{page}</span> de {totalPages} -{" "}
+        Página <span className="font-semibold text-slate-300">{page}</span> de {totalPages} -{" "}
         <span className="font-semibold text-slate-300">{visibleClientsCount}</span> de {filteredClientsCount}
       </p>
 
@@ -396,7 +396,7 @@ function ClientsFooter({
         disabled={page === totalPages}
         className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        Proxima
+        Próxima
         <ChevronRight size={13} />
       </button>
     </div>
@@ -419,4 +419,17 @@ function scoreClass(score: number) {
   if (score >= 80) return "bg-emerald-300";
   if (score >= 60) return "bg-amber-300";
   return "bg-slate-400";
+}
+
+function maskPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length <= 6) return phone || "não informado";
+  return `${digits.slice(0, 4)}****${digits.slice(-4)}`;
+}
+
+function maskEmail(email?: string) {
+  if (!email) return "e-mail protegido";
+  const [name, domain] = email.split("@");
+  if (!name || !domain) return "e-mail protegido";
+  return `${name[0] ?? "*"}***@${domain}`;
 }
