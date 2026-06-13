@@ -38,7 +38,7 @@ export default function DashboardSidebar({
   applySmartFilter,
 }: DashboardSidebarProps) {
   return (
-    <aside className="hidden h-screen w-64 shrink-0 overflow-x-hidden overflow-y-auto border-r border-slate-700/45 bg-[#070c14]/92 p-4 pb-6 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:sticky lg:top-0 lg:block">
+    <aside className="sidebar-shell hidden h-screen w-64 shrink-0 overflow-x-hidden overflow-y-auto border-r border-slate-700/45 p-4 pb-6 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:sticky lg:top-0 lg:block">
       <div className="identity-panel mb-5 rounded-2xl p-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/20 bg-teal-300/[0.08] text-teal-100">
@@ -46,7 +46,7 @@ export default function DashboardSidebar({
           </div>
 
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">CRM Enterprise</p>
+            <p className="truncate text-sm font-semibold">CRM Agro</p>
             <p className="truncate text-[11px] text-slate-500">Operação comercial</p>
           </div>
         </div>
@@ -250,8 +250,8 @@ function SidebarButton({
       onClick={onClick}
       className={`relative mx-auto box-border flex h-10 w-[224px] shrink-0 items-center rounded-xl border px-3 pr-9 text-left text-sm leading-5 transition-all duration-200 ${
         active
-          ? "border-teal-300/30 bg-teal-300/[0.09] text-white ring-1 ring-inset ring-teal-100/20"
-          : "border-white/[0.07] bg-white/[0.032] text-slate-300 hover:border-white/15 hover:bg-white/[0.055] hover:text-white"
+          ? "border-teal-200/25 bg-teal-300/[0.075] text-white shadow-[inset_2px_0_0_rgba(48,201,176,0.42)] ring-1 ring-inset ring-white/10"
+          : "border-white/[0.07] bg-white/[0.028] text-slate-300 hover:border-white/14 hover:bg-white/[0.052] hover:text-white"
       }`}
     >
       {icon}

@@ -29,9 +29,15 @@ export default function DashboardMetrics({
       <div className="identity-panel self-start rounded-2xl p-3.5 md:col-span-2 xl:col-span-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-100/70">Pipeline comercial</p>
-            <h2 className="mt-2 max-w-full whitespace-nowrap text-2xl font-semibold leading-tight text-white">{money(analytics.totalValue)}</h2>
-            <p className="mt-1 text-[11px] text-slate-400">Receita potencial com foco em follow-up e fechamento.</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-100/70">
+              Pipeline comercial
+            </p>
+            <h2 className="mt-2 max-w-full whitespace-nowrap text-2xl font-semibold leading-tight text-white">
+              {money(analytics.totalValue)}
+            </h2>
+            <p className="mt-1 truncate text-[11px] text-slate-400">
+              Receita potencial com foco em follow-up e fechamento.
+            </p>
           </div>
 
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-teal-300/18 bg-teal-300/[0.065] text-teal-100">
@@ -50,7 +56,7 @@ export default function DashboardMetrics({
         title="Ganho"
         value={money(analytics.wonValue)}
         caption="Receita confirmada"
-        icon={<CheckCircle2 size={16} className="text-cyan-300" />}
+        icon={<CheckCircle2 size={16} />}
         tone="revenue"
       />
 
@@ -58,7 +64,7 @@ export default function DashboardMetrics({
         title="Forecast"
         value={money(analytics.forecastValue)}
         caption="Previsão em aberto"
-        icon={<Target size={16} className="text-amber-300" />}
+        icon={<Target size={16} />}
         tone="forecast"
       />
 
@@ -66,7 +72,7 @@ export default function DashboardMetrics({
         title="Quentes"
         value={String(analytics.hotCount)}
         caption="Prioridade ativa"
-        icon={<Flame size={16} className="text-rose-300" />}
+        icon={<Flame size={16} />}
         tone="risk"
       />
 
@@ -74,7 +80,7 @@ export default function DashboardMetrics({
         title="Follow-up"
         value={String(analytics.todayFollowUps)}
         caption="Agenda de hoje"
-        icon={<CalendarDays size={16} className="text-emerald-300" />}
+        icon={<CalendarDays size={16} />}
         tone="pipeline"
       />
     </section>

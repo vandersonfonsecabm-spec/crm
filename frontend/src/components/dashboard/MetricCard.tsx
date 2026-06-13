@@ -19,9 +19,9 @@ const toneClass = {
 
 const iconToneClass = {
   pipeline: "border-teal-300/18 bg-teal-300/[0.065] text-teal-100",
-  revenue: "border-sky-300/18 bg-sky-300/[0.065] text-sky-100",
-  forecast: "border-amber-300/18 bg-amber-300/[0.065] text-amber-100",
-  risk: "border-rose-300/18 bg-rose-300/[0.065] text-rose-100",
+  revenue: "border-sky-300/18 bg-sky-300/[0.06] text-sky-100",
+  forecast: "border-amber-300/18 bg-amber-300/[0.06] text-amber-100",
+  risk: "border-rose-300/18 bg-rose-300/[0.06] text-rose-100",
   neutral: "border-slate-500/16 bg-slate-900/55 text-slate-200",
 };
 
@@ -35,11 +35,13 @@ export default function MetricCard({
 }: MetricCardProps) {
   return (
     <div
-      className={`metric-card group self-start ${compact ? "rounded-xl p-3" : "min-h-[112px] rounded-2xl p-4"} transition-all duration-300 hover:border-slate-400/24 hover:shadow-[0_18px_42px_rgba(0,0,0,0.28)] ${toneClass[tone]}`}
+      className={`metric-card group self-start ${compact ? "rounded-xl p-3" : "min-h-[112px] rounded-2xl p-4"} ${toneClass[tone]}`}
     >
       <div className="flex h-full min-w-0 flex-col justify-between">
         <div className="flex min-w-0 items-start justify-between gap-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">{title}</p>
+          <p className="min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            {title}
+          </p>
           <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${iconToneClass[tone]}`}>
             {icon}
           </div>

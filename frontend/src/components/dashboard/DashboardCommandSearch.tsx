@@ -89,7 +89,7 @@ export default function DashboardCommandSearch({
 
   return (
     <div className="relative hidden md:block">
-      <div className="flex w-64 items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+      <div className="flex w-72 items-center gap-2 rounded-xl border border-slate-500/14 bg-slate-950/28 px-3 py-2 shadow-inner shadow-black/20 transition focus-within:border-teal-200/22 focus-within:bg-slate-950/40">
         <Search size={13} className="text-slate-500" />
 
         <input
@@ -101,7 +101,7 @@ export default function DashboardCommandSearch({
           }}
           onFocus={() => setShowCommandResults(true)}
           placeholder="Buscar cliente, empresa ou página..."
-          className="w-full select-text bg-transparent text-[11px] outline-none placeholder:text-slate-500"
+          className="w-full select-text bg-transparent text-[11px] text-slate-200 outline-none placeholder:text-slate-600"
         />
 
         <kbd className="rounded-md border border-white/10 bg-black/20 px-1.5 py-0.5 text-[9px] text-slate-600">
@@ -110,14 +110,14 @@ export default function DashboardCommandSearch({
       </div>
 
       {showCommandResults && commandSearch && (
-        <div className="absolute right-0 top-11 z-40 w-64 rounded-2xl border border-white/10 bg-[#0d111a] p-2 shadow-2xl">
+        <div className="saas-panel absolute right-0 top-11 z-[130] w-72 rounded-2xl p-2 shadow-2xl shadow-black/45">
           {commandResults.length === 0 && (
             <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
               <p className="text-[11px] font-semibold text-slate-300">
                 Nenhum resultado encontrado
               </p>
               <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                Tente buscar pelo nome do cliente, empresa, email ou página do CRM.
+                Busque pelo nome do cliente, empresa, email ou página do CRM.
               </p>
             </div>
           )}
@@ -130,7 +130,7 @@ export default function DashboardCommandSearch({
                 setCommandSearch("");
                 setShowCommandResults(false);
               }}
-              className="w-full rounded-xl px-3 py-2 text-left hover:bg-white/10"
+              className="w-full rounded-xl px-3 py-2 text-left transition hover:bg-white/[0.06]"
             >
               <p className="text-[11px] font-medium text-slate-200">
                 {item.label}
