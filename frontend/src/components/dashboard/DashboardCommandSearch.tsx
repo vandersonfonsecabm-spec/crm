@@ -117,7 +117,7 @@ export default function DashboardCommandSearch({
                 Nenhum resultado encontrado
               </p>
               <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                Busque pelo nome do cliente, empresa, email ou página do CRM.
+                Busque pelo nome do cliente, empresa, e-mail ou página do CRM.
               </p>
             </div>
           )}

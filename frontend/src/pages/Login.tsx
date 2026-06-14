@@ -76,7 +76,7 @@ export function Login({ onLogin }: LoginProps) {
 
           <div className="grid gap-3 md:grid-cols-3">
             <LoginSignal icon={<ShieldCheck size={15} />} label="Sessão" value="Protegida" tone="pipeline" />
-            <LoginSignal icon={<Database size={15} />} label="Dados" value="Backend" tone="revenue" />
+            <LoginSignal icon={<Database size={15} />} label="Dados" value="Base comercial" tone="revenue" />
             <LoginSignal icon={<Wifi size={15} />} label="Acesso" value="Disponível" tone="forecast" />
           </div>
         </div>

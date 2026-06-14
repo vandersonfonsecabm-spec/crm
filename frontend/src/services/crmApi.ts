@@ -1,6 +1,7 @@
 import type { Client, Note, Status } from "../types/dashboard";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+const API_URL = configuredApiUrl || (import.meta.env.PROD ? "" : "http://localhost:3001");
 const TOKEN_KEY = "crm-auth-token";
 const USER_KEY = "crm-auth-user";
 const DEMO_TOKEN = "demo-sqlite";
@@ -101,6 +102,10 @@ export function clearAuthSession() {
 }
 
 export async function loginWithBackend(email: string, senha: string) {
+  if (!hasRemoteApi()) {
+    throw new Error("Sincronização indisponível.");
+  }
+
   const response = await fetch(`${API_URL}/auth/login`, {
     method: "POST",
     headers: {
@@ -120,28 +125,20 @@ export async function loginWithBackend(email: string, senha: string) {
 }
 
 export async function loginDemoWithBackend() {
-  try {
-    return await loginWithBackend("demo@crm.com", "123456");
-  } catch {
-    setAuthToken(DEMO_TOKEN);
-    setAuthUser({
-      nome: "Acesso guiado",
-      email: "marco@crmagro.com.br",
-    });
-
-    return {
-      access_token: DEMO_TOKEN,
-      user: {
-        nome: "Acesso guiado",
-        email: "marco@crmagro.com.br",
-      },
-    };
+  if (hasRemoteApi()) {
+    try {
+      return await loginWithBackend("demo@crm.com", "123456");
+    } catch {
+      return startGuidedAccess();
+    }
   }
+
+  return startGuidedAccess();
 }
 
 export async function fetchClientesFromBackend() {
   const token = getAuthToken();
-  if (!token) return null;
+  if (!token || !hasRemoteApi()) return null;
 
   const response = await fetch(`${API_URL}/clientes`, {
     headers: buildHeaders(token),
@@ -157,7 +154,7 @@ export async function fetchClientesFromBackend() {
 
 export async function fetchDashboardSummaryFromBackend() {
   const token = getAuthToken();
-  if (!token || token === DEMO_TOKEN) return null;
+  if (!token || token === DEMO_TOKEN || !hasRemoteApi()) return null;
 
   const response = await fetch(`${API_URL}/dashboard`, {
     headers: buildHeaders(token),
@@ -171,12 +168,14 @@ export async function fetchDashboardSummaryFromBackend() {
 }
 
 export async function createClienteOnBackend(client: Client) {
+  if (!hasRemoteApi()) return null;
+
   const response = await requestCliente("POST", "/clientes", clientToPayload(client));
   return mapApiClienteToClient(response);
 }
 
 export async function updateClienteOnBackend(client: Client) {
-  if (!client.backendId) return null;
+  if (!client.backendId || !hasRemoteApi()) return null;
 
   const method = isDemoMode() ? "PUT" : "PATCH";
   const response = await requestCliente(method, `/clientes/${client.backendId}`, clientToPayload(client));
@@ -184,12 +183,12 @@ export async function updateClienteOnBackend(client: Client) {
 }
 
 export async function deleteClienteOnBackend(client: Client) {
-  if (!client.backendId) return;
+  if (!client.backendId || !hasRemoteApi()) return;
   await requestCliente("DELETE", `/clientes/${client.backendId}`);
 }
 
 export async function createNotaOnBackend(client: Client, text: string) {
-  if (!client.backendId) return null;
+  if (!client.backendId || !hasRemoteApi()) return null;
 
   const token = getAuthToken();
   if (!token) {
@@ -245,6 +244,26 @@ function buildHeaders(token: string): Record<string, string> {
   if (token === DEMO_TOKEN) return {};
   return {
     Authorization: `Bearer ${token}`,
+  };
+}
+
+function hasRemoteApi() {
+  return API_URL.length > 0;
+}
+
+function startGuidedAccess() {
+  setAuthToken(DEMO_TOKEN);
+  setAuthUser({
+    nome: "Acesso guiado",
+    email: "marco@crmagro.com.br",
+  });
+
+  return {
+    access_token: DEMO_TOKEN,
+    user: {
+      nome: "Acesso guiado",
+      email: "marco@crmagro.com.br",
+    },
   };
 }
 

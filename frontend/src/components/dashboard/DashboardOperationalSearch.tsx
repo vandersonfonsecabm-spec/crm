@@ -91,7 +91,7 @@ export default function DashboardOperationalSearch({
               setSearch(event.target.value);
               setPage(1);
             }}
-            placeholder="Buscar cliente, empresa, telefone, email ou tag..."
+            placeholder="Buscar cliente, empresa, telefone, e-mail ou tag..."
             className="w-full select-text bg-transparent text-sm outline-none placeholder:text-slate-600"
           />
 
