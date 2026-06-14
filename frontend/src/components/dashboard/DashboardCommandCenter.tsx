@@ -10,7 +10,6 @@ type DashboardCommandCenterProps = {
   getPriority: (client: Client) => string;
   getLeadScore: (client: Client) => number;
   setSelectedId: (clientId: number) => void;
-  setActivePage: (page: "dashboard" | "clientes" | "kanban" | "automacoes") => void;
   setCreating: (client: Client) => void;
   applySmartFilter: (type: "risk" | "proposal" | "silent") => void;
 };
@@ -24,7 +23,6 @@ export default function DashboardCommandCenter({
   getPriority,
   getLeadScore,
   setSelectedId,
-  setActivePage,
   setCreating,
   applySmartFilter,
 }: DashboardCommandCenterProps) {
@@ -63,10 +61,7 @@ export default function DashboardCommandCenter({
               .map((client, index) => (
                 <button
                   key={client.id}
-                  onClick={() => {
-                    setSelectedId(client.id);
-                    setActivePage("clientes");
-                  }}
+                  onClick={() => setSelectedId(client.id)}
                   className="saas-row w-full rounded-xl p-2 text-left"
                 >
                   <div className="flex items-center justify-between gap-2">

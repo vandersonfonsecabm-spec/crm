@@ -374,10 +374,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               enterpriseHealthClass={enterpriseHealthClass}
               enterpriseHealthLabel={enterpriseHealthLabel}
               onSelectClient={setSelectedId}
-              onOpenClient={(clientId) => {
-                setSelectedId(clientId);
-                setActivePage("clientes");
-              }}
+              onOpenClient={setSelectedId}
             />
           )}
 
@@ -415,7 +412,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           <section
             className={`mt-4 ${
               activePage === "comercial"
-                ? "space-y-4"
+                ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
                 : activePage === "agenda"
                   ? "space-y-4"
                 : activePage === "dashboard"
@@ -468,10 +465,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   followUpAgenda={followUpAgenda}
                   money={money}
                   statusClass={statusClass}
-                  onSelectClient={(clientId) => {
-                    setSelectedId(clientId);
-                    setActivePage("clientes");
-                  }}
+                  onSelectClient={setSelectedId}
                 />
               )}
 
@@ -487,7 +481,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   getPriority={getPriority}
                   getLeadScore={getLeadScore}
                   setSelectedId={setSelectedId}
-                  setActivePage={setActivePage}
                   setCreating={setCreating}
                   applySmartFilter={applySmartFilter}
                 />
@@ -501,10 +494,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   smartAlerts={smartAlerts}
                   money={money}
                   statusClass={statusClass}
-                  onSelectClient={(clientId) => {
-                    setSelectedId(clientId);
-                    setActivePage("clientes");
-                  }}
+                  onSelectClient={setSelectedId}
                   onApplySmartFilter={applySmartFilter}
                 />
               )}
@@ -542,7 +532,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
-            {activePage !== "comercial" && activePage !== "agenda" && (
+            {activePage !== "agenda" && (
               <DashboardCustomerDrawer
                 activePage={activePage}
                 selectedClient={selectedClient}

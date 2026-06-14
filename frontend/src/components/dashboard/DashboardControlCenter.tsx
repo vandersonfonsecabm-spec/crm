@@ -9,7 +9,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import type { ActivePage, Analytics, Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
+import type { Analytics, Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
 
 type DashboardControlCenterProps = {
   clients: Client[];
@@ -22,7 +22,6 @@ type DashboardControlCenterProps = {
   getPriority: (client: Client) => string;
   getLeadScore: (client: Client) => number;
   setSelectedId: (clientId: number | null) => void;
-  setActivePage: (page: ActivePage) => void;
   setCreating: (client: Client | null) => void;
   applySmartFilter: (type: SmartFilterType) => void;
 };
@@ -38,7 +37,6 @@ export default function DashboardControlCenter({
   getPriority,
   getLeadScore,
   setSelectedId,
-  setActivePage,
   setCreating,
   applySmartFilter,
 }: DashboardControlCenterProps) {
@@ -132,10 +130,7 @@ export default function DashboardControlCenter({
                 return (
                   <button
                     key={client.id}
-                    onClick={() => {
-                      setSelectedId(client.id);
-                      setActivePage("clientes");
-                    }}
+                    onClick={() => setSelectedId(client.id)}
                     className="saas-row grid min-w-0 gap-3 rounded-xl p-3 text-left md:grid-cols-[minmax(0,1fr)_150px]"
                   >
                     <div className="flex min-w-0 items-start gap-3">

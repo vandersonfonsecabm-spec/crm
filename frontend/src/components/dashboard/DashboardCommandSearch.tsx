@@ -78,10 +78,7 @@ export default function DashboardCommandSearch({
       .map((client) => ({
         label: client.name,
         type: client.company,
-        action: () => {
-          onSelectClient(client.id);
-          onSetActivePage("clientes");
-        },
+        action: () => onSelectClient(client.id),
       }));
 
     return [...pages, ...clientResults].slice(0, 6);
