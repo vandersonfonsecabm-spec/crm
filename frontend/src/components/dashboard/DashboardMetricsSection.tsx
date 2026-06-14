@@ -2,10 +2,9 @@ import {
   AlertTriangle,
   Bell,
   CheckCircle2,
-  MessageCircle,
   Phone,
   Plus,
-  Sparkles,
+  RotateCcw,
   Star,
   StickyNote,
   Target,
@@ -77,10 +76,10 @@ export default function DashboardMetricsSection({
   if (activePage === "automacoes") {
     return (
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Regras ativas" value="04" caption="Automação ligada" icon={<Zap size={15} />} tone="forecast" />
-        <MetricCard title="Sequências" value="09" caption="Fluxos comerciais" icon={<Bell size={15} />} tone="revenue" />
-        <MetricCard title="Mensagens prontas" value="18" caption="Templates salvos" icon={<MessageCircle size={15} />} tone="pipeline" />
-        <MetricCard title="Motor IA" value="Ativo" caption="Operação assistida" icon={<Sparkles size={15} />} />
+        <MetricCard title="Regras ativas" value="03" caption="Fluxos em operação" icon={<Zap size={15} />} tone="pipeline" />
+        <MetricCard title="Follow-ups gerados" value="18" caption="Últimos 7 dias" icon={<Bell size={15} />} tone="revenue" />
+        <MetricCard title="Clientes reativados" value="06" caption="Retomadas comerciais" icon={<RotateCcw size={15} />} tone="pipeline" />
+        <MetricCard title="Alertas pendentes" value="04" caption="Aguardam revisão" icon={<AlertTriangle size={15} />} tone="forecast" />
       </section>
     );
   }
