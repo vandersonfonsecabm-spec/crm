@@ -19,20 +19,22 @@ export default function DashboardClientTimeline({
   onAddNote,
 }: DashboardClientTimelineProps) {
   const idleLabel = getIdleLabel(selectedClient);
+  const latestNote = selectedClient.notes[0] ?? null;
+  const olderNotes = selectedClient.notes.slice(1);
 
   return (
     <div className="saas-card mt-3 overflow-hidden rounded-2xl">
-      <div className="border-b border-slate-700/40 bg-slate-950/18 p-3">
+      <div className="border-b border-slate-700/40 bg-slate-950/18 px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-teal-300/18 bg-teal-300/[0.06] text-teal-100">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-teal-300/18 bg-teal-300/[0.06] text-teal-100">
               <StickyNote size={14} />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold">Histórico comercial</p>
               <p className="mt-0.5 text-[10px] text-slate-500">
-                {idleLabel} sem contato - próxima {selectedClient.nextFollowUp}
+                Últimas interações e próximos contatos
               </p>
             </div>
           </div>
@@ -57,60 +59,79 @@ export default function DashboardClientTimeline({
           </button>
         </div>
 
-        <div className="mt-3 space-y-2">
-          <div className="saas-tile saas-accent-emerald relative rounded-xl p-2.5">
-            <div className="absolute left-3 top-3 h-2 w-2 rounded-full bg-emerald-300" />
-            <div className="pl-5">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold text-slate-100">Ação recomendada</p>
-                <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">ação</span>
+        <div className="mt-2 grid gap-2">
+          <div className="saas-tile saas-accent-emerald rounded-xl p-2.5">
+            <div className="flex items-start gap-2">
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-300" />
+              <div className="min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold text-slate-100">Ação recomendada</p>
+                  <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">ação</span>
+                </div>
+                <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+                  {getLeadScore(selectedClient) >= 80
+                    ? "Priorizar contato hoje e conduzir para fechamento."
+                    : getRisk(selectedClient) === "Alto"
+                      ? "Reativar com mensagem objetiva antes de mover para perdido."
+                      : "Manter cadência de acompanhamento e registrar resposta do cliente."}
+                </p>
               </div>
-              <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
-                {getLeadScore(selectedClient) >= 80
-                  ? "Priorizar contato hoje e conduzir para fechamento."
-                  : getRisk(selectedClient) === "Alto"
-                    ? "Reativar com mensagem objetiva antes de mover para perdido."
-                    : "Manter cadência de acompanhamento e registrar resposta do cliente."}
-              </p>
             </div>
           </div>
 
-          {selectedClient.notes.length === 0 && (
+          <div className="rounded-xl border border-slate-500/12 bg-slate-950/18 px-2.5 py-2">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Próximo contato
+              </p>
+              <span className="text-[10px] font-semibold text-slate-300">{selectedClient.nextFollowUp}</span>
+            </div>
+            <p className="text-[10px] text-slate-500">{idleLabel} sem contato registrado.</p>
+          </div>
+
+          {latestNote ? (
+            <div className="saas-row rounded-xl p-2.5">
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-sky-300/20 bg-slate-950/25 text-[10px] text-sky-200">
+                  <Sparkles size={12} />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold text-slate-200">Última interação</p>
+                    <span className="shrink-0 text-[9px] text-slate-600">{latestNote.date}</span>
+                  </div>
+
+                  <p className="line-clamp-2 text-[11px] leading-relaxed text-slate-400">{latestNote.text}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
             <div className="saas-tile rounded-xl p-2.5">
               <p className="text-[11px] text-slate-500">Nenhuma nota adicionada ainda.</p>
               <p className="mt-1 text-[10px] text-slate-600">Registre ligações, propostas, objeções e próximos passos.</p>
             </div>
           )}
 
-          {selectedClient.notes.map((note, index) => (
-            <div
-              key={note.id}
-              className="saas-row relative rounded-xl p-2.5"
-            >
-              <div className="flex items-start gap-2.5">
-                <div
-                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border text-[10px] ${
-                    index === 0
-                      ? "border-sky-300/20 bg-slate-950/25 text-sky-200"
-                      : "border-slate-500/16 bg-slate-950/25 text-slate-400"
-                  }`}
-                >
-                  {index === 0 ? <Sparkles size={12} /> : <StickyNote size={12} />}
-                </div>
+          {olderNotes.length > 0 && (
+            <details className="rounded-xl border border-slate-500/12 bg-slate-950/18 px-2.5 py-2">
+              <summary className="cursor-pointer select-none text-[10px] font-semibold text-slate-400 transition hover:text-slate-200">
+                Ver histórico completo ({selectedClient.notes.length})
+              </summary>
 
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <p className="text-[11px] font-semibold text-slate-200">
-                      {index === 0 ? "Última interação" : "Registro comercial"}
-                    </p>
-                    <span className="shrink-0 text-[9px] text-slate-600">{note.date}</span>
+              <div className="mt-2 space-y-2">
+                {olderNotes.map((note) => (
+                  <div key={note.id} className="rounded-lg border border-slate-500/10 bg-slate-950/24 px-2 py-1.5">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-semibold text-slate-300">Registro comercial</p>
+                      <span className="shrink-0 text-[9px] text-slate-600">{note.date}</span>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-slate-500">{note.text}</p>
                   </div>
-
-                  <p className="text-[11px] leading-relaxed text-slate-400">{note.text}</p>
-                </div>
+                ))}
               </div>
-            </div>
-          ))}
+            </details>
+          )}
         </div>
       </div>
     </div>
