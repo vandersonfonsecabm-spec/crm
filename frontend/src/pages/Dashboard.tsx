@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   actionIntensity,
   activitySignalLabel,
@@ -83,6 +83,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
 
   const pageSize = 4;
+
+  const handleSelectClient = useCallback((clientId: number | null) => {
+    setSelectedId(clientId);
+  }, []);
 
   const pageTitle =
     activePage === "dashboard"
@@ -339,7 +343,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             currentTime={currentTime}
             showQuickActions={showQuickActions}
             emptyClient={emptyClient}
-            setSelectedId={setSelectedId}
+            setSelectedId={handleSelectClient}
             setActivePage={setActivePage}
             setShowQuickActions={setShowQuickActions}
             setCreating={setCreating}
@@ -373,8 +377,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               getLeadScore={getLeadScore}
               enterpriseHealthClass={enterpriseHealthClass}
               enterpriseHealthLabel={enterpriseHealthLabel}
-              onSelectClient={setSelectedId}
-              onOpenClient={setSelectedId}
+              onSelectClient={handleSelectClient}
+              onOpenClient={handleSelectClient}
             />
           )}
 
@@ -437,7 +441,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                     getLeadScore={getLeadScore}
                     forecastLabel={forecastLabel}
                     idleLabel={idleLabel}
-                    onSelectClient={setSelectedId}
+                    onSelectClient={handleSelectClient}
                     onToggleFavorite={toggleFavorite}
                     onToggleHot={toggleHot}
                     onEditClient={setEditing}
@@ -455,7 +459,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                     statusClass={statusClass}
                     getRisk={getRisk}
                     getLeadScore={getLeadScore}
-                    onSelectClient={setSelectedId}
+                    onSelectClient={handleSelectClient}
                   />
                 </>
               )}
@@ -465,7 +469,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   followUpAgenda={followUpAgenda}
                   money={money}
                   statusClass={statusClass}
-                  onSelectClient={setSelectedId}
+                  onSelectClient={handleSelectClient}
                 />
               )}
 
@@ -480,7 +484,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   statusClass={statusClass}
                   getPriority={getPriority}
                   getLeadScore={getLeadScore}
-                  setSelectedId={setSelectedId}
+                  setSelectedId={handleSelectClient}
                   setCreating={setCreating}
                   applySmartFilter={applySmartFilter}
                 />
@@ -494,7 +498,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   smartAlerts={smartAlerts}
                   money={money}
                   statusClass={statusClass}
-                  onSelectClient={setSelectedId}
+                  onSelectClient={handleSelectClient}
                   onApplySmartFilter={applySmartFilter}
                 />
               )}
@@ -523,7 +527,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 smartCardBorderClass={smartCardBorderClass}
                 stageGuidance={stageGuidance}
                 kanbanHeaderClass={kanbanHeaderClass}
-                setSelectedId={setSelectedId}
+                setSelectedId={handleSelectClient}
                 setDragOverStatus={setDragOverStatus}
                 setIsDraggingKanban={setIsDraggingKanban}
                 changeStatus={changeStatus}
