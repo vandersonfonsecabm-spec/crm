@@ -46,7 +46,7 @@ export default function DashboardCommercialDecisionCenter({
   const leadScore = selectedClient ? getLeadScore(selectedClient) : 0;
 
   return (
-    <div className="saas-panel rounded-2xl">
+    <div className="saas-panel decision-drawer rounded-2xl">
       <div className="border-b border-slate-700/40 bg-slate-950/18 p-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">

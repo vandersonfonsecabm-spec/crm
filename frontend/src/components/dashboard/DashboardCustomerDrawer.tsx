@@ -85,7 +85,7 @@ export default function DashboardCustomerDrawer({
 
   if (activePage === "kanban") {
     return (
-      <aside key={`${activePage}-${selectedClient?.id ?? "empty"}`} className={drawerShellClass(activePage)}>
+      <aside key={`${activePage}-${selectedClient?.id ?? "empty"}`} className={`${drawerShellClass(activePage)} decision-drawer-shell`}>
         <DashboardCommercialDecisionCenter
           selectedClient={selectedClient}
           clients={clients}
@@ -108,8 +108,8 @@ export default function DashboardCustomerDrawer({
   }
 
   return (
-    <aside key={`${activePage}-${selectedClient?.id ?? "empty"}`} className={drawerShellClass(activePage)}>
-      <div className="saas-panel rounded-2xl">
+    <aside key={`${activePage}-${selectedClient?.id ?? "empty"}`} className={`${drawerShellClass(activePage)} decision-drawer-shell`}>
+      <div className="saas-panel decision-drawer rounded-2xl">
         <div className="border-b border-slate-700/40 bg-slate-950/18 p-3">
           <div className="flex items-center justify-between gap-3">
             <div>

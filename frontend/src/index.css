@@ -12,8 +12,11 @@
   --brand-secondary: #7db4d8;
   --brand-amber: #c99a48;
   --brand-coral: #d97883;
+  --brand-blue: #5f8fca;
   --surface-strong: rgba(10, 16, 25, 0.94);
   --surface-soft: rgba(13, 20, 31, 0.72);
+  --surface-depth: rgba(5, 9, 16, 0.88);
+  --surface-lift: rgba(17, 25, 39, 0.74);
   --line-soft: rgba(148, 163, 184, 0.13);
   --line-strong: rgba(226, 232, 240, 0.18);
 }
@@ -26,9 +29,10 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at 14% -10%, rgba(48, 201, 176, 0.075), transparent 30%),
-    radial-gradient(circle at 86% -4%, rgba(125, 180, 216, 0.06), transparent 32%),
-    radial-gradient(circle at 100% 42%, rgba(201, 154, 72, 0.045), transparent 28%),
+    radial-gradient(circle at 14% -10%, rgba(48, 201, 176, 0.055), transparent 30%),
+    radial-gradient(circle at 86% -4%, rgba(95, 143, 202, 0.065), transparent 32%),
+    radial-gradient(circle at 100% 42%, rgba(201, 154, 72, 0.035), transparent 28%),
+    radial-gradient(circle at 0% 88%, rgba(217, 120, 131, 0.026), transparent 24%),
     linear-gradient(135deg, #05070d 0%, #09101a 46%, #070a10 100%);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -75,10 +79,10 @@ button {
 @layer components {
   .premium-shell {
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 220px),
-      radial-gradient(circle at 46% -2%, rgba(48, 201, 176, 0.045), transparent 38%),
-      linear-gradient(rgba(148, 163, 184, 0.018) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148, 163, 184, 0.014) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 220px),
+      radial-gradient(circle at 46% -2%, rgba(48, 201, 176, 0.035), transparent 38%),
+      linear-gradient(rgba(148, 163, 184, 0.014) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.012) 1px, transparent 1px),
       transparent;
     background-size: auto, auto, 32px 32px, 32px 32px, auto;
   }
@@ -86,10 +90,11 @@ button {
   .premium-panel {
     position: relative;
     overflow: hidden;
-    border: 1px solid var(--line-soft);
+    border: 1px solid rgba(148, 163, 184, 0.145);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.018)),
-      rgba(8, 13, 22, 0.76);
+      radial-gradient(circle at 12% 0%, rgba(125, 180, 216, 0.045), transparent 30%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.014)),
+      rgba(8, 13, 22, 0.82);
     box-shadow:
       0 18px 48px rgba(0, 0, 0, 0.28),
       inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -103,18 +108,18 @@ button {
     inset: 0;
     border-radius: inherit;
     background:
-      linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09), rgba(48, 201, 176, 0.055), transparent) top /
+      linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.095), rgba(125, 180, 216, 0.055), transparent) top /
         100% 1px no-repeat;
   }
 
   .identity-panel {
     position: relative;
     overflow: hidden;
-    border: 1px solid rgba(226, 232, 240, 0.13);
+    border: 1px solid rgba(226, 232, 240, 0.16);
     background:
-      radial-gradient(circle at 8% 12%, rgba(48, 201, 176, 0.07), transparent 34%),
-      radial-gradient(circle at 92% 0%, rgba(125, 180, 216, 0.045), transparent 30%),
-      linear-gradient(135deg, rgba(11, 18, 29, 0.96), rgba(7, 11, 18, 0.94));
+      radial-gradient(circle at 8% 12%, rgba(48, 201, 176, 0.075), transparent 32%),
+      radial-gradient(circle at 96% 2%, rgba(201, 154, 72, 0.055), transparent 28%),
+      linear-gradient(135deg, rgba(12, 20, 32, 0.98), rgba(6, 10, 17, 0.96));
     box-shadow:
       0 18px 48px rgba(0, 0, 0, 0.29),
       inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -132,56 +137,56 @@ button {
   }
 
   .metric-pipeline {
-    border-color: rgba(48, 201, 176, 0.16);
+    border-color: rgba(48, 201, 176, 0.2);
     border-left-width: 2px;
     border-left-color: rgba(48, 201, 176, 0.48);
     background:
-      radial-gradient(circle at 92% 8%, rgba(48, 201, 176, 0.085), transparent 34%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.02)),
-      rgba(8, 13, 22, 0.68);
+      radial-gradient(circle at 92% 8%, rgba(48, 201, 176, 0.11), transparent 32%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.016)),
+      rgba(7, 16, 21, 0.74);
   }
 
   .metric-revenue {
-    border-color: rgba(125, 180, 216, 0.16);
+    border-color: rgba(95, 143, 202, 0.2);
     border-left-width: 2px;
-    border-left-color: rgba(125, 180, 216, 0.48);
+    border-left-color: rgba(95, 143, 202, 0.5);
     background:
-      radial-gradient(circle at 92% 8%, rgba(125, 180, 216, 0.08), transparent 34%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.02)),
-      rgba(8, 13, 22, 0.68);
+      radial-gradient(circle at 92% 8%, rgba(95, 143, 202, 0.105), transparent 32%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.016)),
+      rgba(8, 14, 25, 0.74);
   }
 
   .metric-forecast {
-    border-color: rgba(201, 154, 72, 0.17);
+    border-color: rgba(201, 154, 72, 0.22);
     border-left-width: 2px;
     border-left-color: rgba(201, 154, 72, 0.5);
     background:
-      radial-gradient(circle at 92% 8%, rgba(201, 154, 72, 0.085), transparent 34%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.02)),
-      rgba(8, 13, 22, 0.68);
+      radial-gradient(circle at 92% 8%, rgba(201, 154, 72, 0.12), transparent 32%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.016)),
+      rgba(18, 15, 9, 0.74);
   }
 
   .metric-risk {
-    border-color: rgba(217, 120, 131, 0.17);
+    border-color: rgba(217, 120, 131, 0.22);
     border-left-width: 2px;
     border-left-color: rgba(217, 120, 131, 0.5);
     background:
-      radial-gradient(circle at 92% 8%, rgba(217, 120, 131, 0.08), transparent 34%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.048), rgba(255, 255, 255, 0.02)),
-      rgba(8, 13, 22, 0.68);
+      radial-gradient(circle at 92% 8%, rgba(217, 120, 131, 0.105), transparent 32%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.016)),
+      rgba(18, 10, 15, 0.74);
   }
 
   .metric-card {
     position: relative;
     overflow: hidden;
     isolation: isolate;
-    border: 1px solid rgba(148, 163, 184, 0.13);
+    border: 1px solid rgba(148, 163, 184, 0.145);
     background:
-      radial-gradient(circle at 92% 6%, rgba(226, 232, 240, 0.055), transparent 34%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.044), rgba(255, 255, 255, 0.016)),
-      rgba(8, 13, 22, 0.78);
+      radial-gradient(circle at 94% 4%, rgba(226, 232, 240, 0.052), transparent 30%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.014)),
+      rgba(8, 13, 22, 0.82);
     box-shadow:
-      0 14px 34px rgba(0, 0, 0, 0.2),
+      0 12px 30px rgba(0, 0, 0, 0.2),
       inset 0 1px 0 rgba(255, 255, 255, 0.045);
     transition:
       border-color 180ms ease,
@@ -196,7 +201,7 @@ button {
     inset: 0;
     border-radius: inherit;
     background:
-      linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.075), rgba(48, 201, 176, 0.035), transparent) top /
+      linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), rgba(148, 163, 184, 0.045), transparent) top /
         100% 1px no-repeat;
   }
 
@@ -216,23 +221,36 @@ button {
     box-shadow:
       0 10px 28px rgba(0, 0, 0, 0.24),
       inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    transition:
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease,
+      filter 180ms ease;
+  }
+
+  .premium-button:hover {
+    box-shadow:
+      0 14px 32px rgba(0, 0, 0, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    filter: saturate(1.04);
   }
 
   .premium-ghost {
-    border: 1px solid rgba(226, 232, 240, 0.1);
-    background: rgba(15, 23, 42, 0.48);
+    border: 1px solid rgba(226, 232, 240, 0.115);
+    background: rgba(14, 21, 34, 0.54);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   .saas-panel {
     position: relative;
     overflow: hidden;
-    border: 1px solid rgba(148, 163, 184, 0.13);
+    border: 1px solid rgba(148, 163, 184, 0.14);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.044), rgba(255, 255, 255, 0.016)),
-      rgba(9, 14, 23, 0.78);
+      radial-gradient(circle at 100% 0%, rgba(148, 163, 184, 0.035), transparent 32%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012)),
+      rgba(8, 13, 22, 0.84);
     box-shadow:
-      0 18px 48px rgba(0, 0, 0, 0.24),
+      0 16px 42px rgba(0, 0, 0, 0.24),
       inset 0 1px 0 rgba(255, 255, 255, 0.045);
     backdrop-filter: blur(16px);
   }
@@ -244,16 +262,16 @@ button {
     inset: 0;
     border-radius: inherit;
     background:
-      linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.1), rgba(48, 201, 176, 0.04), transparent) top /
+      linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.11), rgba(95, 143, 202, 0.04), transparent) top /
         100% 1px no-repeat;
   }
 
   .saas-card {
-    border: 1px solid rgba(148, 163, 184, 0.13);
+    border: 1px solid rgba(148, 163, 184, 0.12);
     background:
-      radial-gradient(circle at 92% 8%, rgba(148, 163, 184, 0.06), transparent 34%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.038), rgba(255, 255, 255, 0.014)),
-      rgba(9, 15, 25, 0.72);
+      radial-gradient(circle at 92% 8%, rgba(148, 163, 184, 0.045), transparent 32%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.034), rgba(255, 255, 255, 0.012)),
+      rgba(9, 15, 25, 0.68);
     box-shadow:
       0 12px 28px rgba(0, 0, 0, 0.16),
       inset 0 1px 0 rgba(255, 255, 255, 0.035);
@@ -262,9 +280,9 @@ button {
   .saas-tile {
     position: relative;
     overflow: hidden;
-    border: 1px solid rgba(148, 163, 184, 0.13);
+    border: 1px solid rgba(148, 163, 184, 0.12);
     background:
-      radial-gradient(circle at 92% 8%, rgba(148, 163, 184, 0.07), transparent 34%),
+      radial-gradient(circle at 92% 8%, rgba(95, 143, 202, 0.055), transparent 32%),
       linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.016)),
       rgba(9, 15, 25, 0.68);
     box-shadow:
@@ -273,9 +291,13 @@ button {
   }
 
   .saas-row {
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    background: rgba(8, 13, 22, 0.56);
-    box-shadow: inset 2px 0 0 rgba(148, 163, 184, 0.1);
+    border: 1px solid rgba(148, 163, 184, 0.115);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.008)),
+      rgba(8, 13, 22, 0.56);
+    box-shadow:
+      inset 2px 0 0 rgba(148, 163, 184, 0.095),
+      inset 0 1px 0 rgba(255, 255, 255, 0.018);
     transition:
       border-color 180ms ease,
       background-color 180ms ease,
@@ -284,8 +306,10 @@ button {
   }
 
   .saas-row:hover {
-    border-color: rgba(148, 163, 184, 0.22);
-    background: rgba(15, 23, 42, 0.58);
+    border-color: rgba(226, 232, 240, 0.2);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.012)),
+      rgba(15, 23, 42, 0.62);
     box-shadow:
       inset 2px 0 0 rgba(45, 212, 191, 0.26),
       0 14px 32px rgba(0, 0, 0, 0.18);
@@ -293,14 +317,17 @@ button {
   }
 
   .saas-chip {
-    border: 1px solid rgba(148, 163, 184, 0.13);
-    background: rgba(15, 23, 42, 0.56);
-    color: rgba(203, 213, 225, 0.86);
+    border: 1px solid rgba(148, 163, 184, 0.105);
+    background: rgba(10, 16, 27, 0.5);
+    color: rgba(203, 213, 225, 0.78);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
   }
 
   .saas-action {
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    background: rgba(15, 23, 42, 0.48);
+    border: 1px solid rgba(148, 163, 184, 0.13);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.01)),
+      rgba(15, 23, 42, 0.5);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     transition:
       border-color 180ms ease,
@@ -309,9 +336,44 @@ button {
   }
 
   .saas-action:hover {
-    border-color: rgba(45, 212, 191, 0.2);
-    background: rgba(15, 23, 42, 0.68);
+    border-color: rgba(226, 232, 240, 0.2);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.014)),
+      rgba(15, 23, 42, 0.7);
     transform: translateY(-1px);
+  }
+
+  button.saas-row,
+  a.saas-row,
+  button.metric-card,
+  a.metric-card,
+  button.saas-action,
+  a.saas-action {
+    cursor: pointer;
+  }
+
+  .decision-drawer-shell {
+    scrollbar-color: rgba(148, 163, 184, 0.34) rgba(2, 6, 23, 0.42);
+  }
+
+  .decision-drawer {
+    border-color: rgba(226, 232, 240, 0.17);
+    background:
+      radial-gradient(circle at 20% 0%, rgba(48, 201, 176, 0.052), transparent 30%),
+      radial-gradient(circle at 100% 12%, rgba(201, 154, 72, 0.038), transparent 28%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.012)),
+      rgba(7, 11, 18, 0.9);
+    box-shadow:
+      0 18px 46px rgba(0, 0, 0, 0.3),
+      inset 3px 0 0 rgba(48, 201, 176, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  }
+
+  .decision-drawer > .border-b {
+    border-color: rgba(148, 163, 184, 0.16);
+    background:
+      linear-gradient(90deg, rgba(48, 201, 176, 0.055), rgba(15, 23, 42, 0.36)),
+      rgba(2, 6, 23, 0.2);
   }
 
   .saas-accent-sky {
