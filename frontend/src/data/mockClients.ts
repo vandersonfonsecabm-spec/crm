@@ -32,8 +32,8 @@ export const initialClients: Client[] = [
     hot: false,
     lastContactDays: 4,
     nextFollowUp: "Amanhã",
-    tags: ["Follow-up"],
-    notes: [{ id: 1, text: "Enviar follow-up com resumo da proposta inicial.", date: "14/05/2026 15:42" }],
+    tags: ["Acompanhamento"],
+    notes: [{ id: 1, text: "Enviar acompanhamento com resumo da proposta inicial.", date: "14/05/2026 15:42" }],
   },
   {
     id: 3,

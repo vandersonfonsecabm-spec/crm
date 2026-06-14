@@ -234,7 +234,7 @@ function ClientRowCard({
       </div>
 
       <div className="grid min-w-0 grid-cols-2 gap-2 md:block md:space-y-2">
-        <CompactInfo label="Follow-up" value={client.nextFollowUp} hint={`Inativo: ${idleLabel(client)}`} />
+        <CompactInfo label="Próximo contato" value={client.nextFollowUp} hint={`Inativo: ${idleLabel(client)}`} />
         <div className="grid grid-cols-2 gap-1.5">
           <CompactContact icon={<Phone size={11} />} value={maskPhone(client.phone)} />
           <CompactContact icon={<Mail size={11} />} value={maskEmail(client.email)} />
@@ -354,7 +354,7 @@ function EmptyClientsState() {
       </div>
       <p className="mt-3 text-sm font-semibold text-slate-300">Nenhum cliente encontrado</p>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-        Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar o pipeline.
+        Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar o funil.
       </p>
     </div>
   );

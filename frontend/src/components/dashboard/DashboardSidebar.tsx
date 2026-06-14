@@ -55,35 +55,35 @@ export default function DashboardSidebar({
       <nav className="space-y-4">
         <div>
           <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Workspace
+            Área de trabalho
           </p>
 
           <div className="grid gap-1.5">
             <SidebarButton
               active={activePage === "dashboard"}
               icon={<BarChart3 size={15} className="mr-2 shrink-0" />}
-              label="Dashboard"
+              label="Visão Geral"
               onClick={() => setActivePage("dashboard")}
             />
 
             <SidebarButton
               active={activePage === "comercial"}
               icon={<BriefcaseBusiness size={15} className="mr-2 shrink-0" />}
-              label="Comercial"
+              label="Central Comercial"
               onClick={() => setActivePage("comercial")}
             />
 
             <SidebarButton
               active={activePage === "clientes"}
               icon={<Users size={15} className="mr-2 shrink-0" />}
-              label="Clientes"
+              label="Carteira"
               onClick={() => setActivePage("clientes")}
             />
 
             <SidebarButton
               active={activePage === "kanban"}
               icon={<KanbanSquare size={15} className="mr-2 shrink-0" />}
-              label="Kanban"
+              label="Funil Comercial"
               onClick={() => setActivePage("kanban")}
             />
 
@@ -118,7 +118,7 @@ export default function DashboardSidebar({
         <div className="mt-3 space-y-2">
           {activePage === "dashboard" && (
             <>
-              <ActionButton onClick={() => setOnlyHot(true)} label="Clientes quentes" />
+              <ActionButton onClick={() => setOnlyHot(true)} label="Oportunidades quentes" />
               <ActionButton onClick={() => setStatusFilter("Proposta")} label="Propostas abertas" />
             </>
           )}
@@ -139,7 +139,7 @@ export default function DashboardSidebar({
 
           {activePage === "kanban" && (
             <>
-              <ActionButton onClick={() => setOnlyHot(true)} label="Leads quentes" />
+              <ActionButton onClick={() => setOnlyHot(true)} label="Oportunidades quentes" />
               <ActionButton onClick={() => setStatusFilter("Proposta")} label="Focar propostas" />
             </>
           )}
@@ -154,7 +154,7 @@ export default function DashboardSidebar({
           {activePage === "automacoes" && (
             <>
               <ActionButton label="Criar regra" />
-              <ActionButton label="Ver templates" />
+              <ActionButton label="Ver modelos" />
             </>
           )}
 

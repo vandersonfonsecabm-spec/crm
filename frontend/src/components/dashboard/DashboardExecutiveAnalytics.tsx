@@ -44,7 +44,7 @@ export default function DashboardExecutiveAnalytics({
             <div>
               <p className="text-xs font-semibold text-slate-200">Performance semanal</p>
               <p className="mt-0.5 text-[10px] text-slate-500">
-                Tendência, volume e qualidade do pipeline em visão executiva.
+                Tendência, volume e qualidade do funil em visão executiva.
               </p>
             </div>
 
@@ -63,7 +63,7 @@ export default function DashboardExecutiveAnalytics({
             <div className="flex items-start justify-between gap-3 border-b border-white/10 bg-white/[0.025] p-3">
               <div>
                 <p className="text-[9px] uppercase tracking-[0.2em] text-slate-600">
-                  Pipeline previsto
+                  Funil previsto
                 </p>
 
                 <p className="mt-1 text-2xl font-bold text-white">
@@ -158,7 +158,7 @@ export default function DashboardExecutiveAnalytics({
 
               <div className="metric-card rounded-xl p-2">
                 <p className="text-[9px] text-slate-500">Oportunidades</p>
-                <p className="mt-1 text-xs font-semibold text-white">{clients.length} leads</p>
+                <p className="mt-1 text-xs font-semibold text-white">{clients.length} oportunidades</p>
               </div>
 
               <div className="metric-card rounded-xl p-2">
@@ -186,7 +186,7 @@ export default function DashboardExecutiveAnalytics({
               {recentlyMovedClients}/{clients.length}
             </p>
             <p className="mt-1 text-[10px] text-sky-200/60">
-              leads movimentados recentemente
+              oportunidades movimentadas recentemente
             </p>
           </div>
 
@@ -230,7 +230,7 @@ export default function DashboardExecutiveAnalytics({
                 </div>
 
                 <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] text-slate-300">
-                  {sellerClients.length} leads
+                  {sellerClients.length} oportunidades
                 </span>
               </div>
 

@@ -37,13 +37,13 @@ export default function DashboardExecutiveCenter({
             </div>
 
             <p className="mt-0.5 text-[10px] text-slate-500">
-              Analytics, prioridade comercial e resumo de performance em um único bloco.
+              Indicadores, prioridade comercial e resumo de performance em um único bloco.
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            <ExecutiveSignal label="Pipeline" value={`${activePipeline} ativos`} />
-            <ExecutiveSignal label="Quentes" value={`${hotLeads} leads`} />
+            <ExecutiveSignal label="Funil" value={`${activePipeline} ativos`} />
+            <ExecutiveSignal label="Quentes" value={`${hotLeads} oportunidades`} />
             <ExecutiveSignal label="Atenção" value={`${riskSignal} sinais`} />
           </div>
         </div>

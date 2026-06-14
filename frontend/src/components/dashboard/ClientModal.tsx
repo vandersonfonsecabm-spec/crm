@@ -38,7 +38,7 @@ export default function ClientModal({
           <div>
             <p className="text-sm font-semibold">{title}</p>
             <p className="mt-1 text-[11px] text-slate-500">
-              Preencha os dados principais para manter o pipeline limpo e organizado.
+              Preencha os dados principais para manter o funil limpo e organizado.
             </p>
           </div>
 
@@ -109,7 +109,7 @@ export default function ClientModal({
           </div>
 
           <div>
-            <label className={fieldLabelClass}>Origem do lead</label>
+            <label className={fieldLabelClass}>Origem da oportunidade</label>
             <input
               value={client.source}
               onChange={(event) => setClient({ ...client, source: event.target.value })}
@@ -123,7 +123,7 @@ export default function ClientModal({
           </div>
 
           <div>
-            <label className={fieldLabelClass}>Próximo follow-up</label>
+            <label className={fieldLabelClass}>Próximo contato</label>
             <input
               value={client.nextFollowUp}
               onChange={(event) => setClient({ ...client, nextFollowUp: event.target.value })}
@@ -133,7 +133,7 @@ export default function ClientModal({
           </div>
 
           <div>
-            <label className={fieldLabelClass}>Status do pipeline</label>
+            <label className={fieldLabelClass}>Status no funil</label>
             <select
               value={client.status}
               onChange={(event) => setClient({ ...client, status: event.target.value as Status })}

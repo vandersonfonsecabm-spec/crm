@@ -86,13 +86,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   const pageTitle =
     activePage === "dashboard"
-      ? "Visão geral"
+      ? "Visão Geral"
       : activePage === "comercial"
-        ? "Central comercial"
+        ? "Central Comercial"
         : activePage === "clientes"
-          ? "Clientes"
+          ? "Carteira"
           : activePage === "kanban"
-            ? "Kanban"
+            ? "Funil Comercial"
             : activePage === "agenda"
               ? "Agenda"
               : "Automações";

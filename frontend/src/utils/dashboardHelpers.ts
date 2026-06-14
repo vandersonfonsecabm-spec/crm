@@ -62,7 +62,7 @@ export function priorityLabel(client: Client) {
 
 
 export function stageGuidance(status: Status) {
-  if (status === "Novo") return "Qualificar lead";
+  if (status === "Novo") return "Qualificar oportunidade";
   if (status === "Contato") return "Avançar conversa";
   if (status === "Proposta") return "Fechar oportunidade";
   if (status === "Fechado") return "Pós-venda / expansão";
@@ -75,7 +75,7 @@ export function customerFitLabel(client: Client) {
   const score = getLeadScore(client);
 
   if (client.status === "Fechado") return "Cliente validado";
-  if (score >= 85 && client.value >= 12000) return "Fit premium";
+  if (score >= 85 && client.value >= 12000) return "Perfil premium";
   if (score >= 65) return "Bom encaixe";
   if (getRisk(client) === "Alto") return "Recuperação";
   return "Em qualificação";
@@ -89,7 +89,7 @@ export function nextActionLabel(client: Client) {
   if (getRisk(client) === "Alto") return "Retomar contato com urgência e registrar objeção.";
   if (getLeadScore(client) >= 80) return "Priorizar contato hoje e conduzir para fechamento.";
   if (client.status === "Novo") return "Fazer primeiro contato rápido e qualificar necessidade.";
-  return "Manter cadência de follow-up e avançar para próxima etapa.";
+  return "Manter cadência de acompanhamento e avançar para próxima etapa.";
 }
 
 

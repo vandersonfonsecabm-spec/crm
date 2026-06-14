@@ -38,7 +38,7 @@ export default function DashboardTopbar({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="hidden truncate text-xs font-semibold text-slate-100 md:block">
-              Central comercial
+              Central Comercial
             </p>
 
             <span className="flex items-center gap-1.5 rounded-full border border-emerald-300/16 bg-emerald-300/[0.055] px-2 py-0.5 text-[10px] font-semibold text-emerald-50">
@@ -48,7 +48,7 @@ export default function DashboardTopbar({
           </div>
 
           <p className="hidden truncate text-[10px] text-slate-500 lg:block">
-            Pipeline, clientes e agenda em uma visão unificada
+            Funil, carteira e agenda em uma visão unificada
           </p>
         </div>
       </div>

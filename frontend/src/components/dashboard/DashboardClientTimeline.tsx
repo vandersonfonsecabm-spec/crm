@@ -30,7 +30,7 @@ export default function DashboardClientTimeline({
             </div>
 
             <div>
-              <p className="text-xs font-semibold">Timeline comercial</p>
+              <p className="text-xs font-semibold">Histórico comercial</p>
               <p className="mt-0.5 text-[10px] text-slate-500">
                 {idleLabel} sem contato - próxima {selectedClient.nextFollowUp}
               </p>
@@ -53,7 +53,7 @@ export default function DashboardClientTimeline({
           />
           <button onClick={onAddNote} className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-white">
             <Plus size={12} />
-            Add
+            Adicionar
           </button>
         </div>
 
@@ -70,7 +70,7 @@ export default function DashboardClientTimeline({
                   ? "Priorizar contato hoje e conduzir para fechamento."
                   : getRisk(selectedClient) === "Alto"
                     ? "Reativar com mensagem objetiva antes de mover para perdido."
-                    : "Manter cadência de follow-up e registrar resposta do cliente."}
+                    : "Manter cadência de acompanhamento e registrar resposta do cliente."}
               </p>
             </div>
           </div>

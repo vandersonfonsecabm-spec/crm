@@ -36,7 +36,7 @@ export default function DashboardKanbanCommandBar({
           </div>
 
           <div className="min-w-0">
-            <p className="text-sm font-semibold">Comando do Kanban</p>
+            <p className="text-sm font-semibold">Comando do funil</p>
             <p className="mt-1 text-[11px] text-slate-500">
               Leitura executiva do funil sem ocupar espaço das colunas.
             </p>
@@ -45,9 +45,9 @@ export default function DashboardKanbanCommandBar({
 
         <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto xl:grid-cols-6">
           <KanbanCommandPill icon={<Target size={12} />} label="Gargalo" value={biggestBottleneck} tone="default" />
-          <KanbanCommandPill icon={<Flame size={12} />} label="Prioridade" value={`${hotLeads} leads`} tone="amber" />
+          <KanbanCommandPill icon={<Flame size={12} />} label="Prioridade" value={`${hotLeads} oportunidades`} tone="amber" />
           <KanbanCommandPill icon={<GitBranch size={12} />} label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
-          <KanbanCommandPill icon={<AlertTriangle size={12} />} label="Silenciosos" value={`${stalledLeads} leads`} tone="rose" />
+          <KanbanCommandPill icon={<AlertTriangle size={12} />} label="Silenciosos" value={`${stalledLeads} oportunidades`} tone="rose" />
           <KanbanCommandPill icon={<BadgeDollarSign size={12} />} label="Receita prevista" value={money(expectedRevenue)} tone="emerald" />
           <KanbanCommandPill icon={<TrendingUp size={12} />} label="Conversão" value={`${conversionRate}%`} tone="sky" />
         </div>

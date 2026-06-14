@@ -114,7 +114,7 @@ export default function DashboardCustomerDrawer({
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold">Central de decisão</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">Lead, ação, risco e histórico em um único painel.</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Oportunidade, ação, risco e histórico em um único painel.</p>
             </div>
 
             {selectedClient && (

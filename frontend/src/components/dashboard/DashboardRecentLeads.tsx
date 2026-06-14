@@ -42,14 +42,14 @@ export default function DashboardRecentLeads({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold">Inteligência de leads</p>
+              <p className="text-sm font-semibold">Inteligência de oportunidades</p>
               <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px] font-semibold text-slate-300">
                 {clients.length} ativos
               </span>
             </div>
 
             <p className="mt-0.5 text-[10px] text-slate-500">
-              Leads recentes, oportunidades quentes, visualizados e risco silencioso em uma visão única.
+              Oportunidades recentes, prioridades, visualizações e risco silencioso em uma visão única.
             </p>
           </div>
 
@@ -71,12 +71,12 @@ export default function DashboardRecentLeads({
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
-              <p className="text-[11px] font-semibold text-slate-200">Leads em destaque</p>
+              <p className="text-[11px] font-semibold text-slate-200">Oportunidades em destaque</p>
               <p className="mt-0.5 text-[9px] text-slate-500">Últimas oportunidades com valor e score.</p>
             </div>
 
             <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[9px] text-slate-400">
-              top {recentLeads.length}
+              {recentLeads.length} principais
             </span>
           </div>
 
@@ -130,7 +130,7 @@ export default function DashboardRecentLeads({
         <div className="space-y-2">
           <LeadMiniList
             title="Quentes"
-            emptyText="Nenhum lead quente agora."
+            emptyText="Nenhuma oportunidade quente agora."
             clients={hotLeads}
             money={money}
             statusClass={statusClass}
@@ -140,7 +140,7 @@ export default function DashboardRecentLeads({
 
           <LeadMiniList
             title="Visualizados"
-            emptyText="Nenhum lead visualizado ainda."
+            emptyText="Nenhuma oportunidade visualizada ainda."
             clients={viewedLeads}
             money={money}
             statusClass={statusClass}
@@ -150,7 +150,7 @@ export default function DashboardRecentLeads({
 
           <LeadMiniList
             title="Risco silencioso"
-            emptyText="Nenhum lead parado."
+            emptyText="Nenhuma oportunidade parada."
             clients={silentLeads}
             money={money}
             statusClass={statusClass}

@@ -69,7 +69,7 @@ export function Login({ onLogin }: LoginProps) {
                 Acesso seguro ao painel de vendas e atendimento.
               </h1>
               <p className="mt-4 max-w-lg text-sm leading-6 text-slate-400">
-                Carteira, pipeline, agenda e decisão comercial em um ambiente único para o time operar com clareza.
+                Carteira, funil, agenda e decisão comercial em um ambiente único para o time operar com clareza.
               </p>
             </div>
           </div>

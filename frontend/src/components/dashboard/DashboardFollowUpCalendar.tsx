@@ -53,14 +53,14 @@ export default function DashboardFollowUpCalendar({
             </div>
 
             <p className="mt-0.5 text-[10px] text-slate-500">
-              Follow-ups críticos, janelas próximas e valor comercial em aberto.
+              Acompanhamentos críticos, janelas próximas e valor comercial em aberto.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <div className="metric-card rounded-xl px-3 py-1.5 text-right">
               <p className="text-[9px] text-slate-500">Agenda</p>
-              <p className="text-xs font-semibold text-slate-100">{allClients.length} leads</p>
+              <p className="text-xs font-semibold text-slate-100">{allClients.length} oportunidades</p>
             </div>
 
             <div className="metric-card metric-pipeline rounded-xl px-3 py-1.5 text-right">
@@ -99,7 +99,7 @@ export default function DashboardFollowUpCalendar({
 
                 <div className="mt-2 flex items-center justify-between gap-2">
                   <p className="truncate text-[11px] font-semibold leading-3 text-slate-100">
-                    {firstClient ? firstClient.name : "Sem follow-up"}
+                    {firstClient ? firstClient.name : "Sem acompanhamento"}
                   </p>
 
                   <p className="shrink-0 text-[11px] font-semibold leading-3 text-teal-100">{money(groupValue)}</p>
@@ -112,14 +112,14 @@ export default function DashboardFollowUpCalendar({
         <div className="saas-card mt-3 rounded-xl p-2">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
-              <p className="text-[11px] font-semibold text-slate-200">Follow-ups críticos</p>
+              <p className="text-[11px] font-semibold text-slate-200">Acompanhamentos críticos</p>
               <p className="mt-0.5 text-[9px] text-slate-500">
                 Próximos clientes que merecem atenção rápida.
               </p>
             </div>
 
             <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">
-              top {criticalClients.length}
+              {criticalClients.length} principais
             </span>
           </div>
 
@@ -147,7 +147,7 @@ export default function DashboardFollowUpCalendar({
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-slate-500/18 bg-slate-950/25 px-3 py-2">
-              <p className="text-[10px] text-slate-500">Nenhum follow-up crítico no momento.</p>
+              <p className="text-[10px] text-slate-500">Nenhum acompanhamento crítico no momento.</p>
             </div>
           )}
         </div>

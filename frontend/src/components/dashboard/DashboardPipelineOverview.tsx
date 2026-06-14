@@ -27,7 +27,7 @@ export default function DashboardPipelineOverview({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-slate-100">Pipeline por etapa</p>
+              <p className="text-sm font-semibold text-slate-100">Funil por etapa</p>
               <span className="rounded-full border border-sky-400/15 bg-sky-500/[0.06] px-2 py-0.5 text-[9px] font-semibold text-sky-100">
                 {activeClients} ativos
               </span>
@@ -74,7 +74,7 @@ export default function DashboardPipelineOverview({
                 </div>
 
                 <div className="mt-2 flex items-center justify-between gap-2">
-                  <p className="truncate text-[9px] text-slate-500">{topClient ? topClient.name : "Sem leads"}</p>
+                  <p className="truncate text-[9px] text-slate-500">{topClient ? topClient.name : "Sem oportunidades"}</p>
 
                   <span className="shrink-0 text-[9px] font-semibold text-slate-400">{share}%</span>
                 </div>

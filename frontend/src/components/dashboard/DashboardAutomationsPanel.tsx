@@ -38,12 +38,12 @@ type CommercialTemplate = {
 
 const automationRules: AutomationRule[] = [
   {
-    title: "Follow-up de proposta",
+    title: "Acompanhamento de proposta",
     description: "Mantém propostas abertas no radar do time comercial.",
     trigger: "Cliente em proposta por 2 dias",
     action: "Gerar lembrete comercial",
     status: "Ativa",
-    impact: "8 follow-ups",
+    impact: "8 acompanhamentos",
     metric: "R$ 28.200,00 monitorados",
     tone: "sky",
     icon: <Bell size={15} />,
@@ -60,7 +60,7 @@ const automationRules: AutomationRule[] = [
     icon: <Clock3 size={15} />,
   },
   {
-    title: "Lead quente",
+    title: "Oportunidade quente",
     description: "Destaca oportunidades com score alto e ticket relevante.",
     trigger: "Score acima de 85",
     action: "Marcar oportunidade quente",
@@ -91,7 +91,7 @@ const commercialTemplates: CommercialTemplate[] = [
     icon: <MessageCircle size={14} />,
   },
   {
-    title: "Lembrar follow-up de hoje",
+    title: "Lembrar acompanhamento de hoje",
     description: "Prioriza clientes com janela aberta no dia.",
     tone: "sky",
     icon: <Bell size={14} />,
@@ -111,7 +111,7 @@ const commercialTemplates: CommercialTemplate[] = [
 ];
 
 const recentEvents = [
-  { client: "Rafael Lima", event: "entrou na fila de follow-up.", meta: "Proposta aberta" },
+  { client: "Rafael Lima", event: "entrou na fila de acompanhamento.", meta: "Proposta aberta" },
   { client: "Mariana Costa", event: "recebeu alerta de proposta.", meta: "Alta prioridade" },
   { client: "Felipe Andrade", event: "foi marcado como cliente em expansão.", meta: "Carteira ativa" },
   { client: "Daniel Martins", event: "voltou para revisão comercial.", meta: "Sem contato recente" },
@@ -144,7 +144,7 @@ export default function DashboardAutomationsPanel() {
             <div className="min-w-0">
               <p className="text-base font-semibold text-slate-100">Automações</p>
               <p className="mt-0.5 max-w-2xl text-xs leading-5 text-slate-400">
-                Regras comerciais para manter follow-ups, propostas e carteira em movimento.
+                Regras comerciais para manter acompanhamentos, propostas e carteira em movimento.
               </p>
             </div>
           </div>
@@ -177,7 +177,7 @@ export default function DashboardAutomationsPanel() {
           <section className="saas-panel rounded-2xl p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-100">Templates comerciais</p>
+                <p className="text-sm font-semibold text-slate-100">Modelos comerciais</p>
                 <p className="mt-0.5 text-[11px] text-slate-500">Modelos prontos para organizar próximas regras.</p>
               </div>
               <Target size={15} className="shrink-0 text-slate-400" />

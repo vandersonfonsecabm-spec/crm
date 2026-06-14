@@ -7,9 +7,9 @@ export function EmptyDecisionState() {
       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-teal-300/14 bg-teal-300/[0.06] text-teal-100">
         <Sparkles size={16} />
       </div>
-      <p className="mt-3 text-sm font-semibold text-slate-300">Selecione um lead</p>
+      <p className="mt-3 text-sm font-semibold text-slate-300">Selecione uma oportunidade</p>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-        Clique em um cliente na tabela ou no Kanban para abrir a central de decisão comercial.
+        Clique em um cliente na carteira ou no funil comercial para abrir a central de decisão comercial.
       </p>
     </div>
   );

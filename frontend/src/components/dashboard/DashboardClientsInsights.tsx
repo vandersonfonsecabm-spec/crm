@@ -54,7 +54,7 @@ export default function DashboardClientsInsights({
           <MetricCard compact title="Potencial" value={money(totalPotential)} caption="Receita em carteira" icon={<Target size={14} />} tone="pipeline" />
           <MetricCard compact title="Quentes" value={`${hotClients.length} clientes`} caption="Oportunidades prioritárias" icon={<Flame size={14} />} tone="risk" />
           <MetricCard compact title="Atenção" value={`${riskClients.length} clientes`} caption="Risco alto" icon={<AlertTriangle size={14} />} tone="forecast" />
-          <MetricCard compact title="Hoje" value={`${todayFollowUps.length} ações`} caption="Follow-ups do dia" icon={<Users size={14} />} tone="revenue" />
+          <MetricCard compact title="Hoje" value={`${todayFollowUps.length} ações`} caption="Acompanhamentos do dia" icon={<Users size={14} />} tone="revenue" />
         </div>
       </div>
 

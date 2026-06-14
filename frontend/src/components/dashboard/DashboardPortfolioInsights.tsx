@@ -91,7 +91,7 @@ export default function DashboardPortfolioInsights({
       <div className="saas-panel rounded-2xl p-4">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-100">Sinais da carteira</p>
-          <span className="text-[11px] text-slate-500">top leads</span>
+          <span className="text-[11px] text-slate-500">principais oportunidades</span>
         </div>
 
         <div className="space-y-2">

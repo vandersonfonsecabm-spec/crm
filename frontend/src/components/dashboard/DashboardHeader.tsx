@@ -15,10 +15,10 @@ export default function DashboardHeader({
   onCreateClient,
 }: DashboardHeaderProps) {
   const breadcrumbLabel = {
-    dashboard: "Dashboard",
-    comercial: "Comercial",
-    clientes: "Clientes",
-    kanban: "Kanban",
+    dashboard: "Visão Geral",
+    comercial: "Central Comercial",
+    clientes: "Carteira",
+    kanban: "Funil Comercial",
     agenda: "Agenda",
     automacoes: "Automações",
   }[activePage];

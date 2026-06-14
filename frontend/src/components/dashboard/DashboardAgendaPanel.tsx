@@ -59,7 +59,7 @@ export default function DashboardAgendaPanel({
         <AgendaMetric
           icon={<CalendarDays size={15} />}
           title="Hoje"
-          value={`${todayClients.length} follow-ups`}
+          value={`${todayClients.length} acompanhamentos`}
           caption="Ações do dia"
           tone="revenue"
         />
@@ -74,7 +74,7 @@ export default function DashboardAgendaPanel({
           icon={<CheckCircle2 size={15} />}
           title="Valor agendado"
           value={money(totalAgendaValue)}
-          caption="Pipeline em agenda"
+          caption="Funil em agenda"
           tone="pipeline"
         />
       </section>
@@ -83,7 +83,7 @@ export default function DashboardAgendaPanel({
         <div className="saas-panel min-w-0 rounded-2xl p-4">
           <PanelTitle
             icon={<Clock size={15} className="text-sky-300" />}
-            title="Janelas de follow-up"
+            title="Janelas de acompanhamento"
             hint="Prioridade por prazo, urgência e valor comercial."
           />
 

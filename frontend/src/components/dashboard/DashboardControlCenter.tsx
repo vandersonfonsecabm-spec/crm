@@ -78,7 +78,7 @@ export default function DashboardControlCenter({
             <ControlSignal icon={<Zap size={12} />} label="Alertas" value={String(smartAlerts.length)} tone="rose" />
             <ControlSignal icon={<Sparkles size={12} />} label="Quentes" value={String(analytics.hotCount)} tone="amber" />
             <ControlSignal icon={<Users size={12} />} label="Ativos" value={String(activeCount)} tone="sky" />
-            <ControlSignal icon={<Target size={12} />} label="Pipeline" value={money(proposalValue)} tone="pipeline" />
+            <ControlSignal icon={<Target size={12} />} label="Funil" value={money(proposalValue)} tone="pipeline" />
           </div>
         </div>
       </div>
@@ -116,7 +116,7 @@ export default function DashboardControlCenter({
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-base font-semibold text-slate-100">Fila comercial</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Leads ordenados por urgência, score e potencial de receita.</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">Oportunidades ordenadas por urgência, score e potencial de receita.</p>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -206,7 +206,7 @@ export default function DashboardControlCenter({
               <CommandAction
                 icon={<Plus size={15} />}
                 title="Nova oportunidade"
-                description="Criar lead manual sem sair do fluxo comercial."
+                description="Criar oportunidade manual sem sair do fluxo comercial."
                 tone="emerald"
                 onClick={() => setCreating({ ...emptyClient })}
               />

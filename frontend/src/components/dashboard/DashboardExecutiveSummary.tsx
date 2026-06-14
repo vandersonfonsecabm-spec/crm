@@ -21,13 +21,13 @@ export default function DashboardExecutiveSummary({ analytics }: DashboardExecut
         <SummaryCard
           icon={<CalendarCheck size={14} className="text-sky-300" />}
           label="Próximas ações"
-          value={`${analytics.todayFollowUps} follow-ups`}
+          value={`${analytics.todayFollowUps} acompanhamentos`}
           helper="Agenda de hoje"
           tone="sky"
         />
         <SummaryCard
           icon={<Flame size={14} className="text-rose-300" />}
-          label="Clientes quentes"
+          label="Oportunidades quentes"
           value={`${analytics.hotCount} oportunidades`}
           helper="Prioridade ativa"
           tone="rose"

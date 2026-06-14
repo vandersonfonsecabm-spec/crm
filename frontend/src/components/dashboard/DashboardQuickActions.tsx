@@ -32,8 +32,8 @@ export default function DashboardQuickActions({
       {isOpen && (
         <div className="absolute right-0 top-11 z-[240] w-56 rounded-2xl border border-slate-500/18 bg-slate-950/95 p-2 shadow-2xl shadow-black/60 backdrop-blur-xl">
           <ActionItem icon={<Plus size={14} />} label="Novo cliente" onClick={onCreateClient} />
-          <ActionItem icon={<Users size={14} />} label="Ir para clientes" onClick={onGoToClients} />
-          <ActionItem icon={<KanbanSquare size={14} />} label="Abrir Kanban" onClick={onGoToKanban} />
+          <ActionItem icon={<Users size={14} />} label="Ir para carteira" onClick={onGoToClients} />
+          <ActionItem icon={<KanbanSquare size={14} />} label="Abrir funil" onClick={onGoToKanban} />
           <ActionItem icon={<Download size={14} />} label="Exportar CSV" onClick={onExportCsv} />
 
           <div className="mt-2 rounded-xl border border-slate-500/12 bg-white/[0.035] px-3 py-2">

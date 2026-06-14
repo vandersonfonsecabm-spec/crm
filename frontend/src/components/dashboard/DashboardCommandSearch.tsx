@@ -59,10 +59,10 @@ export default function DashboardCommandSearch({
     }
 
     const pages = [
-      { label: "Dashboard", type: "Página", action: () => onSetActivePage("dashboard") },
-      { label: "Comercial", type: "Página", action: () => onSetActivePage("comercial") },
-      { label: "Clientes", type: "Página", action: () => onSetActivePage("clientes") },
-      { label: "Kanban", type: "Página", action: () => onSetActivePage("kanban") },
+      { label: "Visão Geral", type: "Página", action: () => onSetActivePage("dashboard") },
+      { label: "Central Comercial", type: "Página", action: () => onSetActivePage("comercial") },
+      { label: "Carteira", type: "Página", action: () => onSetActivePage("clientes") },
+      { label: "Funil Comercial", type: "Página", action: () => onSetActivePage("kanban") },
       { label: "Agenda", type: "Página", action: () => onSetActivePage("agenda") },
       { label: "Automações", type: "Página", action: () => onSetActivePage("automacoes") },
     ].filter((item) => item.label.toLowerCase().includes(term));

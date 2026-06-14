@@ -37,7 +37,7 @@ export default function DashboardKanbanSummary({
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold">Pipeline Kanban</p>
+              <p className="text-sm font-semibold">Funil Comercial</p>
 
               <span className="saas-chip rounded-full px-2 py-0.5 text-[9px] font-semibold">
                 visão executiva
@@ -45,17 +45,17 @@ export default function DashboardKanbanSummary({
             </div>
 
             <p className="mt-0.5 text-[10px] text-slate-500">
-              {kanbanClientsCount} leads na visão atual -{" "}
+              {kanbanClientsCount} oportunidades na visão atual -{" "}
               {kanbanOwnerFilter === "Todos" ? "todos os vendedores" : `vendedor ${kanbanOwnerFilter}`}
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <SummarySignal icon={<GitBranch size={12} />} label="Pipeline" value={money(kanbanEnterpriseStats.totalValue)} />
-          <SummarySignal icon={<Target size={12} />} label="Forecast" value={money(kanbanEnterpriseStats.forecastValue)} tone="forecast" />
+          <SummarySignal icon={<GitBranch size={12} />} label="Funil" value={money(kanbanEnterpriseStats.totalValue)} />
+          <SummarySignal icon={<Target size={12} />} label="Previsão" value={money(kanbanEnterpriseStats.forecastValue)} tone="forecast" />
           <SummarySignal icon={<CheckCircle2 size={12} />} label="Ganho" value={money(kanbanEnterpriseStats.wonValue)} tone="pipeline" />
-          <SummarySignal icon={<AlertTriangle size={12} />} label="Risco" value={`${kanbanEnterpriseStats.highRiskCount} leads`} tone="risk" />
+          <SummarySignal icon={<AlertTriangle size={12} />} label="Risco" value={`${kanbanEnterpriseStats.highRiskCount} oportunidades`} tone="risk" />
         </div>
       </div>
 
@@ -78,14 +78,14 @@ export default function DashboardKanbanSummary({
 
         <TextSignal
           icon={<GitBranch size={12} />}
-          label="Pipeline ativo"
-          value={`${kanbanEnterpriseStats.activePipeline} leads`}
-          hint="Leads ainda em negociação antes de fechamento ou perda."
+          label="Funil ativo"
+          value={`${kanbanEnterpriseStats.activePipeline} oportunidades`}
+          hint="Oportunidades ainda em negociação antes de fechamento ou perda."
         />
 
         <TextSignal
           icon={<CalendarDays size={12} />}
-          label="Follow-ups hoje"
+          label="Acompanhamentos hoje"
           value={String(kanbanEnterpriseStats.todayFollowUps)}
           hint="Ações que precisam de atenção imediata."
         />

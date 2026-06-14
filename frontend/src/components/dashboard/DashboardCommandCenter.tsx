@@ -48,7 +48,7 @@ export default function DashboardCommandCenter({
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-slate-200">Fila de prioridade</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">Leads com maior urgência comercial agora</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">Oportunidades com maior urgência comercial agora</p>
             </div>
 
             <div className="saas-chip rounded-lg px-2 py-1 text-[10px]">
@@ -133,7 +133,7 @@ export default function DashboardCommandCenter({
               <span className="rounded-full bg-emerald-300/10 px-2 py-0.5 text-[9px] text-emerald-100">Novo</span>
             </div>
             <p className="text-xs font-semibold text-emerald-100">Adicionar oportunidade</p>
-            <p className="mt-1 text-[10px] text-emerald-100/60">Cria um novo lead sem sair do fluxo comercial.</p>
+            <p className="mt-1 text-[10px] text-emerald-100/60">Cria uma nova oportunidade sem sair do fluxo comercial.</p>
           </button>
 
           <div className="saas-card rounded-xl p-3 md:col-span-3">
@@ -141,13 +141,13 @@ export default function DashboardCommandCenter({
               <div>
                 <p className="text-xs font-semibold text-slate-200">Leitura executiva do dia</p>
                 <p className="mt-1 text-[10px] text-slate-500">
-                  Priorize propostas quentes, reative clientes silenciosos e mantenha follow-ups de hoje no topo.
+                  Priorize propostas quentes, reative clientes silenciosos e mantenha acompanhamentos de hoje no topo.
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-2">
                 <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
-                  {analytics.todayFollowUps} follow-ups
+                  {analytics.todayFollowUps} acompanhamentos
                 </span>
                 <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
                   {clients.filter((client) => client.lastContactDays >= 7).length} silenciosos
