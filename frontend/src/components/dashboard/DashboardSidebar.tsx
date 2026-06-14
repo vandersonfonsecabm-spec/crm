@@ -50,13 +50,6 @@ export default function DashboardSidebar({
             <p className="truncate text-[11px] text-slate-500">Operação comercial</p>
           </div>
         </div>
-
-        <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-300/16 bg-emerald-300/[0.055] px-2 py-1.5">
-          <span className="text-[10px] text-slate-300">Ambiente</span>
-          <span className="rounded-full bg-emerald-300/[0.12] px-2 py-0.5 text-[9px] font-semibold text-emerald-50">
-            estável
-          </span>
-        </div>
       </div>
 
       <nav className="space-y-4">

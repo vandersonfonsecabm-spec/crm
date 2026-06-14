@@ -98,11 +98,11 @@ export default function DashboardFollowUpCalendar({
                 </div>
 
                 <div className="mt-2 flex items-center justify-between gap-2">
-                  <p className="truncate text-[10px] text-slate-500">
+                  <p className="truncate text-[11px] font-semibold leading-3 text-slate-100">
                     {firstClient ? firstClient.name : "Sem follow-up"}
                   </p>
 
-                  <p className="shrink-0 text-[10px] font-semibold text-slate-300">{money(groupValue)}</p>
+                  <p className="shrink-0 text-[11px] font-semibold leading-3 text-teal-100">{money(groupValue)}</p>
                 </div>
               </button>
             );
@@ -132,14 +132,14 @@ export default function DashboardFollowUpCalendar({
                   className="saas-row min-w-0 rounded-xl px-2 py-1.5 text-left transition-all duration-200"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-[10px] font-semibold text-slate-200">{client.name}</p>
+                    <p className="truncate text-[11px] font-semibold leading-3 text-slate-100">{client.name}</p>
 
                     <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8px] ${statusClass(client.status)}`}>
                       {client.status}
                     </span>
                   </div>
 
-                  <p className="mt-0.5 truncate text-[9px] text-slate-500">
+                  <p className="mt-0.5 truncate text-[10px] font-medium leading-3 text-slate-400">
                     {client.agendaLabel} • {money(client.value)}
                   </p>
                 </button>

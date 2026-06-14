@@ -89,7 +89,7 @@ export default function DashboardCommandSearch({
 
   return (
     <div className="relative hidden md:block">
-      <div className="flex w-72 items-center gap-2 rounded-xl border border-slate-500/14 bg-slate-950/28 px-3 py-2 shadow-inner shadow-black/20 transition focus-within:border-teal-200/22 focus-within:bg-slate-950/40">
+      <div className="flex w-72 items-center gap-2 rounded-xl border border-slate-500/16 bg-slate-950/34 px-3 py-2 shadow-inner shadow-black/20 transition focus-within:border-teal-200/24 focus-within:bg-slate-950/48">
         <Search size={13} className="text-slate-500" />
 
         <input
