@@ -30,18 +30,18 @@ export default function DashboardPortfolioInsights({
   const highRiskCount = clients.filter((client) => getRisk(client) === "Alto").length;
 
   return (
-    <section className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+    <section className="mt-4 grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
       <div className="saas-panel rounded-2xl p-4">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-100">Qualidade da carteira</p>
-            <p className="mt-1 text-[11px] text-slate-500">Saúde comercial, prioridade e risco em leitura rápida.</p>
+            <p className="text-sm font-semibold text-slate-100">Leitura executiva</p>
+            <p className="mt-1 text-[11px] text-slate-500">Saúde, atenção e risco sem disputar com os indicadores principais.</p>
           </div>
 
-          <span className="saas-chip rounded-full px-2 py-1 text-[10px] font-semibold">carteira ativa</span>
+          <span className="saas-chip rounded-full px-2 py-1 text-[10px] font-semibold">síntese</span>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-3">
           <InsightMetric
             icon={<Activity size={14} className="text-sky-300" />}
             label="Carteira ativa"
@@ -65,10 +65,10 @@ export default function DashboardPortfolioInsights({
           />
         </div>
 
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
+        <div className="mt-3 grid gap-2">
           {clients
             .filter((client) => client.hot || getLeadScore(client) >= 80)
-            .slice(0, 3)
+            .slice(0, 2)
             .map((client) => (
               <button
                 key={client.id}
@@ -89,9 +89,12 @@ export default function DashboardPortfolioInsights({
       </div>
 
       <div className="saas-panel rounded-2xl p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-100">Sinais da carteira</p>
-          <span className="text-[11px] text-slate-500">principais oportunidades</span>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-100">Prioridades comerciais</p>
+            <p className="mt-0.5 text-[10px] text-slate-500">Oportunidades que pedem decisão rápida.</p>
+          </div>
+          <span className="text-[11px] text-slate-500">top 3</span>
         </div>
 
         <div className="space-y-2">
@@ -154,15 +157,15 @@ function InsightMetric({
   };
 
   return (
-    <div className={`metric-card rounded-xl p-3 ${classes[tone]}`}>
+    <div className={`metric-card rounded-xl px-3 py-2.5 ${classes[tone]}`}>
       <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-[0.12em] opacity-70">{label}</p>
+        <p className="truncate text-[9px] uppercase tracking-[0.12em] opacity-70">{label}</p>
         {icon}
       </div>
 
-      <p className="mt-2 text-xl font-semibold">{value}</p>
+      <p className="mt-1 text-base font-semibold">{value}</p>
 
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
         <div className={`h-full rounded-full ${barClasses[tone]}`} style={{ width: `${progress}%` }} />
       </div>
     </div>

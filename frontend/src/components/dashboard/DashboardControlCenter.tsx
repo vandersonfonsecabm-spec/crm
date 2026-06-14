@@ -3,10 +3,7 @@ import {
   ArrowUpRight,
   Command,
   Plus,
-  Sparkles,
   Target,
-  Users,
-  Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Analytics, Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
@@ -50,10 +47,7 @@ export default function DashboardControlCenter({
   const highPriorityCount = clients.filter((client) => getPriority(client) === "Alta").length;
   const silentCount = clients.filter((client) => client.lastContactDays >= 7).length;
   const proposalCount = clients.filter((client) => client.status === "Proposta").length;
-  const activeCount = clients.filter((client) => client.status !== "Perdido").length;
-  const proposalValue = clients
-    .filter((client) => client.status === "Proposta")
-    .reduce((sum, client) => sum + client.value, 0);
+  const topPriority = priorityClients[0] ?? null;
 
   return (
     <section className="space-y-3">
@@ -65,59 +59,31 @@ export default function DashboardControlCenter({
             </div>
 
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-100">Comercial</p>
+              <p className="text-sm font-semibold text-slate-100">Mesa de ação comercial</p>
               <p className="mt-0.5 text-[11px] text-slate-500">
-                Prioridades, oportunidades e próximas ações em um painel limpo.
+                Priorize a fila, resolva sinais críticos e avance a próxima oportunidade.
               </p>
             </div>
           </div>
 
-          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:grid-cols-4">
-            <ControlSignal icon={<Zap size={12} />} label="Alertas" value={String(smartAlerts.length)} tone="rose" />
-            <ControlSignal icon={<Sparkles size={12} />} label="Quentes" value={String(analytics.hotCount)} tone="amber" />
-            <ControlSignal icon={<Users size={12} />} label="Ativos" value={String(activeCount)} tone="sky" />
-            <ControlSignal icon={<Target size={12} />} label="Funil" value={money(proposalValue)} tone="pipeline" />
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+            <FocusPill label="Ação agora" value={topPriority ? topPriority.name : "Fila em dia"} tone="amber" />
+            <FocusPill label="Críticos" value={String(highPriorityCount)} tone="rose" />
+            <FocusPill label="Propostas" value={String(proposalCount)} tone="default" />
           </div>
         </div>
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.55fr)]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.62fr)]">
         <div className="min-w-0 space-y-3">
-          <div className="saas-panel rounded-2xl p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-slate-100">Sinais críticos</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Filtros inteligentes para decidir onde agir primeiro.</p>
-              </div>
-
-              <span className="saas-chip rounded-full px-2 py-1 text-[9px]">leitura rápida</span>
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-3">
-              {smartAlerts.map((alert, index) => (
-                <button
-                  key={alert}
-                  onClick={() => applySmartFilter(index === 0 ? "risk" : index === 1 ? "proposal" : "silent")}
-                  className="saas-row min-w-0 rounded-xl px-3 py-2.5 text-left"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="line-clamp-1 text-[11px] font-semibold text-slate-200">{alert}</p>
-                    <ArrowUpRight size={12} className="shrink-0 text-slate-500" />
-                  </div>
-                  <p className="mt-1 text-[9px] uppercase tracking-[0.12em] text-slate-600">aplicar filtro</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="saas-panel rounded-2xl p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-base font-semibold text-slate-100">Fila comercial</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Oportunidades ordenadas por urgência, score e potencial de receita.</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">Ordem prática de abordagem para hoje.</p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 <QueueBadge label="Críticos" value={String(highPriorityCount)} tone="rose" />
                 <QueueBadge label="Propostas" value={String(proposalCount)} tone="amber" />
               </div>
@@ -174,13 +140,40 @@ export default function DashboardControlCenter({
 
         <div className="min-w-0 space-y-3">
           <div className="saas-panel rounded-2xl p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-slate-100">Sinais críticos</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">Filtros rápidos para agir primeiro.</p>
+              </div>
+
+              <span className="saas-chip rounded-full px-2 py-1 text-[9px]">priorizar</span>
+            </div>
+
+            <div className="grid gap-2">
+              {smartAlerts.map((alert, index) => (
+                <button
+                  key={alert}
+                  onClick={() => applySmartFilter(index === 0 ? "risk" : index === 1 ? "proposal" : "silent")}
+                  className="saas-row min-w-0 rounded-xl px-3 py-2 text-left"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="line-clamp-1 text-[11px] font-semibold text-slate-200">{alert}</p>
+                    <ArrowUpRight size={12} className="shrink-0 text-slate-500" />
+                  </div>
+                  <p className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-slate-600">aplicar filtro</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="saas-panel rounded-2xl p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-slate-100">Ações rápidas</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Comandos diretos para limpar a fila.</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">Comandos para destravar a operação.</p>
               </div>
 
-              <span className="saas-chip rounded-full px-2 py-1 text-[9px]">assistido</span>
+              <span className="saas-chip rounded-full px-2 py-1 text-[9px]">agir</span>
             </div>
 
             <div className="space-y-2">
@@ -208,27 +201,26 @@ export default function DashboardControlCenter({
             </div>
           </div>
 
-          <div className="saas-panel rounded-2xl p-4">
+          <div className="saas-panel rounded-2xl p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-100">Últimas atividades</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Movimentos recentes da carteira.</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">Sinais recentes da operação.</p>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 <QueueBadge label="Hoje" value={String(analytics.todayFollowUps)} tone="sky" />
-                <QueueBadge label="Silenciosos" value={String(silentCount)} tone="default" />
               </div>
             </div>
 
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 space-y-1.5">
               {recentActivities.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-slate-500/18 bg-slate-950/20 px-3 py-2 text-[10px] text-slate-500">
                   Nenhuma atividade recente registrada.
                 </p>
               ) : (
-                recentActivities.slice(0, 4).map((activity) => (
-                  <div key={activity.id} className="saas-row rounded-xl px-3 py-2">
+                recentActivities.slice(0, 3).map((activity) => (
+                  <div key={activity.id} className="saas-row rounded-xl px-3 py-1.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-[11px] font-semibold text-slate-200">{activity.client}</p>
                       <span className="shrink-0 text-[9px] text-slate-600">{activity.date}</span>
@@ -245,31 +237,25 @@ export default function DashboardControlCenter({
   );
 }
 
-function ControlSignal({
-  icon,
+function FocusPill({
   label,
   value,
   tone,
 }: {
-  icon: ReactNode;
   label: string;
   value: string;
-  tone: "rose" | "amber" | "sky" | "pipeline";
+  tone: "default" | "rose" | "amber";
 }) {
   const classes = {
-    rose: "metric-card metric-risk text-rose-100",
-    amber: "metric-card metric-forecast text-amber-100",
-    sky: "metric-card metric-revenue text-sky-100",
-    pipeline: "metric-card metric-pipeline text-teal-100",
+    default: "border-slate-500/12 bg-slate-950/24 text-slate-300",
+    rose: "border-rose-300/16 bg-rose-500/[0.055] text-rose-100",
+    amber: "border-amber-300/16 bg-amber-500/[0.055] text-amber-100",
   };
 
   return (
-    <div className={`min-w-0 rounded-xl border px-2.5 py-2 text-right ${classes[tone]}`}>
-      <div className="flex items-center justify-end gap-1 opacity-75">
-        <span className="truncate text-[8px] uppercase tracking-[0.12em]">{label}</span>
-        {icon}
-      </div>
-      <p className="mt-1 truncate text-sm font-semibold leading-none">{value}</p>
+    <div className={`min-w-0 rounded-xl border px-2.5 py-1.5 text-right ${classes[tone]}`}>
+      <p className="text-[8px] uppercase tracking-[0.12em] opacity-65">{label}</p>
+      <p className="mt-0.5 max-w-[150px] truncate text-[11px] font-semibold leading-none">{value}</p>
     </div>
   );
 }
