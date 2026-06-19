@@ -86,47 +86,26 @@ const clientes = [
 ];
 
 async function main() {
-  await prisma.cliente.deleteMany({
-    where: {
-      nome: "test",
-    },
-  });
+  const totalClientes = await prisma.cliente.count();
+
+  if (totalClientes > 0) {
+    console.log("Seed ignorado: banco ja possui clientes.");
+    return;
+  }
 
   for (const cliente of clientes) {
     const { notas, ...dadosCliente } = cliente;
-    const existente = await prisma.cliente.findFirst({
-      where: {
-        telefone: cliente.telefone,
-      },
-    });
-
-    if (existente) {
-      const clienteAtualizado = await prisma.cliente.update({
-        where: {
-          id: existente.id,
-        },
-        data: dadosCliente,
-      });
-      await resetNotas(clienteAtualizado.id, notas);
-      continue;
-    }
 
     const criado = await prisma.cliente.create({
       data: dadosCliente,
     });
-    await resetNotas(criado.id, notas);
+    await createNotas(criado.id, notas);
   }
 
-  console.log("Demo SQLite pronto em backend/prisma/dev.db");
+  console.log("Demo SQLite pronto.");
 }
 
-async function resetNotas(clienteId, notas) {
-  await prisma.nota.deleteMany({
-    where: {
-      clienteId,
-    },
-  });
-
+async function createNotas(clienteId, notas) {
   for (const texto of notas) {
     await prisma.nota.create({
       data: {

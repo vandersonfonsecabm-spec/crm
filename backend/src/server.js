@@ -8,9 +8,28 @@ const prisma = new PrismaClient();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const HOST = "0.0.0.0";
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://crm-murex-six-83.vercel.app",
+];
+const allowedOrigins = getAllowedOrigins();
 
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Origem nao permitida pelo CORS."));
+    },
+    credentials: true,
+  }),
+);
 
 const DEMO_EMAIL = "demo@crm.com";
 const DEMO_PASSWORD = "123456";
@@ -289,6 +308,30 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+app.use((error, req, res, next) => {
+  if (error.message === "Origem nao permitida pelo CORS.") {
+    return res.status(403).json({
+      erro: "Origem nao permitida.",
+    });
+  }
+
+  console.log(error);
+
+  return res.status(500).json({
+    erro: "Erro interno do servidor",
+  });
 });
+
+app.listen(PORT, HOST, () => {
+  console.log(`Servidor rodando em ${HOST}:${PORT}`);
+});
+
+function getAllowedOrigins() {
+  const configuredOrigins = [process.env.FRONTEND_URL, process.env.ALLOWED_ORIGINS]
+    .filter(Boolean)
+    .flatMap((value) => String(value).split(","))
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return configuredOrigins.length > 0 ? configuredOrigins : DEFAULT_ALLOWED_ORIGINS;
+}
