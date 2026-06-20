@@ -268,6 +268,67 @@ app.post("/clientes/:id/notas", async (req, res) => {
   }
 });
 
+app.delete("/clientes/:clienteId/notas/:notaId", requireAuth, async (req, res) => {
+  try {
+    const clienteId = parsePositiveId(req.params.clienteId);
+    const notaId = parsePositiveId(req.params.notaId);
+
+    if (!clienteId || !notaId) {
+      return res.status(400).json({
+        erro: "Parametros invalidos.",
+      });
+    }
+
+    const cliente = await prisma.cliente.findUnique({
+      where: {
+        id: clienteId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!cliente) {
+      return res.status(404).json({
+        erro: "Cliente nao encontrado.",
+      });
+    }
+
+    const nota = await prisma.nota.findFirst({
+      where: {
+        id: notaId,
+        clienteId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!nota) {
+      return res.status(404).json({
+        erro: "Nota nao encontrada.",
+      });
+    }
+
+    await prisma.nota.delete({
+      where: {
+        id: notaId,
+      },
+    });
+
+    return res.json({
+      ok: true,
+      mensagem: "Nota removida com sucesso.",
+    });
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao remover nota",
+    });
+  }
+});
+
 function clientePayload(body) {
   const tags = Array.isArray(body.tags)
     ? body.tags
@@ -299,6 +360,24 @@ function safeParseTags(value) {
   } catch {
     return [];
   }
+}
+
+function requireAuth(req, res, next) {
+  const authorization = req.headers.authorization || "";
+  const expectedToken = `Bearer ${DEMO_TOKEN}`;
+
+  if (authorization !== expectedToken) {
+    return res.status(401).json({
+      erro: "Nao autorizado.",
+    });
+  }
+
+  return next();
+}
+
+function parsePositiveId(value) {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 app.get("/health", (req, res) => {
