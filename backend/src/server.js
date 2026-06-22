@@ -506,6 +506,37 @@ app.get("/produtos", async (req, res) => {
       });
     }
 
+    const estoqueBaixo = parseBooleanFilter(req.query, "estoqueBaixo");
+
+    if (!estoqueBaixo.valid) {
+      return res.status(400).json({
+        erro: "Filtro estoqueBaixo deve ser verdadeiro ou falso.",
+      });
+    }
+
+    if (estoqueBaixo.provided) {
+      const produtos = await prisma.produto.findMany({
+        where: where.data,
+        include: {
+          categoria: true,
+        },
+        orderBy,
+      });
+      const produtosFiltrados = produtos.filter((produto) => {
+        const baixo = produtoTemEstoqueBaixo(produto);
+        return estoqueBaixo.value ? baixo : !baixo;
+      });
+
+      return res.json(
+        paginatedResponse(
+          produtosFiltrados.slice(skip, skip + limit).map(produtoResponse),
+          produtosFiltrados.length,
+          page,
+          limit,
+        ),
+      );
+    }
+
     const [total, produtos] = await Promise.all([
       prisma.produto.count({
         where: where.data,
@@ -547,6 +578,27 @@ app.get("/produtos/:id", async (req, res) => {
       },
       include: {
         categoria: true,
+        _count: {
+          select: {
+            movimentacoes: true,
+          },
+        },
+        movimentacoes: {
+          include: {
+            produto: {
+              select: {
+                id: true,
+                nome: true,
+                codigo: true,
+                unidadeMedida: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 5,
+        },
       },
     });
 
@@ -714,6 +766,7 @@ app.get("/estoque/resumo", async (req, res) => {
       produtosComEstoqueBaixo,
       categoriasAtivas,
       ultimasMovimentacoes,
+      produtosParaTotais,
     ] = await Promise.all([
       prisma.produto.count({
         where: {
@@ -768,7 +821,18 @@ app.get("/estoque/resumo", async (req, res) => {
         },
         take: 5,
       }),
+      prisma.produto.findMany({
+        where: {
+          ativo: true,
+        },
+        select: {
+          quantidadeAtual: true,
+          precoCustoCentavos: true,
+          precoVendaCentavos: true,
+        },
+      }),
     ]);
+    const totais = calcularTotaisEstoque(produtosParaTotais);
 
     return res.json({
       indicadores: {
@@ -779,6 +843,8 @@ app.get("/estoque/resumo", async (req, res) => {
           decimalLessThanOrEqual(produto.quantidadeAtual, produto.estoqueMinimo),
         ).length,
         categoriasAtivas,
+        valorTotalCustoCentavos: decimalToString(totais.custo),
+        valorTotalVendaCentavos: decimalToString(totais.venda),
       },
       ultimasMovimentacoes: ultimasMovimentacoes.map(movimentacaoResponse),
     });
@@ -831,7 +897,10 @@ async function criarMovimentacaoEstoque(req, res, tipo) {
 
       if (tipo === "SAIDA") {
         if (quantidadeAnterior.lessThan(quantidadeMovimentada)) {
-          return validationError("Saldo insuficiente para realizar a saida.", 409);
+          return validationError(
+            `Saldo insuficiente para realizar a saida. Saldo disponivel: ${decimalToString(quantidadeAnterior)}.`,
+            409,
+          );
         }
 
         quantidadePosterior = quantidadeAnterior.minus(quantidadeMovimentada);
@@ -839,6 +908,10 @@ async function criarMovimentacaoEstoque(req, res, tipo) {
 
       if (tipo === "AJUSTE") {
         quantidadePosterior = quantidadeMovimentada;
+
+        if (quantidadePosterior.equals(quantidadeAnterior)) {
+          return validationError("Ajuste deve alterar o saldo atual do produto.");
+        }
       }
 
       const [produtoAtualizado, movimentacao] = await Promise.all([
@@ -1147,11 +1220,19 @@ async function produtoPayload(body, { partial, currentId = null }) {
       return validationError("Nome do produto e obrigatorio.");
     }
 
+    if (nome.length > 120) {
+      return validationError("Nome do produto deve ter no maximo 120 caracteres.");
+    }
+
     data.nome = nome;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "codigo")) {
-    const codigo = cleanNullableString(body.codigo);
+    const codigo = normalizeProductCode(body.codigo);
+
+    if (codigo && codigo.length > 60) {
+      return validationError("Codigo do produto deve ter no maximo 60 caracteres.");
+    }
 
     if (codigo) {
       const produtoComCodigo = await prisma.produto.findUnique({
@@ -1172,7 +1253,13 @@ async function produtoPayload(body, { partial, currentId = null }) {
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "descricao")) {
-    data.descricao = cleanNullableString(body.descricao);
+    const descricao = cleanNullableString(body.descricao);
+
+    if (descricao && descricao.length > 300) {
+      return validationError("Descricao do produto deve ter no maximo 300 caracteres.");
+    }
+
+    data.descricao = descricao;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "categoriaId")) {
@@ -1191,11 +1278,16 @@ async function produtoPayload(body, { partial, currentId = null }) {
         },
         select: {
           id: true,
+          ativo: true,
         },
       });
 
       if (!categoria) {
         return validationError("Categoria de produto nao encontrada.", 404);
+      }
+
+      if (!categoria.ativo) {
+        return validationError("Categoria inativa nao pode ser vinculada ao produto.", 409);
       }
 
       data.categoriaId = categoriaId;
@@ -1336,14 +1428,27 @@ function produtoOrderBy(query) {
   ]);
 
   if (sortBy && allowedFields.has(sortBy)) {
-    return {
-      [sortBy]: safeDirection,
-    };
+    return [
+      {
+        [sortBy]: safeDirection,
+      },
+      {
+        id: "asc",
+      },
+    ];
   }
 
-  return {
-    nome: "asc",
-  };
+  return [
+    {
+      ativo: "desc",
+    },
+    {
+      nome: "asc",
+    },
+    {
+      id: "asc",
+    },
+  ];
 }
 
 function produtoResponse(produto) {
@@ -1362,6 +1467,8 @@ function produtoResponse(produto) {
     ativo: produto.ativo,
     createdAt: produto.createdAt,
     updatedAt: produto.updatedAt,
+    movimentacoesCount: produto._count?.movimentacoes ?? undefined,
+    ultimasMovimentacoes: produto.movimentacoes?.map(movimentacaoResponse) ?? undefined,
   };
 }
 
@@ -1415,6 +1522,11 @@ function categoriaProdutoResponse(categoria) {
     createdAt: categoria.createdAt,
     updatedAt: categoria.updatedAt,
   };
+}
+
+function normalizeProductCode(value) {
+  const codigo = cleanNullableString(value);
+  return codigo ? codigo.toUpperCase() : null;
 }
 
 function cleanOptionalString(value) {
@@ -1548,6 +1660,28 @@ function toDecimal(value) {
 
 function decimalLessThanOrEqual(left, right) {
   return toDecimal(left).lessThanOrEqualTo(toDecimal(right));
+}
+
+function produtoTemEstoqueBaixo(produto) {
+  const quantidadeAtual = toDecimal(produto.quantidadeAtual);
+  return quantidadeAtual.greaterThan(0) && quantidadeAtual.lessThanOrEqualTo(toDecimal(produto.estoqueMinimo));
+}
+
+function calcularTotaisEstoque(produtos) {
+  return produtos.reduce(
+    (totais, produto) => {
+      const quantidadeAtual = toDecimal(produto.quantidadeAtual);
+
+      return {
+        custo: totais.custo.plus(quantidadeAtual.times(produto.precoCustoCentavos || 0)),
+        venda: totais.venda.plus(quantidadeAtual.times(produto.precoVendaCentavos || 0)),
+      };
+    },
+    {
+      custo: new Prisma.Decimal(0),
+      venda: new Prisma.Decimal(0),
+    },
+  );
 }
 
 function decimalToString(value) {
