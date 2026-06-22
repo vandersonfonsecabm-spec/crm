@@ -135,14 +135,18 @@ export type ApiResumoEstoque = {
     produtosSemEstoque: number;
     produtosComEstoqueBaixo: number;
     categoriasAtivas: number;
+    valorTotalCustoCentavos?: string;
+    valorTotalVendaCentavos?: string;
   };
   ultimasMovimentacoes: ApiMovimentacaoEstoque[];
 };
 
 export type ProdutoQueryParams = {
   busca?: string;
+  categoriaId?: number;
   ativo?: boolean | null;
   unidadeMedida?: string;
+  estoqueBaixo?: boolean;
   page?: number;
   limit?: number;
 };

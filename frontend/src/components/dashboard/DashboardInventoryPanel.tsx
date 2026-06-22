@@ -1,10 +1,11 @@
-import { AlertTriangle, Boxes, CheckCircle2, Layers3, Package, Search, SlidersHorizontal, Warehouse } from "lucide-react";
+import { AlertTriangle, Boxes, CheckCircle2, Layers3, Package, Search, SlidersHorizontal, Wallet, Warehouse } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  fetchEstoqueMovimentacoes,
+  fetchCategoriasProdutos,
   fetchEstoqueResumo,
   fetchProdutos,
+  type ApiCategoriaProduto,
   type ApiMovimentacaoEstoque,
   type ApiProduto,
   type ApiResumoEstoque,
@@ -12,13 +13,13 @@ import {
 import MetricCard from "./MetricCard";
 
 const PRODUCT_PAGE_SIZE = 5;
-const MOVEMENT_LIMIT = 5;
 const UNITS = ["Todos", "UN", "KG", "L", "SC", "TON"];
 
 type InventoryStatus = "idle" | "loading" | "success" | "error";
 
 export default function DashboardInventoryPanel() {
   const [summary, setSummary] = useState<ApiResumoEstoque | null>(null);
+  const [categories, setCategories] = useState<ApiCategoriaProduto[]>([]);
   const [products, setProducts] = useState<ApiProduto[]>([]);
   const [movements, setMovements] = useState<ApiMovimentacaoEstoque[]>([]);
   const [productTotal, setProductTotal] = useState(0);
@@ -27,6 +28,8 @@ export default function DashboardInventoryPanel() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"todos" | "ativos" | "inativos">("todos");
   const [unitFilter, setUnitFilter] = useState("Todos");
+  const [categoryFilter, setCategoryFilter] = useState("Todos");
+  const [stockFilter, setStockFilter] = useState<"todos" | "baixo">("todos");
   const [status, setStatus] = useState<InventoryStatus>("idle");
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -50,28 +53,29 @@ export default function DashboardInventoryPanel() {
       try {
         const ativo =
           activeFilter === "ativos" ? true : activeFilter === "inativos" ? false : null;
+        const categoriaId = categoryFilter === "Todos" ? undefined : Number(categoryFilter);
 
-        const [summaryData, productsData, movementsData] = await Promise.all([
+        const [summaryData, productsData, categoriesData] = await Promise.all([
           fetchEstoqueResumo(),
           fetchProdutos({
             busca: debouncedSearch,
             ativo,
+            categoriaId,
             unidadeMedida: unitFilter === "Todos" ? undefined : unitFilter,
+            estoqueBaixo: stockFilter === "baixo" ? true : undefined,
             page: productPage,
             limit: PRODUCT_PAGE_SIZE,
           }),
-          fetchEstoqueMovimentacoes({
-            page: 1,
-            limit: MOVEMENT_LIMIT,
-          }),
+          fetchCategoriasProdutos({ ativo: true, limit: 100 }),
         ]);
 
         if (ignore) return;
 
         setSummary(summaryData);
+        setCategories(categoriesData.data);
         setProducts(productsData.data);
         setProductTotal(productsData.pagination.total);
-        setMovements(movementsData.data);
+        setMovements(summaryData.ultimasMovimentacoes.slice(0, 5));
         setStatus("success");
       } catch {
         if (ignore) return;
@@ -84,7 +88,7 @@ export default function DashboardInventoryPanel() {
     return () => {
       ignore = true;
     };
-  }, [activeFilter, debouncedSearch, productPage, refreshKey, unitFilter]);
+  }, [activeFilter, categoryFilter, debouncedSearch, productPage, refreshKey, stockFilter, unitFilter]);
 
   const isLoading = status === "loading" || status === "idle";
   const isError = status === "error";
@@ -128,6 +132,13 @@ export default function DashboardInventoryPanel() {
         icon: <Layers3 size={15} />,
         tone: "neutral" as const,
       },
+      {
+        title: "Custo em estoque",
+        value: formatCurrency(Number(summary?.indicadores.valorTotalCustoCentavos ?? 0)),
+        caption: "Valor de custo",
+        icon: <Wallet size={15} />,
+        tone: "revenue" as const,
+      },
     ],
     [summary],
   );
@@ -160,7 +171,7 @@ export default function DashboardInventoryPanel() {
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         {summaryCards.map((card) => (
           <MetricCard
             key={card.title}
@@ -182,7 +193,7 @@ export default function DashboardInventoryPanel() {
               <p className="mt-1 text-xs text-slate-500">Saldos, estoque minimo e status da carteira de itens.</p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_120px_110px] lg:w-[520px]">
+            <div className="grid gap-2 sm:grid-cols-2 xl:w-[620px] xl:grid-cols-[minmax(0,1fr)_120px_120px_105px]">
               <label className="premium-ghost flex h-10 min-w-0 items-center gap-2 rounded-xl px-3 text-xs text-slate-400">
                 <Search size={14} className="shrink-0" />
                 <input
@@ -209,6 +220,22 @@ export default function DashboardInventoryPanel() {
               <select
                 className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
                 onChange={(event) => {
+                  setCategoryFilter(event.target.value);
+                  setProductPage(1);
+                }}
+                value={categoryFilter}
+              >
+                <option value="Todos">Categorias</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.nome}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
+                onChange={(event) => {
                   setUnitFilter(event.target.value);
                   setProductPage(1);
                 }}
@@ -216,9 +243,21 @@ export default function DashboardInventoryPanel() {
               >
                 {UNITS.map((unit) => (
                   <option key={unit} value={unit}>
-                    {unit}
+                  {unit}
                   </option>
                 ))}
+              </select>
+
+              <select
+                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none sm:col-span-2 xl:col-span-1"
+                onChange={(event) => {
+                  setStockFilter(event.target.value as typeof stockFilter);
+                  setProductPage(1);
+                }}
+                value={stockFilter}
+              >
+                <option value="todos">Todos saldos</option>
+                <option value="baixo">Estoque baixo</option>
               </select>
             </div>
           </div>
@@ -236,7 +275,7 @@ export default function DashboardInventoryPanel() {
               <EmptyState
                 icon={<Warehouse size={17} />}
                 title="Nenhum produto cadastrado"
-                text="Cadastre produtos para acompanhar saldos, estoque minimo e movimentacoes."
+                text="Os produtos e seus saldos aparecerao aqui."
               />
             )}
 
@@ -315,7 +354,7 @@ export default function DashboardInventoryPanel() {
 
 function ProductRow({ product }: { product: ApiProduto }) {
   return (
-    <article className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 lg:grid-cols-[minmax(0,1fr)_86px_86px_86px_76px] lg:items-center">
+    <article className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 lg:grid-cols-[minmax(0,1fr)_96px_72px_76px_76px_86px] lg:items-center">
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-sm font-semibold text-white">{product.nome}</p>
@@ -328,10 +367,11 @@ function ProductRow({ product }: { product: ApiProduto }) {
         </p>
       </div>
 
-      <InfoCell label="Unidade" value={product.unidadeMedida} />
-      <InfoCell label="Saldo" value={formatDecimal(product.quantidadeAtual)} />
-      <InfoCell label="Minimo" value={formatDecimal(product.estoqueMinimo)} />
-      <InfoCell label="Venda" value={formatCurrency(product.precoVendaCentavos)} />
+        <InfoCell label="Estoque" value={stockLabel(product)} tone={stockTone(product)} />
+        <InfoCell label="Unidade" value={product.unidadeMedida} />
+        <InfoCell label="Saldo" value={formatDecimal(product.quantidadeAtual)} />
+        <InfoCell label="Minimo" value={formatDecimal(product.estoqueMinimo)} />
+        <InfoCell label="Venda" value={formatCurrency(product.precoVendaCentavos)} />
     </article>
   );
 }
@@ -362,11 +402,18 @@ function MovementRow({ movement }: { movement: ApiMovimentacaoEstoque }) {
   );
 }
 
-function InfoCell({ label, value }: { label: string; value: string }) {
+function InfoCell({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "ok" | "warn" | "empty" }) {
+  const toneClass = {
+    default: "text-slate-100",
+    ok: "text-teal-100",
+    warn: "text-amber-100",
+    empty: "text-rose-100",
+  }[tone];
+
   return (
     <div className="rounded-xl border border-white/[0.06] bg-slate-950/24 px-3 py-2">
       <p className="text-[9px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-xs font-semibold text-slate-100">{value}</p>
+      <p className={`mt-1 truncate text-xs font-semibold ${toneClass}`}>{value}</p>
     </div>
   );
 }
@@ -392,11 +439,34 @@ function formatDecimal(value: string) {
   }).format(numeric);
 }
 
+function decimalNumber(value: string) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
 function formatCurrency(cents: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   }).format(cents / 100);
+}
+
+function stockLabel(product: ApiProduto) {
+  const current = decimalNumber(product.quantidadeAtual);
+  const minimum = decimalNumber(product.estoqueMinimo);
+
+  if (current <= 0) return "Sem estoque";
+  if (minimum > 0 && current <= minimum) return "Estoque baixo";
+  return "Normal";
+}
+
+function stockTone(product: ApiProduto): "ok" | "warn" | "empty" {
+  const current = decimalNumber(product.quantidadeAtual);
+  const minimum = decimalNumber(product.estoqueMinimo);
+
+  if (current <= 0) return "empty";
+  if (minimum > 0 && current <= minimum) return "warn";
+  return "ok";
 }
 
 function formatDate(value: string) {
