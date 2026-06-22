@@ -361,15 +361,27 @@ app.get("/categorias-produtos", async (req, res) => {
       }),
       prisma.categoriaProduto.findMany({
         where,
-        orderBy: {
-          nome: "asc",
+        include: {
+          _count: {
+            select: {
+              produtos: true,
+            },
+          },
         },
+        orderBy: [
+          {
+            ativo: "desc",
+          },
+          {
+            nome: "asc",
+          },
+        ],
         skip,
         take: limit,
       }),
     ]);
 
-    return res.json(paginatedResponse(categorias, total, page, limit));
+    return res.json(paginatedResponse(categorias.map(categoriaProdutoResponse), total, page, limit));
   } catch (error) {
     console.log(error);
 
@@ -399,9 +411,16 @@ app.post("/categorias-produtos", requireAuth, async (req, res) => {
 
     const categoria = await prisma.categoriaProduto.create({
       data: payload.data,
+      include: {
+        _count: {
+          select: {
+            produtos: true,
+          },
+        },
+      },
     });
 
-    return res.status(201).json(categoria);
+    return res.status(201).json(categoriaProdutoResponse(categoria));
   } catch (error) {
     console.log(error);
 
@@ -456,9 +475,16 @@ app.patch("/categorias-produtos/:id", requireAuth, async (req, res) => {
         id,
       },
       data: payload.data,
+      include: {
+        _count: {
+          select: {
+            produtos: true,
+          },
+        },
+      },
     });
 
-    return res.json(categoria);
+    return res.json(categoriaProdutoResponse(categoria));
   } catch (error) {
     console.log(error);
 
@@ -1052,11 +1078,21 @@ function categoriaProdutoPayload(body, { partial }) {
       return validationError("Nome da categoria e obrigatorio.");
     }
 
+    if (nome.length > 80) {
+      return validationError("Nome da categoria deve ter no maximo 80 caracteres.");
+    }
+
     data.nome = nome;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "descricao")) {
-    data.descricao = cleanNullableString(body.descricao);
+    const descricao = cleanNullableString(body.descricao);
+
+    if (descricao && descricao.length > 240) {
+      return validationError("Descricao deve ter no maximo 240 caracteres.");
+    }
+
+    data.descricao = descricao;
   }
 
   if (Object.prototype.hasOwnProperty.call(body, "ativo")) {
@@ -1353,24 +1389,40 @@ function paginationFromQuery(query) {
 }
 
 async function findCategoriaByNome(nome, ignoreId = null) {
-  const categoria = await prisma.categoriaProduto.findUnique({
-    where: {
-      nome,
-    },
+  const nomeNormalizado = normalizeLookupText(nome);
+  const categorias = await prisma.categoriaProduto.findMany({
     select: {
       id: true,
+      nome: true,
     },
   });
 
-  if (!categoria || categoria.id === ignoreId) {
-    return null;
-  }
+  return (
+    categorias.find(
+      (categoria) =>
+        categoria.id !== ignoreId && normalizeLookupText(categoria.nome) === nomeNormalizado,
+    ) || null
+  );
+}
 
-  return categoria;
+function categoriaProdutoResponse(categoria) {
+  return {
+    id: categoria.id,
+    nome: categoria.nome,
+    descricao: categoria.descricao,
+    ativo: categoria.ativo,
+    produtosCount: categoria._count?.produtos ?? 0,
+    createdAt: categoria.createdAt,
+    updatedAt: categoria.updatedAt,
+  };
 }
 
 function cleanOptionalString(value) {
   return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
+function normalizeLookupText(value) {
+  return cleanOptionalString(value).toLowerCase();
 }
 
 function cleanNullableString(value) {
