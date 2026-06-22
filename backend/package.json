@@ -8,8 +8,9 @@
     "dev": "nodemon src/server.js",
     "prisma:generate": "prisma generate",
     "db:deploy": "prisma db push",
+    "db:migrate:deploy": "prisma migrate deploy",
     "seed": "node prisma/seed.js",
-    "railway:start": "npm run db:deploy && npm run seed && npm start",
+    "railway:start": "npm start",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
