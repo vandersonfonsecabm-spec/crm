@@ -2,7 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const { PrismaClient } = require("@prisma/client");
+const { Prisma, PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
@@ -36,6 +36,7 @@ const DEMO_PASSWORD = "123456";
 const DEMO_TOKEN = "demo-sqlite-backend";
 const UNIDADES_MEDIDA = new Set(["UN", "KG", "L", "SC", "TON"]);
 const SORT_DIRECTIONS = new Set(["asc", "desc"]);
+const TIPOS_MOVIMENTACAO_ESTOQUE = new Set(["ENTRADA", "SAIDA", "AJUSTE"]);
 
 app.post("/auth/login", (req, res) => {
   const { email, senha } = req.body || {};
@@ -619,6 +620,422 @@ app.patch("/produtos/:id", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/estoque/entradas", requireAuth, async (req, res) => {
+  return criarMovimentacaoEstoque(req, res, "ENTRADA");
+});
+
+app.post("/estoque/saidas", requireAuth, async (req, res) => {
+  return criarMovimentacaoEstoque(req, res, "SAIDA");
+});
+
+app.post("/estoque/ajustes", requireAuth, async (req, res) => {
+  return criarMovimentacaoEstoque(req, res, "AJUSTE");
+});
+
+app.get("/estoque/movimentacoes", async (req, res) => {
+  try {
+    const filtros = movimentacaoListWhere(req.query);
+
+    if (filtros.error) {
+      return res.status(filtros.status).json({
+        erro: filtros.error,
+      });
+    }
+
+    const { page, limit, skip } = paginationFromQuery(req.query);
+    const [total, movimentacoes] = await Promise.all([
+      prisma.movimentacaoEstoque.count({
+        where: filtros.data,
+      }),
+      prisma.movimentacaoEstoque.findMany({
+        where: filtros.data,
+        include: {
+          produto: {
+            select: {
+              id: true,
+              nome: true,
+              codigo: true,
+              unidadeMedida: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return res.json(
+      paginatedResponse(movimentacoes.map(movimentacaoResponse), total, page, limit),
+    );
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao buscar movimentacoes de estoque.",
+    });
+  }
+});
+
+app.get("/estoque/resumo", async (req, res) => {
+  try {
+    const [
+      produtosAtivos,
+      produtosComEstoque,
+      produtosSemEstoque,
+      produtosComEstoqueBaixo,
+      categoriasAtivas,
+      ultimasMovimentacoes,
+    ] = await Promise.all([
+      prisma.produto.count({
+        where: {
+          ativo: true,
+        },
+      }),
+      prisma.produto.count({
+        where: {
+          ativo: true,
+          quantidadeAtual: {
+            gt: "0",
+          },
+        },
+      }),
+      prisma.produto.count({
+        where: {
+          ativo: true,
+          quantidadeAtual: "0",
+        },
+      }),
+      prisma.produto.findMany({
+        where: {
+          ativo: true,
+          quantidadeAtual: {
+            gt: "0",
+          },
+        },
+        select: {
+          id: true,
+          quantidadeAtual: true,
+          estoqueMinimo: true,
+        },
+      }),
+      prisma.categoriaProduto.count({
+        where: {
+          ativo: true,
+        },
+      }),
+      prisma.movimentacaoEstoque.findMany({
+        include: {
+          produto: {
+            select: {
+              id: true,
+              nome: true,
+              codigo: true,
+              unidadeMedida: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: 5,
+      }),
+    ]);
+
+    return res.json({
+      indicadores: {
+        produtosAtivos,
+        produtosComEstoque,
+        produtosSemEstoque,
+        produtosComEstoqueBaixo: produtosComEstoqueBaixo.filter((produto) =>
+          decimalLessThanOrEqual(produto.quantidadeAtual, produto.estoqueMinimo),
+        ).length,
+        categoriasAtivas,
+      },
+      ultimasMovimentacoes: ultimasMovimentacoes.map(movimentacaoResponse),
+    });
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao buscar resumo de estoque.",
+    });
+  }
+});
+
+async function criarMovimentacaoEstoque(req, res, tipo) {
+  try {
+    const payload =
+      tipo === "AJUSTE" ? ajusteEstoquePayload(req.body) : movimentacaoEstoquePayload(req.body);
+
+    if (payload.error) {
+      return res.status(payload.status).json({
+        erro: payload.error,
+      });
+    }
+
+    const resultado = await prisma.$transaction(async (tx) => {
+      const produto = await tx.produto.findUnique({
+        where: {
+          id: payload.data.produtoId,
+        },
+        include: {
+          categoria: true,
+        },
+      });
+
+      if (!produto) {
+        return validationError("Produto nao encontrado.", 404);
+      }
+
+      if (!produto.ativo) {
+        return validationError("Produto inativo nao pode movimentar estoque.", 409);
+      }
+
+      const quantidadeAnterior = toDecimal(produto.quantidadeAtual);
+      const quantidadeMovimentada =
+        tipo === "AJUSTE" ? payload.data.novaQuantidade : payload.data.quantidade;
+      let quantidadePosterior = quantidadeAnterior;
+
+      if (tipo === "ENTRADA") {
+        quantidadePosterior = quantidadeAnterior.plus(quantidadeMovimentada);
+      }
+
+      if (tipo === "SAIDA") {
+        if (quantidadeAnterior.lessThan(quantidadeMovimentada)) {
+          return validationError("Saldo insuficiente para realizar a saida.", 409);
+        }
+
+        quantidadePosterior = quantidadeAnterior.minus(quantidadeMovimentada);
+      }
+
+      if (tipo === "AJUSTE") {
+        quantidadePosterior = quantidadeMovimentada;
+      }
+
+      const [produtoAtualizado, movimentacao] = await Promise.all([
+        tx.produto.update({
+          where: {
+            id: produto.id,
+          },
+          data: {
+            quantidadeAtual: decimalToString(quantidadePosterior),
+          },
+          include: {
+            categoria: true,
+          },
+        }),
+        tx.movimentacaoEstoque.create({
+          data: {
+            produtoId: produto.id,
+            tipo,
+            quantidade:
+              tipo === "AJUSTE"
+                ? decimalToString(quantidadePosterior.minus(quantidadeAnterior).abs())
+                : decimalToString(quantidadeMovimentada),
+            quantidadeAnterior: decimalToString(quantidadeAnterior),
+            quantidadePosterior: decimalToString(quantidadePosterior),
+            motivo: payload.data.motivo,
+            observacao: payload.data.observacao,
+          },
+          include: {
+            produto: {
+              select: {
+                id: true,
+                nome: true,
+                codigo: true,
+                unidadeMedida: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+      return {
+        produto: produtoResponse(produtoAtualizado),
+        movimentacao: movimentacaoResponse(movimentacao),
+      };
+    });
+
+    if (resultado.error) {
+      return res.status(resultado.status).json({
+        erro: resultado.error,
+      });
+    }
+
+    return res.status(201).json(resultado);
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao movimentar estoque.",
+    });
+  }
+}
+
+function movimentacaoEstoquePayload(body) {
+  const unknown = unknownFields(body, ["produtoId", "quantidade", "motivo", "observacao"]);
+
+  if (unknown.length > 0) {
+    return validationError(`Campos nao permitidos: ${unknown.join(", ")}.`);
+  }
+
+  const produtoId = parsePositiveId(body.produtoId);
+
+  if (!produtoId) {
+    return validationError("Produto invalido.");
+  }
+
+  const quantidade = parsePositiveDecimal(body.quantidade);
+
+  if (!quantidade.ok) {
+    return validationError("Quantidade deve ser maior que zero.");
+  }
+
+  return {
+    data: {
+      produtoId,
+      quantidade: quantidade.value,
+      motivo: cleanNullableString(body.motivo),
+      observacao: cleanNullableString(body.observacao),
+    },
+  };
+}
+
+function ajusteEstoquePayload(body) {
+  const unknown = unknownFields(body, ["produtoId", "novaQuantidade", "motivo", "observacao"]);
+
+  if (unknown.length > 0) {
+    return validationError(`Campos nao permitidos: ${unknown.join(", ")}.`);
+  }
+
+  const produtoId = parsePositiveId(body.produtoId);
+
+  if (!produtoId) {
+    return validationError("Produto invalido.");
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(body, "novaQuantidade")) {
+    return validationError("Nova quantidade e obrigatoria.");
+  }
+
+  const novaQuantidade = parseNonNegativeDecimal(body.novaQuantidade);
+
+  if (!novaQuantidade.ok || novaQuantidade.value === null || novaQuantidade.value === undefined) {
+    return validationError("Nova quantidade nao pode ser negativa.");
+  }
+
+  const motivo = cleanOptionalString(body.motivo);
+
+  if (!motivo) {
+    return validationError("Motivo do ajuste e obrigatorio.");
+  }
+
+  return {
+    data: {
+      produtoId,
+      novaQuantidade: toDecimal(novaQuantidade.value),
+      motivo,
+      observacao: cleanNullableString(body.observacao),
+    },
+  };
+}
+
+function movimentacaoListWhere(query) {
+  const where = {};
+  const produtoId = query.produtoId === undefined || query.produtoId === "" ? null : parsePositiveId(query.produtoId);
+  const tipo = cleanOptionalString(query.tipo).toUpperCase();
+  const dataInicial = cleanOptionalString(query.dataInicial || query.de);
+  const dataFinal = cleanOptionalString(query.dataFinal || query.ate);
+  const busca = cleanOptionalString(query.busca || query.search);
+
+  if (query.produtoId !== undefined && query.produtoId !== "" && !produtoId) {
+    return validationError("Produto invalido.");
+  }
+
+  if (produtoId) {
+    where.produtoId = produtoId;
+  }
+
+  if (tipo) {
+    if (!TIPOS_MOVIMENTACAO_ESTOQUE.has(tipo)) {
+      return validationError("Tipo de movimentacao invalido.");
+    }
+
+    where.tipo = tipo;
+  }
+
+  if (dataInicial || dataFinal) {
+    const createdAt = {};
+
+    if (dataInicial) {
+      const parsed = parseDateFilter(dataInicial);
+
+      if (!parsed) {
+        return validationError("Data inicial invalida.");
+      }
+
+      createdAt.gte = parsed;
+    }
+
+    if (dataFinal) {
+      const parsed = parseDateFilter(dataFinal, true);
+
+      if (!parsed) {
+        return validationError("Data final invalida.");
+      }
+
+      createdAt.lte = parsed;
+    }
+
+    where.createdAt = createdAt;
+  }
+
+  if (busca) {
+    where.produto = {
+      OR: [
+        {
+          nome: {
+            contains: busca,
+          },
+        },
+        {
+          codigo: {
+            contains: busca,
+          },
+        },
+      ],
+    };
+  }
+
+  return {
+    data: where,
+  };
+}
+
+function movimentacaoResponse(movimentacao) {
+  return {
+    id: movimentacao.id,
+    tipo: movimentacao.tipo,
+    quantidade: decimalToString(movimentacao.quantidade),
+    quantidadeAnterior: decimalToString(movimentacao.quantidadeAnterior),
+    quantidadePosterior: decimalToString(movimentacao.quantidadePosterior),
+    motivo: movimentacao.motivo,
+    observacao: movimentacao.observacao,
+    createdAt: movimentacao.createdAt,
+    produto: movimentacao.produto
+      ? {
+          id: movimentacao.produto.id,
+          nome: movimentacao.produto.nome,
+          codigo: movimentacao.produto.codigo,
+          unidadeMedida: movimentacao.produto.unidadeMedida,
+        }
+      : null,
+  };
+}
+
 function categoriaProdutoPayload(body, { partial }) {
   const unknown = unknownFields(body, ["nome", "descricao", "ativo"]);
 
@@ -1041,8 +1458,57 @@ function parseNonNegativeDecimal(value, fallback) {
   };
 }
 
+function parsePositiveDecimal(value) {
+  if (value === undefined || value === null || value === "") {
+    return {
+      ok: false,
+      value: null,
+    };
+  }
+
+  const normalized = String(value).trim().replace(",", ".");
+
+  if (!/^\d+(\.\d+)?$/.test(normalized)) {
+    return {
+      ok: false,
+      value: null,
+    };
+  }
+
+  const decimal = toDecimal(normalized);
+
+  if (decimal.lessThanOrEqualTo(0)) {
+    return {
+      ok: false,
+      value: null,
+    };
+  }
+
+  return {
+    ok: true,
+    value: decimal,
+  };
+}
+
+function toDecimal(value) {
+  return new Prisma.Decimal(decimalToString(value));
+}
+
+function decimalLessThanOrEqual(left, right) {
+  return toDecimal(left).lessThanOrEqualTo(toDecimal(right));
+}
+
 function decimalToString(value) {
   return value === null || value === undefined ? "0" : value.toString();
+}
+
+function parseDateFilter(value, endOfDay = false) {
+  const text = String(value || "").trim();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? new Date(`${text}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`)
+    : new Date(text);
+
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function unknownFields(body, allowed) {
