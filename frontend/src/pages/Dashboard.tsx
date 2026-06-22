@@ -38,6 +38,7 @@ import DashboardControlCenter from "../components/dashboard/DashboardControlCent
 import DashboardKanbanBoard from "../components/dashboard/DashboardKanbanBoard";
 import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomationsPanel";
 import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
+import DashboardInventoryPanel from "../components/dashboard/DashboardInventoryPanel";
 import DashboardToast from "../components/dashboard/DashboardToast";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
@@ -99,7 +100,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             ? "Funil Comercial"
             : activePage === "agenda"
               ? "Agenda"
-              : "Automações";
+              : activePage === "estoque"
+                ? "Estoque"
+                : "Automações";
 
   useEffect(() => {
     if (dataSource === "offline") {
@@ -362,6 +365,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   : "Dados locais"
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
+            showCreateClient={activePage !== "estoque"}
           />
 
           {activePage === "dashboard" && (
@@ -389,7 +393,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             getRisk={getRisk}
           />
 
-          {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && (
+          {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && (
             <DashboardOperationalSearch
               activePage={activePage}
               filteredClientsCount={filteredClients.length}
@@ -419,6 +423,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
                 : activePage === "agenda"
                   ? "space-y-4"
+                  : activePage === "estoque"
+                    ? "space-y-4"
                 : activePage === "dashboard"
                   ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"
                   : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
@@ -503,6 +509,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 />
               )}
 
+              {activePage === "estoque" && <DashboardInventoryPanel />}
+
               <DashboardKanbanBoard
                 activePage={activePage}
                 clients={clients}
@@ -536,7 +544,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
-            {activePage !== "agenda" && (
+            {activePage !== "agenda" && activePage !== "estoque" && (
               <DashboardCustomerDrawer
                 activePage={activePage}
                 selectedClient={selectedClient}

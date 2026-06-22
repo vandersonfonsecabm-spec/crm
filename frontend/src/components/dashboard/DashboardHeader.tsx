@@ -6,6 +6,7 @@ type DashboardHeaderProps = {
   pageTitle: string;
   backendCaption: string;
   onCreateClient: () => void;
+  showCreateClient?: boolean;
 };
 
 export default function DashboardHeader({
@@ -13,6 +14,7 @@ export default function DashboardHeader({
   pageTitle,
   backendCaption,
   onCreateClient,
+  showCreateClient = true,
 }: DashboardHeaderProps) {
   const breadcrumbLabel = {
     dashboard: "Visão Geral",
@@ -20,6 +22,7 @@ export default function DashboardHeader({
     clientes: "Carteira",
     kanban: "Funil Comercial",
     agenda: "Agenda",
+    estoque: "Estoque",
     automacoes: "Automações",
   }[activePage];
 
@@ -53,14 +56,16 @@ export default function DashboardHeader({
             <Bell size={15} />
           </button>
 
-          <button
-            onClick={onCreateClient}
-            className="premium-button inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all duration-200 hover:-translate-y-px hover:brightness-105"
-            type="button"
-          >
-            <Plus size={14} />
-            Novo cliente
-          </button>
+          {showCreateClient && (
+            <button
+              onClick={onCreateClient}
+              className="premium-button inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all duration-200 hover:-translate-y-px hover:brightness-105"
+              type="button"
+            >
+              <Plus size={14} />
+              Novo cliente
+            </button>
+          )}
         </div>
       </div>
     </header>

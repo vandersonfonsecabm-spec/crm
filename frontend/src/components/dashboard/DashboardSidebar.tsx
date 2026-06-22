@@ -3,6 +3,7 @@ import {
   BriefcaseBusiness,
   CalendarCheck,
   KanbanSquare,
+  Package,
   Sparkles,
   Users,
   Zap,
@@ -93,6 +94,13 @@ export default function DashboardSidebar({
               label="Agenda"
               onClick={() => setActivePage("agenda")}
             />
+
+            <SidebarButton
+              active={activePage === "estoque"}
+              icon={<Package size={15} className="mr-2 shrink-0" />}
+              label="Estoque"
+              onClick={() => setActivePage("estoque")}
+            />
           </div>
         </div>
 
@@ -112,6 +120,7 @@ export default function DashboardSidebar({
         </div>
       </nav>
 
+      {activePage !== "estoque" && (
       <div className="premium-panel mx-auto mt-6 w-full max-w-[224px] rounded-2xl p-3 transition-all duration-200 hover:border-white/20">
         <p className="text-xs font-semibold">Atalhos operacionais</p>
 
@@ -161,8 +170,9 @@ export default function DashboardSidebar({
           <ActionButton onClick={clearFilters} label="Resetar visão" />
         </div>
       </div>
+      )}
 
-      {activePage !== "automacoes" && activePage !== "dashboard" && (
+      {activePage !== "automacoes" && activePage !== "dashboard" && activePage !== "estoque" && (
         <>
           <DashboardSmartAlerts
             smartAlerts={smartAlerts}

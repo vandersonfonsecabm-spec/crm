@@ -75,6 +75,86 @@ export type ApiDashboardSummary = {
   produtosMaisVendidos: unknown[];
 };
 
+export type ApiPaginatedResponse<T> = {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
+export type ApiCategoriaProduto = {
+  id: number;
+  nome: string;
+  descricao?: string | null;
+  ativo: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiProduto = {
+  id: number;
+  nome: string;
+  codigo?: string | null;
+  descricao?: string | null;
+  categoriaId?: number | null;
+  categoria?: ApiCategoriaProduto | null;
+  unidadeMedida: string;
+  quantidadeAtual: string;
+  estoqueMinimo: string;
+  precoCustoCentavos: number;
+  precoVendaCentavos: number;
+  ativo: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiMovimentacaoEstoque = {
+  id: number;
+  tipo: "ENTRADA" | "SAIDA" | "AJUSTE";
+  quantidade: string;
+  quantidadeAnterior: string;
+  quantidadePosterior: string;
+  motivo?: string | null;
+  observacao?: string | null;
+  createdAt: string;
+  produto: {
+    id: number;
+    nome: string;
+    codigo?: string | null;
+    unidadeMedida: string;
+  } | null;
+};
+
+export type ApiResumoEstoque = {
+  indicadores: {
+    produtosAtivos: number;
+    produtosComEstoque: number;
+    produtosSemEstoque: number;
+    produtosComEstoqueBaixo: number;
+    categoriasAtivas: number;
+  };
+  ultimasMovimentacoes: ApiMovimentacaoEstoque[];
+};
+
+export type ProdutoQueryParams = {
+  busca?: string;
+  ativo?: boolean | null;
+  unidadeMedida?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type MovimentacaoQueryParams = {
+  produtoId?: number;
+  tipo?: ApiMovimentacaoEstoque["tipo"];
+  busca?: string;
+  page?: number;
+  limit?: number;
+};
+
 export function getAuthToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -167,6 +247,28 @@ export async function fetchDashboardSummaryFromBackend() {
   return (await response.json()) as ApiDashboardSummary;
 }
 
+export async function fetchCategoriasProdutos(params: { busca?: string; ativo?: boolean | null; page?: number; limit?: number } = {}) {
+  return requestApiGet<ApiPaginatedResponse<ApiCategoriaProduto>>(`/categorias-produtos${toQueryString(params)}`);
+}
+
+export async function fetchProdutos(params: ProdutoQueryParams = {}) {
+  return requestApiGet<ApiPaginatedResponse<ApiProduto>>(`/produtos${toQueryString(params)}`);
+}
+
+export async function fetchProduto(id: number) {
+  return requestApiGet<ApiProduto>(`/produtos/${id}`);
+}
+
+export async function fetchEstoqueMovimentacoes(params: MovimentacaoQueryParams = {}) {
+  return requestApiGet<ApiPaginatedResponse<ApiMovimentacaoEstoque>>(
+    `/estoque/movimentacoes${toQueryString(params)}`,
+  );
+}
+
+export async function fetchEstoqueResumo() {
+  return requestApiGet<ApiResumoEstoque>("/estoque/resumo");
+}
+
 export async function createClienteOnBackend(client: Client) {
   if (!hasRemoteApi()) return null;
 
@@ -238,6 +340,32 @@ async function requestCliente(method: "POST" | "PATCH" | "PUT" | "DELETE", path:
 
   if (method === "DELETE") return null;
   return (await response.json()) as ApiCliente;
+}
+
+async function requestApiGet<T>(path: string): Promise<T> {
+  if (!hasRemoteApi()) {
+    throw new Error("Nao foi possivel carregar os dados agora.");
+  }
+
+  const response = await fetch(`${API_URL}${path}`);
+
+  if (!response.ok) {
+    throw new Error("Nao foi possivel carregar os dados agora.");
+  }
+
+  return (await response.json()) as T;
+}
+
+function toQueryString(params: Record<string, string | number | boolean | null | undefined>) {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    query.set(key, String(value));
+  });
+
+  const text = query.toString();
+  return text ? `?${text}` : "";
 }
 
 function buildHeaders(token: string): Record<string, string> {
