@@ -34,6 +34,8 @@ app.use(
 const DEMO_EMAIL = "demo@crm.com";
 const DEMO_PASSWORD = "123456";
 const DEMO_TOKEN = "demo-sqlite-backend";
+const UNIDADES_MEDIDA = new Set(["UN", "KG", "L", "SC", "TON"]);
+const SORT_DIRECTIONS = new Set(["asc", "desc"]);
 
 app.post("/auth/login", (req, res) => {
   const { email, senha } = req.body || {};
@@ -328,6 +330,732 @@ app.delete("/clientes/:clienteId/notas/:notaId", requireAuth, async (req, res) =
     });
   }
 });
+
+app.get("/categorias-produtos", async (req, res) => {
+  try {
+    const { page, limit, skip } = paginationFromQuery(req.query);
+    const where = {};
+    const busca = cleanOptionalString(req.query.busca || req.query.search);
+    const ativo = parseBooleanFilter(req.query, "ativo");
+
+    if (!ativo.valid) {
+      return res.status(400).json({
+        erro: "Filtro ativo deve ser verdadeiro ou falso.",
+      });
+    }
+
+    if (busca) {
+      where.nome = {
+        contains: busca,
+      };
+    }
+
+    if (ativo.provided) {
+      where.ativo = ativo.value;
+    }
+
+    const [total, categorias] = await Promise.all([
+      prisma.categoriaProduto.count({
+        where,
+      }),
+      prisma.categoriaProduto.findMany({
+        where,
+        orderBy: {
+          nome: "asc",
+        },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return res.json(paginatedResponse(categorias, total, page, limit));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao buscar categorias de produtos.",
+    });
+  }
+});
+
+app.post("/categorias-produtos", requireAuth, async (req, res) => {
+  try {
+    const payload = categoriaProdutoPayload(req.body, { partial: false });
+
+    if (payload.error) {
+      return res.status(payload.status).json({
+        erro: payload.error,
+      });
+    }
+
+    const categoriaExistente = await findCategoriaByNome(payload.data.nome);
+
+    if (categoriaExistente) {
+      return res.status(409).json({
+        erro: "Ja existe uma categoria com esse nome.",
+      });
+    }
+
+    const categoria = await prisma.categoriaProduto.create({
+      data: payload.data,
+    });
+
+    return res.status(201).json(categoria);
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao criar categoria de produto.",
+    });
+  }
+});
+
+app.patch("/categorias-produtos/:id", requireAuth, async (req, res) => {
+  try {
+    const id = parsePositiveId(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        erro: "ID invalido.",
+      });
+    }
+
+    const categoriaAtual = await prisma.categoriaProduto.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!categoriaAtual) {
+      return res.status(404).json({
+        erro: "Categoria de produto nao encontrada.",
+      });
+    }
+
+    const payload = categoriaProdutoPayload(req.body, { partial: true });
+
+    if (payload.error) {
+      return res.status(payload.status).json({
+        erro: payload.error,
+      });
+    }
+
+    if (payload.data.nome) {
+      const categoriaExistente = await findCategoriaByNome(payload.data.nome, id);
+
+      if (categoriaExistente) {
+        return res.status(409).json({
+          erro: "Ja existe uma categoria com esse nome.",
+        });
+      }
+    }
+
+    const categoria = await prisma.categoriaProduto.update({
+      where: {
+        id,
+      },
+      data: payload.data,
+    });
+
+    return res.json(categoria);
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao atualizar categoria de produto.",
+    });
+  }
+});
+
+app.get("/produtos", async (req, res) => {
+  try {
+    const { page, limit, skip } = paginationFromQuery(req.query);
+    const where = produtoListWhere(req.query);
+    const orderBy = produtoOrderBy(req.query);
+
+    if (where.error) {
+      return res.status(where.status).json({
+        erro: where.error,
+      });
+    }
+
+    const [total, produtos] = await Promise.all([
+      prisma.produto.count({
+        where: where.data,
+      }),
+      prisma.produto.findMany({
+        where: where.data,
+        include: {
+          categoria: true,
+        },
+        orderBy,
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return res.json(paginatedResponse(produtos.map(produtoResponse), total, page, limit));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao buscar produtos.",
+    });
+  }
+});
+
+app.get("/produtos/:id", async (req, res) => {
+  try {
+    const id = parsePositiveId(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        erro: "ID invalido.",
+      });
+    }
+
+    const produto = await prisma.produto.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        categoria: true,
+      },
+    });
+
+    if (!produto) {
+      return res.status(404).json({
+        erro: "Produto nao encontrado.",
+      });
+    }
+
+    return res.json(produtoResponse(produto));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao buscar produto.",
+    });
+  }
+});
+
+app.post("/produtos", requireAuth, async (req, res) => {
+  try {
+    const payload = await produtoPayload(req.body, { partial: false });
+
+    if (payload.error) {
+      return res.status(payload.status).json({
+        erro: payload.error,
+      });
+    }
+
+    const produto = await prisma.produto.create({
+      data: {
+        ...payload.data,
+        quantidadeAtual: "0",
+      },
+      include: {
+        categoria: true,
+      },
+    });
+
+    return res.status(201).json(produtoResponse(produto));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao criar produto.",
+    });
+  }
+});
+
+app.patch("/produtos/:id", requireAuth, async (req, res) => {
+  try {
+    const id = parsePositiveId(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        erro: "ID invalido.",
+      });
+    }
+
+    const produtoAtual = await prisma.produto.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!produtoAtual) {
+      return res.status(404).json({
+        erro: "Produto nao encontrado.",
+      });
+    }
+
+    const payload = await produtoPayload(req.body, { partial: true, currentId: id });
+
+    if (payload.error) {
+      return res.status(payload.status).json({
+        erro: payload.error,
+      });
+    }
+
+    const produto = await prisma.produto.update({
+      where: {
+        id,
+      },
+      data: payload.data,
+      include: {
+        categoria: true,
+      },
+    });
+
+    return res.json(produtoResponse(produto));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao atualizar produto.",
+    });
+  }
+});
+
+function categoriaProdutoPayload(body, { partial }) {
+  const unknown = unknownFields(body, ["nome", "descricao", "ativo"]);
+
+  if (unknown.length > 0) {
+    return validationError(`Campos nao permitidos: ${unknown.join(", ")}.`);
+  }
+
+  const data = {};
+
+  if (!partial || Object.prototype.hasOwnProperty.call(body, "nome")) {
+    const nome = cleanOptionalString(body.nome);
+
+    if (!nome) {
+      return validationError("Nome da categoria e obrigatorio.");
+    }
+
+    data.nome = nome;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "descricao")) {
+    data.descricao = cleanNullableString(body.descricao);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "ativo")) {
+    const ativo = parseBooleanValue(body.ativo);
+
+    if (ativo === null) {
+      return validationError("Ativo deve ser verdadeiro ou falso.");
+    }
+
+    data.ativo = ativo;
+  } else if (!partial) {
+    data.ativo = true;
+  }
+
+  return {
+    data,
+  };
+}
+
+async function produtoPayload(body, { partial, currentId = null }) {
+  const forbidden = ["quantidadeAtual", "createdAt", "updatedAt", "movimentacoes"].filter((field) =>
+    Object.prototype.hasOwnProperty.call(body, field),
+  );
+
+  if (forbidden.length > 0) {
+    return validationError(`Campos nao podem ser alterados por esta rota: ${forbidden.join(", ")}.`);
+  }
+
+  const allowed = [
+    "nome",
+    "codigo",
+    "descricao",
+    "categoriaId",
+    "unidadeMedida",
+    "estoqueMinimo",
+    "precoCustoCentavos",
+    "precoVendaCentavos",
+    "ativo",
+  ];
+  const unknown = unknownFields(body, allowed);
+
+  if (unknown.length > 0) {
+    return validationError(`Campos nao permitidos: ${unknown.join(", ")}.`);
+  }
+
+  const data = {};
+
+  if (!partial || Object.prototype.hasOwnProperty.call(body, "nome")) {
+    const nome = cleanOptionalString(body.nome);
+
+    if (!nome) {
+      return validationError("Nome do produto e obrigatorio.");
+    }
+
+    data.nome = nome;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "codigo")) {
+    const codigo = cleanNullableString(body.codigo);
+
+    if (codigo) {
+      const produtoComCodigo = await prisma.produto.findUnique({
+        where: {
+          codigo,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (produtoComCodigo && produtoComCodigo.id !== currentId) {
+        return validationError("Ja existe um produto com esse codigo.", 409);
+      }
+    }
+
+    data.codigo = codigo;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "descricao")) {
+    data.descricao = cleanNullableString(body.descricao);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "categoriaId")) {
+    if (body.categoriaId === null || body.categoriaId === "") {
+      data.categoriaId = null;
+    } else {
+      const categoriaId = parsePositiveId(body.categoriaId);
+
+      if (!categoriaId) {
+        return validationError("Categoria invalida.");
+      }
+
+      const categoria = await prisma.categoriaProduto.findUnique({
+        where: {
+          id: categoriaId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!categoria) {
+        return validationError("Categoria de produto nao encontrada.", 404);
+      }
+
+      data.categoriaId = categoriaId;
+    }
+  }
+
+  if (!partial || Object.prototype.hasOwnProperty.call(body, "unidadeMedida")) {
+    const unidadeMedida = cleanOptionalString(body.unidadeMedida).toUpperCase();
+
+    if (!unidadeMedida) {
+      return validationError("Unidade de medida e obrigatoria.");
+    }
+
+    if (!UNIDADES_MEDIDA.has(unidadeMedida)) {
+      return validationError("Unidade de medida invalida.");
+    }
+
+    data.unidadeMedida = unidadeMedida;
+  }
+
+  if (!partial || Object.prototype.hasOwnProperty.call(body, "estoqueMinimo")) {
+    const estoqueMinimo = parseNonNegativeDecimal(body.estoqueMinimo, partial ? null : "0");
+
+    if (!estoqueMinimo.ok) {
+      return validationError("Estoque minimo nao pode ser negativo.");
+    }
+
+    if (estoqueMinimo.value !== null) {
+      data.estoqueMinimo = estoqueMinimo.value;
+    }
+  }
+
+  if (!partial || Object.prototype.hasOwnProperty.call(body, "precoCustoCentavos")) {
+    const precoCustoCentavos = parseNonNegativeInteger(body.precoCustoCentavos, partial ? null : 0);
+
+    if (precoCustoCentavos === null) {
+      return validationError("Preco de custo em centavos nao pode ser negativo.");
+    }
+
+    data.precoCustoCentavos = precoCustoCentavos;
+  }
+
+  if (!partial || Object.prototype.hasOwnProperty.call(body, "precoVendaCentavos")) {
+    const precoVendaCentavos = parseNonNegativeInteger(body.precoVendaCentavos, partial ? null : 0);
+
+    if (precoVendaCentavos === null) {
+      return validationError("Preco de venda em centavos nao pode ser negativo.");
+    }
+
+    data.precoVendaCentavos = precoVendaCentavos;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "ativo")) {
+    const ativo = parseBooleanValue(body.ativo);
+
+    if (ativo === null) {
+      return validationError("Ativo deve ser verdadeiro ou falso.");
+    }
+
+    data.ativo = ativo;
+  } else if (!partial) {
+    data.ativo = true;
+  }
+
+  return {
+    data,
+  };
+}
+
+function produtoListWhere(query) {
+  const where = {};
+  const busca = cleanOptionalString(query.busca || query.search);
+  const ativo = parseBooleanFilter(query, "ativo");
+  const unidadeMedida = cleanOptionalString(query.unidadeMedida).toUpperCase();
+
+  if (!ativo.valid) {
+    return validationError("Filtro ativo deve ser verdadeiro ou falso.");
+  }
+
+  if (busca) {
+    where.OR = [
+      {
+        nome: {
+          contains: busca,
+        },
+      },
+      {
+        codigo: {
+          contains: busca,
+        },
+      },
+    ];
+  }
+
+  if (ativo.provided) {
+    where.ativo = ativo.value;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(query, "categoriaId") && query.categoriaId !== "") {
+    const categoriaId = parsePositiveId(query.categoriaId);
+
+    if (!categoriaId) {
+      return validationError("Categoria invalida.");
+    }
+
+    where.categoriaId = categoriaId;
+  }
+
+  if (unidadeMedida) {
+    if (!UNIDADES_MEDIDA.has(unidadeMedida)) {
+      return validationError("Unidade de medida invalida.");
+    }
+
+    where.unidadeMedida = unidadeMedida;
+  }
+
+  return {
+    data: where,
+  };
+}
+
+function produtoOrderBy(query) {
+  const sortBy = cleanOptionalString(query.sortBy || query.ordenarPor);
+  const direction = cleanOptionalString(query.order || query.direcao).toLowerCase();
+  const safeDirection = SORT_DIRECTIONS.has(direction) ? direction : "asc";
+  const allowedFields = new Set([
+    "id",
+    "nome",
+    "codigo",
+    "unidadeMedida",
+    "quantidadeAtual",
+    "estoqueMinimo",
+    "precoCustoCentavos",
+    "precoVendaCentavos",
+    "ativo",
+    "createdAt",
+    "updatedAt",
+  ]);
+
+  if (sortBy && allowedFields.has(sortBy)) {
+    return {
+      [sortBy]: safeDirection,
+    };
+  }
+
+  return {
+    nome: "asc",
+  };
+}
+
+function produtoResponse(produto) {
+  return {
+    id: produto.id,
+    nome: produto.nome,
+    codigo: produto.codigo,
+    descricao: produto.descricao,
+    categoriaId: produto.categoriaId,
+    categoria: produto.categoria || null,
+    unidadeMedida: produto.unidadeMedida,
+    quantidadeAtual: decimalToString(produto.quantidadeAtual),
+    estoqueMinimo: decimalToString(produto.estoqueMinimo),
+    precoCustoCentavos: produto.precoCustoCentavos,
+    precoVendaCentavos: produto.precoVendaCentavos,
+    ativo: produto.ativo,
+    createdAt: produto.createdAt,
+    updatedAt: produto.updatedAt,
+  };
+}
+
+function paginatedResponse(data, total, page, limit) {
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+
+function paginationFromQuery(query) {
+  const page = Math.max(1, parseInteger(query.page, 1));
+  const limit = Math.min(100, Math.max(1, parseInteger(query.limit, 20)));
+
+  return {
+    page,
+    limit,
+    skip: (page - 1) * limit,
+  };
+}
+
+async function findCategoriaByNome(nome, ignoreId = null) {
+  const categoria = await prisma.categoriaProduto.findUnique({
+    where: {
+      nome,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!categoria || categoria.id === ignoreId) {
+    return null;
+  }
+
+  return categoria;
+}
+
+function cleanOptionalString(value) {
+  return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
+function cleanNullableString(value) {
+  const cleaned = cleanOptionalString(value);
+  return cleaned || null;
+}
+
+function parseBooleanFilter(source, field) {
+  if (!Object.prototype.hasOwnProperty.call(source, field) || source[field] === "") {
+    return {
+      provided: false,
+      valid: true,
+      value: null,
+    };
+  }
+
+  const value = parseBooleanValue(source[field]);
+
+  return {
+    provided: true,
+    valid: value !== null,
+    value,
+  };
+}
+
+function parseBooleanValue(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (["true", "1", "sim", "ativo"].includes(normalized)) {
+      return true;
+    }
+
+    if (["false", "0", "nao", "inativo"].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return null;
+}
+
+function parseInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : fallback;
+}
+
+function parseNonNegativeInteger(value, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function parseNonNegativeDecimal(value, fallback) {
+  if (value === undefined || value === null || value === "") {
+    return {
+      ok: true,
+      value: fallback,
+    };
+  }
+
+  const normalized = String(value).trim().replace(",", ".");
+
+  if (!/^\d+(\.\d+)?$/.test(normalized)) {
+    return {
+      ok: false,
+      value: null,
+    };
+  }
+
+  return {
+    ok: true,
+    value: normalized,
+  };
+}
+
+function decimalToString(value) {
+  return value === null || value === undefined ? "0" : value.toString();
+}
+
+function unknownFields(body, allowed) {
+  const allowedSet = new Set(allowed);
+  return Object.keys(body || {}).filter((field) => !allowedSet.has(field));
+}
+
+function validationError(error, status = 400) {
+  return {
+    error,
+    status,
+  };
+}
 
 function clientePayload(body) {
   const tags = Array.isArray(body.tags)
