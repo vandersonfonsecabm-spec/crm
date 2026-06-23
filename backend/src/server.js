@@ -37,6 +37,9 @@ const DEMO_TOKEN = "demo-sqlite-backend";
 const UNIDADES_MEDIDA = new Set(["UN", "KG", "L", "SC", "TON"]);
 const SORT_DIRECTIONS = new Set(["asc", "desc"]);
 const TIPOS_MOVIMENTACAO_ESTOQUE = new Set(["ENTRADA", "SAIDA", "AJUSTE"]);
+const STATUS_ACOMPANHAMENTO = new Set(["PENDENTE", "CONCLUIDO", "CANCELADO"]);
+const PRIORIDADES_ACOMPANHAMENTO = new Set(["BAIXA", "MEDIA", "ALTA", "CRITICA"]);
+const TIPOS_ACOMPANHAMENTO = new Set(["LIGACAO", "WHATSAPP", "EMAIL", "REUNIAO", "VISITA", "OUTRO"]);
 
 app.post("/auth/login", (req, res) => {
   const { email, senha } = req.body || {};
@@ -330,6 +333,231 @@ app.delete("/clientes/:clienteId/notas/:notaId", requireAuth, async (req, res) =
       erro: "Erro ao remover nota",
     });
   }
+});
+
+app.get("/acompanhamentos", async (req, res) => {
+  try {
+    const filtros = acompanhamentoListWhere(req.query);
+
+    if (filtros.error) {
+      return res.status(filtros.status).json({
+        erro: filtros.error,
+      });
+    }
+
+    const { page, limit, skip } = paginationFromQuery(req.query);
+    const [total, acompanhamentos] = await Promise.all([
+      prisma.acompanhamento.count({ where: filtros.data }),
+      prisma.acompanhamento.findMany({
+        where: filtros.data,
+        include: acompanhamentoInclude(),
+        orderBy: [{ dataHora: "asc" }, { id: "asc" }],
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    return res.json(paginatedResponse(acompanhamentos.map(acompanhamentoResponse), total, page, limit));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao buscar acompanhamentos.",
+    });
+  }
+});
+
+app.get("/acompanhamentos/resumo", async (req, res) => {
+  try {
+    const now = new Date();
+    const { start: todayStart, end: todayEnd } = todayRange();
+    const start = req.query.dataInicial ? parseDateFilter(req.query.dataInicial) : todayStart;
+    const end = req.query.dataFinal ? parseDateFilter(req.query.dataFinal, true) : todayEnd;
+
+    if (!start || !end) {
+      return res.status(400).json({
+        erro: "Periodo invalido.",
+      });
+    }
+
+    const [pendentes, paraHoje, atrasados, criticos, concluidosPeriodo, proximos, porTipo] = await Promise.all([
+      prisma.acompanhamento.count({ where: { status: "PENDENTE" } }),
+      prisma.acompanhamento.count({
+        where: {
+          status: "PENDENTE",
+          dataHora: {
+            gte: todayStart,
+            lte: todayEnd,
+          },
+        },
+      }),
+      prisma.acompanhamento.count({
+        where: {
+          status: "PENDENTE",
+          dataHora: {
+            lt: now,
+          },
+        },
+      }),
+      prisma.acompanhamento.count({
+        where: {
+          status: "PENDENTE",
+          prioridade: "CRITICA",
+        },
+      }),
+      prisma.acompanhamento.count({
+        where: {
+          status: "CONCLUIDO",
+          concluidoEm: {
+            gte: start,
+            lte: end,
+          },
+        },
+      }),
+      prisma.acompanhamento.findMany({
+        where: { status: "PENDENTE" },
+        include: acompanhamentoInclude(),
+        orderBy: [{ dataHora: "asc" }, { id: "asc" }],
+        take: 6,
+      }),
+      prisma.acompanhamento.groupBy({
+        by: ["tipo"],
+        where: { status: "PENDENTE" },
+        _count: { _all: true },
+      }),
+    ]);
+
+    return res.json({
+      indicadores: {
+        pendentes,
+        paraHoje,
+        atrasados,
+        criticos,
+        concluidosPeriodo,
+      },
+      proximos: proximos.map(acompanhamentoResponse),
+      porTipo: porTipo.map((item) => ({
+        tipo: item.tipo,
+        total: item._count._all,
+      })),
+    });
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao buscar resumo de acompanhamentos.",
+    });
+  }
+});
+
+app.get("/acompanhamentos/:id", async (req, res) => {
+  try {
+    const id = parsePositiveId(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        erro: "Acompanhamento invalido.",
+      });
+    }
+
+    const acompanhamento = await prisma.acompanhamento.findUnique({
+      where: { id },
+      include: acompanhamentoInclude(),
+    });
+
+    if (!acompanhamento) {
+      return res.status(404).json({
+        erro: "Acompanhamento nao encontrado.",
+      });
+    }
+
+    return res.json(acompanhamentoResponse(acompanhamento));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao buscar acompanhamento.",
+    });
+  }
+});
+
+app.post("/acompanhamentos", requireAuth, async (req, res) => {
+  try {
+    const payload = await acompanhamentoPayload(req.body, { partial: false });
+
+    if (payload.error) {
+      return res.status(payload.status).json({
+        erro: payload.error,
+      });
+    }
+
+    const acompanhamento = await prisma.acompanhamento.create({
+      data: payload.data,
+      include: acompanhamentoInclude(),
+    });
+
+    return res.status(201).json(acompanhamentoResponse(acompanhamento));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao criar acompanhamento.",
+    });
+  }
+});
+
+app.patch("/acompanhamentos/:id", requireAuth, async (req, res) => {
+  try {
+    const id = parsePositiveId(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        erro: "Acompanhamento invalido.",
+      });
+    }
+
+    const exists = await prisma.acompanhamento.findUnique({ where: { id } });
+
+    if (!exists) {
+      return res.status(404).json({
+        erro: "Acompanhamento nao encontrado.",
+      });
+    }
+
+    const payload = await acompanhamentoPayload(req.body, { partial: true });
+
+    if (payload.error) {
+      return res.status(payload.status).json({
+        erro: payload.error,
+      });
+    }
+
+    const acompanhamento = await prisma.acompanhamento.update({
+      where: { id },
+      data: payload.data,
+      include: acompanhamentoInclude(),
+    });
+
+    return res.json(acompanhamentoResponse(acompanhamento));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao atualizar acompanhamento.",
+    });
+  }
+});
+
+app.post("/acompanhamentos/:id/concluir", requireAuth, async (req, res) => {
+  return updateAcompanhamentoStatus(req, res, "CONCLUIDO");
+});
+
+app.post("/acompanhamentos/:id/reabrir", requireAuth, async (req, res) => {
+  return updateAcompanhamentoStatus(req, res, "PENDENTE");
+});
+
+app.post("/acompanhamentos/:id/cancelar", requireAuth, async (req, res) => {
+  return updateAcompanhamentoStatus(req, res, "CANCELADO");
 });
 
 app.get("/categorias-produtos", async (req, res) => {
@@ -1493,6 +1721,269 @@ function paginationFromQuery(query) {
     limit,
     skip: (page - 1) * limit,
   };
+}
+
+function acompanhamentoInclude() {
+  return {
+    cliente: {
+      select: {
+        id: true,
+        nome: true,
+        empresa: true,
+        telefone: true,
+        email: true,
+        status: true,
+        valor: true,
+      },
+    },
+  };
+}
+
+function acompanhamentoResponse(acompanhamento) {
+  const now = new Date();
+
+  return {
+    id: acompanhamento.id,
+    clienteId: acompanhamento.clienteId,
+    cliente: acompanhamento.cliente || null,
+    titulo: acompanhamento.titulo,
+    descricao: acompanhamento.descricao,
+    dataHora: acompanhamento.dataHora,
+    prioridade: acompanhamento.prioridade,
+    status: acompanhamento.status,
+    tipo: acompanhamento.tipo,
+    responsavel: acompanhamento.responsavel,
+    concluidoEm: acompanhamento.concluidoEm,
+    atrasado: acompanhamento.status === "PENDENTE" && acompanhamento.dataHora < now,
+    createdAt: acompanhamento.createdAt,
+    updatedAt: acompanhamento.updatedAt,
+  };
+}
+
+async function acompanhamentoPayload(body, { partial }) {
+  const allowed = ["clienteId", "titulo", "descricao", "dataHora", "prioridade", "tipo", "responsavel"];
+  const unknown = unknownFields(body, allowed);
+
+  if (unknown.length) {
+    return validationError(`Campos nao permitidos: ${unknown.join(", ")}.`);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "clienteId")) {
+    const clienteId = parsePositiveId(body.clienteId);
+
+    if (!clienteId) {
+      return validationError("Cliente invalido.");
+    }
+
+    const cliente = await prisma.cliente.findUnique({
+      where: { id: clienteId },
+      select: { id: true },
+    });
+
+    if (!cliente) {
+      return validationError("Cliente nao encontrado.", 404);
+    }
+  } else if (!partial) {
+    return validationError("Cliente e obrigatorio.");
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "titulo")) {
+    const titulo = cleanOptionalString(body.titulo);
+
+    if (!titulo) {
+      return validationError("Titulo e obrigatorio.");
+    }
+
+    if (titulo.length > 120) {
+      return validationError("Titulo deve ter no maximo 120 caracteres.");
+    }
+  } else if (!partial) {
+    return validationError("Titulo e obrigatorio.");
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "dataHora")) {
+    const dataHora = parseDateFilter(body.dataHora);
+
+    if (!dataHora) {
+      return validationError("Data e hora invalidas.");
+    }
+  } else if (!partial) {
+    return validationError("Data e hora sao obrigatorias.");
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "prioridade")) {
+    const prioridade = cleanOptionalString(body.prioridade).toUpperCase();
+
+    if (!PRIORIDADES_ACOMPANHAMENTO.has(prioridade)) {
+      return validationError("Prioridade invalida.");
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, "tipo")) {
+    const tipo = cleanOptionalString(body.tipo).toUpperCase();
+
+    if (!TIPOS_ACOMPANHAMENTO.has(tipo)) {
+      return validationError("Tipo de acompanhamento invalido.");
+    }
+  }
+
+  const data = {};
+
+  if (Object.prototype.hasOwnProperty.call(body, "clienteId")) data.clienteId = parsePositiveId(body.clienteId);
+  if (Object.prototype.hasOwnProperty.call(body, "titulo")) data.titulo = cleanOptionalString(body.titulo);
+  if (Object.prototype.hasOwnProperty.call(body, "descricao")) data.descricao = cleanNullableString(body.descricao);
+  if (Object.prototype.hasOwnProperty.call(body, "dataHora")) data.dataHora = parseDateFilter(body.dataHora);
+  if (Object.prototype.hasOwnProperty.call(body, "prioridade")) data.prioridade = cleanOptionalString(body.prioridade).toUpperCase();
+  if (Object.prototype.hasOwnProperty.call(body, "tipo")) data.tipo = cleanOptionalString(body.tipo).toUpperCase();
+  if (Object.prototype.hasOwnProperty.call(body, "responsavel")) data.responsavel = cleanNullableString(body.responsavel);
+
+  if (!partial) {
+    data.status = "PENDENTE";
+  }
+
+  return { data };
+}
+
+function acompanhamentoListWhere(query) {
+  const where = {};
+  const clienteId = query.clienteId === undefined || query.clienteId === "" ? null : parsePositiveId(query.clienteId);
+  const status = cleanOptionalString(query.status).toUpperCase();
+  const prioridade = cleanOptionalString(query.prioridade).toUpperCase();
+  const tipo = cleanOptionalString(query.tipo).toUpperCase();
+  const busca = cleanOptionalString(query.busca || query.search);
+  const dataInicial = cleanOptionalString(query.dataInicial || query.de);
+  const dataFinal = cleanOptionalString(query.dataFinal || query.ate);
+  const atrasados = parseBooleanFilter(query, "atrasados");
+  const hoje = parseBooleanFilter(query, "hoje");
+
+  if (query.clienteId !== undefined && query.clienteId !== "" && !clienteId) {
+    return validationError("Cliente invalido.");
+  }
+
+  if (clienteId) where.clienteId = clienteId;
+
+  if (status) {
+    if (!STATUS_ACOMPANHAMENTO.has(status)) return validationError("Status invalido.");
+    where.status = status;
+  }
+
+  if (prioridade) {
+    if (!PRIORIDADES_ACOMPANHAMENTO.has(prioridade)) return validationError("Prioridade invalida.");
+    where.prioridade = prioridade;
+  }
+
+  if (tipo) {
+    if (!TIPOS_ACOMPANHAMENTO.has(tipo)) return validationError("Tipo de acompanhamento invalido.");
+    where.tipo = tipo;
+  }
+
+  if (!atrasados.valid || !hoje.valid) {
+    return validationError("Filtro booleano invalido.");
+  }
+
+  const dateFilter = {};
+
+  if (dataInicial) {
+    const parsed = parseDateFilter(dataInicial);
+    if (!parsed) return validationError("Data inicial invalida.");
+    dateFilter.gte = parsed;
+  }
+
+  if (dataFinal) {
+    const parsed = parseDateFilter(dataFinal, true);
+    if (!parsed) return validationError("Data final invalida.");
+    dateFilter.lte = parsed;
+  }
+
+  if (hoje.provided && hoje.value) {
+    const { start, end } = todayRange();
+    dateFilter.gte = start;
+    dateFilter.lte = end;
+  }
+
+  if (atrasados.provided && atrasados.value) {
+    where.status = "PENDENTE";
+    dateFilter.lt = new Date();
+  }
+
+  if (Object.keys(dateFilter).length) {
+    where.dataHora = dateFilter;
+  }
+
+  if (busca) {
+    where.OR = [
+      { titulo: { contains: busca } },
+      {
+        cliente: {
+          nome: {
+            contains: busca,
+          },
+        },
+      },
+      {
+        cliente: {
+          empresa: {
+            contains: busca,
+          },
+        },
+      },
+    ];
+  }
+
+  return { data: where };
+}
+
+async function updateAcompanhamentoStatus(req, res, status) {
+  try {
+    const id = parsePositiveId(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        erro: "Acompanhamento invalido.",
+      });
+    }
+
+    const acompanhamentoAtual = await prisma.acompanhamento.findUnique({ where: { id } });
+
+    if (!acompanhamentoAtual) {
+      return res.status(404).json({
+        erro: "Acompanhamento nao encontrado.",
+      });
+    }
+
+    if (status === "CONCLUIDO" && acompanhamentoAtual.status === "CONCLUIDO") {
+      return res.status(409).json({
+        erro: "Acompanhamento ja concluido.",
+      });
+    }
+
+    const data = {
+      status,
+      concluidoEm: status === "CONCLUIDO" ? new Date() : null,
+    };
+
+    const acompanhamento = await prisma.acompanhamento.update({
+      where: { id },
+      data,
+      include: acompanhamentoInclude(),
+    });
+
+    return res.json(acompanhamentoResponse(acompanhamento));
+  } catch (error) {
+    console.log(error);
+
+    return res.status(500).json({
+      erro: "Erro ao atualizar status do acompanhamento.",
+    });
+  }
+}
+
+function todayRange() {
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+
+  return { start, end };
 }
 
 async function findCategoriaByNome(nome, ignoreId = null) {
