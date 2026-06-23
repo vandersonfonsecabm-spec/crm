@@ -151,6 +151,17 @@ export type ProdutoQueryParams = {
   limit?: number;
 };
 
+export type ProdutoCreatePayload = {
+  nome: string;
+  codigo?: string;
+  descricao?: string;
+  categoriaId?: number;
+  unidadeMedida: string;
+  estoqueMinimo: string;
+  precoCustoCentavos: number;
+  precoVendaCentavos: number;
+};
+
 export type MovimentacaoQueryParams = {
   produtoId?: number;
   tipo?: ApiMovimentacaoEstoque["tipo"];
@@ -263,6 +274,10 @@ export async function fetchProduto(id: number) {
   return requestApiGet<ApiProduto>(`/produtos/${id}`);
 }
 
+export async function createProduto(payload: ProdutoCreatePayload) {
+  return requestApiPost<ApiProduto>("/produtos", payload);
+}
+
 export async function fetchEstoqueMovimentacoes(params: MovimentacaoQueryParams = {}) {
   return requestApiGet<ApiPaginatedResponse<ApiMovimentacaoEstoque>>(
     `/estoque/movimentacoes${toQueryString(params)}`,
@@ -358,6 +373,42 @@ async function requestApiGet<T>(path: string): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+async function requestApiPost<T>(path: string, payload: Record<string, unknown>): Promise<T> {
+  if (!hasRemoteApi()) {
+    throw new Error("Nao foi possivel concluir a acao agora.");
+  }
+
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error("Acesse a demonstracao novamente para continuar.");
+  }
+
+  const response = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: {
+      ...buildHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const message = await readApiError(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function readApiError(response: Response) {
+  try {
+    const data = (await response.json()) as { error?: string; message?: string };
+    return data.error || data.message || "Nao foi possivel concluir a acao agora.";
+  } catch {
+    return "Nao foi possivel concluir a acao agora.";
+  }
 }
 
 function toQueryString(params: Record<string, string | number | boolean | null | undefined>) {
