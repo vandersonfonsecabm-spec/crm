@@ -193,6 +193,8 @@ export type MovimentacaoQueryParams = {
   produtoId?: number;
   tipo?: ApiMovimentacaoEstoque["tipo"];
   busca?: string;
+  dataInicial?: string;
+  dataFinal?: string;
   page?: number;
   limit?: number;
 };

@@ -7,6 +7,7 @@ import {
   createEntradaEstoque,
   createSaidaEstoque,
   fetchCategoriasProdutos,
+  fetchEstoqueMovimentacoes,
   fetchEstoqueResumo,
   fetchProduto,
   fetchProdutos,
@@ -19,7 +20,9 @@ import {
 import MetricCard from "./MetricCard";
 
 const PRODUCT_PAGE_SIZE = 5;
+const MOVEMENT_PAGE_SIZE = 5;
 const UNITS = ["Todos", "UN", "KG", "L", "SC", "TON"];
+const MOVEMENT_TYPES = ["Todos", "ENTRADA", "SAIDA", "AJUSTE"] as const;
 const PRODUCT_UNITS = [
   { value: "UN", label: "UN - Unidade" },
   { value: "KG", label: "KG - Quilograma" },
@@ -72,15 +75,24 @@ export default function DashboardInventoryPanel() {
   const [summary, setSummary] = useState<ApiResumoEstoque | null>(null);
   const [categories, setCategories] = useState<ApiCategoriaProduto[]>([]);
   const [products, setProducts] = useState<ApiProduto[]>([]);
+  const [productOptions, setProductOptions] = useState<ApiProduto[]>([]);
   const [movements, setMovements] = useState<ApiMovimentacaoEstoque[]>([]);
   const [productTotal, setProductTotal] = useState(0);
+  const [movementTotal, setMovementTotal] = useState(0);
   const [productPage, setProductPage] = useState(1);
+  const [movementPage, setMovementPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [movementSearch, setMovementSearch] = useState("");
+  const [debouncedMovementSearch, setDebouncedMovementSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"todos" | "ativos" | "inativos">("todos");
   const [unitFilter, setUnitFilter] = useState("Todos");
   const [categoryFilter, setCategoryFilter] = useState("Todos");
   const [stockFilter, setStockFilter] = useState<"todos" | "baixo">("todos");
+  const [movementType, setMovementType] = useState<(typeof MOVEMENT_TYPES)[number]>("Todos");
+  const [movementProductFilter, setMovementProductFilter] = useState("Todos");
+  const [movementStartDate, setMovementStartDate] = useState("");
+  const [movementEndDate, setMovementEndDate] = useState("");
   const [status, setStatus] = useState<InventoryStatus>("idle");
   const [refreshKey, setRefreshKey] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -96,6 +108,13 @@ export default function DashboardInventoryPanel() {
   const [movementForm, setMovementForm] = useState<MovementForm>(initialMovementForm);
 
   const totalPages = Math.max(1, Math.ceil(productTotal / PRODUCT_PAGE_SIZE));
+  const movementTotalPages = Math.max(1, Math.ceil(movementTotal / MOVEMENT_PAGE_SIZE));
+  const hasMovementFilters =
+    Boolean(debouncedMovementSearch) ||
+    movementType !== "Todos" ||
+    movementProductFilter !== "Todos" ||
+    Boolean(movementStartDate) ||
+    Boolean(movementEndDate);
 
   useEffect(() => {
     if (!toast) return;
@@ -113,6 +132,15 @@ export default function DashboardInventoryPanel() {
   }, [search]);
 
   useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedMovementSearch(movementSearch.trim());
+      setMovementPage(1);
+    }, 350);
+
+    return () => window.clearTimeout(timeout);
+  }, [movementSearch]);
+
+  useEffect(() => {
     let ignore = false;
 
     async function loadInventory() {
@@ -123,7 +151,10 @@ export default function DashboardInventoryPanel() {
           activeFilter === "ativos" ? true : activeFilter === "inativos" ? false : null;
         const categoriaId = categoryFilter === "Todos" ? undefined : Number(categoryFilter);
 
-        const [summaryData, productsData] = await Promise.all([
+        const movementProdutoId =
+          movementProductFilter === "Todos" ? undefined : Number(movementProductFilter);
+
+        const [summaryData, productsData, movementsData, productOptionsData] = await Promise.all([
           fetchEstoqueResumo(),
           fetchProdutos({
             busca: debouncedSearch,
@@ -134,6 +165,16 @@ export default function DashboardInventoryPanel() {
             page: productPage,
             limit: PRODUCT_PAGE_SIZE,
           }),
+          fetchEstoqueMovimentacoes({
+            busca: debouncedMovementSearch,
+            tipo: movementType === "Todos" ? undefined : movementType,
+            produtoId: movementProdutoId,
+            dataInicial: movementStartDate || undefined,
+            dataFinal: movementEndDate || undefined,
+            page: movementPage,
+            limit: MOVEMENT_PAGE_SIZE,
+          }),
+          fetchProdutos({ page: 1, limit: 100 }),
         ]);
         const categoriesData = await fetchCategoriasProdutos({ ativo: true, limit: 100 }).catch(() => ({
           data: [] as ApiCategoriaProduto[],
@@ -145,8 +186,10 @@ export default function DashboardInventoryPanel() {
         setSummary(summaryData);
         setCategories(categoriesData.data);
         setProducts(productsData.data);
+        setProductOptions(productOptionsData.data);
         setProductTotal(productsData.pagination.total);
-        setMovements(summaryData.ultimasMovimentacoes.slice(0, 5));
+        setMovements(movementsData.data);
+        setMovementTotal(movementsData.pagination.total);
         setStatus("success");
       } catch (error) {
         if (ignore) return;
@@ -160,7 +203,21 @@ export default function DashboardInventoryPanel() {
     return () => {
       ignore = true;
     };
-  }, [activeFilter, categoryFilter, debouncedSearch, productPage, refreshKey, stockFilter, unitFilter]);
+  }, [
+    activeFilter,
+    categoryFilter,
+    debouncedMovementSearch,
+    debouncedSearch,
+    movementEndDate,
+    movementPage,
+    movementProductFilter,
+    movementStartDate,
+    movementType,
+    productPage,
+    refreshKey,
+    stockFilter,
+    unitFilter,
+  ]);
 
   const isLoading = status === "loading" || status === "idle";
   const isError = status === "error";
@@ -569,13 +626,97 @@ export default function DashboardInventoryPanel() {
         </div>
 
         <div className="premium-panel min-w-0 rounded-2xl p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-white">Movimentacoes recentes</p>
-              <p className="mt-1 text-xs text-slate-500">Ultimos ajustes registrados na operacao.</p>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-white">Historico de movimentacoes</p>
+                <p className="mt-1 text-xs text-slate-500">Entradas, saidas e ajustes registrados no estoque.</p>
+              </div>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/55 text-slate-200">
+                <SlidersHorizontal size={15} />
+              </div>
             </div>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/55 text-slate-200">
-              <SlidersHorizontal size={15} />
+
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+              <label className="premium-ghost flex h-10 min-w-0 items-center gap-2 rounded-xl px-3 text-xs text-slate-400">
+                <Search size={14} className="shrink-0" />
+                <input
+                  className="min-w-0 flex-1 bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-600"
+                  onChange={(event) => setMovementSearch(event.target.value)}
+                  placeholder="Buscar produto ou codigo"
+                  value={movementSearch}
+                />
+              </label>
+
+              <select
+                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
+                onChange={(event) => {
+                  setMovementType(event.target.value as typeof movementType);
+                  setMovementPage(1);
+                }}
+                value={movementType}
+              >
+                {MOVEMENT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type === "Todos" ? "Todos os tipos" : movementLabel(type)}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
+                onChange={(event) => {
+                  setMovementProductFilter(event.target.value);
+                  setMovementPage(1);
+                }}
+                value={movementProductFilter}
+              >
+                <option value="Todos">Todos os produtos</option>
+                {productOptions.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.nome}
+                  </option>
+                ))}
+              </select>
+
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                <input
+                  className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
+                  onChange={(event) => {
+                    setMovementStartDate(event.target.value);
+                    setMovementPage(1);
+                  }}
+                  type="date"
+                  value={movementStartDate}
+                />
+                <input
+                  className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
+                  onChange={(event) => {
+                    setMovementEndDate(event.target.value);
+                    setMovementPage(1);
+                  }}
+                  type="date"
+                  value={movementEndDate}
+                />
+              </div>
+
+              {hasMovementFilters && (
+                <button
+                  className="premium-ghost h-10 rounded-xl px-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-900/70"
+                  onClick={() => {
+                    setMovementSearch("");
+                    setDebouncedMovementSearch("");
+                    setMovementType("Todos");
+                    setMovementProductFilter("Todos");
+                    setMovementStartDate("");
+                    setMovementEndDate("");
+                    setMovementPage(1);
+                  }}
+                  type="button"
+                >
+                  Limpar filtros
+                </button>
+              )}
             </div>
           </div>
 
@@ -583,7 +724,7 @@ export default function DashboardInventoryPanel() {
             {isLoading && (
               <>
                 {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={index} className="h-16 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+                  <div key={index} className="h-24 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
                 ))}
               </>
             )}
@@ -591,8 +732,8 @@ export default function DashboardInventoryPanel() {
             {!isLoading && !hasMovements && (
               <EmptyState
                 icon={<Boxes size={17} />}
-                title="Nenhuma movimentacao registrada"
-                text="Entradas, saidas e ajustes aparecerao aqui."
+                title={hasMovementFilters ? "Nenhuma movimentacao encontrada" : "Nenhuma movimentacao registrada"}
+                text={hasMovementFilters ? "Ajuste os filtros para ampliar a busca." : "Entradas, saidas e ajustes aparecerao aqui."}
               />
             )}
 
@@ -600,6 +741,33 @@ export default function DashboardInventoryPanel() {
               movements.map((movement) => (
                 <MovementRow key={movement.id} movement={movement} />
               ))}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              {movementTotal} movimentacao{movementTotal === 1 ? "" : "es"} encontrada{movementTotal === 1 ? "" : "s"}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={movementPage <= 1}
+                onClick={() => setMovementPage((current) => Math.max(1, current - 1))}
+                type="button"
+              >
+                Anterior
+              </button>
+              <span className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">
+                {movementTotal === 0 ? "0/0" : `${movementPage}/${movementTotalPages}`}
+              </span>
+              <button
+                className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={movementTotal === 0 || movementPage >= movementTotalPages}
+                onClick={() => setMovementPage((current) => Math.min(movementTotalPages, current + 1))}
+                type="button"
+              >
+                Proxima
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1105,26 +1273,57 @@ function ProductRow({ product, onOpen }: { product: ApiProduto; onOpen: () => vo
 }
 
 function MovementRow({ movement }: { movement: ApiMovimentacaoEstoque }) {
+  const unit = movement.produto?.unidadeMedida ?? "";
+
   return (
     <article className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-3">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className={`saas-chip shrink-0 ${movementTone(movement.tipo)}`}>
               {movementLabel(movement.tipo)}
             </span>
-            <p className="truncate text-xs font-semibold text-slate-100">
+            <p className="min-w-0 break-words text-xs font-semibold text-slate-100">
               {movement.produto?.nome || "Produto"}
             </p>
+              {movement.produto?.codigo && (
+                <span className="saas-chip shrink-0 text-slate-400">
+                  {movement.produto.codigo}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {formatDate(movement.createdAt)}
+            </p>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">
-            {formatDecimal(movement.quantidadeAnterior)} &rarr; {formatDecimal(movement.quantidadePosterior)}
-          </p>
+          <div className="shrink-0 text-right">
+            <p className="text-xs font-semibold text-white">
+              {formatDecimal(movement.quantidade)} {unit}
+            </p>
+            <p className="mt-1 text-[10px] text-slate-500">quantidade</p>
+          </div>
         </div>
-        <div className="shrink-0 text-right">
-          <p className="text-xs font-semibold text-white">{formatDecimal(movement.quantidade)}</p>
-          <p className="mt-1 text-[10px] text-slate-500">{formatDate(movement.createdAt)}</p>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <InfoCell label="Saldo anterior" value={`${formatDecimal(movement.quantidadeAnterior)} ${unit}`.trim()} />
+          <InfoCell label="Saldo posterior" value={`${formatDecimal(movement.quantidadePosterior)} ${unit}`.trim()} />
         </div>
+
+        {(movement.motivo || movement.observacao) && (
+          <div className="space-y-1 rounded-xl border border-white/[0.06] bg-slate-950/24 p-3 text-[11px] leading-relaxed text-slate-400">
+            {movement.motivo && (
+              <p className="break-words">
+                <span className="font-semibold text-slate-300">Motivo:</span> {movement.motivo}
+              </p>
+            )}
+            {movement.observacao && (
+              <p className="break-words">
+                <span className="font-semibold text-slate-300">Observacao:</span> {movement.observacao}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </article>
   );
@@ -1327,7 +1526,8 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-function movementLabel(type: ApiMovimentacaoEstoque["tipo"]) {
+function movementLabel(type: ApiMovimentacaoEstoque["tipo"] | "Todos") {
+  if (type === "Todos") return "Todos";
   if (type === "ENTRADA") return "Entrada";
   if (type === "SAIDA") return "Saida";
   return "Ajuste";
