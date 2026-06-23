@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { fetchAcompanhamentoResumo, type ApiAcompanhamentoResumo } from "../../services/crmApi";
 import type { Client, Status } from "../../types/dashboard";
 
 type FollowUpGroup = {
@@ -21,6 +23,27 @@ export default function DashboardFollowUpCalendar({
   statusClass,
   onSelectClient,
 }: DashboardFollowUpCalendarProps) {
+  const [summary, setSummary] = useState<ApiAcompanhamentoResumo | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadSummary() {
+      try {
+        const data = await fetchAcompanhamentoResumo();
+        if (!ignore) setSummary(data);
+      } catch {
+        if (!ignore) setSummary(null);
+      }
+    }
+
+    void loadSummary();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   const allClients = followUpAgenda.flatMap((group) =>
     group.clients.map((client) => ({
       ...client,
@@ -39,6 +62,9 @@ export default function DashboardFollowUpCalendar({
     .slice(0, 4);
 
   const totalValue = allClients.reduce((sum, client) => sum + client.value, 0);
+  const todayCount = summary?.indicadores.paraHoje ?? todayFollowUps;
+  const pendingCount = summary?.indicadores.pendentes ?? allClients.length;
+  const criticalCount = summary?.indicadores.criticos ?? criticalClients.length;
 
   return (
     <div className="saas-panel rounded-2xl">
@@ -48,7 +74,7 @@ export default function DashboardFollowUpCalendar({
             <div className="flex items-center gap-2">
               <p className="text-sm font-semibold">Agenda executiva</p>
               <span className="rounded-full border border-emerald-400/15 bg-emerald-500/[0.06] px-2 py-0.5 text-[9px] font-semibold text-emerald-100">
-                {todayFollowUps} hoje
+                {todayCount} hoje
               </span>
             </div>
 
@@ -60,7 +86,7 @@ export default function DashboardFollowUpCalendar({
           <div className="flex items-center gap-2">
             <div className="metric-card rounded-xl px-3 py-1.5 text-right">
               <p className="text-[9px] text-slate-500">Agenda</p>
-              <p className="text-xs font-semibold text-slate-100">{allClients.length} oportunidades</p>
+              <p className="text-xs font-semibold text-slate-100">{pendingCount} acompanhamentos</p>
             </div>
 
             <div className="metric-card metric-pipeline rounded-xl px-3 py-1.5 text-right">
@@ -119,7 +145,7 @@ export default function DashboardFollowUpCalendar({
             </div>
 
             <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">
-              {criticalClients.length} principais
+              {criticalCount} principais
             </span>
           </div>
 

@@ -143,6 +143,74 @@ export type ApiResumoEstoque = {
   ultimasMovimentacoes: ApiMovimentacaoEstoque[];
 };
 
+export type ApiAcompanhamentoStatus = "PENDENTE" | "CONCLUIDO" | "CANCELADO";
+export type ApiAcompanhamentoPrioridade = "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
+export type ApiAcompanhamentoTipo = "LIGACAO" | "WHATSAPP" | "EMAIL" | "REUNIAO" | "VISITA" | "OUTRO";
+
+export type ApiAcompanhamento = {
+  id: number;
+  clienteId: number;
+  cliente: {
+    id: number;
+    nome: string;
+    empresa?: string | null;
+    telefone?: string | null;
+    email?: string | null;
+    status?: string | null;
+    valor?: number | null;
+  } | null;
+  titulo: string;
+  descricao?: string | null;
+  dataHora: string;
+  prioridade: ApiAcompanhamentoPrioridade;
+  status: ApiAcompanhamentoStatus;
+  tipo: ApiAcompanhamentoTipo;
+  responsavel?: string | null;
+  concluidoEm?: string | null;
+  atrasado: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiAcompanhamentoResumo = {
+  indicadores: {
+    pendentes: number;
+    paraHoje: number;
+    atrasados: number;
+    criticos: number;
+    concluidosPeriodo: number;
+  };
+  proximos: ApiAcompanhamento[];
+  porTipo: Array<{
+    tipo: ApiAcompanhamentoTipo;
+    total: number;
+  }>;
+};
+
+export type AcompanhamentoQueryParams = {
+  busca?: string;
+  clienteId?: number;
+  status?: ApiAcompanhamentoStatus;
+  prioridade?: ApiAcompanhamentoPrioridade;
+  tipo?: ApiAcompanhamentoTipo;
+  dataInicial?: string;
+  dataFinal?: string;
+  atrasados?: boolean;
+  hoje?: boolean;
+  page?: number;
+  limit?: number;
+};
+
+export type AcompanhamentoPayload = {
+  clienteId: number;
+  titulo: string;
+  descricao?: string;
+  dataHora: string;
+  prioridade: ApiAcompanhamentoPrioridade;
+  tipo: ApiAcompanhamentoTipo;
+  responsavel?: string;
+};
+
 export type ProdutoQueryParams = {
   busca?: string;
   categoriaId?: number;
@@ -336,6 +404,37 @@ export async function fetchEstoqueMovimentacoes(params: MovimentacaoQueryParams 
 
 export async function fetchEstoqueResumo() {
   return requestApiGet<ApiResumoEstoque>("/estoque/resumo");
+}
+
+export async function fetchAcompanhamentos(params: AcompanhamentoQueryParams = {}) {
+  const response = await requestApiGet<ApiPaginatedResponse<ApiAcompanhamento> | ApiAcompanhamento[]>(
+    `/acompanhamentos${toQueryString(params)}`,
+  );
+  return normalizePaginatedResponse(response, params);
+}
+
+export async function fetchAcompanhamentoResumo(params: { dataInicial?: string; dataFinal?: string } = {}) {
+  return requestApiGet<ApiAcompanhamentoResumo>(`/acompanhamentos/resumo${toQueryString(params)}`);
+}
+
+export async function createAcompanhamento(payload: AcompanhamentoPayload) {
+  return requestApiPost<ApiAcompanhamento>("/acompanhamentos", payload);
+}
+
+export async function updateAcompanhamento(id: number, payload: Partial<AcompanhamentoPayload>) {
+  return requestApiWrite<ApiAcompanhamento>("PATCH", `/acompanhamentos/${id}`, payload);
+}
+
+export async function concluirAcompanhamento(id: number) {
+  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/concluir`, {});
+}
+
+export async function reabrirAcompanhamento(id: number) {
+  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/reabrir`, {});
+}
+
+export async function cancelarAcompanhamento(id: number) {
+  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/cancelar`, {});
 }
 
 export async function createClienteOnBackend(client: Client) {
