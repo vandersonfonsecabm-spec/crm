@@ -1167,7 +1167,12 @@ function StockMovementModal({
   const title = action === "entrada" ? "Dar entrada" : action === "saida" ? "Registrar saida" : "Ajustar saldo";
   const submitLabel = action === "entrada" ? "Registrar entrada" : action === "saida" ? "Registrar saida" : "Salvar ajuste";
   const current = decimalNumber(product.quantidadeAtual);
-  const next = isAdjustment ? decimalNumber(normalizeDecimalInput(form.novaQuantidade)) : current;
+  const movementAmount = decimalNumber(normalizeDecimalInput(form.quantidade));
+  const next = isAdjustment
+    ? decimalNumber(normalizeDecimalInput(form.novaQuantidade))
+    : action === "entrada"
+      ? current + movementAmount
+      : current - movementAmount;
   const difference = next - current;
   const fieldBaseClass =
     "w-full rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm text-slate-100 outline-none transition-all duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-60";
@@ -1202,11 +1207,20 @@ function StockMovementModal({
             />
           </Field>
 
-          {isAdjustment && (
-            <div className="rounded-xl border border-white/[0.06] bg-slate-950/24 px-3 py-2 text-xs text-slate-400">
-              Diferenca: <span className={difference > 0 ? "text-teal-100" : difference < 0 ? "text-rose-100" : "text-slate-300"}>{formatDecimal(String(difference))}</span>
+          <div className="grid gap-2 rounded-xl border border-white/[0.06] bg-slate-950/24 p-3 text-xs sm:grid-cols-3">
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Saldo atual</p>
+              <p className="mt-1 font-semibold text-slate-200">{formatDecimal(String(current))} {product.unidadeMedida}</p>
             </div>
-          )}
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Novo saldo</p>
+              <p className={`mt-1 font-semibold ${next < 0 ? "text-rose-100" : "text-slate-100"}`}>{formatDecimal(String(next))} {product.unidadeMedida}</p>
+            </div>
+            <div>
+              <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Diferenca</p>
+              <p className={`mt-1 font-semibold ${difference > 0 ? "text-teal-100" : difference < 0 ? "text-rose-100" : "text-slate-300"}`}>{formatDecimal(String(difference))} {product.unidadeMedida}</p>
+            </div>
+          </div>
 
           <Field label={isAdjustment ? "Motivo obrigatorio" : "Motivo"} labelClass={labelClass}>
             <input
