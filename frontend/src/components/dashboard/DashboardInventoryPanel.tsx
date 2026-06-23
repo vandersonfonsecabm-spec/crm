@@ -179,6 +179,13 @@ export default function DashboardInventoryPanel() {
         icon: <Wallet size={15} />,
         tone: "revenue" as const,
       },
+      {
+        title: "Venda potencial",
+        value: formatCurrency(Number(summary?.indicadores.valorTotalVendaCentavos ?? 0)),
+        caption: "Valor de venda",
+        icon: <Wallet size={15} />,
+        tone: "pipeline" as const,
+      },
     ],
     [summary],
   );
@@ -253,7 +260,7 @@ export default function DashboardInventoryPanel() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-7">
         {summaryCards.map((card) => (
           <MetricCard
             key={card.title}
@@ -655,7 +662,7 @@ function Field({
 
 function ProductRow({ product }: { product: ApiProduto }) {
   return (
-    <article className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 lg:grid-cols-[minmax(0,1fr)_96px_72px_76px_76px_86px] lg:items-center">
+    <article className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 lg:grid-cols-[minmax(0,1fr)_96px_68px_72px_72px_84px_84px] lg:items-center">
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-sm font-semibold text-white">{product.nome}</p>
@@ -672,6 +679,7 @@ function ProductRow({ product }: { product: ApiProduto }) {
         <InfoCell label="Unidade" value={product.unidadeMedida} />
         <InfoCell label="Saldo" value={formatDecimal(product.quantidadeAtual)} />
         <InfoCell label="Minimo" value={formatDecimal(product.estoqueMinimo)} />
+        <InfoCell label="Custo" value={formatCurrency(product.precoCustoCentavos)} />
         <InfoCell label="Venda" value={formatCurrency(product.precoVendaCentavos)} />
     </article>
   );
