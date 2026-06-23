@@ -1,11 +1,16 @@
-import { AlertTriangle, Boxes, CheckCircle2, Layers3, Loader2, Package, Plus, Search, SlidersHorizontal, Wallet, Warehouse, X } from "lucide-react";
+import { AlertTriangle, Boxes, CheckCircle2, Edit3, Layers3, Loader2, Package, Plus, Search, SlidersHorizontal, TrendingDown, TrendingUp, Wallet, Warehouse, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   createProduto,
+  createAjusteEstoque,
+  createEntradaEstoque,
+  createSaidaEstoque,
   fetchCategoriasProdutos,
   fetchEstoqueResumo,
+  fetchProduto,
   fetchProdutos,
+  updateProduto,
   type ApiCategoriaProduto,
   type ApiMovimentacaoEstoque,
   type ApiProduto,
@@ -24,6 +29,7 @@ const PRODUCT_UNITS = [
 ];
 
 type InventoryStatus = "idle" | "loading" | "success" | "error";
+type InventoryAction = "entrada" | "saida" | "ajuste";
 type ProductForm = {
   nome: string;
   codigo: string;
@@ -33,6 +39,7 @@ type ProductForm = {
   estoqueMinimo: string;
   precoCusto: string;
   precoVenda: string;
+  ativo: boolean;
 };
 
 const initialProductForm: ProductForm = {
@@ -44,6 +51,21 @@ const initialProductForm: ProductForm = {
   estoqueMinimo: "0",
   precoCusto: "",
   precoVenda: "",
+  ativo: true,
+};
+
+type MovementForm = {
+  quantidade: string;
+  novaQuantidade: string;
+  motivo: string;
+  observacao: string;
+};
+
+const initialMovementForm: MovementForm = {
+  quantidade: "",
+  novaQuantidade: "",
+  motivo: "",
+  observacao: "",
 };
 
 export default function DashboardInventoryPanel() {
@@ -66,6 +88,12 @@ export default function DashboardInventoryPanel() {
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<ApiProduto | null>(null);
+  const [isLoadingProduct, setIsLoadingProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ApiProduto | null>(null);
+  const [movementProduct, setMovementProduct] = useState<ApiProduto | null>(null);
+  const [movementAction, setMovementAction] = useState<InventoryAction | null>(null);
+  const [movementForm, setMovementForm] = useState<MovementForm>(initialMovementForm);
 
   const totalPages = Math.max(1, Math.ceil(productTotal / PRODUCT_PAGE_SIZE));
 
@@ -230,6 +258,125 @@ export default function DashboardInventoryPanel() {
     }
   }
 
+  async function openProductDetails(productId: number) {
+    setIsLoadingProduct(true);
+
+    try {
+      const product = await fetchProduto(productId);
+      setSelectedProduct(product);
+    } catch (error) {
+      console.error("Falha ao carregar produto", error);
+      setToast("Nao foi possivel abrir o produto agora.");
+    } finally {
+      setIsLoadingProduct(false);
+    }
+  }
+
+  function openEditProduct(product: ApiProduto) {
+    setProductForm(productToForm(product));
+    setFormError("");
+    setEditingProduct(product);
+  }
+
+  async function handleUpdateProduct() {
+    if (!editingProduct) return;
+
+    setFormError("");
+    const validation = validateProductForm(productForm);
+    if (validation) {
+      setFormError(validation);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const updated = await updateProduto(editingProduct.id, {
+        nome: productForm.nome.trim(),
+        codigo: productForm.codigo.trim() || undefined,
+        descricao: productForm.descricao.trim() || undefined,
+        categoriaId: productForm.categoriaId ? Number(productForm.categoriaId) : undefined,
+        unidadeMedida: productForm.unidadeMedida,
+        estoqueMinimo: normalizeDecimalInput(productForm.estoqueMinimo),
+        precoCustoCentavos: parseMoneyToCents(productForm.precoCusto),
+        precoVendaCentavos: parseMoneyToCents(productForm.precoVenda),
+        ativo: productForm.ativo,
+      });
+
+      const detailed = await fetchProduto(updated.id);
+      setEditingProduct(null);
+      setSelectedProduct(detailed);
+      setRefreshKey((current) => current + 1);
+      setToast("Produto atualizado com sucesso.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setFormError(toFriendlyProductError(message));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  function openMovementModal(product: ApiProduto, action: InventoryAction) {
+    if (!product.ativo) {
+      setToast("Ative o produto para realizar movimentacoes.");
+      return;
+    }
+
+    setMovementProduct(product);
+    setMovementAction(action);
+    setMovementForm(initialMovementForm);
+    setFormError("");
+  }
+
+  async function handleMovementSubmit() {
+    if (!movementProduct || !movementAction) return;
+
+    const validation = validateMovementForm(movementForm, movementProduct, movementAction);
+    if (validation) {
+      setFormError(validation);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const payloadBase = {
+        produtoId: movementProduct.id,
+        motivo: movementForm.motivo.trim() || undefined,
+        observacao: movementForm.observacao.trim() || undefined,
+      };
+      const response =
+        movementAction === "entrada"
+          ? await createEntradaEstoque({
+              ...payloadBase,
+              quantidade: normalizeDecimalInput(movementForm.quantidade),
+            })
+          : movementAction === "saida"
+            ? await createSaidaEstoque({
+                ...payloadBase,
+                quantidade: normalizeDecimalInput(movementForm.quantidade),
+              })
+            : await createAjusteEstoque({
+                ...payloadBase,
+                motivo: movementForm.motivo.trim(),
+                novaQuantidade: normalizeDecimalInput(movementForm.novaQuantidade),
+              });
+
+      const detailed = await fetchProduto(response.produto.id);
+      setMovementProduct(null);
+      setMovementAction(null);
+      setMovementForm(initialMovementForm);
+      setSelectedProduct(detailed);
+      setRefreshKey((current) => current + 1);
+      setToast(movementSuccessMessage(movementAction));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setFormError(toFriendlyMovementError(message));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   if (isError) {
     return (
       <section className="premium-panel rounded-2xl p-5">
@@ -389,7 +536,7 @@ export default function DashboardInventoryPanel() {
 
             {!isLoading &&
               products.map((product) => (
-                <ProductRow key={product.id} product={product} />
+                <ProductRow key={product.id} product={product} onOpen={() => openProductDetails(product.id)} />
               ))}
           </div>
 
@@ -472,6 +619,53 @@ export default function DashboardInventoryPanel() {
           onSubmit={handleCreateProduct}
         />
       )}
+
+      {selectedProduct && (
+        <ProductDetailsDrawer
+          product={selectedProduct}
+          isLoading={isLoadingProduct}
+          onClose={() => setSelectedProduct(null)}
+          onEdit={() => openEditProduct(selectedProduct)}
+          onMovement={(action) => openMovementModal(selectedProduct, action)}
+        />
+      )}
+
+      {editingProduct && (
+        <ProductCreateModal
+          categories={categories}
+          form={productForm}
+          error={formError}
+          isSubmitting={isSubmitting}
+          setForm={setProductForm}
+          onClose={() => {
+            if (isSubmitting) return;
+            setEditingProduct(null);
+            setFormError("");
+          }}
+          onSubmit={handleUpdateProduct}
+          title="Editar produto"
+          submitLabel="Salvar produto"
+          showActiveToggle
+        />
+      )}
+
+      {movementProduct && movementAction && (
+        <StockMovementModal
+          action={movementAction}
+          product={movementProduct}
+          form={movementForm}
+          error={formError}
+          isSubmitting={isSubmitting}
+          setForm={setMovementForm}
+          onClose={() => {
+            if (isSubmitting) return;
+            setMovementProduct(null);
+            setMovementAction(null);
+            setFormError("");
+          }}
+          onSubmit={handleMovementSubmit}
+        />
+      )}
     </section>
   );
 }
@@ -484,6 +678,9 @@ function ProductCreateModal({
   setForm,
   onClose,
   onSubmit,
+  title = "Novo produto",
+  submitLabel = "Cadastrar produto",
+  showActiveToggle = false,
 }: {
   categories: ApiCategoriaProduto[];
   form: ProductForm;
@@ -492,6 +689,9 @@ function ProductCreateModal({
   setForm: (form: ProductForm) => void;
   onClose: () => void;
   onSubmit: () => void;
+  title?: string;
+  submitLabel?: string;
+  showActiveToggle?: boolean;
 }) {
   const fieldBaseClass =
     "w-full rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm text-slate-100 outline-none transition-all duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-60";
@@ -502,7 +702,7 @@ function ProductCreateModal({
       <div className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 text-white shadow-2xl">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold">Novo produto</p>
+            <p className="text-sm font-semibold">{title}</p>
             <p className="mt-1 text-[11px] text-slate-500">
               Cadastre o item para acompanhar saldos, estoque minimo e movimentacoes.
             </p>
@@ -612,6 +812,21 @@ function ProductCreateModal({
               value={form.descricao}
             />
           </Field>
+
+          {showActiveToggle && (
+            <div className="md:col-span-2">
+              <label className="inline-flex items-center gap-2 rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300">
+                <input
+                  checked={form.ativo}
+                  className="h-4 w-4 accent-teal-300"
+                  disabled={isSubmitting}
+                  onChange={(event) => setForm({ ...form, ativo: event.target.checked })}
+                  type="checkbox"
+                />
+                Produto ativo
+              </label>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -637,7 +852,7 @@ function ProductCreateModal({
             type="button"
           >
             {isSubmitting && <Loader2 size={13} className="animate-spin" />}
-            {isSubmitting ? "Salvando" : "Cadastrar produto"}
+            {isSubmitting ? "Salvando" : submitLabel}
           </button>
         </div>
       </div>
@@ -664,9 +879,209 @@ function Field({
   );
 }
 
-function ProductRow({ product }: { product: ApiProduto }) {
+function ProductDetailsDrawer({
+  product,
+  isLoading,
+  onClose,
+  onEdit,
+  onMovement,
+}: {
+  product: ApiProduto;
+  isLoading: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onMovement: (action: InventoryAction) => void;
+}) {
+  const recentMovements = product.ultimasMovimentacoes ?? [];
+
   return (
-    <article className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 lg:grid-cols-[minmax(0,1fr)_96px_68px_72px_72px_84px_84px] lg:items-center">
+    <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-slate-700/50 bg-[#070b12]/96 text-white shadow-2xl backdrop-blur-xl">
+      <div className="border-b border-white/[0.07] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">{product.nome}</p>
+            <p className="mt-1 truncate text-[11px] text-slate-500">
+              {product.codigo || "Sem codigo"} - {product.categoria?.nome || "Sem categoria"}
+            </p>
+          </div>
+          <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200" onClick={onClose} type="button">
+            <X size={15} />
+          </button>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+        {isLoading && <div className="h-20 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />}
+
+        <section className="saas-card rounded-2xl p-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <InfoCell label="Situacao" value={stockLabel(product)} tone={stockTone(product)} />
+            <InfoCell label="Status" value={product.ativo ? "Ativo" : "Inativo"} tone={product.ativo ? "ok" : "empty"} />
+            <InfoCell label="Saldo" value={`${formatDecimal(product.quantidadeAtual)} ${product.unidadeMedida}`} />
+            <InfoCell label="Minimo" value={formatDecimal(product.estoqueMinimo)} />
+            <InfoCell label="Custo" value={formatCurrency(product.precoCustoCentavos)} />
+            <InfoCell label="Venda" value={formatCurrency(product.precoVendaCentavos)} />
+          </div>
+
+          {product.descricao && (
+            <p className="mt-3 rounded-xl border border-white/[0.06] bg-slate-950/24 p-3 text-xs leading-relaxed text-slate-400">
+              {product.descricao}
+            </p>
+          )}
+        </section>
+
+        {!product.ativo && (
+          <div className="rounded-2xl border border-amber-300/18 bg-amber-300/[0.06] p-3 text-xs text-amber-100">
+            Ative o produto para realizar movimentacoes.
+          </div>
+        )}
+
+        <section className="grid gap-2 sm:grid-cols-2">
+          <button className="saas-action inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200" onClick={onEdit} type="button">
+            <Edit3 size={14} />
+            Editar produto
+          </button>
+          <button className="saas-action inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45" disabled={!product.ativo} onClick={() => onMovement("entrada")} type="button">
+            <TrendingUp size={14} />
+            Dar entrada
+          </button>
+          <button className="saas-action inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45" disabled={!product.ativo} onClick={() => onMovement("saida")} type="button">
+            <TrendingDown size={14} />
+            Registrar saida
+          </button>
+          <button className="saas-action inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45" disabled={!product.ativo} onClick={() => onMovement("ajuste")} type="button">
+            <SlidersHorizontal size={14} />
+            Ajustar saldo
+          </button>
+        </section>
+
+        <section className="saas-card rounded-2xl p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-slate-100">Ultimas movimentacoes</p>
+            <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
+              {product.movimentacoesCount ?? recentMovements.length} registros
+            </span>
+          </div>
+          <div className="space-y-2">
+            {recentMovements.length === 0 && (
+              <p className="rounded-xl border border-dashed border-white/10 bg-black/20 p-3 text-xs text-slate-500">
+                Nenhuma movimentacao registrada para este produto.
+              </p>
+            )}
+            {recentMovements.map((movement) => (
+              <MovementRow key={movement.id} movement={movement} />
+            ))}
+          </div>
+        </section>
+      </div>
+    </aside>
+  );
+}
+
+function StockMovementModal({
+  action,
+  product,
+  form,
+  error,
+  isSubmitting,
+  setForm,
+  onClose,
+  onSubmit,
+}: {
+  action: InventoryAction;
+  product: ApiProduto;
+  form: MovementForm;
+  error: string;
+  isSubmitting: boolean;
+  setForm: (form: MovementForm) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const isAdjustment = action === "ajuste";
+  const title = action === "entrada" ? "Dar entrada" : action === "saida" ? "Registrar saida" : "Ajustar saldo";
+  const submitLabel = action === "entrada" ? "Registrar entrada" : action === "saida" ? "Registrar saida" : "Salvar ajuste";
+  const current = decimalNumber(product.quantidadeAtual);
+  const next = isAdjustment ? decimalNumber(normalizeDecimalInput(form.novaQuantidade)) : current;
+  const difference = next - current;
+  const fieldBaseClass =
+    "w-full rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm text-slate-100 outline-none transition-all duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-60";
+  const labelClass = "mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="saas-panel w-full max-w-lg rounded-2xl p-4 text-white shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">{title}</p>
+            <p className="mt-1 truncate text-[11px] text-slate-500">
+              {product.nome} - saldo atual: {formatDecimal(product.quantidadeAtual)} {product.unidadeMedida}
+            </p>
+          </div>
+          <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="saas-card grid gap-3 rounded-2xl p-3">
+          <Field label={isAdjustment ? "Nova quantidade" : "Quantidade"} labelClass={labelClass}>
+            <input
+              className={fieldBaseClass}
+              disabled={isSubmitting}
+              inputMode="decimal"
+              onChange={(event) =>
+                setForm(isAdjustment ? { ...form, novaQuantidade: event.target.value } : { ...form, quantidade: event.target.value })
+              }
+              placeholder="Ex: 10 ou 10,5"
+              value={isAdjustment ? form.novaQuantidade : form.quantidade}
+            />
+          </Field>
+
+          {isAdjustment && (
+            <div className="rounded-xl border border-white/[0.06] bg-slate-950/24 px-3 py-2 text-xs text-slate-400">
+              Diferenca: <span className={difference > 0 ? "text-teal-100" : difference < 0 ? "text-rose-100" : "text-slate-300"}>{formatDecimal(String(difference))}</span>
+            </div>
+          )}
+
+          <Field label={isAdjustment ? "Motivo obrigatorio" : "Motivo"} labelClass={labelClass}>
+            <input
+              className={fieldBaseClass}
+              disabled={isSubmitting}
+              onChange={(event) => setForm({ ...form, motivo: event.target.value })}
+              placeholder={isAdjustment ? "Ex: Contagem fisica" : "Ex: Operacao de estoque"}
+              value={form.motivo}
+            />
+          </Field>
+
+          <Field label="Observacao" labelClass={labelClass}>
+            <textarea
+              className={`${fieldBaseClass} min-h-[72px] resize-none`}
+              disabled={isSubmitting}
+              onChange={(event) => setForm({ ...form, observacao: event.target.value })}
+              placeholder="Informacao complementar"
+              value={form.observacao}
+            />
+          </Field>
+        </div>
+
+        {error && <div className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/[0.055] px-3 py-2 text-xs text-rose-100">{error}</div>}
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">
+            Cancelar
+          </button>
+          <button className="premium-button inline-flex min-w-32 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60" disabled={isSubmitting} onClick={onSubmit} type="button">
+            {isSubmitting && <Loader2 size={13} className="animate-spin" />}
+            {isSubmitting ? "Salvando" : submitLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductRow({ product, onOpen }: { product: ApiProduto; onOpen: () => void }) {
+  return (
+    <button className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 text-left lg:grid-cols-[minmax(0,1fr)_96px_68px_72px_72px_84px_84px] lg:items-center" onClick={onOpen} type="button">
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-sm font-semibold text-white">{product.nome}</p>
@@ -685,7 +1100,7 @@ function ProductRow({ product }: { product: ApiProduto }) {
         <InfoCell label="Minimo" value={formatDecimal(product.estoqueMinimo)} />
         <InfoCell label="Custo" value={formatCurrency(product.precoCustoCentavos)} />
         <InfoCell label="Venda" value={formatCurrency(product.precoVendaCentavos)} />
-    </article>
+    </button>
   );
 }
 
@@ -808,6 +1223,69 @@ function toFriendlyProductError(message: string) {
   if (normalized.includes("nome")) return "Informe um nome valido para o produto.";
   if (normalized.includes("unidade")) return "Selecione uma unidade de medida valida.";
   return "Nao foi possivel cadastrar o produto agora.";
+}
+
+function productToForm(product: ApiProduto): ProductForm {
+  return {
+    nome: product.nome,
+    codigo: product.codigo ?? "",
+    descricao: product.descricao ?? "",
+    categoriaId: product.categoriaId ? String(product.categoriaId) : "",
+    unidadeMedida: product.unidadeMedida,
+    estoqueMinimo: formatDecimal(product.estoqueMinimo),
+    precoCusto: centsToMoneyInput(product.precoCustoCentavos),
+    precoVenda: centsToMoneyInput(product.precoVendaCentavos),
+    ativo: product.ativo,
+  };
+}
+
+function validateMovementForm(form: MovementForm, product: ApiProduto, action: InventoryAction) {
+  if (!product.ativo) return "Ative o produto para realizar movimentacoes.";
+
+  if (action === "ajuste") {
+    if (!isDecimalInputValid(form.novaQuantidade)) return "Nova quantidade deve ser zero ou maior.";
+    if (!form.motivo.trim()) return "Informe o motivo do ajuste.";
+    if (decimalNumber(normalizeDecimalInput(form.novaQuantidade)) === decimalNumber(product.quantidadeAtual)) {
+      return "Informe uma quantidade diferente do saldo atual.";
+    }
+    return "";
+  }
+
+  if (!isDecimalInputValid(form.quantidade) || decimalNumber(normalizeDecimalInput(form.quantidade)) <= 0) {
+    return "Informe uma quantidade maior que zero.";
+  }
+
+  if (action === "saida" && decimalNumber(normalizeDecimalInput(form.quantidade)) > decimalNumber(product.quantidadeAtual)) {
+    return "A quantidade informada e maior que o saldo disponivel.";
+  }
+
+  return "";
+}
+
+function movementSuccessMessage(action: InventoryAction) {
+  if (action === "entrada") return "Entrada registrada com sucesso.";
+  if (action === "saida") return "Saida registrada com sucesso.";
+  return "Saldo ajustado com sucesso.";
+}
+
+function toFriendlyMovementError(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("saldo") || normalized.includes("insuficiente")) {
+    return "A quantidade informada e maior que o saldo disponivel.";
+  }
+  if (normalized.includes("ativo") || normalized.includes("inativo")) {
+    return "Ative o produto para realizar movimentacoes.";
+  }
+  if (normalized.includes("motivo")) return "Informe o motivo do ajuste.";
+  if (normalized.includes("quantidade")) return "Informe uma quantidade valida.";
+  return "Nao foi possivel concluir a movimentacao agora.";
+}
+
+function centsToMoneyInput(cents: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(cents / 100);
 }
 
 function decimalNumber(value: string) {

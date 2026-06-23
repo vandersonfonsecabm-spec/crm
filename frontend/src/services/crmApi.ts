@@ -109,6 +109,8 @@ export type ApiProduto = {
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
+  movimentacoesCount?: number;
+  ultimasMovimentacoes?: ApiMovimentacaoEstoque[];
 };
 
 export type ApiMovimentacaoEstoque = {
@@ -160,6 +162,31 @@ export type ProdutoCreatePayload = {
   estoqueMinimo: string;
   precoCustoCentavos: number;
   precoVendaCentavos: number;
+};
+
+export type ProdutoUpdatePayload = Partial<ProdutoCreatePayload> & {
+  ativo?: boolean;
+};
+
+export type EstoqueEntradaPayload = {
+  produtoId: number;
+  quantidade: string;
+  motivo?: string;
+  observacao?: string;
+};
+
+export type EstoqueSaidaPayload = EstoqueEntradaPayload;
+
+export type EstoqueAjustePayload = {
+  produtoId: number;
+  novaQuantidade: string;
+  motivo: string;
+  observacao?: string;
+};
+
+export type EstoqueMovimentacaoResponse = {
+  produto: ApiProduto;
+  movimentacao: ApiMovimentacaoEstoque;
 };
 
 export type MovimentacaoQueryParams = {
@@ -282,6 +309,22 @@ export async function createProduto(payload: ProdutoCreatePayload) {
   return requestApiPost<ApiProduto>("/produtos", payload);
 }
 
+export async function updateProduto(id: number, payload: ProdutoUpdatePayload) {
+  return requestApiWrite<ApiProduto>("PATCH", `/produtos/${id}`, payload);
+}
+
+export async function createEntradaEstoque(payload: EstoqueEntradaPayload) {
+  return requestApiPost<EstoqueMovimentacaoResponse>("/estoque/entradas", payload);
+}
+
+export async function createSaidaEstoque(payload: EstoqueSaidaPayload) {
+  return requestApiPost<EstoqueMovimentacaoResponse>("/estoque/saidas", payload);
+}
+
+export async function createAjusteEstoque(payload: EstoqueAjustePayload) {
+  return requestApiPost<EstoqueMovimentacaoResponse>("/estoque/ajustes", payload);
+}
+
 export async function fetchEstoqueMovimentacoes(params: MovimentacaoQueryParams = {}) {
   const response = await requestApiGet<ApiPaginatedResponse<ApiMovimentacaoEstoque> | ApiMovimentacaoEstoque[]>(
     `/estoque/movimentacoes${toQueryString(params)}`,
@@ -381,6 +424,10 @@ async function requestApiGet<T>(path: string): Promise<T> {
 }
 
 async function requestApiPost<T>(path: string, payload: Record<string, unknown>): Promise<T> {
+  return requestApiWrite<T>("POST", path, payload);
+}
+
+async function requestApiWrite<T>(method: "POST" | "PATCH", path: string, payload: Record<string, unknown>): Promise<T> {
   if (!hasRemoteApi()) {
     throw new Error("Nao foi possivel concluir a acao agora.");
   }
@@ -391,7 +438,7 @@ async function requestApiPost<T>(path: string, payload: Record<string, unknown>)
   }
 
   const response = await fetch(`${API_URL}${path}`, {
-    method: "POST",
+    method,
     headers: {
       ...buildHeaders(token),
       "Content-Type": "application/json",
