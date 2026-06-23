@@ -263,11 +263,15 @@ export async function fetchDashboardSummaryFromBackend() {
 }
 
 export async function fetchCategoriasProdutos(params: { busca?: string; ativo?: boolean | null; page?: number; limit?: number } = {}) {
-  return requestApiGet<ApiPaginatedResponse<ApiCategoriaProduto>>(`/categorias-produtos${toQueryString(params)}`);
+  const response = await requestApiGet<ApiPaginatedResponse<ApiCategoriaProduto> | ApiCategoriaProduto[]>(
+    `/categorias-produtos${toQueryString(params)}`,
+  );
+  return normalizePaginatedResponse(response, params);
 }
 
 export async function fetchProdutos(params: ProdutoQueryParams = {}) {
-  return requestApiGet<ApiPaginatedResponse<ApiProduto>>(`/produtos${toQueryString(params)}`);
+  const response = await requestApiGet<ApiPaginatedResponse<ApiProduto> | ApiProduto[]>(`/produtos${toQueryString(params)}`);
+  return normalizePaginatedResponse(response, params);
 }
 
 export async function fetchProduto(id: number) {
@@ -279,9 +283,10 @@ export async function createProduto(payload: ProdutoCreatePayload) {
 }
 
 export async function fetchEstoqueMovimentacoes(params: MovimentacaoQueryParams = {}) {
-  return requestApiGet<ApiPaginatedResponse<ApiMovimentacaoEstoque>>(
+  const response = await requestApiGet<ApiPaginatedResponse<ApiMovimentacaoEstoque> | ApiMovimentacaoEstoque[]>(
     `/estoque/movimentacoes${toQueryString(params)}`,
   );
+  return normalizePaginatedResponse(response, params);
 }
 
 export async function fetchEstoqueResumo() {
@@ -421,6 +426,36 @@ function toQueryString(params: Record<string, string | number | boolean | null |
 
   const text = query.toString();
   return text ? `?${text}` : "";
+}
+
+function normalizePaginatedResponse<T>(
+  response: ApiPaginatedResponse<T> | T[],
+  params: { page?: number; limit?: number } = {},
+): ApiPaginatedResponse<T> {
+  if (Array.isArray(response)) {
+    const page = params.page ?? 1;
+    const limit = params.limit ?? response.length;
+
+    return {
+      data: response,
+      pagination: {
+        page,
+        limit,
+        total: response.length,
+        totalPages: response.length > 0 ? Math.max(1, Math.ceil(response.length / Math.max(1, limit))) : 0,
+      },
+    };
+  }
+
+  return {
+    data: Array.isArray(response.data) ? response.data : [],
+    pagination: {
+      page: response.pagination?.page ?? params.page ?? 1,
+      limit: response.pagination?.limit ?? params.limit ?? response.data?.length ?? 0,
+      total: response.pagination?.total ?? response.data?.length ?? 0,
+      totalPages: response.pagination?.totalPages ?? 0,
+    },
+  };
 }
 
 function buildHeaders(token: string): Record<string, string> {

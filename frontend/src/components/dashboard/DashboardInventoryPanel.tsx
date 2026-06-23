@@ -95,7 +95,7 @@ export default function DashboardInventoryPanel() {
           activeFilter === "ativos" ? true : activeFilter === "inativos" ? false : null;
         const categoriaId = categoryFilter === "Todos" ? undefined : Number(categoryFilter);
 
-        const [summaryData, productsData, categoriesData] = await Promise.all([
+        const [summaryData, productsData] = await Promise.all([
           fetchEstoqueResumo(),
           fetchProdutos({
             busca: debouncedSearch,
@@ -106,8 +106,11 @@ export default function DashboardInventoryPanel() {
             page: productPage,
             limit: PRODUCT_PAGE_SIZE,
           }),
-          fetchCategoriasProdutos({ ativo: true, limit: 100 }),
         ]);
+        const categoriesData = await fetchCategoriasProdutos({ ativo: true, limit: 100 }).catch(() => ({
+          data: [] as ApiCategoriaProduto[],
+          pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
+        }));
 
         if (ignore) return;
 
@@ -117,8 +120,9 @@ export default function DashboardInventoryPanel() {
         setProductTotal(productsData.pagination.total);
         setMovements(summaryData.ultimasMovimentacoes.slice(0, 5));
         setStatus("success");
-      } catch {
+      } catch (error) {
         if (ignore) return;
+        console.error("Falha ao carregar estoque", error);
         setStatus("error");
       }
     }
