@@ -17,7 +17,6 @@ import {
   type ApiProduto,
   type ApiResumoEstoque,
 } from "../../services/crmApi";
-import MetricCard from "./MetricCard";
 
 const PRODUCT_PAGE_SIZE = 5;
 const MOVEMENT_PAGE_SIZE = 5;
@@ -468,16 +467,15 @@ export default function DashboardInventoryPanel() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-7">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {summaryCards.map((card) => (
-          <MetricCard
+          <InventoryMetricCard
             key={card.title}
             title={card.title}
             value={isLoading ? "..." : card.value}
             caption={card.caption}
             icon={card.icon}
             tone={card.tone}
-            compact
           />
         ))}
       </div>
@@ -1249,25 +1247,27 @@ function StockMovementModal({
 
 function ProductRow({ product, onOpen }: { product: ApiProduto; onOpen: () => void }) {
   return (
-    <button className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 text-left lg:grid-cols-[minmax(0,1fr)_96px_68px_72px_72px_84px_84px] lg:items-center" onClick={onOpen} type="button">
+    <button className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 text-left lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.88fr)] lg:items-start" onClick={onOpen} type="button">
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
-          <p className="truncate text-sm font-semibold text-white">{product.nome}</p>
+          <p className="min-w-0 break-words text-sm font-semibold leading-snug text-white">{product.nome}</p>
           <span className={`saas-chip shrink-0 ${product.ativo ? "text-teal-100" : "text-slate-400"}`}>
             {product.ativo ? "Ativo" : "Inativo"}
           </span>
         </div>
-        <p className="mt-1 truncate text-[11px] text-slate-500">
+        <p className="mt-1 break-words text-[11px] leading-snug text-slate-500">
           {product.codigo || "Sem codigo"} - {product.categoria?.nome || "Sem categoria"}
         </p>
       </div>
 
+      <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
         <InfoCell label="Estoque" value={stockLabel(product)} tone={stockTone(product)} />
         <InfoCell label="Unidade" value={product.unidadeMedida} />
         <InfoCell label="Saldo" value={formatDecimal(product.quantidadeAtual)} />
         <InfoCell label="Minimo" value={formatDecimal(product.estoqueMinimo)} />
         <InfoCell label="Custo" value={formatCurrency(product.precoCustoCentavos)} />
         <InfoCell label="Venda" value={formatCurrency(product.precoVendaCentavos)} />
+      </div>
     </button>
   );
 }
@@ -1338,9 +1338,59 @@ function InfoCell({ label, value, tone = "default" }: { label: string; value: st
   }[tone];
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-slate-950/24 px-3 py-2">
-      <p className="text-[9px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
-      <p className={`mt-1 truncate text-xs font-semibold ${toneClass}`}>{value}</p>
+    <div className="min-w-0 rounded-xl border border-white/[0.06] bg-slate-950/24 px-3 py-2">
+      <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">{label}</p>
+      <p className={`mt-1 break-words text-xs font-semibold leading-snug ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function InventoryMetricCard({
+  title,
+  value,
+  icon,
+  caption,
+  tone = "neutral",
+}: {
+  title: string;
+  value: string | number;
+  icon: ReactNode;
+  caption?: string;
+  tone?: "pipeline" | "revenue" | "forecast" | "risk" | "neutral";
+}) {
+  const toneClass = {
+    pipeline: "metric-pipeline",
+    revenue: "metric-revenue",
+    forecast: "metric-forecast",
+    risk: "metric-risk",
+    neutral: "",
+  }[tone];
+  const iconToneClass = {
+    pipeline: "border-teal-300/18 bg-teal-300/[0.065] text-teal-100",
+    revenue: "border-sky-300/18 bg-sky-300/[0.06] text-sky-100",
+    forecast: "border-amber-300/18 bg-amber-300/[0.06] text-amber-100",
+    risk: "border-rose-300/18 bg-rose-300/[0.06] text-rose-100",
+    neutral: "border-slate-500/16 bg-slate-900/55 text-slate-200",
+  }[tone];
+
+  return (
+    <div className={`metric-card group self-start rounded-xl p-3 ${toneClass}`}>
+      <div className="flex h-full min-w-0 flex-col justify-between">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <p className="min-w-0 max-w-[11rem] break-words text-[10px] font-semibold uppercase leading-4 tracking-[0.12em] text-slate-400">
+            {title}
+          </p>
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${iconToneClass}`}>
+            {icon}
+          </div>
+        </div>
+
+        <h2 className="mt-1.5 max-w-full break-words text-base font-semibold leading-tight text-white">
+          {value}
+        </h2>
+
+        {caption && <p className="mt-1 break-words text-[11px] leading-snug text-slate-500">{caption}</p>}
+      </div>
     </div>
   );
 }
@@ -1505,7 +1555,7 @@ function stockLabel(product: ApiProduto) {
 
   if (current <= 0) return "Sem estoque";
   if (minimum > 0 && current <= minimum) return "Estoque baixo";
-  return "Normal";
+  return "Estoque normal";
 }
 
 function stockTone(product: ApiProduto): "ok" | "warn" | "empty" {
