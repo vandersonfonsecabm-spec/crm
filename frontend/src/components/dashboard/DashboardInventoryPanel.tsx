@@ -1,7 +1,8 @@
-import { AlertTriangle, Boxes, CheckCircle2, Edit3, Layers3, Loader2, Package, Plus, Search, SlidersHorizontal, TrendingDown, TrendingUp, Wallet, Warehouse, X } from "lucide-react";
+import { AlertTriangle, Boxes, CheckCircle2, Edit3, FolderCog, Layers3, Loader2, Package, Plus, Search, SlidersHorizontal, TrendingDown, TrendingUp, Wallet, Warehouse, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  createCategoriaProduto,
   createProduto,
   createAjusteEstoque,
   createEntradaEstoque,
@@ -11,6 +12,7 @@ import {
   fetchEstoqueResumo,
   fetchProduto,
   fetchProdutos,
+  updateCategoriaProduto,
   updateProduto,
   type ApiCategoriaProduto,
   type ApiMovimentacaoEstoque,
@@ -32,6 +34,12 @@ const PRODUCT_UNITS = [
 
 type InventoryStatus = "idle" | "loading" | "success" | "error";
 type InventoryAction = "entrada" | "saida" | "ajuste";
+type CategoryForm = {
+  id: number | null;
+  nome: string;
+  descricao: string;
+  ativo: boolean;
+};
 type ProductForm = {
   nome: string;
   codigo: string;
@@ -56,6 +64,13 @@ const initialProductForm: ProductForm = {
   ativo: true,
 };
 
+const initialCategoryForm: CategoryForm = {
+  id: null,
+  nome: "",
+  descricao: "",
+  ativo: true,
+};
+
 type MovementForm = {
   quantidade: string;
   novaQuantidade: string;
@@ -73,6 +88,7 @@ const initialMovementForm: MovementForm = {
 export default function DashboardInventoryPanel() {
   const [summary, setSummary] = useState<ApiResumoEstoque | null>(null);
   const [categories, setCategories] = useState<ApiCategoriaProduto[]>([]);
+  const [allCategories, setAllCategories] = useState<ApiCategoriaProduto[]>([]);
   const [products, setProducts] = useState<ApiProduto[]>([]);
   const [productOptions, setProductOptions] = useState<ApiProduto[]>([]);
   const [movements, setMovements] = useState<ApiMovimentacaoEstoque[]>([]);
@@ -95,6 +111,10 @@ export default function DashboardInventoryPanel() {
   const [status, setStatus] = useState<InventoryStatus>("idle");
   const [refreshKey, setRefreshKey] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCategoriesModal, setShowCategoriesModal] = useState(false);
+  const [categoryForm, setCategoryForm] = useState<CategoryForm>(initialCategoryForm);
+  const [categoryError, setCategoryError] = useState("");
+  const [categorySubmittingId, setCategorySubmittingId] = useState<number | "new" | null>(null);
   const [productForm, setProductForm] = useState<ProductForm>(initialProductForm);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -153,7 +173,7 @@ export default function DashboardInventoryPanel() {
         const movementProdutoId =
           movementProductFilter === "Todos" ? undefined : Number(movementProductFilter);
 
-        const [summaryData, productsData, movementsData, productOptionsData] = await Promise.all([
+        const [summaryData, productsData, movementsData, productOptionsData, categoriesData] = await Promise.all([
           fetchEstoqueResumo(),
           fetchProdutos({
             busca: debouncedSearch,
@@ -174,16 +194,14 @@ export default function DashboardInventoryPanel() {
             limit: MOVEMENT_PAGE_SIZE,
           }),
           fetchProdutos({ page: 1, limit: 100 }),
+          fetchCategoriasProdutos({ limit: 100 }),
         ]);
-        const categoriesData = await fetchCategoriasProdutos({ ativo: true, limit: 100 }).catch(() => ({
-          data: [] as ApiCategoriaProduto[],
-          pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
-        }));
 
         if (ignore) return;
 
         setSummary(summaryData);
-        setCategories(categoriesData.data);
+        setAllCategories(sortCategories(categoriesData.data));
+        setCategories(sortCategories(categoriesData.data.filter((category) => category.ativo)));
         setProducts(productsData.data);
         setProductOptions(productOptionsData.data);
         setProductTotal(productsData.pagination.total);
@@ -311,6 +329,90 @@ export default function DashboardInventoryPanel() {
       setFormError(toFriendlyProductError(message));
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  function openCategoriesManager() {
+    setCategoryForm(initialCategoryForm);
+    setCategoryError("");
+    setShowCategoriesModal(true);
+  }
+
+  function editCategory(category: ApiCategoriaProduto) {
+    setCategoryForm({
+      id: category.id,
+      nome: category.nome,
+      descricao: category.descricao ?? "",
+      ativo: category.ativo,
+    });
+    setCategoryError("");
+  }
+
+  function applyCategoryUpdate(category: ApiCategoriaProduto) {
+    setAllCategories((current) => sortCategories(upsertCategory(current, category)));
+    setCategories((current) => sortCategories(upsertCategory(current, category).filter((item) => item.ativo)));
+  }
+
+  async function handleSaveCategory() {
+    const normalizedName = normalizeCategoryName(categoryForm.nome);
+    setCategoryError("");
+
+    if (!normalizedName) {
+      setCategoryError("Informe o nome da categoria.");
+      return;
+    }
+    if (normalizedName.length > 80) {
+      setCategoryError("O nome deve ter no maximo 80 caracteres.");
+      return;
+    }
+    if (categoryForm.descricao.trim().length > 240) {
+      setCategoryError("A descricao deve ter no maximo 240 caracteres.");
+      return;
+    }
+
+    setCategorySubmittingId(categoryForm.id ?? "new");
+
+    try {
+      const saved = categoryForm.id
+        ? await updateCategoriaProduto(categoryForm.id, {
+            nome: normalizedName,
+            descricao: categoryForm.descricao.trim() || null,
+            ativo: categoryForm.ativo,
+          })
+        : await createCategoriaProduto({
+            nome: normalizedName,
+            descricao: categoryForm.descricao.trim() || undefined,
+          });
+
+      applyCategoryUpdate(saved);
+      setCategoryForm(initialCategoryForm);
+      setRefreshKey((current) => current + 1);
+      setToast(categoryForm.id ? "Categoria atualizada com sucesso." : "Categoria cadastrada com sucesso.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setCategoryError(toFriendlyCategoryError(message));
+    } finally {
+      setCategorySubmittingId(null);
+    }
+  }
+
+  async function handleToggleCategory(category: ApiCategoriaProduto) {
+    setCategoryError("");
+    setCategorySubmittingId(category.id);
+
+    try {
+      const saved = await updateCategoriaProduto(category.id, { ativo: !category.ativo });
+      applyCategoryUpdate(saved);
+      if (categoryForm.id === category.id) {
+        setCategoryForm((current) => ({ ...current, ativo: saved.ativo }));
+      }
+      setRefreshKey((current) => current + 1);
+      setToast("Categoria atualizada com sucesso.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setCategoryError(toFriendlyCategoryError(message));
+    } finally {
+      setCategorySubmittingId(null);
     }
   }
 
@@ -489,18 +591,28 @@ export default function DashboardInventoryPanel() {
             </div>
 
             <div className="flex flex-col gap-2 xl:items-end">
-              <button
-                className="premium-button inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition hover:-translate-y-px"
-                onClick={() => {
-                  setProductForm(initialProductForm);
-                  setFormError("");
-                  setShowCreateModal(true);
-                }}
-                type="button"
-              >
-                <Plus size={14} />
-                Novo produto
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="premium-ghost inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-900/70"
+                  onClick={openCategoriesManager}
+                  type="button"
+                >
+                  <FolderCog size={14} />
+                  Gerenciar categorias
+                </button>
+                <button
+                  className="premium-button inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition hover:-translate-y-px"
+                  onClick={() => {
+                    setProductForm(initialProductForm);
+                    setFormError("");
+                    setShowCreateModal(true);
+                  }}
+                  type="button"
+                >
+                  <Plus size={14} />
+                  Novo produto
+                </button>
+              </div>
 
             <div className="grid gap-2 sm:grid-cols-2 xl:w-[620px] xl:grid-cols-[minmax(0,1fr)_120px_120px_105px]">
               <label className="premium-ghost flex h-10 min-w-0 items-center gap-2 rounded-xl px-3 text-xs text-slate-400">
@@ -535,7 +647,7 @@ export default function DashboardInventoryPanel() {
                 value={categoryFilter}
               >
                 <option value="Todos">Categorias</option>
-                {categories.map((category) => (
+                {allCategories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.nome}
                   </option>
@@ -786,6 +898,29 @@ export default function DashboardInventoryPanel() {
         />
       )}
 
+      {showCategoriesModal && (
+        <CategoryManagerModal
+          categories={allCategories}
+          error={categoryError}
+          form={categoryForm}
+          submittingId={categorySubmittingId}
+          onClose={() => {
+            if (categorySubmittingId !== null) return;
+            setShowCategoriesModal(false);
+            setCategoryError("");
+            setCategoryForm(initialCategoryForm);
+          }}
+          onEdit={editCategory}
+          onFormChange={setCategoryForm}
+          onSave={handleSaveCategory}
+          onToggle={handleToggleCategory}
+          onNew={() => {
+            setCategoryForm(initialCategoryForm);
+            setCategoryError("");
+          }}
+        />
+      )}
+
       {selectedProduct && (
         <ProductDetailsDrawer
           product={selectedProduct}
@@ -798,7 +933,7 @@ export default function DashboardInventoryPanel() {
 
       {editingProduct && (
         <ProductCreateModal
-          categories={categories}
+          categories={productCategoryOptions(categories, editingProduct)}
           form={productForm}
           error={formError}
           isSubmitting={isSubmitting}
@@ -833,6 +968,133 @@ export default function DashboardInventoryPanel() {
         />
       )}
     </section>
+  );
+}
+
+function CategoryManagerModal({
+  categories,
+  form,
+  error,
+  submittingId,
+  onClose,
+  onEdit,
+  onFormChange,
+  onSave,
+  onToggle,
+  onNew,
+}: {
+  categories: ApiCategoriaProduto[];
+  form: CategoryForm;
+  error: string;
+  submittingId: number | "new" | null;
+  onClose: () => void;
+  onEdit: (category: ApiCategoriaProduto) => void;
+  onFormChange: (form: CategoryForm) => void;
+  onSave: () => void;
+  onToggle: (category: ApiCategoriaProduto) => void;
+  onNew: () => void;
+}) {
+  const isSubmitting = submittingId !== null;
+  const fieldBaseClass =
+    "w-full rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm text-slate-100 outline-none transition-all duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-60";
+  const labelClass = "mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="saas-panel flex max-h-[calc(100vh-32px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl text-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] p-4">
+          <div>
+            <p className="text-sm font-semibold">Gerenciar categorias</p>
+            <p className="mt-1 text-[11px] text-slate-500">Organize os grupos usados no cadastro e na edicao dos produtos.</p>
+          </div>
+          <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">
+            <X size={15} />
+          </button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+          <section className="min-w-0 border-b border-white/[0.06] p-4 md:border-b-0 md:border-r">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-200">Categorias cadastradas</p>
+                <p className="mt-1 text-[10px] text-slate-500">Ativas primeiro, em ordem alfabetica.</p>
+              </div>
+              <button className="premium-ghost inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={onNew} type="button">
+                <Plus size={12} /> Nova
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {categories.length === 0 && (
+                <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-4 text-center">
+                  <p className="text-xs font-semibold text-slate-200">Nenhuma categoria cadastrada</p>
+                  <p className="mt-1 text-[11px] text-slate-500">Use o formulario ao lado para criar a primeira.</p>
+                </div>
+              )}
+              {categories.map((category) => (
+                <article className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3" key={category.id}>
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="break-words text-xs font-semibold text-slate-100">{category.nome}</p>
+                        <span className={`saas-chip ${category.ativo ? "text-teal-100" : "text-slate-400"}`}>{category.ativo ? "Ativa" : "Inativa"}</span>
+                      </div>
+                      <p className="mt-1 break-words text-[11px] leading-relaxed text-slate-500">{category.descricao || "Sem descricao."}</p>
+                      <p className="mt-2 text-[10px] text-slate-400">{category.produtosCount} produto{category.produtosCount === 1 ? "" : "s"} vinculado{category.produtosCount === 1 ? "" : "s"}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button className="premium-ghost inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={() => onEdit(category)} type="button">
+                        <Edit3 size={12} /> Editar
+                      </button>
+                      <button className="premium-ghost h-8 rounded-lg px-2.5 text-[11px] text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={() => onToggle(category)} type="button">
+                        {submittingId === category.id ? "Salvando" : category.ativo ? "Desativar" : "Ativar"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="min-w-0 p-4">
+            <p className="text-xs font-semibold text-slate-200">{form.id ? "Editar categoria" : "Nova categoria"}</p>
+            <p className="mt-1 text-[10px] text-slate-500">Nome obrigatorio e descricao opcional.</p>
+
+            <div className="mt-4 space-y-3">
+              <Field label="Nome" labelClass={labelClass}>
+                <input className={fieldBaseClass} disabled={isSubmitting} maxLength={80} onChange={(event) => onFormChange({ ...form, nome: event.target.value })} placeholder="Ex: Fertilizantes" value={form.nome} />
+              </Field>
+              <Field label="Descricao" labelClass={labelClass}>
+                <textarea className={`${fieldBaseClass} min-h-[88px] resize-none`} disabled={isSubmitting} maxLength={240} onChange={(event) => onFormChange({ ...form, descricao: event.target.value })} placeholder="Descricao curta da categoria" value={form.descricao} />
+              </Field>
+              {form.id && (
+                <label className="flex items-start gap-2 rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300">
+                  <input checked={form.ativo} className="mt-0.5 h-4 w-4 accent-teal-300" disabled={isSubmitting} onChange={(event) => onFormChange({ ...form, ativo: event.target.checked })} type="checkbox" />
+                  <span>
+                    Categoria ativa
+                    <span className="mt-1 block text-[10px] leading-relaxed text-slate-500">Desativar nao remove nem altera os produtos ja vinculados.</span>
+                  </span>
+                </label>
+              )}
+            </div>
+
+            {error && <div className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/[0.055] px-3 py-2 text-xs text-rose-100">{error}</div>}
+
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              {form.id && <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-300 disabled:opacity-50" disabled={isSubmitting} onClick={onNew} type="button">Cancelar edicao</button>}
+              <button className="premium-button inline-flex min-w-32 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60" disabled={isSubmitting} onClick={onSave} type="button">
+                {submittingId === (form.id ?? "new") && <Loader2 className="animate-spin" size={13} />}
+                {submittingId === (form.id ?? "new") ? "Salvando" : form.id ? "Salvar categoria" : "Cadastrar categoria"}
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <div className="flex justify-end border-t border-white/[0.06] p-4">
+          <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-300 disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">Fechar</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -915,7 +1177,7 @@ function ProductCreateModal({
               <option value="">Sem categoria</option>
               {categories.map((category) => (
                 <option key={category.id} value={category.id}>
-                  {category.nome}
+                  {category.nome}{category.ativo ? "" : " (inativa)"}
                 </option>
               ))}
             </select>
@@ -1486,6 +1748,39 @@ function toFriendlyProductError(message: string) {
   if (normalized.includes("nome")) return "Informe um nome valido para o produto.";
   if (normalized.includes("unidade")) return "Selecione uma unidade de medida valida.";
   return "Nao foi possivel cadastrar o produto agora.";
+}
+
+function normalizeCategoryName(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function sortCategories(categories: ApiCategoriaProduto[]) {
+  return [...categories].sort((left, right) => {
+    if (left.ativo !== right.ativo) return left.ativo ? -1 : 1;
+    return left.nome.localeCompare(right.nome, "pt-BR", { sensitivity: "base" });
+  });
+}
+
+function upsertCategory(categories: ApiCategoriaProduto[], category: ApiCategoriaProduto) {
+  const exists = categories.some((item) => item.id === category.id);
+  return exists
+    ? categories.map((item) => (item.id === category.id ? category : item))
+    : [...categories, category];
+}
+
+function productCategoryOptions(categories: ApiCategoriaProduto[], product: ApiProduto) {
+  if (!product.categoria || product.categoria.ativo) return categories;
+  return sortCategories([...categories, product.categoria]);
+}
+
+function toFriendlyCategoryError(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("existe") || normalized.includes("duplic") || normalized.includes("unique")) {
+    return "Ja existe uma categoria com esse nome.";
+  }
+  if (normalized.includes("nome")) return "Informe um nome valido para a categoria.";
+  if (normalized.includes("descricao")) return "A descricao informada e muito longa.";
+  return "Nao foi possivel salvar a categoria agora.";
 }
 
 function productToForm(product: ApiProduto): ProductForm {

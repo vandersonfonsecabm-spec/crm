@@ -90,8 +90,20 @@ export type ApiCategoriaProduto = {
   nome: string;
   descricao?: string | null;
   ativo: boolean;
+  produtosCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type CategoriaProdutoCreatePayload = {
+  nome: string;
+  descricao?: string;
+};
+
+export type CategoriaProdutoUpdatePayload = {
+  nome?: string;
+  descricao?: string | null;
+  ativo?: boolean;
 };
 
 export type ApiProduto = {
@@ -366,6 +378,14 @@ export async function fetchCategoriasProdutos(params: { busca?: string; ativo?: 
   return normalizePaginatedResponse(response, params);
 }
 
+export async function createCategoriaProduto(payload: CategoriaProdutoCreatePayload) {
+  return requestApiPost<ApiCategoriaProduto>("/categorias-produtos", payload);
+}
+
+export async function updateCategoriaProduto(id: number, payload: CategoriaProdutoUpdatePayload) {
+  return requestApiWrite<ApiCategoriaProduto>("PATCH", `/categorias-produtos/${id}`, payload);
+}
+
 export async function fetchProdutos(params: ProdutoQueryParams = {}) {
   const response = await requestApiGet<ApiPaginatedResponse<ApiProduto> | ApiProduto[]>(`/produtos${toQueryString(params)}`);
   return normalizePaginatedResponse(response, params);
@@ -557,8 +577,8 @@ async function requestApiWrite<T>(method: "POST" | "PATCH", path: string, payloa
 
 async function readApiError(response: Response) {
   try {
-    const data = (await response.json()) as { error?: string; message?: string };
-    return data.error || data.message || "Nao foi possivel concluir a acao agora.";
+    const data = (await response.json()) as { erro?: string; error?: string; message?: string };
+    return data.erro || data.error || data.message || "Nao foi possivel concluir a acao agora.";
   } catch {
     return "Nao foi possivel concluir a acao agora.";
   }
