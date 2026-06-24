@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { Prisma, PrismaClient } = require("@prisma/client");
+const { createAuth } = require("./auth");
 
 const prisma = new PrismaClient();
 
@@ -40,47 +41,30 @@ const TIPOS_MOVIMENTACAO_ESTOQUE = new Set(["ENTRADA", "SAIDA", "AJUSTE"]);
 const STATUS_ACOMPANHAMENTO = new Set(["PENDENTE", "CONCLUIDO", "CANCELADO"]);
 const PRIORIDADES_ACOMPANHAMENTO = new Set(["BAIXA", "MEDIA", "ALTA", "CRITICA"]);
 const TIPOS_ACOMPANHAMENTO = new Set(["LIGACAO", "WHATSAPP", "EMAIL", "REUNIAO", "VISITA", "OUTRO"]);
-
-app.post("/auth/login", (req, res) => {
-  const { email, senha } = req.body || {};
-
-  if (email !== DEMO_EMAIL || senha !== DEMO_PASSWORD) {
-    return res.status(401).json({
-      message: "Email ou senha invalidos.",
-      statusCode: 401,
-    });
-  }
-
-  return res.json({
-    access_token: DEMO_TOKEN,
-    user: {
+const auth = createAuth({
+  prisma,
+  demo: {
+    email: DEMO_EMAIL,
+    senha: DEMO_PASSWORD,
+    token: DEMO_TOKEN,
+    usuario: {
       id: 1,
       nome: "Marco Admin",
       email: DEMO_EMAIL,
       role: "ADMIN",
+      papel: "ADMIN",
     },
     empresa: {
       id: 1,
       nome: "CRM Agro Demo",
+      slug: "crm-agro-demo",
+      ativo: true,
     },
-  });
+  },
 });
+const requireAuth = auth.authenticate;
 
-app.post("/auth/demo", (req, res) => {
-  return res.json({
-    access_token: DEMO_TOKEN,
-    user: {
-      id: 1,
-      nome: "Marco Admin",
-      email: DEMO_EMAIL,
-      role: "ADMIN",
-    },
-    empresa: {
-      id: 1,
-      nome: "CRM Agro Demo",
-    },
-  });
-});
+auth.mountRoutes(app);
 
 app.get("/dashboard", async (req, res) => {
   try {
@@ -2233,19 +2217,6 @@ function safeParseTags(value) {
   }
 }
 
-function requireAuth(req, res, next) {
-  const authorization = req.headers.authorization || "";
-  const expectedToken = `Bearer ${DEMO_TOKEN}`;
-
-  if (authorization !== expectedToken) {
-    return res.status(401).json({
-      erro: "Nao autorizado.",
-    });
-  }
-
-  return next();
-}
-
 function parsePositiveId(value) {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : null;
@@ -2272,9 +2243,15 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`Servidor rodando em ${HOST}:${PORT}`);
-});
+function startServer(port = PORT) {
+  return app.listen(port, HOST, () => {
+    console.log(`Servidor rodando em ${HOST}:${port}`);
+  });
+}
+
+if (require.main === module) {
+  startServer();
+}
 
 function getAllowedOrigins() {
   const configuredOrigins = [process.env.FRONTEND_URL, process.env.ALLOWED_ORIGINS]
@@ -2285,3 +2262,5 @@ function getAllowedOrigins() {
 
   return configuredOrigins.length > 0 ? configuredOrigins : DEFAULT_ALLOWED_ORIGINS;
 }
+
+module.exports = { app, prisma, startServer };

@@ -8,21 +8,21 @@ datasource db {
 }
 
 model Cliente {
-  id              Int      @id @default(autoincrement())
+  id              Int              @id @default(autoincrement())
   nome            String
-  telefone        String   @default("")
-  email           String   @default("")
-  empresa         String   @default("")
-  interesse       String   @default("")
-  status          String   @default("Lead")
-  valor           Int      @default(0)
-  origem          String   @default("Manual")
-  favorito        Boolean  @default(false)
-  quente          Boolean  @default(false)
-  ultimoContato   Int      @default(0)
-  proximoFollowUp String   @default("Hoje")
-  tags            String   @default("[]")
-  createdAt       DateTime @default(now())
+  telefone        String           @default("")
+  email           String           @default("")
+  empresa         String           @default("")
+  interesse       String           @default("")
+  status          String           @default("Lead")
+  valor           Int              @default(0)
+  origem          String           @default("Manual")
+  favorito        Boolean          @default(false)
+  quente          Boolean          @default(false)
+  ultimoContato   Int              @default(0)
+  proximoFollowUp String           @default("Hoje")
+  tags            String           @default("[]")
+  createdAt       DateTime         @default(now())
   notas           Nota[]
   acompanhamentos Acompanhamento[]
 }
@@ -49,20 +49,20 @@ model CategoriaProduto {
 }
 
 model Produto {
-  id                 Int                    @id @default(autoincrement())
+  id                 Int                   @id @default(autoincrement())
   nome               String
-  codigo             String?                @unique
+  codigo             String?               @unique
   descricao          String?
   categoriaId        Int?
-  categoria          CategoriaProduto?      @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
-  unidadeMedida      String                 @default("UN")
-  quantidadeAtual    Decimal                @default(0)
-  estoqueMinimo      Decimal                @default(0)
-  precoCustoCentavos Int                    @default(0)
-  precoVendaCentavos Int                    @default(0)
-  ativo              Boolean                @default(true)
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
+  categoria          CategoriaProduto?     @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  unidadeMedida      String                @default("UN")
+  quantidadeAtual    Decimal               @default(0)
+  estoqueMinimo      Decimal               @default(0)
+  precoCustoCentavos Int                   @default(0)
+  precoVendaCentavos Int                   @default(0)
+  ativo              Boolean               @default(true)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
   movimentacoes      MovimentacaoEstoque[]
 
   @@index([categoriaId])
@@ -70,16 +70,16 @@ model Produto {
 }
 
 model MovimentacaoEstoque {
-  id                   Int                      @id @default(autoincrement())
-  produtoId            Int
-  produto              Produto                  @relation(fields: [produtoId], references: [id])
-  tipo                 TipoMovimentacaoEstoque
-  quantidade           Decimal
-  quantidadeAnterior   Decimal
-  quantidadePosterior  Decimal
-  motivo               String?
-  observacao           String?
-  createdAt            DateTime                 @default(now())
+  id                  Int                     @id @default(autoincrement())
+  produtoId           Int
+  produto             Produto                 @relation(fields: [produtoId], references: [id])
+  tipo                TipoMovimentacaoEstoque
+  quantidade          Decimal
+  quantidadeAnterior  Decimal
+  quantidadePosterior Decimal
+  motivo              String?
+  observacao          String?
+  createdAt           DateTime                @default(now())
 
   @@index([produtoId])
   @@index([tipo])
@@ -87,25 +87,54 @@ model MovimentacaoEstoque {
 }
 
 model Acompanhamento {
-  id           Int                       @id @default(autoincrement())
-  clienteId    Int
-  cliente      Cliente                   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  titulo       String
-  descricao    String?
-  dataHora     DateTime
-  prioridade   PrioridadeAcompanhamento  @default(MEDIA)
-  status       StatusAcompanhamento      @default(PENDENTE)
-  tipo         TipoAcompanhamento        @default(LIGACAO)
-  responsavel  String?
-  concluidoEm  DateTime?
-  createdAt    DateTime                  @default(now())
-  updatedAt    DateTime                  @updatedAt
+  id          Int                      @id @default(autoincrement())
+  clienteId   Int
+  cliente     Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  titulo      String
+  descricao   String?
+  dataHora    DateTime
+  prioridade  PrioridadeAcompanhamento @default(MEDIA)
+  status      StatusAcompanhamento     @default(PENDENTE)
+  tipo        TipoAcompanhamento       @default(LIGACAO)
+  responsavel String?
+  concluidoEm DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
 
   @@index([clienteId])
   @@index([dataHora])
   @@index([status])
   @@index([prioridade])
   @@index([tipo])
+}
+
+model Empresa {
+  id        Int       @id @default(autoincrement())
+  nome      String
+  slug      String    @unique
+  ativo     Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  usuarios  Usuario[]
+}
+
+model Usuario {
+  id            Int          @id @default(autoincrement())
+  empresaId     Int
+  empresa       Empresa      @relation(fields: [empresaId], references: [id])
+  nome          String
+  email         String
+  senhaHash     String
+  papel         PapelUsuario @default(VENDEDOR)
+  ativo         Boolean      @default(true)
+  ultimoLoginEm DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([empresaId, email])
+  @@index([empresaId])
+  @@index([email])
+  @@index([ativo])
 }
 
 enum TipoMovimentacaoEstoque {
@@ -134,4 +163,10 @@ enum TipoAcompanhamento {
   REUNIAO
   VISITA
   OUTRO
+}
+
+enum PapelUsuario {
+  ADMIN
+  GERENTE
+  VENDEDOR
 }
