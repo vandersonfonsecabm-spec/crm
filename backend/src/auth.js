@@ -463,4 +463,4 @@ function authError(res, status, erro, codigo) {
   return res.status(status).json({ erro, codigo });
 }
 
-module.exports = { createAuth };
+module.exports = { createAuth, normalizeEmail, normalizeSlug };

@@ -9,6 +9,7 @@
     "prisma:generate": "prisma generate",
     "db:deploy": "prisma db push",
     "db:migrate:deploy": "prisma migrate deploy",
+    "admin:create": "node scripts/create-admin.js",
     "seed": "node prisma/seed.js",
     "railway:start": "npm start",
     "test": "node --test tests/*.test.js",
