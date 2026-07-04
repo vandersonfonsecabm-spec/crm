@@ -606,7 +606,9 @@ export function isDemoSession() {
 }
 
 export function getSessionRole(session: AuthSession | null): ApiUserRole | null {
-  return session?.usuario.papel ?? session?.papel ?? null;
+  if (!session || session.isDemo) return null;
+  const role = session.papel ?? session.usuario?.papel;
+  return role === "ADMIN" || role === "GERENTE" || role === "VENDEDOR" ? role : null;
 }
 
 function setAuthSessionFromResponse(data: ApiAuthResponse, options: { forceDemo?: boolean } = {}) {
