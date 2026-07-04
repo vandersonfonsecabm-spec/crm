@@ -578,7 +578,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
-            {activePage !== "agenda" && activePage !== "estoque" && (
+            {activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && (
               <DashboardCustomerDrawer
                 activePage={activePage}
                 selectedClient={selectedClient}
