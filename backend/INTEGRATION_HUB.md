@@ -171,3 +171,25 @@ Codigos usados:
 - Criar reconciliacao entre produtos externos e produtos internos.
 - Criar auditoria de alteracoes por usuario.
 - Definir politica de retencao de logs e payloads sanitizados.
+
+## Importacao manual CSV/XLSX
+
+A fundacao operacional do Hub permite importar produtos externos, estoque e precos por arquivos CSV ou XLSX usando o fluxo:
+
+1. `POST /importacoes/upload` recebe um arquivo temporario, calcula SHA-256, detecta colunas e retorna previa.
+2. `POST /importacoes/:id/mapear` salva o mapeamento entre colunas do arquivo e campos canonicos.
+3. `POST /importacoes/:id/validar` valida todas as linhas e registra erros sanitizados por linha em `ErroImportacao`.
+4. `POST /importacoes/:id/processar` importa as linhas validas para `ProdutoExterno`, `EstoqueExterno` e `PrecoExterno`.
+5. `GET /hub/produtos` consulta os produtos externos importados, sem misturar com o estoque interno do CRM.
+
+O upload e o processamento sao restritos a usuarios `ADMIN`. Token demo, `GERENTE` e `VENDEDOR` nao podem executar importacao. Os arquivos sao temporarios, nao sao gravados no SQLite e sao removidos apos analise/processamento ou cancelamento.
+
+Variaveis de limite:
+
+- `IMPORT_MAX_FILE_SIZE_BYTES` padrao `10485760`.
+- `IMPORT_MAX_ROWS` padrao `50000`.
+- `IMPORT_MAX_COLUMNS` padrao `100`.
+- `IMPORT_MAX_ERRORS` padrao `1000`.
+- `IMPORT_BATCH_SIZE` padrao `500`.
+
+Consulte `IMPORTACAO_DADOS.md` para exemplos de payloads, estrategias e validacoes.

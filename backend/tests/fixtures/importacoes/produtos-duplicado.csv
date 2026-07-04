@@ -1,0 +1,3 @@
+﻿id,sku,nome,estoque,preco
+EXT-DUP,SKU-DUP-1,Produto Duplicado A,1,"10,00"
+EXT-DUP,SKU-DUP-2,Produto Duplicado B,2,"12,00"

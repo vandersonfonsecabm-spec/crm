@@ -1,0 +1,5 @@
+﻿id,sku,nome,estoque,preco
+EXT-PART-OK,SKU-PART-OK,Produto Parcial Valido,4,"20,00"
+EXT-BAD-001,SKU-BAD-001,,10,"12,00"
+EXT-BAD-002,SKU-BAD-002,Produto Preco Ruim,5,abc
+EXT-BAD-003,SKU-BAD-003,Produto Estoque Ruim,xx,"15,00"

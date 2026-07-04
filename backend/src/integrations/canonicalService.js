@@ -1,4 +1,4 @@
-function createCanonicalService({ prisma }) {
+﻿function createCanonicalService({ prisma }) {
   async function buscarProdutos({ empresaId, filtros = {}, page = 1, limit = 20 }) {
     const safePage = Math.max(1, Number(page) || 1);
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
@@ -77,12 +77,28 @@ function produtoWhere(empresaId, filtros = {}) {
   const sku = clean(filtros.sku);
   const codigoBarras = clean(filtros.codigoBarras);
   const categoria = clean(filtros.categoria);
-  const integracaoId = positiveId(filtros.integracaoId);
+  const marca = clean(filtros.marca);
+  const integracaoId = positiveId(filtros.integracaoId || filtros.integracao);
+  const apenasComEstoque = parseBooleanFilter(filtros.apenasComEstoque || filtros.comEstoque);
+  const precoMinimo = nonNegativeInt(filtros.precoMinimoCentavos || filtros.precoMinimo);
+  const precoMaximo = nonNegativeInt(filtros.precoMaximoCentavos || filtros.precoMaximo);
 
   if (integracaoId) where.integracaoId = integracaoId;
   if (sku) where.sku = { contains: sku };
   if (codigoBarras) where.codigoBarras = { contains: codigoBarras };
   if (categoria) where.categoria = { contains: categoria };
+  if (marca) where.marca = { contains: marca };
+  if (apenasComEstoque === true) where.estoques = { some: { quantidade: { gt: 0 } } };
+  if (precoMinimo !== null || precoMaximo !== null) {
+    where.precos = {
+      some: {
+        precoCentavos: {
+          ...(precoMinimo !== null ? { gte: precoMinimo } : {}),
+          ...(precoMaximo !== null ? { lte: precoMaximo } : {}),
+        },
+      },
+    };
+  }
   if (busca) {
     where.OR = [
       { nome: { contains: busca } },
@@ -166,6 +182,20 @@ function decimalToString(value) {
   return value === null || value === undefined ? "0" : value.toString();
 }
 
+function parseBooleanFilter(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const text = String(value).trim().toLowerCase();
+  if (["true", "1", "sim", "s"].includes(text)) return true;
+  if (["false", "0", "nao", "não", "n"].includes(text)) return false;
+  return null;
+}
+
+function nonNegativeInt(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function positiveId(value) {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : null;
@@ -176,3 +206,5 @@ function clean(value) {
 }
 
 module.exports = { createCanonicalService, canonicalProductResponse };
+
+

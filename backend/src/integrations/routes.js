@@ -1,6 +1,18 @@
-const { encryptCredentials, hasEncryptedCredentials } = require("./crypto");
+﻿const { encryptCredentials, hasEncryptedCredentials } = require("./crypto");
 const { createIntegrationAdapter } = require("./adapters");
 const { createCanonicalService } = require("./canonicalService");
+const {
+  createUploadMiddleware,
+  analyzeImportFile,
+  saveImportCache,
+  removeTempFile,
+  mapImportacao,
+  validateImportacao,
+  processImportacao,
+  cancelImportacao,
+  findPreviousImportByHash,
+  importErrorWhere,
+} = require("./importService");
 
 const TIPOS_INTEGRACAO = new Set(["BLING", "OMIE", "CONTA_AZUL", "TINY", "ALTERDATA", "CSV", "XLSX", "XML", "JSON", "CUSTOM"]);
 const STATUS_INTEGRACAO = new Set(["PENDENTE", "ATIVA", "INATIVA", "ERRO"]);
@@ -10,6 +22,7 @@ const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const requireAdmin = [authenticate, requireRole("ADMIN")];
   const canonicalService = createCanonicalService({ prisma });
+  const uploadImportFile = createUploadMiddleware();
 
   app.get("/integracoes", ...requireAdmin, async (req, res) => {
     try {
@@ -181,6 +194,73 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     }
   });
 
+  app.post("/importacoes/upload", ...requireAdmin, (req, res) => {
+    uploadImportFile(req, res, async (uploadError) => {
+      let tempPath;
+      try {
+        if (uploadError) {
+          throw httpError(400, uploadError.message || "Arquivo invalido.", uploadError.code === "LIMIT_FILE_SIZE" ? "IMPORT_FILE_TOO_LARGE" : "IMPORT_UPLOAD_ERROR");
+        }
+        tempPath = req.file?.path;
+        const tipoEntidade = clean(req.body?.tipoEntidade || "PRODUTOS").toUpperCase();
+        if (tipoEntidade !== "PRODUTOS") throw httpError(400, "Tipo de entidade invalido para esta fase.", "IMPORT_INVALID_ENTITY");
+        const confirmarReprocessamento = req.body?.confirmarReprocessamento === "true" || req.body?.confirmarReprocessamento === true;
+        const analysis = await analyzeImportFile(req.file);
+        const previous = await findPreviousImportByHash({ prisma, empresaId: req.auth.empresaId, hashArquivo: analysis.hashArquivo });
+        if (previous && !confirmarReprocessamento) {
+          return res.status(409).json({
+            erro: "Arquivo ja importado anteriormente.",
+            codigo: "IMPORT_DUPLICATE_FILE",
+            importacaoAnterior: importResponse(previous),
+          });
+        }
+
+        const importacao = await prisma.importacaoDados.create({
+          data: {
+            empresaId: req.auth.empresaId,
+            createdByUsuarioId: req.auth.usuarioId,
+            formato: analysis.formato,
+            status: "MAPEAMENTO_PENDENTE",
+            nomeArquivo: analysis.nomeArquivo,
+            tamanhoBytes: analysis.tamanhoBytes,
+            hashArquivo: analysis.hashArquivo,
+            tipoEntidade,
+            totalLinhas: analysis.totalLinhasEstimado,
+          },
+        });
+        await saveImportCache(importacao.id, {
+          columns: analysis.colunasDetectadas,
+          duplicateColumns: analysis.colunasDuplicadas,
+          rows: analysis.linhas,
+          preview: analysis.primeirasLinhas,
+          delimiter: analysis.separador,
+          sheetName: analysis.planilha,
+        });
+
+        return res.status(201).json({
+          importacao: importResponse(importacao),
+          formato: analysis.formato,
+          nomeArquivo: analysis.nomeArquivo,
+          tamanhoBytes: analysis.tamanhoBytes,
+          hashArquivo: analysis.hashArquivo,
+          status: importacao.status,
+          colunasDetectadas: analysis.colunasDetectadas,
+          colunasDuplicadas: analysis.colunasDuplicadas,
+          sugestaoMapeamento: analysis.sugestaoMapeamento,
+          primeirasLinhas: analysis.primeirasLinhas,
+          totalLinhasEstimado: analysis.totalLinhasEstimado,
+          separador: analysis.separador,
+          planilha: analysis.planilha,
+        });
+      } catch (error) {
+        return integrationError(res, error, "Nao foi possivel analisar o arquivo.");
+      } finally {
+        if (tempPath) {
+          try { await removeTempFile(tempPath); } catch (cleanupError) { if (process.env.NODE_ENV !== "production") console.error(cleanupError); }
+        }
+      }
+    });
+  });
   app.get("/importacoes", ...requireAdmin, async (req, res) => {
     try {
       const { page, limit, skip } = pagination(req.query);
@@ -200,13 +280,74 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     }
   });
 
+  app.post("/importacoes/:id/mapear", ...requireAdmin, async (req, res) => {
+    try {
+      const importacao = await findImportacaoOrThrow(prisma, req);
+      const result = await mapImportacao({ prisma, importacao, body: req.body });
+      return res.json({
+        importacao: importResponse(result.importacao),
+        previa: result.previa,
+        errosConfiguracao: result.errosConfiguracao,
+        avisos: result.avisos,
+        linhasValidasEstimadas: result.linhasValidasEstimadas,
+        linhasInvalidasEstimadas: result.linhasInvalidasEstimadas,
+      });
+    } catch (error) {
+      return integrationError(res, error, "Nao foi possivel salvar o mapeamento.");
+    }
+  });
+
+  app.post("/importacoes/:id/validar", ...requireAdmin, async (req, res) => {
+    try {
+      const importacao = await findImportacaoOrThrow(prisma, req);
+      const result = await validateImportacao({ prisma, importacao });
+      return res.json({ importacao: importResponse(result.importacao), resumo: result.resumo });
+    } catch (error) {
+      return integrationError(res, error, "Nao foi possivel validar a importacao.");
+    }
+  });
+
+  app.post("/importacoes/:id/processar", ...requireAdmin, async (req, res) => {
+    try {
+      const importacao = await findImportacaoOrThrow(prisma, req);
+      const result = await processImportacao({ prisma, importacao, empresaId: req.auth.empresaId, usuarioId: req.auth.usuarioId, body: req.body });
+      return res.json({ importacao: importResponse(result.importacao), resultado: result.resultado });
+    } catch (error) {
+      return integrationError(res, error, "Nao foi possivel processar a importacao.");
+    }
+  });
+
+  app.post("/importacoes/:id/cancelar", ...requireAdmin, async (req, res) => {
+    try {
+      const importacao = await findImportacaoOrThrow(prisma, req);
+      const updated = await cancelImportacao({ prisma, importacao });
+      return res.json(importResponse(updated));
+    } catch (error) {
+      return integrationError(res, error, "Nao foi possivel cancelar a importacao.");
+    }
+  });
+
+  app.get("/importacoes/:id/erros", ...requireAdmin, async (req, res) => {
+    try {
+      const importacao = await findImportacaoOrThrow(prisma, req);
+      const { page, limit, skip } = pagination(req.query);
+      const where = importErrorWhere(importacao.id, req.query);
+      const [total, erros] = await Promise.all([
+        prisma.erroImportacao.count({ where }),
+        prisma.erroImportacao.findMany({ where, orderBy: [{ linha: "asc" }, { id: "asc" }], skip, take: limit }),
+      ]);
+      return res.json(paginated(erros.map(importErrorResponse), total, page, limit));
+    } catch (error) {
+      return integrationError(res, error, "Nao foi possivel listar erros da importacao.");
+    }
+  });
   app.get("/importacoes/:id", ...requireAdmin, async (req, res) => {
     try {
       const id = positiveId(req.params.id);
       if (!id) throw httpError(400, "Importacao invalida.", "IMPORT_NOT_FOUND");
       const importacao = await prisma.importacaoDados.findFirst({
         where: { id, empresaId: req.auth.empresaId },
-        include: { erros: true },
+        include: { erros: true, integracao: true, createdByUsuario: true },
       });
       if (!importacao) throw httpError(404, "Importacao nao encontrada.", "IMPORT_NOT_FOUND");
       return res.json(importResponse(importacao));
@@ -372,6 +513,17 @@ async function assertIntegrationBelongsToCompany(prisma, integracaoId, empresaId
   if (!integracao) throw httpError(404, "Integracao nao encontrada.", "INTEGRATION_NOT_FOUND");
 }
 
+async function findImportacaoOrThrow(prisma, req) {
+  const id = positiveId(req.params.id);
+  if (!id) throw httpError(400, "Importacao invalida.", "IMPORT_NOT_FOUND");
+  const importacao = await prisma.importacaoDados.findFirst({
+    where: { id, empresaId: req.auth.empresaId },
+    include: { erros: true, integracao: true, createdByUsuario: true },
+  });
+  if (!importacao) throw httpError(404, "Importacao nao encontrada.", "IMPORT_NOT_FOUND");
+  return importacao;
+}
+
 function integrationResponse(integracao) {
   return {
     id: integracao.id,
@@ -426,7 +578,7 @@ function importResponse(importacao) {
     status: importacao.status,
     nomeArquivo: importacao.nomeArquivo,
     tamanhoBytes: importacao.tamanhoBytes,
-    hashArquivo: importacao.hashArquivo,
+    hashArquivo: partialHash(importacao.hashArquivo),
     tipoEntidade: importacao.tipoEntidade,
     mapeamento: safeJson(importacao.mapeamentoJson, null),
     totalLinhas: importacao.totalLinhas,
@@ -437,7 +589,14 @@ function importResponse(importacao) {
     createdByUsuarioId: importacao.createdByUsuarioId,
     createdAt: importacao.createdAt,
     updatedAt: importacao.updatedAt,
-    erros: importacao.erros?.map((erro) => ({
+    integracao: importacao.integracao ? { id: importacao.integracao.id, nome: importacao.integracao.nome, tipo: importacao.integracao.tipo } : null,
+    usuario: importacao.createdByUsuario ? { id: importacao.createdByUsuario.id, nome: importacao.createdByUsuario.nome, email: importacao.createdByUsuario.email } : null,
+    erros: importacao.erros?.map(importErrorResponse),
+  };
+}
+
+function importErrorResponse(erro) {
+  return {
       id: erro.id,
       linha: erro.linha,
       campo: erro.campo,
@@ -445,9 +604,15 @@ function importResponse(importacao) {
       mensagem: erro.mensagem,
       valorSanitizado: erro.valorSanitizado,
       createdAt: erro.createdAt,
-    })),
-  };
+    };
 }
+
+function partialHash(hash) {
+  if (!hash) return null;
+  return `${String(hash).slice(0, 12)}...${String(hash).slice(-8)}`;
+}
+
+
 
 function integrationError(res, error, fallbackMessage) {
   const status = error.status || statusFromCode(error.code) || 500;
@@ -463,6 +628,8 @@ function integrationError(res, error, fallbackMessage) {
 function statusFromCode(code) {
   if (code === "CONNECTOR_NOT_IMPLEMENTED") return 501;
   if (code === "INTEGRATION_NOT_FOUND" || code === "SYNC_NOT_FOUND" || code === "IMPORT_NOT_FOUND") return 404;
+  if (code === "IMPORT_DUPLICATE_FILE" || code === "IMPORT_INVALID_STATUS" || code === "IMPORT_CONFIRMATION_REQUIRED") return 409;
+  if (code === "IMPORT_CACHE_EXPIRED") return 410;
   if (code === "INTEGRATION_ACCESS_DENIED") return 403;
   if (code === "INTEGRATION_INVALID_TYPE" || code === "VALIDATION_ERROR" || code?.startsWith("IMPORT_")) return 400;
   if (code === "ENCRYPTION_KEY_REQUIRED") return 500;
@@ -541,3 +708,4 @@ function clean(value) {
 }
 
 module.exports = { mountIntegrationHubRoutes };
+
