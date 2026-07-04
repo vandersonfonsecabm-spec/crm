@@ -39,6 +39,7 @@ import DashboardKanbanBoard from "../components/dashboard/DashboardKanbanBoard";
 import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomationsPanel";
 import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
 import DashboardInventoryPanel from "../components/dashboard/DashboardInventoryPanel";
+import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegrationsPanel";
 import DashboardToast from "../components/dashboard/DashboardToast";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
@@ -83,6 +84,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
+  const canManageIntegrations = authSession?.papel === "ADMIN" && !authSession.isDemo;
 
   const pageSize = 4;
 
@@ -177,6 +179,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
   }, [activePage]);
+
 
   const selectedClient = useMemo(() => clients.find((client) => client.id === selectedId) || null, [clients, selectedId]);
 
@@ -281,6 +284,15 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setPage,
   });
 
+  const handleSetActivePage = useCallback((page: ActivePage) => {
+    if (page === "integracoes" && !canManageIntegrations) {
+      setToast("Acesso negado para Integra??es.");
+      setActivePage("dashboard");
+      return;
+    }
+    setActivePage(page);
+  }, [canManageIntegrations, setToast]);
+
   if (isBooting) {
     return (
       <div className="min-h-screen bg-[#050812] p-4 text-white">
@@ -346,7 +358,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           smartAlerts={smartAlerts}
           recentActivities={recentActivities}
           emptyClient={emptyClient}
-          setActivePage={setActivePage}
+          setActivePage={handleSetActivePage}
           setOnlyHot={setOnlyHot}
           setStatusFilter={setStatusFilter}
           setCreating={setCreating}
@@ -362,7 +374,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             showQuickActions={showQuickActions}
             emptyClient={emptyClient}
             setSelectedId={handleSelectClient}
-            setActivePage={setActivePage}
+            setActivePage={handleSetActivePage}
             setShowQuickActions={setShowQuickActions}
             setCreating={setCreating}
             exportCsv={exportCsv}
@@ -381,7 +393,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   : "Dados locais"
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
-            showCreateClient={activePage !== "estoque"}
+            showCreateClient={activePage !== "estoque" && activePage !== "integracoes"}
           />
 
           {activePage === "dashboard" && (
@@ -409,7 +421,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             getRisk={getRisk}
           />
 
-          {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && (
+          {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && (
             <DashboardOperationalSearch
               activePage={activePage}
               filteredClientsCount={filteredClients.length}
@@ -441,6 +453,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   ? "space-y-4"
                   : activePage === "estoque"
                     ? "space-y-4"
+                    : activePage === "integracoes"
+                      ? "space-y-4"
                 : activePage === "dashboard"
                   ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"
                   : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
@@ -526,6 +540,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               )}
 
               {activePage === "estoque" && <DashboardInventoryPanel />}
+
+              {activePage === "integracoes" && canManageIntegrations && <DashboardIntegrationsPanel />}
 
               <DashboardKanbanBoard
                 activePage={activePage}

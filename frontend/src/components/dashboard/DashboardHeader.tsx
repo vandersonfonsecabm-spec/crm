@@ -23,6 +23,7 @@ export default function DashboardHeader({
     kanban: "Funil Comercial",
     agenda: "Agenda",
     estoque: "Estoque",
+    integracoes: "Integra??es",
     automacoes: "Automações",
   }[activePage];
 

@@ -4,6 +4,7 @@ import {
   CalendarCheck,
   KanbanSquare,
   Package,
+  PlugZap,
   Sparkles,
   Users,
   Zap,
@@ -23,6 +24,7 @@ type DashboardSidebarProps = {
   exportCsv: () => void;
   clearFilters: () => void;
   applySmartFilter: (type: SmartFilterType) => void;
+  canManageIntegrations?: boolean;
 };
 
 export default function DashboardSidebar({
@@ -37,6 +39,7 @@ export default function DashboardSidebar({
   exportCsv,
   clearFilters,
   applySmartFilter,
+  canManageIntegrations = false,
 }: DashboardSidebarProps) {
   return (
     <aside className="sidebar-shell hidden h-screen w-64 shrink-0 overflow-x-hidden overflow-y-auto border-r border-slate-700/45 p-4 pb-6 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:sticky lg:top-0 lg:block">
@@ -101,6 +104,15 @@ export default function DashboardSidebar({
               label="Estoque"
               onClick={() => setActivePage("estoque")}
             />
+
+            {canManageIntegrations && (
+              <SidebarButton
+                active={activePage === "integracoes"}
+                icon={<PlugZap size={15} className="mr-2 shrink-0" />}
+                label="Integra??es"
+                onClick={() => setActivePage("integracoes")}
+              />
+            )}
           </div>
         </div>
 
@@ -120,7 +132,7 @@ export default function DashboardSidebar({
         </div>
       </nav>
 
-      {activePage !== "estoque" && (
+      {activePage !== "estoque" && activePage !== "integracoes" && (
       <div className="premium-panel mx-auto mt-6 w-full max-w-[224px] rounded-2xl p-3 transition-all duration-200 hover:border-white/20">
         <p className="text-xs font-semibold">Atalhos operacionais</p>
 
@@ -172,7 +184,7 @@ export default function DashboardSidebar({
       </div>
       )}
 
-      {activePage !== "automacoes" && activePage !== "dashboard" && activePage !== "estoque" && (
+      {activePage !== "automacoes" && activePage !== "dashboard" && activePage !== "estoque" && activePage !== "integracoes" && (
         <>
           <DashboardSmartAlerts
             smartAlerts={smartAlerts}

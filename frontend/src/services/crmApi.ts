@@ -328,6 +328,218 @@ export type MovimentacaoQueryParams = {
   limit?: number;
 };
 
+
+export type HubIntegrationStatus = "PENDENTE" | "ATIVA" | "INATIVA" | "ERRO";
+export type HubIntegrationType = "BLING" | "OMIE" | "CONTA_AZUL" | "TINY" | "ALTERDATA" | "CSV" | "XLSX" | "XML" | "JSON" | "CUSTOM";
+export type HubImportStatus = "ENVIADO" | "MAPEAMENTO_PENDENTE" | "VALIDANDO" | "PRONTO" | "PROCESSANDO" | "CONCLUIDO" | "CONCLUIDO_COM_ERROS" | "FALHOU" | "CANCELADO";
+export type HubImportFormat = "CSV" | "XLSX" | "XML" | "JSON";
+export type HubUpdateStrategy = "CRIAR_E_ATUALIZAR" | "APENAS_CRIAR" | "APENAS_ATUALIZAR";
+export type HubMoneyMode = "CENTAVOS" | "REAIS_VIRGULA" | "REAIS_PONTO";
+
+export type HubIntegracao = {
+  id: number;
+  empresaId: number;
+  nome: string;
+  tipo: HubIntegrationType;
+  status: HubIntegrationStatus;
+  modo?: string | null;
+  configuracao?: Record<string, unknown> | null;
+  possuiCredenciais?: boolean;
+  ultimaSincronizacaoEm?: string | null;
+  ultimoSucessoEm?: string | null;
+  ultimoErroEm?: string | null;
+  ativo: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HubImportacaoUsuario = { id: number; nome: string; email: string };
+
+export type HubCanonicalField =
+  | "externalId"
+  | "sku"
+  | "codigoBarras"
+  | "nome"
+  | "descricao"
+  | "categoria"
+  | "marca"
+  | "unidade"
+  | "ativo"
+  | "quantidade"
+  | "reservado"
+  | "disponivel"
+  | "localExternalId"
+  | "localNome"
+  | "precoCentavos"
+  | "precoPromocionalCentavos"
+  | "tabelaPreco"
+  | "inicioPromocao"
+  | "fimPromocao";
+
+export type HubImportMappingConfig = {
+  mapping: Partial<Record<HubCanonicalField, string>>;
+  options?: { money?: Partial<Record<"precoCentavos" | "precoPromocionalCentavos", HubMoneyMode>> };
+  chavePrincipal?: string;
+  permitirParcial?: boolean;
+};
+
+export type HubErroImportacao = {
+  id: number;
+  linha: number;
+  campo: string;
+  codigo: string;
+  mensagem: string;
+  valorSanitizado?: string | null;
+  createdAt: string;
+};
+
+export type HubImportacaoDados = {
+  id: number;
+  empresaId: number;
+  integracaoId?: number | null;
+  formato: HubImportFormat;
+  status: HubImportStatus;
+  nomeArquivo: string;
+  tamanhoBytes: number;
+  hashArquivo?: string | null;
+  tipoEntidade: string;
+  mapeamento?: HubImportMappingConfig | null;
+  totalLinhas: number;
+  linhasValidas: number;
+  linhasComErro: number;
+  iniciadaEm?: string | null;
+  finalizadaEm?: string | null;
+  createdByUsuarioId?: number | null;
+  createdAt: string;
+  updatedAt: string;
+  integracao?: Pick<HubIntegracao, "id" | "nome" | "tipo"> | null;
+  usuario?: HubImportacaoUsuario | null;
+  erros?: HubErroImportacao[];
+};
+
+export type HubImportacaoUploadResponse = {
+  importacao: HubImportacaoDados;
+  formato: HubImportFormat;
+  nomeArquivo: string;
+  tamanhoBytes: number;
+  hashArquivo: string;
+  status: HubImportStatus;
+  colunasDetectadas: string[];
+  colunasDuplicadas?: string[];
+  sugestaoMapeamento?: Partial<Record<HubCanonicalField, string>>;
+  primeirasLinhas: Record<string, unknown>[];
+  totalLinhasEstimado: number;
+  separador?: string | null;
+  planilha?: string | null;
+};
+
+export type HubImportacaoMapeamentoResponse = {
+  importacao: HubImportacaoDados;
+  previa: Record<string, unknown>[];
+  errosConfiguracao: string[];
+  avisos: string[];
+  linhasValidasEstimadas: number;
+  linhasInvalidasEstimadas: number;
+};
+
+export type HubImportacaoValidacaoResponse = {
+  importacao: HubImportacaoDados;
+  resumo: {
+    totalLinhas: number;
+    linhasValidas: number;
+    linhasComErro: number;
+    errosRegistrados: number;
+    avisos: string[];
+  };
+};
+
+export type HubImportacaoProcessamentoResponse = {
+  importacao: HubImportacaoDados;
+  resultado: {
+    criados: number;
+    atualizados: number;
+    ignorados: number;
+    estoques: number;
+    estoquesCriados: number;
+    estoquesAtualizados: number;
+    precos: number;
+    precosCriados: number;
+    precosAtualizados: number;
+  };
+};
+
+export type HubProdutoComercial = {
+  idCanonico: number;
+  externalId?: string | null;
+  nome: string;
+  descricao?: string | null;
+  sku?: string | null;
+  codigoBarras?: string | null;
+  categoria?: string | null;
+  marca?: string | null;
+  unidade?: string | null;
+  ativo: boolean;
+  disponibilidade: "EM_ESTOQUE" | "SEM_ESTOQUE" | "INDISPONIVEL" | "DESCONHECIDO";
+  estoques: Array<{
+    localExternalId?: string | null;
+    localNome?: string | null;
+    quantidade: string;
+    reservado: string;
+    disponivel: string;
+    status: string;
+    sincronizadoEm?: string | null;
+  }>;
+  quantidadeTotal: string;
+  quantidadeReservadaTotal: string;
+  quantidadeDisponivelTotal: string;
+  precoPadrao?: { tabela?: string | null; precoCentavos: number; precoPromocionalCentavos?: number | null; emPromocao: boolean; inicioPromocao?: string | null; fimPromocao?: string | null } | null;
+  precoAtualCentavos?: number | null;
+  precoOriginalCentavos?: number | null;
+  precoPromocionalCentavos?: number | null;
+  emPromocao: boolean;
+  tabelaPreco?: string | null;
+  inicioPromocao?: string | null;
+  fimPromocao?: string | null;
+  locais: string[];
+  origem: { integracaoId?: number | null; integracaoNome?: string | null; tipoIntegracao?: string | null };
+  ultimaSincronizacao?: string | null;
+  dadosDesatualizados: boolean;
+  avisos: string[];
+};
+
+export type HubQualidadeDados = {
+  totalProdutos: number;
+  produtosAtivos: number;
+  produtosInativos: number;
+  produtosSemSku: number;
+  produtosSemCodigoBarras: number;
+  produtosSemEstoque: number;
+  produtosSemPreco: number;
+  produtosComDadosDesatualizados: number;
+  duplicidadesDetectadas: {
+    sku: Array<{ campo: string; valor: string; total: number }>;
+    codigoBarras: Array<{ campo: string; valor: string; total: number }>;
+  };
+  integracoesOrigem: Array<{ id: number; nome: string; tipo: string; status: string; ultimaSincronizacaoEm?: string | null; ultimoSucessoEm?: string | null }>;
+  ultimaImportacao?: Pick<HubImportacaoDados, "id" | "formato" | "status" | "nomeArquivo" | "totalLinhas" | "linhasValidas" | "linhasComErro" | "createdAt" | "finalizadaEm"> | null;
+  ultimaSincronizacao?: { id: number; nome: string; tipo: string; ultimaSincronizacaoEm?: string | null; ultimoSucessoEm?: string | null } | null;
+  staleAfterMinutes: number;
+};
+
+export type HubCatalogQueryParams = {
+  q?: string;
+  sku?: string;
+  codigoBarras?: string;
+  categoria?: string;
+  marca?: string;
+  local?: string;
+  somenteDisponiveis?: boolean;
+  pagina?: number;
+  limite?: number;
+};
+
+export type HubImportListParams = { page?: number; limit?: number; status?: string; formato?: string; busca?: string };
+
 export function getAuthToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -585,6 +797,68 @@ export async function fetchEstoqueResumo() {
   return requestApiGet<ApiResumoEstoque>("/estoque/resumo");
 }
 
+
+export async function fetchIntegracoes(params: { page?: number; limit?: number; status?: string; tipo?: string; busca?: string } = {}) {
+  const response = await requestApiGetAuthenticated<ApiPaginatedResponse<HubIntegracao> | HubIntegracao[]>("/integracoes" + toQueryString(params));
+  return normalizePaginatedResponse(response, { page: params.page, limit: params.limit });
+}
+
+export async function createIntegracao(payload: { nome: string; tipo: HubIntegrationType; status?: HubIntegrationStatus; ativo?: boolean; configuracao?: Record<string, unknown> }) {
+  return requestApiPost<HubIntegracao>("/integracoes", payload);
+}
+
+export async function fetchImportacoes(params: HubImportListParams = {}) {
+  const response = await requestApiGetAuthenticated<ApiPaginatedResponse<HubImportacaoDados> | HubImportacaoDados[]>("/importacoes" + toQueryString(params));
+  return normalizePaginatedResponse(response, { page: params.page, limit: params.limit });
+}
+
+export async function fetchImportacao(id: number) {
+  return requestApiGetAuthenticated<HubImportacaoDados>("/importacoes/" + id);
+}
+
+export async function uploadImportacao(file: File, options: { tipoEntidade?: "PRODUTOS"; confirmarReprocessamento?: boolean } = {}) {
+  const formData = new FormData();
+  formData.append("arquivo", file);
+  formData.append("tipoEntidade", options.tipoEntidade ?? "PRODUTOS");
+  if (options.confirmarReprocessamento) formData.append("confirmarReprocessamento", "true");
+  return requestApiMultipart<HubImportacaoUploadResponse>("/importacoes/upload", formData);
+}
+
+export async function mapearImportacao(id: number, payload: HubImportMappingConfig) {
+  return requestApiPost<HubImportacaoMapeamentoResponse>("/importacoes/" + id + "/mapear", {
+    mapeamento: payload.mapping,
+    opcoes: payload.options,
+    chavePrincipal: payload.chavePrincipal,
+    permitirParcial: payload.permitirParcial,
+  });
+}
+
+export async function validarImportacao(id: number) {
+  return requestApiPost<HubImportacaoValidacaoResponse>("/importacoes/" + id + "/validar", {});
+}
+
+export async function processarImportacao(id: number, payload: { importarLinhasValidas: boolean; estrategiaAtualizacao: HubUpdateStrategy }) {
+  return requestApiPost<HubImportacaoProcessamentoResponse>("/importacoes/" + id + "/processar", payload);
+}
+
+export async function cancelarImportacao(id: number) {
+  return requestApiPost<HubImportacaoDados>("/importacoes/" + id + "/cancelar", {});
+}
+
+export async function fetchErrosImportacao(id: number, params: { page?: number; limit?: number; campo?: string; codigo?: string; linha?: number } = {}) {
+  const response = await requestApiGetAuthenticated<ApiPaginatedResponse<HubErroImportacao> | HubErroImportacao[]>("/importacoes/" + id + "/erros" + toQueryString(params));
+  return normalizePaginatedResponse(response, { page: params.page, limit: params.limit });
+}
+
+export async function consultarCatalogoComercial(params: HubCatalogQueryParams = {}) {
+  const response = await requestApiGetAuthenticated<ApiPaginatedResponse<HubProdutoComercial> | HubProdutoComercial[]>("/hub/consulta-comercial" + toQueryString(params));
+  return normalizePaginatedResponse(response, { page: params.pagina, limit: params.limite });
+}
+
+export async function fetchQualidadeDados() {
+  return requestApiGetAuthenticated<HubQualidadeDados>("/hub/qualidade-dados");
+}
+
 export async function fetchAcompanhamentos(params: AcompanhamentoQueryParams = {}) {
   const response = await requestApiGet<ApiPaginatedResponse<ApiAcompanhamento> | ApiAcompanhamento[]>(
     `/acompanhamentos${toQueryString(params)}`,
@@ -698,6 +972,53 @@ async function requestApiGet<T>(path: string): Promise<T> {
 
   if (!response.ok) {
     throw new Error("Nao foi possivel carregar os dados agora.");
+  }
+
+  return (await response.json()) as T;
+}
+
+
+async function requestApiGetAuthenticated<T>(path: string): Promise<T> {
+  if (!hasRemoteApi()) {
+    throw new Error("Nao foi possivel carregar os dados agora.");
+  }
+
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error("Sessao expirada. Entre novamente para continuar.");
+  }
+
+  const response = await fetch(API_URL + path, {
+    headers: buildHeaders(token),
+  });
+
+  if (!response.ok) {
+    const message = await readApiError(response);
+    throw new Error(message);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function requestApiMultipart<T>(path: string, body: FormData): Promise<T> {
+  if (!hasRemoteApi()) {
+    throw new Error("Nao foi possivel enviar o arquivo agora.");
+  }
+
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error("Sessao expirada. Entre novamente para continuar.");
+  }
+
+  const response = await fetch(API_URL + path, {
+    method: "POST",
+    headers: buildHeaders(token),
+    body,
+  });
+
+  if (!response.ok) {
+    const message = await readApiError(response);
+    throw new Error(message);
   }
 
   return (await response.json()) as T;
