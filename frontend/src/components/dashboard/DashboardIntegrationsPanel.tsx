@@ -32,6 +32,7 @@ import {
   type HubImportacaoProcessamentoResponse,
   type HubImportacaoUploadResponse,
   type HubImportacaoValidacaoResponse,
+  type HubImportStatus,
   type HubMoneyMode,
   type HubProdutoComercial,
   type HubQualidadeDados,
@@ -43,6 +44,7 @@ const IMPORT_LIMIT = 6;
 const ERROR_LIMIT = 8;
 const CATALOG_LIMIT = 6;
 const IGNORE_FIELD = "__ignore__";
+const IMPORT_DRAFT_PREFIX = "crm-hub-import-draft:";
 
 const CANONICAL_FIELDS: Array<{ value: HubCanonicalField; label: string }> = [
   { value: "externalId", label: "Codigo externo" },
@@ -207,14 +209,16 @@ export default function DashboardIntegrationsPanel() {
     setFileError("");
     try {
       const result = await uploadImportacao(selectedFile, { tipoEntidade: "PRODUTOS", confirmarReprocessamento });
+      saveImportDraft(result);
       setUpload(result);
       setMapping(invertSuggestion(result.sugestaoMapeamento ?? {}, result.colunasDetectadas));
       setMappingResult(null);
       setValidation(null);
       setProcessResult(null);
       setErrors({ data: [], page: 1, total: 0, totalPages: 0 });
+      setSelectedImport(null);
       setStep("mapeamento");
-      setToast("Arquivo analisado com sucesso.");
+      setToast("Arquivo enviado. Continue com o mapeamento.");
       await reloadImports();
     } catch (error) {
       setFileError(errorText(error, "Nao foi possivel enviar o arquivo."));
@@ -313,6 +317,59 @@ export default function DashboardIntegrationsPanel() {
     }
   }
 
+  async function resumeImport(id: number) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const detail = await fetchImportacao(id);
+      setSelectedImport(null);
+      setProcessResult(null);
+
+      if (detail.status === "MAPEAMENTO_PENDENTE") {
+        const draft = loadImportDraft(detail.id);
+        if (!draft) {
+          setSelectedImport(detail);
+          setMessage("Esta importacao esta aguardando mapeamento, mas as colunas do arquivo nao estao mais carregadas neste navegador. Reenvie o mesmo arquivo para continuar com seguranca.");
+          return;
+        }
+        const resumedUpload = { ...draft, importacao: detail, status: detail.status };
+        setUpload(resumedUpload);
+        setMapping(invertSuggestion(resumedUpload.sugestaoMapeamento ?? {}, resumedUpload.colunasDetectadas));
+        setMappingResult(null);
+        setValidation(null);
+        setErrors({ data: [], page: 1, total: 0, totalPages: 0 });
+        setStep("mapeamento");
+        setToast("Mapeamento retomado.");
+        return;
+      }
+
+      setUpload(null);
+      if (detail.status === "VALIDANDO") {
+        setMappingResult(mappingResultFromImport(detail));
+        setValidation(null);
+        setStep("validacao");
+        setToast("Importacao pronta para validar.");
+        return;
+      }
+
+      if (detail.status === "PRONTO") {
+        setMappingResult(mappingResultFromImport(detail));
+        setValidation(validationFromImport(detail));
+        await loadErrors(detail.id, 1);
+        setStep("importacao");
+        setToast("Importacao pronta para importar linhas validas.");
+        return;
+      }
+
+      setSelectedImport(detail);
+      await loadErrors(id, 1);
+    } catch (error) {
+      setMessage(errorText(error, "Nao foi possivel retomar a importacao."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function cancelImport(id: number) {
     setBusy(true);
     try {
@@ -398,6 +455,10 @@ export default function DashboardIntegrationsPanel() {
                 </div>
               ))}
             </div>
+            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.025] p-3 text-xs text-slate-300">
+              <span className="font-semibold text-slate-100">Etapa atual: </span>
+              {workflowStatusText(step, upload?.importacao.status ?? mappingResult?.importacao.status ?? validation?.importacao.status ?? processResult?.importacao.status)}
+            </div>
 
             {message && <Alert tone="error">{message}</Alert>}
 
@@ -407,7 +468,7 @@ export default function DashboardIntegrationsPanel() {
                   <UploadCloud className="text-teal-100" size={24} />
                   <span className="mt-2 text-sm font-semibold text-slate-100">Selecionar CSV ou XLSX</span>
                   <span className="mt-1 text-xs text-slate-500">Um arquivo por vez, ate 10 MB.</span>
-                  <input className="hidden" type="file" accept=".csv,.xlsx" onChange={onFileChange} disabled={busy} />
+                  <input className="mt-3 block w-full max-w-md cursor-pointer rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-300/15 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-teal-50 disabled:cursor-not-allowed disabled:opacity-50" type="file" accept=".csv,.xlsx" onChange={onFileChange} disabled={busy} />
                 </label>
                 {selectedFile && (
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
@@ -452,6 +513,10 @@ export default function DashboardIntegrationsPanel() {
                   <SelectBox label="Preco" value={priceMode} options={MONEY_MODES} onChange={setPriceMode} />
                   <SelectBox label="Preco promocional" value={promoMode} options={MONEY_MODES} onChange={setPromoMode} />
                 </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3 text-xs text-slate-400">
+                  <span className="font-semibold text-slate-100">Chave principal: </span>
+                  {primaryKeyLabel(buildFieldMapping(mapping))}
+                </div>
                 <button type="button" onClick={() => void saveMapping()} disabled={busy} className="premium-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50">
                   {busy ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} Salvar mapeamento
                 </button>
@@ -494,7 +559,7 @@ export default function DashboardIntegrationsPanel() {
                   </label>
                 )}
                 <button type="button" onClick={() => void processImport()} disabled={busy || !validation || validation.resumo.linhasValidas === 0} className="premium-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50">
-                  {busy ? <Loader2 className="animate-spin" size={14} /> : <UploadCloud size={14} />} Processar importacao
+                  {busy ? <Loader2 className="animate-spin" size={14} /> : <UploadCloud size={14} />} Importar linhas validas
                 </button>
               </div>
             )}
@@ -537,6 +602,7 @@ export default function DashboardIntegrationsPanel() {
             onSearch={setImportSearch}
             onPage={setImportsPage}
             onOpen={(id) => void openImport(id)}
+            onResume={(id) => void resumeImport(id)}
             onCancel={(id) => void cancelImport(id)}
             onClose={() => setSelectedImport(null)}
             onErrorsPage={(id, page) => void loadErrors(id, page)}
@@ -596,6 +662,7 @@ function ImportsSection(props: {
   onSearch: (value: string) => void;
   onPage: (page: number) => void;
   onOpen: (id: number) => void;
+  onResume: (id: number) => void;
   onCancel: (id: number) => void;
   onClose: () => void;
   onErrorsPage: (id: number, page: number) => void;
@@ -618,6 +685,11 @@ function ImportsSection(props: {
         {props.imports.length === 0 && <EmptyState title="Nenhuma importacao encontrada" text="As importacoes enviadas pelo ADMIN aparecerao aqui." />}
         {props.imports.map((item) => (
           <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+            {importPrimaryAction(item.status) && (
+              <div className="mb-3 rounded-xl border border-teal-300/20 bg-teal-300/[0.055] px-3 py-2 text-[11px] text-teal-50">
+                {importActionHint(item.status)}
+              </div>
+            )}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-slate-100" title={item.nomeArquivo}>{item.nomeArquivo}</p>
@@ -631,9 +703,14 @@ function ImportsSection(props: {
               <Info label="Erros" value={item.linhasComErro} />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
+              {importPrimaryAction(item.status) && (
+                <button type="button" disabled={props.busy} onClick={() => props.onResume(item.id)} className="premium-button rounded-xl px-3 py-2 text-[11px] font-semibold disabled:opacity-50">
+                  {importPrimaryAction(item.status)}
+                </button>
+              )}
               <button type="button" onClick={() => props.onOpen(item.id)} className="premium-ghost rounded-xl px-3 py-2 text-[11px] font-semibold text-slate-300">Detalhes</button>
               {!isFinalImportStatus(item.status) && (
-                <button type="button" disabled={props.busy} onClick={() => props.onCancel(item.id)} className="rounded-xl border border-red-300/20 bg-red-500/10 px-3 py-2 text-[11px] font-semibold text-red-100 disabled:opacity-50">Cancelar</button>
+                <button type="button" disabled={props.busy} onClick={() => props.onCancel(item.id)} className="premium-ghost rounded-xl px-3 py-2 text-[11px] font-semibold text-red-100 disabled:opacity-50">Cancelar</button>
               )}
             </div>
           </div>
@@ -883,8 +960,80 @@ function buildFieldMapping(columnMapping: Record<string, HubCanonicalField | typ
   return result;
 }
 
+function saveImportDraft(upload: HubImportacaoUploadResponse) {
+  try {
+    sessionStorage.setItem(`${IMPORT_DRAFT_PREFIX}${upload.importacao.id}`, JSON.stringify(upload));
+  } catch {
+    // A retomada fica indisponivel se o navegador bloquear sessionStorage.
+  }
+}
+
+function loadImportDraft(id: number): HubImportacaoUploadResponse | null {
+  try {
+    const value = sessionStorage.getItem(`${IMPORT_DRAFT_PREFIX}${id}`);
+    return value ? (JSON.parse(value) as HubImportacaoUploadResponse) : null;
+  } catch {
+    return null;
+  }
+}
+
+function mappingResultFromImport(importacao: HubImportacaoDados): HubImportacaoMapeamentoResponse {
+  return {
+    importacao,
+    previa: [],
+    errosConfiguracao: [],
+    avisos: [],
+    linhasValidasEstimadas: importacao.linhasValidas,
+    linhasInvalidasEstimadas: importacao.linhasComErro,
+  };
+}
+
+function validationFromImport(importacao: HubImportacaoDados): HubImportacaoValidacaoResponse {
+  return {
+    importacao,
+    resumo: {
+      totalLinhas: importacao.totalLinhas,
+      linhasValidas: importacao.linhasValidas,
+      linhasComErro: importacao.linhasComErro,
+      errosRegistrados: importacao.linhasComErro,
+      avisos: [],
+    },
+  };
+}
+
 function isFinalImportStatus(status: string) {
   return ["CONCLUIDO", "CONCLUIDO_COM_ERROS", "FALHOU", "CANCELADO"].includes(status);
+}
+
+function importPrimaryAction(status: HubImportStatus | string) {
+  if (status === "MAPEAMENTO_PENDENTE") return "Continuar mapeamento";
+  if (status === "VALIDANDO") return "Validar arquivo";
+  if (status === "PRONTO") return "Importar linhas validas";
+  return null;
+}
+
+function importActionHint(status: HubImportStatus | string) {
+  if (status === "MAPEAMENTO_PENDENTE") return "Arquivo enviado. Falta mapear as colunas para continuar.";
+  if (status === "VALIDANDO") return "Mapeamento salvo. Falta validar o arquivo.";
+  if (status === "PRONTO") return "Arquivo validado. Falta importar as linhas validas.";
+  return "";
+}
+
+function workflowStatusText(step: StepKey, status?: HubImportStatus | string) {
+  if (status === "CONCLUIDO") return "Concluido.";
+  if (status === "CONCLUIDO_COM_ERROS") return "Concluido com erros.";
+  if (step === "arquivo") return "Arquivo ainda nao enviado.";
+  if (step === "mapeamento") return "Arquivo enviado. Mapeamento pendente.";
+  if (step === "validacao") return "Mapeamento salvo. Pronto para validar.";
+  if (step === "importacao") return "Validado. Pronto para importar.";
+  return "Resultado da importacao.";
+}
+
+function primaryKeyLabel(mapping: Partial<Record<HubCanonicalField, string>>) {
+  if (mapping.externalId) return "Codigo externo";
+  if (mapping.sku) return "SKU";
+  if (mapping.codigoBarras) return "Codigo de barras";
+  return "Mapeie Codigo externo, SKU ou Codigo de barras";
 }
 
 function availabilityLabel(status: string) {
