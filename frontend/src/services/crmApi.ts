@@ -578,7 +578,7 @@ export function getAuthSession(): AuthSession | null {
   const empresa = readStorageJson<ApiAuthCompany>(COMPANY_KEY);
   const papel = localStorage.getItem(ROLE_KEY) as ApiUserRole | null;
   const expiresAt = localStorage.getItem(EXPIRES_KEY) || undefined;
-  const isDemo = localStorage.getItem(DEMO_KEY) === "true" || token === DEMO_TOKEN;
+  const isDemo = token === DEMO_TOKEN;
 
   if (!usuario?.nome) {
     return {
