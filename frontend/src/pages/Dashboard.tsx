@@ -42,8 +42,8 @@ import DashboardInventoryPanel from "../components/dashboard/DashboardInventoryP
 import DashboardToast from "../components/dashboard/DashboardToast";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
-import { fetchClientesFromBackend, fetchDashboardSummaryFromBackend } from "../services/crmApi";
-import type { ApiDashboardSummary } from "../services/crmApi";
+import { clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession } from "../services/crmApi";
+import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
 
 import { emptyClient, loadClients, statusList } from "../data/mockClients";
 
@@ -82,6 +82,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [isBooting, setIsBooting] = useState(true);
   const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
+  const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
 
   const pageSize = 4;
 
@@ -114,7 +115,15 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     let ignore = false;
 
     async function loadBackendClients() {
+      const savedSession = getAuthSession();
+      setAuthSession(savedSession);
+
       try {
+        if (savedSession && !savedSession.isDemo) {
+          const refreshedSession = await fetchAuthMe();
+          if (!ignore) setAuthSession(refreshedSession);
+        }
+
         const backendClients = await fetchClientesFromBackend();
         if (!backendClients || ignore) return;
 
@@ -129,6 +138,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           if (!ignore) setDashboardSummary(null);
         }
       } catch {
+        if (getAuthSession() === null) {
+          clearAuthSession();
+          onLogout();
+          return;
+        }
+
         setDataSource("offline");
         setDashboardSummary(null);
       }
@@ -139,7 +154,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [onLogout]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -352,6 +367,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             setCreating={setCreating}
             exportCsv={exportCsv}
             onLogout={onLogout}
+            authSession={authSession}
           />
 
           <DashboardHeader

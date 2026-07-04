@@ -1,6 +1,7 @@
 import { LogOut, ShieldCheck } from "lucide-react";
 import DashboardCommandSearch from "./DashboardCommandSearch";
 import DashboardQuickActions from "./DashboardQuickActions";
+import type { AuthSession } from "../../services/crmApi";
 import type { ActivePage, Client } from "../../types/dashboard";
 
 type DashboardTopbarProps = {
@@ -14,6 +15,7 @@ type DashboardTopbarProps = {
   setCreating: (client: Client | null) => void;
   exportCsv: () => void;
   onLogout: () => void;
+  authSession: AuthSession | null;
 };
 
 export default function DashboardTopbar({
@@ -27,7 +29,14 @@ export default function DashboardTopbar({
   setCreating,
   exportCsv,
   onLogout,
+  authSession,
 }: DashboardTopbarProps) {
+  const displayName = authSession?.usuario.nome || "Usuario Local";
+  const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel, authSession?.isDemo);
+  const userInitials = getInitials(displayName);
+  const companyName = authSession?.empresa?.nome;
+  const caption = companyName && !authSession?.isDemo ? `${roleLabel} - ${companyName}` : roleLabel;
+
   return (
     <div className="premium-panel topbar-shell relative z-30 mb-4 flex items-center justify-between overflow-visible rounded-2xl px-4 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
@@ -89,12 +98,16 @@ export default function DashboardTopbar({
 
         <div className="premium-ghost flex items-center gap-2 rounded-xl px-2 py-1.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-950 shadow-[0_10px_24px_rgba(0,0,0,0.2)]">
-            MA
+            {userInitials}
           </div>
 
-          <div className="hidden md:block">
-            <p className="text-[11px] font-medium text-slate-100">Marco Admin</p>
-            <p className="text-[10px] text-slate-500">Administrador</p>
+          <div className="hidden min-w-0 md:block">
+            <p className="max-w-[130px] truncate text-[11px] font-medium text-slate-100 xl:max-w-[150px]">
+              {displayName}
+            </p>
+            <p className="max-w-[130px] truncate text-[10px] text-slate-500 xl:max-w-[170px]">
+              {caption}
+            </p>
           </div>
         </div>
 
@@ -110,4 +123,29 @@ export default function DashboardTopbar({
       </div>
     </div>
   );
+}
+
+function getRoleLabel(role?: string, isDemo?: boolean) {
+  if (isDemo) return "Demonstracao";
+
+  const labels: Record<string, string> = {
+    ADMIN: "Administrador",
+    GERENTE: "Gerente",
+    VENDEDOR: "Vendedor",
+  };
+
+  return role ? labels[role] ?? role : "Operador";
+}
+
+function getInitials(name: string) {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!words.length) return "U";
+
+  const first = words[0]?.[0] ?? "";
+  const second = words.length > 1 ? words[words.length - 1]?.[0] ?? "" : words[0]?.[1] ?? "";
+  return `${first}${second}`.toUpperCase();
 }

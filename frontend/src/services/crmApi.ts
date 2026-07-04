@@ -4,14 +4,63 @@ const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.t
 const API_URL = configuredApiUrl || (import.meta.env.PROD ? "" : "http://localhost:3001");
 const TOKEN_KEY = "crm-auth-token";
 const USER_KEY = "crm-auth-user";
+const COMPANY_KEY = "crm-auth-company";
+const ROLE_KEY = "crm-auth-role";
+const EXPIRES_KEY = "crm-auth-expires-at";
+const DEMO_KEY = "crm-auth-demo";
 const DEMO_TOKEN = "demo-sqlite";
 
 type ApiAuthResponse = {
   access_token: string;
+  expires_at?: string;
   user?: {
+    id?: number;
     nome?: string;
     email?: string;
+    papel?: ApiUserRole;
+    role?: ApiUserRole;
+    ativo?: boolean;
+    empresaId?: number;
   };
+  usuario?: {
+    id?: number;
+    nome?: string;
+    email?: string;
+    papel?: ApiUserRole;
+    role?: ApiUserRole;
+    ativo?: boolean;
+    empresaId?: number;
+  };
+  empresa?: ApiAuthCompany;
+  papel?: ApiUserRole;
+  isDemo?: boolean;
+};
+
+export type ApiUserRole = "ADMIN" | "GERENTE" | "VENDEDOR";
+
+export type ApiAuthUser = {
+  id?: number;
+  empresaId?: number;
+  nome: string;
+  email?: string;
+  papel?: ApiUserRole;
+  ativo?: boolean;
+};
+
+export type ApiAuthCompany = {
+  id?: number;
+  nome: string;
+  slug?: string;
+  ativo?: boolean;
+};
+
+export type AuthSession = {
+  token: string;
+  usuario: ApiAuthUser;
+  empresa?: ApiAuthCompany;
+  papel?: ApiUserRole;
+  expiresAt?: string;
+  isDemo: boolean;
 };
 
 type ApiCliente = {
@@ -291,7 +340,7 @@ export function clearAuthToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-function setAuthUser(user?: ApiAuthResponse["user"]) {
+function setAuthUser(user?: ApiAuthUser) {
   if (user) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     return;
@@ -303,6 +352,109 @@ function setAuthUser(user?: ApiAuthResponse["user"]) {
 export function clearAuthSession() {
   clearAuthToken();
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(COMPANY_KEY);
+  localStorage.removeItem(ROLE_KEY);
+  localStorage.removeItem(EXPIRES_KEY);
+  localStorage.removeItem(DEMO_KEY);
+}
+
+export function getAuthSession(): AuthSession | null {
+  const token = getAuthToken();
+  if (!token) return null;
+
+  const usuario = readStorageJson<ApiAuthUser>(USER_KEY);
+  const empresa = readStorageJson<ApiAuthCompany>(COMPANY_KEY);
+  const papel = localStorage.getItem(ROLE_KEY) as ApiUserRole | null;
+  const expiresAt = localStorage.getItem(EXPIRES_KEY) || undefined;
+  const isDemo = localStorage.getItem(DEMO_KEY) === "true" || token === DEMO_TOKEN;
+
+  if (!usuario?.nome) {
+    return {
+      token,
+      usuario: isDemo ? demoUser() : localUser(),
+      empresa: isDemo ? demoCompany() : empresa ?? undefined,
+      papel: isDemo ? "VENDEDOR" : papel ?? undefined,
+      expiresAt,
+      isDemo,
+    };
+  }
+
+  return {
+    token,
+    usuario,
+    empresa: empresa ?? undefined,
+    papel: papel ?? usuario.papel,
+    expiresAt,
+    isDemo,
+  };
+}
+
+export function isDemoSession() {
+  return getAuthSession()?.isDemo ?? false;
+}
+
+function setAuthSessionFromResponse(data: ApiAuthResponse, options: { forceDemo?: boolean } = {}) {
+  const token = data.access_token;
+  const apiUser = data.usuario ?? data.user;
+  const papel = data.papel ?? apiUser?.papel ?? apiUser?.role;
+  const isDemo = Boolean(options.forceDemo || data.isDemo);
+  const usuario = isDemo
+    ? demoUser(apiUser)
+    : normalizeAuthUser(apiUser, papel);
+  const empresa = isDemo ? demoCompany(data.empresa) : normalizeAuthCompany(data.empresa);
+
+  setAuthToken(token);
+  setAuthUser(usuario);
+
+  if (empresa) {
+    localStorage.setItem(COMPANY_KEY, JSON.stringify(empresa));
+  } else {
+    localStorage.removeItem(COMPANY_KEY);
+  }
+
+  if (papel) {
+    localStorage.setItem(ROLE_KEY, papel);
+  } else if (usuario.papel) {
+    localStorage.setItem(ROLE_KEY, usuario.papel);
+  } else {
+    localStorage.removeItem(ROLE_KEY);
+  }
+
+  if (data.expires_at) {
+    localStorage.setItem(EXPIRES_KEY, data.expires_at);
+  } else {
+    localStorage.removeItem(EXPIRES_KEY);
+  }
+
+  localStorage.setItem(DEMO_KEY, isDemo ? "true" : "false");
+}
+
+export async function fetchAuthMe() {
+  const token = getAuthToken();
+  if (!token || !hasRemoteApi()) {
+    throw new Error("Sessao indisponivel.");
+  }
+
+  const response = await fetch(`${API_URL}/auth/me`, {
+    headers: buildHeaders(token),
+  });
+
+  if (!response.ok) {
+    clearAuthSession();
+    throw new Error("Sessao expirada.");
+  }
+
+  const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "empresa" | "papel" | "isDemo">;
+  const sessionData: ApiAuthResponse = {
+    access_token: token,
+    usuario: data.usuario,
+    user: data.user,
+    empresa: data.empresa,
+    papel: data.papel,
+    isDemo: data.isDemo ?? isDemoSession(),
+  };
+  setAuthSessionFromResponse(sessionData, { forceDemo: sessionData.isDemo });
+  return getAuthSession();
 }
 
 export async function loginWithBackend(email: string, senha: string) {
@@ -323,15 +475,22 @@ export async function loginWithBackend(email: string, senha: string) {
   }
 
   const data = (await response.json()) as ApiAuthResponse;
-  setAuthToken(data.access_token);
-  setAuthUser(data.user);
+  setAuthSessionFromResponse(data);
   return data;
 }
 
 export async function loginDemoWithBackend() {
   if (hasRemoteApi()) {
     try {
-      return await loginWithBackend("demo@crm.com", "123456");
+      const response = await fetch(`${API_URL}/auth/demo`, {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as ApiAuthResponse;
+        setAuthSessionFromResponse(data, { forceDemo: true });
+        return data;
+      }
     } catch {
       return startGuidedAccess();
     }
@@ -639,22 +798,83 @@ function hasRemoteApi() {
 
 function startGuidedAccess() {
   setAuthToken(DEMO_TOKEN);
-  setAuthUser({
-    nome: "Acesso guiado",
-    email: "marco@crmagro.com.br",
-  });
+  setAuthUser(demoUser());
+  localStorage.setItem(COMPANY_KEY, JSON.stringify(demoCompany()));
+  localStorage.setItem(ROLE_KEY, "VENDEDOR");
+  localStorage.setItem(DEMO_KEY, "true");
+  localStorage.removeItem(EXPIRES_KEY);
 
   return {
     access_token: DEMO_TOKEN,
-    user: {
-      nome: "Acesso guiado",
-      email: "marco@crmagro.com.br",
-    },
+    user: demoUser(),
+    usuario: demoUser(),
+    empresa: demoCompany(),
+    papel: "VENDEDOR" as ApiUserRole,
+    isDemo: true,
   };
 }
 
 function isDemoMode() {
-  return getAuthToken() === DEMO_TOKEN;
+  return isDemoSession();
+}
+
+function normalizeAuthUser(user?: ApiAuthResponse["usuario"], papel?: ApiUserRole): ApiAuthUser {
+  return {
+    id: user?.id,
+    empresaId: user?.empresaId,
+    nome: user?.nome?.trim() || "Usuario",
+    email: user?.email,
+    papel: papel ?? user?.papel ?? user?.role,
+    ativo: user?.ativo,
+  };
+}
+
+function normalizeAuthCompany(company?: ApiAuthCompany): ApiAuthCompany | undefined {
+  if (!company?.nome) return undefined;
+  return {
+    id: company.id,
+    nome: company.nome,
+    slug: company.slug,
+    ativo: company.ativo,
+  };
+}
+
+function demoUser(user?: ApiAuthResponse["usuario"]): ApiAuthUser {
+  return {
+    id: user?.id,
+    empresaId: user?.empresaId,
+    nome: "Usuario Demo",
+    email: user?.email ?? "demo@crm.com",
+    papel: "VENDEDOR",
+    ativo: true,
+  };
+}
+
+function demoCompany(company?: ApiAuthCompany): ApiAuthCompany {
+  return {
+    id: company?.id,
+    nome: "CRM Agro Demo",
+    slug: company?.slug ?? "crm-agro-demo",
+    ativo: true,
+  };
+}
+
+function localUser(): ApiAuthUser {
+  return {
+    nome: "Usuario Local",
+    papel: "VENDEDOR",
+    ativo: true,
+  };
+}
+
+function readStorageJson<T>(key: string): T | null {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : null;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
 }
 
 function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
