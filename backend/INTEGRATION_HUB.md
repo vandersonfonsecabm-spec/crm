@@ -193,3 +193,12 @@ Variaveis de limite:
 - `IMPORT_BATCH_SIZE` padrao `500`.
 
 Consulte `IMPORTACAO_DADOS.md` para exemplos de payloads, estrategias e validacoes.
+
+## Consulta comercial e qualidade dos dados
+
+O Hub tambem expoe rotas administrativas somente leitura para consumo comercial futuro:
+
+- `GET /hub/consulta-comercial`.
+- `GET /hub/qualidade-dados`.
+
+Ambas usam isolamento por empresa e bloqueiam token demo. A consulta comercial agrega produto, estoques, precos, origem, disponibilidade, promocao vigente e avisos de dados desatualizados. A qualidade dos dados resume lacunas do catalogo canonico, como produtos sem SKU, sem codigo de barras, sem estoque, sem preco e duplicidades detectadas.

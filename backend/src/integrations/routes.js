@@ -1,6 +1,7 @@
 ﻿const { encryptCredentials, hasEncryptedCredentials } = require("./crypto");
 const { createIntegrationAdapter } = require("./adapters");
 const { createCanonicalService } = require("./canonicalService");
+const { createCommercialCatalogService } = require("./commercialCatalogService");
 const {
   createUploadMiddleware,
   analyzeImportFile,
@@ -22,6 +23,7 @@ const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const requireAdmin = [authenticate, requireRole("ADMIN")];
   const canonicalService = createCanonicalService({ prisma });
+  const commercialCatalogService = createCommercialCatalogService({ prisma });
   const uploadImportFile = createUploadMiddleware();
 
   app.get("/integracoes", ...requireAdmin, async (req, res) => {
@@ -376,6 +378,26 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     }
   });
 
+  app.get("/hub/consulta-comercial", ...requireAdmin, async (req, res) => {
+    try {
+      const result = await commercialCatalogService.consultarCatalogoComercial({
+        empresaId: req.auth.empresaId,
+        filtros: req.query,
+      });
+      return res.json(result);
+    } catch (error) {
+      return integrationError(res, error, "Nao foi possivel consultar o catalogo comercial.");
+    }
+  });
+
+  app.get("/hub/qualidade-dados", ...requireAdmin, async (req, res) => {
+    try {
+      const result = await commercialCatalogService.qualidadeDados({ empresaId: req.auth.empresaId });
+      return res.json(result);
+    } catch (error) {
+      return integrationError(res, error, "Nao foi possivel consultar a qualidade dos dados.");
+    }
+  });
   app.get("/hub/produtos", ...requireAdmin, async (req, res) => {
     try {
       const result = await canonicalService.buscarProdutos({
@@ -708,4 +730,5 @@ function clean(value) {
 }
 
 module.exports = { mountIntegrationHubRoutes };
+
 

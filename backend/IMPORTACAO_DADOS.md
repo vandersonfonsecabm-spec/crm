@@ -205,3 +205,62 @@ ou apenas:
 ```bash
 node --test tests/importacao-manual.test.js
 ```
+
+## Consulta comercial unificada
+
+A rota `GET /hub/consulta-comercial` consolida produto, estoque, preco, origem e avisos em uma unica resposta para uso futuro por atendimento humano ou bot. Ela nao consulta adaptadores externos diretamente; usa somente a base canonica sincronizada/importada.
+
+Filtros:
+
+- `q`: busca em nome, SKU, codigo de barras, descricao, marca e categoria.
+- `sku`.
+- `codigoBarras`.
+- `categoria`.
+- `marca`.
+- `local`.
+- `somenteDisponiveis`.
+- `pagina` ou `page`.
+- `limite` ou `limit`, limitado a 100.
+
+Campos principais da resposta:
+
+- identificadores canonicos e externos;
+- nome, descricao, SKU, codigo de barras, categoria, marca, unidade e status ativo;
+- estoques por local;
+- totais de quantidade, reservado e disponivel;
+- disponibilidade `EM_ESTOQUE`, `SEM_ESTOQUE`, `INDISPONIVEL` ou `DESCONHECIDO`;
+- preco atual, preco original, promocao vigente e periodo;
+- origem da integracao;
+- ultima sincronizacao;
+- `dadosDesatualizados` e avisos.
+
+Promocao vigente exige preco promocional e janela de datas valida: agora deve ser maior ou igual ao inicio, quando informado, e menor ou igual ao fim, quando informado.
+
+`HUB_DATA_STALE_AFTER_MINUTES` define quando dados canonicos passam a retornar aviso de desatualizacao. O padrao local e 60 minutos.
+
+## Qualidade dos dados
+
+A rota `GET /hub/qualidade-dados` retorna metricas operacionais da base canonica da empresa autenticada:
+
+- total de produtos;
+- ativos e inativos;
+- sem SKU;
+- sem codigo de barras;
+- sem estoque;
+- sem preco;
+- dados desatualizados;
+- duplicidades detectadas;
+- integracoes de origem;
+- ultima importacao;
+- ultima sincronizacao.
+
+## Servico interno para atendimento
+
+O backend possui funcoes internas sem LLM e sem token publico:
+
+- `consultarCatalogoComercial`;
+- `buscarProdutoParaAtendimento`;
+- `consultarEstoqueParaAtendimento`;
+- `consultarPrecoParaAtendimento`.
+
+Todas exigem `empresaId` e limites seguros. Elas nao acessam adaptadores quando a base canonica ja possui dados sincronizados.

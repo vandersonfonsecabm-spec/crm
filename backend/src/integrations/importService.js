@@ -303,6 +303,10 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
   let skipped = 0;
   let stockTouched = 0;
   let priceTouched = 0;
+  let stockCreated = 0;
+  let stockUpdated = 0;
+  let priceCreated = 0;
+  let priceUpdated = 0;
   const processingErrors = [];
 
   await prisma.importacaoDados.update({
@@ -313,7 +317,7 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
   for (let start = 0; start < validatedRows.length; start += limits.batchSize) {
     const batch = validatedRows.slice(start, start + limits.batchSize);
     const result = await prisma.$transaction(async (tx) => {
-      const counters = { created: 0, updated: 0, skipped: 0, stockTouched: 0, priceTouched: 0 };
+      const counters = { created: 0, updated: 0, skipped: 0, stockTouched: 0, priceTouched: 0, stockCreated: 0, stockUpdated: 0, priceCreated: 0, priceUpdated: 0 };
       for (const row of batch) {
         const existing = await tx.produtoExterno.findUnique({
           where: { integracaoId_externalId: { integracaoId: integration.id, externalId: row.data.externalId } },
@@ -336,12 +340,16 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
         else counters.created += 1;
 
         if (hasStock(row.data)) {
-          await upsertStock({ tx, empresaId, integracaoId: integration.id, produtoExternoId: produto.id, row: row.data, now });
+          const stockResult = await upsertStock({ tx, empresaId, integracaoId: integration.id, produtoExternoId: produto.id, row: row.data, now });
           counters.stockTouched += 1;
+          if (stockResult.created) counters.stockCreated += 1;
+          if (stockResult.updated) counters.stockUpdated += 1;
         }
         if (hasPrice(row.data)) {
-          await upsertPrice({ tx, empresaId, integracaoId: integration.id, produtoExternoId: produto.id, row: row.data, now });
+          const priceResult = await upsertPrice({ tx, empresaId, integracaoId: integration.id, produtoExternoId: produto.id, row: row.data, now });
           counters.priceTouched += 1;
+          if (priceResult.created) counters.priceCreated += 1;
+          if (priceResult.updated) counters.priceUpdated += 1;
         }
       }
       return counters;
@@ -351,6 +359,10 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
     skipped += result.skipped;
     stockTouched += result.stockTouched;
     priceTouched += result.priceTouched;
+    stockCreated += result.stockCreated;
+    stockUpdated += result.stockUpdated;
+    priceCreated += result.priceCreated;
+    priceUpdated += result.priceUpdated;
   }
 
   const finalStatus = importacao.linhasComErro > 0 || processingErrors.length ? "CONCLUIDO_COM_ERROS" : "CONCLUIDO";
@@ -373,7 +385,17 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
 
   return {
     importacao: finished,
-    resultado: { criados: created, atualizados: updated, ignorados: skipped, estoques: stockTouched, precos: priceTouched },
+    resultado: {
+      criados: created,
+      atualizados: updated,
+      ignorados: skipped,
+      estoques: stockTouched,
+      estoquesCriados: stockCreated,
+      estoquesAtualizados: stockUpdated,
+      precos: priceTouched,
+      precosCriados: priceCreated,
+      precosAtualizados: priceUpdated,
+    },
     configuracao: config,
   };
 }
@@ -564,8 +586,12 @@ async function upsertStock({ tx, empresaId, integracaoId, produtoExternoId, row,
   const localNome = row.localNome || "Padrao";
   const existing = await tx.estoqueExterno.findFirst({ where: { empresaId, produtoExternoId, localExternalId, localNome } });
   const data = { empresaId, integracaoId, produtoExternoId, localExternalId, localNome, quantidade, reservado, disponivel, sincronizadoEm: now };
-  if (existing) return tx.estoqueExterno.update({ where: { id: existing.id }, data });
-  return tx.estoqueExterno.create({ data });
+  if (existing) {
+    await tx.estoqueExterno.update({ where: { id: existing.id }, data });
+    return { updated: true };
+  }
+  await tx.estoqueExterno.create({ data });
+  return { created: true };
 }
 
 async function upsertPrice({ tx, empresaId, integracaoId, produtoExternoId, row, now }) {
@@ -582,8 +608,12 @@ async function upsertPrice({ tx, empresaId, integracaoId, produtoExternoId, row,
     fimPromocao: row.fimPromocao ? new Date(row.fimPromocao) : null,
     sincronizadoEm: now,
   };
-  if (existing) return tx.precoExterno.update({ where: { id: existing.id }, data });
-  return tx.precoExterno.create({ data });
+  if (existing) {
+    await tx.precoExterno.update({ where: { id: existing.id }, data });
+    return { updated: true };
+  }
+  await tx.precoExterno.create({ data });
+  return { created: true };
 }
 
 async function findOrCreateManualIntegration({ prisma, empresaId, formato }) {
@@ -809,5 +839,6 @@ module.exports = {
   getImportLimits,
   UPDATE_STRATEGIES,
 };
+
 
 
