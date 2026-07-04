@@ -366,6 +366,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           exportCsv={exportCsv}
           clearFilters={clearFilters}
           applySmartFilter={applySmartFilter}
+          canManageIntegrations={canManageIntegrations}
         />
 
         <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-4 xl:px-5">
