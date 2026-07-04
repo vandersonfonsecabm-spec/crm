@@ -43,7 +43,7 @@ import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegra
 import DashboardToast from "../components/dashboard/DashboardToast";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
-import { clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession } from "../services/crmApi";
+import { clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession, getSessionRole } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
 
 import { emptyClient, loadClients, statusList } from "../data/mockClients";
@@ -84,7 +84,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
-  const canManageIntegrations = authSession?.papel === "ADMIN" && !authSession.isDemo;
+  const sessionRole = getSessionRole(authSession);
+  const canManageIntegrations = sessionRole === "ADMIN" && !authSession?.isDemo;
 
   const pageSize = 4;
 

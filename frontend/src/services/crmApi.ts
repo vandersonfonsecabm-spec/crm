@@ -605,6 +605,10 @@ export function isDemoSession() {
   return getAuthSession()?.isDemo ?? false;
 }
 
+export function getSessionRole(session: AuthSession | null): ApiUserRole | null {
+  return session?.usuario.papel ?? session?.papel ?? null;
+}
+
 function setAuthSessionFromResponse(data: ApiAuthResponse, options: { forceDemo?: boolean } = {}) {
   const token = data.access_token;
   const apiUser = data.usuario ?? data.user;
