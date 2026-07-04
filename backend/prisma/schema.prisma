@@ -109,32 +109,264 @@ model Acompanhamento {
 }
 
 model Empresa {
-  id        Int       @id @default(autoincrement())
-  nome      String
-  slug      String    @unique
-  ativo     Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  usuarios  Usuario[]
+  id                         Int                         @id @default(autoincrement())
+  nome                       String
+  slug                       String                      @unique
+  ativo                      Boolean                     @default(true)
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  usuarios                   Usuario[]
+  integracoes                Integracao[]
+  sincronizacoesIntegracao   SincronizacaoIntegracao[]
+  errosIntegracao            ErroIntegracao[]
+  produtosExternos           ProdutoExterno[]
+  estoquesExternos           EstoqueExterno[]
+  precosExternos             PrecoExterno[]
+  condicoesPagamentoExternas CondicaoPagamentoExterna[]
+  importacoesDados           ImportacaoDados[]
 }
 
 model Usuario {
-  id            Int          @id @default(autoincrement())
-  empresaId     Int
-  empresa       Empresa      @relation(fields: [empresaId], references: [id])
-  nome          String
-  email         String
-  senhaHash     String
-  papel         PapelUsuario @default(VENDEDOR)
-  ativo         Boolean      @default(true)
-  ultimoLoginEm DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                  Int               @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa           @relation(fields: [empresaId], references: [id])
+  nome                String
+  email               String
+  senhaHash           String
+  papel               PapelUsuario      @default(VENDEDOR)
+  ativo               Boolean           @default(true)
+  ultimoLoginEm       DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  importacoesCriadas  ImportacaoDados[]
 
   @@unique([empresaId, email])
   @@index([empresaId])
   @@index([email])
   @@index([ativo])
+}
+
+model Integracao {
+  id                        Int                       @id @default(autoincrement())
+  empresaId                 Int
+  empresa                   Empresa                   @relation(fields: [empresaId], references: [id])
+  nome                      String
+  tipo                      TipoIntegracao
+  status                    StatusIntegracao          @default(PENDENTE)
+  modo                      ModoIntegracao            @default(SOMENTE_LEITURA)
+  configuracaoJson          String                    @default("{}")
+  credenciaisCriptografadas String?
+  ultimaSincronizacaoEm     DateTime?
+  ultimoSucessoEm           DateTime?
+  ultimoErroEm              DateTime?
+  ativo                     Boolean                   @default(true)
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  sincronizacoes            SincronizacaoIntegracao[]
+  erros                     ErroIntegracao[]
+  produtosExternos          ProdutoExterno[]
+  estoquesExternos          EstoqueExterno[]
+  precosExternos            PrecoExterno[]
+  condicoesPagamento        CondicaoPagamentoExterna[]
+  importacoes               ImportacaoDados[]
+
+  @@index([empresaId])
+  @@index([empresaId, status])
+  @@index([empresaId, tipo])
+  @@index([ativo])
+}
+
+model SincronizacaoIntegracao {
+  id                Int                  @id @default(autoincrement())
+  integracaoId      Int
+  integracao        Integracao           @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  empresaId         Int
+  empresa           Empresa              @relation(fields: [empresaId], references: [id])
+  status            StatusSincronizacao  @default(PENDENTE)
+  origem            OrigemSincronizacao  @default(MANUAL)
+  iniciadaEm        DateTime             @default(now())
+  finalizadaEm      DateTime?
+  itensRecebidos    Int                  @default(0)
+  itensProcessados  Int                  @default(0)
+  itensComErro      Int                  @default(0)
+  mensagemErro      String?
+  metadadosJson     String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  erros             ErroIntegracao[]
+
+  @@index([empresaId])
+  @@index([integracaoId])
+  @@index([status])
+  @@index([origem])
+  @@index([iniciadaEm])
+}
+
+model ErroIntegracao {
+  id                   Int                      @id @default(autoincrement())
+  empresaId            Int
+  empresa              Empresa                  @relation(fields: [empresaId], references: [id])
+  integracaoId         Int
+  integracao           Integracao               @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  sincronizacaoId      Int?
+  sincronizacao        SincronizacaoIntegracao? @relation(fields: [sincronizacaoId], references: [id], onDelete: SetNull)
+  codigo               String
+  mensagem             String
+  detalhesSanitizados  String?
+  resolvido            Boolean                  @default(false)
+  createdAt            DateTime                 @default(now())
+  resolvedAt           DateTime?
+
+  @@index([empresaId])
+  @@index([integracaoId])
+  @@index([sincronizacaoId])
+  @@index([resolvido])
+  @@index([codigo])
+}
+
+model ProdutoExterno {
+  id                 Int               @id @default(autoincrement())
+  empresaId          Int
+  empresa            Empresa           @relation(fields: [empresaId], references: [id])
+  integracaoId       Int
+  integracao         Integracao        @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  externalId         String
+  sku                String?
+  codigoBarras       String?
+  nome               String
+  descricao          String?
+  categoria          String?
+  marca              String?
+  unidade            String?
+  ativo              Boolean           @default(true)
+  dadosOriginaisJson String?
+  sincronizadoEm     DateTime          @default(now())
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  estoques           EstoqueExterno[]
+  precos             PrecoExterno[]
+
+  @@unique([integracaoId, externalId])
+  @@index([empresaId])
+  @@index([integracaoId])
+  @@index([sku])
+  @@index([codigoBarras])
+  @@index([nome])
+  @@index([categoria])
+}
+
+model EstoqueExterno {
+  id               Int             @id @default(autoincrement())
+  empresaId        Int
+  empresa          Empresa         @relation(fields: [empresaId], references: [id])
+  integracaoId     Int
+  integracao       Integracao      @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  produtoExternoId Int
+  produtoExterno   ProdutoExterno  @relation(fields: [produtoExternoId], references: [id], onDelete: Cascade)
+  localExternalId  String?
+  localNome        String?
+  quantidade       Decimal         @default(0)
+  reservado        Decimal?
+  disponivel       Decimal         @default(0)
+  sincronizadoEm   DateTime        @default(now())
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([empresaId])
+  @@index([integracaoId])
+  @@index([produtoExternoId])
+  @@index([localExternalId])
+}
+
+model PrecoExterno {
+  id                        Int             @id @default(autoincrement())
+  empresaId                 Int
+  empresa                   Empresa         @relation(fields: [empresaId], references: [id])
+  integracaoId              Int
+  integracao                Integracao      @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  produtoExternoId          Int
+  produtoExterno            ProdutoExterno  @relation(fields: [produtoExternoId], references: [id], onDelete: Cascade)
+  tabela                    String?
+  precoCentavos             Int
+  precoPromocionalCentavos  Int?
+  inicioPromocao            DateTime?
+  fimPromocao               DateTime?
+  sincronizadoEm            DateTime        @default(now())
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+
+  @@index([empresaId])
+  @@index([integracaoId])
+  @@index([produtoExternoId])
+  @@index([tabela])
+}
+
+model CondicaoPagamentoExterna {
+  id                  Int             @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa         @relation(fields: [empresaId], references: [id])
+  integracaoId        Int
+  integracao          Integracao      @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  externalId          String
+  nome                String
+  parcelas            Int?
+  valorMinimoCentavos Int?
+  ativo               Boolean         @default(true)
+  sincronizadoEm      DateTime        @default(now())
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@unique([integracaoId, externalId])
+  @@index([empresaId])
+  @@index([integracaoId])
+  @@index([ativo])
+}
+
+model ImportacaoDados {
+  id                 Int                @id @default(autoincrement())
+  empresaId          Int
+  empresa            Empresa            @relation(fields: [empresaId], references: [id])
+  integracaoId       Int?
+  integracao         Integracao?        @relation(fields: [integracaoId], references: [id], onDelete: SetNull)
+  formato            FormatoImportacao
+  status             StatusImportacao   @default(ENVIADO)
+  nomeArquivo        String
+  tamanhoBytes       Int
+  hashArquivo        String
+  tipoEntidade       String
+  mapeamentoJson     String?
+  totalLinhas        Int                @default(0)
+  linhasValidas      Int                @default(0)
+  linhasComErro      Int                @default(0)
+  iniciadaEm         DateTime?
+  finalizadaEm       DateTime?
+  createdByUsuarioId Int
+  createdByUsuario   Usuario            @relation(fields: [createdByUsuarioId], references: [id])
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  erros              ErroImportacao[]
+
+  @@index([empresaId])
+  @@index([integracaoId])
+  @@index([createdByUsuarioId])
+  @@index([status])
+  @@index([formato])
+  @@index([hashArquivo])
+}
+
+model ErroImportacao {
+  id              Int             @id @default(autoincrement())
+  importacaoId    Int
+  importacao      ImportacaoDados @relation(fields: [importacaoId], references: [id], onDelete: Cascade)
+  linha           Int?
+  campo           String?
+  codigo          String
+  mensagem        String
+  valorSanitizado String?
+  createdAt       DateTime        @default(now())
+
+  @@index([importacaoId])
+  @@index([codigo])
 }
 
 enum TipoMovimentacaoEstoque {
@@ -169,4 +401,64 @@ enum PapelUsuario {
   ADMIN
   GERENTE
   VENDEDOR
+}
+
+enum TipoIntegracao {
+  BLING
+  OMIE
+  CONTA_AZUL
+  TINY
+  ALTERDATA
+  CSV
+  XLSX
+  XML
+  JSON
+  CUSTOM
+}
+
+enum StatusIntegracao {
+  PENDENTE
+  ATIVA
+  INATIVA
+  ERRO
+}
+
+enum ModoIntegracao {
+  SOMENTE_LEITURA
+  LEITURA_ESCRITA
+}
+
+enum StatusSincronizacao {
+  PENDENTE
+  EXECUTANDO
+  CONCLUIDA
+  CONCLUIDA_COM_ERROS
+  FALHOU
+  CANCELADA
+}
+
+enum OrigemSincronizacao {
+  MANUAL
+  AGENDADA
+  WEBHOOK
+  IMPORTACAO
+}
+
+enum FormatoImportacao {
+  CSV
+  XLSX
+  XML
+  JSON
+}
+
+enum StatusImportacao {
+  ENVIADO
+  MAPEAMENTO_PENDENTE
+  VALIDANDO
+  PRONTO
+  PROCESSANDO
+  CONCLUIDO
+  CONCLUIDO_COM_ERROS
+  FALHOU
+  CANCELADO
 }

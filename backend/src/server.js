@@ -4,6 +4,8 @@ const express = require("express");
 const cors = require("cors");
 const { Prisma, PrismaClient } = require("@prisma/client");
 const { createAuth } = require("./auth");
+const { mountIntegrationHubRoutes } = require("./integrations/routes");
+const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
 
 const prisma = new PrismaClient();
 
@@ -63,8 +65,10 @@ const auth = createAuth({
   },
 });
 const requireAuth = auth.authenticate;
+const requireRole = auth.requireRole;
 
 auth.mountRoutes(app);
+mountIntegrationHubRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 
 app.get("/dashboard", async (req, res) => {
   try {
@@ -2250,7 +2254,14 @@ function startServer(port = PORT) {
 }
 
 if (require.main === module) {
-  startServer();
+  Promise.resolve(assertIntegrationEncryptionReady({ prisma }))
+    .then(() => {
+      startServer();
+    })
+    .catch((error) => {
+      console.error(error.message || "Falha ao validar criptografia de integracoes.");
+      process.exit(1);
+    });
 }
 
 function getAllowedOrigins() {
