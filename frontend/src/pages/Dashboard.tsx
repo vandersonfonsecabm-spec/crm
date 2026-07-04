@@ -93,20 +93,16 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setSelectedId(clientId);
   }, []);
 
-  const pageTitle =
-    activePage === "dashboard"
-      ? "Visão Geral"
-      : activePage === "comercial"
-        ? "Central Comercial"
-        : activePage === "clientes"
-          ? "Carteira"
-          : activePage === "kanban"
-            ? "Funil Comercial"
-            : activePage === "agenda"
-              ? "Agenda"
-              : activePage === "estoque"
-                ? "Estoque"
-                : "Automações";
+  const pageTitle = ({
+    dashboard: "Vis?o Geral",
+    comercial: "Central Comercial",
+    clientes: "Carteira",
+    kanban: "Funil Comercial",
+    agenda: "Agenda",
+    estoque: "Estoque",
+    integracoes: "Integra??es e Dados",
+    automacoes: "Automa??es",
+  } satisfies Record<ActivePage, string>)[activePage];
 
   useEffect(() => {
     if (dataSource === "offline") {
