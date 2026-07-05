@@ -154,7 +154,7 @@ test("consulta comercial unificada usa dados importados e reporta qualidade", as
 
   const noStockSearch = await request("GET", "/hub/consulta-comercial?sku=SKU-OPER-003", undefined, adminA.token);
   assert.equal(noStockSearch.body.data[0].disponibilidade, "DESCONHECIDO");
-  assert.ok(noStockSearch.body.data[0].avisos.includes("Produto sem informacao de estoque."));
+  assert.ok(noStockSearch.body.data[0].avisos.includes("Produto sem informação de estoque."));
 
   const inactiveSearch = await request("GET", "/hub/consulta-comercial?sku=SKU-OPER-004", undefined, adminA.token);
   assert.equal(inactiveSearch.body.data[0].disponibilidade, "INDISPONIVEL");
@@ -168,7 +168,7 @@ test("consulta comercial unificada usa dados importados e reporta qualidade", as
 
   const noPrice = await request("GET", "/hub/consulta-comercial?sku=SKU-OPER-007", undefined, adminA.token);
   assert.equal(noPrice.body.data[0].precoAtualCentavos, null);
-  assert.ok(noPrice.body.data[0].avisos.includes("Produto sem informacao de preco."));
+  assert.ok(noPrice.body.data[0].avisos.includes("Produto sem informação de preço."));
 
   const nameSearch = await request("GET", "/hub/consulta-comercial?q=Operacional%20010", undefined, adminA.token);
   assert.equal(nameSearch.body.data.length, 1);

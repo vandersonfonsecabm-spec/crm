@@ -525,7 +525,7 @@ export default function DashboardIntegrationsPanel() {
                 <p className="mt-1 text-xs text-slate-500">Fluxo real: upload, mapeamento, validação e processamento.</p>
               </div>
               <button type="button" onClick={resetFlow} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">
-                <RotateCcw size={13} /> Nova importacao
+                <RotateCcw size={13} /> Nova importação
               </button>
             </div>
 
@@ -549,7 +549,7 @@ export default function DashboardIntegrationsPanel() {
                 <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-black/20 p-5 text-center transition hover:border-teal-200/25 hover:bg-teal-300/[0.04]">
                   <UploadCloud className="text-teal-100" size={24} />
                   <span className="mt-2 text-sm font-semibold text-slate-100">Selecionar CSV ou XLSX</span>
-                  <span className="mt-1 text-xs text-slate-500">Um arquivo por vez, ate 10 MB.</span>
+                  <span className="mt-1 text-xs text-slate-500">Um arquivo por vez, até 10 MB.</span>
                   <input className="mt-3 block w-full max-w-md cursor-pointer rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-300/15 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-teal-50 disabled:cursor-not-allowed disabled:opacity-50" type="file" accept=".csv,.xlsx" onChange={onFileChange} disabled={busy} />
                 </label>
                 {selectedFile && (
@@ -607,7 +607,7 @@ export default function DashboardIntegrationsPanel() {
 
             {mappingResult && ["validacao", "importacao", "resultado"].includes(step) && (
               <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <Metric title="Validas estimadas" value={mappingResult.linhasValidasEstimadas} icon={<CheckCircle2 size={14} />} />
+                <Metric title="Válidas estimadas" value={mappingResult.linhasValidasEstimadas} icon={<CheckCircle2 size={14} />} />
                 <Metric title="Inválidas estimadas" value={mappingResult.linhasInvalidasEstimadas} icon={<AlertTriangle size={14} />} />
                 <Metric title="Avisos" value={mappingResult.avisos.length} icon={<Filter size={14} />} />
               </div>
@@ -623,7 +623,7 @@ export default function DashboardIntegrationsPanel() {
               <div className="mt-4 space-y-3">
                 <div className="grid gap-3 md:grid-cols-4">
                   <Metric title="Total" value={validation.resumo.totalLinhas} icon={<Database size={14} />} />
-                  <Metric title="Validas" value={validation.resumo.linhasValidas} icon={<CheckCircle2 size={14} />} />
+                  <Metric title="Válidas" value={validation.resumo.linhasValidas} icon={<CheckCircle2 size={14} />} />
                   <Metric title="Inválidas" value={validation.resumo.linhasComErro} icon={<AlertTriangle size={14} />} />
                   <Metric title="Status" value={statusLabel(validation.importacao.status)} icon={<Filter size={14} />} />
                 </div>
@@ -751,7 +751,7 @@ function ImportsSection(props: {
 }) {
   return (
     <section className="premium-panel rounded-2xl p-4">
-      <h3 className="text-sm font-semibold text-slate-100">Importacoes recentes</h3>
+      <h3 className="text-sm font-semibold text-slate-100">Importações recentes</h3>
       <div className="mt-3 grid gap-2">
         <input value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="Buscar arquivo" className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-100" />
         <div className="grid gap-2 sm:grid-cols-2">
@@ -781,7 +781,7 @@ function ImportsSection(props: {
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-slate-400">
               <Info label="Total" value={item.totalLinhas} />
-              <Info label="Validas" value={item.linhasValidas} />
+              <Info label="Válidas" value={item.linhasValidas} />
               <Info label="Erros" value={item.linhasComErro} />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -861,7 +861,7 @@ function CatalogSection(props: {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300">
           <input type="checkbox" checked={props.filters.somenteDisponiveis} onChange={(event) => setFilter("somenteDisponiveis", event.target.checked)} />
-          Somente disponiveis
+          Somente disponíveis
         </label>
         <button type="button" onClick={props.onApply} className="premium-button inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold"><Filter size={13} /> Filtrar</button>
         <button type="button" onClick={props.onClear} className="premium-ghost rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">Limpar filtros</button>

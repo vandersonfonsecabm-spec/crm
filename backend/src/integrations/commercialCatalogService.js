@@ -180,8 +180,8 @@ function commercialProductResponse(produto) {
   const avisos = [];
 
   if (dadosDesatualizados) avisos.push("Os dados podem estar desatualizados.");
-  if (!estoques.length) avisos.push("Produto sem informacao de estoque.");
-  if (!precos.length) avisos.push("Produto sem informacao de preco.");
+  if (!estoques.length) avisos.push("Produto sem informação de estoque.");
+  if (!precos.length) avisos.push("Produto sem informação de preço.");
   if (!produto.ativo) avisos.push("Produto inativo na origem.");
 
   return {

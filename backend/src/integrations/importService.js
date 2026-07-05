@@ -253,7 +253,7 @@ async function mapImportacao({ prisma, importacao, body }) {
 async function validateImportacao({ prisma, importacao }) {
   if (!importacao.mapeamentoJson) throw httpError(400, "Mapeamento ausente.", "IMPORT_MAPPING_REQUIRED");
   if (!["VALIDANDO", "PRONTO", "FALHOU"].includes(importacao.status)) {
-    throw httpError(409, "Importacao nao esta pronta para validacao.", "IMPORT_INVALID_STATUS");
+    throw httpError(409, "Importação não está pronta para validação.", "IMPORT_INVALID_STATUS");
   }
   const cache = await loadImportCache(importacao.id);
   const config = JSON.parse(importacao.mapeamentoJson);
@@ -285,9 +285,9 @@ async function validateImportacao({ prisma, importacao }) {
 }
 
 async function processImportacao({ prisma, importacao, empresaId, usuarioId, body }) {
-  if (importacao.status !== "PRONTO") throw httpError(409, "Importacao precisa estar validada antes do processamento.", "IMPORT_INVALID_STATUS");
+  if (importacao.status !== "PRONTO") throw httpError(409, "Importação precisa estar validada antes do processamento.", "IMPORT_INVALID_STATUS");
   if (!body || body.importarLinhasValidas !== true) {
-    throw httpError(400, "Confirme a importacao das linhas validas.", "IMPORT_CONFIRMATION_REQUIRED");
+    throw httpError(400, "Confirme a importação das linhas válidas.", "IMPORT_CONFIRMATION_REQUIRED");
   }
   const estrategia = clean(body.estrategiaAtualizacao || "CRIAR_E_ATUALIZAR").toUpperCase();
   if (!UPDATE_STRATEGIES.has(estrategia)) throw httpError(400, "Estrategia de atualizacao invalida.", "VALIDATION_ERROR");
@@ -401,8 +401,8 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
 }
 
 async function cancelImportacao({ prisma, importacao }) {
-  if (FINAL_IMPORT_STATUSES.has(importacao.status)) throw httpError(409, "Importacao concluida nao pode ser cancelada.", "IMPORT_INVALID_STATUS");
-  if (importacao.status === "PROCESSANDO") throw httpError(409, "Importacao em processamento nao pode ser cancelada.", "IMPORT_INVALID_STATUS");
+  if (FINAL_IMPORT_STATUSES.has(importacao.status)) throw httpError(409, "Importação concluída não pode ser cancelada.", "IMPORT_INVALID_STATUS");
+  if (importacao.status === "PROCESSANDO") throw httpError(409, "Importação em processamento não pode ser cancelada.", "IMPORT_INVALID_STATUS");
   const updated = await prisma.importacaoDados.update({
     where: { id: importacao.id },
     data: { status: "CANCELADO", finalizadaEm: new Date() },
@@ -617,7 +617,7 @@ async function upsertPrice({ tx, empresaId, integracaoId, produtoExternoId, row,
 }
 
 async function findOrCreateManualIntegration({ prisma, empresaId, formato }) {
-  const nome = `Importacao manual ${formato}`;
+  const nome = `Importação manual ${formato}`;
   const existing = await prisma.integracao.findFirst({ where: { empresaId, tipo: formato, nome } });
   if (existing) return existing;
   return prisma.integracao.create({
@@ -810,7 +810,7 @@ function positiveInt(value, fallback) {
 
 function assertImportEditable(importacao) {
   if (["PROCESSANDO", "CONCLUIDO", "CONCLUIDO_COM_ERROS", "CANCELADO"].includes(importacao.status)) {
-    throw httpError(409, "Importacao nao pode ser alterada neste status.", "IMPORT_INVALID_STATUS");
+    throw httpError(409, "Importação não pode ser alterada neste status.", "IMPORT_INVALID_STATUS");
   }
 }
 
