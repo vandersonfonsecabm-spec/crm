@@ -79,7 +79,7 @@ async function tokenRequest(params) {
   }, config.timeoutMs);
   const data = await safeJson(response);
   if (!response.ok) {
-    throw blingError("BLING_TOKEN_ERROR", sanitizeBlingError(data, "Não foi possivel autenticar no Bling."), response.status);
+    throw blingError("BLING_TOKEN_ERROR", sanitizeBlingError(data, "Não foi possível autenticar no Bling."), response.status);
   }
   return normalizeTokenResponse(data);
 }
@@ -150,7 +150,7 @@ class BlingHttpClient {
 
   async ensureFreshToken() {
     if (!this.credentials?.accessToken || !this.credentials?.refreshToken) {
-      throw blingError("BLING_CREDENTIALS_REQUIRED", "Integracao Bling sem credenciais validas.");
+      throw blingError("BLING_CREDENTIALS_REQUIRED", "Integração Bling sem credenciais válidas.");
     }
     const expiresAt = new Date(this.credentials.expiresAt || 0).getTime();
     if (!Number.isFinite(expiresAt) || expiresAt - Date.now() > 60_000) return;
