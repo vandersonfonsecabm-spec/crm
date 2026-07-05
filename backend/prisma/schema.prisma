@@ -125,6 +125,10 @@ model Empresa {
   condicoesPagamentoExternas CondicaoPagamentoExterna[]
   importacoesDados           ImportacaoDados[]
   oauthStatesIntegracao      IntegracaoOAuthState[]
+  canaisIntegracao           CanalIntegracao[]
+  contatosCanal              ContatoCanal[]
+  conversasCanal             ConversaCanal[]
+  mensagensCanal             MensagemCanal[]
 }
 
 model Usuario {
@@ -387,6 +391,125 @@ model ErroImportacao {
 
   @@index([importacaoId])
   @@index([codigo])
+}
+
+model CanalIntegracao {
+  id             Int              @id @default(autoincrement())
+  empresaId      Int
+  empresa        Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipo           TipoCanal
+  nome           String
+  chaveInterna   String
+  status         StatusCanal      @default(MODO_TESTE)
+  modoTeste      Boolean          @default(true)
+  ativo          Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  contatos       ContatoCanal[]
+  conversas      ConversaCanal[]
+  mensagens      MensagemCanal[]
+
+  @@unique([empresaId, chaveInterna])
+  @@index([empresaId])
+  @@index([empresaId, tipo])
+  @@index([empresaId, ativo])
+}
+
+model ContatoCanal {
+  id                 Int              @id @default(autoincrement())
+  empresaId          Int
+  empresa            Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  canalIntegracaoId  Int
+  canalIntegracao    CanalIntegracao  @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  externalId         String
+  telefoneNormalizado String?
+  nome               String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  conversas          ConversaCanal[]
+
+  @@unique([canalIntegracaoId, externalId])
+  @@index([empresaId])
+  @@index([canalIntegracaoId])
+  @@index([empresaId, telefoneNormalizado])
+}
+
+model ConversaCanal {
+  id                 Int              @id @default(autoincrement())
+  empresaId          Int
+  empresa            Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  canalIntegracaoId  Int
+  canalIntegracao    CanalIntegracao  @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  contatoCanalId     Int
+  contatoCanal       ContatoCanal     @relation(fields: [contatoCanalId], references: [id], onDelete: Cascade)
+  status             StatusConversa   @default(ABERTA)
+  chaveAberta        String?          @unique
+  ultimaMensagemEm   DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  mensagens          MensagemCanal[]
+
+  @@index([empresaId])
+  @@index([canalIntegracaoId])
+  @@index([contatoCanalId])
+  @@index([status])
+  @@index([ultimaMensagemEm])
+}
+
+model MensagemCanal {
+  id                 Int                 @id @default(autoincrement())
+  empresaId          Int
+  empresa            Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  canalIntegracaoId  Int
+  canalIntegracao    CanalIntegracao     @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  conversaCanalId    Int
+  conversaCanal      ConversaCanal       @relation(fields: [conversaCanalId], references: [id], onDelete: Cascade)
+  externalId         String
+  direcao            DirecaoMensagem
+  tipo               TipoMensagemCanal   @default(TEXTO)
+  texto              String?
+  status             StatusMensagem      @default(RECEBIDA)
+  simulada           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([canalIntegracaoId, externalId])
+  @@index([empresaId])
+  @@index([canalIntegracaoId])
+  @@index([conversaCanalId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum TipoCanal {
+  WHATSAPP_META
+}
+
+enum StatusCanal {
+  MODO_TESTE
+  INATIVO
+}
+
+enum DirecaoMensagem {
+  ENTRADA
+  SAIDA
+}
+
+enum StatusConversa {
+  ABERTA
+  ENCERRADA
+}
+
+enum StatusMensagem {
+  RECEBIDA
+  PROCESSADA
+  PREPARADA
+  ERRO
+}
+
+enum TipoMensagemCanal {
+  TEXTO
+  DESCONHECIDA
 }
 
 enum TipoMovimentacaoEstoque {

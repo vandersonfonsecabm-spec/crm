@@ -5,6 +5,7 @@ const cors = require("cors");
 const { Prisma, PrismaClient } = require("@prisma/client");
 const { createAuth } = require("./auth");
 const { mountIntegrationHubRoutes } = require("./integrations/routes");
+const { mountChannelRoutes } = require("./channels/channelRoutes");
 const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
 
 const prisma = new PrismaClient();
@@ -69,6 +70,7 @@ const requireRole = auth.requireRole;
 
 auth.mountRoutes(app);
 mountIntegrationHubRoutes({ app, prisma, authenticate: requireAuth, requireRole });
+mountChannelRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 
 app.get("/dashboard", async (req, res) => {
   try {
