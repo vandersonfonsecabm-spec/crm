@@ -124,6 +124,7 @@ model Empresa {
   precosExternos             PrecoExterno[]
   condicoesPagamentoExternas CondicaoPagamentoExterna[]
   importacoesDados           ImportacaoDados[]
+  oauthStatesIntegracao      IntegracaoOAuthState[]
 }
 
 model Usuario {
@@ -139,11 +140,30 @@ model Usuario {
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
   importacoesCriadas  ImportacaoDados[]
+  oauthStatesIntegracao IntegracaoOAuthState[]
 
   @@unique([empresaId, email])
   @@index([empresaId])
   @@index([email])
   @@index([ativo])
+}
+
+model IntegracaoOAuthState {
+  id         Int       @id @default(autoincrement())
+  empresaId  Int
+  empresa    Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarioId  Int
+  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  provedor   String
+  stateHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([empresaId])
+  @@index([usuarioId])
+  @@index([provedor])
+  @@index([expiresAt])
 }
 
 model Integracao {

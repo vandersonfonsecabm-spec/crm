@@ -6,6 +6,8 @@ import {
   Filter,
   Loader2,
   PackageSearch,
+  PlugZap,
+  Power,
   RefreshCw,
   RotateCcw,
   Search,
@@ -17,16 +19,23 @@ import type { ChangeEvent, ReactNode } from "react";
 import {
   cancelarImportacao,
   consultarCatalogoComercial,
+  desconectarBling,
   fetchErrosImportacao,
   fetchImportacao,
   fetchImportacoes,
+  fetchIntegracoes,
   fetchQualidadeDados,
+  iniciarConexaoBling,
   mapearImportacao,
   processarImportacao,
+  sincronizarIntegracao,
+  testarConexaoBling,
   uploadImportacao,
   validarImportacao,
+  type HubBlingSyncResponse,
   type HubCanonicalField,
   type HubErroImportacao,
+  type HubIntegracao,
   type HubImportacaoDados,
   type HubImportacaoMapeamentoResponse,
   type HubImportacaoProcessamentoResponse,
@@ -47,25 +56,25 @@ const IGNORE_FIELD = "__ignore__";
 const IMPORT_DRAFT_PREFIX = "crm-hub-import-draft:";
 
 const CANONICAL_FIELDS: Array<{ value: HubCanonicalField; label: string }> = [
-  { value: "externalId", label: "Codigo externo" },
+  { value: "externalId", label: "Código externo" },
   { value: "sku", label: "SKU" },
-  { value: "codigoBarras", label: "Codigo de barras" },
+  { value: "codigoBarras", label: "Código de barras" },
   { value: "nome", label: "Nome" },
-  { value: "descricao", label: "Descricao" },
+  { value: "descricao", label: "Descrição" },
   { value: "categoria", label: "Categoria" },
   { value: "marca", label: "Marca" },
   { value: "unidade", label: "Unidade" },
   { value: "ativo", label: "Ativo" },
   { value: "quantidade", label: "Quantidade" },
   { value: "reservado", label: "Reservado" },
-  { value: "disponivel", label: "Disponivel" },
+  { value: "disponivel", label: "Disponível" },
   { value: "localExternalId", label: "Codigo do local" },
   { value: "localNome", label: "Nome do local" },
-  { value: "precoCentavos", label: "Preco" },
-  { value: "precoPromocionalCentavos", label: "Preco promocional" },
-  { value: "tabelaPreco", label: "Tabela de preco" },
-  { value: "inicioPromocao", label: "Inicio da promocao" },
-  { value: "fimPromocao", label: "Fim da promocao" },
+  { value: "precoCentavos", label: "Preço" },
+  { value: "precoPromocionalCentavos", label: "Preço promocional" },
+  { value: "tabelaPreco", label: "Tabela de preço" },
+  { value: "inicioPromocao", label: "Início da promoção" },
+  { value: "fimPromocao", label: "Fim da promoção" },
 ];
 
 const STATUS_OPTIONS = ["Todos", "MAPEAMENTO_PENDENTE", "VALIDANDO", "PRONTO", "PROCESSANDO", "CONCLUIDO", "CONCLUIDO_COM_ERROS", "FALHOU", "CANCELADO"];
@@ -115,6 +124,10 @@ export default function DashboardIntegrationsPanel() {
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogFilters, setCatalogFilters] = useState({ q: "", sku: "", codigoBarras: "", categoria: "", marca: "", local: "", somenteDisponiveis: false });
   const [quality, setQuality] = useState<HubQualidadeDados | null>(null);
+  const [blingIntegrations, setBlingIntegrations] = useState<HubIntegracao[]>([]);
+  const [blingBusy, setBlingBusy] = useState<"connect" | "test" | "sync" | "disconnect" | null>(null);
+  const [blingMessage, setBlingMessage] = useState("");
+  const [lastBlingSync, setLastBlingSync] = useState<HubBlingSyncResponse | null>(null);
 
   const importPages = Math.max(1, Math.ceil(importsTotal / IMPORT_LIMIT));
   const catalogPages = Math.max(1, Math.ceil(catalogTotal / CATALOG_LIMIT));
@@ -143,21 +156,23 @@ export default function DashboardIntegrationsPanel() {
 
   async function loadAll() {
     try {
-      const [importList, catalogList, qualityData] = await Promise.all([
+      const [importList, catalogList, qualityData, blingList] = await Promise.all([
         fetchImportacoes({ page: importsPage, limit: IMPORT_LIMIT }),
         consultarCatalogoComercial({ ...catalogFilters, pagina: catalogPage, limite: CATALOG_LIMIT }),
         fetchQualidadeDados(),
+        fetchIntegracoes({ tipo: "BLING", limit: 10 }),
       ]);
       setImports(importList.data);
       setImportsTotal(importList.pagination.total);
       setCatalog(catalogList.data);
       setCatalogTotal(catalogList.pagination.total);
       setQuality(qualityData);
+      setBlingIntegrations(blingList.data);
       setState("success");
       setMessage("");
     } catch (error) {
       setState("error");
-      setMessage(errorText(error, "Nao foi possivel carregar as integracoes."));
+      setMessage(errorText(error, "Não foi possível carregar as integrações."));
     }
   }
 
@@ -183,7 +198,7 @@ export default function DashboardIntegrationsPanel() {
     if (!file) return;
     const extension = file.name.split(".").pop()?.toLowerCase();
     if (!extension || !["csv", "xlsx"].includes(extension)) {
-      setFileError("Formato nao permitido. Use CSV ou XLSX.");
+      setFileError("Formato não permitido. Use CSV ou XLSX.");
       event.target.value = "";
       return;
     }
@@ -221,7 +236,7 @@ export default function DashboardIntegrationsPanel() {
       setToast("Arquivo enviado. Continue com o mapeamento.");
       await reloadImports();
     } catch (error) {
-      setFileError(errorText(error, "Nao foi possivel enviar o arquivo."));
+      setFileError(errorText(error, "Não foi possível enviar o arquivo."));
     } finally {
       setBusy(false);
     }
@@ -235,7 +250,7 @@ export default function DashboardIntegrationsPanel() {
       return;
     }
     if (!fieldMapping.externalId && !fieldMapping.sku && !fieldMapping.codigoBarras) {
-      setMessage("Mapeie Codigo externo, SKU ou Codigo de barras.");
+      setMessage("Mapeie Código externo, SKU ou Código de barras.");
       return;
     }
     setBusy(true);
@@ -252,7 +267,7 @@ export default function DashboardIntegrationsPanel() {
       setToast("Mapeamento salvo.");
       await reloadImports();
     } catch (error) {
-      setMessage(errorText(error, "Nao foi possivel salvar o mapeamento."));
+      setMessage(errorText(error, "Não foi possível salvar o mapeamento."));
     } finally {
       setBusy(false);
     }
@@ -271,7 +286,7 @@ export default function DashboardIntegrationsPanel() {
       await reloadImports();
       setToast("Arquivo validado.");
     } catch (error) {
-      setMessage(errorText(error, "Nao foi possivel validar o arquivo."));
+      setMessage(errorText(error, "Não foi possível validar o arquivo."));
     } finally {
       setBusy(false);
     }
@@ -281,7 +296,7 @@ export default function DashboardIntegrationsPanel() {
     const id = importId();
     if (!id || !validation) return;
     if (invalidLines > 0 && !confirmPartial) {
-      setMessage("Confirme a importacao somente das linhas validas.");
+      setMessage("Confirme a importação somente das linhas válidas.");
       return;
     }
     setBusy(true);
@@ -290,10 +305,10 @@ export default function DashboardIntegrationsPanel() {
       const result = await processarImportacao(id, { importarLinhasValidas: true, estrategiaAtualizacao: strategy });
       setProcessResult(result);
       setStep("resultado");
-      setToast(result.importacao.status === "CONCLUIDO" ? "Importacao concluida com sucesso." : "Importacao concluida com erros.");
+      setToast(result.importacao.status === "CONCLUIDO" ? "Importação concluída com sucesso." : "Importação concluída com erros.");
       await Promise.all([reloadImports(), reloadCatalog(), reloadQuality()]);
     } catch (error) {
-      setMessage(errorText(error, "Nao foi possivel processar a importacao."));
+      setMessage(errorText(error, "Não foi possível processar a importação."));
     } finally {
       setBusy(false);
     }
@@ -311,7 +326,7 @@ export default function DashboardIntegrationsPanel() {
       setSelectedImport(detail);
       await loadErrors(id, 1);
     } catch (error) {
-      setMessage(errorText(error, "Nao foi possivel abrir a importacao."));
+      setMessage(errorText(error, "Não foi possível abrir a importação."));
     } finally {
       setBusy(false);
     }
@@ -329,7 +344,7 @@ export default function DashboardIntegrationsPanel() {
         const draft = loadImportDraft(detail.id);
         if (!draft) {
           setSelectedImport(detail);
-          setMessage("Esta importacao esta aguardando mapeamento, mas as colunas do arquivo nao estao mais carregadas neste navegador. Reenvie o mesmo arquivo para continuar com seguranca.");
+          setMessage("Esta importação está aguardando mapeamento, mas as colunas do arquivo não estão mais carregadas neste navegador. Reenvie o mesmo arquivo para continuar com segurança.");
           return;
         }
         const resumedUpload = { ...draft, importacao: detail, status: detail.status };
@@ -348,7 +363,7 @@ export default function DashboardIntegrationsPanel() {
         setMappingResult(mappingResultFromImport(detail));
         setValidation(null);
         setStep("validacao");
-        setToast("Importacao pronta para validar.");
+        setToast("Importação pronta para validar.");
         return;
       }
 
@@ -357,14 +372,14 @@ export default function DashboardIntegrationsPanel() {
         setValidation(validationFromImport(detail));
         await loadErrors(detail.id, 1);
         setStep("importacao");
-        setToast("Importacao pronta para importar linhas validas.");
+        setToast("Importação pronta para importar linhas válidas.");
         return;
       }
 
       setSelectedImport(detail);
       await loadErrors(id, 1);
     } catch (error) {
-      setMessage(errorText(error, "Nao foi possivel retomar a importacao."));
+      setMessage(errorText(error, "Não foi possível retomar a importação."));
     } finally {
       setBusy(false);
     }
@@ -374,10 +389,10 @@ export default function DashboardIntegrationsPanel() {
     setBusy(true);
     try {
       await cancelarImportacao(id);
-      setToast("Importacao cancelada.");
+      setToast("Importação cancelada.");
       await reloadImports();
     } catch (error) {
-      setMessage(errorText(error, "Nao foi possivel cancelar a importacao."));
+      setMessage(errorText(error, "Não foi possível cancelar a importação."));
     } finally {
       setBusy(false);
     }
@@ -407,6 +422,62 @@ export default function DashboardIntegrationsPanel() {
     void reloadCatalog(1);
   }
 
+  async function connectBling() {
+    setBlingBusy("connect");
+    setBlingMessage("");
+    try {
+      const result = await iniciarConexaoBling();
+      window.location.href = result.authorizationUrl;
+    } catch (error) {
+      setBlingMessage(errorText(error, "Não foi possível iniciar a conexão com o Bling."));
+    } finally {
+      setBlingBusy(null);
+    }
+  }
+
+  async function testBling(integrationId: number) {
+    setBlingBusy("test");
+    setBlingMessage("");
+    try {
+      const result = await testarConexaoBling(integrationId);
+      setBlingMessage(result.conectado ? "Conexão Bling validada." : "Não foi possível validar a conexão Bling.");
+      await loadAll();
+    } catch (error) {
+      setBlingMessage(errorText(error, "Não foi possível testar a conexão Bling."));
+    } finally {
+      setBlingBusy(null);
+    }
+  }
+
+  async function syncBling(integrationId: number) {
+    setBlingBusy("sync");
+    setBlingMessage("");
+    try {
+      const result = await sincronizarIntegracao(integrationId, ["PRODUTOS", "ESTOQUE", "PRECOS", "CONDICOES_PAGAMENTO"]);
+      setLastBlingSync(result);
+      setBlingMessage(result.sincronizacao.status === "CONCLUIDA" ? "Sincronização Bling concluída." : "Sincronização Bling finalizada com atenção.");
+      await Promise.all([loadAll(), reloadCatalog(), reloadQuality()]);
+    } catch (error) {
+      setBlingMessage(errorText(error, "Não foi possível sincronizar o Bling."));
+    } finally {
+      setBlingBusy(null);
+    }
+  }
+
+  async function disconnectBling(integrationId: number) {
+    setBlingBusy("disconnect");
+    setBlingMessage("");
+    try {
+      await desconectarBling(integrationId);
+      setBlingMessage("Bling desconectado.");
+      await loadAll();
+    } catch (error) {
+      setBlingMessage(errorText(error, "Não foi possível desconectar o Bling."));
+    } finally {
+      setBlingBusy(null);
+    }
+  }
+
   return (
     <div className="space-y-4 overflow-x-hidden">
       {toast && <div className="fixed right-5 top-5 z-50 rounded-2xl border border-emerald-300/20 bg-slate-950/95 px-4 py-3 text-sm font-semibold text-emerald-100 shadow-2xl">{toast}</div>}
@@ -424,7 +495,7 @@ export default function DashboardIntegrationsPanel() {
             <RefreshCw size={14} /> Atualizar
           </button>
         </div>
-        {state === "error" && <Alert tone="error">{message || "Nao foi possivel carregar as integracoes."}</Alert>}
+        {state === "error" && <Alert tone="error">{message || "Não foi possível carregar as integrações."}</Alert>}
       </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -434,13 +505,24 @@ export default function DashboardIntegrationsPanel() {
         <Metric title="Dados desatualizados" value={quality?.produtosComDadosDesatualizados ?? 0} icon={<AlertTriangle size={15} />} />
       </section>
 
+      <BlingSection
+        integrations={blingIntegrations}
+        busy={blingBusy}
+        message={blingMessage}
+        lastSync={lastBlingSync}
+        onConnect={() => void connectBling()}
+        onTest={(id) => void testBling(id)}
+        onSync={(id) => void syncBling(id)}
+        onDisconnect={(id) => void disconnectBling(id)}
+      />
+
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
           <section className="premium-panel rounded-2xl p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-slate-100">Importar arquivo</h3>
-                <p className="mt-1 text-xs text-slate-500">Fluxo real: upload, mapeamento, validacao e processamento.</p>
+                <p className="mt-1 text-xs text-slate-500">Fluxo real: upload, mapeamento, validação e processamento.</p>
               </div>
               <button type="button" onClick={resetFlow} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">
                 <RotateCcw size={13} /> Nova importacao
@@ -510,8 +592,8 @@ export default function DashboardIntegrationsPanel() {
                   ))}
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <SelectBox label="Preco" value={priceMode} options={MONEY_MODES} onChange={setPriceMode} />
-                  <SelectBox label="Preco promocional" value={promoMode} options={MONEY_MODES} onChange={setPromoMode} />
+                  <SelectBox label="Preço" value={priceMode} options={MONEY_MODES} onChange={setPriceMode} />
+                  <SelectBox label="Preço promocional" value={promoMode} options={MONEY_MODES} onChange={setPromoMode} />
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3 text-xs text-slate-400">
                   <span className="font-semibold text-slate-100">Chave principal: </span>
@@ -526,7 +608,7 @@ export default function DashboardIntegrationsPanel() {
             {mappingResult && ["validacao", "importacao", "resultado"].includes(step) && (
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <Metric title="Validas estimadas" value={mappingResult.linhasValidasEstimadas} icon={<CheckCircle2 size={14} />} />
-                <Metric title="Invalidas estimadas" value={mappingResult.linhasInvalidasEstimadas} icon={<AlertTriangle size={14} />} />
+                <Metric title="Inválidas estimadas" value={mappingResult.linhasInvalidasEstimadas} icon={<AlertTriangle size={14} />} />
                 <Metric title="Avisos" value={mappingResult.avisos.length} icon={<Filter size={14} />} />
               </div>
             )}
@@ -542,7 +624,7 @@ export default function DashboardIntegrationsPanel() {
                 <div className="grid gap-3 md:grid-cols-4">
                   <Metric title="Total" value={validation.resumo.totalLinhas} icon={<Database size={14} />} />
                   <Metric title="Validas" value={validation.resumo.linhasValidas} icon={<CheckCircle2 size={14} />} />
-                  <Metric title="Invalidas" value={validation.resumo.linhasComErro} icon={<AlertTriangle size={14} />} />
+                  <Metric title="Inválidas" value={validation.resumo.linhasComErro} icon={<AlertTriangle size={14} />} />
                   <Metric title="Status" value={statusLabel(validation.importacao.status)} icon={<Filter size={14} />} />
                 </div>
                 <ErrorsTable errors={errors} onPage={(page) => importId() && void loadErrors(importId() as number, page)} />
@@ -555,11 +637,11 @@ export default function DashboardIntegrationsPanel() {
                 {invalidLines > 0 && (
                   <label className="flex items-center gap-2 text-xs font-semibold text-slate-300">
                     <input type="checkbox" checked={confirmPartial} onChange={(event) => setConfirmPartial(event.target.checked)} />
-                    Importar somente as linhas validas
+                    Importar somente as linhas válidas
                   </label>
                 )}
                 <button type="button" onClick={() => void processImport()} disabled={busy || !validation || validation.resumo.linhasValidas === 0} className="premium-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50">
-                  {busy ? <Loader2 className="animate-spin" size={14} /> : <UploadCloud size={14} />} Importar linhas validas
+                  {busy ? <Loader2 className="animate-spin" size={14} /> : <UploadCloud size={14} />} Importar linhas válidas
                 </button>
               </div>
             )}
@@ -632,7 +714,7 @@ function ProcessResult({ result }: { result: HubImportacaoProcessamentoResponse 
   return (
     <div className="mt-4 space-y-3 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-3">
       <p className="text-sm font-semibold text-emerald-100">
-        {result.importacao.status === "CONCLUIDO" ? "Importacao concluida com sucesso." : "Importacao concluida com erros."}
+        {result.importacao.status === "CONCLUIDO" ? "Importação concluída com sucesso." : "Importação concluída com erros."}
       </p>
       <div className="grid gap-2 md:grid-cols-3">
         <Info label="Produtos criados" value={result.resultado.criados} />
@@ -640,7 +722,7 @@ function ProcessResult({ result }: { result: HubImportacaoProcessamentoResponse 
         <Info label="Ignorados" value={result.resultado.ignorados} />
         <Info label="Estoques criados" value={result.resultado.estoquesCriados} />
         <Info label="Estoques atualizados" value={result.resultado.estoquesAtualizados} />
-        <Info label="Precos atualizados" value={result.resultado.precosAtualizados} />
+        <Info label="Preços atualizados" value={result.resultado.precosAtualizados} />
       </div>
     </div>
   );
@@ -682,7 +764,7 @@ function ImportsSection(props: {
         </div>
       </div>
       <div className="mt-3 space-y-2">
-        {props.imports.length === 0 && <EmptyState title="Nenhuma importacao encontrada" text="As importacoes enviadas pelo ADMIN aparecerao aqui." />}
+        {props.imports.length === 0 && <EmptyState title="Nenhuma importação encontrada" text="As importações enviadas pelo ADMIN aparecerão aqui." />}
         {props.imports.map((item) => (
           <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
             {importPrimaryAction(item.status) && (
@@ -722,15 +804,15 @@ function ImportsSection(props: {
           <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-4 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h4 className="truncate text-sm font-semibold text-slate-100">Importacao #{props.selectedImport.id}</h4>
+                <h4 className="truncate text-sm font-semibold text-slate-100">Importação #{props.selectedImport.id}</h4>
                 <p className="mt-1 text-xs text-slate-500">{props.selectedImport.nomeArquivo}</p>
               </div>
               <button type="button" onClick={props.onClose} className="premium-ghost rounded-xl p-2"><X size={15} /></button>
             </div>
             <div className="mt-4 grid gap-2 md:grid-cols-3">
               <Info label="Status" value={statusLabel(props.selectedImport.status)} />
-              <Info label="Usuario" value={props.selectedImport.usuario?.nome ?? "-"} />
-              <Info label="Integracao" value={props.selectedImport.integracao?.nome ?? "-"} />
+              <Info label="Usuário" value={props.selectedImport.usuario?.nome ?? "-"} />
+              <Info label="Integração" value={props.selectedImport.integracao?.nome ?? "-"} />
               <Info label="Criada em" value={formatDate(props.selectedImport.createdAt)} />
               <Info label="Finalizada em" value={formatDate(props.selectedImport.finalizadaEm)} />
               <Info label="Hash" value={props.selectedImport.hashArquivo ?? "-"} />
@@ -769,9 +851,9 @@ function CatalogSection(props: {
         <span className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-400">{props.total} produtos</span>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-        <Input icon={<Search size={13} />} value={props.filters.q} placeholder="Nome, SKU, codigo ou marca" onChange={(value) => setFilter("q", value)} />
+        <Input icon={<Search size={13} />} value={props.filters.q} placeholder="Nome, SKU, código ou marca" onChange={(value) => setFilter("q", value)} />
         <Input value={props.filters.sku} placeholder="SKU" onChange={(value) => setFilter("sku", value)} />
-        <Input value={props.filters.codigoBarras} placeholder="Codigo de barras" onChange={(value) => setFilter("codigoBarras", value)} />
+        <Input value={props.filters.codigoBarras} placeholder="Código de barras" onChange={(value) => setFilter("codigoBarras", value)} />
         <Input value={props.filters.categoria} placeholder="Categoria" onChange={(value) => setFilter("categoria", value)} />
         <Input value={props.filters.marca} placeholder="Marca" onChange={(value) => setFilter("marca", value)} />
         <Input value={props.filters.local} placeholder="Local" onChange={(value) => setFilter("local", value)} />
@@ -786,20 +868,20 @@ function CatalogSection(props: {
       </div>
       <div className="mt-4 space-y-2">
         {props.loading && <div className="h-28 animate-pulse rounded-2xl border border-white/10 bg-white/[0.035]" />}
-        {!props.loading && props.products.length === 0 && <EmptyState title="Nenhum produto importado" text="Produtos externos importados por CSV ou XLSX aparecerao aqui." />}
+        {!props.loading && props.products.length === 0 && <EmptyState title="Nenhum produto importado" text="Produtos externos importados por CSV ou XLSX aparecerão aqui." />}
         {props.products.map((product) => (
           <div key={product.idCanonico} className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-100">{product.nome}</p>
-                <p className="mt-1 text-xs text-slate-500">{product.sku || "Sem SKU"} · {product.codigoBarras || "Sem codigo"} · {product.categoria || "Sem categoria"}</p>
+                <p className="mt-1 text-xs text-slate-500">{product.sku || "Sem SKU"} · {product.codigoBarras || "Sem código"} · {product.categoria || "Sem categoria"}</p>
               </div>
               <StatusBadge status={availabilityLabel(product.disponibilidade)} />
             </div>
             <div className="mt-3 grid gap-2 text-xs md:grid-cols-4">
-              <Info label="Disponivel" value={`${formatQuantity(product.quantidadeDisponivelTotal)} ${product.unidade ?? ""}`.trim()} />
-              <Info label="Preco atual" value={formatCurrency(product.precoAtualCentavos)} />
-              <Info label="Promocao" value={product.emPromocao ? "Vigente" : "Nao"} />
+              <Info label="Disponível" value={`${formatQuantity(product.quantidadeDisponivelTotal)} ${product.unidade ?? ""}`.trim()} />
+              <Info label="Preço atual" value={formatCurrency(product.precoAtualCentavos)} />
+              <Info label="Promoção" value={product.emPromocao ? "Vigente" : "Não"} />
               <Info label="Origem" value={product.origem.integracaoNome ?? "-"} />
             </div>
             {product.avisos.length > 0 && <p className="mt-2 text-[11px] text-amber-200">{product.avisos.join(" · ")}</p>}
@@ -807,6 +889,87 @@ function CatalogSection(props: {
         ))}
       </div>
       <Pagination page={props.page} totalPages={props.totalPages} total={props.total} onPage={props.onPage} />
+    </section>
+  );
+}
+
+function BlingSection({
+  integrations,
+  busy,
+  message,
+  lastSync,
+  onConnect,
+  onTest,
+  onSync,
+  onDisconnect,
+}: {
+  integrations: HubIntegracao[];
+  busy: "connect" | "test" | "sync" | "disconnect" | null;
+  message: string;
+  lastSync: HubBlingSyncResponse | null;
+  onConnect: () => void;
+  onTest: (id: number) => void;
+  onSync: (id: number) => void;
+  onDisconnect: (id: number) => void;
+}) {
+  const active = integrations.find((item) => item.tipo === "BLING" && item.ativo && item.status === "ATIVA");
+  const latest = active ?? integrations.find((item) => item.tipo === "BLING");
+  const statusLabel = active ? "Conectado" : latest ? "Desconectado" : "Não conectado";
+
+  return (
+    <section className="premium-panel rounded-2xl p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-100">Conectar Bling</h3>
+            <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
+              Somente leitura
+            </span>
+            <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
+              {statusLabel}
+            </span>
+          </div>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
+            Sincronize produtos, estoque, preços e formas de pagamento do Bling sem alterar dados no ERP.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!active && (
+            <button type="button" onClick={onConnect} disabled={Boolean(busy)} className="premium-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold">
+              {busy === "connect" ? <Loader2 className="animate-spin" size={14} /> : <PlugZap size={14} />} Conectar Bling
+            </button>
+          )}
+          {active && (
+            <>
+              <button type="button" onClick={() => onTest(active.id)} disabled={Boolean(busy)} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">
+                {busy === "test" ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} Testar conexão
+              </button>
+              <button type="button" onClick={() => onSync(active.id)} disabled={Boolean(busy)} className="premium-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold">
+                {busy === "sync" ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />} Sincronizar agora
+              </button>
+              <button type="button" onClick={() => onDisconnect(active.id)} disabled={Boolean(busy)} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">
+                {busy === "disconnect" ? <Loader2 className="animate-spin" size={14} /> : <Power size={14} />} Desconectar
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-4">
+        <Info label="Última sincronização" value={latest?.ultimaSincronizacaoEm ? dateTime(latest.ultimaSincronizacaoEm) : "-"} />
+        <Info label="Último sucesso" value={latest?.ultimoSucessoEm ? dateTime(latest.ultimoSucessoEm) : "-"} />
+        <Info label="Último erro" value={latest?.ultimoErroEm ? dateTime(latest.ultimoErroEm) : "-"} />
+        <Info label="Credenciais" value={latest?.possuiCredenciais ? "Configuradas" : "Não configuradas"} />
+      </div>
+      {!active && (
+        <Alert tone="info">Conector disponível para configuração. Sem credenciais reais, nenhuma chamada ao Bling será iniciada.</Alert>
+      )}
+      {message && <Alert tone={(message.toLowerCase().includes("não foi") || message.toLowerCase().includes("nao foi")) ? "error" : "success"}>{message}</Alert>}
+      {lastSync && (
+        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300">
+          <span className="font-semibold text-slate-100">Última sincronização:</span>{" "}
+          {lastSync.sincronizacao.itensRecebidos} recebidos, {lastSync.sincronizacao.itensProcessados} processados, {lastSync.sincronizacao.itensComErro} com erro.
+        </div>
+      )}
     </section>
   );
 }
@@ -820,20 +983,20 @@ function QualitySection({ quality }: { quality: HubQualidadeDados | null }) {
         <Info label="Ativos" value={quality?.produtosAtivos ?? 0} />
         <Info label="Inativos" value={quality?.produtosInativos ?? 0} />
         <Info label="Sem SKU" value={quality?.produtosSemSku ?? 0} />
-        <Info label="Sem codigo de barras" value={quality?.produtosSemCodigoBarras ?? 0} />
+        <Info label="Sem código de barras" value={quality?.produtosSemCodigoBarras ?? 0} />
         <Info label="Sem estoque" value={quality?.produtosSemEstoque ?? 0} />
-        <Info label="Sem preco" value={quality?.produtosSemPreco ?? 0} />
+        <Info label="Sem preço" value={quality?.produtosSemPreco ?? 0} />
         <Info label="Dados desatualizados" value={quality?.produtosComDadosDesatualizados ?? 0} />
         <Info label="Duplicidades" value={(quality?.duplicidadesDetectadas.sku.length ?? 0) + (quality?.duplicidadesDetectadas.codigoBarras.length ?? 0)} />
-        <Info label="Ultima importacao" value={quality?.ultimaImportacao ? `${quality.ultimaImportacao.nomeArquivo} · ${statusLabel(quality.ultimaImportacao.status)}` : "Nenhuma"} />
-        <Info label="Ultima sincronizacao" value={formatDate(quality?.ultimaSincronizacao?.ultimaSincronizacaoEm)} />
+        <Info label="Última importação" value={quality?.ultimaImportacao ? `${quality.ultimaImportacao.nomeArquivo} · ${statusLabel(quality.ultimaImportacao.status)}` : "Nenhuma"} />
+        <Info label="Última sincronização" value={formatDate(quality?.ultimaSincronizacao?.ultimaSincronizacaoEm)} />
       </div>
     </section>
   );
 }
 
 function ErrorsTable({ errors, onPage }: { errors: ImportErrors; onPage: (page: number) => void }) {
-  if (errors.total === 0) return <EmptyState title="Nenhum erro por linha" text="Quando houver linhas invalidas, os erros sanitizados aparecerao aqui." />;
+  if (errors.total === 0) return <EmptyState title="Nenhum erro por linha" text="Quando houver linhas inválidas, os erros sanitizados aparecerão aqui." />;
   return (
     <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
       <div className="grid gap-2">
@@ -913,9 +1076,22 @@ function SelectBox<T extends string>({ label, value, options, onChange }: { labe
   );
 }
 
-function Alert({ tone, children }: { tone: "error" | "warning"; children: ReactNode }) {
-  const classes = tone === "error" ? "border-red-300/20 bg-red-500/10 text-red-100" : "border-amber-300/20 bg-amber-500/10 text-amber-100";
+function Alert({ tone, children }: { tone: "error" | "warning" | "info" | "success"; children: ReactNode }) {
+  const classes =
+    tone === "error"
+      ? "border-red-300/20 bg-red-500/10 text-red-100"
+      : tone === "success"
+        ? "border-emerald-300/20 bg-emerald-500/10 text-emerald-100"
+        : tone === "info"
+          ? "border-cyan-300/20 bg-cyan-500/10 text-cyan-100"
+          : "border-amber-300/20 bg-amber-500/10 text-amber-100";
   return <div className={`mt-3 rounded-2xl border p-3 text-xs font-semibold ${classes}`}>{children}</div>;
+}
+
+function dateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
 function EmptyState({ title, text }: { title: string; text: string }) {
@@ -934,10 +1110,10 @@ function StatusBadge({ status }: { status: string }) {
 function Pagination({ page, totalPages, total, onPage }: { page: number; totalPages: number; total: number; onPage: (page: number) => void }) {
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-      <span>Total: {total} · Pagina {page} de {totalPages}</span>
+      <span>Total: {total} · Página {page} de {totalPages}</span>
       <div className="flex gap-2">
         <button type="button" disabled={page <= 1} onClick={() => onPage(Math.max(1, page - 1))} className="premium-ghost rounded-xl px-3 py-2 font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button>
-        <button type="button" disabled={page >= totalPages} onClick={() => onPage(Math.min(totalPages, page + 1))} className="premium-ghost rounded-xl px-3 py-2 font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-40">Proxima</button>
+        <button type="button" disabled={page >= totalPages} onClick={() => onPage(Math.min(totalPages, page + 1))} className="premium-ghost rounded-xl px-3 py-2 font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-40">Próxima</button>
       </div>
     </div>
   );
@@ -1008,36 +1184,36 @@ function isFinalImportStatus(status: string) {
 function importPrimaryAction(status: HubImportStatus | string) {
   if (status === "MAPEAMENTO_PENDENTE") return "Continuar mapeamento";
   if (status === "VALIDANDO") return "Validar arquivo";
-  if (status === "PRONTO") return "Importar linhas validas";
+  if (status === "PRONTO") return "Importar linhas válidas";
   return null;
 }
 
 function importActionHint(status: HubImportStatus | string) {
   if (status === "MAPEAMENTO_PENDENTE") return "Arquivo enviado. Falta mapear as colunas para continuar.";
   if (status === "VALIDANDO") return "Mapeamento salvo. Falta validar o arquivo.";
-  if (status === "PRONTO") return "Arquivo validado. Falta importar as linhas validas.";
+  if (status === "PRONTO") return "Arquivo validado. Falta importar as linhas válidas.";
   return "";
 }
 
 function workflowStatusText(step: StepKey, status?: HubImportStatus | string) {
-  if (status === "CONCLUIDO") return "Concluido.";
-  if (status === "CONCLUIDO_COM_ERROS") return "Concluido com erros.";
-  if (step === "arquivo") return "Arquivo ainda nao enviado.";
+  if (status === "CONCLUIDO") return "Concluído.";
+  if (status === "CONCLUIDO_COM_ERROS") return "Concluído com erros.";
+  if (step === "arquivo") return "Arquivo ainda não enviado.";
   if (step === "mapeamento") return "Arquivo enviado. Mapeamento pendente.";
   if (step === "validacao") return "Mapeamento salvo. Pronto para validar.";
   if (step === "importacao") return "Validado. Pronto para importar.";
-  return "Resultado da importacao.";
+  return "Resultado da importação.";
 }
 
 function primaryKeyLabel(mapping: Partial<Record<HubCanonicalField, string>>) {
-  if (mapping.externalId) return "Codigo externo";
+  if (mapping.externalId) return "Código externo";
   if (mapping.sku) return "SKU";
-  if (mapping.codigoBarras) return "Codigo de barras";
-  return "Mapeie Codigo externo, SKU ou Codigo de barras";
+  if (mapping.codigoBarras) return "Código de barras";
+  return "Mapeie Código externo, SKU ou Código de barras";
 }
 
 function availabilityLabel(status: string) {
-  return ({ EM_ESTOQUE: "Em estoque", SEM_ESTOQUE: "Sem estoque", INDISPONIVEL: "Indisponivel", DESCONHECIDO: "Desconhecido" } as Record<string, string>)[status] ?? status;
+  return ({ EM_ESTOQUE: "Em estoque", SEM_ESTOQUE: "Sem estoque", INDISPONIVEL: "Indisponível", DESCONHECIDO: "Desconhecido" } as Record<string, string>)[status] ?? status;
 }
 
 function statusLabel(status?: string | null) {
@@ -1047,8 +1223,8 @@ function statusLabel(status?: string | null) {
     VALIDANDO: "Validando",
     PRONTO: "Pronto",
     PROCESSANDO: "Processando",
-    CONCLUIDO: "Concluido",
-    CONCLUIDO_COM_ERROS: "Concluido com erros",
+    CONCLUIDO: "Concluído",
+    CONCLUIDO_COM_ERROS: "Concluído com erros",
     FALHOU: "Falhou",
     CANCELADO: "Cancelado",
     ENVIADO: "Enviado",
@@ -1056,7 +1232,7 @@ function statusLabel(status?: string | null) {
 }
 
 function stepLabel(step: StepKey) {
-  return ({ arquivo: "Arquivo", mapeamento: "Mapeamento", validacao: "Validacao", importacao: "Importacao", resultado: "Resultado" })[step];
+  return ({ arquivo: "Arquivo", mapeamento: "Mapeamento", validacao: "Validação", importacao: "Importação", resultado: "Resultado" })[step];
 }
 
 function formatBytes(bytes: number) {

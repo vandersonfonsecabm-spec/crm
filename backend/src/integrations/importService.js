@@ -737,11 +737,15 @@ async function removeValidatedRows(importacaoId) {
 }
 
 function getUploadDir() {
-  return path.join(os.tmpdir(), "crm-agro-import-uploads");
+  return path.join(os.tmpdir(), "crm-agro-import-uploads", cacheNamespace());
 }
 
 function getCacheDir() {
-  return path.join(os.tmpdir(), "crm-agro-import-cache");
+  return path.join(os.tmpdir(), "crm-agro-import-cache", cacheNamespace());
+}
+
+function cacheNamespace() {
+  return crypto.createHash("sha1").update(String(process.env.DATABASE_URL || "default")).digest("hex").slice(0, 16);
 }
 
 function rowError(linha, campo, codigo, mensagem, value) {

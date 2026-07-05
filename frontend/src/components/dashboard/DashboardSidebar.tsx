@@ -109,7 +109,7 @@ export default function DashboardSidebar({
               <SidebarButton
                 active={activePage === "integracoes"}
                 icon={<PlugZap size={15} className="mr-2 shrink-0" />}
-                label="Integra??es"
+                label="Integrações"
                 onClick={() => setActivePage("integracoes")}
               />
             )}

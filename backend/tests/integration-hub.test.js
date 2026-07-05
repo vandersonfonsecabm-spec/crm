@@ -120,8 +120,8 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
   assert.equal(patch.body.ativo, false);
 
   const testConnection = await request("POST", `/integracoes/${created.body.id}/testar`, {}, adminA.token);
-  assert.equal(testConnection.status, 501);
-  assert.equal(testConnection.body.codigo, "CONNECTOR_NOT_IMPLEMENTED");
+  assert.ok([400, 501].includes(testConnection.status));
+  assert.ok(["BLING_CREDENTIALS_REQUIRED", "BLING_NOT_CONFIGURED"].includes(testConnection.body.codigo));
   assert.equal(testConnection.body.sincronizacao.status, "FALHOU");
   assert.equal(await prisma.sincronizacaoIntegracao.count({ where: { empresaId: adminA.empresaId, integracaoId: created.body.id } }), 1);
   assert.equal(await prisma.erroIntegracao.count({ where: { empresaId: adminA.empresaId, integracaoId: created.body.id } }), 1);

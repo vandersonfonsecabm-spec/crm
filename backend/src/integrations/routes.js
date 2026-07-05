@@ -1,5 +1,6 @@
 ﻿const { encryptCredentials, hasEncryptedCredentials } = require("./crypto");
 const { createIntegrationAdapter } = require("./adapters");
+const { createBlingService } = require("./blingService");
 const { createCanonicalService } = require("./canonicalService");
 const { createCommercialCatalogService } = require("./commercialCatalogService");
 const {
@@ -24,7 +25,33 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const requireAdmin = [authenticate, requireRole("ADMIN")];
   const canonicalService = createCanonicalService({ prisma });
   const commercialCatalogService = createCommercialCatalogService({ prisma });
+  const blingService = createBlingService({ prisma });
   const uploadImportFile = createUploadMiddleware();
+
+  app.post("/integracoes/bling/iniciar", ...requireAdmin, async (req, res) => {
+    try {
+      const result = await blingService.iniciarOAuth({ auth: req.auth });
+      return res.json(result);
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível iniciar a conexão com o Bling.");
+    }
+  });
+
+  app.get("/integracoes/bling/callback", async (req, res) => {
+    const frontendUrl = String(process.env.FRONTEND_URL || "https://crm-murex-six-83.vercel.app").split(",")[0].trim();
+    try {
+      const code = clean(req.query.code);
+      const state = clean(req.query.state);
+      if (req.query.error) {
+        throw httpError(400, clean(req.query.error_description || req.query.error), "BLING_AUTH_DENIED");
+      }
+      const integracao = await blingService.concluirOAuth({ code, state });
+      return res.redirect(`${frontendUrl}/?bling=conectado&integracaoId=${integracao.id}`);
+    } catch (error) {
+      const code = encodeURIComponent(error.code || "BLING_CALLBACK_ERROR");
+      return res.redirect(`${frontendUrl}/?bling=erro&codigo=${code}`);
+    }
+  });
 
   app.get("/integracoes", ...requireAdmin, async (req, res) => {
     try {
@@ -42,7 +69,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
       return res.json(paginated(integracoes.map(integrationResponse), total, page, limit));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel listar integracoes.");
+      return integrationError(res, error, "Não foi possível listar integrações.");
     }
   });
 
@@ -51,7 +78,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       const integracao = await findIntegrationOrThrow(prisma, req);
       return res.json(integrationResponse(integracao));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel buscar a integracao.");
+      return integrationError(res, error, "Não foi possível buscar a integração.");
     }
   });
 
@@ -74,7 +101,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
       return res.status(201).json(integrationResponse(integracao));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel criar a integracao.");
+      return integrationError(res, error, "Não foi possível criar a integração.");
     }
   });
 
@@ -95,14 +122,16 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
       return res.json(integrationResponse(integracao));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel atualizar a integracao.");
+      return integrationError(res, error, "Não foi possível atualizar a integração.");
     }
   });
 
   app.post("/integracoes/:id/testar", ...requireAdmin, async (req, res) => {
     try {
       const integracao = await findIntegrationOrThrow(prisma, req);
-      const adapter = createIntegrationAdapter(integracao.tipo, safeJson(integracao.configuracaoJson, {}));
+      const adapter = integracao.tipo === "BLING"
+        ? { testConnection: () => blingService.testar({ integracao }) }
+        : createIntegrationAdapter(integracao.tipo, safeJson(integracao.configuracaoJson, {}));
       const sync = await prisma.sincronizacaoIntegracao.create({
         data: {
           empresaId: req.auth.empresaId,
@@ -156,7 +185,49 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
         });
       }
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel testar a integracao.");
+      return integrationError(res, error, "Não foi possível testar a integração.");
+    }
+  });
+
+  app.post("/integracoes/:id/bling/testar", ...requireAdmin, async (req, res) => {
+    try {
+      const integracao = await findIntegrationOrThrow(prisma, req);
+      if (integracao.tipo !== "BLING") throw httpError(400, "Esta ação exige uma integração Bling.", "INTEGRATION_INVALID_TYPE");
+      const result = await blingService.testar({ integracao });
+      return res.json(result);
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível testar a conexão Bling.");
+    }
+  });
+
+  app.post("/integracoes/:id/bling/desconectar", ...requireAdmin, async (req, res) => {
+    try {
+      const integracao = await findIntegrationOrThrow(prisma, req);
+      if (integracao.tipo !== "BLING") throw httpError(400, "Esta ação exige uma integração Bling.", "INTEGRATION_INVALID_TYPE");
+      const updated = await blingService.desconectar({ integracao, usuarioId: req.auth.usuarioId });
+      return res.json(integrationResponse(updated));
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível desconectar o Bling.");
+    }
+  });
+
+  app.post("/integracoes/:id/sincronizar", ...requireAdmin, async (req, res) => {
+    try {
+      const integracao = await findIntegrationOrThrow(prisma, req);
+      const result = await blingService.sincronizar({
+        integracao,
+        empresaId: req.auth.empresaId,
+        entidades: req.body?.entidades,
+      });
+      return res.json({ sincronizacao: syncResponse(result.sincronizacao), resultado: result.resultado });
+    } catch (error) {
+      const payload = error.sincronizacao ? { sincronizacao: syncResponse(error.sincronizacao) } : {};
+      const status = error.status || statusFromCode(error.code) || 500;
+      return res.status(status).json({
+        erro: error.message || "Não foi possível sincronizar a integração.",
+        codigo: error.code || "INTEGRATION_SYNC_ERROR",
+        ...payload,
+      });
     }
   });
 
@@ -176,7 +247,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       ]);
       return res.json(paginated(sincronizacoes.map(syncResponse), total, page, limit));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel listar sincronizacoes.");
+      return integrationError(res, error, "Não foi possível listar sincronizações.");
     }
   });
 
@@ -189,10 +260,10 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
         where: { id, empresaId: req.auth.empresaId },
         include: { integracao: true, erros: true },
       });
-      if (!sync) throw httpError(404, "Sincronizacao nao encontrada.", "SYNC_NOT_FOUND");
+      if (!sync) throw httpError(404, "Sincronização não encontrada.", "SYNC_NOT_FOUND");
       return res.json(syncResponse(sync));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel buscar a sincronizacao.");
+      return integrationError(res, error, "Não foi possível buscar a sincronização.");
     }
   });
 
@@ -201,11 +272,11 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       let tempPath;
       try {
         if (uploadError) {
-          throw httpError(400, uploadError.message || "Arquivo invalido.", uploadError.code === "LIMIT_FILE_SIZE" ? "IMPORT_FILE_TOO_LARGE" : "IMPORT_UPLOAD_ERROR");
+          throw httpError(400, uploadError.message || "Arquivo inválido.", uploadError.code === "LIMIT_FILE_SIZE" ? "IMPORT_FILE_TOO_LARGE" : "IMPORT_UPLOAD_ERROR");
         }
         tempPath = req.file?.path;
         const tipoEntidade = clean(req.body?.tipoEntidade || "PRODUTOS").toUpperCase();
-        if (tipoEntidade !== "PRODUTOS") throw httpError(400, "Tipo de entidade invalido para esta fase.", "IMPORT_INVALID_ENTITY");
+        if (tipoEntidade !== "PRODUTOS") throw httpError(400, "Tipo de entidade inválido para esta fase.", "IMPORT_INVALID_ENTITY");
         const confirmarReprocessamento = req.body?.confirmarReprocessamento === "true" || req.body?.confirmarReprocessamento === true;
         const analysis = await analyzeImportFile(req.file);
         const previous = await findPreviousImportByHash({ prisma, empresaId: req.auth.empresaId, hashArquivo: analysis.hashArquivo });
@@ -255,7 +326,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
           planilha: analysis.planilha,
         });
       } catch (error) {
-        return integrationError(res, error, "Nao foi possivel analisar o arquivo.");
+        return integrationError(res, error, "Não foi possível analisar o arquivo.");
       } finally {
         if (tempPath) {
           try { await removeTempFile(tempPath); } catch (cleanupError) { if (process.env.NODE_ENV !== "production") console.error(cleanupError); }
@@ -278,7 +349,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       ]);
       return res.json(paginated(importacoes.map(importResponse), total, page, limit));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel listar importacoes.");
+      return integrationError(res, error, "Não foi possível listar importações.");
     }
   });
 
@@ -295,7 +366,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
         linhasInvalidasEstimadas: result.linhasInvalidasEstimadas,
       });
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel salvar o mapeamento.");
+      return integrationError(res, error, "Não foi possível salvar o mapeamento.");
     }
   });
 
@@ -305,7 +376,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       const result = await validateImportacao({ prisma, importacao });
       return res.json({ importacao: importResponse(result.importacao), resumo: result.resumo });
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel validar a importacao.");
+      return integrationError(res, error, "Não foi possível validar a importação.");
     }
   });
 
@@ -315,7 +386,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       const result = await processImportacao({ prisma, importacao, empresaId: req.auth.empresaId, usuarioId: req.auth.usuarioId, body: req.body });
       return res.json({ importacao: importResponse(result.importacao), resultado: result.resultado });
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel processar a importacao.");
+      return integrationError(res, error, "Não foi possível processar a importação.");
     }
   });
 
@@ -325,7 +396,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       const updated = await cancelImportacao({ prisma, importacao });
       return res.json(importResponse(updated));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel cancelar a importacao.");
+      return integrationError(res, error, "Não foi possível cancelar a importação.");
     }
   });
 
@@ -340,21 +411,21 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       ]);
       return res.json(paginated(erros.map(importErrorResponse), total, page, limit));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel listar erros da importacao.");
+      return integrationError(res, error, "Não foi possível listar erros da importação.");
     }
   });
   app.get("/importacoes/:id", ...requireAdmin, async (req, res) => {
     try {
       const id = positiveId(req.params.id);
-      if (!id) throw httpError(400, "Importacao invalida.", "IMPORT_NOT_FOUND");
+      if (!id) throw httpError(400, "Importação inválida.", "IMPORT_NOT_FOUND");
       const importacao = await prisma.importacaoDados.findFirst({
         where: { id, empresaId: req.auth.empresaId },
         include: { erros: true, integracao: true, createdByUsuario: true },
       });
-      if (!importacao) throw httpError(404, "Importacao nao encontrada.", "IMPORT_NOT_FOUND");
+      if (!importacao) throw httpError(404, "Importação não encontrada.", "IMPORT_NOT_FOUND");
       return res.json(importResponse(importacao));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel buscar a importacao.");
+      return integrationError(res, error, "Não foi possível buscar a importação.");
     }
   });
 
@@ -374,7 +445,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       });
       return res.status(201).json(importResponse(importacao));
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel registrar metadados da importacao.");
+      return integrationError(res, error, "Não foi possível registrar metadados da importação.");
     }
   });
 
@@ -386,7 +457,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       });
       return res.json(result);
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel consultar o catalogo comercial.");
+      return integrationError(res, error, "Não foi possível consultar o catálogo comercial.");
     }
   });
 
@@ -395,7 +466,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       const result = await commercialCatalogService.qualidadeDados({ empresaId: req.auth.empresaId });
       return res.json(result);
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel consultar a qualidade dos dados.");
+      return integrationError(res, error, "Não foi possível consultar a qualidade dos dados.");
     }
   });
   app.get("/hub/produtos", ...requireAdmin, async (req, res) => {
@@ -408,7 +479,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       });
       return res.json(result);
     } catch (error) {
-      return integrationError(res, error, "Nao foi possivel consultar produtos do Hub.");
+      return integrationError(res, error, "Não foi possível consultar produtos do Hub.");
     }
   });
 }
@@ -416,22 +487,22 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 function integrationPayload(body = {}, { partial }) {
   const allowed = ["nome", "tipo", "status", "ativo", "configuracao", "configuracaoJson", "credenciais"];
   const unknown = unknownFields(body, allowed);
-  if (unknown.length) throw httpError(400, `Campos nao permitidos: ${unknown.join(", ")}.`, "VALIDATION_ERROR");
+  if (unknown.length) throw httpError(400, `Campos não permitidos: ${unknown.join(", ")}.`, "VALIDATION_ERROR");
 
   const data = {};
   if (!partial || Object.hasOwn(body, "nome")) {
     const nome = clean(body.nome);
-    if (!nome || nome.length > 120) throw httpError(400, "Nome da integracao obrigatorio, com ate 120 caracteres.", "VALIDATION_ERROR");
+    if (!nome || nome.length > 120) throw httpError(400, "Nome da integração obrigatório, com até 120 caracteres.", "VALIDATION_ERROR");
     data.nome = nome;
   }
   if (!partial || Object.hasOwn(body, "tipo")) {
     const tipo = clean(body.tipo).toUpperCase();
-    if (!TIPOS_INTEGRACAO.has(tipo)) throw httpError(400, "Tipo de integracao invalido.", "INTEGRATION_INVALID_TYPE");
+    if (!TIPOS_INTEGRACAO.has(tipo)) throw httpError(400, "Tipo de integração inválido.", "INTEGRATION_INVALID_TYPE");
     data.tipo = tipo;
   }
   if (Object.hasOwn(body, "status")) {
     const status = clean(body.status).toUpperCase();
-    if (!STATUS_INTEGRACAO.has(status)) throw httpError(400, "Status de integracao invalido.", "VALIDATION_ERROR");
+    if (!STATUS_INTEGRACAO.has(status)) throw httpError(400, "Status de integração inválido.", "VALIDATION_ERROR");
     data.status = status;
   } else if (!partial) {
     data.status = "PENDENTE";
@@ -466,21 +537,21 @@ function importMetadataPayload(body = {}) {
     "linhasComErro",
   ];
   const unknown = unknownFields(body, allowed);
-  if (unknown.length) throw httpError(400, `Campos nao permitidos: ${unknown.join(", ")}.`, "VALIDATION_ERROR");
+  if (unknown.length) throw httpError(400, `Campos não permitidos: ${unknown.join(", ")}.`, "VALIDATION_ERROR");
 
   const formato = clean(body.formato).toUpperCase();
-  if (!FORMATOS_IMPORTACAO.has(formato)) throw httpError(400, "Formato de importacao invalido.", "IMPORT_INVALID_FORMAT");
+  if (!FORMATOS_IMPORTACAO.has(formato)) throw httpError(400, "Formato de importação inválido.", "IMPORT_INVALID_FORMAT");
 
   const tamanhoBytes = nonNegativeInt(body.tamanhoBytes);
   if (tamanhoBytes === null || tamanhoBytes > MAX_IMPORT_BYTES) {
-    throw httpError(400, "Arquivo invalido ou maior que o limite permitido.", "IMPORT_FILE_TOO_LARGE");
+    throw httpError(400, "Arquivo inválido ou maior que o limite permitido.", "IMPORT_FILE_TOO_LARGE");
   }
 
   const nomeArquivo = clean(body.nomeArquivo);
   const hashArquivo = clean(body.hashArquivo);
   const tipoEntidade = clean(body.tipoEntidade).toUpperCase();
   if (!nomeArquivo || !hashArquivo || !tipoEntidade) {
-    throw httpError(400, "Metadados obrigatorios ausentes.", "VALIDATION_ERROR");
+    throw httpError(400, "Metadados obrigatórios ausentes.", "VALIDATION_ERROR");
   }
 
   return {
@@ -506,11 +577,11 @@ function integrationWhere(empresaId, query) {
   const status = clean(query.status).toUpperCase();
   const busca = clean(query.busca || query.search);
   if (tipo) {
-    if (!TIPOS_INTEGRACAO.has(tipo)) throw httpError(400, "Tipo de integracao invalido.", "INTEGRATION_INVALID_TYPE");
+    if (!TIPOS_INTEGRACAO.has(tipo)) throw httpError(400, "Tipo de integração inválido.", "INTEGRATION_INVALID_TYPE");
     where.tipo = tipo;
   }
   if (status) {
-    if (!STATUS_INTEGRACAO.has(status)) throw httpError(400, "Status de integracao invalido.", "VALIDATION_ERROR");
+    if (!STATUS_INTEGRACAO.has(status)) throw httpError(400, "Status de integração inválido.", "VALIDATION_ERROR");
     where.status = status;
   }
   if (busca) where.nome = { contains: busca };
@@ -523,7 +594,7 @@ async function findIntegrationOrThrow(prisma, req) {
   const integracao = await prisma.integracao.findFirst({
     where: { id, empresaId: req.auth.empresaId },
   });
-  if (!integracao) throw httpError(404, "Integracao nao encontrada.", "INTEGRATION_NOT_FOUND");
+  if (!integracao) throw httpError(404, "Integração não encontrada.", "INTEGRATION_NOT_FOUND");
   return integracao;
 }
 
@@ -532,17 +603,17 @@ async function assertIntegrationBelongsToCompany(prisma, integracaoId, empresaId
     where: { id: integracaoId, empresaId },
     select: { id: true },
   });
-  if (!integracao) throw httpError(404, "Integracao nao encontrada.", "INTEGRATION_NOT_FOUND");
+  if (!integracao) throw httpError(404, "Integração não encontrada.", "INTEGRATION_NOT_FOUND");
 }
 
 async function findImportacaoOrThrow(prisma, req) {
   const id = positiveId(req.params.id);
-  if (!id) throw httpError(400, "Importacao invalida.", "IMPORT_NOT_FOUND");
+  if (!id) throw httpError(400, "Importação inválida.", "IMPORT_NOT_FOUND");
   const importacao = await prisma.importacaoDados.findFirst({
     where: { id, empresaId: req.auth.empresaId },
     include: { erros: true, integracao: true, createdByUsuario: true },
   });
-  if (!importacao) throw httpError(404, "Importacao nao encontrada.", "IMPORT_NOT_FOUND");
+  if (!importacao) throw httpError(404, "Importação não encontrada.", "IMPORT_NOT_FOUND");
   return importacao;
 }
 
@@ -649,6 +720,9 @@ function integrationError(res, error, fallbackMessage) {
 
 function statusFromCode(code) {
   if (code === "CONNECTOR_NOT_IMPLEMENTED") return 501;
+  if (code === "BLING_NOT_CONFIGURED") return 501;
+  if (code === "BLING_CREDENTIALS_REQUIRED" || code === "BLING_INVALID_STATE" || code === "BLING_AUTH_CODE_REQUIRED") return 400;
+  if (code === "BLING_TOKEN_ERROR" || code === "BLING_HTTP_ERROR" || code === "BLING_TIMEOUT") return 502;
   if (code === "INTEGRATION_NOT_FOUND" || code === "SYNC_NOT_FOUND" || code === "IMPORT_NOT_FOUND") return 404;
   if (code === "IMPORT_DUPLICATE_FILE" || code === "IMPORT_INVALID_STATUS" || code === "IMPORT_CONFIRMATION_REQUIRED") return 409;
   if (code === "IMPORT_CACHE_EXPIRED") return 410;
@@ -677,7 +751,7 @@ function stringifySafeConfig(value) {
 function sanitizeCredentialInput(value) {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "object" || Array.isArray(value)) {
-    throw httpError(400, "Credenciais invalidas.", "INTEGRATION_CREDENTIALS_INVALID");
+    throw httpError(400, "Credenciais inválidas.", "INTEGRATION_CREDENTIALS_INVALID");
   }
   return value;
 }

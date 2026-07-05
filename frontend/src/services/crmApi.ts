@@ -353,6 +353,28 @@ export type HubIntegracao = {
   updatedAt: string;
 };
 
+export type HubSincronizacao = {
+  id: number;
+  empresaId: number;
+  integracaoId: number;
+  status: "PENDENTE" | "EXECUTANDO" | "CONCLUIDA" | "CONCLUIDA_COM_ERROS" | "FALHOU" | "CANCELADA";
+  origem: string;
+  iniciadaEm: string;
+  finalizadaEm?: string | null;
+  itensRecebidos: number;
+  itensProcessados: number;
+  itensComErro: number;
+  mensagemErro?: string | null;
+  metadados?: Record<string, unknown> | null;
+};
+
+export type HubBlingStartResponse = { authorizationUrl: string; expiresAt: string };
+export type HubBlingTestResponse = { conectado: boolean; validadoEm: string; conta?: string | null };
+export type HubBlingSyncResponse = {
+  sincronizacao: HubSincronizacao;
+  resultado: Record<string, number>;
+};
+
 export type HubImportacaoUsuario = { id: number; nome: string; email: string };
 
 export type HubCanonicalField =
@@ -811,6 +833,22 @@ export async function fetchIntegracoes(params: { page?: number; limit?: number; 
 
 export async function createIntegracao(payload: { nome: string; tipo: HubIntegrationType; status?: HubIntegrationStatus; ativo?: boolean; configuracao?: Record<string, unknown> }) {
   return requestApiPost<HubIntegracao>("/integracoes", payload);
+}
+
+export async function iniciarConexaoBling() {
+  return requestApiPost<HubBlingStartResponse>("/integracoes/bling/iniciar", {});
+}
+
+export async function testarConexaoBling(id: number) {
+  return requestApiPost<HubBlingTestResponse>("/integracoes/" + id + "/bling/testar", {});
+}
+
+export async function desconectarBling(id: number) {
+  return requestApiPost<HubIntegracao>("/integracoes/" + id + "/bling/desconectar", {});
+}
+
+export async function sincronizarIntegracao(id: number, entidades: Array<"PRODUTOS" | "ESTOQUE" | "PRECOS" | "CONDICOES_PAGAMENTO">) {
+  return requestApiPost<HubBlingSyncResponse>("/integracoes/" + id + "/sincronizar", { entidades });
 }
 
 export async function fetchImportacoes(params: HubImportListParams = {}) {

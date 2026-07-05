@@ -1,3 +1,5 @@
+const { BlingHttpClient } = require("./blingClient");
+
 class IntegrationAdapter {
   constructor({ tipo, config = {} } = {}) {
     this.tipo = tipo;
@@ -25,7 +27,31 @@ class IntegrationAdapter {
   }
 }
 
-class BlingAdapter extends IntegrationAdapter {}
+class BlingAdapter extends IntegrationAdapter {
+  client() {
+    return new BlingHttpClient({ credentials: this.config.credentials, onTokenRefresh: this.config.onTokenRefresh });
+  }
+
+  async testConnection() {
+    return this.client().testConnection();
+  }
+
+  async fetchProducts() {
+    return this.client().fetchPaginated("/produtos");
+  }
+
+  async fetchStock() {
+    return this.client().fetchPaginated("/estoques/saldos");
+  }
+
+  async fetchPrices() {
+    return this.client().fetchPaginated("/produtos");
+  }
+
+  async fetchPaymentTerms() {
+    return this.client().fetchPaginated("/formas-pagamentos");
+  }
+}
 class OmieAdapter extends IntegrationAdapter {}
 class ContaAzulAdapter extends IntegrationAdapter {}
 class TinyAdapter extends IntegrationAdapter {}

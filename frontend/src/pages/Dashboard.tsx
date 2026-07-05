@@ -94,14 +94,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }, []);
 
   const pageTitle = ({
-    dashboard: "Vis?o Geral",
+    dashboard: "Visão Geral",
     comercial: "Central Comercial",
     clientes: "Carteira",
     kanban: "Funil Comercial",
     agenda: "Agenda",
     estoque: "Estoque",
-    integracoes: "Integra??es e Dados",
-    automacoes: "Automa??es",
+    integracoes: "Integrações e Dados",
+    automacoes: "Automações",
   } satisfies Record<ActivePage, string>)[activePage];
 
   useEffect(() => {
@@ -283,7 +283,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   const handleSetActivePage = useCallback((page: ActivePage) => {
     if (page === "integracoes" && !canManageIntegrations) {
-      setToast("Acesso negado para Integra??es.");
+      setToast("Acesso negado para Integrações.");
       setActivePage("dashboard");
       return;
     }
