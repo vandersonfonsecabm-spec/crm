@@ -224,11 +224,11 @@ test("fundacao SaaS autentica, autoriza e preserva o token demo", async () => {
   assert.equal(demoCompanyBlocked.status, 403);
 
   const health = await request("GET", "/health");
-  const dashboard = await request("GET", "/dashboard");
-  const clientes = await request("GET", "/clientes");
+  const dashboard = await request("GET", "/dashboard", undefined, demo.body.access_token);
+  const clientes = await request("GET", "/clientes", undefined, demo.body.access_token);
   const clienteId = clientes.body[0].id;
-  const notas = await request("GET", `/clientes/${clienteId}/notas`);
-  const acompanhamentos = await request("GET", "/acompanhamentos");
+  const notas = await request("GET", `/clientes/${clienteId}/notas`, undefined, demo.body.access_token);
+  const acompanhamentos = await request("GET", "/acompanhamentos", undefined, demo.body.access_token);
   const categorias = await request("GET", "/categorias-produtos");
   const produtos = await request("GET", "/produtos");
   const movimentacoes = await request("GET", "/estoque/movimentacoes");

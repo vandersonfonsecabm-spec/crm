@@ -9,6 +9,8 @@ datasource db {
 
 model Cliente {
   id              Int              @id @default(autoincrement())
+  empresaId       Int
+  empresaTenant   Empresa          @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   nome            String
   telefone        String           @default("")
   email           String           @default("")
@@ -25,17 +27,27 @@ model Cliente {
   createdAt       DateTime         @default(now())
   notas           Nota[]
   acompanhamentos Acompanhamento[]
+
+  @@index([empresaId])
+  @@index([empresaId, status])
+  @@index([empresaId, quente])
+  @@index([empresaId, createdAt])
 }
 
 model Nota {
   id        Int      @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   texto     String
   tipo      String   @default("nota")
   createdAt DateTime @default(now())
   clienteId Int
   cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
+  @@index([empresaId])
   @@index([clienteId])
+  @@index([empresaId, clienteId])
+  @@index([empresaId, createdAt])
 }
 
 model CategoriaProduto {
@@ -88,6 +100,8 @@ model MovimentacaoEstoque {
 
 model Acompanhamento {
   id          Int                      @id @default(autoincrement())
+  empresaId   Int
+  empresa     Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   clienteId   Int
   cliente     Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   titulo      String
@@ -101,11 +115,13 @@ model Acompanhamento {
   createdAt   DateTime                 @default(now())
   updatedAt   DateTime                 @updatedAt
 
+  @@index([empresaId])
   @@index([clienteId])
-  @@index([dataHora])
-  @@index([status])
-  @@index([prioridade])
-  @@index([tipo])
+  @@index([empresaId, clienteId])
+  @@index([empresaId, dataHora])
+  @@index([empresaId, status])
+  @@index([empresaId, prioridade])
+  @@index([empresaId, tipo])
 }
 
 model Empresa {
@@ -116,6 +132,9 @@ model Empresa {
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
   usuarios                   Usuario[]
+  clientes                   Cliente[]
+  notas                      Nota[]
+  acompanhamentos            Acompanhamento[]
   integracoes                Integracao[]
   sincronizacoesIntegracao   SincronizacaoIntegracao[]
   errosIntegracao            ErroIntegracao[]

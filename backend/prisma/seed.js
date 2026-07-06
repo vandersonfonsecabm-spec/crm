@@ -93,22 +93,32 @@ async function main() {
     return;
   }
 
+  const empresa = await prisma.empresa.upsert({
+    where: { slug: "crm-agro-demo" },
+    create: {
+      nome: "CRM Agro Demo",
+      slug: "crm-agro-demo",
+    },
+    update: {},
+  });
+
   for (const cliente of clientes) {
     const { notas, ...dadosCliente } = cliente;
 
     const criado = await prisma.cliente.create({
-      data: dadosCliente,
+      data: { ...dadosCliente, empresaId: empresa.id },
     });
-    await createNotas(criado.id, notas);
+    await createNotas(empresa.id, criado.id, notas);
   }
 
   console.log("Demo SQLite pronto.");
 }
 
-async function createNotas(clienteId, notas) {
+async function createNotas(empresaId, clienteId, notas) {
   for (const texto of notas) {
     await prisma.nota.create({
       data: {
+        empresaId,
         clienteId,
         texto,
         tipo: "nota",

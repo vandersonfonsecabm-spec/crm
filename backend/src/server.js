@@ -67,16 +67,19 @@ const auth = createAuth({
 });
 const requireAuth = auth.authenticate;
 const requireRole = auth.requireRole;
+const commercialAuth = [requireAuth, requireCommercialTenant];
 
 auth.mountRoutes(app);
 mountIntegrationHubRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountChannelRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 
-app.get("/dashboard", async (req, res) => {
+app.get("/dashboard", ...commercialAuth, async (req, res) => {
   try {
+    const empresaId = req.commercialEmpresaId;
     const clientes = await prisma.cliente.findMany({
+      where: { empresaId },
       include: {
-        notas: true,
+        notas: { where: { empresaId } },
       },
     });
 
@@ -109,11 +112,15 @@ app.get("/dashboard", async (req, res) => {
   }
 });
 
-app.get("/clientes", async (req, res) => {
+app.get("/clientes", ...commercialAuth, async (req, res) => {
   try {
+    if (hasEmpresaIdInput(req.query)) return tenantInputError(res);
+    const empresaId = req.commercialEmpresaId;
     const clientes = await prisma.cliente.findMany({
+      where: { empresaId },
       include: {
         notas: {
+          where: { empresaId },
           orderBy: {
             createdAt: "desc",
           },
@@ -132,14 +139,16 @@ app.get("/clientes", async (req, res) => {
   }
 });
 
-app.post("/clientes", async (req, res) => {
+app.post("/clientes", ...commercialAuth, async (req, res) => {
   try {
-    const data = clientePayload(req.body);
+    if (hasEmpresaIdInput(req.body)) return tenantInputError(res);
+    const empresaId = req.commercialEmpresaId;
+    const data = { ...clientePayload(req.body), empresaId };
 
     const cliente = await prisma.cliente.create({
       data,
       include: {
-        notas: true,
+        notas: { where: { empresaId } },
       },
     });
 
@@ -153,26 +162,33 @@ app.post("/clientes", async (req, res) => {
   }
 });
 
-app.put("/clientes/:id", async (req, res) => {
+app.put("/clientes/:id", ...commercialAuth, async (req, res) => {
   return updateCliente(req, res);
 });
 
-app.patch("/clientes/:id", async (req, res) => {
+app.patch("/clientes/:id", ...commercialAuth, async (req, res) => {
   return updateCliente(req, res);
 });
 
 async function updateCliente(req, res) {
   try {
     const { id } = req.params;
+    if (hasEmpresaIdInput(req.body)) return tenantInputError(res);
+    const empresaId = req.commercialEmpresaId;
+    const clienteId = parsePositiveId(id);
+    if (!clienteId) return res.status(400).json({ erro: "ID invalido." });
+    const existing = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true } });
+    if (!existing) return res.status(404).json({ erro: "Cliente nao encontrado." });
     const data = clientePayload(req.body);
 
     const clienteAtualizado = await prisma.cliente.update({
       where: {
-        id: Number(id),
+        id: clienteId,
       },
       data,
       include: {
         notas: {
+          where: { empresaId },
           orderBy: {
             createdAt: "desc",
           },
@@ -190,13 +206,19 @@ async function updateCliente(req, res) {
   }
 }
 
-app.delete("/clientes/:id", async (req, res) => {
+app.delete("/clientes/:id", ...commercialAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    if (hasEmpresaIdInput(req.query)) return tenantInputError(res);
+    const empresaId = req.commercialEmpresaId;
+    const clienteId = parsePositiveId(id);
+    if (!clienteId) return res.status(400).json({ erro: "ID invalido." });
+    const existing = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true } });
+    if (!existing) return res.status(404).json({ erro: "Cliente nao encontrado." });
 
     await prisma.cliente.delete({
       where: {
-        id: Number(id),
+        id: clienteId,
       },
     });
 
@@ -212,13 +234,20 @@ app.delete("/clientes/:id", async (req, res) => {
   }
 });
 
-app.get("/clientes/:id/notas", async (req, res) => {
+app.get("/clientes/:id/notas", ...commercialAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    if (hasEmpresaIdInput(req.query)) return tenantInputError(res);
+    const empresaId = req.commercialEmpresaId;
+    const clienteId = parsePositiveId(id);
+    if (!clienteId) return res.status(400).json({ erro: "Cliente invalido." });
+    const cliente = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true } });
+    if (!cliente) return res.status(404).json({ erro: "Cliente nao encontrado." });
 
     const notas = await prisma.nota.findMany({
       where: {
-        clienteId: Number(id),
+        clienteId,
+        empresaId,
       },
       orderBy: {
         createdAt: "desc",
@@ -235,27 +264,44 @@ app.get("/clientes/:id/notas", async (req, res) => {
   }
 });
 
-app.post("/clientes/:id/notas", async (req, res) => {
+app.post("/clientes/:id/notas", ...commercialAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    if (hasEmpresaIdInput(req.body)) return tenantInputError(res);
     const { texto, tipo } = req.body;
+    const empresaId = req.commercialEmpresaId;
+    const clienteId = parsePositiveId(id);
 
+    if (!clienteId) return res.status(400).json({ erro: "Cliente invalido." });
     if (!texto || !String(texto).trim()) {
       return res.status(400).json({
         erro: "Texto da nota é obrigatório",
       });
     }
 
-    const nota = await prisma.nota.create({
-      data: {
-        clienteId: Number(id),
-        texto: String(texto).trim(),
-        tipo: tipo || "nota",
-      },
+    const nota = await prisma.$transaction(async (tx) => {
+      const cliente = await tx.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true } });
+      if (!cliente) {
+        const error = new Error("Cliente nao encontrado.");
+        error.status = 404;
+        throw error;
+      }
+      return tx.nota.create({
+        data: {
+          empresaId,
+          clienteId,
+          texto: String(texto).trim(),
+          tipo: tipo || "nota",
+        },
+      });
     });
 
     res.json(nota);
   } catch (error) {
+    if (error && error.status) {
+      return res.status(error.status).json({ erro: error.message });
+    }
+
     console.log(error);
 
     res.status(500).json({
@@ -264,7 +310,7 @@ app.post("/clientes/:id/notas", async (req, res) => {
   }
 });
 
-app.delete("/clientes/:clienteId/notas/:notaId", requireAuth, async (req, res) => {
+app.delete("/clientes/:clienteId/notas/:notaId", ...commercialAuth, async (req, res) => {
   try {
     const clienteId = parsePositiveId(req.params.clienteId);
     const notaId = parsePositiveId(req.params.notaId);
@@ -275,9 +321,10 @@ app.delete("/clientes/:clienteId/notas/:notaId", requireAuth, async (req, res) =
       });
     }
 
-    const cliente = await prisma.cliente.findUnique({
+    const cliente = await prisma.cliente.findFirst({
       where: {
         id: clienteId,
+        empresaId: req.commercialEmpresaId,
       },
       select: {
         id: true,
@@ -294,6 +341,7 @@ app.delete("/clientes/:clienteId/notas/:notaId", requireAuth, async (req, res) =
       where: {
         id: notaId,
         clienteId,
+        empresaId: req.commercialEmpresaId,
       },
       select: {
         id: true,
@@ -325,9 +373,10 @@ app.delete("/clientes/:clienteId/notas/:notaId", requireAuth, async (req, res) =
   }
 });
 
-app.get("/acompanhamentos", async (req, res) => {
+app.get("/acompanhamentos", ...commercialAuth, async (req, res) => {
   try {
-    const filtros = acompanhamentoListWhere(req.query);
+    if (hasEmpresaIdInput(req.query)) return tenantInputError(res);
+    const filtros = acompanhamentoListWhere(req.query, req.commercialEmpresaId);
 
     if (filtros.error) {
       return res.status(filtros.status).json({
@@ -357,7 +406,7 @@ app.get("/acompanhamentos", async (req, res) => {
   }
 });
 
-app.get("/acompanhamentos/resumo", async (req, res) => {
+app.get("/acompanhamentos/resumo", ...commercialAuth, async (req, res) => {
   try {
     const now = new Date();
     const { start: todayStart, end: todayEnd } = todayRange();
@@ -371,9 +420,10 @@ app.get("/acompanhamentos/resumo", async (req, res) => {
     }
 
     const [pendentes, paraHoje, atrasados, criticos, concluidosPeriodo, proximos, porTipo] = await Promise.all([
-      prisma.acompanhamento.count({ where: { status: "PENDENTE" } }),
+      prisma.acompanhamento.count({ where: { empresaId: req.commercialEmpresaId, status: "PENDENTE" } }),
       prisma.acompanhamento.count({
         where: {
+          empresaId: req.commercialEmpresaId,
           status: "PENDENTE",
           dataHora: {
             gte: todayStart,
@@ -383,6 +433,7 @@ app.get("/acompanhamentos/resumo", async (req, res) => {
       }),
       prisma.acompanhamento.count({
         where: {
+          empresaId: req.commercialEmpresaId,
           status: "PENDENTE",
           dataHora: {
             lt: now,
@@ -391,12 +442,14 @@ app.get("/acompanhamentos/resumo", async (req, res) => {
       }),
       prisma.acompanhamento.count({
         where: {
+          empresaId: req.commercialEmpresaId,
           status: "PENDENTE",
           prioridade: "CRITICA",
         },
       }),
       prisma.acompanhamento.count({
         where: {
+          empresaId: req.commercialEmpresaId,
           status: "CONCLUIDO",
           concluidoEm: {
             gte: start,
@@ -405,14 +458,14 @@ app.get("/acompanhamentos/resumo", async (req, res) => {
         },
       }),
       prisma.acompanhamento.findMany({
-        where: { status: "PENDENTE" },
+        where: { empresaId: req.commercialEmpresaId, status: "PENDENTE" },
         include: acompanhamentoInclude(),
         orderBy: [{ dataHora: "asc" }, { id: "asc" }],
         take: 6,
       }),
       prisma.acompanhamento.groupBy({
         by: ["tipo"],
-        where: { status: "PENDENTE" },
+        where: { empresaId: req.commercialEmpresaId, status: "PENDENTE" },
         _count: { _all: true },
       }),
     ]);
@@ -440,7 +493,7 @@ app.get("/acompanhamentos/resumo", async (req, res) => {
   }
 });
 
-app.get("/acompanhamentos/:id", async (req, res) => {
+app.get("/acompanhamentos/:id", ...commercialAuth, async (req, res) => {
   try {
     const id = parsePositiveId(req.params.id);
 
@@ -450,8 +503,8 @@ app.get("/acompanhamentos/:id", async (req, res) => {
       });
     }
 
-    const acompanhamento = await prisma.acompanhamento.findUnique({
-      where: { id },
+    const acompanhamento = await prisma.acompanhamento.findFirst({
+      where: { id, empresaId: req.commercialEmpresaId },
       include: acompanhamentoInclude(),
     });
 
@@ -471,9 +524,10 @@ app.get("/acompanhamentos/:id", async (req, res) => {
   }
 });
 
-app.post("/acompanhamentos", requireAuth, async (req, res) => {
+app.post("/acompanhamentos", ...commercialAuth, async (req, res) => {
   try {
-    const payload = await acompanhamentoPayload(req.body, { partial: false });
+    if (hasEmpresaIdInput(req.body)) return tenantInputError(res);
+    const payload = await acompanhamentoPayload(req.body, { partial: false, empresaId: req.commercialEmpresaId });
 
     if (payload.error) {
       return res.status(payload.status).json({
@@ -482,7 +536,7 @@ app.post("/acompanhamentos", requireAuth, async (req, res) => {
     }
 
     const acompanhamento = await prisma.acompanhamento.create({
-      data: payload.data,
+      data: { ...payload.data, empresaId: req.commercialEmpresaId },
       include: acompanhamentoInclude(),
     });
 
@@ -496,7 +550,7 @@ app.post("/acompanhamentos", requireAuth, async (req, res) => {
   }
 });
 
-app.patch("/acompanhamentos/:id", requireAuth, async (req, res) => {
+app.patch("/acompanhamentos/:id", ...commercialAuth, async (req, res) => {
   try {
     const id = parsePositiveId(req.params.id);
 
@@ -506,7 +560,8 @@ app.patch("/acompanhamentos/:id", requireAuth, async (req, res) => {
       });
     }
 
-    const exists = await prisma.acompanhamento.findUnique({ where: { id } });
+    if (hasEmpresaIdInput(req.body)) return tenantInputError(res);
+    const exists = await prisma.acompanhamento.findFirst({ where: { id, empresaId: req.commercialEmpresaId } });
 
     if (!exists) {
       return res.status(404).json({
@@ -514,7 +569,7 @@ app.patch("/acompanhamentos/:id", requireAuth, async (req, res) => {
       });
     }
 
-    const payload = await acompanhamentoPayload(req.body, { partial: true });
+    const payload = await acompanhamentoPayload(req.body, { partial: true, empresaId: req.commercialEmpresaId });
 
     if (payload.error) {
       return res.status(payload.status).json({
@@ -538,15 +593,15 @@ app.patch("/acompanhamentos/:id", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/acompanhamentos/:id/concluir", requireAuth, async (req, res) => {
+app.post("/acompanhamentos/:id/concluir", ...commercialAuth, async (req, res) => {
   return updateAcompanhamentoStatus(req, res, "CONCLUIDO");
 });
 
-app.post("/acompanhamentos/:id/reabrir", requireAuth, async (req, res) => {
+app.post("/acompanhamentos/:id/reabrir", ...commercialAuth, async (req, res) => {
   return updateAcompanhamentoStatus(req, res, "PENDENTE");
 });
 
-app.post("/acompanhamentos/:id/cancelar", requireAuth, async (req, res) => {
+app.post("/acompanhamentos/:id/cancelar", ...commercialAuth, async (req, res) => {
   return updateAcompanhamentoStatus(req, res, "CANCELADO");
 });
 
@@ -1750,7 +1805,7 @@ function acompanhamentoResponse(acompanhamento) {
   };
 }
 
-async function acompanhamentoPayload(body, { partial }) {
+async function acompanhamentoPayload(body, { partial, empresaId }) {
   const allowed = ["clienteId", "titulo", "descricao", "dataHora", "prioridade", "tipo", "responsavel"];
   const unknown = unknownFields(body, allowed);
 
@@ -1765,8 +1820,8 @@ async function acompanhamentoPayload(body, { partial }) {
       return validationError("Cliente invalido.");
     }
 
-    const cliente = await prisma.cliente.findUnique({
-      where: { id: clienteId },
+    const cliente = await prisma.cliente.findFirst({
+      where: { id: clienteId, empresaId },
       select: { id: true },
     });
 
@@ -1834,8 +1889,8 @@ async function acompanhamentoPayload(body, { partial }) {
   return { data };
 }
 
-function acompanhamentoListWhere(query) {
-  const where = {};
+function acompanhamentoListWhere(query, empresaId) {
+  const where = { empresaId };
   const clienteId = query.clienteId === undefined || query.clienteId === "" ? null : parsePositiveId(query.clienteId);
   const status = cleanOptionalString(query.status).toUpperCase();
   const prioridade = cleanOptionalString(query.prioridade).toUpperCase();
@@ -1933,7 +1988,7 @@ async function updateAcompanhamentoStatus(req, res, status) {
       });
     }
 
-    const acompanhamentoAtual = await prisma.acompanhamento.findUnique({ where: { id } });
+    const acompanhamentoAtual = await prisma.acompanhamento.findFirst({ where: { id, empresaId: req.commercialEmpresaId } });
 
     if (!acompanhamentoAtual) {
       return res.status(404).json({
@@ -2188,6 +2243,23 @@ function validationError(error, status = 400) {
     error,
     status,
   };
+}
+
+function requireCommercialTenant(req, res, next) {
+  const empresaId = req.auth && req.auth.empresaId ? req.auth.empresaId : req.auth && req.auth.isDemo && req.auth.empresa ? req.auth.empresa.id : null;
+  if (!empresaId) {
+    return res.status(403).json({ erro: "Empresa da sessao obrigatoria.", codigo: "COMPANY_CONTEXT_REQUIRED" });
+  }
+  req.commercialEmpresaId = empresaId;
+  return next();
+}
+
+function hasEmpresaIdInput(source) {
+  return Object.prototype.hasOwnProperty.call(source || {}, "empresaId");
+}
+
+function tenantInputError(res) {
+  return res.status(400).json({ erro: "empresaId nao pode ser informado pelo cliente.", codigo: "TENANT_INPUT_FORBIDDEN" });
 }
 
 function clientePayload(body) {
