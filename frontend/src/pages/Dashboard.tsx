@@ -43,7 +43,7 @@ import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegra
 import DashboardToast from "../components/dashboard/DashboardToast";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
-import { clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession, getSessionRole } from "../services/crmApi";
+import { canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
 
 import { emptyClient, loadClients, statusList } from "../data/mockClients";
@@ -64,7 +64,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [onlySilent, setOnlySilent] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("score");
   const [kanbanOwnerFilter, setKanbanOwnerFilter] = useState<KanbanOwner>("Todos");
-  const [activePage, setActivePage] = useState<ActivePage>("dashboard");
+  const [requestedActivePage, setActivePage] = useState<ActivePage>("dashboard");
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null);
   const [isDraggingKanban, setIsDraggingKanban] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(1);
@@ -84,8 +84,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
-  const sessionRole = getSessionRole(authSession);
-  const canManageIntegrations = sessionRole === "ADMIN" && !authSession?.isDemo;
+  const canManageIntegrations = canAccessIntegrations(authSession);
+  const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
 
   const pageSize = 4;
 

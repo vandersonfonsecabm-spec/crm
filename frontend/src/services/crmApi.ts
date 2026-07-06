@@ -600,7 +600,8 @@ export function getAuthSession(): AuthSession | null {
   const empresa = readStorageJson<ApiAuthCompany>(COMPANY_KEY);
   const papel = localStorage.getItem(ROLE_KEY) as ApiUserRole | null;
   const expiresAt = localStorage.getItem(EXPIRES_KEY) || undefined;
-  const isDemo = token === DEMO_TOKEN;
+  const storedDemo = localStorage.getItem(DEMO_KEY) === "true";
+  const isDemo = storedDemo || token === DEMO_TOKEN;
 
   if (!usuario?.nome) {
     return {
@@ -631,6 +632,10 @@ export function getSessionRole(session: AuthSession | null): ApiUserRole | null 
   if (!session || session.isDemo) return null;
   const role = session.papel ?? session.usuario?.papel;
   return role === "ADMIN" || role === "GERENTE" || role === "VENDEDOR" ? role : null;
+}
+
+export function canAccessIntegrations(session: AuthSession | null) {
+  return getSessionRole(session) === "ADMIN";
 }
 
 function setAuthSessionFromResponse(data: ApiAuthResponse, options: { forceDemo?: boolean } = {}) {
