@@ -6,6 +6,7 @@ const { Prisma, PrismaClient } = require("@prisma/client");
 const { createAuth } = require("./auth");
 const { mountIntegrationHubRoutes } = require("./integrations/routes");
 const { mountChannelRoutes } = require("./channels/channelRoutes");
+const { mountWhatsappSimulationRoutes } = require("./channels/whatsapp/simulationRoutes");
 const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
 
 const prisma = new PrismaClient();
@@ -72,6 +73,7 @@ const commercialAuth = [requireAuth, requireCommercialTenant];
 auth.mountRoutes(app);
 mountIntegrationHubRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountChannelRoutes({ app, prisma, authenticate: requireAuth, requireRole });
+mountWhatsappSimulationRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 
 app.get("/dashboard", ...commercialAuth, async (req, res) => {
   try {
