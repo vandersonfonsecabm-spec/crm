@@ -93,17 +93,28 @@ const MONEY_MODES: Array<{ value: HubMoneyMode; label: string }> = [
   { value: "REAIS_PONTO", label: "Reais com ponto" },
   { value: "CENTAVOS", label: "Valor em centavos" },
 ];
-const WHATSAPP_SMOKE_PAYLOAD = {
-  externalId: "smoke-admin-saudacao-20260706-01",
-  telefone: "+5511999990001",
-  nome: "Contato Teste Simulador",
-  mensagem: "Bom dia",
-};
+const WHATSAPP_SMOKE_PHONE = "+5511999990001";
+const WHATSAPP_SMOKE_NAME = "Contato Teste Simulador";
 
 type StepKey = "arquivo" | "mapeamento" | "validacao" | "importacao" | "resultado";
 type LoadState = "loading" | "success" | "error";
 type ImportErrors = { data: HubErroImportacao[]; page: number; total: number; totalPages: number };
 type WhatsappSmokeCall = WhatsappSimulationCallResult;
+type WhatsappScenarioId = "saudacao" | "produto" | "preco" | "estoque" | "inexistente" | "vendedor";
+type WhatsappScenario = {
+  id: WhatsappScenarioId;
+  title: string;
+  description: string;
+  message: string;
+  externalBase: string;
+  expectedIntent: string[];
+  expectedNote: boolean;
+  expectedFunnel: "unchanged" | "may-change";
+  expectedFollowUp: boolean | "when-needed";
+  requiresProduct: boolean;
+  productName?: string;
+  warning?: string;
+};
 
 export default function DashboardIntegrationsPanel() {
   const [state, setState] = useState<LoadState>("loading");
@@ -139,6 +150,8 @@ export default function DashboardIntegrationsPanel() {
   const [blingBusy, setBlingBusy] = useState<"connect" | "test" | "sync" | "disconnect" | null>(null);
   const [blingMessage, setBlingMessage] = useState("");
   const [lastBlingSync, setLastBlingSync] = useState<HubBlingSyncResponse | null>(null);
+  const [whatsappScenarioId, setWhatsappScenarioId] = useState<WhatsappScenarioId>("saudacao");
+  const [whatsappExternalId, setWhatsappExternalId] = useState(() => createWhatsappExternalId("saudacao"));
   const [whatsappSmokeBusy, setWhatsappSmokeBusy] = useState<"first" | "repeat" | null>(null);
   const [whatsappSmokeError, setWhatsappSmokeError] = useState("");
   const [whatsappSmokeFirst, setWhatsappSmokeFirst] = useState<WhatsappSmokeCall | null>(null);
@@ -146,6 +159,9 @@ export default function DashboardIntegrationsPanel() {
 
   const importPages = Math.max(1, Math.ceil(importsTotal / IMPORT_LIMIT));
   const catalogPages = Math.max(1, Math.ceil(catalogTotal / CATALOG_LIMIT));
+  const whatsappProduct = useMemo(() => selectWhatsappProduct(catalog), [catalog]);
+  const whatsappScenarios = useMemo(() => buildWhatsappScenarios(whatsappProduct), [whatsappProduct]);
+  const whatsappScenario = whatsappScenarios.find((scenario) => scenario.id === whatsappScenarioId) ?? whatsappScenarios[0];
   const invalidLines = validation?.resumo.linhasComErro ?? mappingResult?.linhasInvalidasEstimadas ?? 0;
 
   useEffect(() => {
@@ -493,16 +509,40 @@ export default function DashboardIntegrationsPanel() {
     }
   }
 
+  function selectWhatsappScenario(id: WhatsappScenarioId) {
+    setWhatsappScenarioId(id);
+    setWhatsappExternalId(createWhatsappExternalId(id));
+    setWhatsappSmokeFirst(null);
+    setWhatsappSmokeRepeat(null);
+    setWhatsappSmokeError("");
+  }
+
+  function newWhatsappScenarioTest() {
+    setWhatsappExternalId(createWhatsappExternalId(whatsappScenario.id));
+    setWhatsappSmokeFirst(null);
+    setWhatsappSmokeRepeat(null);
+    setWhatsappSmokeError("");
+  }
+
   async function runWhatsappSmoke(kind: "first" | "repeat") {
     if (!canAccessIntegrations(getAuthSession())) {
       setWhatsappSmokeError("Acesso negado para executar o simulador.");
+      return;
+    }
+    if (whatsappScenario.requiresProduct && !whatsappProduct) {
+      setWhatsappSmokeError("Nenhum produto ativo do catálogo está disponível para este cenário.");
       return;
     }
     setWhatsappSmokeBusy(kind);
     setWhatsappSmokeError("");
     if (kind === "first") setWhatsappSmokeRepeat(null);
     try {
-      const result = await simulateWhatsappMessage(WHATSAPP_SMOKE_PAYLOAD);
+      const result = await simulateWhatsappMessage({
+        externalId: whatsappExternalId,
+        telefone: WHATSAPP_SMOKE_PHONE,
+        nome: WHATSAPP_SMOKE_NAME,
+        mensagem: whatsappScenario.message,
+      });
       if (kind === "first") setWhatsappSmokeFirst(result);
       else setWhatsappSmokeRepeat(result);
     } catch (error) {
@@ -551,10 +591,17 @@ export default function DashboardIntegrationsPanel() {
       />
 
       <WhatsappSimulationSection
+        scenarios={whatsappScenarios}
+        scenario={whatsappScenario}
+        scenarioId={whatsappScenarioId}
+        externalId={whatsappExternalId}
+        product={whatsappProduct}
         first={whatsappSmokeFirst}
         repeat={whatsappSmokeRepeat}
         busy={whatsappSmokeBusy}
         error={whatsappSmokeError}
+        onScenarioChange={selectWhatsappScenario}
+        onNewTest={newWhatsappScenarioTest}
         onRun={() => void runWhatsappSmoke("first")}
         onRepeat={() => void runWhatsappSmoke("repeat")}
       />
@@ -1018,21 +1065,36 @@ function BlingSection({
 }
 
 function WhatsappSimulationSection({
+  scenarios,
+  scenario,
+  scenarioId,
+  externalId,
+  product,
   first,
   repeat,
   busy,
   error,
+  onScenarioChange,
+  onNewTest,
   onRun,
   onRepeat,
 }: {
+  scenarios: WhatsappScenario[];
+  scenario: WhatsappScenario;
+  scenarioId: WhatsappScenarioId;
+  externalId: string;
+  product: HubProdutoComercial | null;
   first: WhatsappSmokeCall | null;
   repeat: WhatsappSmokeCall | null;
   busy: "first" | "repeat" | null;
   error: string;
+  onScenarioChange: (id: WhatsappScenarioId) => void;
+  onNewTest: () => void;
   onRun: () => void;
   onRepeat: () => void;
 }) {
   const canRepeat = Boolean(first) && !busy;
+  const canRun = !busy && (!scenario.requiresProduct || Boolean(product));
   return (
     <section className="premium-panel rounded-2xl p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1048,8 +1110,11 @@ function WhatsappSimulationSection({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={onRun} disabled={Boolean(busy)} className="premium-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">
-            {busy === "first" ? <Loader2 className="animate-spin" size={14} /> : <PlugZap size={14} />} Executar smoke test
+          <button type="button" onClick={onNewTest} disabled={Boolean(busy)} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
+            <RefreshCw size={14} /> Novo teste deste cenário
+          </button>
+          <button type="button" onClick={onRun} disabled={!canRun} className="premium-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+            {busy === "first" ? <Loader2 className="animate-spin" size={14} /> : <PlugZap size={14} />} Executar cenário
           </button>
           {first && (
             <button type="button" onClick={onRepeat} disabled={!canRepeat} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
@@ -1059,10 +1124,35 @@ function WhatsappSimulationSection({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-2 md:grid-cols-4">
-        <Info label="External ID" value={WHATSAPP_SMOKE_PAYLOAD.externalId} />
-        <Info label="Telefone fictício" value={maskSmokePhone(WHATSAPP_SMOKE_PAYLOAD.telefone)} />
-        <Info label="Mensagem" value={WHATSAPP_SMOKE_PAYLOAD.mensagem} />
+      <div className="mt-3 grid gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Cenário
+          <select
+            value={scenarioId}
+            onChange={(event) => onScenarioChange(event.target.value as WhatsappScenarioId)}
+            disabled={Boolean(busy)}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none focus:border-emerald-300/40"
+          >
+            {scenarios.map((item) => (
+              <option key={item.id} value={item.id}>{item.title}</option>
+            ))}
+          </select>
+        </label>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-sm font-semibold text-slate-100">{scenario.title}</h4>
+            {scenario.requiresProduct && <StatusBadge status={product ? "Produto real selecionado" : "Sem produto"} />}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">{scenario.description}</p>
+          {scenario.warning && <p className="mt-2 text-xs text-amber-100">{scenario.warning}</p>}
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-5">
+        <Info label="External ID" value={externalId} />
+        <Info label="Telefone fictício" value={maskSmokePhone(WHATSAPP_SMOKE_PHONE)} />
+        <Info label="Mensagem" value={scenario.message} />
+        <Info label="Produto usado" value={scenario.requiresProduct ? product?.nome ?? "Indisponível" : "Não aplicável"} />
         <Info label="Ambiente" value="Produção controlada" />
       </div>
 
@@ -1070,8 +1160,8 @@ function WhatsappSimulationSection({
       {error && <Alert tone="error">{error}</Alert>}
 
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
-        {first && <WhatsappSimulationResult title="Primeira chamada" result={first} />}
-        {repeat && <WhatsappSimulationResult title="Repetição do mesmo payload" result={repeat} />}
+        {first && <WhatsappSimulationResult title="Primeira chamada" result={first} scenario={scenario} />}
+        {repeat && <WhatsappSimulationResult title="Repetição do mesmo payload" result={repeat} scenario={scenario} original={first} />}
       </div>
 
       {repeat?.data.duplicada === true && (
@@ -1084,8 +1174,9 @@ function WhatsappSimulationSection({
   );
 }
 
-function WhatsappSimulationResult({ title, result }: { title: string; result: WhatsappSmokeCall }) {
+function WhatsappSimulationResult({ title, result, scenario, original }: { title: string; result: WhatsappSmokeCall; scenario: WhatsappScenario; original?: WhatsappSmokeCall | null }) {
   const data = result.data;
+  const checks = evaluateWhatsappScenario(result, scenario, original);
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1097,6 +1188,9 @@ function WhatsappSimulationResult({ title, result }: { title: string; result: Wh
         <Info label="Status" value={data.status} />
         <Info label="Duplicada" value={data.duplicada ? "Sim" : "Não"} />
         <Info label="Intenção" value={data.intencao?.tipo ?? "-"} />
+        <Info label="Produto" value={data.produtoPrincipal?.nome ?? (scenario.id === "inexistente" ? "Não encontrado" : "-")} />
+        <Info label="Preço" value={data.preco?.precoAtualCentavos === null || data.preco?.precoAtualCentavos === undefined ? "-" : formatCurrency(data.preco.precoAtualCentavos)} />
+        <Info label="Estoque" value={data.estoque?.disponibilidade ? `${data.estoque.disponibilidade}${data.estoque.quantidadeDisponivelTotal === null || data.estoque.quantidadeDisponivelTotal === undefined ? "" : ` · ${formatQuantity(data.estoque.quantidadeDisponivelTotal)}`}` : "-"} />
         <Info label="Canal" value={data.canal ? `#${data.canal.id} · ${data.canal.status}` : "-"} />
         <Info label="Contato" value={data.contato ? `#${data.contato.id}` : "-"} />
         <Info label="Conversa" value={data.conversa ? `#${data.conversa.id} · ${data.conversa.status}` : "-"} />
@@ -1111,6 +1205,16 @@ function WhatsappSimulationResult({ title, result }: { title: string; result: Wh
           {data.respostaPreparada.texto}
         </div>
       )}
+      <div className="mt-3 space-y-2">
+        {checks.map((check) => (
+          <div key={check.label} className="grid gap-2 rounded-xl border border-white/10 bg-slate-950/40 p-2 text-xs md:grid-cols-[120px_minmax(0,1fr)_minmax(0,1fr)_90px]">
+            <span className="font-semibold text-slate-400">{check.label}</span>
+            <span className="text-slate-500">Esperado: {check.expected}</span>
+            <span className="text-slate-300">Obtido: {check.obtained}</span>
+            <span className={check.approved ? "font-semibold text-emerald-200" : "font-semibold text-amber-200"}>{check.approved ? "Aprovado" : "Divergente"}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1370,6 +1474,136 @@ function statusLabel(status?: string | null) {
     CANCELADO: "Cancelado",
     ENVIADO: "Enviado",
   } as Record<string, string>)[status] ?? status;
+}
+
+function selectWhatsappProduct(products: HubProdutoComercial[]) {
+  return (
+    products.find((product) => product.ativo && product.precoAtualCentavos !== null && product.precoAtualCentavos !== undefined && product.disponibilidade === "EM_ESTOQUE") ||
+    products.find((product) => product.ativo && product.precoAtualCentavos !== null && product.precoAtualCentavos !== undefined && product.disponibilidade !== "DESCONHECIDO") ||
+    products.find((product) => product.ativo && product.precoAtualCentavos !== null && product.precoAtualCentavos !== undefined) ||
+    products.find((product) => product.ativo) ||
+    null
+  );
+}
+
+function buildWhatsappScenarios(product: HubProdutoComercial | null): WhatsappScenario[] {
+  const productName = product?.nome || "produto do catálogo";
+  return [
+    {
+      id: "saudacao",
+      title: "Saudação",
+      description: "Valida uma saudação simples, sem efeitos comerciais.",
+      message: "Bom dia",
+      externalBase: "saudacao",
+      expectedIntent: ["SAUDACAO"],
+      expectedNote: false,
+      expectedFunnel: "unchanged",
+      expectedFollowUp: false,
+      requiresProduct: false,
+    },
+    {
+      id: "produto",
+      title: "Consulta de produto",
+      description: "Pergunta se um produto real do catálogo está disponível.",
+      message: `Tem ${productName}?`,
+      externalBase: "consulta-produto",
+      expectedIntent: ["CONSULTAR_DISPONIBILIDADE", "CONSULTAR_PRODUTO"],
+      expectedNote: true,
+      expectedFunnel: "may-change",
+      expectedFollowUp: "when-needed",
+      requiresProduct: true,
+      productName: product?.nome,
+    },
+    {
+      id: "preco",
+      title: "Consulta de preço",
+      description: "Consulta preço de um produto real sem inventar valor.",
+      message: `Qual o preço de ${productName}?`,
+      externalBase: "consulta-preco",
+      expectedIntent: ["CONSULTAR_PRECO"],
+      expectedNote: true,
+      expectedFunnel: "may-change",
+      expectedFollowUp: "when-needed",
+      requiresProduct: true,
+      productName: product?.nome,
+    },
+    {
+      id: "estoque",
+      title: "Consulta de estoque",
+      description: "Consulta estoque de um produto real e preserva estoque desconhecido quando for o caso.",
+      message: `Tem ${productName} em estoque?`,
+      externalBase: "consulta-estoque",
+      expectedIntent: ["CONSULTAR_ESTOQUE", "CONSULTAR_DISPONIBILIDADE"],
+      expectedNote: true,
+      expectedFunnel: "may-change",
+      expectedFollowUp: "when-needed",
+      requiresProduct: true,
+      productName: product?.nome,
+    },
+    {
+      id: "inexistente",
+      title: "Produto inexistente",
+      description: "Valida resposta segura para produto não encontrado.",
+      message: "Tem o produto fictício Zeta Agro Teste 999?",
+      externalBase: "produto-inexistente",
+      expectedIntent: ["CONSULTAR_DISPONIBILIDADE", "CONSULTAR_PRODUTO"],
+      expectedNote: true,
+      expectedFunnel: "may-change",
+      expectedFollowUp: true,
+      requiresProduct: false,
+      warning: "Produto propositalmente fictício para validar atendimento humano.",
+    },
+    {
+      id: "vendedor",
+      title: "Falar com vendedor",
+      description: "Solicita atendimento humano sem envio real de mensagem.",
+      message: "Quero falar com um vendedor",
+      externalBase: "falar-vendedor",
+      expectedIntent: ["FALAR_COM_VENDEDOR"],
+      expectedNote: true,
+      expectedFunnel: "may-change",
+      expectedFollowUp: true,
+      requiresProduct: false,
+    },
+  ];
+}
+
+function createWhatsappExternalId(scenarioId: WhatsappScenarioId) {
+  return `admin-scenario-${scenarioId}-${Date.now()}-${randomSuffix()}`.slice(0, 150);
+}
+
+function randomSuffix() {
+  if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
+    const values = new Uint32Array(1);
+    crypto.getRandomValues(values);
+    return values[0].toString(36);
+  }
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function evaluateWhatsappScenario(result: WhatsappSmokeCall, scenario: WhatsappScenario, original?: WhatsappSmokeCall | null) {
+  const data = result.data;
+  const productExpected = scenario.id === "inexistente" ? "não encontrado" : scenario.requiresProduct ? "produto encontrado" : "não aplicável";
+  const productApproved = scenario.id === "inexistente" ? !data.produtoPrincipal : !scenario.requiresProduct || Boolean(data.produtoPrincipal);
+  const noteApproved = data.duplicada ? true : Boolean(data.nota?.criada) === scenario.expectedNote;
+  const followUpApproved = data.duplicada || scenario.expectedFollowUp === "when-needed" ? true : Boolean(data.acompanhamento?.criado || data.acompanhamento?.reutilizado) === scenario.expectedFollowUp;
+  const funnelApproved = scenario.expectedFunnel === "may-change" || !data.funil?.alterado;
+  const sameIds = !original || (
+    original.data.canal?.id === data.canal?.id &&
+    original.data.contato?.id === data.contato?.id &&
+    original.data.conversa?.id === data.conversa?.id &&
+    original.data.cliente?.id === data.cliente?.id
+  );
+
+  return [
+    { label: "Intenção", expected: scenario.expectedIntent.join(" ou "), obtained: data.intencao?.tipo || "-", approved: scenario.expectedIntent.includes(data.intencao?.tipo || "") || data.duplicada },
+    { label: "Produto", expected: productExpected, obtained: data.produtoPrincipal?.nome || "não encontrado", approved: productApproved || data.duplicada },
+    { label: "Nota", expected: scenario.expectedNote ? "criada" : "não criada", obtained: data.nota?.criada ? "criada" : "não criada", approved: noteApproved },
+    { label: "Funil", expected: scenario.expectedFunnel === "may-change" ? "sem rebaixar estágio" : "sem alteração", obtained: data.funil?.alterado ? "alterado" : "sem alteração", approved: funnelApproved },
+    { label: "Acompanhamento", expected: scenario.expectedFollowUp === "when-needed" ? "quando necessário" : scenario.expectedFollowUp ? "criado/reutilizado" : "não criado", obtained: data.acompanhamento?.criado ? "criado" : data.acompanhamento?.reutilizado ? "reutilizado" : "não criado", approved: followUpApproved },
+    { label: "Saída", expected: "PREPARADA simulada", obtained: data.respostaPreparada ? `${data.respostaPreparada.status} simulada` : "-", approved: data.respostaPreparada?.status === "PREPARADA" },
+    { label: "Idempotência", expected: original ? "mesmos IDs principais" : "primeira execução", obtained: original ? (sameIds ? "mesmos IDs" : "IDs divergentes") : (data.duplicada ? "duplicada" : "nova execução"), approved: original ? sameIds && data.duplicada : !data.duplicada },
+  ];
 }
 
 function stepLabel(step: StepKey) {
