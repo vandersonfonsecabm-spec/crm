@@ -95,7 +95,7 @@ const MONEY_MODES: Array<{ value: HubMoneyMode; label: string }> = [
 ];
 const WHATSAPP_SMOKE_PAYLOAD = {
   externalId: "smoke-admin-saudacao-20260706-01",
-  telefone: "5511999990001",
+  telefone: "+5511999990001",
   nome: "Contato Teste Simulador",
   mensagem: "Bom dia",
 };
