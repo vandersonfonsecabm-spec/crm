@@ -7,6 +7,14 @@ type DashboardCommandSearchProps = {
   onSelectClient: (clientId: number) => void;
   onSetActivePage: (page: ActivePage) => void;
   onCloseQuickActions: () => void;
+  canManageIntegrations: boolean;
+};
+
+type CommandResult = {
+  label: string;
+  type: string;
+  searchText: string;
+  action: () => void;
 };
 
 export default function DashboardCommandSearch({
@@ -14,9 +22,11 @@ export default function DashboardCommandSearch({
   onSelectClient,
   onSetActivePage,
   onCloseQuickActions,
+  canManageIntegrations,
 }: DashboardCommandSearchProps) {
   const [commandSearch, setCommandSearch] = useState("");
   const [showCommandResults, setShowCommandResults] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
     function handleShortcuts(event: KeyboardEvent) {
@@ -52,37 +62,49 @@ export default function DashboardCommandSearch({
   }, [onCloseQuickActions]);
 
   const commandResults = useMemo(() => {
-    const term = commandSearch.toLowerCase().trim();
+    const term = normalizeCommandTerm(commandSearch);
 
     if (!term) {
       return [];
     }
 
-    const pages = [
-      { label: "Visão Geral", type: "Página", action: () => onSetActivePage("dashboard") },
-      { label: "Central Comercial", type: "Página", action: () => onSetActivePage("comercial") },
-      { label: "Carteira", type: "Página", action: () => onSetActivePage("clientes") },
-      { label: "Funil Comercial", type: "Página", action: () => onSetActivePage("kanban") },
-      { label: "Agenda", type: "Página", action: () => onSetActivePage("agenda") },
-      { label: "Automações", type: "Página", action: () => onSetActivePage("automacoes") },
-    ].filter((item) => item.label.toLowerCase().includes(term));
+    const pages: CommandResult[] = [
+      { label: "Visão Geral", type: "Página", searchText: "visao geral dashboard inicio", action: () => onSetActivePage("dashboard") },
+      { label: "Central Comercial", type: "Página", searchText: "central comercial operacao", action: () => onSetActivePage("comercial") },
+      { label: "Carteira", type: "Página", searchText: "carteira clientes", action: () => onSetActivePage("clientes") },
+      { label: "Funil Comercial", type: "Página", searchText: "funil comercial kanban oportunidades", action: () => onSetActivePage("kanban") },
+      { label: "Agenda", type: "Página", searchText: "agenda acompanhamentos calendario", action: () => onSetActivePage("agenda") },
+      { label: "Estoque", type: "Página", searchText: "estoque produtos inventario", action: () => onSetActivePage("estoque") },
+      { label: "Automações", type: "Página", searchText: "automacoes automacao inteligencia regras", action: () => onSetActivePage("automacoes") },
+      ...(canManageIntegrations
+        ? [{ label: "Integrações", type: "Página administrativa", searchText: "integracoes integracao dados importacoes catalogo qualidade bling simulador whatsapp", action: () => onSetActivePage("integracoes") }]
+        : []),
+    ].filter((item) => matchesCommandSearch(term, item.label, item.searchText));
 
     const clientResults = clients
       .filter(
         (client) =>
-          client.name.toLowerCase().includes(term) ||
-          client.company.toLowerCase().includes(term) ||
-          client.email.toLowerCase().includes(term)
+          matchesCommandSearch(term, client.name, client.company, client.email, client.phone, ...(client.tags ?? []))
       )
       .slice(0, 4)
       .map((client) => ({
         label: client.name,
         type: client.company,
+        searchText: `${client.name} ${client.company}`,
         action: () => onSelectClient(client.id),
       }));
 
     return [...pages, ...clientResults].slice(0, 6);
-  }, [clients, commandSearch, onSelectClient, onSetActivePage]);
+  }, [canManageIntegrations, clients, commandSearch, onSelectClient, onSetActivePage]);
+
+  const boundedSelectedIndex = Math.min(selectedIndex, Math.max(commandResults.length - 1, 0));
+
+  function runCommandResult(item: CommandResult) {
+    item.action();
+    setCommandSearch("");
+    setShowCommandResults(false);
+    setSelectedIndex(0);
+  }
 
   return (
     <div className="relative hidden md:block">
@@ -95,8 +117,37 @@ export default function DashboardCommandSearch({
           onChange={(event) => {
             setCommandSearch(event.target.value);
             setShowCommandResults(true);
+            setSelectedIndex(0);
           }}
           onFocus={() => setShowCommandResults(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setShowCommandResults(false);
+              setCommandSearch("");
+              return;
+            }
+
+            if (!showCommandResults || commandResults.length === 0) {
+              return;
+            }
+
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setSelectedIndex((current) => Math.min(current + 1, commandResults.length - 1));
+              return;
+            }
+
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setSelectedIndex((current) => Math.max(current - 1, 0));
+              return;
+            }
+
+            if (event.key === "Enter") {
+              event.preventDefault();
+              runCommandResult(commandResults[boundedSelectedIndex] ?? commandResults[0]);
+            }
+          }}
           placeholder="Buscar cliente, empresa ou página..."
           className="w-full select-text bg-transparent text-[11px] text-slate-200 outline-none placeholder:text-slate-600"
         />
@@ -119,15 +170,12 @@ export default function DashboardCommandSearch({
             </div>
           )}
 
-          {commandResults.map((item) => (
+          {commandResults.map((item, index) => (
             <button
               key={`${item.type}-${item.label}`}
-              onClick={() => {
-                item.action();
-                setCommandSearch("");
-                setShowCommandResults(false);
-              }}
-              className="w-full rounded-xl px-3 py-2 text-left transition hover:bg-white/[0.06]"
+              aria-selected={index === boundedSelectedIndex}
+              onClick={() => runCommandResult(item)}
+              className={`w-full rounded-xl px-3 py-2 text-left transition hover:bg-white/[0.06] ${index === boundedSelectedIndex ? "bg-white/[0.06]" : ""}`}
             >
               <p className="text-[11px] font-medium text-slate-200">
                 {item.label}
@@ -141,4 +189,19 @@ export default function DashboardCommandSearch({
       )}
     </div>
   );
+}
+
+function normalizeCommandTerm(value?: string | null) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchesCommandSearch(term: string, ...values: Array<string | null | undefined>) {
+  if (!term) return false;
+  const searchable = normalizeCommandTerm(values.filter(Boolean).join(" "));
+  return searchable.includes(term);
 }

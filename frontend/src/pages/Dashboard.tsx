@@ -378,6 +378,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             exportCsv={exportCsv}
             onLogout={onLogout}
             authSession={authSession}
+            canManageIntegrations={canManageIntegrations}
           />
 
           <DashboardHeader

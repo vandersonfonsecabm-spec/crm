@@ -16,6 +16,7 @@ type DashboardTopbarProps = {
   exportCsv: () => void;
   onLogout: () => void;
   authSession: AuthSession | null;
+  canManageIntegrations: boolean;
 };
 
 export default function DashboardTopbar({
@@ -30,6 +31,7 @@ export default function DashboardTopbar({
   exportCsv,
   onLogout,
   authSession,
+  canManageIntegrations,
 }: DashboardTopbarProps) {
   const displayName = authSession?.usuario.nome || "Usuario Local";
   const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel, authSession?.isDemo);
@@ -68,6 +70,7 @@ export default function DashboardTopbar({
           onSelectClient={setSelectedId}
           onSetActivePage={setActivePage}
           onCloseQuickActions={() => setShowQuickActions(false)}
+          canManageIntegrations={canManageIntegrations}
         />
 
         <div className="premium-ghost hidden rounded-xl px-3 py-1.5 lg:block">

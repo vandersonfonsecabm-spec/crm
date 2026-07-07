@@ -991,14 +991,14 @@ export async function simulateWhatsappMessage(payload: WhatsappSimulationPayload
 }
 
 export async function fetchAcompanhamentos(params: AcompanhamentoQueryParams = {}) {
-  const response = await requestApiGet<ApiPaginatedResponse<ApiAcompanhamento> | ApiAcompanhamento[]>(
+  const response = await requestApiGetAuthenticated<ApiPaginatedResponse<ApiAcompanhamento> | ApiAcompanhamento[]>(
     `/acompanhamentos${toQueryString(params)}`,
   );
   return normalizePaginatedResponse(response, params);
 }
 
 export async function fetchAcompanhamentoResumo(params: { dataInicial?: string; dataFinal?: string } = {}) {
-  return requestApiGet<ApiAcompanhamentoResumo>(`/acompanhamentos/resumo${toQueryString(params)}`);
+  return requestApiGetAuthenticated<ApiAcompanhamentoResumo>(`/acompanhamentos/resumo${toQueryString(params)}`);
 }
 
 export async function createAcompanhamento(payload: AcompanhamentoPayload) {
