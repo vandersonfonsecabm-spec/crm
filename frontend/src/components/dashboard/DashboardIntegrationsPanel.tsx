@@ -25,9 +25,12 @@ import {
   fetchImportacoes,
   fetchIntegracoes,
   fetchQualidadeDados,
+  canAccessIntegrations,
+  getAuthSession,
   iniciarConexaoBling,
   mapearImportacao,
   processarImportacao,
+  simulateWhatsappMessage,
   sincronizarIntegracao,
   testarConexaoBling,
   uploadImportacao,
@@ -46,6 +49,7 @@ import {
   type HubProdutoComercial,
   type HubQualidadeDados,
   type HubUpdateStrategy,
+  type WhatsappSimulationCallResult,
 } from "../../services/crmApi";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -89,10 +93,17 @@ const MONEY_MODES: Array<{ value: HubMoneyMode; label: string }> = [
   { value: "REAIS_PONTO", label: "Reais com ponto" },
   { value: "CENTAVOS", label: "Valor em centavos" },
 ];
+const WHATSAPP_SMOKE_PAYLOAD = {
+  externalId: "smoke-admin-saudacao-20260706-01",
+  telefone: "5511999990001",
+  nome: "Contato Teste Simulador",
+  mensagem: "Bom dia",
+};
 
 type StepKey = "arquivo" | "mapeamento" | "validacao" | "importacao" | "resultado";
 type LoadState = "loading" | "success" | "error";
 type ImportErrors = { data: HubErroImportacao[]; page: number; total: number; totalPages: number };
+type WhatsappSmokeCall = WhatsappSimulationCallResult;
 
 export default function DashboardIntegrationsPanel() {
   const [state, setState] = useState<LoadState>("loading");
@@ -128,6 +139,10 @@ export default function DashboardIntegrationsPanel() {
   const [blingBusy, setBlingBusy] = useState<"connect" | "test" | "sync" | "disconnect" | null>(null);
   const [blingMessage, setBlingMessage] = useState("");
   const [lastBlingSync, setLastBlingSync] = useState<HubBlingSyncResponse | null>(null);
+  const [whatsappSmokeBusy, setWhatsappSmokeBusy] = useState<"first" | "repeat" | null>(null);
+  const [whatsappSmokeError, setWhatsappSmokeError] = useState("");
+  const [whatsappSmokeFirst, setWhatsappSmokeFirst] = useState<WhatsappSmokeCall | null>(null);
+  const [whatsappSmokeRepeat, setWhatsappSmokeRepeat] = useState<WhatsappSmokeCall | null>(null);
 
   const importPages = Math.max(1, Math.ceil(importsTotal / IMPORT_LIMIT));
   const catalogPages = Math.max(1, Math.ceil(catalogTotal / CATALOG_LIMIT));
@@ -478,6 +493,25 @@ export default function DashboardIntegrationsPanel() {
     }
   }
 
+  async function runWhatsappSmoke(kind: "first" | "repeat") {
+    if (!canAccessIntegrations(getAuthSession())) {
+      setWhatsappSmokeError("Acesso negado para executar o simulador.");
+      return;
+    }
+    setWhatsappSmokeBusy(kind);
+    setWhatsappSmokeError("");
+    if (kind === "first") setWhatsappSmokeRepeat(null);
+    try {
+      const result = await simulateWhatsappMessage(WHATSAPP_SMOKE_PAYLOAD);
+      if (kind === "first") setWhatsappSmokeFirst(result);
+      else setWhatsappSmokeRepeat(result);
+    } catch (error) {
+      setWhatsappSmokeError(errorText(error, "Não foi possível executar o smoke test do simulador."));
+    } finally {
+      setWhatsappSmokeBusy(null);
+    }
+  }
+
   return (
     <div className="space-y-4 overflow-x-hidden">
       {toast && <div className="fixed right-5 top-5 z-50 rounded-2xl border border-emerald-300/20 bg-slate-950/95 px-4 py-3 text-sm font-semibold text-emerald-100 shadow-2xl">{toast}</div>}
@@ -514,6 +548,15 @@ export default function DashboardIntegrationsPanel() {
         onTest={(id) => void testBling(id)}
         onSync={(id) => void syncBling(id)}
         onDisconnect={(id) => void disconnectBling(id)}
+      />
+
+      <WhatsappSimulationSection
+        first={whatsappSmokeFirst}
+        repeat={whatsappSmokeRepeat}
+        busy={whatsappSmokeBusy}
+        error={whatsappSmokeError}
+        onRun={() => void runWhatsappSmoke("first")}
+        onRepeat={() => void runWhatsappSmoke("repeat")}
       />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -974,6 +1017,104 @@ function BlingSection({
   );
 }
 
+function WhatsappSimulationSection({
+  first,
+  repeat,
+  busy,
+  error,
+  onRun,
+  onRepeat,
+}: {
+  first: WhatsappSmokeCall | null;
+  repeat: WhatsappSmokeCall | null;
+  busy: "first" | "repeat" | null;
+  error: string;
+  onRun: () => void;
+  onRepeat: () => void;
+}) {
+  const canRepeat = Boolean(first) && !busy;
+  return (
+    <section className="premium-panel rounded-2xl p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-100">Simulador WhatsApp</h3>
+            <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-100">
+              Sem envio real
+            </span>
+          </div>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
+            Execute uma simulação interna para validar o fluxo do catálogo e CRM. Nenhuma mensagem será enviada pelo WhatsApp.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={onRun} disabled={Boolean(busy)} className="premium-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+            {busy === "first" ? <Loader2 className="animate-spin" size={14} /> : <PlugZap size={14} />} Executar smoke test
+          </button>
+          {first && (
+            <button type="button" onClick={onRepeat} disabled={!canRepeat} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
+              {busy === "repeat" ? <Loader2 className="animate-spin" size={14} /> : <RotateCcw size={14} />} Repetir payload
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 md:grid-cols-4">
+        <Info label="External ID" value={WHATSAPP_SMOKE_PAYLOAD.externalId} />
+        <Info label="Telefone fictício" value={maskSmokePhone(WHATSAPP_SMOKE_PAYLOAD.telefone)} />
+        <Info label="Mensagem" value={WHATSAPP_SMOKE_PAYLOAD.mensagem} />
+        <Info label="Ambiente" value="Produção controlada" />
+      </div>
+
+      <Alert tone="info">Resposta apenas preparada — nenhuma mensagem será enviada.</Alert>
+      {error && <Alert tone="error">{error}</Alert>}
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {first && <WhatsappSimulationResult title="Primeira chamada" result={first} />}
+        {repeat && <WhatsappSimulationResult title="Repetição do mesmo payload" result={repeat} />}
+      </div>
+
+      {repeat?.data.duplicada === true && (
+        <Alert tone="success">Idempotência validada: a repetição do mesmo payload não criou novos efeitos.</Alert>
+      )}
+      {repeat?.data.duplicada === false && (
+        <Alert tone="error">A repetição retornou duplicada=false. Não execute uma terceira chamada antes de revisar o resultado.</Alert>
+      )}
+    </section>
+  );
+}
+
+function WhatsappSimulationResult({ title, result }: { title: string; result: WhatsappSmokeCall }) {
+  const data = result.data;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{title}</h4>
+        <StatusBadge status={data.duplicada ? "Duplicada" : "Processada"} />
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <Info label="HTTP" value={result.httpStatus} />
+        <Info label="Status" value={data.status} />
+        <Info label="Duplicada" value={data.duplicada ? "Sim" : "Não"} />
+        <Info label="Intenção" value={data.intencao?.tipo ?? "-"} />
+        <Info label="Canal" value={data.canal ? `#${data.canal.id} · ${data.canal.status}` : "-"} />
+        <Info label="Contato" value={data.contato ? `#${data.contato.id}` : "-"} />
+        <Info label="Conversa" value={data.conversa ? `#${data.conversa.id} · ${data.conversa.status}` : "-"} />
+        <Info label="Cliente" value={data.cliente ? `#${data.cliente.id} · ${data.cliente.criado ? "criado" : "reutilizado"}` : "-"} />
+        <Info label="Nota" value={data.nota?.criada ? `#${data.nota.id}` : "Não criada"} />
+        <Info label="Funil" value={`${data.funil?.etapaAnterior ?? "-"} → ${data.funil?.etapaAtual ?? "-"}${data.funil?.alterado ? " · alterado" : " · sem alteração"}`} />
+        <Info label="Acompanhamento" value={data.acompanhamento?.criado ? `#${data.acompanhamento.id}` : data.acompanhamento?.reutilizado ? `#${data.acompanhamento.id} reutilizado` : "Não criado"} />
+        <Info label="Saída" value={data.respostaPreparada ? `${data.respostaPreparada.status} · simulada` : "-"} />
+      </div>
+      {data.respostaPreparada?.texto && (
+        <div className="mt-3 rounded-xl border border-emerald-300/10 bg-emerald-300/[0.05] p-3 text-xs leading-relaxed text-emerald-50">
+          {data.respostaPreparada.texto}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QualitySection({ quality }: { quality: HubQualidadeDados | null }) {
   return (
     <section className="premium-panel rounded-2xl p-4">
@@ -1239,6 +1380,10 @@ function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function maskSmokePhone(value: string) {
+  return value.length > 4 ? `${"*".repeat(value.length - 4)}${value.slice(-4)}` : "***";
 }
 
 function formatDate(value?: string | null) {

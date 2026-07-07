@@ -562,6 +562,58 @@ export type HubCatalogQueryParams = {
 
 export type HubImportListParams = { page?: number; limit?: number; status?: string; formato?: string; busca?: string };
 
+export type WhatsappSimulationPayload = {
+  externalId?: string;
+  canalIntegracaoId?: number;
+  telefone: string;
+  nome?: string;
+  mensagem: string;
+};
+
+export type WhatsappSimulationProduct = {
+  idCanonico?: string | number | null;
+  externalId?: string | null;
+  nome?: string | null;
+  sku?: string | null;
+  codigoBarras?: string | null;
+  ativo?: boolean;
+  disponibilidade?: string | null;
+  quantidadeDisponivelTotal?: number | null;
+  precoAtualCentavos?: number | null;
+  precoOriginalCentavos?: number | null;
+  emPromocao?: boolean;
+  dadosDesatualizados?: boolean;
+  locais?: string[];
+  avisos?: string[];
+};
+
+export type WhatsappSimulationResponse = {
+  simulacaoId: number | null;
+  mensagemId: number | null;
+  externalId: string | null;
+  duplicada: boolean;
+  status: string;
+  canal: { id: number; nome: string; tipo: string; status: string; modoTeste: boolean } | null;
+  contato: { id: number; nome?: string | null; telefone?: string | null } | null;
+  conversa: { id: number; status: string } | null;
+  intencao: { tipo: string; termoBusca?: string | null; regra?: string | null };
+  termosBusca: string[];
+  produtosEncontrados: WhatsappSimulationProduct[];
+  produtoPrincipal: WhatsappSimulationProduct | null;
+  preco: { precoAtualCentavos?: number | null; emPromocao?: boolean } | null;
+  estoque: { disponibilidade?: string | null; quantidadeDisponivelTotal?: number | null; locais?: string[] } | null;
+  respostaPreparada: { id: number; texto: string; status: string } | null;
+  cliente: { id: number; criado: boolean; nome: string } | null;
+  nota: { id: number | null; criada: boolean };
+  funil: { etapaAnterior?: string | null; etapaAtual?: string | null; alterado: boolean };
+  acompanhamento: { id: number | null; criado: boolean; reutilizado: boolean };
+};
+
+export type WhatsappSimulationCallResult = {
+  httpStatus: number;
+  data: WhatsappSimulationResponse;
+};
+
 export function getAuthToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -906,6 +958,36 @@ export async function consultarCatalogoComercial(params: HubCatalogQueryParams =
 
 export async function fetchQualidadeDados() {
   return requestApiGetAuthenticated<HubQualidadeDados>("/hub/qualidade-dados");
+}
+
+export async function simulateWhatsappMessage(payload: WhatsappSimulationPayload): Promise<WhatsappSimulationCallResult> {
+  if (!hasRemoteApi()) {
+    throw new Error("Não foi possível executar o simulador agora.");
+  }
+
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error("Sessão expirada. Entre novamente para continuar.");
+  }
+
+  const response = await fetch(`${API_URL}/whatsapp/simular-mensagem`, {
+    method: "POST",
+    headers: {
+      ...buildHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const message = await readApiError(response);
+    throw new Error(message);
+  }
+
+  return {
+    httpStatus: response.status,
+    data: (await response.json()) as WhatsappSimulationResponse,
+  };
 }
 
 export async function fetchAcompanhamentos(params: AcompanhamentoQueryParams = {}) {
