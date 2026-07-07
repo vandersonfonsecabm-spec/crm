@@ -35,6 +35,7 @@ type DashboardSelectedClientPanelProps = {
   onRemoveTagFromSelected: (tag: string) => void;
   onEditClient: (client: Client) => void;
   onCopyText: (text: string, message: string) => void;
+  onRequestWhatsapp: (client: Client) => void;
 };
 
 export default function DashboardSelectedClientPanel({
@@ -59,6 +60,7 @@ export default function DashboardSelectedClientPanel({
   onRemoveTagFromSelected,
   onEditClient,
   onCopyText,
+  onRequestWhatsapp,
 }: DashboardSelectedClientPanelProps) {
   const leadScore = getLeadScore(selectedClient);
   const risk = getRisk(selectedClient);
@@ -177,15 +179,14 @@ export default function DashboardSelectedClientPanel({
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <a
-            href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(message)}`}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            onClick={() => onRequestWhatsapp(selectedClient)}
             className="saas-action rounded-xl border-emerald-300/18 bg-emerald-300/[0.075] px-2 py-2 text-left text-emerald-50 hover:border-emerald-200/28 hover:bg-emerald-300/[0.11]"
+            type="button"
           >
             <MessageCircle size={14} className="mb-1 text-emerald-200" />
             <p className="text-[10px] font-semibold">WhatsApp</p>
-          </a>
+          </button>
 
           <QuickAction
             icon={<Phone size={13} />}

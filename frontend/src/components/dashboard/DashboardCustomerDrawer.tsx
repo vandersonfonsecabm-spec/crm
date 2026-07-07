@@ -32,6 +32,7 @@ type DashboardCustomerDrawerProps = {
   onRemoveTagFromSelected: (tag: string) => void;
   onEditClient: (client: Client) => void;
   onCopyText: (text: string, message: string) => void;
+  onRequestWhatsapp: (client: Client) => void;
   onApplySmartFilter: (type: SmartFilterType) => void;
 };
 
@@ -77,6 +78,7 @@ export default function DashboardCustomerDrawer({
   onRemoveTagFromSelected,
   onEditClient,
   onCopyText,
+  onRequestWhatsapp,
   onApplySmartFilter,
 }: DashboardCustomerDrawerProps) {
   if (activePage === "automacoes") {
@@ -97,9 +99,9 @@ export default function DashboardCustomerDrawer({
           slaLabel={slaLabel}
           priorityLabel={priorityLabel}
           nextActionLabel={nextActionLabel}
-          whatsappMessage={whatsappMessage}
           onEditClient={onEditClient}
           onCopyText={onCopyText}
+          onRequestWhatsapp={onRequestWhatsapp}
           onApplySmartFilter={onApplySmartFilter}
           mode="kanban"
         />
@@ -151,6 +153,7 @@ export default function DashboardCustomerDrawer({
             onRemoveTagFromSelected={onRemoveTagFromSelected}
             onEditClient={onEditClient}
             onCopyText={onCopyText}
+            onRequestWhatsapp={onRequestWhatsapp}
           />
         ) : (
           <EmptyDecisionState />

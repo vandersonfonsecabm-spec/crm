@@ -41,6 +41,8 @@ import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
 import DashboardInventoryPanel from "../components/dashboard/DashboardInventoryPanel";
 import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegrationsPanel";
 import DashboardToast from "../components/dashboard/DashboardToast";
+import WhatsappExternalConfirmDialog from "../components/dashboard/WhatsappExternalConfirmDialog";
+import type { WhatsappExternalRequest } from "../components/dashboard/WhatsappExternalConfirmDialog";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
 import { canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession } from "../services/crmApi";
@@ -84,6 +86,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
+  const [whatsappExternalRequest, setWhatsappExternalRequest] = useState<WhatsappExternalRequest | null>(null);
   const canManageIntegrations = canAccessIntegrations(authSession);
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
 
@@ -290,6 +293,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setActivePage(page);
   }, [canManageIntegrations, setToast]);
 
+  const requestExternalWhatsapp = useCallback((client: Client) => {
+    setWhatsappExternalRequest({
+      contactName: client.name,
+      phone: client.phone,
+      message: whatsappMessage(client),
+    });
+  }, [whatsappMessage]);
+
   if (isBooting) {
     return (
       <div className="min-h-screen bg-[#050812] p-4 text-white">
@@ -481,7 +492,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                     onToggleHot={toggleHot}
                     onEditClient={setEditing}
                     onCopyText={copyText}
-                    whatsappMessage={whatsappMessage}
+                    onRequestWhatsapp={requestExternalWhatsapp}
                     onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
                     onNextPage={() => setPage((current) => Math.min(totalPages, current + 1))}
                   />
@@ -603,6 +614,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 onRemoveTagFromSelected={removeTagFromSelected}
                 onEditClient={setEditing}
                 onCopyText={copyText}
+                onRequestWhatsapp={requestExternalWhatsapp}
                 onApplySmartFilter={applySmartFilter}
               />
             )}
@@ -619,6 +631,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       )}
 
       <DashboardToast toast={toast} onClose={() => setToast("")} />
+
+      <WhatsappExternalConfirmDialog
+        request={whatsappExternalRequest}
+        onClose={() => setWhatsappExternalRequest(null)}
+      />
     </div>
   );
 }

@@ -13,9 +13,9 @@ type DashboardCommercialDecisionCenterProps = {
   slaLabel: (client: Client) => string;
   priorityLabel: (client: Client) => string;
   nextActionLabel: (client: Client) => string;
-  whatsappMessage: (client: Client) => string;
   onEditClient: (client: Client) => void;
   onCopyText: (text: string, message: string) => void;
+  onRequestWhatsapp: (client: Client) => void;
   onApplySmartFilter: (type: SmartFilterType) => void;
   mode: "kanban" | "default";
 };
@@ -31,9 +31,9 @@ export default function DashboardCommercialDecisionCenter({
   slaLabel,
   priorityLabel,
   nextActionLabel,
-  whatsappMessage,
   onEditClient,
   onCopyText,
+  onRequestWhatsapp,
   onApplySmartFilter,
   mode,
 }: DashboardCommercialDecisionCenterProps) {
@@ -120,15 +120,14 @@ export default function DashboardCommercialDecisionCenter({
             </div>
 
             <div className="mt-3 grid grid-cols-3 gap-2">
-              <a
-                href={`https://wa.me/${selectedClient.phone}?text=${encodeURIComponent(whatsappMessage(selectedClient))}`}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                onClick={() => onRequestWhatsapp(selectedClient)}
                 className="rounded-xl bg-slate-100 px-2 py-2 text-left text-slate-950 transition hover:bg-white"
+                type="button"
               >
                 <MessageCircle size={14} className="mb-1" />
                 <p className="text-[10px] font-semibold">WhatsApp</p>
-              </a>
+              </button>
 
               <ActionButton
                 icon={<Phone size={13} className="mb-1 text-emerald-300" />}

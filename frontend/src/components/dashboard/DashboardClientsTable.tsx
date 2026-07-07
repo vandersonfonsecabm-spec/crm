@@ -32,7 +32,7 @@ type DashboardClientsTableProps = {
   onToggleHot: (clientId: number) => void;
   onEditClient: (client: Client) => void;
   onCopyText: (text: string, message: string) => void;
-  whatsappMessage: (client: Client) => string;
+  onRequestWhatsapp: (client: Client) => void;
   onPreviousPage: () => void;
   onNextPage: () => void;
 };
@@ -56,7 +56,7 @@ export default function DashboardClientsTable({
   onToggleHot,
   onEditClient,
   onCopyText,
-  whatsappMessage,
+  onRequestWhatsapp,
   onPreviousPage,
   onNextPage,
 }: DashboardClientsTableProps) {
@@ -83,7 +83,7 @@ export default function DashboardClientsTable({
             onToggleHot={onToggleHot}
             onEditClient={onEditClient}
             onCopyText={onCopyText}
-            whatsappMessage={whatsappMessage}
+            onRequestWhatsapp={onRequestWhatsapp}
           />
         ))}
 
@@ -152,7 +152,7 @@ function ClientRowCard({
   onToggleHot,
   onEditClient,
   onCopyText,
-  whatsappMessage,
+  onRequestWhatsapp,
 }: {
   client: Client;
   selected: boolean;
@@ -169,7 +169,7 @@ function ClientRowCard({
   onToggleHot: (clientId: number) => void;
   onEditClient: (client: Client) => void;
   onCopyText: (text: string, message: string) => void;
-  whatsappMessage: (client: Client) => string;
+  onRequestWhatsapp: (client: Client) => void;
 }) {
   const score = getLeadScore(client);
   const priority = getPriority(client);
@@ -265,15 +265,14 @@ function ClientRowCard({
           <IconButton title="Copiar telefone" onClick={() => onCopyText(client.phone, "Telefone copiado.")}>
             <Phone size={14} />
           </IconButton>
-          <a
+          <button
             title="Abrir WhatsApp"
-            href={`https://wa.me/${client.phone}?text=${encodeURIComponent(whatsappMessage(client))}`}
-            target="_blank"
-            rel="noreferrer"
+            onClick={() => onRequestWhatsapp(client)}
             className="rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-emerald-200"
+            type="button"
           >
             <MessageCircle size={14} />
-          </a>
+          </button>
         </div>
       </div>
     </article>
