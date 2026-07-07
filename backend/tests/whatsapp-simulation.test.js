@@ -59,6 +59,7 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
     { externalId: "prod-sem-preco", sku: "SKU-PRE-00", codigoBarras: "7890000000013", nome: "Rocadeira Estoque Desconhecido", preco: null, quantidade: null, disponivel: null },
     { externalId: "prod-promo", sku: "SKU-PRO-10", codigoBarras: "7890000000014", nome: "Fertilizante Promocional", preco: 30000, promocional: 25000, quantidade: 8, disponivel: 8, local: "Loja Teste" },
     { externalId: "prod-inativo", sku: "SKU-INA-10", codigoBarras: "7890000000015", nome: "Produto Inativo Teste", preco: 10000, quantidade: 10, disponivel: 10, ativo: false },
+    { externalId: "prod-correia-a52", sku: "CORREIA-A52", codigoBarras: "7890000000016", nome: "Correia Agricola Reforcada A-52", categoria: "Agro Teste", preco: 74500, quantidade: 0, disponivel: 0 },
   ]);
   await seedCatalog(adminB.empresaId, "Simulador B", [
     { externalId: "prod-b", sku: "SKU-HID-20", codigoBarras: "7890000000099", nome: "Produto de Outra Empresa", preco: 99999, quantidade: 1, disponivel: 1 },
@@ -135,6 +136,23 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
   assert.equal(notFound.body.produtoPrincipal, null);
   assert.equal(notFound.body.acompanhamento.criado, true);
 
+  const weakMatch = await request("POST", "/whatsapp/simular-mensagem", {
+    externalId: "msg-zeta-agro-teste-999",
+    telefone: "+55 (11) 98888-0009",
+    mensagem: "Tem o produto fictício Zeta Agro Teste 999?",
+  }, adminA.token);
+  assert.equal(weakMatch.status, 201);
+  assert.equal(weakMatch.body.produtoPrincipal, null);
+  assert.equal(weakMatch.body.produtosEncontrados.some((item) => item.nome === "Correia Agricola Reforcada A-52"), false);
+  assert.equal(weakMatch.body.acompanhamento.criado, true);
+  const weakMatchReplay = await request("POST", "/whatsapp/simular-mensagem", {
+    externalId: "msg-zeta-agro-teste-999",
+    telefone: "+55 (11) 98888-0009",
+    mensagem: "Tem o produto fictício Zeta Agro Teste 999?",
+  }, adminA.token);
+  assert.equal(weakMatchReplay.body.duplicada, true);
+  assert.equal(await prisma.acompanhamento.count({ where: { empresaId: adminA.empresaId, descricao: { contains: "msg-zeta-agro-teste-999" } } }), 1);
+
   const stockZero = await request("POST", "/whatsapp/simular-mensagem", {
     externalId: "msg-sem-estoque",
     telefone: "+55 (11) 98888-0005",
@@ -209,6 +227,9 @@ async function seedCatalog(empresaId, name, products) {
         sku: product.sku,
         codigoBarras: product.codigoBarras,
         nome: product.nome,
+        descricao: product.descricao,
+        categoria: product.categoria,
+        marca: product.marca,
         ativo: product.ativo !== false,
         sincronizadoEm: product.stale ? new Date(Date.now() - 120 * 60 * 1000) : new Date(),
       },

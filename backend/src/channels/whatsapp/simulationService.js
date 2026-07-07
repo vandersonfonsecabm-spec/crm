@@ -106,13 +106,16 @@ function createWhatsappSimulationService({ prisma }) {
     if (intent.sku) filtros.sku = intent.sku;
     if (intent.codigoBarras) filtros.codigoBarras = intent.codigoBarras;
     const result = await catalogService.consultarCatalogoComercial({ empresaId, filtros });
-    if (!result.data.length) {
+    const relevant = relevantCatalogProducts(result.data, intent);
+    if (relevant.length) return { products: relevant, product: relevant[0] || null, pagination: result.pagination };
+    if (!relevant.length) {
       for (const token of searchTokens(intent.termoBusca)) {
         const fallback = await catalogService.consultarCatalogoComercial({ empresaId, filtros: { q: token, limite: 5 } });
-        if (fallback.data.length) return { products: fallback.data, product: fallback.data[0] || null, pagination: fallback.pagination };
+        const fallbackRelevant = relevantCatalogProducts(fallback.data, intent);
+        if (fallbackRelevant.length) return { products: fallbackRelevant, product: fallbackRelevant[0] || null, pagination: fallback.pagination };
       }
     }
-    return { products: result.data, product: result.data[0] || null, pagination: result.pagination };
+    return { products: [], product: null, pagination: result.pagination };
   }
 
   async function findExistingResult({ empresaId, canalIntegracaoId, externalId, prismaClient = prisma }) {
@@ -290,11 +293,73 @@ function responseExternalId(externalId) {
 }
 
 function searchTokens(term) {
-  return String(term || "")
+  return meaningfulSearchTokens(term)
+    .slice(0, 4);
+}
+
+function relevantCatalogProducts(products, intent) {
+  return (products || []).filter((product) => isRelevantCatalogProduct(product, intent));
+}
+
+function isRelevantCatalogProduct(product, intent) {
+  if (!product) return false;
+  const sku = normalizeSearchText(product.sku);
+  const barcode = normalizeSearchText(product.codigoBarras);
+  const requestedSku = normalizeSearchText(intent.sku);
+  const requestedBarcode = normalizeSearchText(intent.codigoBarras);
+  if (requestedBarcode && barcode === requestedBarcode) return true;
+  if (requestedSku && (sku === requestedSku || sku.endsWith(requestedSku) || requestedSku.endsWith(sku))) return true;
+
+  const term = normalizeSearchText(intent.termoBusca);
+  const tokens = meaningfulSearchTokens(term);
+  if (!tokens.length) return false;
+
+  const name = normalizeSearchText(product.nome);
+  const searchable = normalizeSearchText([product.nome, product.sku, product.codigoBarras].filter(Boolean).join(" "));
+  if (term.length >= 4 && (name.includes(term) || term.includes(name))) return true;
+
+  const matched = tokens.filter((token) => searchable.includes(token));
+  if (tokens.length === 1) return matched.length === 1 && tokens[0].length >= 4 && !isNumericOnly(tokens[0]);
+  return matched.length >= 2;
+}
+
+function meaningfulSearchTokens(value) {
+  return normalizeSearchText(value)
     .split(/\s+/)
     .map((item) => item.trim())
     .filter((item) => item.length >= 4)
-    .slice(0, 4);
+    .filter((item) => !isGenericSearchToken(item))
+    .filter((item) => !isNumericOnly(item));
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isGenericSearchToken(value) {
+  return new Set([
+    "produto",
+    "produtos",
+    "ficticio",
+    "teste",
+    "agro",
+    "preco",
+    "valor",
+    "estoque",
+    "disponivel",
+    "quero",
+    "gostaria",
+  ]).has(value);
+}
+
+function isNumericOnly(value) {
+  return /^\d+$/.test(String(value || ""));
 }
 
 function responsePayload({ duplicate, channel, contact, conversation, incoming, outgoing, intent, catalog, clienteResult, notaResult, funilResult, followUpResult, preparedText }) {
