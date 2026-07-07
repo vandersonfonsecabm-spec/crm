@@ -174,8 +174,15 @@ export default function DashboardSidebar({
 
           {activePage === "automacoes" && (
             <>
-              <ActionButton label="Criar regra" />
-              <ActionButton label="Ver modelos" />
+              <ActionButton
+                disabled
+                label="Criar regra"
+                title="O motor de automações ainda está em desenvolvimento."
+              />
+              <ActionButton
+                label="Ver modelos"
+                onClick={() => document.getElementById("automation-templates")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              />
             </>
           )}
 
@@ -281,18 +288,30 @@ function SidebarButton({
 }
 
 function ActionButton({
+  disabled = false,
   label,
   onClick,
+  title,
 }: {
+  disabled?: boolean;
   label: string;
   onClick?: () => void;
+  title?: string;
 }) {
   return (
     <button
+      aria-disabled={disabled}
+      disabled={disabled}
       onClick={onClick}
-      className="box-border h-9 w-full rounded-xl border border-white/[0.07] bg-white/[0.045] px-3 text-left text-[11px] text-slate-300 transition-all duration-200 hover:border-cyan-200/20 hover:bg-cyan-300/[0.06] hover:text-slate-100"
+      title={title}
+      className={`inline-flex box-border h-9 w-full items-center rounded-xl border px-3 text-left text-[11px] transition-all duration-200 ${
+        disabled
+          ? "cursor-not-allowed border-white/[0.05] bg-white/[0.025] text-slate-500"
+          : "border-white/[0.07] bg-white/[0.045] text-slate-300 hover:border-cyan-200/20 hover:bg-cyan-300/[0.06] hover:text-slate-100"
+      }`}
     >
-      {label}
+      <span>{label}</span>
+      {disabled && <span className="ml-2 text-[9px] uppercase tracking-[0.12em] text-slate-600">em breve</span>}
     </button>
   );
 }
