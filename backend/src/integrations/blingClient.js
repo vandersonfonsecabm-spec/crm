@@ -33,12 +33,14 @@ function buildAuthorizationUrl({ state }) {
   const url = new URL(BLING_AUTHORIZE_URL);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", config.clientId);
+  url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", state);
   return url.toString();
 }
 
 async function exchangeCodeForTokens(code) {
-  return tokenRequest({ grant_type: "authorization_code", code });
+  const config = assertBlingConfigured();
+  return tokenRequest({ grant_type: "authorization_code", code, redirect_uri: config.redirectUri });
 }
 
 async function refreshBlingTokens(refreshToken) {

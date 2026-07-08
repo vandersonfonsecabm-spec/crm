@@ -87,6 +87,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
   const [whatsappExternalRequest, setWhatsappExternalRequest] = useState<WhatsappExternalRequest | null>(null);
+  const [blingReturnMessage, setBlingReturnMessage] = useState("");
   const canManageIntegrations = canAccessIntegrations(authSession);
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
 
@@ -291,6 +292,36 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       return;
     }
     setActivePage(page);
+  }, [canManageIntegrations, setToast]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const blingStatus = url.searchParams.get("bling");
+    if (!blingStatus) return;
+
+    const motivo = url.searchParams.get("motivo") || "";
+    const message = blingStatus === "conectado"
+      ? "Bling conectado com sucesso."
+      : blingErrorMessage(motivo);
+
+    url.searchParams.delete("bling");
+    url.searchParams.delete("motivo");
+    url.searchParams.delete("codigo");
+    url.searchParams.delete("integracaoId");
+    url.searchParams.delete("code");
+    url.searchParams.delete("state");
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+
+    const timeout = window.setTimeout(() => {
+      if (canManageIntegrations) {
+        setActivePage("integracoes");
+        setBlingReturnMessage(message);
+      } else {
+        setToast(message);
+      }
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [canManageIntegrations, setToast]);
 
   const requestExternalWhatsapp = useCallback((client: Client) => {
@@ -551,7 +582,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
               {activePage === "estoque" && <DashboardInventoryPanel />}
 
-              {activePage === "integracoes" && canManageIntegrations && <DashboardIntegrationsPanel />}
+              {activePage === "integracoes" && canManageIntegrations && <DashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />}
 
               <DashboardKanbanBoard
                 activePage={activePage}
@@ -646,4 +677,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       />
     </div>
   );
+}
+
+function blingErrorMessage(reason: string) {
+  const normalized = reason.trim().toLowerCase();
+  if (normalized === "configuracao") return "Não foi possível concluir a conexão com o Bling. Revise a configuração do conector.";
+  if (normalized === "autorizacao") return "Não foi possível concluir a conexão com o Bling. A autorização não foi finalizada.";
+  if (normalized === "state") return "Não foi possível concluir a conexão com o Bling. A autorização expirou ou é inválida.";
+  if (normalized === "token") return "Não foi possível concluir a conexão com o Bling. Tente iniciar a conexão novamente.";
+  return "Não foi possível concluir a conexão com o Bling.";
 }

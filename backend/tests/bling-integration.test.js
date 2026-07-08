@@ -70,19 +70,30 @@ test("Bling OAuth bloqueia perfis, usa state persistente e criptografa tokens", 
   const started = await request("POST", "/integracoes/bling/iniciar", {}, admin.token);
   assert.equal(started.status, 200);
   assert.match(started.body.authorizationUrl, /^https:\/\/www\.bling\.com\.br\/Api\/v3\/oauth\/authorize/);
-  const state = new URL(started.body.authorizationUrl).searchParams.get("state");
+  const authorizationUrl = new URL(started.body.authorizationUrl);
+  assert.equal(authorizationUrl.searchParams.get("redirect_uri"), process.env.BLING_REDIRECT_URI);
+  assert.equal(authorizationUrl.searchParams.get("client_id"), process.env.BLING_CLIENT_ID);
+  assert.equal(authorizationUrl.toString().includes(process.env.BLING_CLIENT_SECRET), false);
+  const state = authorizationUrl.searchParams.get("state");
   assert.ok(state);
   assert.equal(await prisma.integracaoOAuthState.count({ where: { empresaId: admin.empresaId, usedAt: null } }), 1);
 
   const invalid = await request("GET", "/integracoes/bling/callback?code=abc&state=invalido");
   assert.equal(invalid.status, 302);
   assert.match(invalid.headers.location, /bling=erro/);
+  assert.match(invalid.headers.location, /motivo=state/);
+  assert.equal(invalid.headers.location.includes("code=abc"), false);
+  assert.equal(invalid.headers.location.includes("state=invalido"), false);
 
   mockFetch(async (url, options) => {
     fetchCalls.push({ url: String(url), options });
     assert.equal(String(url), "https://api.bling.com.br/Api/v3/oauth/token");
     assert.equal(options.headers.Authorization.startsWith("Basic "), true);
     assert.equal(options.headers["enable-jwt"], "1");
+    const body = new URLSearchParams(options.body);
+    assert.equal(body.get("grant_type"), "authorization_code");
+    assert.equal(body.get("code"), "oauth-code");
+    assert.equal(body.get("redirect_uri"), process.env.BLING_REDIRECT_URI);
     return jsonResponse({
       access_token: "access-secret",
       refresh_token: "refresh-secret",
@@ -95,6 +106,11 @@ test("Bling OAuth bloqueia perfis, usa state persistente e criptografa tokens", 
   const callback = await request("GET", `/integracoes/bling/callback?code=oauth-code&state=${encodeURIComponent(state)}`);
   assert.equal(callback.status, 302);
   assert.match(callback.headers.location, /bling=conectado/);
+  assert.equal(callback.headers.location.includes("integracaoId"), false);
+  assert.equal(callback.headers.location.includes("oauth-code"), false);
+  assert.equal(callback.headers.location.includes(state), false);
+  assert.equal(callback.headers.location.includes("access-secret"), false);
+  assert.equal(callback.headers.location.includes("refresh-secret"), false);
   const integration = await prisma.integracao.findFirst({ where: { empresaId: admin.empresaId, tipo: "BLING" } });
   assert.equal(integration.status, "ATIVA");
   assert.equal(integration.modo, "SOMENTE_LEITURA");
@@ -106,6 +122,7 @@ test("Bling OAuth bloqueia perfis, usa state persistente e criptografa tokens", 
   const reused = await request("GET", `/integracoes/bling/callback?code=oauth-code&state=${encodeURIComponent(state)}`);
   assert.equal(reused.status, 302);
   assert.match(reused.headers.location, /bling=erro/);
+  assert.match(reused.headers.location, /motivo=state/);
 
   const expiredStart = await prisma.integracaoOAuthState.create({
     data: {
@@ -144,6 +161,10 @@ test("Bling sincroniza com refresh, 429, paginação, normalização e idempotê
     const parsed = new URL(String(url));
     fetchCalls.push({ url: String(url), authorization: options.headers?.Authorization });
     if (parsed.pathname.endsWith("/oauth/token")) {
+      const body = new URLSearchParams(options.body);
+      assert.equal(body.get("grant_type"), "refresh_token");
+      assert.equal(body.get("refresh_token"), "refresh-original");
+      assert.equal(body.has("redirect_uri"), false);
       return jsonResponse({ access_token: "new-access", refresh_token: "refresh-rotated", expires_in: 21600, token_type: "Bearer" });
     }
     assert.equal(options.headers.Authorization.includes("new-access"), true);
@@ -249,6 +270,12 @@ test("Bling trata timeout e ausência de configuração sem vazar tokens", async
   const notConfigured = await request("POST", "/integracoes/bling/iniciar", {}, admin.token);
   assert.equal(notConfigured.status, 501);
   process.env.BLING_CLIENT_ID = previousId;
+
+  const previousRedirect = process.env.BLING_REDIRECT_URI;
+  process.env.BLING_REDIRECT_URI = "";
+  const missingRedirect = await request("POST", "/integracoes/bling/iniciar", {}, admin.token);
+  assert.equal(missingRedirect.status, 501);
+  process.env.BLING_REDIRECT_URI = previousRedirect;
 });
 
 function mockFetch(handler) {

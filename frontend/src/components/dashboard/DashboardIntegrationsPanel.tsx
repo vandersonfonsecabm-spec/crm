@@ -116,7 +116,7 @@ type WhatsappScenario = {
   warning?: string;
 };
 
-export default function DashboardIntegrationsPanel() {
+export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: { initialBlingNotice?: string }) {
   const [state, setState] = useState<LoadState>("loading");
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
@@ -174,6 +174,16 @@ export default function DashboardIntegrationsPanel() {
     const timeout = window.setTimeout(() => setToast(""), 3400);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    if (!initialBlingNotice) return;
+    const timeout = window.setTimeout(() => {
+      setBlingMessage(initialBlingNotice);
+      void loadAll();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialBlingNotice]);
 
   const filteredImports = useMemo(() => {
     const term = importSearch.trim().toLowerCase();

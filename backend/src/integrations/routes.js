@@ -45,11 +45,11 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       if (req.query.error) {
         throw httpError(400, clean(req.query.error_description || req.query.error), "BLING_AUTH_DENIED");
       }
-      const integracao = await blingService.concluirOAuth({ code, state });
-      return res.redirect(`${frontendUrl}/?bling=conectado&integracaoId=${integracao.id}`);
+      await blingService.concluirOAuth({ code, state });
+      return res.redirect(`${frontendUrl}/?bling=conectado`);
     } catch (error) {
-      const code = encodeURIComponent(error.code || "BLING_CALLBACK_ERROR");
-      return res.redirect(`${frontendUrl}/?bling=erro&codigo=${code}`);
+      const reason = encodeURIComponent(blingCallbackReason(error.code));
+      return res.redirect(`${frontendUrl}/?bling=erro&motivo=${reason}`);
     }
   });
 
@@ -730,6 +730,14 @@ function statusFromCode(code) {
   if (code === "INTEGRATION_INVALID_TYPE" || code === "VALIDATION_ERROR" || code?.startsWith("IMPORT_")) return 400;
   if (code === "ENCRYPTION_KEY_REQUIRED") return 500;
   return null;
+}
+
+function blingCallbackReason(code) {
+  if (code === "BLING_NOT_CONFIGURED") return "configuracao";
+  if (code === "BLING_AUTH_DENIED" || code === "BLING_AUTH_CODE_REQUIRED") return "autorizacao";
+  if (code === "BLING_INVALID_STATE") return "state";
+  if (code === "BLING_TOKEN_ERROR") return "token";
+  return "conexao";
 }
 
 function httpError(status, message, code) {
