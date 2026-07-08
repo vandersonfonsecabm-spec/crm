@@ -627,7 +627,15 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       )}
 
       {creating && (
-        <ClientModal title="Novo cliente" client={creating} setClient={setCreating} onClose={() => setCreating(null)} onSave={createClient} saveLabel="Criar cliente" />
+        <ClientModal
+          title="Novo cliente"
+          client={creating}
+          setClient={setCreating}
+          onClose={() => setCreating(null)}
+          onSave={createClient}
+          saveLabel="Criar cliente"
+          validateBeforeSave
+        />
       )}
 
       <DashboardToast toast={toast} onClose={() => setToast("")} />

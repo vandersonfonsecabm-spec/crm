@@ -185,14 +185,23 @@ export default function useDashboardActions({
 
   async function createClient() {
     if (!creating || !creating.name.trim()) {
-      showToast("Informe o nome do cliente.");
-      return;
+      throw new Error("Informe o nome do cliente.");
     }
 
-    const newClient: Client = {
+    const normalizedClient = {
       ...creating,
+      name: creating.name.trim().replace(/\s+/g, " "),
+      company: creating.company.trim().replace(/\s+/g, " "),
+      phone: creating.phone.trim(),
+      email: creating.email.trim(),
+      source: creating.source.trim().replace(/\s+/g, " "),
+      nextFollowUp: creating.nextFollowUp.trim().replace(/\s+/g, " "),
+    };
+
+    const newClient: Client = {
+      ...normalizedClient,
       id: Date.now(),
-      tags: creating.tags.length ? creating.tags : ["Novo"],
+      tags: normalizedClient.tags.length ? normalizedClient.tags : ["Novo"],
       notes: [],
     };
 
@@ -205,10 +214,7 @@ export default function useDashboardActions({
       setCreating(null);
       showToast(syncedClient ? "Cliente criado e sincronizado." : "Cliente criado.");
     } catch {
-      setClients((current) => [newClient, ...current]);
-      setSelectedId(newClient.id);
-      setCreating(null);
-      showToast("Cliente criado neste navegador. Sincronização indisponível.");
+      throw new Error("Não foi possível criar o cliente agora. Tente novamente.");
     }
   }
 
