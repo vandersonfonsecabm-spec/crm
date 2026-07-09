@@ -170,6 +170,8 @@ test("Bling sincroniza com refresh, 429, paginação, normalização e idempotê
     }
     assert.equal(options.headers.Authorization.includes("new-access"), true);
     if (parsed.pathname.endsWith("/produtos") && parsed.searchParams.get("pagina") === "1") {
+      assert.equal(parsed.searchParams.get("criterio"), "5");
+      assert.equal(parsed.searchParams.get("tipo"), "T");
       productsPageOneAttempts += 1;
       if (productsPageOneAttempts === 1) return jsonResponse({ error: { message: "rate" } }, 429, { "Retry-After": "0" });
       return jsonResponse({ data: [
@@ -264,6 +266,8 @@ test("Bling sincronizacao padrao usa apenas produtos e estoque", async () => {
   mockFetch(async (url) => {
     const parsed = new URL(String(url));
     if (parsed.pathname.endsWith("/produtos")) {
+      assert.equal(parsed.searchParams.get("criterio"), "5");
+      assert.equal(parsed.searchParams.get("tipo"), "T");
       productCalls += 1;
       if (parsed.searchParams.get("pagina") === "1") {
         return jsonResponse({ data: [{ id: 401, codigo: "SKU-BLG-401", nome: "Produto Bling 401", preco: 40 }] });
@@ -317,6 +321,8 @@ test("Bling sincronizacao deduplica entidades e rejeita valores desconhecidos", 
   mockFetch(async (url) => {
     const parsed = new URL(String(url));
     if (parsed.pathname.endsWith("/produtos")) {
+      assert.equal(parsed.searchParams.get("criterio"), "5");
+      assert.equal(parsed.searchParams.get("tipo"), "T");
       productCalls += 1;
       return jsonResponse({ data: [] });
     }
@@ -364,6 +370,8 @@ test("Bling consulta saldo apenas com ids de produtos validos e preserva estoque
     fetchCalls.push({ url: String(url), authorization: options.headers?.Authorization });
     assert.equal(options.headers.Authorization.includes("access-stock"), true);
     if (parsed.pathname.endsWith("/produtos") && parsed.searchParams.get("pagina") === "1") {
+      assert.equal(parsed.searchParams.get("criterio"), "5");
+      assert.equal(parsed.searchParams.get("tipo"), "T");
       return jsonResponse({ data: [
         { id: 201, codigo: "SKU-BLG-201", nome: "Produto Bling 201", preco: 10 },
         { codigo: "SKU-SEM-ID", nome: "Produto sem ID Bling", preco: 20 },
@@ -416,7 +424,11 @@ test("Bling nao consulta saldo quando nao ha produtos", async () => {
 
   mockFetch(async (url) => {
     const parsed = new URL(String(url));
-    if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
+    if (parsed.pathname.endsWith("/produtos")) {
+      assert.equal(parsed.searchParams.get("criterio"), "5");
+      assert.equal(parsed.searchParams.get("tipo"), "T");
+      return jsonResponse({ data: [] });
+    }
     if (parsed.pathname.endsWith("/estoques/saldos")) throw new Error("Saldo nao deveria ser consultado sem produtos.");
     throw new Error(`Unexpected URL ${url}`);
   });
@@ -450,6 +462,8 @@ test("Bling sanitiza falta de escopo ao consultar saldo", async () => {
   mockFetch(async (url) => {
     const parsed = new URL(String(url));
     if (parsed.pathname.endsWith("/produtos") && parsed.searchParams.get("pagina") === "1") {
+      assert.equal(parsed.searchParams.get("criterio"), "5");
+      assert.equal(parsed.searchParams.get("tipo"), "T");
       return jsonResponse({ data: [{ id: 301, codigo: "SKU-BLG-301", nome: "Produto Bling 301" }] });
     }
     if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });

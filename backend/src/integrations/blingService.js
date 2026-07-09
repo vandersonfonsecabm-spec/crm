@@ -13,6 +13,7 @@ const {
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SYNC_ENTITIES = new Set(["PRODUTOS", "ESTOQUE", "PRECOS", "CONDICOES_PAGAMENTO"]);
 const STOCK_PRODUCT_ID_BATCH_SIZE = 50;
+const PRODUCT_LIST_PARAMS = { criterio: 5, tipo: "T" };
 const refreshLocks = new Map();
 
 function createBlingService({ prisma }) {
@@ -112,7 +113,7 @@ function createBlingService({ prisma }) {
       let productIndex = new Map();
 
       if (requested.includes("PRODUTOS")) {
-        const products = await client.fetchPaginated("/produtos");
+        const products = await client.fetchPaginated("/produtos", PRODUCT_LIST_PARAMS);
         counters.produtosRecebidos = products.length;
         const result = await upsertProducts({ prisma, empresaId, integracaoId: integracao.id, products, now });
         counters.produtosCriados += result.created;
@@ -132,7 +133,7 @@ function createBlingService({ prisma }) {
       }
 
       if (requested.includes("PRECOS")) {
-        const products = requested.includes("PRODUTOS") ? Array.from(productIndex.values()).map((entry) => entry.original).filter(Boolean) : await client.fetchPaginated("/produtos");
+        const products = requested.includes("PRODUTOS") ? Array.from(productIndex.values()).map((entry) => entry.original).filter(Boolean) : await client.fetchPaginated("/produtos", PRODUCT_LIST_PARAMS);
         counters.precosRecebidos = products.length;
         const result = await upsertPrices({ prisma, empresaId, integracaoId: integracao.id, products, productIndex, now });
         counters.precosCriados += result.created;
