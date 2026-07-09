@@ -12,6 +12,7 @@ const {
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SYNC_ENTITIES = new Set(["PRODUTOS", "ESTOQUE", "PRECOS", "CONDICOES_PAGAMENTO"]);
+const STOCK_PRODUCT_ID_BATCH_SIZE = 50;
 const refreshLocks = new Map();
 
 function createBlingService({ prisma }) {
@@ -122,7 +123,7 @@ function createBlingService({ prisma }) {
       }
 
       if (requested.includes("ESTOQUE")) {
-        const stocks = await client.fetchPaginated("/estoques/saldos");
+        const stocks = await fetchStocksForProducts({ client, productIndex });
         counters.estoquesRecebidos = stocks.length;
         const result = await upsertStocks({ prisma, empresaId, integracaoId: integracao.id, stocks, productIndex, now });
         counters.estoquesCriados += result.created;
@@ -360,6 +361,38 @@ async function loadProductIndex({ prisma, empresaId, integracaoId }) {
     if (produto.codigoBarras) index.set(produto.codigoBarras, { produto });
   }
   return index;
+}
+
+async function fetchStocksForProducts({ client, productIndex }) {
+  const productIds = extractBlingProductIds(productIndex);
+  if (!productIds.length) return [];
+  const stocks = [];
+  for (const batch of chunk(productIds, STOCK_PRODUCT_ID_BATCH_SIZE)) {
+    const batchStocks = await client.fetchPaginated("/estoques/saldos", { "idsProdutos[]": batch });
+    stocks.push(...batchStocks);
+  }
+  return stocks;
+}
+
+function extractBlingProductIds(productIndex) {
+  const ids = new Set();
+  for (const entry of productIndex.values()) {
+    const productId = text(entry?.original?.id || entry?.produto?.externalId);
+    if (isBlingProductId(productId)) ids.add(productId);
+  }
+  return [...ids];
+}
+
+function isBlingProductId(value) {
+  return /^\d+$/.test(text(value));
+}
+
+function chunk(values, size) {
+  const batches = [];
+  for (let index = 0; index < values.length; index += size) {
+    batches.push(values.slice(index, index + size));
+  }
+  return batches;
 }
 
 function normalizeProduct(item = {}) {

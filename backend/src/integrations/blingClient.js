@@ -122,7 +122,7 @@ class BlingHttpClient {
     await this.ensureFreshToken();
     const url = new URL(`${BLING_API_BASE_URL}${path}`);
     for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+      appendSearchParam(url.searchParams, key, value);
     }
     const response = await fetchWithTimeout(url.toString(), {
       method: "GET",
@@ -221,6 +221,16 @@ function retryAfterMs(response) {
   if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
   const date = new Date(value).getTime();
   return Number.isFinite(date) ? Math.max(0, date - Date.now()) : 0;
+}
+
+function appendSearchParam(searchParams, key, value) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (item !== undefined && item !== null && item !== "") searchParams.append(key, String(item));
+    }
+    return;
+  }
+  if (value !== undefined && value !== null && value !== "") searchParams.set(key, String(value));
 }
 
 function blingError(code, message, status) {

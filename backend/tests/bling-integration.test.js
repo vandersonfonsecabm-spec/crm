@@ -157,6 +157,7 @@ test("Bling sincroniza com refresh, 429, paginação, normalização e idempotê
   });
 
   let productsPageOneAttempts = 0;
+  const stockProductIdBatches = [];
   mockFetch(async (url, options) => {
     const parsed = new URL(String(url));
     fetchCalls.push({ url: String(url), authorization: options.headers?.Authorization });
@@ -180,12 +181,14 @@ test("Bling sincroniza com refresh, 429, paginação, normalização e idempotê
       return jsonResponse({ data: [] });
     }
     if (parsed.pathname.endsWith("/estoques/saldos") && parsed.searchParams.get("pagina") === "1") {
+      stockProductIdBatches.push(parsed.searchParams.getAll("idsProdutos[]"));
       return jsonResponse({ data: [
         { produto: { id: 101 }, deposito: { id: 1, descricao: "Geral" }, saldoFisicoTotal: 10, reservado: 2 },
         { produto: { id: 999 }, deposito: { id: 1, descricao: "Geral" }, saldoFisicoTotal: 5 },
       ] });
     }
     if (parsed.pathname.endsWith("/estoques/saldos")) {
+      stockProductIdBatches.push(parsed.searchParams.getAll("idsProdutos[]"));
       return jsonResponse({ data: [] });
     }
     if (parsed.pathname.endsWith("/formas-pagamentos") && parsed.searchParams.get("pagina") === "1") {
@@ -210,6 +213,7 @@ test("Bling sincroniza com refresh, 429, paginação, normalização e idempotê
   assert.equal(sync.body.resultado.condicoesCriadas, 1);
   assert.equal(sync.body.resultado.erros, 1);
   assert.equal(productsPageOneAttempts, 2);
+  assert.deepEqual(stockProductIdBatches[0], ["101", "102"]);
 
   const stored = await prisma.integracao.findUnique({ where: { id: integration.id } });
   assert.equal(decryptCredentials(stored.credenciaisCriptografadas).refreshToken, "refresh-rotated");
@@ -234,6 +238,134 @@ test("Bling sincroniza com refresh, 429, paginação, normalização e idempotê
   assert.equal(disconnect.body.ativo, false);
   const disconnected = await prisma.integracao.findUnique({ where: { id: integration.id } });
   assert.equal(disconnected.credenciaisCriptografadas, null);
+});
+
+test("Bling consulta saldo apenas com ids de produtos validos e preserva estoque zero", async () => {
+  const admin = await registerAndLogin("Empresa Bling Estoque", "Admin Estoque", "admin-estoque@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Estoque",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "access-stock",
+        refreshToken: "refresh-stock",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  let stockCalls = 0;
+  mockFetch(async (url, options) => {
+    const parsed = new URL(String(url));
+    fetchCalls.push({ url: String(url), authorization: options.headers?.Authorization });
+    assert.equal(options.headers.Authorization.includes("access-stock"), true);
+    if (parsed.pathname.endsWith("/produtos") && parsed.searchParams.get("pagina") === "1") {
+      return jsonResponse({ data: [
+        { id: 201, codigo: "SKU-BLG-201", nome: "Produto Bling 201", preco: 10 },
+        { codigo: "SKU-SEM-ID", nome: "Produto sem ID Bling", preco: 20 },
+      ] });
+    }
+    if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
+    if (parsed.pathname.endsWith("/estoques/saldos")) {
+      stockCalls += 1;
+      assert.deepEqual(parsed.searchParams.getAll("idsProdutos[]"), ["201"]);
+      if (parsed.searchParams.get("pagina") === "1") {
+        return jsonResponse({ data: [
+          { produto: { id: 201 }, deposito: { id: 7, descricao: "Central" }, saldoFisicoTotal: 0, reservado: 0 },
+        ] });
+      }
+      return jsonResponse({ data: [] });
+    }
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const sync = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS", "ESTOQUE"] }, admin.token);
+  assert.equal(sync.status, 200);
+  assert.equal(sync.body.resultado.produtosCriados, 2);
+  assert.equal(sync.body.resultado.estoquesCriados, 1);
+  assert.equal(sync.body.resultado.erros, 0);
+  assert.equal(stockCalls, 1);
+
+  const product201 = await prisma.produtoExterno.findUnique({ where: { integracaoId_externalId: { integracaoId: integration.id, externalId: "201" } }, include: { estoques: true } });
+  assert.equal(product201.estoques[0].quantidade.toString(), "0");
+  assert.equal(product201.estoques[0].disponivel.toString(), "0");
+});
+
+test("Bling nao consulta saldo quando nao ha produtos", async () => {
+  const admin = await registerAndLogin("Empresa Bling Sem Produtos", "Admin Sem Produtos", "admin-sem-produtos@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Sem Produtos",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "access-empty",
+        refreshToken: "refresh-empty",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  mockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
+    if (parsed.pathname.endsWith("/estoques/saldos")) throw new Error("Saldo nao deveria ser consultado sem produtos.");
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const sync = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS", "ESTOQUE"] }, admin.token);
+  assert.equal(sync.status, 200);
+  assert.equal(sync.body.resultado.produtosRecebidos, 0);
+  assert.equal(sync.body.resultado.estoquesRecebidos, 0);
+  assert.equal(sync.body.resultado.erros, 0);
+});
+
+test("Bling sanitiza falta de escopo ao consultar saldo", async () => {
+  const admin = await registerAndLogin("Empresa Bling Escopo", "Admin Escopo", "admin-escopo@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Escopo",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "access-scope",
+        refreshToken: "refresh-scope",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  mockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/produtos") && parsed.searchParams.get("pagina") === "1") {
+      return jsonResponse({ data: [{ id: 301, codigo: "SKU-BLG-301", nome: "Produto Bling 301" }] });
+    }
+    if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
+    if (parsed.pathname.endsWith("/estoques/saldos")) {
+      assert.deepEqual(parsed.searchParams.getAll("idsProdutos[]"), ["301"]);
+      return jsonResponse({ error: { message: "escopo insuficiente" } }, 403);
+    }
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const sync = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS", "ESTOQUE"] }, admin.token);
+  assert.equal(sync.status, 403);
+  assert.equal(sync.body.codigo, "BLING_HTTP_ERROR");
+  assert.equal(JSON.stringify(sync.body).includes("access-scope"), false);
+  assert.equal(JSON.stringify(sync.body).includes("refresh-scope"), false);
 });
 
 test("Bling trata timeout e ausência de configuração sem vazar tokens", async () => {
