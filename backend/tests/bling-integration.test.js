@@ -366,6 +366,10 @@ test("Bling sanitiza falta de escopo ao consultar saldo", async () => {
   assert.equal(sync.body.codigo, "BLING_HTTP_ERROR");
   assert.equal(JSON.stringify(sync.body).includes("access-scope"), false);
   assert.equal(JSON.stringify(sync.body).includes("refresh-scope"), false);
+  const afterError = await prisma.integracao.findUnique({ where: { id: integration.id } });
+  assert.equal(afterError.status, "ATIVA");
+  assert.equal(afterError.ativo, true);
+  assert.equal(afterError.credenciaisCriptografadas.includes("access-scope"), false);
 });
 
 test("Bling trata timeout e ausência de configuração sem vazar tokens", async () => {

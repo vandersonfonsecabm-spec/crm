@@ -1012,9 +1012,9 @@ function BlingSection({
   onSync: (id: number) => void;
   onDisconnect: (id: number) => void;
 }) {
-  const active = integrations.find((item) => item.tipo === "BLING" && item.ativo && item.status === "ATIVA");
+  const active = integrations.find((item) => item.tipo === "BLING" && item.ativo && item.possuiCredenciais && item.status !== "INATIVA");
   const latest = active ?? integrations.find((item) => item.tipo === "BLING");
-  const statusLabel = active ? "Conectado" : latest ? "Desconectado" : "Não conectado";
+  const statusLabel = active ? (active.status === "ERRO" ? "Conectado com erro" : "Conectado") : latest ? "Desconectado" : "Não conectado";
 
   return (
     <section className="premium-panel rounded-2xl p-4">

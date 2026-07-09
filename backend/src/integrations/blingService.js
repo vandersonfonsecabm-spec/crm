@@ -195,7 +195,7 @@ function createBlingService({ prisma }) {
         });
         await tx.integracao.update({
           where: { id: integracao.id },
-          data: { status: "ERRO", ultimoErroEm: now, ultimaSincronizacaoEm: now },
+          data: { status: statusAfterSyncError(integracao, error), ultimoErroEm: now, ultimaSincronizacaoEm: now },
         });
         return syncFailed;
       });
@@ -515,6 +515,12 @@ function sanitizeError(error) {
     code: error?.code || "BLING_SYNC_ERROR",
     message: text(error?.message) || "Não foi possível sincronizar com o Bling.",
   };
+}
+
+function statusAfterSyncError(integracao, error) {
+  if (!integracao?.ativo || !integracao?.credenciaisCriptografadas) return "ERRO";
+  if (["BLING_CREDENTIALS_REQUIRED", "BLING_TOKEN_ERROR"].includes(error?.code)) return "ERRO";
+  return "ATIVA";
 }
 
 function moneyToCents(value) {
