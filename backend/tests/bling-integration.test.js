@@ -240,6 +240,105 @@ test("Bling sincroniza com refresh, 429, paginação, normalização e idempotê
   assert.equal(disconnected.credenciaisCriptografadas, null);
 });
 
+test("Bling sincronizacao padrao usa apenas produtos e estoque", async () => {
+  const admin = await registerAndLogin("Empresa Bling Padrao", "Admin Padrao", "admin-padrao@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Padrao",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "access-default",
+        refreshToken: "refresh-default",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  let productCalls = 0;
+  let stockCalls = 0;
+  mockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/produtos")) {
+      productCalls += 1;
+      if (parsed.searchParams.get("pagina") === "1") {
+        return jsonResponse({ data: [{ id: 401, codigo: "SKU-BLG-401", nome: "Produto Bling 401", preco: 40 }] });
+      }
+      return jsonResponse({ data: [] });
+    }
+    if (parsed.pathname.endsWith("/estoques/saldos")) {
+      stockCalls += 1;
+      assert.deepEqual(parsed.searchParams.getAll("idsProdutos[]"), ["401"]);
+      if (parsed.searchParams.get("pagina") === "1") {
+        return jsonResponse({ data: [{ produto: { id: 401 }, deposito: { id: 1, descricao: "Geral" }, saldoFisicoTotal: 3, reservado: 0 }] });
+      }
+      return jsonResponse({ data: [] });
+    }
+    if (parsed.pathname.endsWith("/formas-pagamentos")) throw new Error("Condicoes de pagamento nao devem ser consultadas no fluxo padrao.");
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const sync = await request("POST", `/integracoes/${integration.id}/sincronizar`, {}, admin.token);
+  assert.equal(sync.status, 200);
+  assert.deepEqual(sync.body.sincronizacao.metadados.entidades, ["PRODUTOS", "ESTOQUE"]);
+  assert.equal(sync.body.resultado.produtosCriados, 1);
+  assert.equal(sync.body.resultado.estoquesCriados, 1);
+  assert.equal(sync.body.resultado.precosCriados, 0);
+  assert.equal(sync.body.resultado.condicoesCriadas, 0);
+  assert.equal(productCalls, 1);
+  assert.equal(stockCalls, 1);
+});
+
+test("Bling sincronizacao deduplica entidades e rejeita valores desconhecidos", async () => {
+  const admin = await registerAndLogin("Empresa Bling Entidades", "Admin Entidades", "admin-entidades@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Entidades",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "access-entities",
+        refreshToken: "refresh-entities",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  let productCalls = 0;
+  let stockCalls = 0;
+  mockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/produtos")) {
+      productCalls += 1;
+      return jsonResponse({ data: [] });
+    }
+    if (parsed.pathname.endsWith("/estoques/saldos")) {
+      stockCalls += 1;
+      return jsonResponse({ data: [] });
+    }
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const sync = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS", "produtos", "ESTOQUE"] }, admin.token);
+  assert.equal(sync.status, 200);
+  assert.deepEqual(sync.body.sincronizacao.metadados.entidades, ["PRODUTOS", "ESTOQUE"]);
+  assert.equal(productCalls, 1);
+  assert.equal(stockCalls, 0);
+
+  const invalid = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS", "FORMAS_PAGAMENTO"] }, admin.token);
+  assert.equal(invalid.status, 400);
+  assert.equal(invalid.body.codigo, "VALIDATION_ERROR");
+  assert.match(invalid.body.erro, /FORMAS_PAGAMENTO/);
+});
+
 test("Bling consulta saldo apenas com ids de produtos validos e preserva estoque zero", async () => {
   const admin = await registerAndLogin("Empresa Bling Estoque", "Admin Estoque", "admin-estoque@test.local");
   const integration = await prisma.integracao.create({

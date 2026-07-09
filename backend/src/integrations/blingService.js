@@ -449,9 +449,11 @@ function normalizePaymentTerm(item = {}) {
 }
 
 function normalizeEntities(entidades) {
-  const requested = Array.isArray(entidades) && entidades.length ? entidades : ["PRODUTOS", "ESTOQUE", "PRECOS", "CONDICOES_PAGAMENTO"];
-  const normalized = requested.map((item) => text(item).toUpperCase()).filter((item) => SYNC_ENTITIES.has(item));
+  const requested = Array.isArray(entidades) && entidades.length ? entidades : ["PRODUTOS", "ESTOQUE"];
+  const normalized = requested.map((item) => text(item).toUpperCase()).filter(Boolean);
   if (!normalized.length) throw blingError("VALIDATION_ERROR", "Informe ao menos uma entidade valida para sincronizar.");
+  const invalid = normalized.filter((item) => !SYNC_ENTITIES.has(item));
+  if (invalid.length) throw blingError("VALIDATION_ERROR", `Entidades invalidas para sincronizacao: ${invalid.join(", ")}.`);
   return [...new Set(normalized)];
 }
 

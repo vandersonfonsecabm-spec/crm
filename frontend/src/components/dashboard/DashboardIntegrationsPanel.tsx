@@ -494,9 +494,9 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
     setBlingBusy("sync");
     setBlingMessage("");
     try {
-      const result = await sincronizarIntegracao(integrationId, ["PRODUTOS", "ESTOQUE", "PRECOS", "CONDICOES_PAGAMENTO"]);
+      const result = await sincronizarIntegracao(integrationId, ["PRODUTOS", "ESTOQUE"]);
       setLastBlingSync(result);
-      setBlingMessage(result.sincronizacao.status === "CONCLUIDA" ? "Sincronização Bling concluída." : "Sincronização Bling finalizada com atenção.");
+      setBlingMessage(result.sincronizacao.status === "CONCLUIDA" ? "Produtos e estoque sincronizados com sucesso." : "Produtos sincronizados. Não foi possível atualizar todo o estoque.");
       await Promise.all([loadAll(), reloadCatalog(), reloadQuality()]);
     } catch (error) {
       setBlingMessage(errorText(error, "Não foi possível sincronizar o Bling."));
@@ -1030,7 +1030,7 @@ function BlingSection({
             </span>
           </div>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
-            Sincronize produtos, estoque, preços e formas de pagamento do Bling sem alterar dados no ERP.
+            Sincronize produtos e estoque do Bling sem alterar dados no ERP.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
