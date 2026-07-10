@@ -529,6 +529,48 @@ export type HubProdutoComercial = {
   avisos: string[];
 };
 
+export type HubProdutoEstoque = {
+  produto: {
+    id: number;
+    externalId?: string | null;
+    sku?: string | null;
+    codigoBarras?: string | null;
+    nome: string;
+    descricao?: string | null;
+    categoria?: string | null;
+    marca?: string | null;
+    unidade?: string | null;
+    ativo: boolean;
+  };
+  estoques: Array<{
+    id: number;
+    localExternalId?: string | null;
+    localNome?: string | null;
+    quantidade: string;
+    reservado?: string | null;
+    disponivel: string;
+    sincronizadoEm?: string | null;
+  }>;
+  precos: Array<{
+    id: number;
+    tabela?: string | null;
+    precoCentavos: number;
+    precoPromocionalCentavos?: number | null;
+    inicioPromocao?: string | null;
+    fimPromocao?: string | null;
+    sincronizadoEm?: string | null;
+  }>;
+  origem: {
+    integracaoId?: number | null;
+    integracaoNome?: string | null;
+    tipo?: string | null;
+    ultimaSincronizacaoEm?: string | null;
+    ultimoSucessoEm?: string | null;
+  };
+  atualizadoEm?: string | null;
+  possivelmenteDesatualizado?: boolean;
+};
+
 export type HubQualidadeDados = {
   totalProdutos: number;
   produtosAtivos: number;
@@ -558,6 +600,20 @@ export type HubCatalogQueryParams = {
   somenteDisponiveis?: boolean;
   pagina?: number;
   limite?: number;
+};
+
+export type HubEstoqueQueryParams = {
+  busca?: string;
+  nome?: string;
+  sku?: string;
+  codigoBarras?: string;
+  categoria?: string;
+  marca?: string;
+  integracaoId?: number;
+  comEstoque?: boolean;
+  apenasComEstoque?: boolean;
+  page?: number;
+  limit?: number;
 };
 
 export type HubImportListParams = { page?: number; limit?: number; status?: string; formato?: string; busca?: string };
@@ -954,6 +1010,11 @@ export async function fetchErrosImportacao(id: number, params: { page?: number; 
 export async function consultarCatalogoComercial(params: HubCatalogQueryParams = {}) {
   const response = await requestApiGetAuthenticated<ApiPaginatedResponse<HubProdutoComercial> | HubProdutoComercial[]>("/hub/consulta-comercial" + toQueryString(params));
   return normalizePaginatedResponse(response, { page: params.pagina, limit: params.limite });
+}
+
+export async function fetchHubProdutosEstoque(params: HubEstoqueQueryParams = {}) {
+  const response = await requestApiGetAuthenticated<ApiPaginatedResponse<HubProdutoEstoque> | HubProdutoEstoque[]>("/hub/produtos" + toQueryString(params));
+  return normalizePaginatedResponse(response, { page: params.page, limit: params.limit });
 }
 
 export async function fetchQualidadeDados() {

@@ -7,9 +7,12 @@ import {
   createAjusteEstoque,
   createEntradaEstoque,
   createSaidaEstoque,
+  canAccessIntegrations,
   fetchCategoriasProdutos,
   fetchEstoqueMovimentacoes,
   fetchEstoqueResumo,
+  fetchHubProdutosEstoque,
+  getAuthSession,
   fetchProduto,
   fetchProdutos,
   updateCategoriaProduto,
@@ -18,9 +21,12 @@ import {
   type ApiMovimentacaoEstoque,
   type ApiProduto,
   type ApiResumoEstoque,
+  type HubProdutoEstoque,
 } from "../../services/crmApi";
 
 const PRODUCT_PAGE_SIZE = 5;
+const INTEGRATED_PRODUCT_PAGE_SIZE = 6;
+const INTEGRATED_PRODUCT_FETCH_LIMIT = 250;
 const MOVEMENT_PAGE_SIZE = 5;
 const HISTORY_PAGE_SIZE = 10;
 const UNITS = ["Todos", "UN", "KG", "L", "SC", "TON"];
@@ -35,6 +41,7 @@ const PRODUCT_UNITS = [
 
 type InventoryStatus = "idle" | "loading" | "success" | "error";
 type InventoryAction = "entrada" | "saida" | "ajuste";
+type IntegratedStockFilter = "todos" | "disponivel" | "sem-estoque";
 type CategoryForm = {
   id: number | null;
   nome: string;
@@ -92,25 +99,35 @@ export default function DashboardInventoryPanel() {
   const [allCategories, setAllCategories] = useState<ApiCategoriaProduto[]>([]);
   const [products, setProducts] = useState<ApiProduto[]>([]);
   const [productOptions, setProductOptions] = useState<ApiProduto[]>([]);
+  const [integratedProducts, setIntegratedProducts] = useState<HubProdutoEstoque[]>([]);
+  const [integratedTotal, setIntegratedTotal] = useState(0);
   const [movements, setMovements] = useState<ApiMovimentacaoEstoque[]>([]);
   const [productTotal, setProductTotal] = useState(0);
   const [movementTotal, setMovementTotal] = useState(0);
   const [productPage, setProductPage] = useState(1);
+  const [integratedPage, setIntegratedPage] = useState(1);
   const [movementPage, setMovementPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [integratedSearch, setIntegratedSearch] = useState("");
+  const [debouncedIntegratedSearch, setDebouncedIntegratedSearch] = useState("");
   const [movementSearch, setMovementSearch] = useState("");
   const [debouncedMovementSearch, setDebouncedMovementSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"todos" | "ativos" | "inativos">("todos");
   const [unitFilter, setUnitFilter] = useState("Todos");
   const [categoryFilter, setCategoryFilter] = useState("Todos");
   const [stockFilter, setStockFilter] = useState<"todos" | "baixo">("todos");
+  const [integratedOriginFilter, setIntegratedOriginFilter] = useState("Todos");
+  const [integratedUnitFilter, setIntegratedUnitFilter] = useState("Todos");
+  const [integratedStockFilter, setIntegratedStockFilter] = useState<IntegratedStockFilter>("todos");
   const [movementType, setMovementType] = useState<(typeof MOVEMENT_TYPES)[number]>("Todos");
   const [movementProductFilter, setMovementProductFilter] = useState("Todos");
   const [movementStartDate, setMovementStartDate] = useState("");
   const [movementEndDate, setMovementEndDate] = useState("");
   const [status, setStatus] = useState<InventoryStatus>("idle");
+  const [integratedStatus, setIntegratedStatus] = useState<InventoryStatus>("idle");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [integratedRetryKey, setIntegratedRetryKey] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCategoriesModal, setShowCategoriesModal] = useState(false);
   const [categoryForm, setCategoryForm] = useState<CategoryForm>(initialCategoryForm);
@@ -149,6 +166,7 @@ export default function DashboardInventoryPanel() {
     movementProductFilter !== "Todos" ||
     Boolean(movementStartDate) ||
     Boolean(movementEndDate);
+  const canLoadIntegratedProducts = canAccessIntegrations(getAuthSession());
 
   useEffect(() => {
     if (!toast) return;
@@ -164,6 +182,15 @@ export default function DashboardInventoryPanel() {
 
     return () => window.clearTimeout(timeout);
   }, [search]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedIntegratedSearch(integratedSearch.trim());
+      setIntegratedPage(1);
+    }, 350);
+
+    return () => window.clearTimeout(timeout);
+  }, [integratedSearch]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -229,6 +256,43 @@ export default function DashboardInventoryPanel() {
     refreshKey,
     showHistoryModal,
   ]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadIntegratedProducts() {
+      if (!canLoadIntegratedProducts) {
+        setIntegratedProducts([]);
+        setIntegratedTotal(0);
+        setIntegratedStatus("success");
+        return;
+      }
+
+      setIntegratedStatus("loading");
+
+      try {
+        const response = await fetchHubProdutosEstoque({
+          page: 1,
+          limit: INTEGRATED_PRODUCT_FETCH_LIMIT,
+        });
+
+        if (ignore) return;
+        setIntegratedProducts(response.data);
+        setIntegratedTotal(response.pagination.total);
+        setIntegratedStatus("success");
+      } catch (error) {
+        if (ignore) return;
+        console.error("Falha ao carregar produtos integrados", error);
+        setIntegratedStatus("error");
+      }
+    }
+
+    void loadIntegratedProducts();
+
+    return () => {
+      ignore = true;
+    };
+  }, [canLoadIntegratedProducts, integratedRetryKey, refreshKey]);
 
   useEffect(() => {
     let ignore = false;
@@ -311,6 +375,52 @@ export default function DashboardInventoryPanel() {
   const isError = status === "error";
   const hasProducts = products.length > 0;
   const hasMovements = movements.length > 0;
+  const filteredIntegratedProducts = useMemo(
+    () =>
+      integratedProducts.filter((product) => {
+        if (integratedOriginFilter !== "Todos" && integratedOriginLabel(product) !== integratedOriginFilter) {
+          return false;
+        }
+
+        if (integratedUnitFilter !== "Todos" && integratedUnit(product) !== integratedUnitFilter) {
+          return false;
+        }
+
+        const quantity = integratedQuantity(product);
+        if (integratedStockFilter === "disponivel" && quantity <= 0) return false;
+        if (integratedStockFilter === "sem-estoque" && quantity > 0) return false;
+
+        const query = normalizeSearchText(debouncedIntegratedSearch);
+        if (!query) return true;
+
+        return normalizeSearchText([
+          product.produto.nome,
+          product.produto.sku,
+          product.produto.unidade,
+          integratedOriginLabel(product),
+        ].filter(Boolean).join(" ")).includes(query);
+      }),
+    [debouncedIntegratedSearch, integratedOriginFilter, integratedProducts, integratedStockFilter, integratedUnitFilter],
+  );
+  const integratedTotalPages = Math.max(1, Math.ceil(filteredIntegratedProducts.length / INTEGRATED_PRODUCT_PAGE_SIZE));
+  const safeIntegratedPage = Math.min(integratedPage, integratedTotalPages);
+  const paginatedIntegratedProducts = filteredIntegratedProducts.slice(
+    (safeIntegratedPage - 1) * INTEGRATED_PRODUCT_PAGE_SIZE,
+    safeIntegratedPage * INTEGRATED_PRODUCT_PAGE_SIZE,
+  );
+  const integratedOriginOptions = useMemo(
+    () => ["Todos", ...uniqueValues(integratedProducts.map(integratedOriginLabel))],
+    [integratedProducts],
+  );
+  const integratedUnitOptions = useMemo(
+    () => ["Todos", ...uniqueValues(integratedProducts.map(integratedUnit).filter(Boolean))],
+    [integratedProducts],
+  );
+  const hasIntegratedFilters =
+    Boolean(debouncedIntegratedSearch) ||
+    integratedOriginFilter !== "Todos" ||
+    integratedUnitFilter !== "Todos" ||
+    integratedStockFilter !== "todos";
 
   const summaryCards = useMemo(
     () => [
@@ -652,6 +762,45 @@ export default function DashboardInventoryPanel() {
           />
         ))}
       </div>
+
+      <IntegratedProductsPanel
+        products={paginatedIntegratedProducts}
+        status={integratedStatus}
+        total={filteredIntegratedProducts.length}
+        loadedTotal={integratedTotal}
+        page={safeIntegratedPage}
+        totalPages={integratedTotalPages}
+        search={integratedSearch}
+        originFilter={integratedOriginFilter}
+        originOptions={integratedOriginOptions}
+        unitFilter={integratedUnitFilter}
+        unitOptions={integratedUnitOptions}
+        stockFilter={integratedStockFilter}
+        hasFilters={hasIntegratedFilters}
+        onSearchChange={setIntegratedSearch}
+        onOriginFilterChange={(value) => {
+          setIntegratedOriginFilter(value);
+          setIntegratedPage(1);
+        }}
+        onUnitFilterChange={(value) => {
+          setIntegratedUnitFilter(value);
+          setIntegratedPage(1);
+        }}
+        onStockFilterChange={(value) => {
+          setIntegratedStockFilter(value);
+          setIntegratedPage(1);
+        }}
+        onClearFilters={() => {
+          setIntegratedSearch("");
+          setDebouncedIntegratedSearch("");
+          setIntegratedOriginFilter("Todos");
+          setIntegratedUnitFilter("Todos");
+          setIntegratedStockFilter("todos");
+          setIntegratedPage(1);
+        }}
+        onPageChange={setIntegratedPage}
+        onRetry={() => setIntegratedRetryKey((current) => current + 1)}
+      />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="premium-panel min-w-0 rounded-2xl p-4">
@@ -1828,6 +1977,171 @@ function StockMovementModal({
   );
 }
 
+function IntegratedProductsPanel({
+  products,
+  status,
+  total,
+  loadedTotal,
+  page,
+  totalPages,
+  search,
+  originFilter,
+  originOptions,
+  unitFilter,
+  unitOptions,
+  stockFilter,
+  hasFilters,
+  onSearchChange,
+  onOriginFilterChange,
+  onUnitFilterChange,
+  onStockFilterChange,
+  onClearFilters,
+  onPageChange,
+  onRetry,
+}: {
+  products: HubProdutoEstoque[];
+  status: InventoryStatus;
+  total: number;
+  loadedTotal: number;
+  page: number;
+  totalPages: number;
+  search: string;
+  originFilter: string;
+  originOptions: string[];
+  unitFilter: string;
+  unitOptions: string[];
+  stockFilter: IntegratedStockFilter;
+  hasFilters: boolean;
+  onSearchChange: (value: string) => void;
+  onOriginFilterChange: (value: string) => void;
+  onUnitFilterChange: (value: string) => void;
+  onStockFilterChange: (value: IntegratedStockFilter) => void;
+  onClearFilters: () => void;
+  onPageChange: (page: number) => void;
+  onRetry: () => void;
+}) {
+  const isLoading = status === "loading" || status === "idle";
+  const isError = status === "error";
+  const isEmpty = !isLoading && !isError && products.length === 0;
+
+  return (
+    <section className="premium-panel min-w-0 rounded-2xl p-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-white">Produtos integrados</p>
+          <p className="mt-1 text-xs text-slate-500">Catalogo sincronizado de integracoes, exibido somente para leitura.</p>
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_130px_120px_150px_auto]">
+          <label className="premium-ghost flex h-10 min-w-0 items-center gap-2 rounded-xl px-3 text-xs text-slate-400">
+            <Search className="shrink-0" size={14} />
+            <input
+              className="min-w-0 flex-1 bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-600"
+              disabled={isLoading}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Buscar produto, SKU, unidade ou origem"
+              value={search}
+            />
+          </label>
+
+          <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onOriginFilterChange(event.target.value)} value={originFilter}>
+            {originOptions.map((option) => <option key={option} value={option}>{option === "Todos" ? "Todas origens" : option}</option>)}
+          </select>
+
+          <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onUnitFilterChange(event.target.value)} value={unitFilter}>
+            {unitOptions.map((option) => <option key={option} value={option}>{option === "Todos" ? "Todas unidades" : option}</option>)}
+          </select>
+
+          <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onStockFilterChange(event.target.value as IntegratedStockFilter)} value={stockFilter}>
+            <option value="todos">Todos estoques</option>
+            <option value="disponivel">Disponivel</option>
+            <option value="sem-estoque">Sem estoque</option>
+          </select>
+
+          <button className="premium-ghost h-10 rounded-xl px-3 text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={!hasFilters || isLoading} onClick={onClearFilters} type="button">
+            Limpar
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {isLoading && (
+          <>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="h-24 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+            ))}
+          </>
+        )}
+
+        {isError && (
+          <div className="rounded-2xl border border-rose-300/15 bg-rose-300/[0.045] p-5 text-center">
+            <p className="text-sm font-semibold text-rose-100">Nao foi possivel carregar o estoque integrado.</p>
+            <p className="mt-1 text-xs text-slate-500">A consulta foi interrompida sem alterar dados externos.</p>
+            <button className="premium-ghost mt-4 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200" onClick={onRetry} type="button">Tentar novamente</button>
+          </div>
+        )}
+
+        {isEmpty && (
+          <EmptyState
+            icon={<Warehouse size={17} />}
+            title={hasFilters ? "Nao encontramos produtos para esta busca." : "Nenhum produto disponivel no estoque."}
+            text={hasFilters ? "Ajuste os filtros para ampliar a consulta." : "Sincronize os produtos na area de Integracoes para atualizar o estoque."}
+          />
+        )}
+
+        {!isLoading && !isError && products.map((product) => (
+          <IntegratedProductRow key={integratedProductKey(product)} product={product} />
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          {total} produto{total === 1 ? "" : "s"} integrado{total === 1 ? "" : "s"}
+          {loadedTotal > total ? ` de ${loadedTotal} carregados` : ""}
+        </span>
+        <div className="flex items-center gap-2">
+          <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoading || page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} type="button">
+            Anterior
+          </button>
+          <span className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">
+            {total === 0 ? "0/0" : `${page}/${totalPages}`}
+          </span>
+          <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoading || total === 0 || page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} type="button">
+            Proxima
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function IntegratedProductRow({ product }: { product: HubProdutoEstoque }) {
+  const unit = integratedUnit(product);
+  const status = integratedStockStatus(product);
+
+  return (
+    <article className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 lg:grid-cols-[minmax(0,1fr)_minmax(460px,0.96fr)] lg:items-start">
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <p className="min-w-0 break-words text-sm font-semibold leading-snug text-white">{product.produto.nome}</p>
+          <span className={`saas-chip shrink-0 ${originTone(product)}`}>{integratedOriginLabel(product)}</span>
+          <span className={`saas-chip shrink-0 ${status.toneClass}`}>{status.label}</span>
+        </div>
+        <p className="mt-1 break-words text-[11px] leading-snug text-slate-500">
+          {product.produto.sku || "Sem SKU"} - {product.produto.categoria || "Sem categoria"}
+        </p>
+      </div>
+
+      <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <InfoCell label="Preco" value={formatOptionalCurrency(integratedPrice(product))} />
+        <InfoCell label="Unidade" value={unit || "Nao informada"} />
+        <InfoCell label="Estoque" value={formatIntegratedStock(product)} tone={status.tone} />
+        <InfoCell label="Atualizado" value={formatOptionalDateTime(integratedUpdatedAt(product))} />
+      </div>
+    </article>
+  );
+}
+
 function ProductRow({ product, onOpen }: { product: ApiProduto; onOpen: () => void }) {
   return (
     <button className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 text-left lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.88fr)] lg:items-start" onClick={onOpen} type="button">
@@ -1997,6 +2311,87 @@ function formatDecimal(value: string) {
   return new Intl.NumberFormat("pt-BR", {
     maximumFractionDigits: 3,
   }).format(numeric);
+}
+
+function integratedProductKey(product: HubProdutoEstoque) {
+  return product.produto.id || product.produto.externalId || product.produto.sku || product.produto.nome;
+}
+
+function integratedUnit(product: HubProdutoEstoque) {
+  return product.produto.unidade?.trim().toUpperCase() || "";
+}
+
+function integratedPrice(product: HubProdutoEstoque) {
+  const defaultPrice = product.precos.find((price) => normalizeSearchText(price.tabela || "") === "padrao") ?? product.precos[0];
+  return defaultPrice?.precoPromocionalCentavos ?? defaultPrice?.precoCentavos ?? null;
+}
+
+function integratedQuantity(product: HubProdutoEstoque) {
+  return product.estoques.reduce((total, stock) => total + decimalNumber(stock.disponivel ?? stock.quantidade), 0);
+}
+
+function formatIntegratedStock(product: HubProdutoEstoque) {
+  const unit = integratedUnit(product);
+  return `${formatDecimal(String(integratedQuantity(product)))} ${unit}`.trim();
+}
+
+function integratedOriginLabel(product: HubProdutoEstoque) {
+  const type = product.origem?.tipo?.trim().toUpperCase();
+  if (type === "BLING") return "Bling";
+  if (type === "CSV") return "CSV";
+  if (type === "XLSX") return "XLSX";
+  return product.origem?.integracaoNome?.trim() || "Integracao";
+}
+
+function originTone(product: HubProdutoEstoque) {
+  return product.origem?.tipo?.trim().toUpperCase() === "BLING"
+    ? "border-sky-300/15 bg-sky-300/[0.07] text-sky-100"
+    : "text-slate-400";
+}
+
+function integratedUpdatedAt(product: HubProdutoEstoque) {
+  return (
+    product.atualizadoEm ||
+    product.origem?.ultimoSucessoEm ||
+    product.origem?.ultimaSincronizacaoEm ||
+    product.estoques[0]?.sincronizadoEm ||
+    product.precos[0]?.sincronizadoEm ||
+    null
+  );
+}
+
+function integratedStockStatus(product: HubProdutoEstoque): { label: string; tone: "ok" | "empty"; toneClass: string } {
+  if (!product.produto.ativo) {
+    return { label: "Inativo", tone: "empty", toneClass: "text-slate-400" };
+  }
+  if (integratedQuantity(product) <= 0) {
+    return { label: "Sem estoque", tone: "empty", toneClass: "border-rose-300/15 bg-rose-300/[0.07] text-rose-100" };
+  }
+  return { label: "Disponivel", tone: "ok", toneClass: "border-teal-300/15 bg-teal-300/[0.07] text-teal-100" };
+}
+
+function formatOptionalCurrency(cents: number | null | undefined) {
+  if (cents === null || cents === undefined || !Number.isFinite(cents)) return "Nao informado";
+  return formatCurrency(cents);
+}
+
+function formatOptionalDateTime(value?: string | null) {
+  if (!value) return "Nao informado";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Nao informado";
+  return formatDateTime(value);
+}
+
+function uniqueValues(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right, "pt-BR", { sensitivity: "base" }));
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function validateProductForm(form: ProductForm) {
