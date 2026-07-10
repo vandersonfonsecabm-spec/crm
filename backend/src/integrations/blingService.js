@@ -504,13 +504,11 @@ function normalizeUnit(item = {}) {
     unitValue(item.unidadeComercial),
     unitValue(item.siglaUnidade),
     unitValue(item.un),
-    unitValue(item.formato),
     unitValue(item.detalheProduto?.unidade),
     unitValue(item.detalheProduto?.unidadeMedida),
     unitValue(item.detalheProduto?.unidadeComercial),
     unitValue(item.detalheProduto?.siglaUnidade),
     unitValue(item.detalheProduto?.un),
-    unitValue(item.detalheProduto?.formato),
   ) || null;
 }
 

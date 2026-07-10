@@ -414,6 +414,13 @@ test("Bling busca detalhe para unidade ausente e preserva unidade existente", as
 
   let detailMode = "with-unit";
   const detailCalls = [];
+  await prisma.produtoExterno.createMany({
+    data: [
+      { empresaId: admin.empresaId, integracaoId: integration.id, externalId: "602", sku: "SKU-BLG-602", nome: "Produto Detalhe 602", unidade: "S" },
+      { empresaId: admin.empresaId, integracaoId: integration.id, externalId: "603", sku: "SKU-BLG-603", nome: "Produto Detalhe 603", unidade: "S" },
+    ],
+  });
+
   mockFetch(async (url) => {
     const parsed = new URL(String(url));
     if (parsed.pathname.endsWith("/produtos") && parsed.searchParams.get("pagina") === "1") {
@@ -421,8 +428,8 @@ test("Bling busca detalhe para unidade ausente e preserva unidade existente", as
       assert.equal(parsed.searchParams.get("tipo"), "T");
       return jsonResponse({ data: [
         { id: 601, codigo: "SKU-BLG-601", nome: "Produto Detalhe 601", unidade: "SC", preco: "129,90" },
-        { id: 602, codigo: "SKU-BLG-602", nome: "Produto Detalhe 602", preco: "89,50" },
-        { id: 603, codigo: "SKU-BLG-603", nome: "Produto Detalhe 603", preco: "249,90" },
+        { id: 602, codigo: "SKU-BLG-602", nome: "Produto Detalhe 602", formato: "S", preco: "89,50" },
+        { id: 603, codigo: "SKU-BLG-603", nome: "Produto Detalhe 603", formato: "S", preco: "249,90" },
       ] });
     }
     if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
@@ -432,7 +439,7 @@ test("Bling busca detalhe para unidade ausente e preserva unidade existente", as
     }
     if (parsed.pathname.endsWith("/produtos/603")) {
       detailCalls.push("603");
-      return jsonResponse({ data: detailMode === "with-unit" ? { id: 603, formato: "UN" } : { id: 603, unidade: "" } });
+      return jsonResponse({ data: detailMode === "with-unit" ? { id: 603, unidadeComercial: { sigla: "UN" } } : { id: 603, unidade: "" } });
     }
     if (parsed.pathname.includes("/produtos/601")) throw new Error("Produto com unidade na listagem nao deve consultar detalhe.");
     if (parsed.pathname.endsWith("/estoques/saldos") || parsed.pathname.endsWith("/formas-pagamentos")) throw new Error("Fluxo de detalhe de unidade nao deve consultar estoque ou condicoes.");
@@ -442,7 +449,8 @@ test("Bling busca detalhe para unidade ausente e preserva unidade existente", as
   const sync = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS"] }, admin.token);
   assert.equal(sync.status, 200);
   assert.equal(sync.body.resultado.produtosRecebidos, 3);
-  assert.equal(sync.body.resultado.produtosCriados, 3);
+  assert.equal(sync.body.resultado.produtosCriados, 1);
+  assert.equal(sync.body.resultado.produtosAtualizados, 2);
   assert.equal(sync.body.resultado.detalhesProdutosConsultados, 2);
   assert.equal(sync.body.resultado.detalhesProdutosComErro, 0);
   assert.deepEqual(detailCalls, ["602", "603"]);
