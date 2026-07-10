@@ -336,6 +336,7 @@ test("Bling mapeia preco e unidade dos produtos do fluxo padrao", async () => {
         { id: 505, codigo: "TESTE-CRM-AGRO-NULL", nome: "Produto Sem Preco", preco: null },
       ] });
     }
+    if (parsed.pathname.endsWith("/produtos/505")) return jsonResponse({ data: { id: 505 } });
     if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
     if (parsed.pathname.endsWith("/estoques/saldos") && parsed.searchParams.get("pagina") === "1") {
       assert.deepEqual(parsed.searchParams.getAll("idsProdutos[]"), ["501", "502", "503", "504", "505"]);
@@ -390,6 +391,137 @@ test("Bling mapeia preco e unidade dos produtos do fluxo padrao", async () => {
   assert.equal(syncAgain.body.resultado.precosAtualizados, 4);
   assert.equal(await prisma.produtoExterno.count({ where: { empresaId: admin.empresaId, integracaoId: integration.id } }), 5);
   assert.equal(await prisma.precoExterno.count({ where: { empresaId: admin.empresaId, integracaoId: integration.id } }), 4);
+});
+
+test("Bling busca detalhe para unidade ausente e preserva unidade existente", async () => {
+  const admin = await registerAndLogin("Empresa Bling Detalhe", "Admin Detalhe", "admin-detalhe@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Detalhe",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "access-detail",
+        refreshToken: "refresh-detail",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  let detailMode = "with-unit";
+  const detailCalls = [];
+  mockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/produtos") && parsed.searchParams.get("pagina") === "1") {
+      assert.equal(parsed.searchParams.get("criterio"), "5");
+      assert.equal(parsed.searchParams.get("tipo"), "T");
+      return jsonResponse({ data: [
+        { id: 601, codigo: "SKU-BLG-601", nome: "Produto Detalhe 601", unidade: "SC", preco: "129,90" },
+        { id: 602, codigo: "SKU-BLG-602", nome: "Produto Detalhe 602", preco: "89,50" },
+        { id: 603, codigo: "SKU-BLG-603", nome: "Produto Detalhe 603", preco: "249,90" },
+      ] });
+    }
+    if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
+    if (parsed.pathname.endsWith("/produtos/602")) {
+      detailCalls.push("602");
+      return jsonResponse({ data: detailMode === "with-unit" ? { id: 602, unidadeMedida: { sigla: "KG" } } : { id: 602 } });
+    }
+    if (parsed.pathname.endsWith("/produtos/603")) {
+      detailCalls.push("603");
+      return jsonResponse({ data: detailMode === "with-unit" ? { id: 603, formato: "UN" } : { id: 603, unidade: "" } });
+    }
+    if (parsed.pathname.includes("/produtos/601")) throw new Error("Produto com unidade na listagem nao deve consultar detalhe.");
+    if (parsed.pathname.endsWith("/estoques/saldos") || parsed.pathname.endsWith("/formas-pagamentos")) throw new Error("Fluxo de detalhe de unidade nao deve consultar estoque ou condicoes.");
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const sync = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS"] }, admin.token);
+  assert.equal(sync.status, 200);
+  assert.equal(sync.body.resultado.produtosRecebidos, 3);
+  assert.equal(sync.body.resultado.produtosCriados, 3);
+  assert.equal(sync.body.resultado.detalhesProdutosConsultados, 2);
+  assert.equal(sync.body.resultado.detalhesProdutosComErro, 0);
+  assert.deepEqual(detailCalls, ["602", "603"]);
+
+  const products = await prisma.produtoExterno.findMany({
+    where: { empresaId: admin.empresaId, integracaoId: integration.id },
+    orderBy: { externalId: "asc" },
+  });
+  assert.equal(products.find((item) => item.externalId === "601").unidade, "SC");
+  assert.equal(products.find((item) => item.externalId === "602").unidade, "KG");
+  assert.equal(products.find((item) => item.externalId === "603").unidade, "UN");
+
+  detailMode = "without-unit";
+  detailCalls.length = 0;
+  const syncAgain = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS"] }, admin.token);
+  assert.equal(syncAgain.status, 200);
+  assert.equal(syncAgain.body.resultado.produtosCriados, 0);
+  assert.equal(syncAgain.body.resultado.produtosAtualizados, 3);
+  assert.equal(syncAgain.body.resultado.detalhesProdutosConsultados, 2);
+  assert.deepEqual(detailCalls, ["602", "603"]);
+
+  const updated = await prisma.produtoExterno.findMany({
+    where: { empresaId: admin.empresaId, integracaoId: integration.id },
+    orderBy: { externalId: "asc" },
+  });
+  assert.equal(updated.find((item) => item.externalId === "602").unidade, "KG");
+  assert.equal(updated.find((item) => item.externalId === "603").unidade, "UN");
+  assert.equal(await prisma.produtoExterno.count({ where: { empresaId: admin.empresaId, integracaoId: integration.id } }), 3);
+});
+
+test("Bling trata falha parcial ao consultar detalhe de unidade", async () => {
+  const admin = await registerAndLogin("Empresa Bling Detalhe Parcial", "Admin Detalhe Parcial", "admin-detalhe-parcial@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Detalhe Parcial",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "access-detail-partial",
+        refreshToken: "refresh-detail-partial",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  mockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/produtos") && parsed.searchParams.get("pagina") === "1") {
+      return jsonResponse({ data: [
+        { id: 701, codigo: "SKU-BLG-701", nome: "Produto Detalhe 701", preco: 10 },
+        { id: 702, codigo: "SKU-BLG-702", nome: "Produto Detalhe 702", preco: 20 },
+      ] });
+    }
+    if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
+    if (parsed.pathname.endsWith("/produtos/701")) return jsonResponse({ error: { message: "detalhe indisponivel" } }, 500);
+    if (parsed.pathname.endsWith("/produtos/702")) return jsonResponse({ data: { id: 702, unidade: { valor: "SC" } } });
+    if (parsed.pathname.endsWith("/estoques/saldos") || parsed.pathname.endsWith("/formas-pagamentos")) throw new Error("Falha parcial de detalhe nao deve chamar outros recursos.");
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const sync = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS"] }, admin.token);
+  assert.equal(sync.status, 200);
+  assert.equal(sync.body.sincronizacao.status, "CONCLUIDA_COM_ERROS");
+  assert.equal(sync.body.resultado.produtosCriados, 2);
+  assert.equal(sync.body.resultado.detalhesProdutosConsultados, 2);
+  assert.equal(sync.body.resultado.detalhesProdutosComErro, 1);
+  assert.equal(sync.body.resultado.erros, 1);
+
+  const product701 = await prisma.produtoExterno.findUnique({ where: { integracaoId_externalId: { integracaoId: integration.id, externalId: "701" } } });
+  const product702 = await prisma.produtoExterno.findUnique({ where: { integracaoId_externalId: { integracaoId: integration.id, externalId: "702" } } });
+  assert.equal(product701.unidade, null);
+  assert.equal(product702.unidade, "SC");
+  const afterPartialError = await prisma.integracao.findUnique({ where: { id: integration.id } });
+  assert.equal(afterPartialError.status, "ATIVA");
+  assert.equal(afterPartialError.ativo, true);
 });
 
 test("Bling sincronizacao deduplica entidades e rejeita valores desconhecidos", async () => {
@@ -472,6 +604,7 @@ test("Bling consulta saldo apenas com ids de produtos validos e preserva estoque
         { codigo: "SKU-SEM-ID", nome: "Produto sem ID Bling", preco: 20 },
       ] });
     }
+    if (parsed.pathname.endsWith("/produtos/201")) return jsonResponse({ data: { id: 201, unidade: "UN" } });
     if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
     if (parsed.pathname.endsWith("/estoques/saldos")) {
       stockCalls += 1;
@@ -561,6 +694,7 @@ test("Bling sanitiza falta de escopo ao consultar saldo", async () => {
       assert.equal(parsed.searchParams.get("tipo"), "T");
       return jsonResponse({ data: [{ id: 301, codigo: "SKU-BLG-301", nome: "Produto Bling 301" }] });
     }
+    if (parsed.pathname.endsWith("/produtos/301")) return jsonResponse({ data: { id: 301, unidade: "UN" } });
     if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
     if (parsed.pathname.endsWith("/estoques/saldos")) {
       assert.deepEqual(parsed.searchParams.getAll("idsProdutos[]"), ["301"]);

@@ -14,6 +14,7 @@ const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const SYNC_ENTITIES = new Set(["PRODUTOS", "ESTOQUE", "PRECOS", "CONDICOES_PAGAMENTO"]);
 const STOCK_PRODUCT_ID_BATCH_SIZE = 50;
 const PRODUCT_LIST_PARAMS = { criterio: 5, tipo: "T" };
+const PRODUCT_DETAIL_CONCURRENCY = 3;
 const refreshLocks = new Map();
 
 function createBlingService({ prisma }) {
@@ -113,8 +114,13 @@ function createBlingService({ prisma }) {
       let productIndex = new Map();
 
       if (requested.includes("PRODUTOS")) {
-        const products = await client.fetchPaginated("/produtos", PRODUCT_LIST_PARAMS);
+        const listedProducts = await client.fetchPaginated("/produtos", PRODUCT_LIST_PARAMS);
+        const detailResult = await enrichProductsWithUnitDetails({ client, products: listedProducts });
+        const products = detailResult.products;
         counters.produtosRecebidos = products.length;
+        counters.detalhesProdutosConsultados += detailResult.detailsFetched;
+        counters.detalhesProdutosComErro += detailResult.detailErrors;
+        counters.erros += detailResult.detailErrors;
         const result = await upsertProducts({ prisma, empresaId, integracaoId: integracao.id, products, now });
         counters.produtosCriados += result.created;
         counters.produtosAtualizados += result.updated;
@@ -241,6 +247,7 @@ async function upsertProducts({ prisma, empresaId, integracaoId, products, now }
   for (const item of products) {
     const row = normalizeProduct(item);
     if (!row.externalId || !row.nome) continue;
+    const existing = await prisma.produtoExterno.findUnique({ where: { integracaoId_externalId: { integracaoId, externalId: row.externalId } } });
     const data = {
       empresaId,
       integracaoId,
@@ -251,12 +258,11 @@ async function upsertProducts({ prisma, empresaId, integracaoId, products, now }
       descricao: row.descricao,
       categoria: row.categoria,
       marca: row.marca,
-      unidade: row.unidade,
+      unidade: row.unidade || existing?.unidade || null,
       ativo: row.ativo,
       dadosOriginaisJson: JSON.stringify(sanitizeOriginal(item)),
       sincronizadoEm: now,
     };
-    const existing = await prisma.produtoExterno.findUnique({ where: { integracaoId_externalId: { integracaoId, externalId: row.externalId } } });
     const produto = existing
       ? await prisma.produtoExterno.update({ where: { id: existing.id }, data })
       : await prisma.produtoExterno.create({ data });
@@ -267,6 +273,52 @@ async function upsertProducts({ prisma, empresaId, integracaoId, products, now }
     if (row.codigoBarras) productIndex.set(row.codigoBarras, { produto, original: item });
   }
   return { created, updated, productIndex };
+}
+
+async function enrichProductsWithUnitDetails({ client, products }) {
+  const detailIds = [];
+  const seen = new Set();
+  for (const item of products) {
+    const productId = text(item?.id);
+    if (normalizeUnit(item) || !isBlingProductId(productId) || seen.has(productId)) continue;
+    seen.add(productId);
+    detailIds.push(productId);
+  }
+
+  if (!detailIds.length) return { products, detailsFetched: 0, detailErrors: 0 };
+
+  const details = new Map();
+  let detailErrors = 0;
+  await mapWithConcurrency(detailIds, PRODUCT_DETAIL_CONCURRENCY, async (productId) => {
+    try {
+      const detail = await client.fetchProductDetail(productId);
+      if (detail && typeof detail === "object") details.set(productId, detail);
+    } catch {
+      detailErrors += 1;
+    }
+  });
+
+  return {
+    products: products.map((item) => {
+      const productId = text(item?.id);
+      const detail = details.get(productId);
+      return detail ? { ...item, detalheProduto: detail } : item;
+    }),
+    detailsFetched: detailIds.length,
+    detailErrors,
+  };
+}
+
+async function mapWithConcurrency(values, limit, handler) {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, values.length) }, async () => {
+    while (cursor < values.length) {
+      const value = values[cursor];
+      cursor += 1;
+      await handler(value);
+    }
+  });
+  await Promise.all(workers);
 }
 
 async function upsertStocks({ prisma, empresaId, integracaoId, stocks, productIndex, now }) {
@@ -452,15 +504,22 @@ function normalizeUnit(item = {}) {
     unitValue(item.unidadeComercial),
     unitValue(item.siglaUnidade),
     unitValue(item.un),
+    unitValue(item.formato),
+    unitValue(item.detalheProduto?.unidade),
+    unitValue(item.detalheProduto?.unidadeMedida),
+    unitValue(item.detalheProduto?.unidadeComercial),
+    unitValue(item.detalheProduto?.siglaUnidade),
+    unitValue(item.detalheProduto?.un),
+    unitValue(item.detalheProduto?.formato),
   ) || null;
 }
 
 function unitValue(value) {
   if (!value) return "";
   if (typeof value === "object") {
-    return firstText(value.sigla, value.codigo, value.descricao, value.nome);
+    return firstText(value.sigla, value.codigo, value.valor, value.descricao, value.nome);
   }
-  return text(value);
+  return text(value).toUpperCase();
 }
 
 function normalizePriceValue(item = {}) {
@@ -536,6 +595,8 @@ function emptyCounters() {
     precosRecebidos: 0,
     precosCriados: 0,
     precosAtualizados: 0,
+    detalhesProdutosConsultados: 0,
+    detalhesProdutosComErro: 0,
     condicoesRecebidas: 0,
     condicoesCriadas: 0,
     condicoesAtualizadas: 0,

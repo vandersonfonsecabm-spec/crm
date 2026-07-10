@@ -118,6 +118,11 @@ class BlingHttpClient {
     return items;
   }
 
+  async fetchProductDetail(productId) {
+    const data = await this.get(`/produtos/${encodeURIComponent(String(productId))}`);
+    return data?.data || data;
+  }
+
   async get(path, params = {}, attempt = 0) {
     await this.ensureFreshToken();
     const url = new URL(`${BLING_API_BASE_URL}${path}`);
