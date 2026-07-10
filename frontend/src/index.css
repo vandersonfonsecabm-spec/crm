@@ -15,14 +15,25 @@
   --border: #dfe5e1;
   --border-strong: #cbd5cf;
   --text-primary: #17211c;
-  --text-secondary: #46534c;
-  --text-muted: #718078;
+  --text-secondary: #3f4c45;
+  --text-muted: #58665f;
+  --text-inverse: #f8fbf9;
+  --icon-default: #44524a;
+  --icon-muted: #64736b;
   --primary: #167a55;
   --primary-hover: #116445;
   --success: #247a52;
   --warning: #9a6b19;
   --danger: #b33a45;
   --info: #356f98;
+  --focus-ring: rgba(22, 122, 85, 0.58);
+  --disabled-bg: #edf1ee;
+  --disabled-text: #58665f;
+  --bg-app: var(--background);
+  --bg-surface: var(--surface);
+  --bg-muted: var(--surface-muted);
+  --bg-elevated: var(--surface);
+  --border-default: var(--border);
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
@@ -539,6 +550,26 @@ button {
   transform: none;
 }
 
+.crm-workspace .premium-action {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-sm);
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.crm-workspace .premium-action:hover {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+}
+
+.crm-workspace .premium-action:disabled {
+  border-color: var(--border-strong);
+  background: var(--disabled-bg) !important;
+  color: var(--disabled-text) !important;
+  opacity: 1 !important;
+}
+
 .crm-workspace .premium-ghost,
 .crm-workspace .data-caption,
 .crm-workspace .icon-button,
@@ -603,6 +634,16 @@ button {
 }
 
 .crm-workspace .sidebar-shell .identity-panel {
+  border-color: #33423b;
+  background: #1d2a24;
+  box-shadow: none;
+}
+
+.crm-workspace .sidebar-shell .premium-panel,
+.crm-workspace .sidebar-shell .saas-panel,
+.crm-workspace .sidebar-shell .saas-card,
+.crm-workspace .sidebar-shell .saas-tile,
+.crm-workspace .sidebar-shell .saas-row {
   border-color: #33423b;
   background: #1d2a24;
   box-shadow: none;
@@ -697,10 +738,35 @@ button {
   color: var(--text-muted) !important;
 }
 
+.crm-workspace .text-gray-100,
+.crm-workspace .text-gray-200,
+.crm-workspace .text-zinc-100,
+.crm-workspace .text-zinc-200 {
+  color: var(--text-primary) !important;
+}
+
+.crm-workspace .text-gray-300,
+.crm-workspace .text-gray-400,
+.crm-workspace .text-zinc-300,
+.crm-workspace .text-zinc-400 {
+  color: var(--text-secondary) !important;
+}
+
 .crm-workspace .text-teal-50,
 .crm-workspace .text-teal-100,
 .crm-workspace .text-emerald-50,
 .crm-workspace .text-emerald-100 {
+  color: #226844 !important;
+}
+
+.crm-workspace [class*="text-teal-100/"],
+.crm-workspace [class*="text-emerald-100/"],
+.crm-workspace .text-teal-200,
+.crm-workspace .text-emerald-200,
+.crm-workspace .text-teal-300,
+.crm-workspace .text-emerald-300,
+.crm-workspace .text-teal-400,
+.crm-workspace .text-emerald-400 {
   color: #226844 !important;
 }
 
@@ -710,14 +776,67 @@ button {
   color: #356f98 !important;
 }
 
+.crm-workspace [class*="text-sky-100/"],
+.crm-workspace [class*="text-blue-100/"],
+.crm-workspace [class*="text-cyan-100/"],
+.crm-workspace .text-sky-200,
+.crm-workspace .text-blue-200,
+.crm-workspace .text-cyan-200,
+.crm-workspace .text-sky-300,
+.crm-workspace .text-blue-300,
+.crm-workspace .text-cyan-300,
+.crm-workspace .text-sky-400,
+.crm-workspace .text-blue-400,
+.crm-workspace .text-cyan-400 {
+  color: #2f668c !important;
+}
+
 .crm-workspace .text-amber-100,
 .crm-workspace .text-yellow-100 {
   color: #815a18 !important;
 }
 
+.crm-workspace [class*="text-amber-100/"],
+.crm-workspace [class*="text-yellow-100/"],
+.crm-workspace .text-amber-200,
+.crm-workspace .text-yellow-200,
+.crm-workspace .text-amber-300,
+.crm-workspace .text-yellow-300,
+.crm-workspace .text-amber-400,
+.crm-workspace .text-yellow-400 {
+  color: #7a5415 !important;
+}
+
 .crm-workspace .text-rose-100,
 .crm-workspace .text-red-100 {
   color: #9f3440 !important;
+}
+
+.crm-workspace [class*="text-rose-100/"],
+.crm-workspace [class*="text-red-100/"],
+.crm-workspace .text-rose-200,
+.crm-workspace .text-red-200,
+.crm-workspace .text-rose-300,
+.crm-workspace .text-red-300,
+.crm-workspace .text-rose-400,
+.crm-workspace .text-red-400 {
+  color: #96313c !important;
+}
+
+.crm-workspace .text-violet-100,
+.crm-workspace .text-violet-200,
+.crm-workspace .text-violet-300,
+.crm-workspace .text-violet-400,
+.crm-workspace [class*="text-violet-100/"] {
+  color: #684c88 !important;
+}
+
+.crm-workspace [class*="text-white/"] {
+  color: var(--text-primary) !important;
+}
+
+.crm-workspace .sidebar-shell [class*="text-white/"] {
+  color: var(--text-inverse) !important;
 }
 
 .crm-workspace input,
@@ -731,7 +850,42 @@ button {
 
 .crm-workspace input::placeholder,
 .crm-workspace textarea::placeholder {
-  color: #8b9891;
+  color: #68766e;
+  opacity: 1;
+}
+
+.crm-workspace button:disabled,
+.crm-workspace input:disabled,
+.crm-workspace select:disabled,
+.crm-workspace textarea:disabled {
+  color: var(--disabled-text) !important;
+  opacity: 1 !important;
+}
+
+.crm-workspace button:disabled:not(.premium-button),
+.crm-workspace input:disabled,
+.crm-workspace select:disabled,
+.crm-workspace textarea:disabled {
+  background: var(--disabled-bg) !important;
+}
+
+.crm-workspace .premium-button:disabled,
+.login-shell .premium-button:disabled {
+  border-color: var(--border-strong);
+  background: var(--disabled-bg) !important;
+  color: var(--disabled-text) !important;
+  opacity: 1 !important;
+}
+
+.crm-workspace .sidebar-shell button:disabled {
+  border-color: #33443c !important;
+  background: #202e28 !important;
+  color: #91a097 !important;
+  opacity: 1 !important;
+}
+
+.crm-workspace svg:not([class*="text-"]) {
+  color: currentColor;
 }
 
 .crm-workspace label > div:has(input),
@@ -754,12 +908,28 @@ button {
   background: var(--surface-muted) !important;
 }
 
+.crm-workspace [class*="bg-white/"]:not(.sidebar-shell),
+.crm-workspace [class*="bg-slate-800"]:not(.sidebar-shell),
+.crm-workspace [class*="bg-slate-900"]:not(.sidebar-shell),
+.crm-workspace [class*="bg-slate-950"]:not(.sidebar-shell),
+.crm-workspace [class*="bg-black/"]:not(.fixed) {
+  background: var(--surface-muted) !important;
+}
+
 .crm-workspace .sidebar-shell [class~="bg-black/20"],
 .crm-workspace .sidebar-shell [class~="bg-white/5"],
 .crm-workspace .sidebar-shell [class~="bg-white/[0.025]"],
 .crm-workspace .sidebar-shell [class~="bg-white/[0.03]"],
 .crm-workspace .sidebar-shell [class~="bg-white/[0.035]"],
 .crm-workspace .sidebar-shell [class~="bg-white/[0.04]"] {
+  background: #202e28 !important;
+}
+
+.crm-workspace .sidebar-shell [class*="bg-white/"],
+.crm-workspace .sidebar-shell [class*="bg-slate-800"],
+.crm-workspace .sidebar-shell [class*="bg-slate-900"],
+.crm-workspace .sidebar-shell [class*="bg-slate-950"],
+.crm-workspace .sidebar-shell [class*="bg-black/"] {
   background: #202e28 !important;
 }
 
@@ -783,6 +953,14 @@ button {
   border-color: var(--border) !important;
 }
 
+.crm-workspace [class*="border-white/"],
+.crm-workspace [class*="border-slate-500/"],
+.crm-workspace [class*="border-slate-600/"],
+.crm-workspace [class*="border-slate-700"],
+.crm-workspace [class*="border-slate-800"] {
+  border-color: var(--border) !important;
+}
+
 .crm-workspace .sidebar-shell [class~="border-white/5"],
 .crm-workspace .sidebar-shell [class~="border-white/10"],
 .crm-workspace .sidebar-shell [class~="border-white/[0.05]"],
@@ -792,9 +970,32 @@ button {
   border-color: #33443c !important;
 }
 
+.crm-workspace .sidebar-shell [class*="border-white/"],
+.crm-workspace .sidebar-shell [class*="border-slate-500/"],
+.crm-workspace .sidebar-shell [class*="border-slate-600/"],
+.crm-workspace .sidebar-shell [class*="border-slate-700"],
+.crm-workspace .sidebar-shell [class*="border-slate-800"] {
+  border-color: #33443c !important;
+}
+
 .crm-workspace [class*="tracking-["],
 .login-shell [class*="tracking-["] {
   letter-spacing: 0 !important;
+}
+
+.crm-workspace p.opacity-60,
+.crm-workspace p.opacity-65,
+.crm-workspace p.opacity-70,
+.crm-workspace span.opacity-60,
+.crm-workspace span.opacity-65,
+.crm-workspace span.opacity-70,
+.login-shell p.opacity-60,
+.login-shell p.opacity-65,
+.login-shell p.opacity-70,
+.login-shell span.opacity-60,
+.login-shell span.opacity-65,
+.login-shell span.opacity-70 {
+  opacity: 1 !important;
 }
 
 .crm-workspace .decision-drawer > .border-b {
@@ -821,7 +1022,7 @@ button {
 .crm-workspace input:focus-visible,
 .crm-workspace select:focus-visible,
 .crm-workspace textarea:focus-visible {
-  outline: 2px solid rgba(22, 122, 85, 0.58);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -839,6 +1040,12 @@ button {
 }
 
 .login-shell .saas-panel::before { display: none; }
+.login-shell .saas-chip {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
 .login-shell .saas-action,
 .login-shell .metric-card,
 .login-shell .metric-pipeline,
@@ -856,15 +1063,43 @@ button {
 .login-shell .text-white,
 .login-shell .text-slate-50,
 .login-shell .text-slate-100 { color: var(--text-primary) !important; }
+.login-shell .text-slate-200 { color: var(--text-secondary) !important; }
 .login-shell .text-slate-300,
 .login-shell .text-slate-400 { color: var(--text-secondary) !important; }
 .login-shell .text-slate-500,
 .login-shell .text-slate-600 { color: var(--text-muted) !important; }
 .login-shell .text-teal-100 { color: var(--primary) !important; }
+.login-shell .text-sky-100,
+.login-shell .text-sky-200,
+.login-shell .text-cyan-100,
+.login-shell .text-cyan-200 { color: #2f668c !important; }
+.login-shell .text-amber-100,
+.login-shell .text-amber-200 { color: #7a5415 !important; }
+.login-shell [class*="text-white/"] { color: var(--text-primary) !important; }
 
 .login-shell input {
   background: transparent;
   color: var(--text-primary);
+}
+
+.login-shell input::placeholder {
+  color: #68766e;
+  opacity: 1;
+}
+
+.crm-workspace input:-webkit-autofill,
+.crm-workspace textarea:-webkit-autofill,
+.login-shell input:-webkit-autofill {
+  -webkit-text-fill-color: var(--text-primary);
+  box-shadow: 0 0 0 1000px var(--surface) inset;
+}
+
+.crm-workspace input[type="file"]::file-selector-button {
+  border: 0;
+  border-radius: var(--radius-md);
+  background: #e4eee8;
+  color: #1e5f43;
+  font-weight: 600;
 }
 
 .login-shell label > div:has(input) {
