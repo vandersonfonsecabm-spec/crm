@@ -270,7 +270,7 @@ test("Bling sincronizacao padrao usa apenas produtos e estoque", async () => {
       assert.equal(parsed.searchParams.get("tipo"), "T");
       productCalls += 1;
       if (parsed.searchParams.get("pagina") === "1") {
-        return jsonResponse({ data: [{ id: 401, codigo: "SKU-BLG-401", nome: "Produto Bling 401", preco: 40 }] });
+        return jsonResponse({ data: [{ id: 401, codigo: "SKU-BLG-401", nome: "Produto Bling 401", unidadeMedida: { sigla: "UN" }, preco: 40 }] });
       }
       return jsonResponse({ data: [] });
     }
@@ -291,10 +291,105 @@ test("Bling sincronizacao padrao usa apenas produtos e estoque", async () => {
   assert.deepEqual(sync.body.sincronizacao.metadados.entidades, ["PRODUTOS", "ESTOQUE"]);
   assert.equal(sync.body.resultado.produtosCriados, 1);
   assert.equal(sync.body.resultado.estoquesCriados, 1);
-  assert.equal(sync.body.resultado.precosCriados, 0);
+  assert.equal(sync.body.resultado.precosCriados, 1);
   assert.equal(sync.body.resultado.condicoesCriadas, 0);
   assert.equal(productCalls, 1);
   assert.equal(stockCalls, 1);
+
+  const product = await prisma.produtoExterno.findUnique({
+    where: { integracaoId_externalId: { integracaoId: integration.id, externalId: "401" } },
+    include: { precos: true },
+  });
+  assert.equal(product.unidade, "UN");
+  assert.equal(product.precos[0].precoCentavos, 4000);
+});
+
+test("Bling mapeia preco e unidade dos produtos do fluxo padrao", async () => {
+  const admin = await registerAndLogin("Empresa Bling Campos", "Admin Campos", "admin-campos@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Campos",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "access-fields",
+        refreshToken: "refresh-fields",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  mockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/produtos") && parsed.searchParams.get("pagina") === "1") {
+      assert.equal(parsed.searchParams.get("criterio"), "5");
+      assert.equal(parsed.searchParams.get("tipo"), "T");
+      return jsonResponse({ data: [
+        { id: 501, codigo: "TESTE-CRM-AGRO-001", nome: "Produto 1", unidadeMedida: { sigla: "SC" }, preco: "129,90" },
+        { id: 502, codigo: "TESTE-CRM-AGRO-002", nome: "Produto 2", unidade: { sigla: "KG" }, precoVenda: "89.50" },
+        { id: 503, codigo: "TESTE-CRM-AGRO-003", nome: "Produto 3", unidade: "UN", preco: { valor: "249,90" } },
+        { id: 504, codigo: "TESTE-CRM-AGRO-ZERO", nome: "Produto Zero", unidadeMedida: "UN", preco: 0 },
+        { id: 505, codigo: "TESTE-CRM-AGRO-NULL", nome: "Produto Sem Preco", preco: null },
+      ] });
+    }
+    if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ data: [] });
+    if (parsed.pathname.endsWith("/estoques/saldos") && parsed.searchParams.get("pagina") === "1") {
+      assert.deepEqual(parsed.searchParams.getAll("idsProdutos[]"), ["501", "502", "503", "504", "505"]);
+      return jsonResponse({ data: [
+        { produto: { id: 501 }, deposito: { id: 1, descricao: "Geral" }, saldoFisicoTotal: 12 },
+        { produto: { id: 502 }, deposito: { id: 1, descricao: "Geral" }, saldoFisicoTotal: 30 },
+        { produto: { id: 503 }, deposito: { id: 1, descricao: "Geral" }, saldoFisicoTotal: 5 },
+      ] });
+    }
+    if (parsed.pathname.endsWith("/estoques/saldos")) return jsonResponse({ data: [] });
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const sync = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS", "ESTOQUE"] }, admin.token);
+  assert.equal(sync.status, 200);
+  assert.equal(sync.body.resultado.produtosRecebidos, 5);
+  assert.equal(sync.body.resultado.produtosCriados, 5);
+  assert.equal(sync.body.resultado.estoquesRecebidos, 3);
+  assert.equal(sync.body.resultado.estoquesCriados, 3);
+  assert.equal(sync.body.resultado.precosCriados, 4);
+  assert.equal(sync.body.resultado.erros, 0);
+  assert.equal(sync.body.sincronizacao.itensRecebidos, 8);
+  assert.equal(sync.body.sincronizacao.itensProcessados, 12);
+
+  const products = await prisma.produtoExterno.findMany({
+    where: { empresaId: admin.empresaId, integracaoId: integration.id },
+    include: { precos: true, estoques: true },
+    orderBy: { externalId: "asc" },
+  });
+  assert.equal(products.length, 5);
+  assert.equal(products.find((item) => item.externalId === "501").unidade, "SC");
+  assert.equal(products.find((item) => item.externalId === "502").unidade, "KG");
+  assert.equal(products.find((item) => item.externalId === "503").unidade, "UN");
+  assert.equal(products.find((item) => item.externalId === "504").unidade, "UN");
+  assert.equal(products.find((item) => item.externalId === "505").unidade, null);
+  assert.equal(products.find((item) => item.externalId === "501").precos[0].precoCentavos, 12990);
+  assert.equal(products.find((item) => item.externalId === "502").precos[0].precoCentavos, 8950);
+  assert.equal(products.find((item) => item.externalId === "503").precos[0].precoCentavos, 24990);
+  assert.equal(products.find((item) => item.externalId === "504").precos[0].precoCentavos, 0);
+  assert.equal(products.find((item) => item.externalId === "505").precos.length, 0);
+  assert.equal(products.find((item) => item.externalId === "501").estoques[0].quantidade.toString(), "12");
+  assert.equal(products.find((item) => item.externalId === "502").estoques[0].quantidade.toString(), "30");
+  assert.equal(products.find((item) => item.externalId === "503").estoques[0].quantidade.toString(), "5");
+
+  const syncAgain = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS", "ESTOQUE"] }, admin.token);
+  assert.equal(syncAgain.status, 200);
+  assert.equal(syncAgain.body.resultado.produtosCriados, 0);
+  assert.equal(syncAgain.body.resultado.produtosAtualizados, 5);
+  assert.equal(syncAgain.body.resultado.estoquesCriados, 0);
+  assert.equal(syncAgain.body.resultado.estoquesAtualizados, 3);
+  assert.equal(syncAgain.body.resultado.precosCriados, 0);
+  assert.equal(syncAgain.body.resultado.precosAtualizados, 4);
+  assert.equal(await prisma.produtoExterno.count({ where: { empresaId: admin.empresaId, integracaoId: integration.id } }), 5);
+  assert.equal(await prisma.precoExterno.count({ where: { empresaId: admin.empresaId, integracaoId: integration.id } }), 4);
 });
 
 test("Bling sincronizacao deduplica entidades e rejeita valores desconhecidos", async () => {

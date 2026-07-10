@@ -115,6 +115,17 @@ type WhatsappScenario = {
   productName?: string;
   warning?: string;
 };
+type BlingSyncCounters = {
+  produtosRecebidos?: number;
+  produtosCriados?: number;
+  produtosAtualizados?: number;
+  estoquesRecebidos?: number;
+  estoquesCriados?: number;
+  estoquesAtualizados?: number;
+  precosCriados?: number;
+  precosAtualizados?: number;
+  erros?: number;
+};
 
 export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: { initialBlingNotice?: string }) {
   const [state, setState] = useState<LoadState>("loading");
@@ -496,7 +507,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
     try {
       const result = await sincronizarIntegracao(integrationId, ["PRODUTOS", "ESTOQUE"]);
       setLastBlingSync(result);
-      setBlingMessage(result.sincronizacao.status === "CONCLUIDA" ? "Produtos e estoque sincronizados com sucesso." : "Produtos sincronizados. Não foi possível atualizar todo o estoque.");
+      setBlingMessage(formatBlingSyncMessage(result));
       await Promise.all([loadAll(), reloadCatalog(), reloadQuality()]);
     } catch (error) {
       setBlingMessage(errorText(error, "Não foi possível sincronizar o Bling."));
@@ -1067,7 +1078,7 @@ function BlingSection({
       {lastSync && (
         <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300">
           <span className="font-semibold text-slate-100">Última sincronização:</span>{" "}
-          {lastSync.sincronizacao.itensRecebidos} recebidos, {lastSync.sincronizacao.itensProcessados} processados, {lastSync.sincronizacao.itensComErro} com erro.
+          {formatBlingSyncSummary(lastSync)}
         </div>
       )}
     </section>
@@ -1347,6 +1358,37 @@ function dateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatBlingSyncMessage(sync: HubBlingSyncResponse) {
+  const counters = readBlingSyncCounters(sync);
+  if (sync.sincronizacao.status !== "CONCLUIDA") {
+    return "Produtos sincronizados. Não foi possível atualizar todo o estoque.";
+  }
+  if (!counters) return "Produtos e estoque sincronizados com sucesso.";
+  const produtos = count(counters.produtosCriados) + count(counters.produtosAtualizados);
+  const saldos = count(counters.estoquesCriados) + count(counters.estoquesAtualizados);
+  return `${produtos} produtos e ${saldos} saldos de estoque sincronizados com sucesso.`;
+}
+
+function formatBlingSyncSummary(sync: HubBlingSyncResponse) {
+  const counters = readBlingSyncCounters(sync);
+  if (!counters) {
+    return `${sync.sincronizacao.itensRecebidos} recebidos, ${sync.sincronizacao.itensProcessados} processados, ${sync.sincronizacao.itensComErro} com erro.`;
+  }
+  const produtosProcessados = count(counters.produtosCriados) + count(counters.produtosAtualizados);
+  const estoquesProcessados = count(counters.estoquesCriados) + count(counters.estoquesAtualizados);
+  return `${count(counters.produtosRecebidos)} produtos recebidos, ${produtosProcessados} produtos processados, ${count(counters.estoquesRecebidos)} saldos recebidos, ${estoquesProcessados} saldos processados, ${sync.sincronizacao.itensComErro} com erro.`;
+}
+
+function readBlingSyncCounters(sync: HubBlingSyncResponse) {
+  const resultado = sync.sincronizacao.metadados?.resultado;
+  if (!resultado || typeof resultado !== "object" || Array.isArray(resultado)) return null;
+  return resultado as BlingSyncCounters;
+}
+
+function count(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function EmptyState({ title, text }: { title: string; text: string }) {

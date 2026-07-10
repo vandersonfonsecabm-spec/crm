@@ -119,6 +119,12 @@ function createBlingService({ prisma }) {
         counters.produtosCriados += result.created;
         counters.produtosAtualizados += result.updated;
         productIndex = result.productIndex;
+        if (!requested.includes("PRECOS")) {
+          const priceResult = await upsertPrices({ prisma, empresaId, integracaoId: integracao.id, products, productIndex, now });
+          counters.precosCriados += priceResult.created;
+          counters.precosAtualizados += priceResult.updated;
+          counters.erros += priceResult.errors;
+        }
       } else {
         productIndex = await loadProductIndex({ prisma, empresaId, integracaoId: integracao.id });
       }
@@ -406,7 +412,7 @@ function normalizeProduct(item = {}) {
     descricao: text(item.descricaoComplementar || item.observacoes || item.descricaoCurta) || null,
     categoria: text(categoria) || null,
     marca: text(item.marca || item.fabricante) || null,
-    unidade: text(item.unidade) || null,
+    unidade: normalizeUnit(item),
     ativo: normalizeActive(item.situacao ?? item.ativo),
   };
 }
@@ -432,11 +438,72 @@ function normalizePrice(item = {}) {
   return {
     externalId: product.externalId,
     tabela: "Padrao",
-    precoCentavos: moneyToCents(item.preco || item.precoVenda || item.valor),
-    precoPromocionalCentavos: moneyToCents(item.precoPromocional || item.promocao?.preco),
+    precoCentavos: moneyToCents(normalizePriceValue(item)),
+    precoPromocionalCentavos: moneyToCents(normalizePromotionalPriceValue(item)),
     inicioPromocao: item.promocao?.inicio ? new Date(item.promocao.inicio) : null,
     fimPromocao: item.promocao?.fim ? new Date(item.promocao.fim) : null,
   };
+}
+
+function normalizeUnit(item = {}) {
+  return firstText(
+    unitValue(item.unidade),
+    unitValue(item.unidadeMedida),
+    unitValue(item.unidadeComercial),
+    unitValue(item.siglaUnidade),
+    unitValue(item.un),
+  ) || null;
+}
+
+function unitValue(value) {
+  if (!value) return "";
+  if (typeof value === "object") {
+    return firstText(value.sigla, value.codigo, value.descricao, value.nome);
+  }
+  return text(value);
+}
+
+function normalizePriceValue(item = {}) {
+  return firstValue(
+    priceValue(item.preco),
+    priceValue(item.precoVenda),
+    priceValue(item.valor),
+    priceValue(item.valorVenda),
+    priceValue(item.precoProduto),
+    priceValue(item.precoLoja),
+    priceValue(item.precoUnitario),
+    priceValue(item.precos?.preco),
+    priceValue(item.precos?.precoVenda),
+    priceValue(item.tabelaPreco?.preco),
+  );
+}
+
+function normalizePromotionalPriceValue(item = {}) {
+  return firstValue(
+    priceValue(item.precoPromocional),
+    priceValue(item.valorPromocional),
+    priceValue(item.promocao?.preco),
+    priceValue(item.promocao?.valor),
+  );
+}
+
+function priceValue(value) {
+  if (value && typeof value === "object") {
+    return firstValue(value.valor, value.preco, value.precoVenda, value.valorVenda);
+  }
+  return value;
+}
+
+function firstValue(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== "");
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    const normalized = text(value);
+    if (normalized) return normalized;
+  }
+  return "";
 }
 
 function normalizePaymentTerm(item = {}) {
