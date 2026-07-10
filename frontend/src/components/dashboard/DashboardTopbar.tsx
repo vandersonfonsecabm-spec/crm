@@ -40,26 +40,26 @@ export default function DashboardTopbar({
   const caption = companyName && !authSession?.isDemo ? `${roleLabel} - ${companyName}` : roleLabel;
 
   return (
-    <div className="premium-panel topbar-shell relative z-30 mb-4 flex items-center justify-between overflow-visible rounded-2xl px-4 py-2.5">
+    <div className="topbar-shell relative z-30 mb-5 flex min-h-14 items-center justify-between overflow-visible border-b px-1 pb-3">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-teal-200/16 bg-teal-300/[0.055] text-teal-100 md:flex">
+        <div className="workspace-status hidden h-8 w-8 shrink-0 items-center justify-center rounded-md md:flex">
           <ShieldCheck size={15} />
         </div>
 
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="hidden truncate text-xs font-semibold text-slate-100 md:block">
-              Central Comercial
+              Área de trabalho
             </p>
 
-            <span className="flex items-center gap-1.5 rounded-full border border-emerald-300/16 bg-emerald-300/[0.055] px-2 py-0.5 text-[10px] font-semibold text-emerald-50">
+            <span className="workspace-online flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
               Ativo
             </span>
           </div>
 
           <p className="hidden truncate text-[10px] text-slate-500 lg:block">
-            Funil, carteira e agenda em uma visão unificada
+            Operação comercial e dados da empresa
           </p>
         </div>
       </div>
@@ -73,7 +73,7 @@ export default function DashboardTopbar({
           canManageIntegrations={canManageIntegrations}
         />
 
-        <div className="premium-ghost hidden rounded-xl px-3 py-1.5 lg:block">
+        <div className="topbar-time hidden rounded-md px-3 py-1.5 lg:block">
           <p className="text-[10px] text-slate-500">Agora</p>
           <p className="text-[11px] font-semibold text-slate-100">{currentTime}</p>
         </div>
@@ -99,8 +99,8 @@ export default function DashboardTopbar({
           }}
         />
 
-        <div className="premium-ghost flex items-center gap-2 rounded-xl px-2 py-1.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-950 shadow-[0_10px_24px_rgba(0,0,0,0.2)]">
+        <div className="topbar-user flex items-center gap-2 rounded-md px-2 py-1.5">
+          <div className="user-avatar flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold">
             {userInitials}
           </div>
 
@@ -116,7 +116,7 @@ export default function DashboardTopbar({
 
         <button
           onClick={onLogout}
-          className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-slate-600/26 bg-slate-950/24 px-2.5 text-[10px] font-semibold text-slate-400 transition hover:border-rose-300/30 hover:bg-rose-500/10 hover:text-rose-100"
+          className="topbar-logout inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[10px] font-semibold"
           title="Sair da conta"
           type="button"
         >

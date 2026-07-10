@@ -5,7 +5,7 @@ import {
   KanbanSquare,
   Package,
   PlugZap,
-  Sparkles,
+  Sprout,
   Users,
   Zap,
 } from "lucide-react";
@@ -42,24 +42,24 @@ export default function DashboardSidebar({
   canManageIntegrations = false,
 }: DashboardSidebarProps) {
   return (
-    <aside className="sidebar-shell hidden h-screen w-64 shrink-0 overflow-x-hidden overflow-y-auto border-r border-slate-700/45 p-4 pb-6 shadow-[18px_0_54px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:sticky lg:top-0 lg:block">
-      <div className="identity-panel mb-5 rounded-2xl p-3">
+    <aside className="sidebar-shell hidden h-screen w-[232px] shrink-0 overflow-x-hidden overflow-y-auto border-r p-3 pb-5 lg:sticky lg:top-0 lg:block">
+      <div className="identity-panel mb-5 rounded-lg p-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/20 bg-teal-300/[0.08] text-teal-100">
-            <Sparkles size={16} />
+          <div className="brand-mark flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
+            <Sprout size={17} />
           </div>
 
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">CRM Agro SaaS</p>
-            <p className="truncate text-[11px] text-slate-500">Operação comercial</p>
+            <p className="truncate text-sm font-semibold">CRM Agro</p>
+            <p className="truncate text-[11px] text-slate-500">Gestão comercial</p>
           </div>
         </div>
       </div>
 
-      <nav className="space-y-4">
+      <nav aria-label="Navegação principal" className="space-y-5">
         <div>
           <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Área de trabalho
+            Visão geral
           </p>
 
           <div className="grid gap-1.5">
@@ -69,59 +69,53 @@ export default function DashboardSidebar({
               label="Visão Geral"
               onClick={() => setActivePage("dashboard")}
             />
+          </div>
+        </div>
 
+        <div>
+          <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Comercial
+          </p>
+
+          <div className="grid gap-1.5">
             <SidebarButton
               active={activePage === "comercial"}
               icon={<BriefcaseBusiness size={15} className="mr-2 shrink-0" />}
               label="Central Comercial"
               onClick={() => setActivePage("comercial")}
             />
-
             <SidebarButton
               active={activePage === "clientes"}
               icon={<Users size={15} className="mr-2 shrink-0" />}
               label="Carteira"
               onClick={() => setActivePage("clientes")}
             />
-
             <SidebarButton
               active={activePage === "kanban"}
               icon={<KanbanSquare size={15} className="mr-2 shrink-0" />}
               label="Funil Comercial"
               onClick={() => setActivePage("kanban")}
             />
+          </div>
+        </div>
 
+        <div>
+          <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Operação
+          </p>
+          <div className="grid gap-1.5">
             <SidebarButton
               active={activePage === "agenda"}
               icon={<CalendarCheck size={15} className="mr-2 shrink-0" />}
               label="Agenda"
               onClick={() => setActivePage("agenda")}
             />
-
             <SidebarButton
               active={activePage === "estoque"}
               icon={<Package size={15} className="mr-2 shrink-0" />}
               label="Estoque"
               onClick={() => setActivePage("estoque")}
             />
-
-            {canManageIntegrations && (
-              <SidebarButton
-                active={activePage === "integracoes"}
-                icon={<PlugZap size={15} className="mr-2 shrink-0" />}
-                label="Integrações"
-                onClick={() => setActivePage("integracoes")}
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="border-t border-white/5 pt-3">
-          <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Inteligência
-          </p>
-
-          <div className="grid gap-1.5">
             <SidebarButton
               active={activePage === "automacoes"}
               icon={<Zap size={15} className="mr-2 shrink-0" />}
@@ -130,11 +124,25 @@ export default function DashboardSidebar({
             />
           </div>
         </div>
+
+        {canManageIntegrations && (
+          <div>
+            <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Conexões
+            </p>
+            <SidebarButton
+              active={activePage === "integracoes"}
+              icon={<PlugZap size={15} className="mr-2 shrink-0" />}
+              label="Integrações"
+              onClick={() => setActivePage("integracoes")}
+            />
+          </div>
+        )}
       </nav>
 
       {activePage !== "estoque" && activePage !== "integracoes" && (
-      <div className="premium-panel mx-auto mt-6 w-full max-w-[224px] rounded-2xl p-3 transition-all duration-200 hover:border-white/20">
-        <p className="text-xs font-semibold">Atalhos operacionais</p>
+      <div className="sidebar-context mx-auto mt-6 w-full rounded-lg p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em]">Ações da página</p>
 
         <div className="mt-3 space-y-2">
           {activePage === "dashboard" && (
@@ -270,18 +278,13 @@ function SidebarButton({
   return (
     <button
       onClick={onClick}
-      className={`relative mx-auto box-border flex h-10 w-[224px] shrink-0 items-center rounded-xl border px-3 pr-9 text-left text-sm leading-5 transition-all duration-200 ${
-        active
-          ? "border-teal-200/25 bg-teal-300/[0.075] text-white shadow-[inset_2px_0_0_rgba(48,201,176,0.42)] ring-1 ring-inset ring-white/10"
-          : "border-white/[0.07] bg-white/[0.028] text-slate-300 hover:border-white/14 hover:bg-white/[0.052] hover:text-white"
-      }`}
+      aria-current={active ? "page" : undefined}
+      className={`sidebar-nav-item relative box-border flex h-9 w-full shrink-0 items-center rounded-md px-3 pr-8 text-left text-[13px] leading-5 ${active ? "is-active" : ""}`}
     >
       {icon}
       <span className="block min-w-0 flex-1 truncate leading-5">{label}</span>
       <span
-        className={`absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full ${
-          active ? "bg-teal-200" : "bg-white/15"
-        }`}
+        className="sidebar-nav-indicator absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full"
       />
     </button>
   );
@@ -304,11 +307,7 @@ function ActionButton({
       disabled={disabled}
       onClick={onClick}
       title={title}
-      className={`inline-flex box-border h-9 w-full items-center rounded-xl border px-3 text-left text-[11px] transition-all duration-200 ${
-        disabled
-          ? "cursor-not-allowed border-white/[0.05] bg-white/[0.025] text-slate-500"
-          : "border-white/[0.07] bg-white/[0.045] text-slate-300 hover:border-cyan-200/20 hover:bg-cyan-300/[0.06] hover:text-slate-100"
-      }`}
+      className={`sidebar-action inline-flex box-border h-8 w-full items-center rounded-md px-2.5 text-left text-[11px] ${disabled ? "is-disabled" : ""}`}
     >
       <span>{label}</span>
       {disabled && <span className="ml-2 text-[9px] uppercase tracking-[0.12em] text-slate-600">em breve</span>}

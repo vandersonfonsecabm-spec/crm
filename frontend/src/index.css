@@ -7,38 +7,54 @@
 }
 
 :root {
-  color-scheme: dark;
-  --brand-primary: #30c9b0;
-  --brand-secondary: #7db4d8;
-  --brand-amber: #c99a48;
-  --brand-coral: #d97883;
-  --brand-blue: #5f8fca;
-  --surface-strong: rgba(10, 16, 25, 0.94);
-  --surface-soft: rgba(13, 20, 31, 0.72);
-  --surface-depth: rgba(5, 9, 16, 0.88);
-  --surface-lift: rgba(17, 25, 39, 0.74);
-  --line-soft: rgba(148, 163, 184, 0.13);
-  --line-strong: rgba(226, 232, 240, 0.18);
+  color-scheme: light;
+  --background: #f4f6f4;
+  --surface: #ffffff;
+  --surface-muted: #f7f9f7;
+  --surface-subtle: #eef2ef;
+  --border: #dfe5e1;
+  --border-strong: #cbd5cf;
+  --text-primary: #17211c;
+  --text-secondary: #46534c;
+  --text-muted: #718078;
+  --primary: #167a55;
+  --primary-hover: #116445;
+  --success: #247a52;
+  --warning: #9a6b19;
+  --danger: #b33a45;
+  --info: #356f98;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --shadow-sm: 0 1px 2px rgba(20, 35, 27, 0.06);
+  --shadow-md: 0 6px 18px rgba(20, 35, 27, 0.07);
+  --brand-primary: var(--primary);
+  --brand-secondary: var(--info);
+  --brand-amber: var(--warning);
+  --brand-coral: var(--danger);
+  --brand-blue: var(--info);
+  --surface-strong: var(--surface);
+  --surface-soft: var(--surface-muted);
+  --surface-depth: var(--surface-subtle);
+  --surface-lift: var(--surface);
+  --line-soft: var(--border);
+  --line-strong: var(--border-strong);
 }
 
 html {
-  background: #05070d;
+  background: var(--background);
 }
 
 body {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(circle at 14% -10%, rgba(48, 201, 176, 0.055), transparent 30%),
-    radial-gradient(circle at 86% -4%, rgba(95, 143, 202, 0.065), transparent 32%),
-    radial-gradient(circle at 100% 42%, rgba(201, 154, 72, 0.035), transparent 28%),
-    radial-gradient(circle at 0% 88%, rgba(217, 120, 131, 0.026), transparent 24%),
-    linear-gradient(135deg, #05070d 0%, #09101a 46%, #070a10 100%);
+  background: var(--background);
+  color: var(--text-primary);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   -webkit-font-smoothing: antialiased;
-  text-rendering: geometricPrecision;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -53,7 +69,7 @@ button {
 }
 
 ::selection {
-  background: rgba(45, 212, 191, 0.28);
+  background: rgba(22, 122, 85, 0.2);
   color: #ffffff;
 }
 
@@ -63,17 +79,17 @@ button {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(2, 6, 23, 0.55);
+  background: #edf1ee;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.24);
-  border: 2px solid rgba(2, 6, 23, 0.55);
+  background: #bec9c2;
+  border: 2px solid #edf1ee;
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.34);
+  background: #9eaca3;
 }
 
 @layer components {
@@ -416,3 +432,460 @@ button {
       inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 }
+
+/* Enterprise CRM theme. These unlayered rules intentionally sit above legacy
+   utility combinations while the product keeps its existing functional markup. */
+.crm-workspace {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+.crm-main {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), transparent 190px),
+    var(--background);
+}
+
+.crm-workspace .premium-shell {
+  background: transparent;
+}
+
+.crm-workspace .premium-panel,
+.crm-workspace .saas-panel,
+.crm-workspace .identity-panel,
+.crm-workspace .decision-drawer {
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: none;
+}
+
+.crm-workspace .premium-panel::before,
+.crm-workspace .saas-panel::before,
+.crm-workspace .identity-panel::before,
+.crm-workspace .metric-card::before {
+  display: none;
+}
+
+.crm-workspace .saas-card,
+.crm-workspace .saas-tile,
+.crm-workspace .saas-row,
+.crm-workspace .saas-action {
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.crm-workspace .saas-row {
+  box-shadow: inset 2px 0 0 transparent, var(--shadow-sm);
+}
+
+.crm-workspace .saas-row:hover,
+.crm-workspace .saas-action:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+  box-shadow: inset 2px 0 0 rgba(22, 122, 85, 0.35), var(--shadow-sm);
+  transform: none;
+}
+
+.crm-workspace .metric-card,
+.crm-workspace .metric-pipeline,
+.crm-workspace .metric-revenue,
+.crm-workspace .metric-forecast,
+.crm-workspace .metric-risk {
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.crm-workspace .metric-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: none;
+}
+
+.crm-workspace .metric-pipeline { border-left-color: var(--primary); }
+.crm-workspace .metric-revenue { border-left-color: var(--info); }
+.crm-workspace .metric-forecast { border-left-color: var(--warning); }
+.crm-workspace .metric-risk { border-left-color: var(--danger); }
+
+.crm-workspace .saas-accent-sky,
+.crm-workspace .saas-accent-amber,
+.crm-workspace .saas-accent-rose,
+.crm-workspace .saas-accent-emerald {
+  box-shadow: inset 2px 0 0 var(--border-strong), var(--shadow-sm);
+}
+
+.crm-workspace .saas-accent-sky { box-shadow: inset 2px 0 0 #5b93b8, var(--shadow-sm); }
+.crm-workspace .saas-accent-amber { box-shadow: inset 2px 0 0 #b48637, var(--shadow-sm); }
+.crm-workspace .saas-accent-rose { box-shadow: inset 2px 0 0 #c65a65, var(--shadow-sm); }
+.crm-workspace .saas-accent-emerald { box-shadow: inset 2px 0 0 #3c8f69, var(--shadow-sm); }
+
+.crm-workspace .premium-button {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+  filter: none;
+  transform: none;
+}
+
+.crm-workspace .premium-button:hover {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+  box-shadow: var(--shadow-sm);
+  filter: none;
+  transform: none;
+}
+
+.crm-workspace .premium-ghost,
+.crm-workspace .data-caption,
+.crm-workspace .icon-button,
+.crm-workspace .topbar-time,
+.crm-workspace .topbar-user,
+.crm-workspace .topbar-logout {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.crm-workspace .icon-button:hover,
+.crm-workspace .topbar-logout:hover,
+.crm-workspace .premium-ghost:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.crm-workspace .topbar-shell {
+  border-color: var(--border);
+  background: transparent;
+  box-shadow: none;
+}
+
+.crm-workspace .workspace-status {
+  border: 1px solid #cfe0d6;
+  background: #eef7f2;
+  color: var(--primary);
+}
+
+.crm-workspace .workspace-online {
+  border: 1px solid #cfe0d6;
+  background: #eef7f2;
+  color: #226844;
+}
+
+.crm-workspace .user-avatar {
+  background: #e4eee8;
+  color: #1e5f43;
+  box-shadow: none;
+}
+
+.crm-workspace .saas-chip {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.crm-workspace .page-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 18px;
+}
+
+.crm-workspace .sidebar-shell {
+  border-color: #2d3a34;
+  background: #18231e;
+  box-shadow: none;
+  color: #f3f7f4;
+}
+
+.crm-workspace .sidebar-shell .identity-panel {
+  border-color: #33423b;
+  background: #1d2a24;
+  box-shadow: none;
+}
+
+.crm-workspace .brand-mark {
+  border: 1px solid #35664f;
+  background: #234432;
+  color: #b8e2ca;
+}
+
+.crm-workspace .sidebar-nav-item {
+  border: 1px solid transparent;
+  color: #c5d0ca;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.crm-workspace .sidebar-nav-item:hover {
+  border-color: #33443c;
+  background: #202e28;
+  color: #ffffff;
+}
+
+.crm-workspace .sidebar-nav-item.is-active {
+  border-color: #3b5949;
+  background: #263a30;
+  color: #ffffff;
+}
+
+.crm-workspace .sidebar-nav-indicator {
+  background: #53645b;
+}
+
+.crm-workspace .sidebar-nav-item.is-active .sidebar-nav-indicator {
+  background: #6fd19c;
+}
+
+.crm-workspace .sidebar-context {
+  border: 1px solid #33423b;
+  background: #1d2a24;
+  color: #e7eee9;
+}
+
+.crm-workspace .sidebar-action {
+  border: 1px solid #33443c;
+  background: #202e28;
+  color: #cbd7d0;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.crm-workspace .sidebar-action:hover {
+  border-color: #496457;
+  background: #293a32;
+  color: #ffffff;
+}
+
+.crm-workspace .sidebar-action.is-disabled {
+  cursor: not-allowed;
+  color: #738179;
+  opacity: 0.72;
+}
+
+.crm-workspace .sidebar-shell .text-white,
+.crm-workspace .sidebar-shell .text-slate-50,
+.crm-workspace .sidebar-shell .text-slate-100,
+.crm-workspace .sidebar-shell .text-slate-200,
+.crm-workspace .sidebar-shell .text-slate-300 {
+  color: #e7eee9 !important;
+}
+
+.crm-workspace .sidebar-shell .text-slate-400,
+.crm-workspace .sidebar-shell .text-slate-500,
+.crm-workspace .sidebar-shell .text-slate-600 {
+  color: #91a097 !important;
+}
+
+.crm-workspace .text-white,
+.crm-workspace .text-slate-50,
+.crm-workspace .text-slate-100 {
+  color: var(--text-primary) !important;
+}
+
+.crm-workspace .text-slate-200,
+.crm-workspace .text-slate-300 {
+  color: var(--text-secondary) !important;
+}
+
+.crm-workspace .text-slate-400,
+.crm-workspace .text-slate-500,
+.crm-workspace .text-slate-600,
+.crm-workspace .text-slate-700 {
+  color: var(--text-muted) !important;
+}
+
+.crm-workspace .text-teal-50,
+.crm-workspace .text-teal-100,
+.crm-workspace .text-emerald-50,
+.crm-workspace .text-emerald-100 {
+  color: #226844 !important;
+}
+
+.crm-workspace .text-sky-100,
+.crm-workspace .text-blue-100,
+.crm-workspace .text-cyan-100 {
+  color: #356f98 !important;
+}
+
+.crm-workspace .text-amber-100,
+.crm-workspace .text-yellow-100 {
+  color: #815a18 !important;
+}
+
+.crm-workspace .text-rose-100,
+.crm-workspace .text-red-100 {
+  color: #9f3440 !important;
+}
+
+.crm-workspace input,
+.crm-workspace textarea,
+.crm-workspace select {
+  border-color: var(--border) !important;
+  background: var(--surface) !important;
+  color: var(--text-primary) !important;
+  outline-color: var(--primary);
+}
+
+.crm-workspace input::placeholder,
+.crm-workspace textarea::placeholder {
+  color: #8b9891;
+}
+
+.crm-workspace label > div:has(input),
+.crm-workspace label > div:has(textarea),
+.crm-workspace label > div:has(select) {
+  border-color: var(--border) !important;
+  background: var(--surface) !important;
+}
+
+.crm-workspace [class~="bg-black/20"],
+.crm-workspace [class~="bg-white/5"],
+.crm-workspace [class~="bg-white/[0.025]"],
+.crm-workspace [class~="bg-white/[0.03]"],
+.crm-workspace [class~="bg-white/[0.035]"],
+.crm-workspace [class~="bg-white/[0.04]"],
+.crm-workspace [class~="bg-slate-950/24"],
+.crm-workspace [class~="bg-slate-950/25"],
+.crm-workspace [class~="bg-slate-950/28"],
+.crm-workspace [class~="bg-slate-950/35"] {
+  background: var(--surface-muted) !important;
+}
+
+.crm-workspace .sidebar-shell [class~="bg-black/20"],
+.crm-workspace .sidebar-shell [class~="bg-white/5"],
+.crm-workspace .sidebar-shell [class~="bg-white/[0.025]"],
+.crm-workspace .sidebar-shell [class~="bg-white/[0.03]"],
+.crm-workspace .sidebar-shell [class~="bg-white/[0.035]"],
+.crm-workspace .sidebar-shell [class~="bg-white/[0.04]"] {
+  background: #202e28 !important;
+}
+
+.crm-workspace .animate-pulse {
+  border-color: var(--border) !important;
+  background: #e7ece9 !important;
+}
+
+.crm-workspace [class~="border-white/5"],
+.crm-workspace [class~="border-white/10"],
+.crm-workspace [class~="border-white/[0.05]"],
+.crm-workspace [class~="border-white/[0.06]"],
+.crm-workspace [class~="border-white/[0.07]"],
+.crm-workspace [class~="border-white/[0.08]"],
+.crm-workspace [class~="border-white/[0.09]"],
+.crm-workspace [class~="border-white/[0.1]"],
+.crm-workspace [class~="border-slate-500/14"],
+.crm-workspace [class~="border-slate-500/16"],
+.crm-workspace [class~="border-slate-600/20"],
+.crm-workspace [class~="border-slate-600/26"] {
+  border-color: var(--border) !important;
+}
+
+.crm-workspace .sidebar-shell [class~="border-white/5"],
+.crm-workspace .sidebar-shell [class~="border-white/10"],
+.crm-workspace .sidebar-shell [class~="border-white/[0.05]"],
+.crm-workspace .sidebar-shell [class~="border-white/[0.06]"],
+.crm-workspace .sidebar-shell [class~="border-white/[0.07]"],
+.crm-workspace .sidebar-shell [class~="border-white/[0.08]"] {
+  border-color: #33443c !important;
+}
+
+.crm-workspace [class*="tracking-["],
+.login-shell [class*="tracking-["] {
+  letter-spacing: 0 !important;
+}
+
+.crm-workspace .decision-drawer > .border-b {
+  border-color: var(--border);
+  background: var(--surface-muted);
+}
+
+.crm-workspace .decision-drawer-shell {
+  scrollbar-color: #aebbb3 #eef2ef;
+}
+
+.crm-workspace .premium-button,
+.crm-workspace .premium-button:hover,
+.login-shell .premium-button,
+.login-shell .premium-button:hover {
+  color: #ffffff !important;
+}
+
+.crm-workspace .rounded-2xl { border-radius: var(--radius-lg) !important; }
+.crm-workspace .rounded-xl { border-radius: var(--radius-md) !important; }
+.crm-workspace .rounded-lg { border-radius: var(--radius-md) !important; }
+
+.crm-workspace button:focus-visible,
+.crm-workspace input:focus-visible,
+.crm-workspace select:focus-visible,
+.crm-workspace textarea:focus-visible {
+  outline: 2px solid rgba(22, 122, 85, 0.58);
+  outline-offset: 2px;
+}
+
+.login-shell {
+  background:
+    linear-gradient(90deg, #edf3ef 0, #f5f7f5 52%, #ffffff 52%);
+  color: var(--text-primary);
+}
+
+.login-shell .saas-panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: none;
+}
+
+.login-shell .saas-panel::before { display: none; }
+.login-shell .saas-action,
+.login-shell .metric-card,
+.login-shell .metric-pipeline,
+.login-shell .metric-revenue,
+.login-shell .metric-forecast {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  box-shadow: var(--shadow-sm);
+}
+
+.login-shell .metric-card::before { display: none; }
+.login-shell .metric-pipeline { border-left-color: var(--primary); }
+.login-shell .metric-revenue { border-left-color: var(--info); }
+.login-shell .metric-forecast { border-left-color: var(--warning); }
+.login-shell .text-white,
+.login-shell .text-slate-50,
+.login-shell .text-slate-100 { color: var(--text-primary) !important; }
+.login-shell .text-slate-300,
+.login-shell .text-slate-400 { color: var(--text-secondary) !important; }
+.login-shell .text-slate-500,
+.login-shell .text-slate-600 { color: var(--text-muted) !important; }
+.login-shell .text-teal-100 { color: var(--primary) !important; }
+
+.login-shell input {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.login-shell label > div:has(input) {
+  border-color: var(--border);
+  background: var(--surface-muted);
+}
+
+.login-shell .premium-button {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+.login-shell .premium-ghost {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.login-shell .rounded-2xl { border-radius: var(--radius-lg) !important; }
+.login-shell .rounded-xl { border-radius: var(--radius-md) !important; }
+.login-shell .rounded-lg { border-radius: var(--radius-md) !important; }

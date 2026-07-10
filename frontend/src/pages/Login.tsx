@@ -1,4 +1,4 @@
-import { ArrowRight, Database, LockKeyhole, Mail, ShieldCheck, Sparkles, Wifi } from "lucide-react";
+import { ArrowRight, Database, LockKeyhole, Mail, ShieldCheck, Sprout, Wifi } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { loginDemoWithBackend, loginWithBackend } from "../services/crmApi";
@@ -52,7 +52,7 @@ export function Login({ onLogin }: LoginProps) {
   }
 
   return (
-    <main className="premium-shell flex min-h-screen items-center justify-center overflow-hidden bg-[#060b12] px-4 py-8 text-white">
+    <main className="login-shell flex min-h-screen items-center justify-center overflow-hidden px-4 py-8">
       <section className="grid w-full max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_390px]">
         <div className="saas-panel hidden min-h-[540px] rounded-2xl p-5 lg:flex lg:flex-col lg:justify-between">
           <div>
@@ -65,8 +65,8 @@ export function Login({ onLogin }: LoginProps) {
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                 Operação comercial
               </p>
-              <h1 className="mt-3 text-4xl font-semibold leading-tight text-slate-50">
-                Acesso seguro ao painel de vendas e atendimento.
+              <h1 className="mt-3 text-3xl font-semibold leading-tight text-slate-50">
+                Gestão comercial com contexto, ritmo e previsibilidade.
               </h1>
               <p className="mt-4 max-w-lg text-sm leading-6 text-slate-400">
                 Carteira, funil, agenda e decisão comercial em um ambiente único para o time operar com clareza.
@@ -85,7 +85,7 @@ export function Login({ onLogin }: LoginProps) {
           <div className="mb-6 flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.07] text-teal-100">
-                <Sparkles size={18} />
+                <Sprout size={18} />
               </div>
 
               <div className="min-w-0">
@@ -150,7 +150,7 @@ export function Login({ onLogin }: LoginProps) {
               disabled={isLoading}
               className="premium-button mt-1 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isLoading ? "Conectando..." : "Entrar com acesso conectado"}
+              {isLoading ? "Entrando..." : "Entrar"}
               {!isLoading && <ArrowRight size={15} />}
             </button>
           </form>

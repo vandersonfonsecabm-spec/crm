@@ -334,7 +334,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   if (isBooting) {
     return (
-      <div className="min-h-screen bg-[#050812] p-4 text-white">
+      <div className="crm-workspace min-h-screen p-4">
         <div className="flex min-h-[calc(100vh-32px)] min-w-0 gap-4 overflow-x-hidden">
           <div className="premium-panel hidden w-60 rounded-2xl p-4 lg:block">
             <div className="mb-6 flex items-center gap-2">
@@ -390,7 +390,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }
 
   return (
-    <div className="premium-shell min-h-screen select-none overflow-x-hidden text-white">
+    <div className="crm-workspace premium-shell min-h-screen select-none overflow-x-hidden">
       <div className="flex min-h-screen">
         <DashboardSidebar
           activePage={activePage}
@@ -407,7 +407,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           canManageIntegrations={canManageIntegrations}
         />
 
-        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-4 xl:px-5">
+        <main className="crm-main min-w-0 flex-1 overflow-x-hidden px-5 py-4 xl:px-7">
           <DashboardTopbar
             clients={clients}
             currentTime={currentTime}
