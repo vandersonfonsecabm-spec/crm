@@ -1,6 +1,4 @@
 import {
-  ChevronLeft,
-  ChevronRight,
   Edit3,
   Flame,
   Mail,
@@ -12,6 +10,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Client, Status } from "../../types/dashboard";
+import { Badge, EmptyState, IconButton, Pagination, SectionHeader } from "../ui";
 
 type DashboardClientsTableProps = {
   paginatedClients: Client[];
@@ -112,27 +111,12 @@ function ClientsHeader({
   totalPages: number;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-700/40 bg-slate-950/20 px-4 py-3">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.07] text-teal-100">
-          <UserCheck size={16} />
-        </div>
-
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">Carteira de clientes</p>
-          <p className="mt-0.5 text-[10px] text-slate-500">Lista priorizada por valor, score e próxima ação.</p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
-          {filteredClientsCount} registros
-        </span>
-        <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
-          Página {page}/{totalPages}
-        </span>
-      </div>
-    </div>
+    <SectionHeader
+      actions={<><Badge>{filteredClientsCount} registros</Badge><Badge>Página {page}/{totalPages}</Badge></>}
+      description="Lista priorizada por valor, score e próxima ação."
+      icon={<UserCheck size={16} />}
+      title="Carteira de clientes"
+    />
   );
 }
 
@@ -253,26 +237,25 @@ function ClientRowCard({
         <ScorePill score={score} forecast={forecastLabel(client)} />
 
         <div className="flex shrink-0 items-center gap-1">
-          <IconButton title="Favoritar" onClick={() => onToggleFavorite(client.id)}>
+          <IconButton aria-label="Favoritar" onClick={() => onToggleFavorite(client.id)}>
             <Star size={14} />
           </IconButton>
-          <IconButton title="Marcar como quente" onClick={() => onToggleHot(client.id)}>
+          <IconButton aria-label="Marcar como quente" onClick={() => onToggleHot(client.id)}>
             <Flame size={14} />
           </IconButton>
-          <IconButton title="Editar cliente" onClick={() => onEditClient(client)}>
+          <IconButton aria-label="Editar cliente" onClick={() => onEditClient(client)}>
             <Edit3 size={14} />
           </IconButton>
-          <IconButton title="Copiar telefone" onClick={() => onCopyText(client.phone, "Telefone copiado.")}>
+          <IconButton aria-label="Copiar telefone" onClick={() => onCopyText(client.phone, "Telefone copiado.")}>
             <Phone size={14} />
           </IconButton>
-          <button
-            title="Abrir WhatsApp"
+          <IconButton
+            aria-label="Abrir WhatsApp"
             onClick={() => onRequestWhatsapp(client)}
-            className="rounded-lg p-1.5 text-slate-300 transition hover:bg-white/10 hover:text-emerald-200"
-            type="button"
+            className="hover:text-emerald-700"
           >
             <MessageCircle size={14} />
-          </button>
+          </IconButton>
         </div>
       </div>
     </article>
@@ -325,37 +308,14 @@ function ScorePill({ score, forecast }: { score: number; forecast: string }) {
   );
 }
 
-function IconButton({
-  title,
-  onClick,
-  children,
-}: {
-  title: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-700/45 hover:text-slate-100"
-    >
-      {children}
-    </button>
-  );
-}
-
 function EmptyClientsState() {
   return (
-    <div className="metric-card mx-auto w-full max-w-sm rounded-2xl p-5 text-center">
-      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/70 text-slate-400">
-        <UserCheck size={16} />
-      </div>
-      <p className="mt-3 text-sm font-semibold text-slate-300">Nenhum cliente encontrado</p>
-      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-        Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar o funil.
-      </p>
-    </div>
+    <EmptyState
+      className="metric-card rounded-2xl"
+      description="Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar o funil."
+      icon={<UserCheck size={16} />}
+      title="Nenhum cliente encontrado"
+    />
   );
 }
 
@@ -375,30 +335,14 @@ function ClientsFooter({
   onNextPage: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between border-t border-slate-700/40 bg-slate-950/16 px-4 py-3">
-      <button
-        onClick={onPreviousPage}
-        disabled={page === 1}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <ChevronLeft size={13} />
-        Anterior
-      </button>
-
-      <p className="text-[11px] text-slate-500">
-        Página <span className="font-semibold text-slate-300">{page}</span> de {totalPages} -{" "}
-        <span className="font-semibold text-slate-300">{visibleClientsCount}</span> de {filteredClientsCount}
-      </p>
-
-      <button
-        onClick={onNextPage}
-        disabled={page === totalPages}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        Próxima
-        <ChevronRight size={13} />
-      </button>
-    </div>
+    <Pagination
+      itemLabel="registros"
+      onPageChange={(nextPage) => nextPage < page ? onPreviousPage() : onNextPage()}
+      page={page}
+      total={filteredClientsCount}
+      totalPages={totalPages}
+      visibleCount={visibleClientsCount}
+    />
   );
 }
 

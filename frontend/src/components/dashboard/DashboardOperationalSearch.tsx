@@ -1,5 +1,6 @@
 import { Download, Flame, RotateCcw, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import type { ActivePage, KanbanOwner, SortBy, Status } from "../../types/dashboard";
+import { Button, FilterBar, Select, Toolbar } from "../ui";
 
 type DashboardOperationalSearchProps = {
   activePage: ActivePage;
@@ -48,7 +49,7 @@ export default function DashboardOperationalSearch({
 
   return (
     <section className="saas-panel mt-4 rounded-2xl p-3">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <Toolbar className="mb-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/55 text-slate-300">
             <SlidersHorizontal size={15} />
@@ -71,17 +72,18 @@ export default function DashboardOperationalSearch({
             </span>
           )}
 
-          <button
+          <Button
+            leftIcon={<Download size={14} />}
             onClick={exportCsv}
-            className="saas-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-slate-300"
+            size="sm"
+            variant="secondary"
           >
-            <Download size={14} />
             CSV
-          </button>
+          </Button>
         </div>
-      </div>
+      </Toolbar>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <FilterBar className="border-0 bg-transparent p-0 shadow-none">
         <div className="flex min-w-[280px] flex-[1_1_420px] items-center gap-2 rounded-xl border border-slate-500/16 bg-slate-950/35 px-3 py-2 transition focus-within:border-teal-300/28 focus-within:bg-slate-900/70">
           <Search size={14} className="text-slate-500" />
 
@@ -109,13 +111,13 @@ export default function DashboardOperationalSearch({
           )}
         </div>
 
-        <select
+        <Select
           value={statusFilter}
           onChange={(event) => {
             setStatusFilter(event.target.value as Status | "Todos");
             setPage(1);
           }}
-          className="rounded-xl border border-slate-500/16 bg-[#0d111a] px-3 py-2 text-xs text-slate-200 outline-none transition hover:border-slate-400/24"
+          aria-label="Filtrar por status"
         >
           <option value="Todos">Todos os status</option>
           {statusList.map((status) => (
@@ -123,31 +125,31 @@ export default function DashboardOperationalSearch({
               {status}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <select
+        <Select
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value as SortBy)}
-          className="rounded-xl border border-slate-500/16 bg-[#0d111a] px-3 py-2 text-xs text-slate-200 outline-none transition hover:border-slate-400/24"
+          aria-label="Ordenar clientes"
         >
           <option value="score">Score</option>
           <option value="value">Maior valor</option>
           <option value="name">Nome</option>
           <option value="status">Status</option>
-        </select>
+        </Select>
 
         {activePage === "kanban" && (
-          <select
+          <Select
             value={kanbanOwnerFilter}
             onChange={(event) => setKanbanOwnerFilter(event.target.value as KanbanOwner)}
-            className="rounded-xl border border-slate-500/16 bg-[#0d111a] px-3 py-2 text-xs text-slate-200 outline-none transition hover:border-slate-400/24"
+            aria-label="Filtrar por responsável"
           >
             <option value="Todos">Todos vendedores</option>
             <option value="Ana">Ana</option>
             <option value="Marco">Marco</option>
             <option value="Bia">Bia</option>
             <option value="Time">Time</option>
-          </select>
+          </Select>
         )}
 
         <button
@@ -174,14 +176,15 @@ export default function DashboardOperationalSearch({
           Quentes
         </button>
 
-        <button
+        <Button
+          leftIcon={<RotateCcw size={14} />}
           onClick={clearFilters}
-          className="saas-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-slate-300"
+          size="sm"
+          variant="secondary"
         >
-          <RotateCcw size={14} />
           Limpar
-        </button>
-      </div>
+        </Button>
+      </FilterBar>
     </section>
   );
 }
