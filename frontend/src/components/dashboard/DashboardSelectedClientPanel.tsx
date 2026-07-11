@@ -315,7 +315,7 @@ function DecisionStat({
   return (
     <div className={`metric-card rounded-xl px-2 py-2 ${tone === "risk" ? "metric-risk" : ""}`}>
       <p className="text-[8px] uppercase tracking-[0.1em] text-slate-500">{label}</p>
-      <p className="mt-0.5 break-words text-[10px] font-semibold leading-tight text-slate-200">
+      <p className="mt-0.5 break-words text-[9px] font-semibold leading-tight text-slate-200">
         {value}
       </p>
     </div>
