@@ -9,257 +9,123 @@ import {
   Users,
   Zap,
 } from "lucide-react";
-import DashboardSmartAlerts from "./DashboardSmartAlerts";
-import type { ActivePage, Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
+import type { AuthSession } from "../../services/crmApi";
+import type { ActivePage } from "../../types/dashboard";
 
 type DashboardSidebarProps = {
   activePage: ActivePage;
-  smartAlerts: string[];
-  recentActivities: RecentActivity[];
-  emptyClient: Client;
   setActivePage: (page: ActivePage) => void;
-  setOnlyHot: (value: boolean) => void;
-  setStatusFilter: (status: Status | "Todos") => void;
-  setCreating: (client: Client) => void;
-  exportCsv: () => void;
-  clearFilters: () => void;
-  applySmartFilter: (type: SmartFilterType) => void;
+  authSession: AuthSession | null;
   canManageIntegrations?: boolean;
 };
 
+const navigationGroups: Array<{
+  label: string;
+  items: Array<{
+    page: ActivePage;
+    label: string;
+    icon: React.ReactNode;
+    requiresIntegrationAccess?: boolean;
+  }>;
+}> = [
+  {
+    label: "Visão geral",
+    items: [
+      { page: "dashboard", label: "Visão Geral", icon: <BarChart3 size={16} /> },
+    ],
+  },
+  {
+    label: "Comercial",
+    items: [
+      { page: "comercial", label: "Central Comercial", icon: <BriefcaseBusiness size={16} /> },
+      { page: "clientes", label: "Carteira", icon: <Users size={16} /> },
+      { page: "kanban", label: "Funil Comercial", icon: <KanbanSquare size={16} /> },
+    ],
+  },
+  {
+    label: "Operação",
+    items: [
+      { page: "agenda", label: "Agenda", icon: <CalendarCheck size={16} /> },
+      { page: "estoque", label: "Estoque", icon: <Package size={16} /> },
+      { page: "automacoes", label: "Automações", icon: <Zap size={16} /> },
+    ],
+  },
+  {
+    label: "Conexões",
+    items: [
+      {
+        page: "integracoes",
+        label: "Integrações",
+        icon: <PlugZap size={16} />,
+        requiresIntegrationAccess: true,
+      },
+    ],
+  },
+];
+
 export default function DashboardSidebar({
   activePage,
-  smartAlerts,
-  recentActivities,
-  emptyClient,
   setActivePage,
-  setOnlyHot,
-  setStatusFilter,
-  setCreating,
-  exportCsv,
-  clearFilters,
-  applySmartFilter,
+  authSession,
   canManageIntegrations = false,
 }: DashboardSidebarProps) {
+  const visibleGroups = navigationGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.requiresIntegrationAccess || canManageIntegrations),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const displayName = authSession?.usuario.nome || "Usuário local";
+  const companyName = authSession?.empresa?.nome || (authSession?.isDemo ? "Ambiente de demonstração" : "CRM Agro SaaS");
+  const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel, authSession?.isDemo);
+
   return (
-    <aside className="sidebar-shell hidden h-screen w-[232px] shrink-0 overflow-x-hidden overflow-y-auto border-r p-3 pb-5 lg:sticky lg:top-0 lg:block">
-      <div className="identity-panel mb-5 rounded-lg p-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="brand-mark flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
-            <Sprout size={17} />
-          </div>
-
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">CRM Agro</p>
-            <p className="truncate text-[11px] text-slate-500">Gestão comercial</p>
-          </div>
+    <aside className="sidebar-shell hidden h-screen w-[224px] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex">
+      <div className="sidebar-brand flex h-16 shrink-0 items-center gap-3 border-b px-4">
+        <div className="brand-mark flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
+          <Sprout size={16} />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-semibold">CRM Agro</p>
+          <p className="truncate text-[11px]">Gestão comercial</p>
         </div>
       </div>
 
-      <nav aria-label="Navegação principal" className="space-y-5">
-        <div>
-          <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Visão geral
-          </p>
-
-          <div className="grid gap-1.5">
-            <SidebarButton
-              active={activePage === "dashboard"}
-              icon={<BarChart3 size={15} className="mr-2 shrink-0" />}
-              label="Visão Geral"
-              onClick={() => setActivePage("dashboard")}
-            />
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Comercial
-          </p>
-
-          <div className="grid gap-1.5">
-            <SidebarButton
-              active={activePage === "comercial"}
-              icon={<BriefcaseBusiness size={15} className="mr-2 shrink-0" />}
-              label="Central Comercial"
-              onClick={() => setActivePage("comercial")}
-            />
-            <SidebarButton
-              active={activePage === "clientes"}
-              icon={<Users size={15} className="mr-2 shrink-0" />}
-              label="Carteira"
-              onClick={() => setActivePage("clientes")}
-            />
-            <SidebarButton
-              active={activePage === "kanban"}
-              icon={<KanbanSquare size={15} className="mr-2 shrink-0" />}
-              label="Funil Comercial"
-              onClick={() => setActivePage("kanban")}
-            />
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Operação
-          </p>
-          <div className="grid gap-1.5">
-            <SidebarButton
-              active={activePage === "agenda"}
-              icon={<CalendarCheck size={15} className="mr-2 shrink-0" />}
-              label="Agenda"
-              onClick={() => setActivePage("agenda")}
-            />
-            <SidebarButton
-              active={activePage === "estoque"}
-              icon={<Package size={15} className="mr-2 shrink-0" />}
-              label="Estoque"
-              onClick={() => setActivePage("estoque")}
-            />
-            <SidebarButton
-              active={activePage === "automacoes"}
-              icon={<Zap size={15} className="mr-2 shrink-0" />}
-              label="Automações"
-              onClick={() => setActivePage("automacoes")}
-            />
-          </div>
-        </div>
-
-        {canManageIntegrations && (
-          <div>
-            <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Conexões
-            </p>
-            <SidebarButton
-              active={activePage === "integracoes"}
-              icon={<PlugZap size={15} className="mr-2 shrink-0" />}
-              label="Integrações"
-              onClick={() => setActivePage("integracoes")}
-            />
-          </div>
-        )}
-      </nav>
-
-      {activePage !== "estoque" && activePage !== "integracoes" && (
-      <div className="sidebar-context mx-auto mt-6 w-full rounded-lg p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em]">Ações da página</p>
-
-        <div className="mt-3 space-y-2">
-          {activePage === "dashboard" && (
-            <>
-              <ActionButton onClick={() => setOnlyHot(true)} label="Oportunidades quentes" />
-              <ActionButton onClick={() => setStatusFilter("Proposta")} label="Propostas abertas" />
-            </>
-          )}
-
-          {activePage === "comercial" && (
-            <>
-              <ActionButton onClick={() => setOnlyHot(true)} label="Fila quente" />
-              <ActionButton onClick={() => setStatusFilter("Proposta")} label="Focar propostas" />
-            </>
-          )}
-
-          {activePage === "clientes" && (
-            <>
-              <ActionButton onClick={() => setCreating({ ...emptyClient })} label="Novo cliente" />
-              <ActionButton onClick={exportCsv} label="Exportar clientes" />
-            </>
-          )}
-
-          {activePage === "kanban" && (
-            <>
-              <ActionButton onClick={() => setOnlyHot(true)} label="Oportunidades quentes" />
-              <ActionButton onClick={() => setStatusFilter("Proposta")} label="Focar propostas" />
-            </>
-          )}
-
-          {activePage === "agenda" && (
-            <>
-              <ActionButton onClick={() => applySmartFilter("silent")} label="Sem contato" />
-              <ActionButton onClick={() => applySmartFilter("proposal")} label="Propostas hoje" />
-            </>
-          )}
-
-          {activePage === "automacoes" && (
-            <>
-              <ActionButton
-                disabled
-                label="Criar regra"
-                title="O motor de automações ainda está em desenvolvimento."
-              />
-              <ActionButton
-                label="Ver modelos"
-                onClick={() => document.getElementById("automation-templates")?.scrollIntoView({ behavior: "smooth", block: "start" })}
-              />
-            </>
-          )}
-
-          <ActionButton onClick={clearFilters} label="Resetar visão" />
-        </div>
-      </div>
-      )}
-
-      {activePage !== "automacoes" && activePage !== "dashboard" && activePage !== "estoque" && activePage !== "integracoes" && (
-        <>
-          <DashboardSmartAlerts
-            smartAlerts={smartAlerts}
-            onApplySmartFilter={applySmartFilter}
-          />
-
-          {activePage === "clientes" && (
-            <div className="premium-panel mt-3 rounded-2xl p-3 transition-all duration-200 hover:border-white/20">
-              <p className="text-xs font-semibold">Atividades recentes</p>
-
-              <div className="mt-3 space-y-2">
-                {recentActivities.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-3">
-                    <p className="text-[11px] font-semibold text-slate-300">
-                      Sem atividades registradas
-                    </p>
-                    <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                      As notas criadas no painel do cliente aparecem aqui como histórico rápido.
-                    </p>
-                  </div>
-                )}
-
-                {recentActivities.map((activity) => (
-                  <div
-                    key={activity.id}
-                    className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10"
-                  >
-                    <p className="text-[11px] text-slate-200">{activity.client}</p>
-                    <p className="mt-0.5 line-clamp-2 text-[10px] text-slate-500">
-                      {activity.text}
-                    </p>
-                  </div>
+      <nav aria-label="Navegação principal" className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
+        <div className="space-y-5">
+          {visibleGroups.map((group) => (
+            <div key={group.label}>
+              <p className="sidebar-group-label mb-1.5 px-2 text-[10px] font-semibold">
+                {group.label}
+              </p>
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <SidebarButton
+                    key={item.page}
+                    active={activePage === item.page}
+                    icon={item.icon}
+                    label={item.label}
+                    onClick={() => setActivePage(item.page)}
+                  />
                 ))}
               </div>
             </div>
-          )}
-        </>
-      )}
+          ))}
+        </div>
+      </nav>
 
-      {activePage === "automacoes" && (
-        <div className="premium-panel mt-3 rounded-2xl p-3 transition-all duration-200 hover:border-white/20">
-          <p className="text-xs font-semibold">Status operacional</p>
-
-          <div className="mt-3 space-y-2">
-            <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-              <p className="text-[11px] text-slate-200">Automações</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">
-                Regras comerciais prontas para acompanhamento.
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-white/5 p-2 transition-all duration-200 hover:bg-white/10">
-              <p className="text-[11px] text-slate-200">Operação assistida</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">
-                Ações automáticas acompanhadas pelo time comercial.
-              </p>
-            </div>
+      <div className="sidebar-account border-t px-3 py-3">
+        <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
+          <div className="sidebar-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold">
+            {getInitials(displayName)}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-[11px] font-medium">{displayName}</p>
+            <p className="truncate text-[10px]">{roleLabel} · {companyName}</p>
           </div>
         </div>
-      )}
+      </div>
     </aside>
   );
 }
@@ -279,38 +145,30 @@ function SidebarButton({
     <button
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={`sidebar-nav-item relative box-border flex h-9 w-full shrink-0 items-center rounded-md px-3 pr-8 text-left text-[13px] leading-5 ${active ? "is-active" : ""}`}
+      className={`sidebar-nav-item relative flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[12px] ${active ? "is-active" : ""}`}
+      type="button"
     >
-      {icon}
-      <span className="block min-w-0 flex-1 truncate leading-5">{label}</span>
-      <span
-        className="sidebar-nav-indicator absolute right-3 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full"
-      />
+      <span className="sidebar-nav-icon flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="sidebar-nav-indicator h-1.5 w-1.5 shrink-0 rounded-full" aria-hidden="true" />
     </button>
   );
 }
 
-function ActionButton({
-  disabled = false,
-  label,
-  onClick,
-  title,
-}: {
-  disabled?: boolean;
-  label: string;
-  onClick?: () => void;
-  title?: string;
-}) {
-  return (
-    <button
-      aria-disabled={disabled}
-      disabled={disabled}
-      onClick={onClick}
-      title={title}
-      className={`sidebar-action inline-flex box-border h-8 w-full items-center rounded-md px-2.5 text-left text-[11px] ${disabled ? "is-disabled" : ""}`}
-    >
-      <span>{label}</span>
-      {disabled && <span className="ml-2 text-[9px] uppercase tracking-[0.12em] text-slate-600">em breve</span>}
-    </button>
-  );
+function getRoleLabel(role?: string, isDemo?: boolean) {
+  if (isDemo) return "Demonstração";
+  const labels: Record<string, string> = {
+    ADMIN: "Administrador",
+    GERENTE: "Gerente",
+    VENDEDOR: "Vendedor",
+  };
+  return role ? labels[role] ?? role : "Operador";
+}
+
+function getInitials(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "U";
+  const first = words[0]?.[0] ?? "";
+  const second = words.length > 1 ? words[words.length - 1]?.[0] ?? "" : words[0]?.[1] ?? "";
+  return `${first}${second}`.toUpperCase();
 }

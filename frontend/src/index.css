@@ -1124,3 +1124,185 @@ button {
 .login-shell .rounded-2xl { border-radius: var(--radius-lg) !important; }
 .login-shell .rounded-xl { border-radius: var(--radius-md) !important; }
 .login-shell .rounded-lg { border-radius: var(--radius-md) !important; }
+
+/* Global application shell */
+.crm-workspace .crm-main {
+  min-height: 100vh;
+  background: var(--background);
+}
+
+.crm-workspace .topbar-shell {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: none;
+}
+
+.crm-workspace .topbar-icon-button,
+.crm-workspace .topbar-user-button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.crm-workspace .topbar-icon-button:hover,
+.crm-workspace .topbar-user-button:hover,
+.crm-workspace .topbar-user-button[aria-expanded="true"] {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.crm-workspace .command-search {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.crm-workspace .command-search:focus-within {
+  border-color: #91b8a5;
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(22, 122, 85, 0.08);
+}
+
+.crm-workspace .command-search input {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  outline: 0;
+}
+
+.crm-workspace .command-search-shortcut {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.crm-workspace .command-results,
+.crm-workspace .quick-actions-menu,
+.crm-workspace .user-menu,
+.crm-workspace .page-actions-menu {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.crm-workspace .command-result:hover,
+.crm-workspace .command-result.is-selected,
+.crm-workspace .quick-action-item:hover,
+.crm-workspace .page-action-item:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.crm-workspace .quick-action-item,
+.crm-workspace .page-action-item {
+  color: var(--text-secondary);
+}
+
+.crm-workspace .quick-actions-hint {
+  border-color: var(--border);
+  background: var(--surface-muted);
+}
+
+.crm-workspace .user-menu-logout {
+  color: var(--danger);
+}
+
+.crm-workspace .user-menu-logout:hover {
+  background: #fff1f2;
+}
+
+.crm-workspace .sidebar-shell {
+  border-color: #2d3a34;
+  background: #18231e;
+  color: #f3f7f4;
+}
+
+.crm-workspace .sidebar-brand,
+.crm-workspace .sidebar-account {
+  border-color: #2d3a34;
+}
+
+.crm-workspace .sidebar-brand p:last-child,
+.crm-workspace .sidebar-account p:last-child,
+.crm-workspace .sidebar-group-label {
+  color: #91a097;
+}
+
+.crm-workspace .sidebar-group-label {
+  letter-spacing: 0;
+}
+
+.crm-workspace .sidebar-account > div:hover {
+  background: #202e28;
+}
+
+.crm-workspace .sidebar-avatar {
+  border: 1px solid #3b5949;
+  background: #263a30;
+  color: #dff5e8;
+}
+
+.crm-workspace .sidebar-nav-icon {
+  color: #91a097;
+}
+
+.crm-workspace .sidebar-nav-item:hover .sidebar-nav-icon,
+.crm-workspace .sidebar-nav-item.is-active .sidebar-nav-icon {
+  color: #dff5e8;
+}
+
+.crm-workspace .page-header {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.crm-workspace .page-breadcrumb {
+  color: var(--text-muted);
+}
+
+.crm-workspace .page-breadcrumb [aria-current="page"] {
+  color: var(--text-secondary);
+}
+
+.crm-workspace .page-header h1 {
+  color: var(--text-primary);
+}
+
+.crm-workspace .page-header h1 + p {
+  color: var(--text-muted);
+}
+
+.crm-workspace .page-header-meta {
+  border-color: var(--border);
+}
+
+.crm-workspace .page-secondary-action {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.crm-workspace .page-secondary-action:hover,
+.crm-workspace .page-secondary-action[aria-expanded="true"] {
+  border-color: var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+}
+
+.crm-workspace .page-action-item:disabled {
+  cursor: not-allowed;
+  background: transparent !important;
+  color: var(--disabled-text) !important;
+}
+
+.crm-workspace .topbar-icon-button:focus-visible,
+.crm-workspace .topbar-user-button:focus-visible,
+.crm-workspace .page-secondary-action:focus-visible,
+.crm-workspace .page-action-item:focus-visible,
+.crm-workspace .quick-action-item:focus-visible,
+.crm-workspace .user-menu-logout:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

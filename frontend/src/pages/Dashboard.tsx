@@ -25,6 +25,7 @@ import {
 import DashboardMetrics from "../components/dashboard/DashboardMetrics";
 import DashboardMetricsSection from "../components/dashboard/DashboardMetricsSection";
 import DashboardHeader from "../components/dashboard/DashboardHeader";
+import type { PageAction } from "../components/dashboard/DashboardHeader";
 import DashboardPortfolioInsights from "../components/dashboard/DashboardPortfolioInsights";
 import DashboardClientsTable from "../components/dashboard/DashboardClientsTable";
 import DashboardClientsInsights from "../components/dashboard/DashboardClientsInsights";
@@ -76,12 +77,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [tagText, setTagText] = useState("");
   const [page, setPage] = useState(1);
   const [showQuickActions, setShowQuickActions] = useState(false);
-  const [currentTime, setCurrentTime] = useState(
-    new Date().toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  );
   const [isBooting, setIsBooting] = useState(true);
   const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
@@ -158,19 +153,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       ignore = true;
     };
   }, [onLogout]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(
-        new Date().toLocaleTimeString("pt-BR", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      );
-    }, 1000 * 30);
-
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setIsBooting(false), 650);
@@ -294,6 +276,67 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setActivePage(page);
   }, [canManageIntegrations, setToast]);
 
+  const pageActions = useMemo<PageAction[]>(() => {
+    const riskAction = {
+      label: smartAlerts[0] || "Clientes em risco",
+      onClick: () => applySmartFilter("risk"),
+    };
+    const silentAction = {
+      label: smartAlerts[2] || "Clientes sem contato",
+      onClick: () => applySmartFilter("silent"),
+    };
+    const resetAction = { label: "Resetar visão", onClick: clearFilters };
+
+    const actionsByPage: Partial<Record<ActivePage, PageAction[]>> = {
+      dashboard: [
+        { label: "Oportunidades quentes", onClick: () => setOnlyHot(true) },
+        { label: "Propostas abertas", onClick: () => setStatusFilter("Proposta") },
+        resetAction,
+      ],
+      comercial: [
+        { label: "Fila quente", onClick: () => setOnlyHot(true) },
+        { label: "Focar propostas", onClick: () => setStatusFilter("Proposta") },
+        riskAction,
+        silentAction,
+        resetAction,
+      ],
+      clientes: [
+        { label: "Exportar clientes", onClick: exportCsv },
+        riskAction,
+        { label: "Propostas abertas", onClick: () => applySmartFilter("proposal") },
+        silentAction,
+        resetAction,
+      ],
+      kanban: [
+        { label: "Oportunidades quentes", onClick: () => setOnlyHot(true) },
+        { label: "Focar propostas", onClick: () => setStatusFilter("Proposta") },
+        riskAction,
+        silentAction,
+        resetAction,
+      ],
+      agenda: [
+        { label: "Sem contato", onClick: () => applySmartFilter("silent") },
+        { label: "Propostas hoje", onClick: () => applySmartFilter("proposal") },
+        riskAction,
+        resetAction,
+      ],
+      automacoes: [
+        {
+          label: "Criar regra · em breve",
+          disabled: true,
+          title: "O motor de automações ainda está em desenvolvimento.",
+        },
+        {
+          label: "Ver modelos",
+          onClick: () => document.getElementById("automation-templates")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        },
+        resetAction,
+      ],
+    };
+
+    return actionsByPage[activePage] ?? [];
+  }, [activePage, applySmartFilter, clearFilters, exportCsv, smartAlerts]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
@@ -394,23 +437,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       <div className="flex min-h-screen">
         <DashboardSidebar
           activePage={activePage}
-          smartAlerts={smartAlerts}
-          recentActivities={recentActivities}
-          emptyClient={emptyClient}
           setActivePage={handleSetActivePage}
-          setOnlyHot={setOnlyHot}
-          setStatusFilter={setStatusFilter}
-          setCreating={setCreating}
-          exportCsv={exportCsv}
-          clearFilters={clearFilters}
-          applySmartFilter={applySmartFilter}
+          authSession={authSession}
           canManageIntegrations={canManageIntegrations}
         />
 
-        <main className="crm-main min-w-0 flex-1 overflow-x-hidden px-5 py-4 xl:px-7">
+        <div className="crm-main min-w-0 flex-1 overflow-x-hidden">
           <DashboardTopbar
             clients={clients}
-            currentTime={currentTime}
             showQuickActions={showQuickActions}
             emptyClient={emptyClient}
             setSelectedId={handleSelectClient}
@@ -423,7 +457,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             canManageIntegrations={canManageIntegrations}
           />
 
+          <main className="crm-content mx-auto w-full max-w-[1680px] px-5 pb-8 pt-5 lg:px-7">
           <DashboardHeader
+            key={activePage}
             activePage={activePage}
             pageTitle={pageTitle}
             backendCaption={
@@ -435,6 +471,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
             showCreateClient={activePage !== "estoque" && activePage !== "integracoes"}
+            actions={pageActions}
           />
 
           {activePage === "dashboard" && (
@@ -650,7 +687,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               />
             )}
           </section>
-        </main>
+          </main>
+        </div>
       </div>
 
       {editing && (

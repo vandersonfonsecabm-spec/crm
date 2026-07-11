@@ -1,5 +1,13 @@
-import { Bell, Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { ActivePage } from "../../types/dashboard";
+
+export type PageAction = {
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  title?: string;
+};
 
 type DashboardHeaderProps = {
   activePage: ActivePage;
@@ -7,6 +15,7 @@ type DashboardHeaderProps = {
   backendCaption: string;
   onCreateClient: () => void;
   showCreateClient?: boolean;
+  actions?: PageAction[];
 };
 
 export default function DashboardHeader({
@@ -15,63 +24,82 @@ export default function DashboardHeader({
   backendCaption,
   onCreateClient,
   showCreateClient = true,
+  actions = [],
 }: DashboardHeaderProps) {
-  const breadcrumbLabel = {
-    dashboard: "Visão Geral",
-    comercial: "Central Comercial",
-    clientes: "Carteira",
-    kanban: "Funil Comercial",
-    agenda: "Agenda",
-    estoque: "Estoque",
-    integracoes: "Integrações",
-    automacoes: "Automações",
-  }[activePage];
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const breadcrumbLabel = pageMeta[activePage].breadcrumb;
+  const pageDescription = pageMeta[activePage].description;
 
-  const pageDescription = {
-    dashboard: "Indicadores, prioridades e atividades da operação comercial.",
-    comercial: "Decisões, oportunidades e ações comerciais em um só contexto.",
-    clientes: "Clientes, responsáveis, interações e próximos passos.",
-    kanban: "Acompanhe oportunidades por etapa e mantenha o pipeline em movimento.",
-    agenda: "Compromissos, retornos e atividades organizados por prioridade.",
-    estoque: "Catálogo, saldos e dados sincronizados das integrações.",
-    integracoes: "Conexões, sincronizações e saúde dos dados externos.",
-    automacoes: "Fluxos disponíveis, estados e modelos operacionais.",
-  }[activePage];
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!actionsRef.current?.contains(event.target as Node)) setIsActionsOpen(false);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsActionsOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   return (
     <header className="page-header mb-5">
-      <div className="mb-2 flex items-center gap-2 text-[11px] text-slate-500">
-        <span>CRM Agro</span>
-        <span aria-hidden="true" className="text-slate-700">/</span>
-        <span className="text-slate-300">{breadcrumbLabel}</span>
-      </div>
-
-      <div className="flex items-start justify-between gap-5">
+      <div className="page-header-main flex items-start justify-between gap-5">
         <div className="min-w-0">
-          <h1 className="truncate text-[22px] font-semibold leading-7 tracking-normal text-slate-50">
-            {pageTitle}
-          </h1>
-          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">{pageDescription}</p>
+          <div className="page-breadcrumb mb-2 flex items-center gap-1.5 text-[10px]">
+            <span>CRM Agro</span>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">{breadcrumbLabel}</span>
+          </div>
+          <h1 className="truncate text-[21px] font-semibold leading-7">{pageTitle}</h1>
+          <p className="mt-1 max-w-2xl text-[12px] leading-5">{pageDescription}</p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="data-caption hidden rounded-md px-3 py-2 text-[10px] font-semibold sm:inline-flex">
-            {backendCaption}
-          </span>
+        <div className="flex shrink-0 items-center gap-2 pt-1">
+          {actions.length > 0 && (
+            <div ref={actionsRef} className="relative">
+              <button
+                aria-expanded={isActionsOpen}
+                aria-haspopup="menu"
+                className="page-secondary-action inline-flex h-9 items-center gap-2 rounded-md px-3 text-[11px] font-medium"
+                onClick={() => setIsActionsOpen((current) => !current)}
+                type="button"
+              >
+                <MoreHorizontal size={15} />
+                Ações
+              </button>
 
-          <button
-            aria-label="Notificações"
-            className="icon-button rounded-md p-2 text-slate-300"
-            title="Notificações"
-            type="button"
-          >
-            <Bell size={15} />
-          </button>
+              {isActionsOpen && (
+                <div className="page-actions-menu absolute right-0 top-11 z-[180] w-60 rounded-lg border p-1.5 shadow-lg" role="menu">
+                  {actions.map((action) => (
+                    <button
+                      key={action.label}
+                      className="page-action-item flex w-full items-center rounded-md px-2.5 py-2 text-left text-[11px]"
+                      disabled={action.disabled}
+                      onClick={() => {
+                        action.onClick?.();
+                        setIsActionsOpen(false);
+                      }}
+                      role="menuitem"
+                      title={action.title}
+                      type="button"
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {showCreateClient && (
             <button
               onClick={onCreateClient}
-              className="premium-button inline-flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold"
+              className="premium-button inline-flex h-9 items-center gap-2 rounded-md px-3 text-[11px] font-semibold"
               type="button"
             >
               <Plus size={14} />
@@ -80,6 +108,47 @@ export default function DashboardHeader({
           )}
         </div>
       </div>
+
+      <div className="page-header-meta mt-4 flex items-center border-t pt-3">
+        <span className="data-caption inline-flex rounded-md px-2.5 py-1 text-[10px] font-medium">
+          {backendCaption}
+        </span>
+      </div>
     </header>
   );
 }
+
+const pageMeta: Record<ActivePage, { breadcrumb: string; description: string }> = {
+  dashboard: {
+    breadcrumb: "Visão Geral",
+    description: "Indicadores, prioridades e atividades da operação comercial.",
+  },
+  comercial: {
+    breadcrumb: "Central Comercial",
+    description: "Decisões, oportunidades e ações comerciais em um só contexto.",
+  },
+  clientes: {
+    breadcrumb: "Carteira",
+    description: "Clientes, responsáveis, interações e próximos passos.",
+  },
+  kanban: {
+    breadcrumb: "Funil Comercial",
+    description: "Acompanhe oportunidades por etapa e mantenha o pipeline em movimento.",
+  },
+  agenda: {
+    breadcrumb: "Agenda",
+    description: "Compromissos, retornos e atividades organizados por prioridade.",
+  },
+  estoque: {
+    breadcrumb: "Estoque",
+    description: "Catálogo, saldos e dados sincronizados das integrações.",
+  },
+  integracoes: {
+    breadcrumb: "Integrações",
+    description: "Conexões, sincronizações e saúde dos dados externos.",
+  },
+  automacoes: {
+    breadcrumb: "Automações",
+    description: "Fluxos disponíveis, estados e modelos operacionais.",
+  },
+};

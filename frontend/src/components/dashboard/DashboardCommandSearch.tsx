@@ -107,8 +107,8 @@ export default function DashboardCommandSearch({
   }
 
   return (
-    <div className="relative hidden md:block">
-      <div className="flex w-72 items-center gap-2 rounded-xl border border-slate-500/16 bg-slate-950/34 px-3 py-2 shadow-inner shadow-black/20 transition focus-within:border-teal-200/24 focus-within:bg-slate-950/48">
+    <div className="relative hidden min-w-0 flex-1 md:block md:max-w-xl">
+      <div className="command-search flex h-9 w-full items-center gap-2 rounded-md border px-3 transition">
         <Search size={13} className="text-slate-500" />
 
         <input
@@ -149,18 +149,19 @@ export default function DashboardCommandSearch({
             }
           }}
           placeholder="Buscar cliente, empresa ou página..."
-          className="w-full select-text bg-transparent text-[11px] text-slate-200 outline-none placeholder:text-slate-600"
+          aria-label="Busca global"
+          className="w-full select-text bg-transparent text-[11px] outline-none"
         />
 
-        <kbd className="rounded-md border border-white/10 bg-black/20 px-1.5 py-0.5 text-[9px] text-slate-600">
+        <kbd className="command-search-shortcut rounded border px-1.5 py-0.5 text-[9px]">
           Ctrl K
         </kbd>
       </div>
 
       {showCommandResults && commandSearch && (
-        <div className="saas-panel absolute right-0 top-11 z-[130] w-72 rounded-2xl p-2 shadow-2xl shadow-black/45">
+        <div className="command-results absolute left-0 right-0 top-11 z-[130] rounded-lg border p-2 shadow-lg">
           {commandResults.length === 0 && (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+            <div className="rounded-md border px-3 py-3">
               <p className="text-[11px] font-semibold text-slate-300">
                 Nenhum resultado encontrado
               </p>
@@ -175,7 +176,7 @@ export default function DashboardCommandSearch({
               key={`${item.type}-${item.label}`}
               aria-selected={index === boundedSelectedIndex}
               onClick={() => runCommandResult(item)}
-              className={`w-full rounded-xl px-3 py-2 text-left transition hover:bg-white/[0.06] ${index === boundedSelectedIndex ? "bg-white/[0.06]" : ""}`}
+              className={`command-result w-full rounded-md px-3 py-2 text-left transition ${index === boundedSelectedIndex ? "is-selected" : ""}`}
             >
               <p className="text-[11px] font-medium text-slate-200">
                 {item.label}
