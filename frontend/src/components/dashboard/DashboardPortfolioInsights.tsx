@@ -1,6 +1,7 @@
-import { Activity, AlertTriangle, Flame } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock3, Flame, Target, Users } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Client } from "../../types/dashboard";
+import type { Client, SmartFilterType, Status } from "../../types/dashboard";
+import { Badge, Button, EmptyState, SectionHeader, Surface } from "../ui";
 
 type DashboardPortfolioInsightsProps = {
   clients: Client[];
@@ -8,11 +9,13 @@ type DashboardPortfolioInsightsProps = {
   getPriority: (client: Client) => string;
   getRisk: (client: Client) => string;
   getLeadScore: (client: Client) => number;
-  enterpriseHealthClass: (client: Client) => string;
   enterpriseHealthLabel: (client: Client) => string;
   onSelectClient: (clientId: number) => void;
   onOpenClient: (clientId: number) => void;
+  onApplySmartFilter: (type: SmartFilterType) => void;
 };
+
+const pipelineStages: Status[] = ["Novo", "Contato", "Proposta", "Fechado", "Perdido"];
 
 export default function DashboardPortfolioInsights({
   clients,
@@ -20,154 +23,148 @@ export default function DashboardPortfolioInsights({
   getPriority,
   getRisk,
   getLeadScore,
-  enterpriseHealthClass,
   enterpriseHealthLabel,
   onSelectClient,
   onOpenClient,
+  onApplySmartFilter,
 }: DashboardPortfolioInsightsProps) {
-  const activeClientsCount = clients.filter((client) => client.status !== "Perdido").length;
-  const highAttentionCount = clients.filter((client) => client.hot || getPriority(client) === "Alta").length;
+  const activeClients = clients.filter((client) => client.status !== "Perdido");
+  const attentionClients = [...clients]
+    .filter((client) => client.hot || getPriority(client) === "Alta" || getRisk(client) === "Alto" || client.lastContactDays >= 7)
+    .sort((a, b) => attentionWeight(b, getPriority, getRisk, getLeadScore) - attentionWeight(a, getPriority, getRisk, getLeadScore))
+    .slice(0, 5);
   const highRiskCount = clients.filter((client) => getRisk(client) === "Alto").length;
+  const highAttentionCount = clients.filter((client) => client.hot || getPriority(client) === "Alta").length;
+  const hotOpportunities = clients.filter((client) => client.hot || client.value >= 12000);
+  const silentClients = clients.filter((client) => client.lastContactDays >= 7);
+  const proposalValue = clients.filter((client) => client.status === "Proposta").reduce((sum, client) => sum + client.value, 0);
+  const suggestedAction = highRiskCount > 0
+    ? "Reativar clientes em risco antes de criar novas oportunidades."
+    : clients.some((client) => client.nextFollowUp.toLowerCase() === "hoje")
+      ? "Priorizar acompanhamentos de hoje e propostas abertas."
+      : "Revisar oportunidades quentes e manter cadência comercial.";
 
   return (
-    <section className="mt-4 grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
-      <div className="saas-panel rounded-2xl p-4">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-100">Leitura executiva</p>
-            <p className="mt-1 text-[11px] text-slate-500">Saúde, atenção e risco sem disputar com os indicadores principais.</p>
-          </div>
+    <Surface className="min-w-0 overflow-hidden">
+      <SectionHeader
+        actions={<Badge variant={highAttentionCount > 0 ? "warning" : "success"}>{highAttentionCount} alta atenção</Badge>}
+        description="Clientes e oportunidades que pedem uma próxima ação."
+        icon={<AlertTriangle size={16} />}
+        title="Requer atenção"
+      />
 
-          <span className="saas-chip rounded-full px-2 py-1 text-[10px] font-semibold">síntese</span>
-        </div>
-
-        <div className="grid gap-2 md:grid-cols-3">
-          <InsightMetric
-            icon={<Activity size={14} className="text-sky-300" />}
-            label="Carteira ativa"
-            value={String(activeClientsCount)}
-            progress={Math.min(100, (activeClientsCount / Math.max(clients.length, 1)) * 100)}
-            tone="sky"
-          />
-          <InsightMetric
-            icon={<Flame size={14} className="text-rose-300" />}
-            label="Alta atenção"
-            value={String(highAttentionCount)}
-            progress={Math.min(100, highAttentionCount * 14)}
-            tone="rose"
-          />
-          <InsightMetric
-            icon={<AlertTriangle size={14} className="text-amber-300" />}
-            label="Requer ação"
-            value={String(highRiskCount)}
-            progress={Math.min(100, highRiskCount * 18)}
-            tone="amber"
-          />
-        </div>
-
-        <div className="mt-3 grid gap-2">
-          {clients
-            .filter((client) => client.hot || getLeadScore(client) >= 80)
-            .slice(0, 2)
-            .map((client) => (
-              <button
-                key={client.id}
-                onClick={() => onSelectClient(client.id)}
-                className="saas-row rounded-xl px-3 py-2 text-left"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-xs font-semibold text-slate-100">{client.name}</p>
-                  <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">{getLeadScore(client)}</span>
-                </div>
-
-                <p className="mt-1 truncate text-[10px] text-slate-500">
-                  {client.company} | {money(client.value)}
-                </p>
-              </button>
-            ))}
-        </div>
-      </div>
-
-      <div className="saas-panel rounded-2xl p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-100">Prioridades comerciais</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Oportunidades que pedem decisão rápida.</p>
-          </div>
-          <span className="text-[11px] text-slate-500">top 3</span>
-        </div>
-
-        <div className="space-y-2">
-          {clients
-            .slice()
-            .sort((a, b) => getLeadScore(b) - getLeadScore(a))
-            .slice(0, 3)
-            .map((client) => (
-              <button
-                key={client.id}
-                onClick={() => onOpenClient(client.id)}
-                className="saas-row w-full rounded-xl p-2.5 text-left"
-              >
-                <div className="flex items-center justify-between gap-2">
+      <div className="grid min-w-0 xl:grid-cols-[minmax(0,1.35fr)_minmax(250px,0.65fr)]">
+        <div className="min-w-0">
+          {attentionClients.length > 0 ? (
+            <div className="divide-y divide-[var(--border-default)]">
+              {attentionClients.map((client) => (
+                <button
+                  className="grid w-full min-w-0 gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] md:grid-cols-[minmax(0,1fr)_150px_auto] md:items-center"
+                  key={client.id}
+                  onClick={() => onOpenClient(client.id)}
+                  type="button"
+                >
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-slate-100">{client.name}</p>
-                    <p className="mt-0.5 truncate text-[10px] text-slate-500">{client.company}</p>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{client.name}</p>
+                      {client.hot && <Flame aria-label="Oportunidade quente" className="shrink-0 text-[var(--danger)]" size={13} />}
+                    </div>
+                    <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{client.company} · {attentionReason(client, getRisk)} · {enterpriseHealthLabel(client)}</p>
                   </div>
 
-                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] ${enterpriseHealthClass(client)}`}>
-                    {enterpriseHealthLabel(client)}
-                  </span>
-                </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-[var(--text-muted)]">Próxima ação</p>
+                    <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--text-secondary)]">{client.nextFollowUp}</p>
+                  </div>
 
-                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500">
-                  <span>{money(client.value)}</span>
-                  <span>{getLeadScore(client)}/100</span>
-                </div>
-              </button>
-            ))}
+                  <div className="flex items-center justify-between gap-3 md:justify-end">
+                    <div className="text-right">
+                      <p className="text-[10px] text-[var(--text-muted)]">{money(client.value)}</p>
+                      <p className="text-[10px] font-medium text-[var(--text-secondary)]">Score {getLeadScore(client)}</p>
+                    </div>
+                    <ArrowRight aria-hidden="true" className="text-[var(--icon-muted)]" size={14} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <EmptyState description="Não há clientes em risco, atrasados ou marcados como prioridade." title="Fila de atenção em dia" />
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border-default)] px-4 py-3">
+            <Button onClick={() => onApplySmartFilter("risk")} size="sm" variant="ghost">Ver riscos ({highRiskCount})</Button>
+            <Button onClick={() => onApplySmartFilter("proposal")} size="sm" variant="ghost">Ver propostas</Button>
+            <Button onClick={() => onApplySmartFilter("silent")} size="sm" variant="ghost">Sem contato ({silentClients.length})</Button>
+          </div>
         </div>
+
+        <aside className="border-t border-[var(--border-default)] bg-[var(--bg-muted)] p-4 xl:border-l xl:border-t-0">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold text-[var(--text-primary)]">Resumo comercial</p>
+              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Distribuição atual do pipeline.</p>
+            </div>
+            <Target className="text-[var(--icon-muted)]" size={15} />
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {pipelineStages.map((stage) => {
+              const stageClients = clients.filter((client) => client.status === stage);
+              const stageValue = stageClients.reduce((sum, client) => sum + client.value, 0);
+              return (
+                <div key={stage}>
+                  <div className="flex items-center justify-between gap-3 text-[11px]">
+                    <span className="font-medium text-[var(--text-secondary)]">{stage}</span>
+                    <span className="text-[var(--text-muted)]">{stageClients.length} · {money(stageValue)}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--surface-subtle)]">
+                    <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${Math.max(stageClients.length > 0 ? 8 : 0, (stageClients.length / Math.max(clients.length, 1)) * 100)}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--border-default)] pt-4">
+            <SummaryValue icon={<Users size={13} />} label="Ativos" value={String(activeClients.length)} />
+            <SummaryValue icon={<AlertTriangle size={13} />} label="Risco" value={String(highRiskCount)} />
+            <SummaryValue icon={<Flame size={13} />} label="Quentes" value={String(hotOpportunities.length)} />
+            <SummaryValue icon={<Clock3 size={13} />} label="Propostas" value={money(proposalValue)} />
+          </dl>
+
+          <p className="mt-4 border-t border-[var(--border-default)] pt-3 text-[10px] leading-4 text-[var(--text-muted)]">
+            <strong className="font-medium text-[var(--text-secondary)]">Ação sugerida:</strong> {suggestedAction}
+          </p>
+
+          {attentionClients[0] && (
+            <button className="mt-3 w-full border-t border-[var(--border-default)] pt-3 text-left" onClick={() => onSelectClient(attentionClients[0].id)} type="button">
+              <p className="text-[10px] text-[var(--text-muted)]">Conta prioritária · {enterpriseHealthLabel(attentionClients[0])}</p>
+              <p className="mt-1 truncate text-xs font-semibold text-[var(--text-primary)]">{attentionClients[0].name}</p>
+            </button>
+          )}
+        </aside>
       </div>
-    </section>
+    </Surface>
   );
 }
 
-function InsightMetric({
-  icon,
-  label,
-  value,
-  progress,
-  tone,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  progress: number;
-  tone: "sky" | "rose" | "amber";
-}) {
-  const classes = {
-    sky: "metric-revenue text-sky-100",
-    rose: "metric-risk text-rose-100",
-    amber: "metric-forecast text-amber-100",
-  };
-
-  const barClasses = {
-    sky: "bg-sky-300",
-    rose: "bg-rose-300",
-    amber: "bg-amber-300",
-  };
-
+function SummaryValue({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className={`metric-card rounded-xl px-3 py-2.5 ${classes[tone]}`}>
-      <div className="flex items-center justify-between">
-        <p className="truncate text-[9px] uppercase tracking-[0.12em] opacity-70">{label}</p>
-        {icon}
-      </div>
-
-      <p className="mt-1 text-base font-semibold">{value}</p>
-
-      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
-        <div className={`h-full rounded-full ${barClasses[tone]}`} style={{ width: `${progress}%` }} />
-      </div>
+    <div className="min-w-0">
+      <div className="flex items-center gap-1 text-[var(--icon-muted)]">{icon}<dt className="text-[10px] text-[var(--text-muted)]">{label}</dt></div>
+      <dd className="mt-1 truncate text-xs font-semibold text-[var(--text-primary)]">{value}</dd>
     </div>
   );
+}
+
+function attentionReason(client: Client, getRisk: (client: Client) => string) {
+  if (getRisk(client) === "Alto") return "Risco alto";
+  if (client.lastContactDays >= 7) return `${client.lastContactDays} dias sem contato`;
+  if (client.status === "Proposta") return "Proposta em aberto";
+  if (client.hot) return "Oportunidade quente";
+  return "Prioridade comercial";
+}
+
+function attentionWeight(client: Client, getPriority: (client: Client) => string, getRisk: (client: Client) => string, getLeadScore: (client: Client) => number) {
+  return (getRisk(client) === "Alto" ? 300 : 0) + (getPriority(client) === "Alta" ? 200 : 0) + (client.hot ? 100 : 0) + client.lastContactDays + getLeadScore(client);
 }

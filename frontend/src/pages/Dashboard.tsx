@@ -3,7 +3,6 @@ import {
   actionIntensity,
   activitySignalLabel,
   customerFitLabel,
-  enterpriseHealthClass,
   enterpriseHealthLabel,
   forecastLabel,
   getLeadScore,
@@ -77,6 +76,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [tagText, setTagText] = useState("");
   const [page, setPage] = useState(1);
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [isBooting, setIsBooting] = useState(true);
   const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
@@ -90,6 +90,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   const handleSelectClient = useCallback((clientId: number | null) => {
     setSelectedId(clientId);
+    if (clientId !== null && (requestedActivePage === "dashboard" || requestedActivePage === "comercial")) {
+      setIsCustomerDrawerOpen(true);
+    }
+  }, [requestedActivePage]);
+
+  const handleCloseCustomerDrawer = useCallback(() => {
+    setIsCustomerDrawerOpen(false);
   }, []);
 
   const pageTitle = ({
@@ -268,6 +275,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   });
 
   const handleSetActivePage = useCallback((page: ActivePage) => {
+    setIsCustomerDrawerOpen(false);
     if (page === "integracoes" && !canManageIntegrations) {
       setToast("Acesso negado para Integrações.");
       setActivePage("dashboard");
@@ -375,6 +383,41 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     });
   }, [whatsappMessage]);
 
+  const customerDrawer = (
+    <DashboardCustomerDrawer
+      activePage={activePage}
+      selectedClient={selectedClient}
+      noteText={noteText}
+      tagText={tagText}
+      clients={clients}
+      analytics={analytics}
+      money={money}
+      initials={initials}
+      statusClass={statusClass}
+      tagClass={tagClass}
+      customerFitLabel={customerFitLabel}
+      leadOwner={leadOwner}
+      nextActionLabel={nextActionLabel}
+      getLeadScore={getLeadScore}
+      getRisk={getRisk}
+      slaLabel={slaLabel}
+      priorityLabel={priorityLabel}
+      whatsappMessage={whatsappMessage}
+      onClearSelectedClient={activePage === "dashboard" || activePage === "comercial" ? handleCloseCustomerDrawer : () => setSelectedId(null)}
+      onSetNoteText={setNoteText}
+      onSetTagText={setTagText}
+      onAddNote={addNote}
+      onAddTagToSelected={addTagToSelected}
+      onRemoveTagFromSelected={removeTagFromSelected}
+      onEditClient={setEditing}
+      onCopyText={copyText}
+      onRequestWhatsapp={requestExternalWhatsapp}
+      onApplySmartFilter={applySmartFilter}
+      overlay={activePage === "dashboard" || activePage === "comercial"}
+      open={isCustomerDrawerOpen}
+    />
+  );
+
   if (isBooting) {
     return (
       <div className="crm-workspace min-h-screen p-4">
@@ -479,17 +522,27 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           )}
 
           {activePage === "dashboard" && (
-            <DashboardPortfolioInsights
-              clients={clients}
-              money={money}
-              getPriority={getPriority}
-              getRisk={getRisk}
-              getLeadScore={getLeadScore}
-              enterpriseHealthClass={enterpriseHealthClass}
-              enterpriseHealthLabel={enterpriseHealthLabel}
-              onSelectClient={handleSelectClient}
-              onOpenClient={handleSelectClient}
-            />
+            <section className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.75fr)]">
+              <DashboardPortfolioInsights
+                clients={clients}
+                money={money}
+                getPriority={getPriority}
+                getRisk={getRisk}
+                getLeadScore={getLeadScore}
+                enterpriseHealthLabel={enterpriseHealthLabel}
+                onSelectClient={handleSelectClient}
+                onOpenClient={handleSelectClient}
+                onApplySmartFilter={applySmartFilter}
+              />
+              <DashboardFollowUpCalendar
+                todayFollowUps={analytics.todayFollowUps}
+                followUpAgenda={followUpAgenda}
+                money={money}
+                statusClass={statusClass}
+                onSelectClient={handleSelectClient}
+              />
+              {customerDrawer}
+            </section>
           )}
 
           <DashboardMetricsSection
@@ -523,19 +576,17 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             />
           )}
 
-          <section
+          {activePage !== "dashboard" && <section
             className={`mt-4 ${
               activePage === "comercial"
-                ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
+                ? "block"
                 : activePage === "agenda"
                   ? "space-y-4"
                   : activePage === "estoque"
                     ? "space-y-4"
                     : activePage === "integracoes"
                       ? "space-y-4"
-                : activePage === "dashboard"
-                  ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"
-                  : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
+                : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
             }`}
           >
             <div className="space-y-4">
@@ -577,16 +628,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   />
                 </>
               )}
-              {activePage === "dashboard" && (
-                <DashboardFollowUpCalendar
-                  todayFollowUps={analytics.todayFollowUps}
-                  followUpAgenda={followUpAgenda}
-                  money={money}
-                  statusClass={statusClass}
-                  onSelectClient={handleSelectClient}
-                />
-              )}
-
               {activePage === "comercial" && (
                 <DashboardControlCenter
                   clients={clients}
@@ -654,39 +695,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
-            {activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && (
-              <DashboardCustomerDrawer
-                activePage={activePage}
-                selectedClient={selectedClient}
-                noteText={noteText}
-                tagText={tagText}
-                clients={clients}
-                analytics={analytics}
-                money={money}
-                initials={initials}
-                statusClass={statusClass}
-                tagClass={tagClass}
-                customerFitLabel={customerFitLabel}
-                leadOwner={leadOwner}
-                nextActionLabel={nextActionLabel}
-                getLeadScore={getLeadScore}
-                getRisk={getRisk}
-                slaLabel={slaLabel}
-                priorityLabel={priorityLabel}
-                whatsappMessage={whatsappMessage}
-                onClearSelectedClient={() => setSelectedId(null)}
-                onSetNoteText={setNoteText}
-                onSetTagText={setTagText}
-                onAddNote={addNote}
-                onAddTagToSelected={addTagToSelected}
-                onRemoveTagFromSelected={removeTagFromSelected}
-                onEditClient={setEditing}
-                onCopyText={copyText}
-                onRequestWhatsapp={requestExternalWhatsapp}
-                onApplySmartFilter={applySmartFilter}
-              />
-            )}
-          </section>
+            {activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && customerDrawer}
+          </section>}
           </main>
         </div>
       </div>

@@ -13,6 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 import MetricCard from "./MetricCard";
+import DashboardMetricStrip from "./DashboardMetricStrip";
 import type { ActivePage, Client } from "../../types/dashboard";
 
 type DashboardMetricsSectionProps = {
@@ -29,13 +30,17 @@ export default function DashboardMetricsSection({
   getRisk,
 }: DashboardMetricsSectionProps) {
   if (activePage === "comercial") {
+    const proposals = clients.filter((client) => client.status === "Proposta").length;
+    const hot = clients.filter((client) => client.hot).length;
+    const risk = clients.filter((client) => getRisk(client) === "Alto").length;
+    const silent = clients.filter((client) => client.lastContactDays >= 7).length;
     return (
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Propostas abertas" value={String(clients.filter((client) => client.status === "Proposta").length)} caption="Negociações em aberto" icon={<Target size={15} />} tone="forecast" />
-        <MetricCard title="Oportunidades quentes" value={String(clients.filter((client) => client.hot).length)} caption="Prioridade comercial" icon={<Zap size={15} />} tone="pipeline" />
-        <MetricCard title="Em risco" value={String(clients.filter((client) => getRisk(client) === "Alto").length)} caption="Exigem recuperação" icon={<AlertTriangle size={15} />} tone="risk" />
-        <MetricCard title="Sem contato" value={String(clients.filter((client) => client.lastContactDays >= 7).length)} caption="Carteira silenciosa" icon={<Bell size={15} />} tone="revenue" />
-      </section>
+      <DashboardMetricStrip metrics={[
+        { label: "Propostas abertas", value: String(proposals), context: "Negociações em andamento", icon: <Target size={15} />, tone: "warning" },
+        { label: "Oportunidades quentes", value: String(hot), context: "Prioridade comercial", icon: <Zap size={15} />, tone: "success" },
+        { label: "Clientes em risco", value: String(risk), context: "Exigem recuperação", icon: <AlertTriangle size={15} />, tone: "danger" },
+        { label: "Sem contato", value: String(silent), context: "Retomar relacionamento", icon: <Bell size={15} />, tone: "info" },
+      ]} />
     );
   }
 

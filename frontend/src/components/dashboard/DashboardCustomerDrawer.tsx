@@ -1,5 +1,7 @@
 import { X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import type { ActivePage, Analytics, Client, SmartFilterType, Status } from "../../types/dashboard";
+import { IconButton } from "../ui";
 import DashboardCommercialDecisionCenter from "./DashboardCommercialDecisionCenter";
 import { EmptyDecisionState } from "./DashboardDrawerPrimitives";
 import DashboardExecutiveRadar from "./DashboardExecutiveRadar";
@@ -34,6 +36,8 @@ type DashboardCustomerDrawerProps = {
   onCopyText: (text: string, message: string) => void;
   onRequestWhatsapp: (client: Client) => void;
   onApplySmartFilter: (type: SmartFilterType) => void;
+  overlay?: boolean;
+  open?: boolean;
 };
 
 function drawerShellClass(activePage: ActivePage) {
@@ -80,9 +84,94 @@ export default function DashboardCustomerDrawer({
   onCopyText,
   onRequestWhatsapp,
   onApplySmartFilter,
+  overlay = false,
+  open = false,
 }: DashboardCustomerDrawerProps) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const overlayDrawerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!overlay || !open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const timeout = window.setTimeout(() => closeButtonRef.current?.focus(), 0);
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClearSelectedClient();
+      if (event.key !== "Tab") return;
+      const focusable = overlayDrawerRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.clearTimeout(timeout);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, [onClearSelectedClient, open, overlay]);
+
   if (activePage === "automacoes") {
     return null;
+  }
+
+  if (overlay) {
+    if (!open || !selectedClient) return null;
+    return (
+      <div className="fixed inset-0 z-[220] flex justify-end" role="presentation">
+        <button aria-label="Fechar central de decisão" className="absolute inset-0 cursor-default bg-slate-950/25 backdrop-blur-[1px]" onClick={onClearSelectedClient} tabIndex={-1} type="button" />
+        <aside
+          aria-labelledby="customer-decision-title"
+          aria-modal="true"
+          className="relative h-full w-[min(440px,calc(100vw-24px))] overflow-y-auto border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-2xl"
+          ref={overlayDrawerRef}
+          role="dialog"
+        >
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]" id="customer-decision-title">Central de decisão</h2>
+              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Dados, ação e histórico do cliente.</p>
+            </div>
+            <IconButton aria-label="Fechar central de decisão" onClick={onClearSelectedClient} ref={closeButtonRef}><X size={15} /></IconButton>
+          </div>
+          <DashboardSelectedClientPanel
+            selectedClient={selectedClient}
+            noteText={noteText}
+            tagText={tagText}
+            money={money}
+            initials={initials}
+            statusClass={statusClass}
+            tagClass={tagClass}
+            customerFitLabel={customerFitLabel}
+            leadOwner={leadOwner}
+            nextActionLabel={nextActionLabel}
+            getLeadScore={getLeadScore}
+            getRisk={getRisk}
+            slaLabel={slaLabel}
+            whatsappMessage={whatsappMessage}
+            onSetNoteText={onSetNoteText}
+            onSetTagText={onSetTagText}
+            onAddNote={onAddNote}
+            onAddTagToSelected={onAddTagToSelected}
+            onRemoveTagFromSelected={onRemoveTagFromSelected}
+            onEditClient={onEditClient}
+            onCopyText={onCopyText}
+            onRequestWhatsapp={onRequestWhatsapp}
+          />
+        </aside>
+      </div>
+    );
   }
 
   if (activePage === "kanban") {

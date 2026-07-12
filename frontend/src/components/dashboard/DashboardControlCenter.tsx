@@ -1,12 +1,7 @@
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  Command,
-  Plus,
-  Target,
-} from "lucide-react";
+import { AlertTriangle, ArrowRight, ArrowUpRight, Plus, Target } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Analytics, Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
+import { Badge, EmptyState, SectionHeader, Surface } from "../ui";
 
 type DashboardControlCenterProps = {
   clients: Client[];
@@ -23,294 +18,133 @@ type DashboardControlCenterProps = {
   applySmartFilter: (type: SmartFilterType) => void;
 };
 
-export default function DashboardControlCenter({
-  clients,
-  analytics,
-  smartAlerts,
-  recentActivities,
-  emptyClient,
-  money,
-  statusClass,
-  getPriority,
-  getLeadScore,
-  setSelectedId,
-  setCreating,
-  applySmartFilter,
-}: DashboardControlCenterProps) {
+export default function DashboardControlCenter({ clients, analytics, smartAlerts, recentActivities, emptyClient, money, statusClass, getPriority, getLeadScore, setSelectedId, setCreating, applySmartFilter }: DashboardControlCenterProps) {
   const priorityClients = [...clients]
     .sort((a, b) => {
       if (getPriority(a) !== getPriority(b)) return getPriority(a) === "Alta" ? -1 : 1;
       return getLeadScore(b) - getLeadScore(a);
     })
-    .slice(0, 5);
-
+    .slice(0, 6);
   const highPriorityCount = clients.filter((client) => getPriority(client) === "Alta").length;
   const silentCount = clients.filter((client) => client.lastContactDays >= 7).length;
   const proposalCount = clients.filter((client) => client.status === "Proposta").length;
   const topPriority = priorityClients[0] ?? null;
 
   return (
-    <section className="space-y-3">
-      <div className="saas-panel rounded-2xl px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.07] text-teal-100">
-              <Command size={17} />
-            </div>
+    <Surface className="min-w-0 overflow-hidden">
+      <SectionHeader
+        actions={<div className="flex items-center gap-2"><Badge variant="danger">{highPriorityCount} alta prioridade</Badge><Badge variant="warning">{proposalCount} propostas</Badge></div>}
+        description="Priorize a fila, resolva sinais críticos e avance a próxima oportunidade."
+        status={topPriority ? <span className="text-[10px] text-[var(--text-muted)]">Próxima: <strong className="font-medium text-[var(--text-secondary)]">{topPriority.name}</strong></span> : undefined}
+        title="Mesa de ação comercial"
+      />
 
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-100">Mesa de ação comercial</p>
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                Priorize a fila, resolva sinais críticos e avance a próxima oportunidade.
-              </p>
+      <div className="grid min-w-0 xl:grid-cols-[minmax(0,1.85fr)_minmax(300px,0.75fr)]">
+        <section className="min-w-0" aria-labelledby="commercial-queue-title">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--border-default)] px-4 py-2.5">
+            <div>
+              <h3 className="text-xs font-semibold text-[var(--text-primary)]" id="commercial-queue-title">Fila comercial</h3>
+              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Ordem de abordagem por prioridade e score.</p>
             </div>
+            <span className="text-[10px] text-[var(--text-muted)]">{priorityClients.length} em foco</span>
           </div>
 
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-            <FocusPill label="Ação agora" value={topPriority ? topPriority.name : "Fila em dia"} tone="amber" />
-            <FocusPill label="Críticos" value={String(highPriorityCount)} tone="rose" />
-            <FocusPill label="Propostas" value={String(proposalCount)} tone="default" />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.62fr)]">
-        <div className="min-w-0 space-y-3">
-          <div className="saas-panel rounded-2xl p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-base font-semibold text-slate-100">Fila comercial</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Ordem prática de abordagem para hoje.</p>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                <QueueBadge label="Críticos" value={String(highPriorityCount)} tone="rose" />
-                <QueueBadge label="Propostas" value={String(proposalCount)} tone="amber" />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
+          {priorityClients.length > 0 ? (
+            <div className="divide-y divide-[var(--border-default)]">
               {priorityClients.map((client, index) => {
                 const score = getLeadScore(client);
-
                 return (
                   <button
+                    className="grid w-full min-w-0 gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] md:grid-cols-[36px_minmax(0,1fr)_150px_100px_20px] md:items-center"
                     key={client.id}
                     onClick={() => setSelectedId(client.id)}
-                    className="saas-row grid min-w-0 gap-3 rounded-xl p-3 text-left md:grid-cols-[minmax(0,1fr)_150px]"
+                    type="button"
                   >
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/70 text-xs font-bold text-slate-200">
-                        {index + 1}
+                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--surface-subtle)] text-[10px] font-semibold text-[var(--text-secondary)]">{index + 1}</span>
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{client.name}</p>
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] ${statusClass(client.status)}`}>{client.status}</span>
                       </div>
-
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-slate-100">{client.name}</p>
-                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] ${statusClass(client.status)}`}>
-                            {client.status}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 truncate text-[10px] text-slate-500">{client.company}</p>
-                        <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-slate-500">
-                          <span>{money(client.value)}</span>
-                          <span>Prioridade {getPriority(client)}</span>
-                        </div>
-                      </div>
+                      <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">{client.company} · Prioridade {getPriority(client)}</p>
                     </div>
-
-                    <div className="min-w-0 self-center">
-                      <div className="flex items-center justify-between gap-2 text-[10px]">
-                        <span className="text-slate-500">Score</span>
-                        <span className="font-semibold text-slate-200">{score}/100</span>
-                      </div>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className={`h-full rounded-full ${score >= 80 ? "bg-emerald-300" : score >= 60 ? "bg-amber-300" : "bg-slate-400"}`}
-                          style={{ width: `${score}%` }}
-                        />
-                      </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-[var(--text-muted)]">Próxima ação</p>
+                      <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--text-secondary)]">{client.nextFollowUp}</p>
                     </div>
+                    <div className="text-right">
+                      <p className="text-[11px] font-semibold text-[var(--text-primary)]">{money(client.value)}</p>
+                      <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Score {score}</p>
+                    </div>
+                    <ArrowRight aria-hidden="true" className="hidden text-[var(--icon-muted)] md:block" size={14} />
                   </button>
                 );
               })}
             </div>
-          </div>
-        </div>
+          ) : <EmptyState description="Nenhum cliente corresponde à fila comercial atual." title="Fila comercial vazia" />}
+        </section>
 
-        <div className="min-w-0 space-y-3">
-          <div className="saas-panel rounded-2xl p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <aside className="min-w-0 border-t border-[var(--border-default)] bg-[var(--bg-muted)] xl:border-l xl:border-t-0">
+          <section className="p-4" aria-labelledby="critical-signals-title">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-semibold text-slate-100">Sinais críticos</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Filtros rápidos para agir primeiro.</p>
+                <h3 className="text-xs font-semibold text-[var(--text-primary)]" id="critical-signals-title">Sinais críticos</h3>
+                <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Atalhos para as filas que exigem atenção.</p>
               </div>
-
-              <span className="saas-chip rounded-full px-2 py-1 text-[9px]">priorizar</span>
+              <AlertTriangle className="text-[var(--warning)]" size={15} />
             </div>
-
-            <div className="grid gap-2">
+            <div className="mt-3 divide-y divide-[var(--border-default)] border-y border-[var(--border-default)]">
               {smartAlerts.map((alert, index) => (
                 <button
+                  className="flex w-full items-center justify-between gap-3 py-2.5 text-left text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                   key={alert}
                   onClick={() => applySmartFilter(index === 0 ? "risk" : index === 1 ? "proposal" : "silent")}
-                  className="saas-row min-w-0 rounded-xl px-3 py-2 text-left"
+                  type="button"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="line-clamp-1 text-[11px] font-semibold text-slate-200">{alert}</p>
-                    <ArrowUpRight size={12} className="shrink-0 text-slate-500" />
-                  </div>
-                  <p className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-slate-600">aplicar filtro</p>
+                  <span className="line-clamp-2">{alert}</span>
+                  <ArrowUpRight aria-hidden="true" className="shrink-0 text-[var(--icon-muted)]" size={13} />
                 </button>
               ))}
             </div>
-          </div>
+          </section>
 
-          <div className="saas-panel rounded-2xl p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-slate-100">Ações rápidas</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Comandos para destravar a operação.</p>
-              </div>
-
-              <span className="saas-chip rounded-full px-2 py-1 text-[9px]">agir</span>
+          <section className="border-t border-[var(--border-default)] p-4" aria-labelledby="quick-actions-title">
+            <h3 className="text-xs font-semibold text-[var(--text-primary)]" id="quick-actions-title">Ações rápidas</h3>
+            <div className="mt-2 grid gap-1.5">
+              <QuickCommand icon={<Target size={14} />} label={`Atacar propostas · ${proposalCount}`} onClick={() => applySmartFilter("proposal")} />
+              <QuickCommand icon={<AlertTriangle size={14} />} label={`Reativar silenciosos · ${silentCount}`} onClick={() => applySmartFilter("silent")} />
+              <QuickCommand icon={<Plus size={14} />} label="Nova oportunidade" onClick={() => setCreating({ ...emptyClient })} />
             </div>
+          </section>
 
-            <div className="space-y-2">
-              <CommandAction
-                icon={<Target size={15} />}
-                title="Atacar propostas"
-                description={`${proposalCount} proposta(s) abertas com alto potencial.`}
-                tone="amber"
-                onClick={() => applySmartFilter("proposal")}
-              />
-              <CommandAction
-                icon={<AlertTriangle size={15} />}
-                title="Reativar silenciosos"
-                description={`${silentCount} cliente(s) sem contato recente.`}
-                tone="rose"
-                onClick={() => applySmartFilter("silent")}
-              />
-              <CommandAction
-                icon={<Plus size={15} />}
-                title="Nova oportunidade"
-                description="Criar oportunidade manual sem sair do fluxo comercial."
-                tone="emerald"
-                onClick={() => setCreating({ ...emptyClient })}
-              />
+          <section className="border-t border-[var(--border-default)] p-4" aria-labelledby="recent-activities-title">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold text-[var(--text-primary)]" id="recent-activities-title">Últimas atividades</h3>
+              <span className="text-[10px] text-[var(--text-muted)]">{analytics.todayFollowUps} hoje</span>
             </div>
-          </div>
-
-          <div className="saas-panel rounded-2xl p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-100">Últimas atividades</p>
-                <p className="mt-0.5 text-[10px] text-slate-500">Sinais recentes da operação.</p>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                <QueueBadge label="Hoje" value={String(analytics.todayFollowUps)} tone="sky" />
-              </div>
-            </div>
-
-            <div className="mt-3 space-y-1.5">
-              {recentActivities.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-500/18 bg-slate-950/20 px-3 py-2 text-[10px] text-slate-500">
-                  Nenhuma atividade recente registrada.
-                </p>
-              ) : (
-                recentActivities.slice(0, 3).map((activity) => (
-                  <div key={activity.id} className="saas-row rounded-xl px-3 py-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-[11px] font-semibold text-slate-200">{activity.client}</p>
-                      <span className="shrink-0 text-[9px] text-slate-600">{activity.date}</span>
-                    </div>
-                    <p className="mt-0.5 line-clamp-1 text-[10px] text-slate-500">{activity.text}</p>
+            <div className="mt-3 space-y-3">
+              {recentActivities.length > 0 ? recentActivities.slice(0, 3).map((activity) => (
+                <div className="border-l-2 border-[var(--border-strong)] pl-3" key={activity.id}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-[11px] font-medium text-[var(--text-secondary)]">{activity.client}</p>
+                    <span className="shrink-0 text-[9px] text-[var(--text-muted)]">{activity.date}</span>
                   </div>
-                ))
-              )}
+                  <p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[var(--text-muted)]">{activity.text}</p>
+                </div>
+              )) : <p className="text-[10px] text-[var(--text-muted)]">Nenhuma atividade recente registrada.</p>}
             </div>
-          </div>
-        </div>
+          </section>
+        </aside>
       </div>
-    </section>
+    </Surface>
   );
 }
 
-function FocusPill({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "default" | "rose" | "amber";
-}) {
-  const classes = {
-    default: "border-slate-500/12 bg-slate-950/24 text-slate-300",
-    rose: "border-rose-300/16 bg-rose-500/[0.055] text-rose-100",
-    amber: "border-amber-300/16 bg-amber-500/[0.055] text-amber-100",
-  };
-
+function QuickCommand({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
   return (
-    <div className={`min-w-0 rounded-xl border px-2.5 py-1.5 text-right ${classes[tone]}`}>
-      <p className="text-[8px] uppercase tracking-[0.12em] opacity-65">{label}</p>
-      <p className="mt-0.5 max-w-[150px] truncate text-[11px] font-semibold leading-none">{value}</p>
-    </div>
-  );
-}
-
-function QueueBadge({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "default" | "rose" | "amber" | "sky";
-}) {
-  const classes = {
-    default: "metric-card text-slate-300",
-    rose: "metric-card metric-risk text-rose-100",
-    amber: "metric-card metric-forecast text-amber-100",
-    sky: "metric-card metric-revenue text-sky-100",
-  };
-
-  return (
-    <span className={`rounded-full border px-2 py-1 text-[9px] ${classes[tone]}`}>
-      {label}: <span className="font-semibold">{value}</span>
-    </span>
-  );
-}
-
-function CommandAction({
-  icon,
-  title,
-  description,
-  tone,
-  onClick,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  tone: "amber" | "rose" | "emerald";
-  onClick: () => void;
-}) {
-  const classes = {
-    amber: "saas-accent-amber text-amber-100",
-    rose: "saas-accent-rose text-rose-100",
-    emerald: "saas-accent-emerald text-emerald-100",
-  };
-
-  return (
-    <button onClick={onClick} className={`saas-action flex w-full items-start gap-3 rounded-xl p-2.5 text-left ${classes[tone]}`}>
-      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-950/25">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs font-semibold">{title}</p>
-        <p className="mt-0.5 text-[10px] leading-relaxed opacity-65">{description}</p>
-      </div>
+    <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]" onClick={onClick} type="button">
+      <span className="text-[var(--icon-muted)]">{icon}</span>
+      <span>{label}</span>
     </button>
   );
 }
