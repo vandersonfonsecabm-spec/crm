@@ -8,27 +8,36 @@
 
 :root {
   color-scheme: light;
-  --background: #f4f6f4;
+  --background: #f4f6f3;
   --surface: #ffffff;
-  --surface-muted: #f7f9f7;
+  --surface-muted: #fafbfa;
   --surface-subtle: #eef2ef;
-  --border: #dfe5e1;
-  --border-strong: #cbd5cf;
-  --text-primary: #17211c;
-  --text-secondary: #3f4c45;
-  --text-muted: #58665f;
-  --text-inverse: #f8fbf9;
-  --icon-default: #44524a;
-  --icon-muted: #64736b;
-  --primary: #167a55;
-  --primary-hover: #116445;
+  --border: #dde4df;
+  --border-strong: #c8d2cc;
+  --text-primary: #17201c;
+  --text-secondary: #66736c;
+  --text-muted: #7b8780;
+  --text-inverse: #f2f6f3;
+  --icon-default: #66736c;
+  --icon-muted: #7b8780;
+  --primary: #147a52;
+  --primary-hover: #106b47;
   --success: #247a52;
   --warning: #9a6b19;
   --danger: #b33a45;
   --info: #356f98;
-  --focus-ring: rgba(22, 122, 85, 0.58);
+  --focus-ring: rgba(20, 122, 82, 0.58);
   --disabled-bg: #edf1ee;
-  --disabled-text: #58665f;
+  --disabled-text: #7b8780;
+  --sidebar-bg: #14241e;
+  --sidebar-hover: #1d342b;
+  --sidebar-surface: #1a3027;
+  --sidebar-active: #265443;
+  --sidebar-indicator: #59c48a;
+  --sidebar-border: #2d4037;
+  --sidebar-text: #f2f6f3;
+  --sidebar-text-secondary: #c2cec7;
+  --sidebar-text-muted: #95a59c;
   --bg-app: var(--background);
   --bg-surface: var(--surface);
   --bg-muted: var(--surface-muted);
@@ -80,8 +89,8 @@ button {
 }
 
 ::selection {
-  background: rgba(22, 122, 85, 0.2);
-  color: #ffffff;
+  background: rgba(20, 122, 82, 0.2);
+  color: var(--text-primary);
 }
 
 ::-webkit-scrollbar {
@@ -496,7 +505,7 @@ button {
 .crm-workspace .saas-action:hover {
   border-color: var(--border-strong);
   background: var(--surface-muted);
-  box-shadow: inset 2px 0 0 rgba(22, 122, 85, 0.35), var(--shadow-sm);
+  box-shadow: inset 2px 0 0 rgba(20, 122, 82, 0.35), var(--shadow-sm);
   transform: none;
 }
 
@@ -627,15 +636,15 @@ button {
 }
 
 .crm-workspace .sidebar-shell {
-  border-color: #2d3a34;
-  background: #18231e;
+  border-color: var(--sidebar-border);
+  background: var(--sidebar-bg);
   box-shadow: none;
-  color: #f3f7f4;
+  color: var(--sidebar-text);
 }
 
 .crm-workspace .sidebar-shell .identity-panel {
-  border-color: #33423b;
-  background: #1d2a24;
+  border-color: var(--sidebar-border);
+  background: var(--sidebar-surface);
   box-shadow: none;
 }
 
@@ -644,65 +653,65 @@ button {
 .crm-workspace .sidebar-shell .saas-card,
 .crm-workspace .sidebar-shell .saas-tile,
 .crm-workspace .sidebar-shell .saas-row {
-  border-color: #33423b;
-  background: #1d2a24;
+  border-color: var(--sidebar-border);
+  background: var(--sidebar-surface);
   box-shadow: none;
 }
 
 .crm-workspace .brand-mark {
-  border: 1px solid #35664f;
-  background: #234432;
-  color: #b8e2ca;
+  border: 1px solid var(--sidebar-active);
+  background: var(--sidebar-surface);
+  color: var(--sidebar-indicator);
 }
 
 .crm-workspace .sidebar-nav-item {
   border: 1px solid transparent;
-  color: #c5d0ca;
+  color: var(--sidebar-text-secondary);
   transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
 }
 
 .crm-workspace .sidebar-nav-item:hover {
-  border-color: #33443c;
-  background: #202e28;
-  color: #ffffff;
+  border-color: var(--sidebar-border);
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
 }
 
 .crm-workspace .sidebar-nav-item.is-active {
-  border-color: #3b5949;
-  background: #263a30;
-  color: #ffffff;
+  border-color: var(--sidebar-active);
+  background: var(--sidebar-active);
+  color: var(--sidebar-text);
 }
 
 .crm-workspace .sidebar-nav-indicator {
-  background: #53645b;
+  background: var(--sidebar-text-muted);
 }
 
 .crm-workspace .sidebar-nav-item.is-active .sidebar-nav-indicator {
-  background: #6fd19c;
+  background: var(--sidebar-indicator);
 }
 
 .crm-workspace .sidebar-context {
-  border: 1px solid #33423b;
-  background: #1d2a24;
-  color: #e7eee9;
+  border: 1px solid var(--sidebar-border);
+  background: var(--sidebar-surface);
+  color: var(--sidebar-text);
 }
 
 .crm-workspace .sidebar-action {
-  border: 1px solid #33443c;
-  background: #202e28;
-  color: #cbd7d0;
+  border: 1px solid var(--sidebar-border);
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text-secondary);
   transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 .crm-workspace .sidebar-action:hover {
-  border-color: #496457;
-  background: #293a32;
-  color: #ffffff;
+  border-color: var(--sidebar-active);
+  background: var(--sidebar-active);
+  color: var(--sidebar-text);
 }
 
 .crm-workspace .sidebar-action.is-disabled {
   cursor: not-allowed;
-  color: #738179;
+  color: var(--sidebar-text-muted);
   opacity: 0.72;
 }
 
@@ -711,13 +720,13 @@ button {
 .crm-workspace .sidebar-shell .text-slate-100,
 .crm-workspace .sidebar-shell .text-slate-200,
 .crm-workspace .sidebar-shell .text-slate-300 {
-  color: #e7eee9 !important;
+  color: var(--sidebar-text) !important;
 }
 
 .crm-workspace .sidebar-shell .text-slate-400,
 .crm-workspace .sidebar-shell .text-slate-500,
 .crm-workspace .sidebar-shell .text-slate-600 {
-  color: #91a097 !important;
+  color: var(--sidebar-text-muted) !important;
 }
 
 .crm-workspace .text-white,
@@ -878,9 +887,9 @@ button {
 }
 
 .crm-workspace .sidebar-shell button:disabled {
-  border-color: #33443c !important;
-  background: #202e28 !important;
-  color: #91a097 !important;
+  border-color: var(--sidebar-border) !important;
+  background: var(--sidebar-hover) !important;
+  color: var(--sidebar-text-muted) !important;
   opacity: 1 !important;
 }
 
@@ -922,7 +931,7 @@ button {
 .crm-workspace .sidebar-shell [class~="bg-white/[0.03]"],
 .crm-workspace .sidebar-shell [class~="bg-white/[0.035]"],
 .crm-workspace .sidebar-shell [class~="bg-white/[0.04]"] {
-  background: #202e28 !important;
+  background: var(--sidebar-hover) !important;
 }
 
 .crm-workspace .sidebar-shell [class*="bg-white/"],
@@ -930,7 +939,7 @@ button {
 .crm-workspace .sidebar-shell [class*="bg-slate-900"],
 .crm-workspace .sidebar-shell [class*="bg-slate-950"],
 .crm-workspace .sidebar-shell [class*="bg-black/"] {
-  background: #202e28 !important;
+  background: var(--sidebar-hover) !important;
 }
 
 .crm-workspace .animate-pulse {
@@ -967,7 +976,7 @@ button {
 .crm-workspace .sidebar-shell [class~="border-white/[0.06]"],
 .crm-workspace .sidebar-shell [class~="border-white/[0.07]"],
 .crm-workspace .sidebar-shell [class~="border-white/[0.08]"] {
-  border-color: #33443c !important;
+  border-color: var(--sidebar-border) !important;
 }
 
 .crm-workspace .sidebar-shell [class*="border-white/"],
@@ -975,7 +984,7 @@ button {
 .crm-workspace .sidebar-shell [class*="border-slate-600/"],
 .crm-workspace .sidebar-shell [class*="border-slate-700"],
 .crm-workspace .sidebar-shell [class*="border-slate-800"] {
-  border-color: #33443c !important;
+  border-color: var(--sidebar-border) !important;
 }
 
 .crm-workspace [class*="tracking-["],
@@ -1004,7 +1013,7 @@ button {
 }
 
 .crm-workspace .decision-drawer-shell {
-  scrollbar-color: #aebbb3 #eef2ef;
+  scrollbar-color: var(--border-strong) var(--surface-subtle);
 }
 
 .crm-workspace .premium-button,
@@ -1027,8 +1036,7 @@ button {
 }
 
 .login-shell {
-  background:
-    linear-gradient(90deg, #edf3ef 0, #f5f7f5 52%, #ffffff 52%);
+  background: var(--background);
   color: var(--text-primary);
 }
 
@@ -1133,7 +1141,7 @@ button {
 
 .crm-workspace .topbar-shell {
   border-color: var(--border);
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(250, 251, 250, 0.96);
   box-shadow: none;
 }
 
@@ -1160,9 +1168,9 @@ button {
 }
 
 .crm-workspace .command-search:focus-within {
-  border-color: #91b8a5;
+  border-color: var(--primary);
   background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(22, 122, 85, 0.08);
+  box-shadow: 0 0 0 3px rgba(20, 122, 82, 0.1);
 }
 
 .crm-workspace .command-search input {
@@ -1214,20 +1222,20 @@ button {
 }
 
 .crm-workspace .sidebar-shell {
-  border-color: #2d3a34;
-  background: #18231e;
-  color: #f3f7f4;
+  border-color: var(--sidebar-border);
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
 }
 
 .crm-workspace .sidebar-brand,
 .crm-workspace .sidebar-account {
-  border-color: #2d3a34;
+  border-color: var(--sidebar-border);
 }
 
 .crm-workspace .sidebar-brand p:last-child,
 .crm-workspace .sidebar-account p:last-child,
 .crm-workspace .sidebar-group-label {
-  color: #91a097;
+  color: var(--sidebar-text-muted);
 }
 
 .crm-workspace .sidebar-group-label {
@@ -1235,22 +1243,22 @@ button {
 }
 
 .crm-workspace .sidebar-account > div:hover {
-  background: #202e28;
+  background: var(--sidebar-hover);
 }
 
 .crm-workspace .sidebar-avatar {
-  border: 1px solid #3b5949;
-  background: #263a30;
-  color: #dff5e8;
+  border: 1px solid var(--sidebar-active);
+  background: var(--sidebar-surface);
+  color: var(--sidebar-text);
 }
 
 .crm-workspace .sidebar-nav-icon {
-  color: #91a097;
+  color: var(--sidebar-text-muted);
 }
 
 .crm-workspace .sidebar-nav-item:hover .sidebar-nav-icon,
 .crm-workspace .sidebar-nav-item.is-active .sidebar-nav-icon {
-  color: #dff5e8;
+  color: var(--sidebar-text);
 }
 
 .crm-workspace .page-header {
