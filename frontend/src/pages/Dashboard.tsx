@@ -523,7 +523,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               backendCaption
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
-            showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes"}
+            showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes" && activePage !== "kanban"}
             showBackendCaption={activePage !== "dashboard" && activePage !== "agenda" && activePage !== "integracoes" && activePage !== "automacoes"}
             compact={activePage === "dashboard" || activePage === "agenda"}
             primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : undefined}

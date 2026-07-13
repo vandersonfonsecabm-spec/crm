@@ -66,6 +66,11 @@ export default function DashboardHeader({
           </div>
           <h1 className="truncate text-[21px] font-semibold leading-7">{pageTitle}</h1>
           <p className="mt-1 max-w-2xl text-[12px] leading-5">{pageDescription}</p>
+          {showBackendCaption && (
+            <span className="data-caption mt-2 inline-flex rounded-md px-2.5 py-1 text-[10px] font-medium">
+              {backendCaption}
+            </span>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2 pt-1">
@@ -118,13 +123,6 @@ export default function DashboardHeader({
         </div>
       </div>
 
-      {showBackendCaption && (
-        <div className="page-header-meta mt-4 flex items-center border-t pt-3">
-          <span className="data-caption inline-flex rounded-md px-2.5 py-1 text-[10px] font-medium">
-            {backendCaption}
-          </span>
-        </div>
-      )}
     </header>
   );
 }

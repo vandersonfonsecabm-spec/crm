@@ -70,19 +70,64 @@ export default function DashboardTopbar({
             }}
           />
 
-          <button
-            aria-label="Notificações"
-            className="topbar-icon-button inline-flex h-9 w-9 items-center justify-center rounded-md"
-            title="Notificações"
-            type="button"
-          >
-            <Bell size={16} />
-          </button>
+          <NotificationsMenu />
 
           <UserMenu authSession={authSession} onLogout={onLogout} />
         </div>
       </div>
     </header>
+  );
+}
+
+function NotificationsMenu() {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        aria-label="Notificações"
+        className="topbar-icon-button inline-flex h-9 w-9 items-center justify-center rounded-md"
+        onClick={() => setIsOpen((current) => !current)}
+        title="Notificações"
+        type="button"
+      >
+        <Bell size={16} />
+      </button>
+
+      {isOpen && (
+        <div aria-label="Notificações" className="user-menu absolute right-0 top-11 z-[240] w-72 overflow-hidden rounded-lg border shadow-lg" role="dialog">
+          <div className="border-b border-[var(--border-default)] px-4 py-3">
+            <p className="text-[12px] font-semibold text-[var(--text-primary)]">Notificações</p>
+            <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Atualizações da operação comercial</p>
+          </div>
+          <div className="flex flex-col items-center px-5 py-7 text-center">
+            <span className="flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--icon-muted)]">
+              <Bell size={16} />
+            </span>
+            <p className="mt-3 text-[11px] font-semibold text-[var(--text-primary)]">Nenhuma notificação disponível</p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--text-muted)]">Os alertas operacionais continuam disponíveis nas áreas correspondentes.</p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
