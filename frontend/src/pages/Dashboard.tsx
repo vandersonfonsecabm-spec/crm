@@ -354,18 +354,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         riskAction,
         resetAction,
       ],
-      automacoes: [
-        {
-          label: "Criar regra · em breve",
-          disabled: true,
-          title: "O motor de automações ainda está em desenvolvimento.",
-        },
-        {
-          label: "Ver modelos",
-          onClick: () => document.getElementById("automation-templates")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-        },
-        resetAction,
-      ],
     };
 
     return actionsByPage[activePage] ?? [];
@@ -535,8 +523,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               backendCaption
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
-            showCreateClient={activePage !== "estoque" && activePage !== "integracoes"}
-            showBackendCaption={activePage !== "dashboard" && activePage !== "agenda"}
+            showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes"}
+            showBackendCaption={activePage !== "dashboard" && activePage !== "agenda" && activePage !== "integracoes" && activePage !== "automacoes"}
             compact={activePage === "dashboard" || activePage === "agenda"}
             primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : undefined}
             actions={pageActions}

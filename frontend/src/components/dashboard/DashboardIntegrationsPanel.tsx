@@ -5,6 +5,7 @@ import {
   FileSpreadsheet,
   Filter,
   Loader2,
+  MessageCircle,
   PackageSearch,
   PlugZap,
   Power,
@@ -51,6 +52,20 @@ import {
   type HubUpdateStrategy,
   type WhatsappSimulationCallResult,
 } from "../../services/crmApi";
+import DashboardMetricStrip from "./DashboardMetricStrip";
+import {
+  Button as UiButton,
+  EmptyState as UiEmptyState,
+  ErrorState as UiErrorState,
+  Input as UiInput,
+  LoadingState as UiLoadingState,
+  Pagination as UiPagination,
+  SectionHeader as UiSectionHeader,
+  Select as UiSelect,
+  StatusBadge as UiStatusBadge,
+  Surface as UiSurface,
+  Toolbar as UiToolbar,
+} from "../ui";
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const IMPORT_LIMIT = 6;
@@ -98,6 +113,7 @@ const WHATSAPP_SMOKE_NAME = "Contato Teste Simulador";
 
 type StepKey = "arquivo" | "mapeamento" | "validacao" | "importacao" | "resultado";
 type LoadState = "loading" | "success" | "error";
+type IntegrationView = "overview" | "imports" | "catalog" | "simulator";
 type ImportErrors = { data: HubErroImportacao[]; page: number; total: number; totalPages: number };
 type WhatsappSmokeCall = WhatsappSimulationCallResult;
 type WhatsappScenarioId = "saudacao" | "produto" | "preco" | "estoque" | "inexistente" | "vendedor";
@@ -129,6 +145,7 @@ type BlingSyncCounters = {
 
 export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: { initialBlingNotice?: string }) {
   const [state, setState] = useState<LoadState>("loading");
+  const [activeView, setActiveView] = useState<IntegrationView>("overview");
   const [message, setMessage] = useState("");
   const [toast, setToast] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -517,6 +534,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
   }
 
   async function disconnectBling(integrationId: number) {
+    if (!window.confirm("Desconectar o Bling? As sincronizações serão interrompidas até uma nova conexão.")) return;
     setBlingBusy("disconnect");
     setBlingMessage("");
     try {
@@ -577,56 +595,80 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
     <div className="space-y-4 overflow-x-hidden">
       {toast && <div className="fixed right-5 top-5 z-50 rounded-2xl border border-emerald-300/20 bg-slate-950/95 px-4 py-3 text-sm font-semibold text-emerald-100 shadow-2xl">{toast}</div>}
 
-      <section className="premium-panel rounded-2xl p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Hub operacional</p>
-            <h2 className="mt-1 text-lg font-semibold text-slate-50">Integrações e Dados</h2>
-            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-400">
-              Importe produtos por CSV ou XLSX, valide linhas e consulte o catálogo comercial sincronizado.
-            </p>
+      <UiSurface className="p-3">
+        <UiToolbar>
+          <div aria-label="Áreas de integrações" className="flex min-w-0 flex-wrap items-center gap-1 rounded-md bg-[var(--bg-muted)] p-1" role="tablist">
+            <IntegrationTab active={activeView === "overview"} icon={<PlugZap size={13} />} label="Conexões" onClick={() => setActiveView("overview")} />
+            <IntegrationTab active={activeView === "imports"} icon={<FileSpreadsheet size={13} />} label="Importações" onClick={() => setActiveView("imports")} />
+            <IntegrationTab active={activeView === "catalog"} icon={<Database size={13} />} label="Catálogo" onClick={() => setActiveView("catalog")} />
+            <IntegrationTab active={activeView === "simulator"} icon={<MessageCircle size={13} />} label="Simulador" onClick={() => setActiveView("simulator")} />
           </div>
-          <button type="button" onClick={() => void loadAll()} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">
-            <RefreshCw size={14} /> Atualizar
-          </button>
+          <UiButton leftIcon={<RefreshCw size={14} />} onClick={() => void loadAll()} size="sm" variant="secondary">
+            Atualizar dados
+          </UiButton>
+        </UiToolbar>
+      </UiSurface>
+
+      {state === "loading" && (
+        <UiSurface className="p-4">
+          <UiLoadingState label="Carregando integrações" rows={4} />
+        </UiSurface>
+      )}
+
+      {state === "error" && (
+        <UiSurface>
+          <UiErrorState
+            description="A consulta foi interrompida sem alterar conexões ou dados externos."
+            onRetry={() => void loadAll()}
+            title={message || "Não foi possível carregar as integrações"}
+          />
+        </UiSurface>
+      )}
+
+      {state === "success" && activeView === "overview" && (
+        <DashboardMetricStrip metrics={[
+          { label: "Produtos no Hub", value: String(quality?.totalProdutos ?? 0), context: "Catálogo consolidado", icon: <Database size={15} /> },
+          { label: "Produtos ativos", value: String(quality?.produtosAtivos ?? 0), context: "Disponíveis para consulta", icon: <CheckCircle2 size={15} />, tone: "success" },
+          { label: "Sem estoque", value: String(quality?.produtosSemEstoque ?? 0), context: "Saldo indisponível", icon: <PackageSearch size={15} />, tone: "warning" },
+          { label: "Dados desatualizados", value: String(quality?.produtosComDadosDesatualizados ?? 0), context: "Pedem revisão", icon: <AlertTriangle size={15} />, tone: "danger" },
+        ]} />
+      )}
+
+      {state === "success" && activeView === "overview" && (
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <BlingSection
+            integrations={blingIntegrations}
+            busy={blingBusy}
+            message={blingMessage}
+            lastSync={lastBlingSync}
+            onConnect={() => void connectBling()}
+            onTest={(id) => void testBling(id)}
+            onSync={(id) => void syncBling(id)}
+            onDisconnect={(id) => void disconnectBling(id)}
+          />
+          <QualitySection quality={quality} />
         </div>
-        {state === "error" && <Alert tone="error">{message || "Não foi possível carregar as integrações."}</Alert>}
-      </section>
+      )}
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Metric title="Produtos no Hub" value={quality?.totalProdutos ?? 0} icon={<Database size={15} />} />
-        <Metric title="Ativos" value={quality?.produtosAtivos ?? 0} icon={<CheckCircle2 size={15} />} />
-        <Metric title="Sem estoque" value={quality?.produtosSemEstoque ?? 0} icon={<PackageSearch size={15} />} />
-        <Metric title="Dados desatualizados" value={quality?.produtosComDadosDesatualizados ?? 0} icon={<AlertTriangle size={15} />} />
-      </section>
+      {state === "success" && activeView === "simulator" && (
+        <WhatsappSimulationSection
+          scenarios={whatsappScenarios}
+          scenario={whatsappScenario}
+          scenarioId={whatsappScenarioId}
+          externalId={whatsappExternalId}
+          product={whatsappProduct}
+          first={whatsappSmokeFirst}
+          repeat={whatsappSmokeRepeat}
+          busy={whatsappSmokeBusy}
+          error={whatsappSmokeError}
+          onScenarioChange={selectWhatsappScenario}
+          onNewTest={newWhatsappScenarioTest}
+          onRun={() => void runWhatsappSmoke("first")}
+          onRepeat={() => void runWhatsappSmoke("repeat")}
+        />
+      )}
 
-      <BlingSection
-        integrations={blingIntegrations}
-        busy={blingBusy}
-        message={blingMessage}
-        lastSync={lastBlingSync}
-        onConnect={() => void connectBling()}
-        onTest={(id) => void testBling(id)}
-        onSync={(id) => void syncBling(id)}
-        onDisconnect={(id) => void disconnectBling(id)}
-      />
-
-      <WhatsappSimulationSection
-        scenarios={whatsappScenarios}
-        scenario={whatsappScenario}
-        scenarioId={whatsappScenarioId}
-        externalId={whatsappExternalId}
-        product={whatsappProduct}
-        first={whatsappSmokeFirst}
-        repeat={whatsappSmokeRepeat}
-        busy={whatsappSmokeBusy}
-        error={whatsappSmokeError}
-        onScenarioChange={selectWhatsappScenario}
-        onNewTest={newWhatsappScenarioTest}
-        onRun={() => void runWhatsappSmoke("first")}
-        onRepeat={() => void runWhatsappSmoke("repeat")}
-      />
-
+      {state === "success" && activeView === "imports" && (
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 space-y-4">
           <section className="premium-panel rounded-2xl p-4">
@@ -760,22 +802,6 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
             {processResult && step === "resultado" && <ProcessResult result={processResult} />}
           </section>
 
-          <CatalogSection
-            products={catalog}
-            total={catalogTotal}
-            page={catalogPage}
-            totalPages={catalogPages}
-            filters={catalogFilters}
-            loading={state === "loading"}
-            onFiltersChange={setCatalogFilters}
-            onApply={() => applyCatalogFilters()}
-            onClear={() => {
-              setCatalogFilters({ q: "", sku: "", codigoBarras: "", categoria: "", marca: "", local: "", somenteDisponiveis: false });
-              setCatalogPage(1);
-              window.setTimeout(() => void reloadCatalog(1), 0);
-            }}
-            onPage={setCatalogPage}
-          />
         </div>
 
         <aside className="min-w-0 space-y-4">
@@ -800,10 +826,49 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
             onClose={() => setSelectedImport(null)}
             onErrorsPage={(id, page) => void loadErrors(id, page)}
           />
-          <QualitySection quality={quality} />
         </aside>
       </section>
+      )}
+
+      {state === "success" && activeView === "catalog" && (
+        <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <CatalogSection
+            products={catalog}
+            total={catalogTotal}
+            page={catalogPage}
+            totalPages={catalogPages}
+            filters={catalogFilters}
+            loading={false}
+            onFiltersChange={setCatalogFilters}
+            onApply={() => applyCatalogFilters()}
+            onClear={() => {
+              setCatalogFilters({ q: "", sku: "", codigoBarras: "", categoria: "", marca: "", local: "", somenteDisponiveis: false });
+              setCatalogPage(1);
+              window.setTimeout(() => void reloadCatalog(1), 0);
+            }}
+            onPage={setCatalogPage}
+          />
+          <QualitySection quality={quality} />
+        </section>
+      )}
     </div>
+  );
+}
+
+function IntegrationTab({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      aria-selected={active}
+      className={`inline-flex h-8 items-center gap-1.5 rounded px-2.5 text-[11px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus-ring)] ${
+        active ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+      }`}
+      onClick={onClick}
+      role="tab"
+      type="button"
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
@@ -1026,62 +1091,45 @@ function BlingSection({
   const active = integrations.find((item) => item.tipo === "BLING" && item.ativo && item.possuiCredenciais && item.status !== "INATIVA");
   const latest = active ?? integrations.find((item) => item.tipo === "BLING");
   const statusLabel = active ? (active.status === "ERRO" ? "Conectado com erro" : "Conectado") : latest ? "Desconectado" : "Não conectado";
+  const status = active ? (active.status === "ERRO" ? "erro" : "conectado") : latest ? "desconectado" : "indisponivel";
 
   return (
-    <section className="premium-panel rounded-2xl p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
+    <UiSurface className="min-w-0 overflow-hidden">
+      <UiSectionHeader
+        actions={(
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-slate-100">Conectar Bling</h3>
-            <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
-              Somente leitura
-            </span>
-            <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
-              {statusLabel}
-            </span>
-          </div>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
-            Sincronize produtos e estoque do Bling sem alterar dados no ERP.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
           {!active && (
-            <button type="button" onClick={onConnect} disabled={Boolean(busy)} className="premium-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold">
-              {busy === "connect" ? <Loader2 className="animate-spin" size={14} /> : <PlugZap size={14} />} Conectar Bling
-            </button>
+              <UiButton leftIcon={<PlugZap size={14} />} loading={busy === "connect"} onClick={onConnect} size="sm" variant="primary">Conectar Bling</UiButton>
           )}
           {active && (
             <>
-              <button type="button" onClick={() => onTest(active.id)} disabled={Boolean(busy)} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">
-                {busy === "test" ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} Testar conexão
-              </button>
-              <button type="button" onClick={() => onSync(active.id)} disabled={Boolean(busy)} className="premium-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold">
-                {busy === "sync" ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />} Sincronizar agora
-              </button>
-              <button type="button" onClick={() => onDisconnect(active.id)} disabled={Boolean(busy)} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">
-                {busy === "disconnect" ? <Loader2 className="animate-spin" size={14} /> : <Power size={14} />} Desconectar
-              </button>
+                <UiButton disabled={Boolean(busy)} leftIcon={<CheckCircle2 size={14} />} loading={busy === "test"} onClick={() => onTest(active.id)} size="sm">Testar conexão</UiButton>
+                <UiButton disabled={Boolean(busy)} leftIcon={<RefreshCw size={14} />} loading={busy === "sync"} onClick={() => onSync(active.id)} size="sm" variant="primary">Sincronizar agora</UiButton>
+                <UiButton disabled={Boolean(busy)} leftIcon={<Power size={14} />} loading={busy === "disconnect"} onClick={() => onDisconnect(active.id)} size="sm">Desconectar</UiButton>
             </>
           )}
-        </div>
-      </div>
-      <div className="mt-3 grid gap-2 md:grid-cols-4">
+          </div>
+        )}
+        description="Produtos e estoque em modo de leitura. As ações de conexão respeitam as permissões administrativas existentes."
+        icon={<PlugZap size={15} />}
+        status={<div className="flex items-center gap-2"><UiStatusBadge label="Somente leitura" status="informacao" /><UiStatusBadge label={statusLabel} status={status} /></div>}
+        title="Bling"
+      />
+      <div className="grid gap-2 px-4 py-3 md:grid-cols-4">
         <Info label="Última sincronização" value={latest?.ultimaSincronizacaoEm ? dateTime(latest.ultimaSincronizacaoEm) : "-"} />
         <Info label="Último sucesso" value={latest?.ultimoSucessoEm ? dateTime(latest.ultimoSucessoEm) : "-"} />
         <Info label="Último erro" value={latest?.ultimoErroEm ? dateTime(latest.ultimoErroEm) : "-"} />
         <Info label="Credenciais" value={latest?.possuiCredenciais ? "Configuradas" : "Não configuradas"} />
       </div>
-      {!active && (
-        <Alert tone="info">Conector disponível para configuração. Sem credenciais reais, nenhuma chamada ao Bling será iniciada.</Alert>
-      )}
-      {message && <Alert tone={(message.toLowerCase().includes("não foi") || message.toLowerCase().includes("nao foi")) ? "error" : "success"}>{message}</Alert>}
+      {!active && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert tone="info">Conector disponível para configuração. Sem credenciais reais, nenhuma chamada ao Bling será iniciada.</Alert></div>}
+      {message && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert tone={(message.toLowerCase().includes("não foi") || message.toLowerCase().includes("nao foi")) ? "error" : "success"}>{message}</Alert></div>}
       {lastSync && (
-        <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300">
-          <span className="font-semibold text-slate-100">Última sincronização:</span>{" "}
+        <div className="border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-[11px] text-[var(--text-secondary)]">
+          <span className="font-semibold text-[var(--text-primary)]">Última sincronização:</span>{" "}
           {formatBlingSyncSummary(lastSync)}
         </div>
       )}
-    </section>
+    </UiSurface>
   );
 }
 
@@ -1241,23 +1289,38 @@ function WhatsappSimulationResult({ title, result, scenario, original }: { title
 }
 
 function QualitySection({ quality }: { quality: HubQualidadeDados | null }) {
+  const checks = [
+    { label: "Total de produtos", value: quality?.totalProdutos ?? 0, attention: false },
+    { label: "Ativos", value: quality?.produtosAtivos ?? 0, attention: false },
+    { label: "Inativos", value: quality?.produtosInativos ?? 0, attention: (quality?.produtosInativos ?? 0) > 0 },
+    { label: "Sem SKU", value: quality?.produtosSemSku ?? 0, attention: (quality?.produtosSemSku ?? 0) > 0 },
+    { label: "Sem código de barras", value: quality?.produtosSemCodigoBarras ?? 0, attention: (quality?.produtosSemCodigoBarras ?? 0) > 0 },
+    { label: "Sem estoque", value: quality?.produtosSemEstoque ?? 0, attention: (quality?.produtosSemEstoque ?? 0) > 0 },
+    { label: "Sem preço", value: quality?.produtosSemPreco ?? 0, attention: (quality?.produtosSemPreco ?? 0) > 0 },
+    { label: "Dados desatualizados", value: quality?.produtosComDadosDesatualizados ?? 0, attention: (quality?.produtosComDadosDesatualizados ?? 0) > 0 },
+    { label: "Duplicidades", value: (quality?.duplicidadesDetectadas.sku.length ?? 0) + (quality?.duplicidadesDetectadas.codigoBarras.length ?? 0), attention: (quality?.duplicidadesDetectadas.sku.length ?? 0) + (quality?.duplicidadesDetectadas.codigoBarras.length ?? 0) > 0 },
+  ];
+
   return (
-    <section className="premium-panel rounded-2xl p-4">
-      <h3 className="text-sm font-semibold text-slate-100">Qualidade dos dados</h3>
-      <div className="mt-3 grid gap-2">
-        <Info label="Total de produtos" value={quality?.totalProdutos ?? 0} />
-        <Info label="Ativos" value={quality?.produtosAtivos ?? 0} />
-        <Info label="Inativos" value={quality?.produtosInativos ?? 0} />
-        <Info label="Sem SKU" value={quality?.produtosSemSku ?? 0} />
-        <Info label="Sem código de barras" value={quality?.produtosSemCodigoBarras ?? 0} />
-        <Info label="Sem estoque" value={quality?.produtosSemEstoque ?? 0} />
-        <Info label="Sem preço" value={quality?.produtosSemPreco ?? 0} />
-        <Info label="Dados desatualizados" value={quality?.produtosComDadosDesatualizados ?? 0} />
-        <Info label="Duplicidades" value={(quality?.duplicidadesDetectadas.sku.length ?? 0) + (quality?.duplicidadesDetectadas.codigoBarras.length ?? 0)} />
-        <Info label="Última importação" value={quality?.ultimaImportacao ? `${quality.ultimaImportacao.nomeArquivo} · ${statusLabel(quality.ultimaImportacao.status)}` : "Nenhuma"} />
-        <Info label="Última sincronização" value={formatDate(quality?.ultimaSincronizacao?.ultimaSincronizacaoEm)} />
+    <UiSurface className="min-w-0 overflow-hidden">
+      <UiSectionHeader description="Pendências reais do catálogo consolidado." icon={<CheckCircle2 size={15} />} title="Qualidade dos dados" />
+      <dl className="divide-y divide-[var(--border-default)]">
+        {checks.map((check) => (
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5" key={check.label}>
+            <dt className="text-[11px] text-[var(--text-secondary)]">{check.label}</dt>
+            <dd className={`text-[11px] font-semibold tabular-nums ${check.attention ? "text-[var(--warning)]" : "text-[var(--text-primary)]"}`}>{check.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3">
+        <p className="text-[10px] text-[var(--text-muted)]">Última importação</p>
+        <p className="mt-0.5 break-words text-[11px] font-medium text-[var(--text-secondary)]">
+          {quality?.ultimaImportacao ? `${quality.ultimaImportacao.nomeArquivo} · ${statusLabel(quality.ultimaImportacao.status)}` : "Nenhuma"}
+        </p>
+        <p className="mt-2 text-[10px] text-[var(--text-muted)]">Última sincronização</p>
+        <p className="mt-0.5 text-[11px] font-medium text-[var(--text-secondary)]">{formatDate(quality?.ultimaSincronizacao?.ultimaSincronizacaoEm)}</p>
       </div>
-    </section>
+    </UiSurface>
   );
 }
 
@@ -1303,55 +1366,52 @@ function PreviewTable({ rows }: { rows: Record<string, unknown>[] }) {
 
 function Metric({ title, value, icon }: { title: string; value: ReactNode; icon: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-3">
-      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-        <span className="text-teal-100">{icon}</span>
+    <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
+      <div className="flex items-center gap-2 text-[10px] font-semibold text-[var(--text-muted)]">
+        <span className="text-[var(--icon-default)]">{icon}</span>
         <span className="leading-snug">{title}</span>
       </div>
-      <p className="mt-2 text-lg font-semibold text-slate-50">{value}</p>
+      <p className="mt-2 text-base font-semibold text-[var(--text-primary)]">{value}</p>
     </div>
   );
 }
 
 function Info({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.025] px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-xs font-semibold text-slate-200">{value ?? "-"}</p>
+    <div className="min-w-0 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-2">
+      <p className="text-[10px] font-medium text-[var(--text-muted)]">{label}</p>
+      <p className="mt-1 break-words text-[11px] font-semibold text-[var(--text-primary)]">{value ?? "-"}</p>
     </div>
   );
 }
 
 function Input({ value, placeholder, icon, onChange }: { value: string; placeholder: string; icon?: ReactNode; onChange: (value: string) => void }) {
   return (
-    <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-100">
-      {icon}
-      <input value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-slate-600" />
-    </label>
+    <div className="relative min-w-0">
+      {icon && <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--icon-muted)]">{icon}</span>}
+      <UiInput aria-label={placeholder} className={icon ? "pl-8" : ""} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} />
+    </div>
   );
 }
 
 function SelectBox<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: Array<{ value: T; label: string }>; onChange: (value: T) => void }) {
   return (
-    <label className="grid gap-1 text-xs text-slate-400">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value as T)} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-100">
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-    </label>
+    <UiSelect label={label} onChange={(event) => onChange(event.target.value as T)} value={value}>
+      {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+    </UiSelect>
   );
 }
 
 function Alert({ tone, children }: { tone: "error" | "warning" | "info" | "success"; children: ReactNode }) {
   const classes =
     tone === "error"
-      ? "border-red-300/20 bg-red-500/10 text-red-100"
+      ? "border-rose-200 bg-rose-50 text-rose-800"
       : tone === "success"
-        ? "border-emerald-300/20 bg-emerald-500/10 text-emerald-100"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
         : tone === "info"
-          ? "border-cyan-300/20 bg-cyan-500/10 text-cyan-100"
-          : "border-amber-300/20 bg-amber-500/10 text-amber-100";
-  return <div className={`mt-3 rounded-2xl border p-3 text-xs font-semibold ${classes}`}>{children}</div>;
+          ? "border-sky-200 bg-sky-50 text-sky-800"
+          : "border-amber-200 bg-amber-50 text-amber-800";
+  return <div className={`mt-3 rounded-md border px-3 py-2.5 text-[11px] font-medium leading-5 ${classes}`}>{children}</div>;
 }
 
 function dateTime(value: string) {
@@ -1392,28 +1452,25 @@ function count(value: unknown) {
 }
 
 function EmptyState({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-center">
-      <p className="text-sm font-semibold text-slate-200">{title}</p>
-      <p className="mt-1 text-xs text-slate-500">{text}</p>
-    </div>
-  );
+  return <UiEmptyState className="py-6" description={text} title={title} />;
 }
 
 function StatusBadge({ status }: { status: string }) {
-  return <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.045] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300">{statusLabel(status)}</span>;
+  const normalized = status.toLocaleLowerCase("pt-BR");
+  const tone = normalized.includes("falhou") || normalized.includes("erro")
+    ? "erro"
+    : normalized.includes("concluído com erros") || normalized.includes("sem estoque")
+      ? "alerta"
+      : normalized.includes("concluído") || normalized.includes("em estoque")
+        ? "sucesso"
+        : normalized.includes("process") || normalized.includes("valid") || normalized.includes("pronto")
+          ? "informacao"
+          : "inativo";
+  return <UiStatusBadge label={statusLabel(status)} status={tone} />;
 }
 
 function Pagination({ page, totalPages, total, onPage }: { page: number; totalPages: number; total: number; onPage: (page: number) => void }) {
-  return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-      <span>Total: {total} · Página {page} de {totalPages}</span>
-      <div className="flex gap-2">
-        <button type="button" disabled={page <= 1} onClick={() => onPage(Math.max(1, page - 1))} className="premium-ghost rounded-xl px-3 py-2 font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button>
-        <button type="button" disabled={page >= totalPages} onClick={() => onPage(Math.min(totalPages, page + 1))} className="premium-ghost rounded-xl px-3 py-2 font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-40">Próxima</button>
-      </div>
-    </div>
-  );
+  return <UiPagination className="mt-3 px-0 pb-0" onPageChange={onPage} page={page} total={total} totalPages={totalPages} />;
 }
 
 function invertSuggestion(suggestion: Partial<Record<HubCanonicalField, string>>, columns: string[]) {

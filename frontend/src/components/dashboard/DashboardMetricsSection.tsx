@@ -4,14 +4,12 @@ import {
   CheckCircle2,
   Phone,
   Plus,
-  RotateCcw,
   Star,
   StickyNote,
   Target,
   Users,
   Zap,
 } from "lucide-react";
-import MetricCard from "./MetricCard";
 import DashboardMetricStrip from "./DashboardMetricStrip";
 import type { ActivePage, Client } from "../../types/dashboard";
 
@@ -75,17 +73,6 @@ export default function DashboardMetricsSection({
         { label: "Propostas", value: String(clients.filter((client) => client.status === "Proposta").length), context: "Janelas abertas", icon: <Target size={15} />, tone: "warning" },
         { label: "Notas recentes", value: String(clients.reduce((sum, client) => sum + client.notes.length, 0)), context: "Histórico comercial", icon: <StickyNote size={15} /> },
       ]} />
-    );
-  }
-
-  if (activePage === "automacoes") {
-    return (
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Regras ativas" value="03" caption="Fluxos em operação" icon={<Zap size={15} />} tone="pipeline" />
-        <MetricCard title="Acompanhamentos criados" value="18" caption="Últimos 7 dias" icon={<Bell size={15} />} tone="revenue" />
-        <MetricCard title="Clientes reativados" value="06" caption="Retomadas comerciais" icon={<RotateCcw size={15} />} tone="pipeline" />
-        <MetricCard title="Alertas pendentes" value="04" caption="Aguardam revisão" icon={<AlertTriangle size={15} />} tone="forecast" />
-      </section>
     );
   }
 

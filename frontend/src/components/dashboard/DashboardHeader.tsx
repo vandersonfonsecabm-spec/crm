@@ -160,6 +160,6 @@ const pageMeta: Record<ActivePage, { breadcrumb: string; description: string }> 
   },
   automacoes: {
     breadcrumb: "Automações",
-    description: "Fluxos disponíveis, estados e modelos operacionais.",
+    description: "Padrões comerciais documentados e preparação do motor de regras.",
   },
 };
