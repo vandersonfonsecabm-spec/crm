@@ -41,6 +41,7 @@
   --filter-active-bg: #eef7f2;
   --filter-active-text: #106b47;
   --filter-active-border: #9bc8b2;
+  --overlay-backdrop: rgba(20, 36, 30, 0.24);
   --sidebar-bg: #14241e;
   --sidebar-hover: #1d342b;
   --sidebar-surface: #1a3027;
@@ -893,7 +894,19 @@ button {
   border-color: var(--border) !important;
   background: var(--surface) !important;
   color: var(--text-primary) !important;
-  outline-color: var(--primary);
+  outline: none;
+}
+
+.crm-workspace [data-ui-control] {
+  border-color: var(--control-border) !important;
+}
+
+.crm-workspace [data-ui-control]:hover:not(:focus) {
+  border-color: var(--control-border-hover) !important;
+}
+
+.crm-workspace [data-ui-control]:focus {
+  border-color: var(--control-border-focus) !important;
 }
 
 .crm-workspace input::placeholder,

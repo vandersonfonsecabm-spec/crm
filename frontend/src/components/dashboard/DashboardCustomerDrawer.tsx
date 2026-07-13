@@ -139,7 +139,7 @@ export default function DashboardCustomerDrawer({
     if (!open || !selectedClient) return null;
     return (
       <div className="fixed inset-0 z-[220] flex justify-end" role="presentation">
-        <button aria-label={`Fechar ${overlayTitle.toLowerCase()}`} className="absolute inset-0 cursor-default bg-slate-950/25 backdrop-blur-[1px]" onClick={onClearSelectedClient} tabIndex={-1} type="button" />
+        <button aria-label={`Fechar ${overlayTitle.toLowerCase()}`} className="absolute inset-0 cursor-default bg-[var(--overlay-backdrop)]" onClick={onClearSelectedClient} tabIndex={-1} type="button" />
         <aside
           aria-labelledby="customer-decision-title"
           aria-modal="true"

@@ -180,21 +180,18 @@ export function getLeadScore(client: Client) {
 
 
 export function statusClass(status: Status) {
-  if (status === "Novo") return "border-sky-400/20 bg-sky-500/10 text-sky-200";
-  if (status === "Contato") return "border-violet-400/20 bg-violet-500/10 text-violet-200";
-  if (status === "Proposta") return "border-amber-400/20 bg-amber-500/10 text-amber-200";
-  if (status === "Fechado") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-200";
-  return "border-rose-400/20 bg-rose-500/10 text-rose-200";
+  if (status === "Novo") return "border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--info)]";
+  if (status === "Contato") return "border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--text-secondary)]";
+  if (status === "Proposta") return "border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--warning)]";
+  if (status === "Fechado") return "border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--success)]";
+  return "border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--danger)]";
 }
 
 
 
 export function kanbanHeaderClass(status: Status) {
-  if (status === "Novo") return "border-sky-400/20 bg-sky-500/10";
-  if (status === "Contato") return "border-violet-400/20 bg-violet-500/10";
-  if (status === "Proposta") return "border-amber-400/20 bg-amber-500/10";
-  if (status === "Fechado") return "border-emerald-400/20 bg-emerald-500/10";
-  return "border-rose-400/20 bg-rose-500/10";
+  void status;
+  return "border-[var(--border-default)] bg-[var(--bg-surface)]";
 }
 
 

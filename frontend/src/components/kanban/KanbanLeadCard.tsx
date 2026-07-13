@@ -38,12 +38,14 @@ export default function KanbanLeadCard({
   const score = getLeadScore(client);
   const intensity = actionIntensity(client);
   const risk = getRisk(client);
+  const sla = slaLabel(client);
   const isSelected = selectedId === client.id;
   const isStrongLead = client.hot && score >= 80;
-  const isAttentionLead = risk === "Alto" || client.lastContactDays >= 7;
-  const urgencyLabel = isStrongLead ? "Quente" : isAttentionLead ? "Atenção" : "Estável";
-  const urgencyColor = isStrongLead ? "bg-[var(--danger)]" : isAttentionLead ? "bg-[var(--warning)]" : "bg-[var(--success)]";
-  const scoreColor = score >= 80 ? "text-[var(--success)]" : score >= 60 ? "text-[var(--warning)]" : "text-[var(--text-secondary)]";
+  const isRiskLead = risk === "Alto" || sla === "Crítico";
+  const isAttentionLead = !isRiskLead && sla === "Atenção";
+  const urgencyLabel = isRiskLead ? "Risco" : isStrongLead ? "Quente" : isAttentionLead ? "Atenção" : "Estável";
+  const semanticColor = isRiskLead ? "bg-[var(--danger)]" : isAttentionLead ? "bg-[var(--warning)]" : "bg-[var(--success)]";
+  const semanticTextColor = isRiskLead ? "text-[var(--danger)]" : isAttentionLead ? "text-[var(--warning)]" : "text-[var(--success)]";
   const interactionLabel = client.lastContactDays === 0
     ? "Contato hoje"
     : client.lastContactDays === 1
@@ -74,11 +76,9 @@ export default function KanbanLeadCard({
       role="button"
       tabIndex={0}
       className={`group relative min-w-0 cursor-grab overflow-hidden rounded-md border bg-[var(--bg-surface)] p-2.5 text-left shadow-sm transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] active:cursor-grabbing ${
-        isSelected ? "border-[var(--primary)] bg-[var(--bg-muted)] shadow-[inset_3px_0_0_var(--primary)]" : "border-[var(--border-default)]"
+        isSelected ? "border-[var(--primary)] bg-[var(--bg-muted)] ring-1 ring-[var(--control-ring)]" : "border-[var(--border-default)]"
       }`}
     >
-      <div className={`pointer-events-none absolute inset-x-0 top-0 h-0.5 ${urgencyColor}`} />
-
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-2">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--surface-subtle)] text-[11px] font-semibold text-[var(--text-secondary)]">
@@ -98,7 +98,7 @@ export default function KanbanLeadCard({
           <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{forecastLabel(client)}</p>
         </div>
         <div className="shrink-0 text-right">
-          <p className={`text-xs font-semibold ${scoreColor}`}>{score}</p>
+          <p className="text-xs font-semibold text-[var(--text-primary)]">{score}</p>
           <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Score</p>
         </div>
       </div>
@@ -110,13 +110,13 @@ export default function KanbanLeadCard({
         </div>
         <div className="text-right">
           <p className="inline-flex items-center gap-1 text-[var(--text-muted)]"><Timer size={11} /> SLA</p>
-          <p className="mt-0.5 font-medium text-[var(--text-secondary)]">{slaLabel(client)}</p>
+          <p className={`mt-0.5 font-medium ${semanticTextColor}`}>{sla}</p>
         </div>
       </div>
 
       <div className="mt-2 flex min-w-0 items-center justify-between gap-2 text-[11px] text-[var(--text-muted)]">
         <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${urgencyColor}`} />
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${semanticColor}`} />
           {urgencyLabel} · {priorityLabel(client)} · {interactionLabel}
         </span>
         {client.notes.length > 0 && (
@@ -127,7 +127,7 @@ export default function KanbanLeadCard({
       </div>
 
       <div aria-label={`Intensidade comercial ${intensity}%`} aria-valuemax={100} aria-valuemin={0} aria-valuenow={intensity} className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--surface-subtle)]" role="progressbar">
-        <div className={`h-full rounded-full ${intensity >= 85 ? "bg-[var(--danger)]" : intensity >= 65 ? "bg-[var(--warning)]" : "bg-[var(--icon-muted)]"}`} style={{ width: `${intensity}%` }} />
+        <div className={`h-full rounded-full ${semanticColor}`} style={{ width: `${intensity}%` }} />
       </div>
     </div>
   );

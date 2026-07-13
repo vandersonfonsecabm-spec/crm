@@ -74,7 +74,7 @@ export default function DashboardSelectedClientPanel({
       <div className="saas-card rounded-2xl p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.07] text-xs font-bold text-teal-100 shadow-inner shadow-white/5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--surface-subtle)] text-xs font-bold text-[var(--primary)]">
               {initials(selectedClient.name)}
             </div>
 
@@ -115,12 +115,12 @@ export default function DashboardSelectedClientPanel({
         <div className="mt-3 grid grid-cols-[minmax(0,1fr)_78px] gap-2">
           <div className="metric-card metric-pipeline rounded-xl p-2.5">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[9px] uppercase tracking-[0.14em] text-teal-100/55">
+              <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
                 Oportunidade
               </p>
-              <TrendingUp size={12} className="text-teal-100/70" />
+              <TrendingUp size={12} className="text-[var(--success)]" />
             </div>
-            <p className="mt-1 truncate text-sm font-semibold text-teal-50">
+            <p className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">
               {money(selectedClient.value)}
             </p>
             <p className="mt-0.5 truncate text-[10px] text-slate-500">
@@ -137,7 +137,7 @@ export default function DashboardSelectedClientPanel({
             </p>
             <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
               <div
-                className={leadScore >= 80 ? "h-full rounded-full bg-teal-200" : leadScore >= 60 ? "h-full rounded-full bg-amber-200" : "h-full rounded-full bg-slate-400"}
+                className={leadScore >= 80 ? "h-full rounded-full bg-[var(--success)]" : leadScore >= 60 ? "h-full rounded-full bg-[var(--warning)]" : "h-full rounded-full bg-[var(--icon-muted)]"}
                 style={{ width: `${leadScore}%` }}
               />
             </div>
@@ -172,7 +172,7 @@ export default function DashboardSelectedClientPanel({
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
             <div
-              className={`h-full rounded-full ${leadScore >= 80 ? "bg-teal-200" : leadScore >= 60 ? "bg-amber-200" : "bg-slate-400"}`}
+              className={`h-full rounded-full ${leadScore >= 80 ? "bg-[var(--success)]" : leadScore >= 60 ? "bg-[var(--warning)]" : "bg-[var(--icon-muted)]"}`}
               style={{ width: `${leadScore}%` }}
             />
           </div>
