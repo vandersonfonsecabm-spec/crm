@@ -1,11 +1,10 @@
-import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock, Edit3, Plus, RotateCcw, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Bell, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, Columns3, Edit3, List, Plus, RefreshCw, RotateCcw, StickyNote, Target, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   cancelarAcompanhamento,
   concluirAcompanhamento,
   createAcompanhamento,
-  fetchAcompanhamentoResumo,
   fetchAcompanhamentos,
   reabrirAcompanhamento,
   updateAcompanhamento,
@@ -14,10 +13,11 @@ import {
   type ApiAcompanhamentoPrioridade,
   type ApiAcompanhamentoStatus,
   type ApiAcompanhamentoTipo,
-  type ApiAcompanhamentoResumo,
+  type AcompanhamentoQueryParams,
 } from "../../services/crmApi";
 import type { Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
-import { Button, EmptyState, ErrorState, Input, LoadingState, Pagination, SectionHeader, Select, Surface, Textarea, Toolbar } from "../ui";
+import { Button, EmptyState, ErrorState, IconButton, Input, LoadingState, Pagination, SectionHeader, Select, Surface, Textarea, Toolbar } from "../ui";
+import DashboardMetricStrip from "./DashboardMetricStrip";
 
 type FollowUpGroup = {
   label: string;
@@ -27,6 +27,9 @@ type FollowUpGroup = {
 
 type DashboardAgendaPanelProps = {
   clients: Client[];
+  backendCaption: string;
+  createRequestKey: number;
+  todayRequestKey: number;
   followUpAgenda: FollowUpGroup[];
   recentActivities: RecentActivity[];
   smartAlerts: string[];
@@ -65,13 +68,17 @@ const initialForm: AgendaForm = {
 
 export default function DashboardAgendaPanel({
   clients,
+  backendCaption,
+  createRequestKey,
+  todayRequestKey,
   recentActivities,
   smartAlerts,
   onSelectClient,
   onApplySmartFilter,
 }: DashboardAgendaPanelProps) {
   const [items, setItems] = useState<ApiAcompanhamento[]>([]);
-  const [summary, setSummary] = useState<ApiAcompanhamentoResumo | null>(null);
+  const [periodItems, setPeriodItems] = useState<ApiAcompanhamento[]>([]);
+  const [nextCommitment, setNextCommitment] = useState<ApiAcompanhamento | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -82,7 +89,10 @@ export default function DashboardAgendaPanel({
   const [clientFilter, setClientFilter] = useState("Todos");
   const [onlyLate, setOnlyLate] = useState(false);
   const [onlyToday, setOnlyToday] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "week">("list");
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [isLoading, setIsLoading] = useState(true);
+  const [isContextLoading, setIsContextLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -91,8 +101,12 @@ export default function DashboardAgendaPanel({
   const [editing, setEditing] = useState<ApiAcompanhamento | null>(null);
   const [form, setForm] = useState<AgendaForm>(initialForm);
   const [formError, setFormError] = useState("");
+  const handledCreateRequest = useRef(createRequestKey);
+  const handledTodayRequest = useRef(todayRequestKey);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const weekEnd = useMemo(() => endOfWeek(weekStart), [weekStart]);
+  const periodQuery = useMemo(() => ({ dataInicial: weekStart.toISOString(), dataFinal: weekEnd.toISOString() }), [weekEnd, weekStart]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -110,6 +124,26 @@ export default function DashboardAgendaPanel({
   }, [toast]);
 
   useEffect(() => {
+    if (handledCreateRequest.current === createRequestKey) return;
+    handledCreateRequest.current = createRequestKey;
+    setEditing(null);
+    setForm({ ...initialForm, clienteId: clients[0] ? String(clients[0].backendId || clients[0].id) : "" });
+    setFormError("");
+    setModalMode("create");
+  }, [clients, createRequestKey]);
+
+  useEffect(() => {
+    if (handledTodayRequest.current === todayRequestKey) return;
+    handledTodayRequest.current = todayRequestKey;
+    setWeekStart(startOfWeek(new Date()));
+    setOnlyToday(true);
+    setOnlyLate(false);
+    setStatus("Todos");
+    setPriority("Todas");
+    setPage(1);
+  }, [todayRequestKey]);
+
+  useEffect(() => {
     let ignore = false;
 
     async function loadAgenda() {
@@ -117,25 +151,28 @@ export default function DashboardAgendaPanel({
       setError("");
 
       try {
-        const [list, resumo] = await Promise.all([
-          fetchAcompanhamentos({
-            busca: debouncedSearch,
-            clienteId: clientFilter === "Todos" ? undefined : Number(clientFilter),
-            status: status === "Todos" ? undefined : status,
-            prioridade: priority === "Todas" ? undefined : priority,
-            tipo: type === "Todos" ? undefined : type,
-            atrasados: onlyLate || undefined,
-            hoje: onlyToday || undefined,
-            page,
-            limit: PAGE_SIZE,
-          }),
-          fetchAcompanhamentoResumo(),
-        ]);
+        const params: AcompanhamentoQueryParams = {
+          busca: debouncedSearch,
+          clienteId: clientFilter === "Todos" ? undefined : Number(clientFilter),
+          status: status === "Todos" ? undefined : status,
+          prioridade: priority === "Todas" ? undefined : priority,
+          tipo: type === "Todos" ? undefined : type,
+          atrasados: onlyLate || undefined,
+          hoje: onlyToday || undefined,
+          ...periodQuery,
+        };
+        const list = viewMode === "week"
+          ? await fetchAllAcompanhamentos(params)
+          : await fetchAcompanhamentos({ ...params, page, limit: PAGE_SIZE });
 
         if (ignore) return;
-        setItems(list.data);
-        setTotal(list.pagination.total);
-        setSummary(resumo);
+        if (Array.isArray(list)) {
+          setItems(list);
+          setTotal(list.length);
+        } else {
+          setItems(list.data);
+          setTotal(list.pagination.total);
+        }
       } catch (loadError) {
         if (ignore) return;
         console.error("Falha ao carregar acompanhamentos", loadError);
@@ -150,7 +187,36 @@ export default function DashboardAgendaPanel({
     return () => {
       ignore = true;
     };
-  }, [clientFilter, debouncedSearch, onlyLate, onlyToday, page, priority, refreshKey, status, type]);
+  }, [clientFilter, debouncedSearch, onlyLate, onlyToday, page, periodQuery, priority, refreshKey, status, type, viewMode]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadAgendaContext() {
+      setIsContextLoading(true);
+      try {
+        const [period, next] = await Promise.all([
+          fetchAllAcompanhamentos(periodQuery),
+          fetchAcompanhamentos({ dataInicial: new Date().toISOString(), status: "PENDENTE", page: 1, limit: 1 }),
+        ]);
+        if (ignore) return;
+        setPeriodItems(period);
+        setNextCommitment(next.data[0] ?? null);
+      } catch (contextError) {
+        if (ignore) return;
+        console.error("Falha ao carregar contexto da agenda", contextError);
+        setPeriodItems([]);
+        setNextCommitment(null);
+      } finally {
+        if (!ignore) setIsContextLoading(false);
+      }
+    }
+
+    void loadAgendaContext();
+    return () => {
+      ignore = true;
+    };
+  }, [periodQuery, refreshKey]);
 
   const hasFilters =
     Boolean(debouncedSearch) || clientFilter !== "Todos" || status !== "Todos" || priority !== "Todas" || type !== "Todos" || onlyLate || onlyToday;
@@ -163,6 +229,39 @@ export default function DashboardAgendaPanel({
       })),
     [clients],
   );
+
+  const statusCounts = useMemo(() => agendaStatusCounts(periodItems), [periodItems]);
+  const upcomingThisWeek = useMemo(
+    () => periodItems
+      .filter((item) => item.status === "PENDENTE" && !item.atrasado)
+      .sort((first, second) => new Date(first.dataHora).getTime() - new Date(second.dataHora).getTime())
+      .slice(0, 4),
+    [periodItems],
+  );
+
+  function moveWeek(offset: number) {
+    setWeekStart((current) => addDays(current, offset * 7));
+    setOnlyToday(false);
+    setPage(1);
+  }
+
+  function goToToday() {
+    setWeekStart(startOfWeek(new Date()));
+    setOnlyToday(true);
+    setOnlyLate(false);
+    setStatus("Todos");
+    setPriority("Todas");
+    setPage(1);
+  }
+
+  function selectAgendaStatus(next: AgendaStatusKey) {
+    if (next === "today") setWeekStart(startOfWeek(new Date()));
+    setOnlyToday(next === "today");
+    setOnlyLate(next === "late");
+    setPriority(next === "critical" ? "CRITICA" : "Todas");
+    setStatus(next === "done" ? "CONCLUIDO" : next === "pending" || next === "critical" ? "PENDENTE" : "Todos");
+    setPage(1);
+  }
 
   function openCreate() {
     setEditing(null);
@@ -257,25 +356,61 @@ export default function DashboardAgendaPanel({
         </div>
       )}
 
+      <Surface className="overflow-hidden">
+        <Toolbar className="min-h-12 gap-3 px-3 py-2">
+          <div className="flex items-center gap-1.5">
+            <IconButton aria-label="Semana anterior" onClick={() => moveWeek(-1)} variant="secondary"><ChevronLeft size={14} /></IconButton>
+            <div className="min-w-[154px] text-center">
+              <p className="text-[11px] font-semibold text-[var(--text-primary)]">{formatWeekLabel(weekStart, weekEnd)}</p>
+              <p className="text-[10px] text-[var(--text-muted)]">Semana comercial</p>
+            </div>
+            <IconButton aria-label="Próxima semana" onClick={() => moveWeek(1)} variant="secondary"><ChevronRight size={14} /></IconButton>
+            <Button onClick={goToToday} size="sm" variant="ghost">Hoje</Button>
+          </div>
+
+          <div aria-label="Visualização da agenda" className="flex rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-1" role="group">
+            <button aria-pressed={viewMode === "list"} className={`inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${viewMode === "list" ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`} onClick={() => { setViewMode("list"); setPage(1); }} type="button">
+              <List size={13} /> Lista
+            </button>
+            <button aria-pressed={viewMode === "week"} className={`inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${viewMode === "week" ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`} onClick={() => { setViewMode("week"); setPage(1); }} type="button">
+              <Columns3 size={13} /> Semana
+            </button>
+          </div>
+
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-[var(--text-muted)]">
+            <RefreshCw aria-hidden="true" size={12} /> {backendCaption}
+          </span>
+        </Toolbar>
+      </Surface>
+
+      <AgendaNextCommitment
+        disabled={isSubmitting}
+        isLoading={isContextLoading}
+        item={nextCommitment}
+        onComplete={(item) => void runAction(item, "concluir")}
+        onOpen={openEdit}
+        onSchedule={openCreate}
+      />
+
+      <DashboardMetricStrip metrics={[
+        { label: "Acompanhamentos hoje", value: String(statusCounts.today), context: "Agenda imediata", icon: <Bell size={15} />, tone: "info", onClick: goToToday, actionLabel: "Filtrar" },
+        { label: "Sem contato", value: String(clients.filter((client) => client.lastContactDays >= 7).length), context: "Retomar relação", icon: <AlertTriangle size={15} />, tone: "danger" },
+        { label: "Propostas", value: String(clients.filter((client) => client.status === "Proposta").length), context: "Janelas abertas", icon: <Target size={15} />, tone: "warning" },
+        { label: "Notas recentes", value: String(clients.reduce((sum, client) => sum + client.notes.length, 0)), context: "Histórico comercial", icon: <StickyNote size={15} /> },
+      ]} />
+
       <AgendaStatusSummary
-        active={onlyToday ? "today" : onlyLate ? "late" : priority === "CRITICA" ? "critical" : status === "CONCLUIDO" ? "done" : status === "PENDENTE" ? "pending" : null}
-        summary={summary}
-        onSelect={(next) => {
-          setOnlyToday(next === "today");
-          setOnlyLate(next === "late");
-          setPriority(next === "critical" ? "CRITICA" : "Todas");
-          setStatus(next === "done" ? "CONCLUIDO" : next === "pending" ? "PENDENTE" : "Todos");
-          setPage(1);
-        }}
+        active={onlyToday ? "today" : onlyLate ? "late" : priority === "CRITICA" && status === "PENDENTE" ? "critical" : status === "CONCLUIDO" ? "done" : status === "PENDENTE" ? "pending" : status === "Todos" ? "all" : null}
+        counts={statusCounts}
+        onSelect={selectAgendaStatus}
       />
 
       <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         <Surface className="min-w-0 overflow-hidden">
           <SectionHeader
-            actions={<Button leftIcon={<Plus size={14} />} onClick={openCreate} size="sm">Novo acompanhamento</Button>}
-            description="Contatos, retornos e janelas comerciais organizados por prioridade temporal."
+            description={viewMode === "list" ? "Contatos e retornos da semana, com filtros e ações preservados." : "Acompanhamentos agrupados por dia para leitura temporal rápida."}
             icon={<CalendarDays size={15} />}
-            title="Agenda e acompanhamentos"
+            title={viewMode === "list" ? "Agenda da semana" : "Visão semanal"}
           />
 
           <div className="border-b border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
@@ -299,24 +434,16 @@ export default function DashboardAgendaPanel({
               {clientOptions.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}
               </Select>
 
-              <Button aria-pressed={onlyToday} className={onlyToday ? "border-[var(--filter-active-border)] bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""} onClick={() => { setOnlyToday((current) => !current); setOnlyLate(false); setPage(1); }} size="sm" variant="secondary">
-              Hoje
-              </Button>
-
-              <Button aria-pressed={onlyLate} className={onlyLate ? "border-[var(--filter-active-border)] bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""} onClick={() => { setOnlyLate((current) => !current); setOnlyToday(false); setPage(1); }} size="sm" variant="secondary">
-              Atrasados
-              </Button>
-
               <Button disabled={!hasFilters} leftIcon={<RotateCcw size={13} />} onClick={() => { setSearch(""); setDebouncedSearch(""); setStatus("Todos"); setPriority("Todas"); setType("Todos"); setClientFilter("Todos"); setOnlyLate(false); setOnlyToday(false); setPage(1); }} size="sm" variant="ghost">
                 Limpar filtros
               </Button>
             </Toolbar>
           </div>
 
-          <div aria-busy={isLoading} className="divide-y divide-[var(--border-default)]">
+          <div aria-busy={isLoading} className={viewMode === "list" ? "divide-y divide-[var(--border-default)]" : ""}>
             {isLoading && <LoadingState className="p-4" label="Carregando acompanhamentos" rows={4} />}
             {!isLoading && items.length === 0 && <EmptyState description={hasFilters ? "Ajuste ou limpe os filtros para ampliar a consulta." : "Crie um acompanhamento para organizar o próximo contato comercial."} title={hasFilters ? "Nenhum acompanhamento para os filtros" : "Nenhum acompanhamento encontrado"} />}
-            {!isLoading && items.map((item) => (
+            {!isLoading && viewMode === "list" && items.map((item) => (
               <AgendaRow
                 key={item.id}
                 item={item}
@@ -327,16 +454,27 @@ export default function DashboardAgendaPanel({
                 onAction={runAction}
               />
             ))}
+            {!isLoading && viewMode === "week" && items.length > 0 && (
+              <AgendaWeekView
+                disabled={isSubmitting}
+                items={items}
+                weekStart={weekStart}
+                onAction={runAction}
+                onEdit={openEdit}
+                onReschedule={openReschedule}
+                onSelectClient={onSelectClient}
+              />
+            )}
           </div>
 
-          <Pagination disabled={isLoading} itemLabel="acompanhamentos" onPageChange={setPage} page={page} total={total} totalPages={totalPages} visibleCount={items.length} />
+          {viewMode === "list" && <Pagination disabled={isLoading} itemLabel="acompanhamentos" onPageChange={setPage} page={page} total={total} totalPages={totalPages} visibleCount={items.length} />}
         </Surface>
 
         <Surface className="min-w-0 self-start overflow-hidden">
           <SectionHeader description="Contexto temporal e sinais que pedem ação." icon={<Clock size={15} />} title="Painel operacional" />
-          <SideSection title="Próximos acompanhamentos">
-            {(summary?.proximos ?? []).length === 0 && <p className="px-4 py-3 text-[11px] text-[var(--text-muted)]">Nenhum acompanhamento pendente.</p>}
-            {(summary?.proximos ?? []).map((item) => (
+          <SideSection title="Próximos nesta semana">
+            {upcomingThisWeek.length === 0 && <p className="px-4 py-3 text-[11px] text-[var(--text-muted)]">Nenhum acompanhamento pendente.</p>}
+            {upcomingThisWeek.map((item) => (
               <button key={item.id} className="w-full px-4 py-2.5 text-left transition-colors hover:bg-[var(--bg-muted)]" onClick={() => onSelectClient(item.clienteId)} type="button">
                 <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{item.titulo}</p>
                 <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Cliente"} · {formatDateTime(item.dataHora)}</p>
@@ -385,6 +523,107 @@ export default function DashboardAgendaPanel({
           onSubmit={submitForm}
         />
       )}
+    </div>
+  );
+}
+
+function AgendaNextCommitment({
+  disabled,
+  isLoading,
+  item,
+  onComplete,
+  onOpen,
+  onSchedule,
+}: {
+  disabled: boolean;
+  isLoading: boolean;
+  item: ApiAcompanhamento | null;
+  onComplete: (item: ApiAcompanhamento) => void;
+  onOpen: (item: ApiAcompanhamento) => void;
+  onSchedule: () => void;
+}) {
+  return (
+    <Surface className="overflow-hidden">
+      <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--surface-subtle)] text-[var(--primary)]">
+            <Clock size={15} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium text-[var(--text-muted)]">Próximo compromisso</p>
+            {isLoading ? (
+              <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Carregando agenda...</p>
+            ) : item ? (
+              <p className="mt-0.5 truncate text-xs font-semibold text-[var(--text-primary)]">
+                {formatTime(item.dataHora)} · {item.cliente?.nome ?? "Cliente"} · {typeLabel(item.tipo)} · {item.titulo}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Nenhum compromisso futuro agendado.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {item ? (
+            <>
+              <Button onClick={() => onOpen(item)} size="sm" variant="secondary">Abrir</Button>
+              <Button disabled={disabled} onClick={() => onComplete(item)} size="sm" variant="subtle">Concluir</Button>
+            </>
+          ) : (
+            <Button leftIcon={<Plus size={13} />} onClick={onSchedule} size="sm">Agendar</Button>
+          )}
+        </div>
+      </div>
+    </Surface>
+  );
+}
+
+function AgendaWeekView({
+  disabled,
+  items,
+  weekStart,
+  onAction,
+  onEdit,
+  onReschedule,
+  onSelectClient,
+}: {
+  disabled: boolean;
+  items: ApiAcompanhamento[];
+  weekStart: Date;
+  onAction: (item: ApiAcompanhamento, action: "concluir" | "reabrir" | "cancelar") => void;
+  onEdit: (item: ApiAcompanhamento) => void;
+  onReschedule: (item: ApiAcompanhamento) => void;
+  onSelectClient: (clientId: number) => void;
+}) {
+  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  return (
+    <div>
+      {days.map((day) => {
+        const dayItems = items.filter((item) => isSameLocalDay(new Date(item.dataHora), day));
+        return (
+          <section className="grid border-b border-[var(--border-default)] last:border-b-0 md:grid-cols-[132px_minmax(0,1fr)]" key={day.toISOString()}>
+            <header className="border-b border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 md:border-b-0 md:border-r">
+              <p className="text-[11px] font-semibold capitalize text-[var(--text-primary)]">{formatWeekDay(day)}</p>
+              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{dayItems.length} {dayItems.length === 1 ? "compromisso" : "compromissos"}</p>
+            </header>
+            <div className="divide-y divide-[var(--border-default)]">
+              {dayItems.length === 0 ? (
+                <p className="px-4 py-4 text-[11px] text-[var(--text-muted)]">Sem acompanhamentos neste dia.</p>
+              ) : dayItems.map((item) => (
+                <AgendaRow
+                  disabled={disabled}
+                  item={item}
+                  key={item.id}
+                  onAction={onAction}
+                  onEdit={onEdit}
+                  onReschedule={onReschedule}
+                  onSelectClient={onSelectClient}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -471,7 +710,7 @@ function AgendaModal({
             <p className="text-sm font-semibold" id="agenda-modal-title">{title}</p>
             <p className="mt-1 text-[11px] text-slate-500">Registre o proximo contato comercial com persistencia real.</p>
           </div>
-          <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">
+          <button aria-label="Fechar modal de acompanhamento" className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={onClose} title="Fechar" type="button">
             <X size={15} />
           </button>
         </div>
@@ -517,34 +756,36 @@ function AgendaModal({
   );
 }
 
-type AgendaStatusKey = "pending" | "today" | "late" | "critical" | "done";
+type AgendaStatusKey = "all" | "pending" | "today" | "late" | "critical" | "done";
+type AgendaStatusCounts = Record<AgendaStatusKey, number>;
 
-function AgendaStatusSummary({ active, summary, onSelect }: { active: AgendaStatusKey | null; summary: ApiAcompanhamentoResumo | null; onSelect: (status: AgendaStatusKey) => void }) {
+function AgendaStatusSummary({ active, counts, onSelect }: { active: AgendaStatusKey | null; counts: AgendaStatusCounts; onSelect: (status: AgendaStatusKey) => void }) {
   const items: Array<{ key: AgendaStatusKey; label: string; value: number; icon: ReactNode; tone: string }> = [
-    { key: "pending", label: "Pendentes", value: summary?.indicadores.pendentes ?? 0, icon: <Clock size={14} />, tone: "text-[var(--text-secondary)]" },
-    { key: "today", label: "Hoje", value: summary?.indicadores.paraHoje ?? 0, icon: <CalendarDays size={14} />, tone: "text-[var(--info)]" },
-    { key: "late", label: "Atrasados", value: summary?.indicadores.atrasados ?? 0, icon: <AlertTriangle size={14} />, tone: "text-[var(--danger)]" },
-    { key: "critical", label: "Críticos", value: summary?.indicadores.criticos ?? 0, icon: <Bell size={14} />, tone: "text-[var(--warning)]" },
-    { key: "done", label: "Concluídos", value: summary?.indicadores.concluidosPeriodo ?? 0, icon: <CheckCircle2 size={14} />, tone: "text-[var(--success)]" },
+    { key: "all", label: "Todos", value: counts.all, icon: <CalendarDays size={14} />, tone: "text-[var(--text-secondary)]" },
+    { key: "pending", label: "Pendentes", value: counts.pending, icon: <Clock size={14} />, tone: "text-[var(--text-secondary)]" },
+    { key: "today", label: "Hoje", value: counts.today, icon: <CalendarDays size={14} />, tone: "text-[var(--info)]" },
+    { key: "late", label: "Atrasados", value: counts.late, icon: <AlertTriangle size={14} />, tone: "text-[var(--danger)]" },
+    { key: "critical", label: "Críticos", value: counts.critical, icon: <Bell size={14} />, tone: "text-[var(--warning)]" },
+    { key: "done", label: "Concluídos", value: counts.done, icon: <CheckCircle2 size={14} />, tone: "text-[var(--success)]" },
   ];
 
   return (
-    <Surface className="grid overflow-hidden sm:grid-cols-5" aria-label="Resumo de status da agenda">
+    <Surface className="overflow-x-auto" aria-label="Filtros de status da agenda">
+      <div className="flex min-w-max items-stretch" role="tablist">
       {items.map((item, index) => (
         <button
-          aria-pressed={active === item.key}
-          className={`flex min-w-0 items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] ${index > 0 ? "border-t border-[var(--border-default)] sm:border-l sm:border-t-0" : ""} ${active === item.key ? "bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""}`}
+          aria-selected={active === item.key}
+          className={`flex min-w-[132px] items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] ${index > 0 ? "border-l border-[var(--border-default)]" : ""} ${active === item.key ? "bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""}`}
           key={item.key}
           onClick={() => onSelect(item.key)}
+          role="tab"
           type="button"
         >
-          <span className="min-w-0">
-            <span className="block truncate text-[11px] text-[var(--text-muted)]">{item.label}</span>
-            <span className={`mt-0.5 block text-base font-semibold ${active === item.key ? "text-[var(--filter-active-text)]" : item.tone}`}>{item.value}</span>
-          </span>
-          <span className={active === item.key ? "text-[var(--filter-active-text)]" : item.tone}>{item.icon}</span>
+          <span className={`text-[11px] font-medium ${active === item.key ? "text-[var(--filter-active-text)]" : "text-[var(--text-secondary)]"}`}>{item.label}</span>
+          <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${active === item.key ? "text-[var(--filter-active-text)]" : item.tone}`}>{item.icon}{item.value}</span>
         </button>
       ))}
+      </div>
     </Surface>
   );
 }
@@ -655,4 +896,68 @@ function priorityTone(priority: ApiAcompanhamentoPrioridade) {
   if (priority === "ALTA") return "text-[var(--warning)]";
   if (priority === "MEDIA") return "text-[var(--info)]";
   return "text-[var(--text-muted)]";
+}
+
+async function fetchAllAcompanhamentos(params: AcompanhamentoQueryParams) {
+  const firstPage = await fetchAcompanhamentos({ ...params, page: 1, limit: 100 });
+  if (firstPage.pagination.totalPages <= 1) return firstPage.data;
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.pagination.totalPages - 1 }, (_, index) =>
+      fetchAcompanhamentos({ ...params, page: index + 2, limit: 100 }),
+    ),
+  );
+  return [firstPage.data, ...remainingPages.map((result) => result.data)].flat();
+}
+
+function agendaStatusCounts(items: ApiAcompanhamento[]): AgendaStatusCounts {
+  const now = new Date();
+  return {
+    all: items.length,
+    pending: items.filter((item) => item.status === "PENDENTE").length,
+    today: items.filter((item) => item.status === "PENDENTE" && isSameLocalDay(new Date(item.dataHora), now)).length,
+    late: items.filter((item) => item.status === "PENDENTE" && new Date(item.dataHora).getTime() < now.getTime()).length,
+    critical: items.filter((item) => item.status === "PENDENTE" && item.prioridade === "CRITICA").length,
+    done: items.filter((item) => item.status === "CONCLUIDO").length,
+  };
+}
+
+function startOfWeek(value: Date) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  const mondayOffset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - mondayOffset);
+  return date;
+}
+
+function endOfWeek(value: Date) {
+  const date = addDays(value, 6);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function addDays(value: Date, amount: number) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + amount);
+  return date;
+}
+
+function isSameLocalDay(first: Date, second: Date) {
+  return first.getFullYear() === second.getFullYear()
+    && first.getMonth() === second.getMonth()
+    && first.getDate() === second.getDate();
+}
+
+function formatWeekLabel(start: Date, end: Date) {
+  const startLabel = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(start);
+  const endLabel = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(end);
+  return `${startLabel} - ${endLabel}`;
+}
+
+function formatWeekDay(value: Date) {
+  return new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "2-digit", month: "short" }).format(value);
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }

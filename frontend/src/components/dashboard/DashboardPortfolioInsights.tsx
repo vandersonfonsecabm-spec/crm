@@ -10,7 +10,6 @@ type DashboardPortfolioInsightsProps = {
   getRisk: (client: Client) => string;
   getLeadScore: (client: Client) => number;
   enterpriseHealthLabel: (client: Client) => string;
-  onSelectClient: (clientId: number) => void;
   onOpenClient: (clientId: number) => void;
   onApplySmartFilter: (type: SmartFilterType) => void;
 };
@@ -24,7 +23,6 @@ export default function DashboardPortfolioInsights({
   getRisk,
   getLeadScore,
   enterpriseHealthLabel,
-  onSelectClient,
   onOpenClient,
   onApplySmartFilter,
 }: DashboardPortfolioInsightsProps) {
@@ -136,12 +134,6 @@ export default function DashboardPortfolioInsights({
             <strong className="font-medium text-[var(--text-secondary)]">Ação sugerida:</strong> {suggestedAction}
           </p>
 
-          {attentionClients[0] && (
-            <button className="mt-3 w-full border-t border-[var(--border-default)] pt-3 text-left" onClick={() => onSelectClient(attentionClients[0].id)} type="button">
-              <p className="text-[10px] text-[var(--text-muted)]">Conta prioritária · {enterpriseHealthLabel(attentionClients[0])}</p>
-              <p className="mt-1 truncate text-xs font-semibold text-[var(--text-primary)]">{attentionClients[0].name}</p>
-            </button>
-          )}
         </aside>
       </div>
     </Surface>

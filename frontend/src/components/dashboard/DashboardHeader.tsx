@@ -15,6 +15,12 @@ type DashboardHeaderProps = {
   backendCaption: string;
   onCreateClient: () => void;
   showCreateClient?: boolean;
+  showBackendCaption?: boolean;
+  compact?: boolean;
+  primaryAction?: {
+    label: string;
+    onClick: () => void;
+  };
   actions?: PageAction[];
 };
 
@@ -24,6 +30,9 @@ export default function DashboardHeader({
   backendCaption,
   onCreateClient,
   showCreateClient = true,
+  showBackendCaption = true,
+  compact = false,
+  primaryAction,
   actions = [],
 }: DashboardHeaderProps) {
   const [isActionsOpen, setIsActionsOpen] = useState(false);
@@ -47,7 +56,7 @@ export default function DashboardHeader({
   }, []);
 
   return (
-    <header className="page-header mb-5">
+    <header className={`page-header ${compact ? "mb-3" : "mb-5"}`}>
       <div className="page-header-main flex items-start justify-between gap-5">
         <div className="min-w-0">
           <div className="page-breadcrumb mb-2 flex items-center gap-1.5 text-[10px]">
@@ -96,24 +105,26 @@ export default function DashboardHeader({
             </div>
           )}
 
-          {showCreateClient && (
+          {(primaryAction || showCreateClient) && (
             <button
-              onClick={onCreateClient}
+              onClick={primaryAction?.onClick ?? onCreateClient}
               className="premium-button inline-flex h-9 items-center gap-2 rounded-md px-3 text-[11px] font-semibold"
               type="button"
             >
               <Plus size={14} />
-              Novo cliente
+              {primaryAction?.label ?? "Novo cliente"}
             </button>
           )}
         </div>
       </div>
 
-      <div className="page-header-meta mt-4 flex items-center border-t pt-3">
-        <span className="data-caption inline-flex rounded-md px-2.5 py-1 text-[10px] font-medium">
-          {backendCaption}
-        </span>
-      </div>
+      {showBackendCaption && (
+        <div className="page-header-meta mt-4 flex items-center border-t pt-3">
+          <span className="data-caption inline-flex rounded-md px-2.5 py-1 text-[10px] font-medium">
+            {backendCaption}
+          </span>
+        </div>
+      )}
     </header>
   );
 }

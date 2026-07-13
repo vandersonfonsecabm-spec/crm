@@ -22,6 +22,7 @@ import {
   tagClass,
 } from "../utils/dashboardHelpers";
 import DashboardMetrics from "../components/dashboard/DashboardMetrics";
+import DashboardContextToolbar from "../components/dashboard/DashboardContextToolbar";
 import DashboardMetricsSection from "../components/dashboard/DashboardMetricsSection";
 import DashboardHeader from "../components/dashboard/DashboardHeader";
 import type { PageAction } from "../components/dashboard/DashboardHeader";
@@ -83,6 +84,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
   const [whatsappExternalRequest, setWhatsappExternalRequest] = useState<WhatsappExternalRequest | null>(null);
   const [blingReturnMessage, setBlingReturnMessage] = useState("");
+  const [agendaCreateRequestKey, setAgendaCreateRequestKey] = useState(0);
+  const [agendaTodayRequestKey, setAgendaTodayRequestKey] = useState(0);
+  const [kanbanStageRequest, setKanbanStageRequest] = useState<{ group: "pipeline" | "resultado"; key: number }>({ group: "pipeline", key: 0 });
   const canManageIntegrations = canAccessIntegrations(authSession);
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
 
@@ -172,6 +176,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
 
   const selectedClient = useMemo(() => clients.find((client) => client.id === selectedId) || null, [clients, selectedId]);
+  const priorityClient = useMemo(() => {
+    return [...clients]
+      .filter((client) => client.hot || getPriority(client) === "Alta" || getRisk(client) === "Alto" || client.lastContactDays >= 7)
+      .sort((first, second) => priorityWeight(second) - priorityWeight(first))[0] ?? null;
+  }, [clients]);
 
   const filteredClients = useMemo(() => {
     const result = clients.filter((client) => {
@@ -284,6 +293,22 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setActivePage(page);
   }, [canManageIntegrations, setToast]);
 
+  const backendCaption = dashboardSummary
+    ? `${dashboardSummary.indicadores.clientes} clientes sincronizados`
+    : dataSource === "backend"
+      ? "Dados sincronizados"
+      : "Dados locais";
+
+  const openKanbanWithStatus = useCallback((nextStatus: Status | "Todos") => {
+    clearFilters();
+    setStatusFilter(nextStatus);
+    setKanbanStageRequest((current) => ({
+      group: nextStatus === "Fechado" || nextStatus === "Perdido" ? "resultado" : "pipeline",
+      key: current.key + 1,
+    }));
+    handleSetActivePage("kanban");
+  }, [clearFilters, handleSetActivePage]);
+
   const pageActions = useMemo<PageAction[]>(() => {
     const riskAction = {
       label: smartAlerts[0] || "Clientes em risco",
@@ -323,6 +348,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         resetAction,
       ],
       agenda: [
+        { label: "Novo cliente", onClick: () => setCreating({ ...emptyClient }) },
         { label: "Sem contato", onClick: () => applySmartFilter("silent") },
         { label: "Propostas hoje", onClick: () => applySmartFilter("proposal") },
         riskAction,
@@ -506,19 +532,37 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             activePage={activePage}
             pageTitle={pageTitle}
             backendCaption={
-              dashboardSummary
-                ? `${dashboardSummary.indicadores.clientes} clientes sincronizados`
-                : dataSource === "backend"
-                  ? "Dados sincronizados"
-                  : "Dados locais"
+              backendCaption
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
             showCreateClient={activePage !== "estoque" && activePage !== "integracoes"}
+            showBackendCaption={activePage !== "dashboard" && activePage !== "agenda"}
+            compact={activePage === "dashboard" || activePage === "agenda"}
+            primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : undefined}
             actions={pageActions}
           />
 
           {activePage === "dashboard" && (
-            <DashboardMetrics analytics={analytics} money={money} />
+            <>
+              <DashboardContextToolbar
+                backendCaption={backendCaption}
+                priorityClient={priorityClient}
+                money={money}
+                onOpenPriority={handleSelectClient}
+                onOpenCommercialQueue={() => handleSetActivePage("comercial")}
+              />
+              <DashboardMetrics
+                analytics={analytics}
+                money={money}
+                onOpenPipeline={() => openKanbanWithStatus("Todos")}
+                onOpenWon={() => openKanbanWithStatus("Fechado")}
+                onOpenForecast={() => openKanbanWithStatus("Proposta")}
+                onOpenTodayAgenda={() => {
+                  setAgendaTodayRequestKey((current) => current + 1);
+                  handleSetActivePage("agenda");
+                }}
+              />
+            </>
           )}
 
           {activePage === "dashboard" && (
@@ -530,7 +574,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 getRisk={getRisk}
                 getLeadScore={getLeadScore}
                 enterpriseHealthLabel={enterpriseHealthLabel}
-                onSelectClient={handleSelectClient}
                 onOpenClient={handleSelectClient}
                 onApplySmartFilter={applySmartFilter}
               />
@@ -545,12 +588,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             </section>
           )}
 
-          <DashboardMetricsSection
-            activePage={activePage}
-            clients={clients}
-            kanbanClients={kanbanClients}
-            getRisk={getRisk}
-          />
+          {activePage !== "agenda" && (
+            <DashboardMetricsSection
+              activePage={activePage}
+              clients={clients}
+              kanbanClients={kanbanClients}
+              getRisk={getRisk}
+            />
+          )}
 
           {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && (
             <DashboardOperationalSearch
@@ -651,6 +696,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               {activePage === "agenda" && (
                 <DashboardAgendaPanel
                   clients={clients}
+                  backendCaption={backendCaption}
+                  createRequestKey={agendaCreateRequestKey}
+                  todayRequestKey={agendaTodayRequestKey}
                   followUpAgenda={followUpAgenda}
                   recentActivities={recentActivities}
                   smartAlerts={smartAlerts}
@@ -666,7 +714,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               {activePage === "integracoes" && canManageIntegrations && <DashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />}
 
               <DashboardKanbanBoard
+                key={`kanban-${kanbanStageRequest.key}`}
                 activePage={activePage}
+                initialStageGroup={kanbanStageRequest.group}
                 clients={clients}
                 kanbanClients={kanbanClients}
                 kanbanOwnerFilter={kanbanOwnerFilter}
@@ -737,4 +787,12 @@ function blingErrorMessage(reason: string) {
   if (normalized === "state") return "Não foi possível concluir a conexão com o Bling. A autorização expirou ou é inválida.";
   if (normalized === "token") return "Não foi possível concluir a conexão com o Bling. Tente iniciar a conexão novamente.";
   return "Não foi possível concluir a conexão com o Bling.";
+}
+
+function priorityWeight(client: Client) {
+  return (getRisk(client) === "Alto" ? 300 : 0)
+    + (getPriority(client) === "Alta" ? 200 : 0)
+    + (client.hot ? 100 : 0)
+    + client.lastContactDays
+    + getLeadScore(client);
 }

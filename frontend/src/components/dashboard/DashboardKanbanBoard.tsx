@@ -19,6 +19,7 @@ type KanbanEnterpriseStats = {
 
 type DashboardKanbanBoardProps = {
   activePage: ActivePage;
+  initialStageGroup?: "pipeline" | "resultado";
   clients: Client[];
   kanbanClients: Client[];
   kanbanOwnerFilter: KanbanOwner;
@@ -49,6 +50,7 @@ type DashboardKanbanBoardProps = {
 
 export default function DashboardKanbanBoard({
   activePage,
+  initialStageGroup = "pipeline",
   clients,
   kanbanClients,
   kanbanOwnerFilter,
@@ -74,7 +76,7 @@ export default function DashboardKanbanBoard({
   setIsDraggingKanban,
   changeStatus,
 }: DashboardKanbanBoardProps) {
-  const [stageGroup, setStageGroup] = useState<"pipeline" | "resultado">("pipeline");
+  const [stageGroup, setStageGroup] = useState<"pipeline" | "resultado">(initialStageGroup);
 
   const groupedStatuses = useMemo(() => {
     const pipeline = statusList.filter((status) => ["Novo", "Contato", "Proposta"].includes(status));
@@ -86,7 +88,10 @@ export default function DashboardKanbanBoard({
     };
   }, [statusList]);
 
-  const visibleStatuses = groupedStatuses[stageGroup];
+  const effectiveStageGroup = kanbanClients.length > 0 && kanbanClients.every((client) => client.status === "Fechado" || client.status === "Perdido")
+    ? "resultado"
+    : stageGroup;
+  const visibleStatuses = groupedStatuses[effectiveStageGroup];
 
   if (activePage !== "kanban") {
     return null;
@@ -105,7 +110,7 @@ export default function DashboardKanbanBoard({
             <button
               onClick={() => setStageGroup("pipeline")}
               className={`rounded px-3 py-1.5 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${
-                stageGroup === "pipeline"
+                effectiveStageGroup === "pipeline"
                   ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
@@ -116,7 +121,7 @@ export default function DashboardKanbanBoard({
             <button
               onClick={() => setStageGroup("resultado")}
               className={`rounded px-3 py-1.5 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${
-                stageGroup === "resultado"
+                effectiveStageGroup === "resultado"
                   ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm"
                   : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
