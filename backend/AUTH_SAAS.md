@@ -42,24 +42,24 @@ Os testes criam uma copia SQLite descartavel, aplicam as migrations nessa copia 
 
 O bootstrap nunca roda no start, instalacao ou migration. Defina as variaveis somente na sessao administrativa e execute manualmente:
 
-```sh
-BOOTSTRAP_COMPANY_NAME="Nome da empresa"
-BOOTSTRAP_COMPANY_SLUG="nome-da-empresa"
-BOOTSTRAP_ADMIN_NAME="Nome do administrador"
-BOOTSTRAP_ADMIN_EMAIL="admin@empresa.com"
-BOOTSTRAP_ADMIN_PASSWORD="senha-longa-nao-versionada"
+```bat
+set BOOTSTRAP_COMPANY_NAME=Nome da empresa
+set BOOTSTRAP_COMPANY_SLUG=nome-da-empresa
+set BOOTSTRAP_ADMIN_NAME=Nome do administrador
+set BOOTSTRAP_ADMIN_EMAIL=admin@empresa.com
+set BOOTSTRAP_ADMIN_PASSWORD=senha-longa-nao-versionada
 npm run admin:create
 ```
 
-No PowerShell, use `$env:NOME_DA_VARIAVEL="valor"`. O script exige senha com no minimo 12 caracteres, cria Empresa e ADMIN na mesma transacao e recusa empresa existente sem alteracao silenciosa. A senha e seu hash nunca aparecem na saida.
+No CMD, use `set NOME_DA_VARIAVEL=valor`. O script exige senha com no minimo 12 caracteres, cria Empresa e ADMIN na mesma transacao e recusa empresa existente sem alteracao silenciosa. A senha e seu hash nunca aparecem na saida.
 
-Para uma execucao futura no Railway, abra um shell autenticado no servico `api`, confirme `DATABASE_URL=file:/app/data/dev.db`, defina essas cinco variaveis apenas naquela sessao e execute `npm run admin:create` uma unica vez. Nao salve a senha como variavel persistente, nao inclua os valores no Git e remova as variaveis da sessao ao terminar.
+Para uma execucao futura no Railway, use um procedimento administrativo autorizado, confirme que `DATABASE_URL` aponta para o armazenamento persistente configurado e execute `npm run admin:create` uma unica vez. Nao salve a senha como variavel persistente, nao inclua valores no Git e remova as variaveis temporarias ao terminar.
 
 ## Antes da producao
 
 1. Configurar `JWT_SECRET` seguro no Railway.
 2. Manter `ALLOW_COMPANY_REGISTRATION=false` ate definir o fluxo publico de onboarding.
-3. Fazer backup do volume SQLite.
-4. Aplicar `prisma migrate deploy` em uma etapa controlada.
+3. Fazer backup do volume SQLite persistente.
+4. Nao executar migration, seed ou `db push` automaticamente no deploy.
 5. Validar login normal, papeis e isolamento de usuarios.
-6. Migrar `empresaId` para os modulos comerciais apenas em pacote posterior.
+6. Seguir `docs/DEPLOYMENT.md` para o checklist arquitetural.
