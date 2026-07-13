@@ -1,8 +1,10 @@
+import { ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import DashboardKanbanCommandBar from "./DashboardKanbanCommandBar";
 import DashboardKanbanSummary from "./DashboardKanbanSummary";
 import KanbanLeadCard from "../kanban/KanbanLeadCard";
 import type { ActivePage, Client, KanbanOwner, Status } from "../../types/dashboard";
+import { Surface } from "../ui";
 
 type KanbanEnterpriseStats = {
   totalValue: number;
@@ -91,48 +93,58 @@ export default function DashboardKanbanBoard({
   }
 
   return (
-    <>
-      <DashboardKanbanCommandBar clients={clients} money={money} getLeadScore={getLeadScore} />
-
-      <div className="space-y-3">
-        <DashboardKanbanSummary
-          kanbanClientsCount={kanbanClients.length}
-          kanbanOwnerFilter={kanbanOwnerFilter}
-          kanbanEnterpriseStats={kanbanEnterpriseStats}
-          money={money}
-        />
-
-        <div className="saas-panel flex flex-wrap items-center justify-between gap-2 rounded-2xl px-3 py-2.5">
+    <section className="space-y-2">
+      <Surface className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
           <div>
-            <p className="text-sm font-semibold">Etapas do funil</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">Movimente oportunidades por etapa e acompanhe gargalos sem barra horizontal.</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Funil Comercial</p>
+            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{kanbanClients.length} oportunidades · arraste entre etapas ou abra os detalhes.</p>
           </div>
 
-          <div className="flex rounded-xl border border-slate-500/16 bg-slate-950/25 p-1">
+          <div className="flex rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-1">
             <button
               onClick={() => setStageGroup("pipeline")}
-              className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
+              className={`rounded px-3 py-1.5 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${
                 stageGroup === "pipeline"
-                  ? "bg-slate-100 text-slate-950 shadow-[0_8px_20px_rgba(0,0,0,0.18)]"
-                  : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-200"
+                  ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
+              type="button"
             >
               Fluxo comercial
             </button>
             <button
               onClick={() => setStageGroup("resultado")}
-              className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
+              className={`rounded px-3 py-1.5 text-[11px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${
                 stageGroup === "resultado"
-                  ? "bg-slate-100 text-slate-950 shadow-[0_8px_20px_rgba(0,0,0,0.18)]"
-                  : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-200"
+                  ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm"
+                  : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               }`}
+              type="button"
             >
               Resultado
             </button>
           </div>
         </div>
 
-        <div className={`grid gap-3 ${visibleStatuses.length === 2 ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
+        <details className="group border-t border-[var(--border-default)]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-[11px] font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]">
+            Indicadores e comando do funil
+            <ChevronDown className="transition-transform group-open:rotate-180" size={14} />
+          </summary>
+          <div className="space-y-2 border-t border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
+            <DashboardKanbanCommandBar clients={clients} money={money} getLeadScore={getLeadScore} />
+            <DashboardKanbanSummary
+              kanbanClientsCount={kanbanClients.length}
+              kanbanOwnerFilter={kanbanOwnerFilter}
+              kanbanEnterpriseStats={kanbanEnterpriseStats}
+              money={money}
+            />
+          </div>
+        </details>
+      </Surface>
+
+      <div className={`grid gap-2 ${visibleStatuses.length === 2 ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
           {visibleStatuses.map((status) => {
             const stageClients = kanbanClients.filter((client) => client.status === status);
             const stageValue = stageClients.reduce((sum, client) => sum + client.value, 0);
@@ -146,6 +158,8 @@ export default function DashboardKanbanBoard({
             return (
               <div
                 key={status}
+                role="group"
+                aria-label={`Etapa ${status}`}
                 onDragOver={(event) => {
                   event.preventDefault();
                   setDragOverStatus(status);
@@ -158,14 +172,14 @@ export default function DashboardKanbanBoard({
                   setDragOverStatus(null);
                   setIsDraggingKanban(false);
                 }}
-                className={`saas-panel min-w-0 rounded-2xl p-2.5 transition-all duration-300 ${
+                className={`min-h-[280px] min-w-0 rounded-lg border bg-[var(--bg-surface)] p-2 transition-colors ${
                   isDropTarget
-                    ? "scale-[1.01] border-teal-300/40 bg-teal-300/[0.08] shadow-[0_18px_42px_rgba(0,0,0,0.24),inset_0_0_0_1px_rgba(45,212,191,0.16)]"
-                    : ""
+                    ? "border-[var(--primary)] bg-[var(--surface-subtle)] shadow-[inset_0_0_0_1px_var(--primary)]"
+                    : "border-[var(--border-default)]"
                 }`}
               >
-                <div className={`mb-2 overflow-hidden rounded-xl border ${kanbanHeaderClass(status)}`}>
-                  <div className="flex min-w-0 items-start justify-between gap-2 px-2.5 py-2.5">
+                <div className={`mb-2 overflow-hidden rounded-md border ${kanbanHeaderClass(status)}`}>
+                  <div className="flex min-w-0 items-start justify-between gap-2 px-2.5 py-2">
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
                         <div
@@ -182,37 +196,37 @@ export default function DashboardKanbanBoard({
                           }`}
                         />
 
-                        <p className="truncate text-sm font-semibold">{status}</p>
+                        <p className="truncate text-xs font-semibold">{status}</p>
                       </div>
 
-                      <p className="mt-1 truncate text-[9px] text-slate-400">
+                      <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">
                         {isDropTarget && isDraggingKanban ? "Solte a oportunidade nesta etapa" : stageGuidance(status)}
                       </p>
                     </div>
 
                     <div className="shrink-0 text-right">
-                      <span className="saas-chip inline-flex min-w-6 justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold">
+                      <span className="inline-flex min-w-6 justify-center rounded-full border border-[var(--border-default)] bg-[var(--bg-muted)] px-2 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)]">
                         {stageClients.length}
                       </span>
 
-                      <p className="mt-1 max-w-[104px] truncate text-[9px] font-medium text-slate-300">
+                      <p className="mt-1 max-w-[112px] truncate text-[11px] font-medium text-[var(--text-secondary)]">
                         {money(stageValue)}
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-px border-t border-white/10 bg-white/10 text-center">
-                    <StageMini label="Score" value={String(stageScore)} />
-                    <StageMini label="Risco" value={String(stageRiskCount)} />
-                    <StageMini label="Hoje" value={String(stageTodayCount)} />
+                  <div className="flex items-center gap-3 border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-2.5 py-1.5 text-[11px] text-[var(--text-muted)]">
+                    <span>Score <strong className="font-medium text-[var(--text-secondary)]">{stageScore}</strong></span>
+                    <span>Risco <strong className="font-medium text-[var(--text-secondary)]">{stageRiskCount}</strong></span>
+                    <span>Hoje <strong className="font-medium text-[var(--text-secondary)]">{stageTodayCount}</strong></span>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
                   {stageClients.length === 0 && (
-                    <div className="metric-card rounded-xl border-dashed p-4 text-center">
-                      <p className="text-[11px] font-semibold text-slate-300">Etapa vazia</p>
-                      <p className="mt-1 text-[9px] text-slate-600">
+                    <div className="rounded-md border border-dashed border-[var(--border-default)] bg-[var(--bg-muted)] p-4 text-center">
+                      <p className="text-[11px] font-semibold text-[var(--text-secondary)]">Etapa vazia</p>
+                      <p className="mt-1 text-[11px] text-[var(--text-muted)]">
                         {isDraggingKanban ? "Solte aqui para mover a oportunidade" : "Sem oportunidades nesta etapa"}
                       </p>
                     </div>
@@ -249,17 +263,7 @@ export default function DashboardKanbanBoard({
               </div>
             );
           })}
-        </div>
       </div>
-    </>
-  );
-}
-
-function StageMini({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-slate-950/22 px-1.5 py-1.5">
-      <p className="text-[7px] text-slate-500">{label}</p>
-      <p className="mt-0.5 text-[9px] font-semibold text-slate-200">{value}</p>
-    </div>
+    </section>
   );
 }

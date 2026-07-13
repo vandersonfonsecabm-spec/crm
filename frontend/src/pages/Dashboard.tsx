@@ -90,7 +90,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   const handleSelectClient = useCallback((clientId: number | null) => {
     setSelectedId(clientId);
-    if (clientId !== null && (requestedActivePage === "dashboard" || requestedActivePage === "comercial")) {
+    if (clientId !== null && ["dashboard", "comercial", "clientes", "kanban"].includes(requestedActivePage)) {
       setIsCustomerDrawerOpen(true);
     }
   }, [requestedActivePage]);
@@ -403,7 +403,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       slaLabel={slaLabel}
       priorityLabel={priorityLabel}
       whatsappMessage={whatsappMessage}
-      onClearSelectedClient={activePage === "dashboard" || activePage === "comercial" ? handleCloseCustomerDrawer : () => setSelectedId(null)}
+      onClearSelectedClient={["dashboard", "comercial", "clientes", "kanban"].includes(activePage) ? handleCloseCustomerDrawer : () => setSelectedId(null)}
       onSetNoteText={setNoteText}
       onSetTagText={setTagText}
       onAddNote={addNote}
@@ -413,7 +413,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       onCopyText={copyText}
       onRequestWhatsapp={requestExternalWhatsapp}
       onApplySmartFilter={applySmartFilter}
-      overlay={activePage === "dashboard" || activePage === "comercial"}
+      overlay={["dashboard", "comercial", "clientes", "kanban"].includes(activePage)}
       open={isCustomerDrawerOpen}
     />
   );
@@ -580,6 +580,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             className={`mt-4 ${
               activePage === "comercial"
                 ? "block"
+                : activePage === "clientes" || activePage === "kanban"
+                  ? "block"
                 : activePage === "agenda"
                   ? "space-y-4"
                   : activePage === "estoque"
@@ -601,6 +603,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                     money={money}
                     initials={initials}
                     statusClass={statusClass}
+                    leadOwner={leadOwner}
                     getPriority={getPriority}
                     getRisk={getRisk}
                     getLeadScore={getLeadScore}

@@ -122,6 +122,15 @@ export default function DashboardCustomerDrawer({
     };
   }, [onClearSelectedClient, open, overlay]);
 
+  const overlayTitle = activePage === "clientes"
+    ? "Detalhes do cliente"
+    : activePage === "kanban"
+      ? "Detalhes da oportunidade"
+      : "Central de decisão";
+  const overlayDescription = activePage === "kanban"
+    ? "Oportunidade, próxima ação e histórico comercial."
+    : "Dados, ação e histórico do cliente.";
+
   if (activePage === "automacoes") {
     return null;
   }
@@ -130,7 +139,7 @@ export default function DashboardCustomerDrawer({
     if (!open || !selectedClient) return null;
     return (
       <div className="fixed inset-0 z-[220] flex justify-end" role="presentation">
-        <button aria-label="Fechar central de decisão" className="absolute inset-0 cursor-default bg-slate-950/25 backdrop-blur-[1px]" onClick={onClearSelectedClient} tabIndex={-1} type="button" />
+        <button aria-label={`Fechar ${overlayTitle.toLowerCase()}`} className="absolute inset-0 cursor-default bg-slate-950/25 backdrop-blur-[1px]" onClick={onClearSelectedClient} tabIndex={-1} type="button" />
         <aside
           aria-labelledby="customer-decision-title"
           aria-modal="true"
@@ -140,10 +149,10 @@ export default function DashboardCustomerDrawer({
         >
           <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-3">
             <div>
-              <h2 className="text-sm font-semibold text-[var(--text-primary)]" id="customer-decision-title">Central de decisão</h2>
-              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Dados, ação e histórico do cliente.</p>
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]" id="customer-decision-title">{overlayTitle}</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{overlayDescription}</p>
             </div>
-            <IconButton aria-label="Fechar central de decisão" onClick={onClearSelectedClient} ref={closeButtonRef}><X size={15} /></IconButton>
+            <IconButton aria-label={`Fechar ${overlayTitle.toLowerCase()}`} onClick={onClearSelectedClient} ref={closeButtonRef}><X size={15} /></IconButton>
           </div>
           <DashboardSelectedClientPanel
             selectedClient={selectedClient}

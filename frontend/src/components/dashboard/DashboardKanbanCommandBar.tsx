@@ -28,30 +28,13 @@ export default function DashboardKanbanCommandBar({
   );
 
   return (
-    <div className="saas-panel rounded-2xl p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.07] text-teal-100">
-            <GitBranch size={16} />
-          </div>
-
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">Comando do funil</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Leitura executiva do funil sem ocupar espaço das colunas.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid w-full gap-2 sm:grid-cols-2 lg:w-auto xl:grid-cols-6">
-          <KanbanCommandPill icon={<Target size={12} />} label="Gargalo" value={biggestBottleneck} tone="default" />
-          <KanbanCommandPill icon={<Flame size={12} />} label="Prioridade" value={`${hotLeads} oportunidades`} tone="amber" />
-          <KanbanCommandPill icon={<GitBranch size={12} />} label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
-          <KanbanCommandPill icon={<AlertTriangle size={12} />} label="Silenciosos" value={`${stalledLeads} oportunidades`} tone="rose" />
-          <KanbanCommandPill icon={<BadgeDollarSign size={12} />} label="Receita prevista" value={money(expectedRevenue)} tone="emerald" />
-          <KanbanCommandPill icon={<TrendingUp size={12} />} label="Conversão" value={`${conversionRate}%`} tone="sky" />
-        </div>
-      </div>
+    <div className="grid overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <KanbanCommandPill icon={<Target size={12} />} label="Gargalo" value={biggestBottleneck} tone="default" />
+      <KanbanCommandPill icon={<Flame size={12} />} label="Prioridade" value={`${hotLeads} oportunidades`} tone="warning" />
+      <KanbanCommandPill icon={<GitBranch size={12} />} label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
+      <KanbanCommandPill icon={<AlertTriangle size={12} />} label="Silenciosos" value={`${stalledLeads} oportunidades`} tone="danger" />
+      <KanbanCommandPill icon={<BadgeDollarSign size={12} />} label="Receita prevista" value={money(expectedRevenue)} tone="success" />
+      <KanbanCommandPill icon={<TrendingUp size={12} />} label="Conversão" value={`${conversionRate}%`} tone="info" />
     </div>
   );
 }
@@ -65,24 +48,23 @@ function KanbanCommandPill({
   icon: ReactNode;
   label: string;
   value: string;
-  tone: "default" | "amber" | "violet" | "rose" | "emerald" | "sky";
+  tone: "default" | "warning" | "danger" | "success" | "info";
 }) {
   const tones = {
-    default: "metric-card text-slate-200",
-    amber: "metric-card metric-forecast text-amber-100",
-    violet: "metric-card text-slate-200",
-    rose: "metric-card metric-risk text-rose-100",
-    emerald: "metric-card metric-pipeline text-emerald-100",
-    sky: "metric-card metric-revenue text-sky-100",
+    default: "text-[var(--text-primary)]",
+    warning: "text-[var(--warning)]",
+    danger: "text-[var(--danger)]",
+    success: "text-[var(--success)]",
+    info: "text-[var(--info)]",
   };
 
   return (
-    <div className={`rounded-xl px-3 py-2 ${tones[tone]}`}>
+    <div className={`min-w-0 border-b border-[var(--border-default)] px-3 py-2 last:border-b-0 sm:border-r xl:border-b-0 ${tones[tone]}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[9px] opacity-65">{label}</p>
+        <p className="text-[11px] text-[var(--text-muted)]">{label}</p>
         {icon}
       </div>
-      <p className="mt-0.5 truncate text-xs font-semibold">{value}</p>
+      <p className="mt-0.5 truncate text-[11px] font-semibold">{value}</p>
     </div>
   );
 }

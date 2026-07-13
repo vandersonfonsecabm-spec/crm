@@ -41,145 +41,93 @@ export default function KanbanLeadCard({
   const isSelected = selectedId === client.id;
   const isStrongLead = client.hot && score >= 80;
   const isAttentionLead = risk === "Alto" || client.lastContactDays >= 7;
+  const urgencyLabel = isStrongLead ? "Quente" : isAttentionLead ? "Atenção" : "Estável";
+  const urgencyColor = isStrongLead ? "bg-[var(--danger)]" : isAttentionLead ? "bg-[var(--warning)]" : "bg-[var(--success)]";
+  const scoreColor = score >= 80 ? "text-[var(--success)]" : score >= 60 ? "text-[var(--warning)]" : "text-[var(--text-secondary)]";
+  const interactionLabel = client.lastContactDays === 0
+    ? "Contato hoje"
+    : client.lastContactDays === 1
+      ? "1 dia parado"
+      : `${client.lastContactDays} dias parado`;
 
-  const urgencyLabel = isStrongLead
-    ? "Quente"
-    : isAttentionLead
-      ? "Atenção"
-      : "Estável";
-
-  const urgencyTone = isStrongLead
-    ? "border-rose-300/20 bg-slate-950/25 text-rose-100"
-    : isAttentionLead
-      ? "border-amber-300/20 bg-slate-950/25 text-amber-100"
-      : "border-emerald-300/20 bg-slate-950/25 text-emerald-100";
-
-  const slaTone =
-    client.lastContactDays >= 7
-      ? "border-rose-300/16 bg-slate-950/25 text-rose-200"
-      : client.lastContactDays >= 3
-        ? "border-amber-300/16 bg-slate-950/25 text-amber-200"
-        : "border-emerald-300/16 bg-slate-950/25 text-emerald-200";
-
-  const scoreTone =
-    score >= 80
-      ? "border-emerald-300/16 bg-slate-950/25 text-emerald-200"
-      : score >= 60
-        ? "border-amber-300/16 bg-slate-950/25 text-amber-200"
-        : "border-slate-500/16 bg-slate-950/25 text-slate-400";
-
-  const interactionLabel =
-    client.lastContactDays === 0
-      ? "Contato hoje"
-      : client.lastContactDays === 1
-        ? "1 dia parado"
-        : `${client.lastContactDays} dias parado`;
+  const openDetails = () => setSelectedId(client.id);
 
   return (
     <div
+      aria-label={`Abrir oportunidade de ${client.name}`}
       draggable
-      onDragStart={(event) => {
-        event.dataTransfer.setData("clientId", String(client.id));
-        setIsDraggingKanban(true);
-      }}
+      onClick={openDetails}
       onDragEnd={() => {
         setDragOverStatus(null);
         setIsDraggingKanban(false);
       }}
-      onClick={() => setSelectedId(client.id)}
-      className={`metric-card group relative min-w-0 cursor-grab overflow-hidden rounded-xl p-2.5 transition active:cursor-grabbing ${
-        isSelected
-          ? "border-teal-300/32 bg-teal-300/[0.055] shadow-[inset_2px_0_0_rgba(45,212,191,0.42),0_14px_32px_rgba(0,0,0,0.18)]"
-          : ""
+      onDragStart={(event) => {
+        event.dataTransfer.setData("clientId", String(client.id));
+        setIsDraggingKanban(true);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openDetails();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      className={`group relative min-w-0 cursor-grab overflow-hidden rounded-md border bg-[var(--bg-surface)] p-2.5 text-left shadow-sm transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] active:cursor-grabbing ${
+        isSelected ? "border-[var(--primary)] bg-[var(--bg-muted)] shadow-[inset_3px_0_0_var(--primary)]" : "border-[var(--border-default)]"
       }`}
     >
-      <div
-        className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] ${
-          isStrongLead
-            ? "bg-rose-300/65"
-            : isAttentionLead
-              ? "bg-amber-300/55"
-              : "bg-emerald-300/35"
-        }`}
-      />
+      <div className={`pointer-events-none absolute inset-x-0 top-0 h-0.5 ${urgencyColor}`} />
 
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-500/16 bg-slate-900/70 text-[8px] font-bold text-slate-100">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--surface-subtle)] text-[11px] font-semibold text-[var(--text-secondary)]">
             {initials(client.name)}
-          </div>
-
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <p className="truncate text-[11px] font-semibold text-slate-100">
-                {client.name}
-              </p>
-
-              {client.notes.length > 0 && (
-                <span className="saas-chip inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px]">
-                  <MessageSquareText size={9} />
-                  {client.notes.length}
-                </span>
-              )}
-            </div>
-
-            <p className="mt-0.5 truncate text-[9px] text-slate-500">
-              {client.company}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-1">
-          <span className={`rounded-full border px-1.5 py-0.5 text-[8px] font-semibold ${scoreTone}`}>
-            {score}
           </span>
-          <GripVertical size={12} className="text-slate-600 opacity-0 transition group-hover:opacity-100" />
+          <span className="min-w-0">
+            <span className="block truncate text-xs font-semibold text-[var(--text-primary)]">{client.name}</span>
+            <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">{client.company}</span>
+          </span>
         </div>
+        <GripVertical aria-hidden="true" className="shrink-0 text-[var(--icon-muted)] opacity-60 group-hover:opacity-100" size={14} />
       </div>
 
-      <div className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2">
+      <div className="mt-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[11px] font-semibold text-slate-100">
-            {money(client.value)}
-          </p>
-          <p className="mt-0.5 truncate text-[8px] text-slate-500">
-            {forecastLabel(client)}
-          </p>
+          <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{money(client.value)}</p>
+          <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{forecastLabel(client)}</p>
         </div>
-
-        <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[8px] font-semibold ${urgencyTone}`}>
-          {urgencyLabel}
-        </span>
+        <div className="shrink-0 text-right">
+          <p className={`text-xs font-semibold ${scoreColor}`}>{score}</p>
+          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Score</p>
+        </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-2 gap-1.5 text-[8px]">
-        <span className={`inline-flex items-center gap-1 truncate rounded-full border px-1.5 py-0.5 font-medium ${slaTone}`}>
-          <Timer size={9} />
-          {slaLabel(client)}
-        </span>
-
-        <span className="truncate rounded-full border border-slate-500/16 bg-slate-950/25 px-1.5 py-0.5 font-medium text-slate-300">
-          {client.nextFollowUp}
-        </span>
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t border-[var(--border-default)] pt-2 text-[11px]">
+        <div className="min-w-0">
+          <p className="text-[var(--text-muted)]">Próxima ação</p>
+          <p className="mt-0.5 truncate font-medium text-[var(--text-primary)]">{client.nextFollowUp}</p>
+        </div>
+        <div className="text-right">
+          <p className="inline-flex items-center gap-1 text-[var(--text-muted)]"><Timer size={11} /> SLA</p>
+          <p className="mt-0.5 font-medium text-[var(--text-secondary)]">{slaLabel(client)}</p>
+        </div>
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
-          <div
-            className={`h-full rounded-full ${
-              intensity >= 85
-                ? "bg-rose-300"
-                : intensity >= 65
-                  ? "bg-amber-300"
-                  : "bg-slate-400"
-            }`}
-            style={{ width: `${intensity}%` }}
-          />
-        </div>
-
-        <span className="shrink-0 truncate text-[8px] font-medium text-slate-500">
-          {priorityLabel(client)} - {interactionLabel}
+      <div className="mt-2 flex min-w-0 items-center justify-between gap-2 text-[11px] text-[var(--text-muted)]">
+        <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${urgencyColor}`} />
+          {urgencyLabel} · {priorityLabel(client)} · {interactionLabel}
         </span>
+        {client.notes.length > 0 && (
+          <span className="inline-flex shrink-0 items-center gap-1" title={`${client.notes.length} nota(s)`}>
+            <MessageSquareText size={11} /> {client.notes.length}
+          </span>
+        )}
+      </div>
+
+      <div aria-label={`Intensidade comercial ${intensity}%`} aria-valuemax={100} aria-valuemin={0} aria-valuenow={intensity} className="mt-2 h-1 overflow-hidden rounded-full bg-[var(--surface-subtle)]" role="progressbar">
+        <div className={`h-full rounded-full ${intensity >= 85 ? "bg-[var(--danger)]" : intensity >= 65 ? "bg-[var(--warning)]" : "bg-[var(--icon-muted)]"}`} style={{ width: `${intensity}%` }} />
       </div>
     </div>
   );

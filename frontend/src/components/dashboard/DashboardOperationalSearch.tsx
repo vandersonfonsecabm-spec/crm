@@ -1,6 +1,6 @@
 import { Download, Flame, RotateCcw, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import type { ActivePage, KanbanOwner, SortBy, Status } from "../../types/dashboard";
-import { Button, FilterBar, Select, Toolbar } from "../ui";
+import { Button, FilterBar, Select, Surface, Toolbar } from "../ui";
 
 type DashboardOperationalSearchProps = {
   activePage: ActivePage;
@@ -48,18 +48,18 @@ export default function DashboardOperationalSearch({
   if (activePage === "automacoes") return null;
 
   return (
-    <section className="saas-panel mt-4 rounded-2xl p-3">
-      <Toolbar className="mb-3">
+    <Surface className="mt-3 p-3">
+      <Toolbar className="mb-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/55 text-slate-300">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--icon-default)]">
             <SlidersHorizontal size={15} />
           </div>
 
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-200">
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
               {activePage === "clientes" ? "Filtro da carteira" : "Busca operacional"}
             </p>
-            <p className="mt-0.5 text-[10px] text-slate-500">
+            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
               {filteredClientsCount} encontrados - {activeFiltersCount} filtro(s) ativo(s)
             </p>
           </div>
@@ -67,8 +67,8 @@ export default function DashboardOperationalSearch({
 
         <div className="flex items-center gap-2">
           {activeFiltersCount > 0 && (
-            <span className="saas-chip rounded-full px-2 py-1 text-[10px] text-sky-100">
-              filtros ativos
+            <span className="rounded-full border border-[var(--primary)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] font-medium text-[var(--primary)]">
+              {activeFiltersCount} ativo(s)
             </span>
           )}
 
@@ -84,8 +84,12 @@ export default function DashboardOperationalSearch({
       </Toolbar>
 
       <FilterBar className="border-0 bg-transparent p-0 shadow-none">
-        <div className="flex min-w-[280px] flex-[1_1_420px] items-center gap-2 rounded-xl border border-slate-500/16 bg-slate-950/35 px-3 py-2 transition focus-within:border-teal-300/28 focus-within:bg-slate-900/70">
-          <Search size={14} className="text-slate-500" />
+        <div
+          className={`flex h-9 min-w-[280px] items-center gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 transition focus-within:border-[var(--primary)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)] ${
+            activePage === "kanban" ? "flex-[1_1_280px]" : "flex-[1_1_380px]"
+          }`}
+        >
+          <Search size={14} className="text-[var(--icon-muted)]" />
 
           <input
             value={search}
@@ -94,7 +98,7 @@ export default function DashboardOperationalSearch({
               setPage(1);
             }}
             placeholder="Buscar cliente, empresa, telefone, e-mail ou tag..."
-            className="w-full select-text bg-transparent text-sm outline-none placeholder:text-slate-600"
+            className="w-full select-text bg-transparent text-xs outline-none placeholder:text-[var(--text-muted)]"
           />
 
           {search.trim() && (
@@ -103,7 +107,7 @@ export default function DashboardOperationalSearch({
                 setSearch("");
                 setPage(1);
               }}
-              className="rounded-lg p-1 text-slate-500 hover:bg-white/10 hover:text-slate-200"
+              className="rounded-md p-1 text-[var(--icon-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)]"
               title="Limpar busca"
             >
               <X size={13} />
@@ -112,6 +116,7 @@ export default function DashboardOperationalSearch({
         </div>
 
         <Select
+          className="min-w-[136px]"
           value={statusFilter}
           onChange={(event) => {
             setStatusFilter(event.target.value as Status | "Todos");
@@ -128,6 +133,7 @@ export default function DashboardOperationalSearch({
         </Select>
 
         <Select
+          className="min-w-[120px]"
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value as SortBy)}
           aria-label="Ordenar clientes"
@@ -140,6 +146,7 @@ export default function DashboardOperationalSearch({
 
         {activePage === "kanban" && (
           <Select
+            className="min-w-[150px]"
             value={kanbanOwnerFilter}
             onChange={(event) => setKanbanOwnerFilter(event.target.value as KanbanOwner)}
             aria-label="Filtrar por responsável"
@@ -152,29 +159,27 @@ export default function DashboardOperationalSearch({
           </Select>
         )}
 
-        <button
+        <Button
+          aria-pressed={onlyFavorites}
           onClick={() => setOnlyFavorites((value) => !value)}
-          className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs transition-all duration-200 ${
-            onlyFavorites
-              ? "border-amber-300/30 bg-amber-400/10 text-amber-100"
-              : "border-slate-500/16 bg-slate-950/30 text-slate-300 hover:border-slate-400/24 hover:bg-slate-900/70"
-          }`}
+          className={onlyFavorites ? "border-[var(--warning)] bg-[var(--surface-subtle)] text-[var(--warning)]" : ""}
+          leftIcon={<Star size={13} />}
+          size="sm"
+          variant="secondary"
         >
-          <Star size={13} />
           Favoritos
-        </button>
+        </Button>
 
-        <button
+        <Button
+          aria-pressed={onlyHot}
           onClick={() => setOnlyHot((value) => !value)}
-          className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs transition-all duration-200 ${
-            onlyHot
-              ? "border-rose-300/30 bg-rose-400/10 text-rose-100"
-              : "border-slate-500/16 bg-slate-950/30 text-slate-300 hover:border-slate-400/24 hover:bg-slate-900/70"
-          }`}
+          className={onlyHot ? "border-[var(--danger)] bg-[var(--surface-subtle)] text-[var(--danger)]" : ""}
+          leftIcon={<Flame size={13} />}
+          size="sm"
+          variant="secondary"
         >
-          <Flame size={13} />
           Quentes
-        </button>
+        </Button>
 
         <Button
           leftIcon={<RotateCcw size={14} />}
@@ -185,6 +190,6 @@ export default function DashboardOperationalSearch({
           Limpar
         </Button>
       </FilterBar>
-    </section>
+    </Surface>
   );
 }

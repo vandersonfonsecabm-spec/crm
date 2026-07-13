@@ -1,16 +1,12 @@
 import {
-  Edit3,
+  Eye,
   Flame,
-  Mail,
   MessageCircle,
-  Phone,
   Star,
-  Tag,
   UserCheck,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import type { Client, Status } from "../../types/dashboard";
-import { Badge, EmptyState, IconButton, Pagination, SectionHeader } from "../ui";
+import { EmptyState, IconButton, Pagination, SectionHeader, Surface } from "../ui";
 
 type DashboardClientsTableProps = {
   paginatedClients: Client[];
@@ -22,6 +18,7 @@ type DashboardClientsTableProps = {
   initials: (name: string) => string;
   statusClass: (status: Status) => string;
   idleLabel: (client: Client) => string;
+  leadOwner: (client: Client) => string;
   getPriority: (client: Client) => string;
   getRisk: (client: Client) => string;
   getLeadScore: (client: Client) => number;
@@ -46,6 +43,7 @@ export default function DashboardClientsTable({
   initials,
   statusClass,
   idleLabel,
+  leadOwner,
   getPriority,
   getRisk,
   getLeadScore,
@@ -53,80 +51,86 @@ export default function DashboardClientsTable({
   onSelectClient,
   onToggleFavorite,
   onToggleHot,
-  onEditClient,
-  onCopyText,
   onRequestWhatsapp,
   onPreviousPage,
   onNextPage,
 }: DashboardClientsTableProps) {
   return (
-    <section className="saas-panel rounded-2xl">
-      <ClientsHeader filteredClientsCount={filteredClientsCount} page={page} totalPages={totalPages} />
+    <Surface className="overflow-hidden">
+      <SectionHeader
+        actions={<span className="text-[11px] text-[var(--text-muted)]">{filteredClientsCount} registros · Página {page}/{totalPages}</span>}
+        description="Clientes, contatos, oportunidade e próxima ação em uma visão operacional."
+        icon={<UserCheck size={16} />}
+        title="Carteira de clientes"
+      />
 
-      <div className="grid gap-2.5 p-3">
-        {paginatedClients.map((client) => (
-          <ClientRowCard
-            key={client.id}
-            client={client}
-            selected={selectedId === client.id}
-            money={money}
-            initials={initials}
-            statusClass={statusClass}
-            idleLabel={idleLabel}
-            getPriority={getPriority}
-            getRisk={getRisk}
-            getLeadScore={getLeadScore}
-            forecastLabel={forecastLabel}
-            onSelectClient={onSelectClient}
-            onToggleFavorite={onToggleFavorite}
-            onToggleHot={onToggleHot}
-            onEditClient={onEditClient}
-            onCopyText={onCopyText}
-            onRequestWhatsapp={onRequestWhatsapp}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1080px] table-fixed border-collapse text-left">
+          <thead className="bg-[var(--bg-muted)] text-[11px] font-medium text-[var(--text-secondary)]">
+            <tr className="border-b border-[var(--border-default)]">
+              <th className="w-[24%] px-4 py-2.5 font-medium">Cliente</th>
+              <th className="w-[17%] px-3 py-2.5 font-medium">Contato principal</th>
+              <th className="w-[11%] px-3 py-2.5 font-medium">Status</th>
+              <th className="w-[15%] px-3 py-2.5 font-medium">Oportunidade</th>
+              <th className="w-[10%] px-3 py-2.5 font-medium">Score</th>
+              <th className="w-[14%] px-3 py-2.5 font-medium">Próxima ação</th>
+              <th className="w-[9%] px-3 py-2.5 text-right font-medium">Ações</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-[var(--border-default)]">
+            {paginatedClients.map((client) => (
+              <ClientTableRow
+                client={client}
+                getLeadScore={getLeadScore}
+                getPriority={getPriority}
+                getRisk={getRisk}
+                idleLabel={idleLabel}
+                initials={initials}
+                key={client.id}
+                leadOwner={leadOwner}
+                money={money}
+                onRequestWhatsapp={onRequestWhatsapp}
+                onSelectClient={onSelectClient}
+                onToggleFavorite={onToggleFavorite}
+                onToggleHot={onToggleHot}
+                selected={selectedId === client.id}
+                statusClass={statusClass}
+                forecastLabel={forecastLabel}
+              />
+            ))}
+          </tbody>
+        </table>
+
+        {paginatedClients.length === 0 && (
+          <EmptyState
+            description="Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar o funil."
+            icon={<UserCheck size={16} />}
+            title="Nenhum cliente encontrado"
           />
-        ))}
-
-        {paginatedClients.length === 0 && <EmptyClientsState />}
+        )}
       </div>
 
-      <ClientsFooter
+      <Pagination
+        itemLabel="registros"
+        onPageChange={(nextPage) => nextPage < page ? onPreviousPage() : onNextPage()}
         page={page}
+        total={filteredClientsCount}
         totalPages={totalPages}
-        visibleClientsCount={paginatedClients.length}
-        filteredClientsCount={filteredClientsCount}
-        onPreviousPage={onPreviousPage}
-        onNextPage={onNextPage}
+        visibleCount={paginatedClients.length}
       />
-    </section>
+    </Surface>
   );
 }
 
-function ClientsHeader({
-  filteredClientsCount,
-  page,
-  totalPages,
-}: {
-  filteredClientsCount: number;
-  page: number;
-  totalPages: number;
-}) {
-  return (
-    <SectionHeader
-      actions={<><Badge>{filteredClientsCount} registros</Badge><Badge>Página {page}/{totalPages}</Badge></>}
-      description="Lista priorizada por valor, score e próxima ação."
-      icon={<UserCheck size={16} />}
-      title="Carteira de clientes"
-    />
-  );
-}
-
-function ClientRowCard({
+function ClientTableRow({
   client,
   selected,
   money,
   initials,
   statusClass,
   idleLabel,
+  leadOwner,
   getPriority,
   getRisk,
   getLeadScore,
@@ -134,8 +138,6 @@ function ClientRowCard({
   onSelectClient,
   onToggleFavorite,
   onToggleHot,
-  onEditClient,
-  onCopyText,
   onRequestWhatsapp,
 }: {
   client: Client;
@@ -144,6 +146,7 @@ function ClientRowCard({
   initials: (name: string) => string;
   statusClass: (status: Status) => string;
   idleLabel: (client: Client) => string;
+  leadOwner: (client: Client) => string;
   getPriority: (client: Client) => string;
   getRisk: (client: Client) => string;
   getLeadScore: (client: Client) => number;
@@ -151,228 +154,99 @@ function ClientRowCard({
   onSelectClient: (clientId: number) => void;
   onToggleFavorite: (clientId: number) => void;
   onToggleHot: (clientId: number) => void;
-  onEditClient: (client: Client) => void;
-  onCopyText: (text: string, message: string) => void;
   onRequestWhatsapp: (client: Client) => void;
 }) {
   const score = getLeadScore(client);
-  const priority = getPriority(client);
-  const risk = getRisk(client);
-  const visibleTags = client.tags.slice(0, 2);
-  const hiddenTags = Math.max(0, client.tags.length - visibleTags.length);
+  const tags = client.tags.slice(0, 2);
+  const hiddenTags = Math.max(0, client.tags.length - tags.length);
 
   return (
-    <article
-      className={`saas-row grid min-w-0 gap-3 rounded-xl p-3 md:grid-cols-[minmax(0,1.25fr)_minmax(150px,0.58fr)_minmax(170px,0.72fr)_auto] ${
-        selected
-          ? "border-teal-300/32 bg-teal-300/[0.055] shadow-[inset_2px_0_0_rgba(45,212,191,0.42),0_14px_32px_rgba(0,0,0,0.18)]"
-          : ""
-      }`}
+    <tr
+      aria-selected={selected}
+      className={`group transition-colors hover:bg-[var(--bg-muted)] ${selected ? "bg-[var(--bg-muted)] shadow-[inset_3px_0_0_var(--primary)]" : "bg-[var(--bg-surface)]"}`}
     >
-      <button onClick={() => onSelectClient(client.id)} className="min-w-0 text-left">
-        <div className="flex min-w-0 items-start gap-2">
-          <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-[10px] font-bold ${
-              selected
-                ? "border-teal-300/24 bg-teal-300/[0.09] text-teal-100"
-                : "border-slate-500/16 bg-slate-900/70 text-slate-200"
-            }`}
-          >
+      <td className="px-4 py-3 align-middle">
+        <button className="flex w-full min-w-0 items-center gap-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]" onClick={() => onSelectClient(client.id)} type="button">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--surface-subtle)] text-[11px] font-semibold text-[var(--text-secondary)]">
             {initials(client.name)}
-          </div>
-
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <p className="truncate text-sm font-semibold text-slate-100">{client.name}</p>
-              {client.favorite && <Star size={12} className="shrink-0 fill-amber-300 text-amber-300" />}
-              {client.hot && <Flame size={12} className="shrink-0 text-rose-400" />}
-            </div>
-
-            <p className="mt-0.5 truncate text-[11px] text-slate-500">{client.company}</p>
-
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
-              {visibleTags.map((tag) => (
-                <span key={tag} className="saas-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]">
-                  <Tag size={10} />
-                  {tag}
-                </span>
-              ))}
-              {hiddenTags > 0 && (
-                <span className="rounded-full bg-slate-900/60 px-2 py-0.5 text-[9px] text-slate-500">
-                  +{hiddenTags}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </button>
-
-      <div className="grid min-w-0 grid-cols-2 gap-2 md:block md:space-y-2">
-        <CompactInfo label="Valor" value={money(client.value)} strong />
-        <div>
-          <p className="text-[9px] text-slate-500">Status</p>
-          <span className={`mt-1 inline-flex rounded-full border px-2 py-1 text-[10px] ${statusClass(client.status)}`}>
-            {client.status}
           </span>
-        </div>
-      </div>
-
-      <div className="grid min-w-0 grid-cols-2 gap-2 md:block md:space-y-2">
-        <CompactInfo label="Próximo contato" value={client.nextFollowUp} hint={`Inativo: ${idleLabel(client)}`} />
-        <div className="grid grid-cols-2 gap-1.5">
-          <CompactContact icon={<Phone size={11} />} value={maskPhone(client.phone)} />
-          <CompactContact icon={<Mail size={11} />} value={maskEmail(client.email)} />
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          <span className={`rounded-full border px-2 py-1 text-[10px] ${priorityClass(priority)}`}>
-            {priority}
+          <span className="min-w-0">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-xs font-semibold text-[var(--text-primary)]">{client.name}</span>
+              {client.favorite && <Star aria-label="Favorito" className="shrink-0 fill-[var(--warning)] text-[var(--warning)]" size={12} />}
+              {client.hot && <Flame aria-label="Oportunidade quente" className="shrink-0 text-[var(--danger)]" size={12} />}
+            </span>
+            <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">
+              {client.company}{tags.length > 0 ? ` · ${tags.join(" · ")}` : ""}{hiddenTags > 0 ? ` · +${hiddenTags}` : ""}
+            </span>
           </span>
-          <span className={`rounded-full border px-2 py-1 text-[10px] ${riskClass(risk)}`}>
-            {risk}
-          </span>
+        </button>
+      </td>
+
+      <td className="px-3 py-3 align-middle">
+        <p className="truncate text-[11px] font-medium text-[var(--text-secondary)]">{maskPhone(client.phone)}</p>
+        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{maskEmail(client.email)}</p>
+      </td>
+
+      <td className="px-3 py-3 align-middle">
+        <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] ${statusClass(client.status)}`}>{client.status}</span>
+      </td>
+
+      <td className="px-3 py-3 align-middle">
+        <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{money(client.value)}</p>
+        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{getPriority(client)} · Risco {getRisk(client)}</p>
+      </td>
+
+      <td className="px-3 py-3 align-middle">
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="font-semibold text-[var(--text-primary)]">{score}</span>
+          <span className="truncate text-[var(--text-muted)]">{forecastLabel(client)}</span>
         </div>
-      </div>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--surface-subtle)]">
+          <div className={`h-full rounded-full ${scoreClass(score)}`} style={{ width: `${score}%` }} />
+        </div>
+      </td>
 
-      <div className="flex min-w-0 items-center justify-between gap-3 md:justify-end">
-        <ScorePill score={score} forecast={forecastLabel(client)} />
+      <td className="px-3 py-3 align-middle">
+        <p className="truncate text-[11px] font-medium text-[var(--text-primary)]">{client.nextFollowUp}</p>
+        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{leadOwner(client)} · {idleLabel(client)}</p>
+      </td>
 
-        <div className="flex shrink-0 items-center gap-1">
-          <IconButton aria-label="Favoritar" onClick={() => onToggleFavorite(client.id)}>
-            <Star size={14} />
+      <td className="px-3 py-3 align-middle">
+        <div className="flex justify-end gap-0.5">
+          <IconButton aria-label={client.favorite ? "Remover dos favoritos" : "Adicionar aos favoritos"} aria-pressed={client.favorite} onClick={() => onToggleFavorite(client.id)}>
+            <Star className={client.favorite ? "fill-[var(--warning)] text-[var(--warning)]" : ""} size={14} />
           </IconButton>
-          <IconButton aria-label="Marcar como quente" onClick={() => onToggleHot(client.id)}>
-            <Flame size={14} />
+          <IconButton aria-label={client.hot ? "Remover dos quentes" : "Marcar como quente"} aria-pressed={client.hot} onClick={() => onToggleHot(client.id)}>
+            <Flame className={client.hot ? "text-[var(--danger)]" : ""} size={14} />
           </IconButton>
-          <IconButton aria-label="Editar cliente" onClick={() => onEditClient(client)}>
-            <Edit3 size={14} />
-          </IconButton>
-          <IconButton aria-label="Copiar telefone" onClick={() => onCopyText(client.phone, "Telefone copiado.")}>
-            <Phone size={14} />
-          </IconButton>
-          <IconButton
-            aria-label="Abrir WhatsApp"
-            onClick={() => onRequestWhatsapp(client)}
-            className="hover:text-emerald-700"
-          >
+          <IconButton aria-label="Abrir WhatsApp" className="hover:text-[var(--primary)]" onClick={() => onRequestWhatsapp(client)}>
             <MessageCircle size={14} />
           </IconButton>
+          <IconButton aria-label="Abrir detalhes do cliente" onClick={() => onSelectClient(client.id)}>
+            <Eye size={14} />
+          </IconButton>
         </div>
-      </div>
-    </article>
+      </td>
+    </tr>
   );
-}
-
-function CompactInfo({
-  label,
-  value,
-  hint,
-  strong = false,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  strong?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="text-[9px] text-slate-500">{label}</p>
-      <p className={`mt-0.5 truncate text-xs font-semibold ${strong ? "text-teal-100" : "text-slate-200"}`}>
-        {value}
-      </p>
-      {hint && <p className="mt-0.5 truncate text-[9px] text-slate-600">{hint}</p>}
-    </div>
-  );
-}
-
-function CompactContact({ icon, value }: { icon: ReactNode; value: string }) {
-  return (
-    <div className="flex min-w-0 items-center gap-1 rounded-lg border border-slate-500/12 bg-slate-950/20 px-2 py-1 text-[9px] text-slate-500">
-      <span className="shrink-0 text-slate-600">{icon}</span>
-      <span className="truncate">{value}</span>
-    </div>
-  );
-}
-
-function ScorePill({ score, forecast }: { score: number; forecast: string }) {
-  return (
-    <div className={`metric-card w-28 shrink-0 rounded-lg p-1.5 ${score >= 80 ? "metric-pipeline" : score >= 60 ? "metric-forecast" : ""}`}>
-      <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
-        <span>Score</span>
-        <span>{score}</span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-        <div className={`h-full rounded-full ${scoreClass(score)}`} style={{ width: `${score}%` }} />
-      </div>
-      <p className="mt-1 truncate text-[9px] text-slate-600">{forecast}</p>
-    </div>
-  );
-}
-
-function EmptyClientsState() {
-  return (
-    <EmptyState
-      className="metric-card rounded-2xl"
-      description="Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar o funil."
-      icon={<UserCheck size={16} />}
-      title="Nenhum cliente encontrado"
-    />
-  );
-}
-
-function ClientsFooter({
-  page,
-  totalPages,
-  visibleClientsCount,
-  filteredClientsCount,
-  onPreviousPage,
-  onNextPage,
-}: {
-  page: number;
-  totalPages: number;
-  visibleClientsCount: number;
-  filteredClientsCount: number;
-  onPreviousPage: () => void;
-  onNextPage: () => void;
-}) {
-  return (
-    <Pagination
-      itemLabel="registros"
-      onPageChange={(nextPage) => nextPage < page ? onPreviousPage() : onNextPage()}
-      page={page}
-      total={filteredClientsCount}
-      totalPages={totalPages}
-      visibleCount={visibleClientsCount}
-    />
-  );
-}
-
-function priorityClass(priority: string) {
-  if (priority === "Alta") return "border-rose-300/20 bg-slate-950/25 text-rose-200";
-  if (priority !== "Baixa") return "border-amber-300/20 bg-slate-950/25 text-amber-200";
-  return "border-slate-400/20 bg-slate-950/25 text-slate-300";
-}
-
-function riskClass(risk: string) {
-  if (risk === "Alto") return "border-rose-300/20 bg-slate-950/25 text-rose-200";
-  if (risk === "Medio" || risk === "Médio") return "border-amber-300/20 bg-slate-950/25 text-amber-200";
-  return "border-emerald-300/20 bg-slate-950/25 text-emerald-200";
 }
 
 function scoreClass(score: number) {
-  if (score >= 80) return "bg-emerald-300";
-  if (score >= 60) return "bg-amber-300";
-  return "bg-slate-400";
+  if (score >= 80) return "bg-[var(--success)]";
+  if (score >= 60) return "bg-[var(--warning)]";
+  return "bg-[var(--icon-muted)]";
 }
 
 function maskPhone(phone: string) {
   const digits = phone.replace(/\D/g, "");
-  if (digits.length <= 6) return phone || "não informado";
+  if (digits.length <= 6) return phone || "Não informado";
   return `${digits.slice(0, 4)}****${digits.slice(-4)}`;
 }
 
 function maskEmail(email?: string) {
-  if (!email) return "e-mail protegido";
+  if (!email) return "E-mail protegido";
   const [name, domain] = email.split("@");
-  if (!name || !domain) return "e-mail protegido";
+  if (!name || !domain) return "E-mail protegido";
   return `${name[0] ?? "*"}***@${domain}`;
 }

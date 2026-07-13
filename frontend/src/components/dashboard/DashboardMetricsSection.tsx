@@ -9,7 +9,6 @@ import {
   StickyNote,
   Target,
   Users,
-  X,
   Zap,
 } from "lucide-react";
 import MetricCard from "./MetricCard";
@@ -46,24 +45,25 @@ export default function DashboardMetricsSection({
 
   if (activePage === "clientes") {
     return (
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Carteira ativa" value={String(clients.length)} caption="Base ativa" icon={<Users size={15} />} tone="revenue" />
-        <MetricCard title="Favoritos" value={String(clients.filter((client) => client.favorite).length)} caption="Contas estratégicas" icon={<Star size={15} />} tone="forecast" />
-        <MetricCard title="Em risco" value={String(clients.filter((client) => getRisk(client) === "Alto").length)} caption="Atenção imediata" icon={<AlertTriangle size={15} />} tone="risk" />
-        <MetricCard title="Notas internas" value={String(clients.reduce((sum, client) => sum + client.notes.length, 0))} caption="Registros salvos" icon={<StickyNote size={15} />} />
-      </section>
+      <DashboardMetricStrip metrics={[
+        { label: "Carteira ativa", value: String(clients.length), context: "Base ativa", icon: <Users size={15} />, tone: "info" },
+        { label: "Favoritos", value: String(clients.filter((client) => client.favorite).length), context: "Contas estratégicas", icon: <Star size={15} />, tone: "warning" },
+        { label: "Em risco", value: String(clients.filter((client) => getRisk(client) === "Alto").length), context: "Atenção imediata", icon: <AlertTriangle size={15} />, tone: "danger" },
+        { label: "Notas internas", value: String(clients.reduce((sum, client) => sum + client.notes.length, 0)), context: "Registros salvos", icon: <StickyNote size={15} /> },
+      ]} />
     );
   }
 
   if (activePage === "kanban") {
+    const won = kanbanClients.filter((client) => client.status === "Fechado").length;
+    const lost = kanbanClients.filter((client) => client.status === "Perdido").length;
     return (
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard title="Novas oportunidades" value={String(kanbanClients.filter((client) => client.status === "Novo").length)} caption="Entrada do funil" icon={<Plus size={15} />} tone="revenue" />
-        <MetricCard title="Contatos" value={String(kanbanClients.filter((client) => client.status === "Contato").length)} caption="Em abordagem" icon={<Phone size={15} />} />
-        <MetricCard title="Propostas" value={String(kanbanClients.filter((client) => client.status === "Proposta").length)} caption="Negociação ativa" icon={<Target size={15} />} tone="forecast" />
-        <MetricCard title="Fechados" value={String(kanbanClients.filter((client) => client.status === "Fechado").length)} caption="Receita ganha" icon={<CheckCircle2 size={15} />} tone="pipeline" />
-        <MetricCard title="Perdidos" value={String(kanbanClients.filter((client) => client.status === "Perdido").length)} caption="Saída do funil" icon={<X size={15} />} tone="risk" />
-      </section>
+      <DashboardMetricStrip metrics={[
+        { label: "Novas oportunidades", value: String(kanbanClients.filter((client) => client.status === "Novo").length), context: "Entrada do funil", icon: <Plus size={15} />, tone: "info" },
+        { label: "Contatos", value: String(kanbanClients.filter((client) => client.status === "Contato").length), context: "Em abordagem", icon: <Phone size={15} /> },
+        { label: "Propostas", value: String(kanbanClients.filter((client) => client.status === "Proposta").length), context: "Negociação ativa", icon: <Target size={15} />, tone: "warning" },
+        { label: "Resultado", value: `${won} ganhos`, context: `${lost} perdidos`, icon: <CheckCircle2 size={15} />, tone: won > 0 ? "success" : lost > 0 ? "danger" : "default" },
+      ]} />
     );
   }
 
