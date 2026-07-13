@@ -25,17 +25,7 @@ function createAuth({ prisma }) {
       process.env.ALLOW_COMPANY_REGISTRATION,
       !production,
     ),
-    demo: {
-      enabled: parseBoolean(process.env.ALLOW_DEMO_MODE, false),
-      companySlug: normalizeSlug(process.env.DEMO_COMPANY_SLUG),
-      userEmail: normalizeEmail(process.env.DEMO_USER_EMAIL),
-      expiresIn: String(process.env.DEMO_JWT_EXPIRES_IN || "30m").trim(),
-    },
   };
-
-  if (config.demo.enabled && (!config.demo.companySlug || !config.demo.userEmail)) {
-    throw new Error("DEMO_COMPANY_SLUG e DEMO_USER_EMAIL sao obrigatorios quando ALLOW_DEMO_MODE=true.");
-  }
 
   async function authenticate(req, res, next) {
     const authorization = String(req.headers.authorization || "");
@@ -52,6 +42,10 @@ function createAuth({ prisma }) {
         audience: JWT_AUDIENCE,
       });
     } catch {
+      return authError(res, 401, "Token invalido ou expirado.", "AUTH_TOKEN_INVALID");
+    }
+
+    if (!hasOnlyExpectedClaims(payload)) {
       return authError(res, 401, "Token invalido ou expirado.", "AUTH_TOKEN_INVALID");
     }
 
@@ -77,7 +71,6 @@ function createAuth({ prisma }) {
       }
 
       req.auth = {
-        isDemo: payload.demo === true,
         usuarioId: usuario.id,
         empresaId: usuario.empresaId,
         papel: usuario.papel,
@@ -91,16 +84,9 @@ function createAuth({ prisma }) {
     }
   }
 
-  function requireDemoReadOnly(req, res, next) {
-    if (req.auth && req.auth.isDemo && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
-      return authError(res, 403, "O modo demonstrativo permite apenas leitura.", "DEMO_READ_ONLY");
-    }
-    return next();
-  }
-
   function requireRole(...allowedRoles) {
     return (req, res, next) => {
-      if (!req.auth || req.auth.isDemo || !allowedRoles.includes(req.auth.papel)) {
+      if (!req.auth || !allowedRoles.includes(req.auth.papel)) {
         return authError(res, 403, "Voce nao possui permissao para esta operacao.", "AUTH_FORBIDDEN");
       }
       return next();
@@ -108,38 +94,7 @@ function createAuth({ prisma }) {
   }
 
   function mountRoutes(app) {
-    app.post("/auth/demo", async (req, res) => {
-      if (!config.demo.enabled) {
-        return authError(res, 404, "Modo demonstrativo indisponivel.", "DEMO_DISABLED");
-      }
-
-      try {
-        const usuario = await prisma.usuario.findFirst({
-          where: {
-            email: config.demo.userEmail,
-            empresa: { slug: config.demo.companySlug },
-          },
-          include: { empresa: true },
-        });
-
-        if (!usuario || usuario.papel !== "VENDEDOR" || !usuario.ativo || !usuario.empresa || !usuario.empresa.ativo) {
-          return authError(res, 403, "Modo demonstrativo indisponivel.", "DEMO_CONTEXT_INVALID");
-        }
-
-        return res.json(loginResponse(usuario, config, {
-          isDemo: true,
-          expiresIn: config.demo.expiresIn,
-        }));
-      } catch (error) {
-        console.error("Falha ao validar o contexto demonstrativo.", error);
-        return authError(res, 500, "Modo demonstrativo indisponivel.", "DEMO_CONTEXT_ERROR");
-      }
-    });
-
     app.post("/auth/register-company", async (req, res) => {
-      if (hasDemoBearer(req, config.secret)) {
-        return authError(res, 403, "O contexto demonstrativo nao pode cadastrar empresas.", "AUTH_FORBIDDEN");
-      }
       if (!config.allowCompanyRegistration) {
         return authError(res, 403, "Cadastro de empresas desabilitado.", "AUTH_FORBIDDEN");
       }
@@ -191,13 +146,6 @@ function createAuth({ prisma }) {
       if (!email || !senha) {
         return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
       }
-      if (
-        config.demo.enabled &&
-        email === config.demo.userEmail &&
-        (!slug || slug === config.demo.companySlug)
-      ) {
-        return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
-      }
 
       try {
         const usuarios = await prisma.usuario.findMany({
@@ -241,7 +189,6 @@ function createAuth({ prisma }) {
         usuario: req.auth.usuario,
         empresa: req.auth.empresa,
         papel: req.auth.papel,
-        isDemo: req.auth.isDemo,
         status: "ATIVO",
       });
     });
@@ -346,7 +293,7 @@ function createAuth({ prisma }) {
     });
   }
 
-  return { authenticate, requireRole, requireDemoReadOnly, mountRoutes, config };
+  return { authenticate, requireRole, mountRoutes, config };
 }
 
 const publicUsuarioSelect = {
@@ -361,18 +308,16 @@ const publicUsuarioSelect = {
   updatedAt: true,
 };
 
-function loginResponse(usuario, config, options = {}) {
-  const isDemo = options.isDemo === true;
+function loginResponse(usuario, config) {
   const token = jwt.sign(
     {
       empresaId: usuario.empresaId,
       papel: usuario.papel,
-      ...(isDemo ? { demo: true } : {}),
     },
     config.secret,
     {
       subject: String(usuario.id),
-      expiresIn: options.expiresIn || config.expiresIn,
+      expiresIn: config.expiresIn,
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     },
@@ -385,29 +330,17 @@ function loginResponse(usuario, config, options = {}) {
     user: publicUsuario(usuario),
     empresa: publicEmpresa(usuario.empresa),
     papel: usuario.papel,
-    ...(isDemo ? { isDemo: true } : {}),
   };
-}
-
-function hasDemoBearer(req, secret) {
-  const authorization = String(req.headers.authorization || "");
-  const [scheme, token] = authorization.split(" ");
-  if (scheme !== "Bearer" || !token) return false;
-
-  try {
-    const payload = jwt.verify(token, secret, {
-      issuer: JWT_ISSUER,
-      audience: JWT_AUDIENCE,
-    });
-    return payload.demo === true;
-  } catch {
-    return false;
-  }
 }
 
 function publicUsuario(usuario) {
   const { senhaHash, empresa, ...safe } = usuario;
   return safe;
+}
+
+function hasOnlyExpectedClaims(payload) {
+  const expected = new Set(["sub", "empresaId", "papel", "iat", "exp", "iss", "aud"]);
+  return payload && typeof payload === "object" && Object.keys(payload).every((claim) => expected.has(claim));
 }
 
 function publicEmpresa(empresa) {

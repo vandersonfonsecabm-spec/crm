@@ -22,7 +22,7 @@ Os limites podem ser ajustados por ambiente:
 ## Seguranca
 
 - Apenas `ADMIN` pode importar.
-- Token demo e papeis `GERENTE`/`VENDEDOR` sao bloqueados.
+- Papeis `GERENTE`/`VENDEDOR` sao bloqueados.
 - O nome original do arquivo e sanitizado.
 - O arquivo e salvo apenas em diretorio temporario interno.
 - O conteudo bruto nao e persistido no SQLite.

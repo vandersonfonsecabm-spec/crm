@@ -13,7 +13,6 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "integration-hub-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
-process.env.ALLOW_DEMO_MODE = "false";
 process.env.INTEGRATION_ENCRYPTION_KEY = "hub-test-encryption-key-with-32-bytes-minimum";
 process.env.DATABASE_URL = `file:./${databaseName}`;
 
@@ -57,8 +56,6 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
   const gerente = await createUserAndLogin(adminA.token, "Gerente Hub", "gerente@hub.test", "GERENTE");
   const vendedor = await createUserAndLogin(adminA.token, "Vendedor Hub", "vendedor@hub.test", "VENDEDOR");
 
-  const demo = await request("POST", "/auth/demo");
-  assert.equal(demo.status, 404);
 
   const gerenteCreate = await request("POST", "/integracoes", {
     nome: "Bling Gerente",

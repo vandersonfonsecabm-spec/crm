@@ -13,7 +13,6 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "whatsapp-simulation-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
-process.env.ALLOW_DEMO_MODE = "false";
 process.env.INTEGRATION_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 process.env.DATABASE_URL = `file:./${databaseName}`;
 
@@ -52,8 +51,6 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
   const adminB = await registerAndLogin("Empresa WhatsApp B", "Admin WhatsApp B", "admin-b@whatsapp.test");
   const gerente = await createUserAndLogin(adminA.token, "Gerente WhatsApp", "gerente@whatsapp.test", "GERENTE");
   const vendedor = await createUserAndLogin(adminA.token, "Vendedor WhatsApp", "vendedor@whatsapp.test", "VENDEDOR");
-  const demo = await request("POST", "/auth/demo");
-  assert.equal(demo.status, 404);
 
   await seedCatalog(adminA.empresaId, "Simulador A", [
     { externalId: "prod-disponivel", sku: "SKU-HID-20", codigoBarras: "7890000000011", nome: "Semente de Milho Hibrido 20 kg", preco: 25990, quantidade: 35, disponivel: 35, local: "Deposito Central" },

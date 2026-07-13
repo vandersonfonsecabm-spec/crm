@@ -1,7 +1,7 @@
 import { ArrowRight, Database, LockKeyhole, Mail, ShieldCheck, Sprout, Wifi } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { loginDemoWithBackend, loginWithBackend } from "../services/crmApi";
+import { loginWithBackend } from "../services/crmApi";
 
 type LoginProps = {
   onLogin: () => void;
@@ -26,29 +26,10 @@ export function Login({ onLogin }: LoginProps) {
       await loginWithBackend(email.trim(), senha);
       onLogin();
     } catch {
-      setMessage("Não foi possível conectar com estes dados. Revise o acesso ou use o fluxo comercial guiado.");
+      setMessage("Não foi possível conectar com estes dados. Revise o e-mail, a senha e a disponibilidade do serviço.");
     } finally {
       setIsLoading(false);
     }
-  }
-
-  async function handleDemoLogin() {
-    setIsLoading(true);
-    setMessage("");
-
-    try {
-      await loginDemoWithBackend();
-      onLogin();
-    } catch {
-      setMessage("Demonstração indisponível no momento. Tente novamente em instantes.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  function handleOfflineLogin() {
-    setMessage("");
-    onLogin();
   }
 
   return (
@@ -155,28 +136,6 @@ export function Login({ onLogin }: LoginProps) {
             </button>
           </form>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              disabled={isLoading}
-              className="saas-action rounded-xl px-3 py-3 text-left text-xs font-semibold text-teal-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span className="block">Conhecer fluxo comercial</span>
-              <span className="mt-0.5 block text-[10px] font-normal text-slate-500">Acesso comercial guiado</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleOfflineLogin}
-              disabled={isLoading}
-              className="saas-action rounded-xl px-3 py-3 text-left text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span className="block">Continuar com dados locais</span>
-              <span className="mt-0.5 block text-[10px] font-normal text-slate-500">Abrir carteira salva neste navegador</span>
-            </button>
-          </div>
-
           <div className="metric-card mt-5 rounded-xl p-3">
             <div className="flex items-start gap-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-teal-300/18 bg-teal-300/[0.065] text-teal-100">
@@ -185,7 +144,7 @@ export function Login({ onLogin }: LoginProps) {
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold text-slate-200">Ambiente de acesso</p>
                 <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                  Use o acesso principal para operação conectada ou o fluxo guiado para conhecer a experiência comercial.
+                  O acesso exige uma conta ativa vinculada à empresa e validada pelo serviço do CRM.
                 </p>
               </div>
             </div>

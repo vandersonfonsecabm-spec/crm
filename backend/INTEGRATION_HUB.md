@@ -90,7 +90,7 @@ Enquanto nao implementados, retornam erro controlado `CONNECTOR_NOT_IMPLEMENTED`
 
 ## Rotas administrativas
 
-Todas exigem JWT real de usuario ADMIN. Token demo nao acessa o Hub.
+Todas exigem JWT de usuario ADMIN ativo e vinculado a empresa valida.
 
 ### Integracoes
 
@@ -182,7 +182,7 @@ A fundacao operacional do Hub permite importar produtos externos, estoque e prec
 4. `POST /importacoes/:id/processar` importa as linhas validas para `ProdutoExterno`, `EstoqueExterno` e `PrecoExterno`.
 5. `GET /hub/produtos` consulta os produtos externos importados, sem misturar com o estoque interno do CRM.
 
-O upload e o processamento sao restritos a usuarios `ADMIN`. Token demo, `GERENTE` e `VENDEDOR` nao podem executar importacao. Os arquivos sao temporarios, nao sao gravados no SQLite e sao removidos apos analise/processamento ou cancelamento.
+O upload e o processamento sao restritos a usuarios `ADMIN`. `GERENTE` e `VENDEDOR` nao podem executar importacao. Os arquivos sao temporarios, nao sao gravados no SQLite e sao removidos apos analise/processamento ou cancelamento.
 
 Variaveis de limite:
 
@@ -201,4 +201,4 @@ O Hub tambem expoe rotas administrativas somente leitura para consumo comercial 
 - `GET /hub/consulta-comercial`.
 - `GET /hub/qualidade-dados`.
 
-Ambas usam isolamento por empresa e bloqueiam token demo. A consulta comercial agrega produto, estoques, precos, origem, disponibilidade, promocao vigente e avisos de dados desatualizados. A qualidade dos dados resume lacunas do catalogo canonico, como produtos sem SKU, sem codigo de barras, sem estoque, sem preco e duplicidades detectadas.
+Ambas usam isolamento por empresa e exigem autenticacao normal. A consulta comercial agrega produto, estoques, precos, origem, disponibilidade, promocao vigente e avisos de dados desatualizados. A qualidade dos dados resume lacunas do catalogo canonico, como produtos sem SKU, sem codigo de barras, sem estoque, sem preco e duplicidades detectadas.

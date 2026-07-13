@@ -12,15 +12,14 @@ Nunca versione um segredo real. Sem `JWT_SECRET`, o desenvolvimento usa um segre
 
 ## Rotas
 
-- `POST /auth/demo`: preserva o token demonstrativo legado.
 - `POST /auth/login`: recebe `email`, `senha` e, quando o mesmo e-mail existir em mais de uma empresa, `empresaSlug`.
 - `POST /auth/register-company`: recebe `empresaNome`, `adminNome`, `email`, `senha` e `slug` opcional. Cria empresa e ADMIN na mesma transacao.
-- `GET /auth/me`: retorna usuario, empresa, papel e contexto demo.
+- `GET /auth/me`: retorna usuario, empresa, papel e status da sessao.
 - `GET /usuarios`: ADMIN ou GERENTE; suporta `page`, `limit` e `busca`.
 - `POST /usuarios`: somente ADMIN; recebe `nome`, `email`, `senha` e `papel`.
 - `PATCH /usuarios/:id`: somente ADMIN; altera `nome`, `papel` e `ativo` dentro da propria empresa.
 
-Papeis: `ADMIN`, `GERENTE` e `VENDEDOR`. O token demo continua autorizado nas rotas antigas, mas e recusado nas rotas administrativas de usuarios.
+Papeis: `ADMIN`, `GERENTE` e `VENDEDOR`. Todas as rotas privadas exigem JWT normal associado a usuario e empresa persistidos.
 
 ## Respostas e seguranca
 
@@ -62,5 +61,5 @@ Para uma execucao futura no Railway, abra um shell autenticado no servico `api`,
 2. Manter `ALLOW_COMPANY_REGISTRATION=false` ate definir o fluxo publico de onboarding.
 3. Fazer backup do volume SQLite.
 4. Aplicar `prisma migrate deploy` em uma etapa controlada.
-5. Validar login demo, login real e isolamento de usuarios.
+5. Validar login normal, papeis e isolamento de usuarios.
 6. Migrar `empresaId` para os modulos comerciais apenas em pacote posterior.

@@ -14,7 +14,6 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "commercial-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
-process.env.ALLOW_DEMO_MODE = "false";
 process.env.INTEGRATION_ENCRYPTION_KEY = "commercial-test-encryption-key-32-bytes";
 process.env.IMPORT_MAX_FILE_SIZE_BYTES = String(2 * 1024 * 1024);
 process.env.IMPORT_MAX_ROWS = "1000";
@@ -71,8 +70,6 @@ test("consulta comercial unificada usa dados importados e reporta qualidade", as
   const adminA = await registerAndLogin("Empresa Comercial A", "Admin Comercial A", "admin-comercial-a@qa.test");
   const adminB = await registerAndLogin("Empresa Comercial B", "Admin Comercial B", "admin-comercial-b@qa.test");
   const gerente = await createUserAndLogin(adminA.token, "Gerente Comercial", "gerente-comercial@qa.test", "GERENTE");
-  const demo = await request("POST", "/auth/demo");
-  assert.equal(demo.status, 404);
 
   const gerenteConsulta = await request("GET", "/hub/consulta-comercial?q=Produto", undefined, gerente.token);
   assert.equal(gerenteConsulta.status, 403);

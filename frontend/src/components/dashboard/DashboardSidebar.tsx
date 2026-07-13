@@ -77,9 +77,9 @@ export default function DashboardSidebar({
     }))
     .filter((group) => group.items.length > 0);
 
-  const displayName = authSession?.usuario.nome || "Usuário local";
-  const companyName = authSession?.empresa?.nome || (authSession?.isDemo ? "Ambiente de demonstração" : "CRM Agro SaaS");
-  const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel, authSession?.isDemo);
+  const displayName = authSession?.usuario.nome || "Usuário";
+  const companyName = authSession?.empresa?.nome || "CRM Agro SaaS";
+  const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel);
 
   return (
     <aside className="sidebar-shell hidden h-screen w-[224px] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex">
@@ -153,8 +153,7 @@ function SidebarButton({
   );
 }
 
-function getRoleLabel(role?: string, isDemo?: boolean) {
-  if (isDemo) return "Demonstração";
+function getRoleLabel(role?: string) {
   const labels: Record<string, string> = {
     ADMIN: "Administrador",
     GERENTE: "Gerente",

@@ -54,7 +54,7 @@ Isso evita responder para uma empresa usando produtos ou estoques de outra.
 Acesso:
 
 - `ADMIN` real: permitido;
-- demo: `403`;
+- sem autenticacao: `401`;
 - `GERENTE`: `403`;
 - `VENDEDOR`: `403`;
 - sem token: `401`;

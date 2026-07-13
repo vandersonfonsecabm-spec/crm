@@ -45,7 +45,7 @@ const TIPOS_ACOMPANHAMENTO = new Set(["LIGACAO", "WHATSAPP", "EMAIL", "REUNIAO",
 const auth = createAuth({ prisma });
 const requireAuth = auth.authenticate;
 const requireRole = auth.requireRole;
-const commercialAuth = [requireAuth, auth.requireDemoReadOnly, requireCommercialTenant];
+const commercialAuth = [requireAuth, requireCommercialTenant];
 
 auth.mountRoutes(app);
 mountIntegrationHubRoutes({ app, prisma, authenticate: requireAuth, requireRole });
@@ -2295,7 +2295,7 @@ function parsePositiveId(value) {
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    service: "crm-agro-demo-api",
+    service: "crm-agro-api",
   });
 });
 

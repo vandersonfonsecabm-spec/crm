@@ -135,8 +135,8 @@ function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; 
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const displayName = authSession?.usuario.nome || "Usuário local";
-  const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel, authSession?.isDemo);
-  const companyName = authSession?.empresa?.nome || (authSession?.isDemo ? "Ambiente de demonstração" : "CRM Agro SaaS");
+  const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel);
+  const companyName = authSession?.empresa?.nome || "CRM Agro SaaS";
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -205,8 +205,7 @@ function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; 
   );
 }
 
-function getRoleLabel(role?: string, isDemo?: boolean) {
-  if (isDemo) return "Demonstração";
+function getRoleLabel(role?: string) {
   const labels: Record<string, string> = {
     ADMIN: "Administrador",
     GERENTE: "Gerente",

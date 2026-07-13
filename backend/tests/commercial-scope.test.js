@@ -13,7 +13,6 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "commercial-scope-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
-process.env.ALLOW_DEMO_MODE = "false";
 process.env.INTEGRATION_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 process.env.DATABASE_URL = `file:./${databaseName}`;
 
@@ -198,9 +197,6 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   const sellerList = await request("GET", "/clientes", undefined, sellerLogin.body.access_token);
   assert.equal(sellerList.status, 200);
 
-  const demo = await request("POST", "/auth/demo");
-  assert.equal(demo.status, 404);
-  assert.equal(demo.body.codigo, "DEMO_DISABLED");
 
   const noteRelation = await prisma.nota.findUnique({
     where: { id: noteA.body.id },

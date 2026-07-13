@@ -76,7 +76,7 @@ Todas exigem ADMIN real:
 - `POST /canais/whatsapp/teste`
 - `PATCH /canais/:id`
 
-Demo, GERENTE, VENDEDOR, sem token e token invalido sao bloqueados pelo middleware existente.
+GERENTE, VENDEDOR, sem token e token invalido sao bloqueados pelo middleware existente.
 
 ## Allowlist
 

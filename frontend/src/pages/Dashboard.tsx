@@ -49,7 +49,7 @@ import useDashboardActions from "../hooks/useDashboardActions";
 import { canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
 
-import { emptyClient, loadClients, statusList } from "../data/mockClients";
+import { emptyClient, statusList } from "../data/clientDefaults";
 
 import type { ActivePage, Client, KanbanOwner, SortBy, Status } from "../types/dashboard";
 
@@ -58,7 +58,7 @@ type DashboardProps = {
 };
 
 export default function Dashboard({ onLogout }: DashboardProps) {
-  const [clients, setClients] = useState<Client[]>(loadClients);
+  const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
   const [onlyFavorites, setOnlyFavorites] = useState(false);
@@ -70,7 +70,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [requestedActivePage, setActivePage] = useState<ActivePage>("dashboard");
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null);
   const [isDraggingKanban, setIsDraggingKanban] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(1);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [editing, setEditing] = useState<Client | null>(null);
   const [creating, setCreating] = useState<Client | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -79,7 +79,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [isBooting, setIsBooting] = useState(true);
-  const [dataSource, setDataSource] = useState<"offline" | "backend">("offline");
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
   const [whatsappExternalRequest, setWhatsappExternalRequest] = useState<WhatsappExternalRequest | null>(null);
@@ -115,12 +114,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   } satisfies Record<ActivePage, string>)[activePage];
 
   useEffect(() => {
-    if (dataSource === "offline") {
-      localStorage.setItem("crm-premium-clients", JSON.stringify(clients));
-    }
-  }, [clients, dataSource]);
-
-  useEffect(() => {
     let ignore = false;
 
     async function loadBackendClients() {
@@ -128,17 +121,15 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       setAuthSession(savedSession);
 
       try {
-        if (savedSession && !savedSession.isDemo) {
-          const refreshedSession = await fetchAuthMe();
-          if (!ignore) setAuthSession(refreshedSession);
-        }
+        const refreshedSession = await fetchAuthMe();
+        if (!ignore) setAuthSession(refreshedSession);
 
         const backendClients = await fetchClientesFromBackend();
-        if (!backendClients || ignore) return;
+        if (ignore) return;
+        if (!backendClients) throw new Error("Dados indisponiveis.");
 
         setClients(backendClients);
         setSelectedId(backendClients[0]?.id ?? null);
-        setDataSource("backend");
 
         try {
           const summary = await fetchDashboardSummaryFromBackend();
@@ -147,14 +138,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           if (!ignore) setDashboardSummary(null);
         }
       } catch {
-        if (getAuthSession() === null) {
-          clearAuthSession();
-          onLogout();
-          return;
-        }
-
-        setDataSource("offline");
-        setDashboardSummary(null);
+        if (ignore) return;
+        clearAuthSession();
+        onLogout();
       }
     }
 
@@ -260,7 +246,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   } = useDashboardActions({
     clients,
     setClients,
-    dataSource,
     selectedClient,
     selectedId,
     setSelectedId,
@@ -295,9 +280,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   const backendCaption = dashboardSummary
     ? `${dashboardSummary.indicadores.clientes} clientes sincronizados`
-    : dataSource === "backend"
-      ? "Dados sincronizados"
-      : "Dados locais";
+    : "Dados sincronizados";
 
   const openKanbanWithStatus = useCallback((nextStatus: Status | "Todos") => {
     clearFilters();

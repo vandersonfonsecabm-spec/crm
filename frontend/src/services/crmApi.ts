@@ -7,8 +7,7 @@ const USER_KEY = "crm-auth-user";
 const COMPANY_KEY = "crm-auth-company";
 const ROLE_KEY = "crm-auth-role";
 const EXPIRES_KEY = "crm-auth-expires-at";
-const DEMO_KEY = "crm-auth-demo";
-const DEMO_TOKEN = "demo-sqlite";
+const LEGACY_BYPASS_STORAGE_KEYS = ["crm-auth-demo", "crm-premium-clients"] as const;
 
 type ApiAuthResponse = {
   access_token: string;
@@ -33,7 +32,6 @@ type ApiAuthResponse = {
   };
   empresa?: ApiAuthCompany;
   papel?: ApiUserRole;
-  isDemo?: boolean;
 };
 
 export type ApiUserRole = "ADMIN" | "GERENTE" | "VENDEDOR";
@@ -60,7 +58,6 @@ export type AuthSession = {
   empresa?: ApiAuthCompany;
   papel?: ApiUserRole;
   expiresAt?: string;
-  isDemo: boolean;
 };
 
 type ApiCliente = {
@@ -697,7 +694,12 @@ export function clearAuthSession() {
   localStorage.removeItem(COMPANY_KEY);
   localStorage.removeItem(ROLE_KEY);
   localStorage.removeItem(EXPIRES_KEY);
-  localStorage.removeItem(DEMO_KEY);
+}
+
+export function cleanupLegacyBypassStorage() {
+  for (const key of LEGACY_BYPASS_STORAGE_KEYS) {
+    localStorage.removeItem(key);
+  }
 }
 
 export function getAuthSession(): AuthSession | null {
@@ -708,18 +710,10 @@ export function getAuthSession(): AuthSession | null {
   const empresa = readStorageJson<ApiAuthCompany>(COMPANY_KEY);
   const papel = localStorage.getItem(ROLE_KEY) as ApiUserRole | null;
   const expiresAt = localStorage.getItem(EXPIRES_KEY) || undefined;
-  const storedDemo = localStorage.getItem(DEMO_KEY) === "true";
-  const isDemo = storedDemo || token === DEMO_TOKEN;
 
-  if (!usuario?.nome) {
-    return {
-      token,
-      usuario: isDemo ? demoUser() : localUser(),
-      empresa: isDemo ? demoCompany() : empresa ?? undefined,
-      papel: isDemo ? "VENDEDOR" : papel ?? undefined,
-      expiresAt,
-      isDemo,
-    };
+  if (!usuario?.id || !usuario.empresaId || !usuario.nome || !empresa?.id || !empresa.nome) {
+    clearAuthSession();
+    return null;
   }
 
   return {
@@ -728,16 +722,11 @@ export function getAuthSession(): AuthSession | null {
     empresa: empresa ?? undefined,
     papel: papel ?? usuario.papel,
     expiresAt,
-    isDemo,
   };
 }
 
-export function isDemoSession() {
-  return getAuthSession()?.isDemo ?? false;
-}
-
 export function getSessionRole(session: AuthSession | null): ApiUserRole | null {
-  if (!session || session.isDemo) return null;
+  if (!session) return null;
   const role = session.papel ?? session.usuario?.papel;
   return role === "ADMIN" || role === "GERENTE" || role === "VENDEDOR" ? role : null;
 }
@@ -746,15 +735,17 @@ export function canAccessIntegrations(session: AuthSession | null) {
   return getSessionRole(session) === "ADMIN";
 }
 
-function setAuthSessionFromResponse(data: ApiAuthResponse, options: { forceDemo?: boolean } = {}) {
+function setAuthSessionFromResponse(data: ApiAuthResponse) {
   const token = data.access_token;
   const apiUser = data.usuario ?? data.user;
   const papel = data.papel ?? apiUser?.papel ?? apiUser?.role;
-  const isDemo = Boolean(options.forceDemo || data.isDemo);
-  const usuario = isDemo
-    ? demoUser(apiUser)
-    : normalizeAuthUser(apiUser, papel);
-  const empresa = isDemo ? demoCompany(data.empresa) : normalizeAuthCompany(data.empresa);
+  const usuario = normalizeAuthUser(apiUser, papel);
+  const empresa = normalizeAuthCompany(data.empresa);
+
+  if (!token || !usuario.id || !usuario.empresaId || !empresa?.id) {
+    clearAuthSession();
+    throw new Error("Resposta de autenticacao invalida.");
+  }
 
   setAuthToken(token);
   setAuthUser(usuario);
@@ -778,8 +769,6 @@ function setAuthSessionFromResponse(data: ApiAuthResponse, options: { forceDemo?
   } else {
     localStorage.removeItem(EXPIRES_KEY);
   }
-
-  localStorage.setItem(DEMO_KEY, isDemo ? "true" : "false");
 }
 
 export async function fetchAuthMe() {
@@ -797,16 +786,15 @@ export async function fetchAuthMe() {
     throw new Error("Sessao expirada.");
   }
 
-  const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "empresa" | "papel" | "isDemo">;
+  const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "empresa" | "papel">;
   const sessionData: ApiAuthResponse = {
     access_token: token,
     usuario: data.usuario,
     user: data.user,
     empresa: data.empresa,
     papel: data.papel,
-    isDemo: data.isDemo ?? isDemoSession(),
   };
-  setAuthSessionFromResponse(sessionData, { forceDemo: sessionData.isDemo });
+  setAuthSessionFromResponse(sessionData);
   return getAuthSession();
 }
 
@@ -832,26 +820,6 @@ export async function loginWithBackend(email: string, senha: string) {
   return data;
 }
 
-export async function loginDemoWithBackend() {
-  if (hasRemoteApi()) {
-    try {
-      const response = await fetch(`${API_URL}/auth/demo`, {
-        method: "POST",
-      });
-
-      if (response.ok) {
-        const data = (await response.json()) as ApiAuthResponse;
-        setAuthSessionFromResponse(data, { forceDemo: true });
-        return data;
-      }
-    } catch {
-      return startGuidedAccess();
-    }
-  }
-
-  return startGuidedAccess();
-}
-
 export async function fetchClientesFromBackend() {
   const token = getAuthToken();
   if (!token || !hasRemoteApi()) return null;
@@ -870,7 +838,7 @@ export async function fetchClientesFromBackend() {
 
 export async function fetchDashboardSummaryFromBackend() {
   const token = getAuthToken();
-  if (!token || token === DEMO_TOKEN || !hasRemoteApi()) return null;
+  if (!token || !hasRemoteApi()) return null;
 
   const response = await fetch(`${API_URL}/dashboard`, {
     headers: buildHeaders(token),
@@ -1083,27 +1051,27 @@ export async function cancelarAcompanhamento(id: number) {
 }
 
 export async function createClienteOnBackend(client: Client) {
-  if (!hasRemoteApi()) return null;
+  if (!hasRemoteApi()) throw new Error("Serviço indisponível.");
 
   const response = await requestCliente("POST", "/clientes", clientToPayload(client));
   return mapApiClienteToClient(response);
 }
 
 export async function updateClienteOnBackend(client: Client) {
-  if (!client.backendId || !hasRemoteApi()) return null;
+  if (!client.backendId || !hasRemoteApi()) throw new Error("Cliente não sincronizado.");
 
-  const method = isDemoMode() ? "PUT" : "PATCH";
+  const method = "PATCH";
   const response = await requestCliente(method, `/clientes/${client.backendId}`, clientToPayload(client));
   return mapApiClienteToClient(response, client);
 }
 
 export async function deleteClienteOnBackend(client: Client) {
-  if (!client.backendId || !hasRemoteApi()) return;
+  if (!client.backendId || !hasRemoteApi()) throw new Error("Cliente não sincronizado.");
   await requestCliente("DELETE", `/clientes/${client.backendId}`);
 }
 
 export async function createNotaOnBackend(client: Client, text: string) {
-  if (!client.backendId || !hasRemoteApi()) return null;
+  if (!client.backendId || !hasRemoteApi()) throw new Error("Cliente não sincronizado.");
 
   const token = getAuthToken();
   if (!token) {
@@ -1227,7 +1195,7 @@ async function requestApiWrite<T>(method: "POST" | "PATCH", path: string, payloa
 
   const token = getAuthToken();
   if (!token) {
-    throw new Error("Acesse a demonstracao novamente para continuar.");
+    throw new Error("Autentique-se novamente para continuar.");
   }
 
   const response = await fetch(`${API_URL}${path}`, {
@@ -1299,7 +1267,6 @@ function normalizePaginatedResponse<T>(
 }
 
 function buildHeaders(token: string): Record<string, string> {
-  if (token === DEMO_TOKEN) return {};
   return {
     Authorization: `Bearer ${token}`,
   };
@@ -1307,28 +1274,6 @@ function buildHeaders(token: string): Record<string, string> {
 
 function hasRemoteApi() {
   return API_URL.length > 0;
-}
-
-function startGuidedAccess() {
-  setAuthToken(DEMO_TOKEN);
-  setAuthUser(demoUser());
-  localStorage.setItem(COMPANY_KEY, JSON.stringify(demoCompany()));
-  localStorage.setItem(ROLE_KEY, "VENDEDOR");
-  localStorage.setItem(DEMO_KEY, "true");
-  localStorage.removeItem(EXPIRES_KEY);
-
-  return {
-    access_token: DEMO_TOKEN,
-    user: demoUser(),
-    usuario: demoUser(),
-    empresa: demoCompany(),
-    papel: "VENDEDOR" as ApiUserRole,
-    isDemo: true,
-  };
-}
-
-function isDemoMode() {
-  return isDemoSession();
 }
 
 function normalizeAuthUser(user?: ApiAuthResponse["usuario"], papel?: ApiUserRole): ApiAuthUser {
@@ -1349,34 +1294,6 @@ function normalizeAuthCompany(company?: ApiAuthCompany): ApiAuthCompany | undefi
     nome: company.nome,
     slug: company.slug,
     ativo: company.ativo,
-  };
-}
-
-function demoUser(user?: ApiAuthResponse["usuario"]): ApiAuthUser {
-  return {
-    id: user?.id,
-    empresaId: user?.empresaId,
-    nome: "Usuario Demo",
-    email: user?.email ?? "demo@crm.com",
-    papel: "VENDEDOR",
-    ativo: true,
-  };
-}
-
-function demoCompany(company?: ApiAuthCompany): ApiAuthCompany {
-  return {
-    id: company?.id,
-    nome: "CRM Agro Demo",
-    slug: company?.slug ?? "crm-agro-demo",
-    ativo: true,
-  };
-}
-
-function localUser(): ApiAuthUser {
-  return {
-    nome: "Usuario Local",
-    papel: "VENDEDOR",
-    ativo: true,
   };
 }
 

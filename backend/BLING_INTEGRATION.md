@@ -61,7 +61,7 @@ Payload inicial de sincronização:
 ## Segurança
 
 - Apenas ADMIN real acessa as rotas.
-- Token demo, GERENTE e VENDEDOR são bloqueados pelo middleware existente.
+- GERENTE e VENDEDOR são bloqueados pelo middleware de papel existente.
 - `state` OAuth é aleatório, associado a empresa/usuário, salvo como SHA-256 em `IntegracaoOAuthState`, expira em 10 minutos e é de uso único.
 - `client_secret`, `access_token` e `refresh_token` nunca são enviados ao frontend.
 - Tokens são criptografados com AES-256-GCM via `INTEGRATION_ENCRYPTION_KEY`.
@@ -130,4 +130,4 @@ Se a publicação falhar:
 2. Voltar o deployment para o commit anterior.
 3. Restaurar o backup SQLite se houver corrupção ou migration indevida.
 4. Remover temporariamente as variáveis Bling se a inicialização depender delas.
-5. Validar login real, demo, Hub CSV/XLSX e catálogo comercial.
+5. Validar login normal, Hub CSV/XLSX e catálogo comercial.

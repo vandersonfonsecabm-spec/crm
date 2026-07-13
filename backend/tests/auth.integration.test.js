@@ -14,7 +14,6 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "integration-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
-process.env.ALLOW_DEMO_MODE = "false";
 process.env.DATABASE_URL = `file:./${databaseName}`;
 
 let api;
@@ -201,8 +200,6 @@ test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", 
 
   const health = await request("GET", "/health");
   const dashboard = await request("GET", "/dashboard", undefined, adminToken);
-  const demoDisabled = await request("POST", "/auth/demo");
-  const oldDemoToken = await request("GET", "/clientes", undefined, "demo-sqlite-backend");
   const categorias = await request("GET", "/categorias-produtos");
   const produtos = await request("GET", "/produtos");
   const movimentacoes = await request("GET", "/estoque/movimentacoes");
@@ -213,9 +210,6 @@ test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", 
   const estoqueResumoAuthenticated = await request("GET", "/estoque/resumo", undefined, adminToken);
   assert.equal(health.status, 200);
   assert.equal(dashboard.status, 200);
-  assert.equal(demoDisabled.status, 404);
-  assert.equal(demoDisabled.body.codigo, "DEMO_DISABLED");
-  assert.equal(oldDemoToken.status, 401);
   assert.equal(categorias.status, 401);
   assert.equal(produtos.status, 401);
   assert.equal(movimentacoes.status, 401);

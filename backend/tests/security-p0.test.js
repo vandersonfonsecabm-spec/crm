@@ -11,17 +11,11 @@ const databaseName = `security-p0-test-${process.pid}.db`;
 const databasePath = path.join(backendDir, "prisma", databaseName);
 const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
 const jwtSecret = "security-p0-test-secret-with-sufficient-entropy";
-const demoCompanySlug = `security-demo-${process.pid}`;
-const demoUserEmail = `demo-${process.pid}@security.test`;
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = jwtSecret;
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
-process.env.ALLOW_DEMO_MODE = "true";
-process.env.DEMO_COMPANY_SLUG = demoCompanySlug;
-process.env.DEMO_USER_EMAIL = demoUserEmail;
-process.env.DEMO_JWT_EXPIRES_IN = "15m";
 process.env.INTEGRATION_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 process.env.DATABASE_URL = `file:./${databaseName}`;
 
@@ -29,10 +23,12 @@ let api;
 let prisma;
 let server;
 let baseUrl;
-let demoCompany;
-let demoUser;
-let realCompany;
-let realUser;
+let primaryCompany;
+let secondaryCompany;
+let primaryAdmin;
+let primarySeller;
+let inactiveUser;
+let secondaryAdmin;
 
 before(async () => {
   fs.copyFileSync(sourceDatabase, databasePath);
@@ -45,34 +41,21 @@ before(async () => {
   api = require("../src/server");
   prisma = api.prisma;
 
-  demoCompany = await prisma.empresa.create({
-    data: { nome: "Tenant Demo P0", slug: demoCompanySlug },
+  primaryCompany = await prisma.empresa.create({
+    data: { nome: "Tenant Primario P0", slug: `security-primary-${process.pid}` },
   });
-  demoUser = await prisma.usuario.create({
-    data: {
-      empresaId: demoCompany.id,
-      nome: "Usuario Demo P0",
-      email: demoUserEmail,
-      senhaHash: await bcrypt.hash("SenhaDemoNaoPublica123", 12),
-      papel: "VENDEDOR",
-    },
+  secondaryCompany = await prisma.empresa.create({
+    data: { nome: "Tenant Secundario P0", slug: `security-secondary-${process.pid}` },
   });
-  realCompany = await prisma.empresa.create({
-    data: { nome: "Tenant Real P0", slug: `security-real-${process.pid}` },
-  });
-  realUser = await prisma.usuario.create({
-    data: {
-      empresaId: realCompany.id,
-      nome: "Admin Real P0",
-      email: `admin-${process.pid}@security.test`,
-      senhaHash: await bcrypt.hash("SenhaRealSegura123", 12),
-      papel: "ADMIN",
-    },
-  });
+  primaryAdmin = await createUser(primaryCompany.id, "Admin Primario P0", `admin-${process.pid}@security.test`, "ADMIN");
+  primarySeller = await createUser(primaryCompany.id, "Vendedor Primario P0", `seller-${process.pid}@security.test`, "VENDEDOR");
+  inactiveUser = await createUser(primaryCompany.id, "Usuario Inativo P0", `inactive-${process.pid}@security.test`, "VENDEDOR", false);
+  secondaryAdmin = await createUser(secondaryCompany.id, "Admin Secundario P0", `admin-secondary-${process.pid}@security.test`, "ADMIN");
+
   await prisma.cliente.createMany({
     data: [
-      { empresaId: demoCompany.id, nome: "Cliente exclusivo do demo" },
-      { empresaId: realCompany.id, nome: "Cliente exclusivo real" },
+      { empresaId: primaryCompany.id, nome: "Cliente exclusivo primario" },
+      { empresaId: secondaryCompany.id, nome: "Cliente exclusivo secundario" },
     ],
   });
 
@@ -91,74 +74,75 @@ after(async () => {
   }
 });
 
-test("P0: demo usa tenant dedicado, e somente leitura, e estoque global fica inacessivel", async () => {
-  const demo = await request("POST", "/auth/demo");
-  assert.equal(demo.status, 200);
-  assert.notEqual(demo.body.access_token, "demo-sqlite-backend");
-  assert.equal(demo.body.isDemo, true);
-  assert.equal(demo.body.empresa.id, demoCompany.id);
-  assert.equal(demo.body.usuario.id, demoUser.id);
-  assert.equal(demo.body.papel, "VENDEDOR");
+test("P0: autenticacao normal, tenant e estoque permanecem protegidos", async () => {
+  const removedEndpoint = await request("POST", "/auth/demo");
+  assert.equal(removedEndpoint.status, 404);
+  assert.equal(typeof removedEndpoint.body, "string");
+  assert.doesNotMatch(removedEndpoint.body, /access_token|codigo/i);
 
-  const decodedDemo = jwt.verify(demo.body.access_token, jwtSecret, tokenOptions());
-  assert.equal(decodedDemo.demo, true);
-  assert.equal(decodedDemo.empresaId, demoCompany.id);
-  assert.ok(decodedDemo.exp - decodedDemo.iat <= 15 * 60);
+  const rejectedLegacyToken = await request("GET", "/clientes", undefined, "demo-sqlite-backend");
+  assert.equal(rejectedLegacyToken.status, 401);
 
-  const demoMe = await request("GET", "/auth/me", undefined, demo.body.access_token);
-  assert.equal(demoMe.status, 200);
-  assert.equal(demoMe.body.isDemo, true);
-  assert.equal(demoMe.body.empresa.id, demoCompany.id);
-
-  const demoClients = await request("GET", "/clientes", undefined, demo.body.access_token);
-  assert.equal(demoClients.status, 200);
-  assert.deepEqual(demoClients.body.map((client) => client.nome), ["Cliente exclusivo do demo"]);
-
-  const beforeDemoClients = await prisma.cliente.count({ where: { empresaId: demoCompany.id } });
-  const demoCreate = await request("POST", "/clientes", { nome: "Escrita indevida" }, demo.body.access_token);
-  assert.equal(demoCreate.status, 403);
-  assert.equal(demoCreate.body.codigo, "DEMO_READ_ONLY");
-  assert.equal(await prisma.cliente.count({ where: { empresaId: demoCompany.id } }), beforeDemoClients);
-
-  const demoAdmin = await request("GET", "/usuarios", undefined, demo.body.access_token);
-  assert.equal(demoAdmin.status, 403);
-  const demoRegistration = await request("POST", "/auth/register-company", {
-    empresaNome: "Empresa indevida",
-    adminNome: "Demo",
-    email: "demo-registration@security.test",
-    senha: "SenhaValida123",
-  }, demo.body.access_token);
-  assert.equal(demoRegistration.status, 403);
-  const demoPasswordLogin = await request("POST", "/auth/login", {
-    email: demoUser.email,
-    senha: "SenhaDemoNaoPublica123",
+  const missingCredentials = await request("POST", "/auth/login", {
+    email: `missing-${process.pid}@security.test`,
+    senha: "SenhaNormalSegura123",
   });
-  assert.equal(demoPasswordLogin.status, 401);
-  assert.equal(demoPasswordLogin.body.codigo, "AUTH_INVALID_CREDENTIALS");
+  assert.equal(missingCredentials.status, 401);
 
-  const oldToken = await request("GET", "/clientes", undefined, "demo-sqlite-backend");
-  assert.equal(oldToken.status, 401);
+  const invalidPassword = await request("POST", "/auth/login", {
+    email: primaryAdmin.email,
+    senha: "SenhaIncorreta123",
+  });
+  assert.equal(invalidPassword.status, 401);
 
-  const missingUserToken = signedToken(999999, demoCompany.id);
-  const missingUser = await request("GET", "/clientes", undefined, missingUserToken);
+  const inactiveLogin = await request("POST", "/auth/login", {
+    email: inactiveUser.email,
+    senha: "SenhaNormalSegura123",
+  });
+  assert.equal(inactiveLogin.status, 403);
+  assert.equal(inactiveLogin.body.codigo, "USER_INACTIVE");
+
+  const adminLogin = await login(primaryAdmin.email);
+  const sellerLogin = await login(primarySeller.email);
+  const secondaryLogin = await login(secondaryAdmin.email);
+  const decoded = jwt.verify(adminLogin.body.access_token, jwtSecret, tokenOptions());
+  assert.deepEqual(
+    Object.keys(decoded).sort(),
+    ["aud", "empresaId", "exp", "iat", "iss", "papel", "sub"],
+  );
+  assert.equal(decoded.empresaId, primaryCompany.id);
+
+  const unauthenticated = await request("GET", "/clientes");
+  assert.equal(unauthenticated.status, 401);
+
+  const primaryClients = await request("GET", "/clientes", undefined, adminLogin.body.access_token);
+  assert.equal(primaryClients.status, 200);
+  assert.deepEqual(primaryClients.body.map((client) => client.nome), ["Cliente exclusivo primario"]);
+
+  const secondaryClients = await request("GET", "/clientes", undefined, secondaryLogin.body.access_token);
+  assert.equal(secondaryClients.status, 200);
+  assert.deepEqual(secondaryClients.body.map((client) => client.nome), ["Cliente exclusivo secundario"]);
+
+  const adminUsers = await request("GET", "/usuarios", undefined, adminLogin.body.access_token);
+  assert.equal(adminUsers.status, 200);
+  const sellerUsers = await request("GET", "/usuarios", undefined, sellerLogin.body.access_token);
+  assert.equal(sellerUsers.status, 403);
+
+  const missingUser = await request("GET", "/clientes", undefined, signedToken(999999, primaryCompany.id));
   assert.equal(missingUser.status, 401);
-  const missingCompanyToken = signedToken(demoUser.id, 999999);
-  const missingCompany = await request("GET", "/clientes", undefined, missingCompanyToken);
+  const missingCompany = await request("GET", "/clientes", undefined, signedToken(primarySeller.id, 999999));
   assert.equal(missingCompany.status, 401);
-  const missingTenantToken = signedToken(demoUser.id, undefined);
-  const missingTenant = await request("GET", "/clientes", undefined, missingTenantToken);
+  const missingTenant = await request("GET", "/clientes", undefined, signedToken(primarySeller.id, undefined));
   assert.equal(missingTenant.status, 401);
-
-  const normalLogin = await request("POST", "/auth/login", {
-    email: realUser.email,
-    senha: "SenhaRealSegura123",
-  });
-  assert.equal(normalLogin.status, 200);
-  assert.equal(normalLogin.body.isDemo, undefined);
-  const realToken = normalLogin.body.access_token;
-  const realClients = await request("GET", "/clientes", undefined, realToken);
-  assert.equal(realClients.status, 200);
-  assert.deepEqual(realClients.body.map((client) => client.nome), ["Cliente exclusivo real"]);
+  const invalidLink = await request("GET", "/clientes", undefined, signedToken(primarySeller.id, secondaryCompany.id));
+  assert.equal(invalidLink.status, 401);
+  const unsupportedClaim = await request(
+    "GET",
+    "/clientes",
+    undefined,
+    signedToken(primarySeller.id, primaryCompany.id, { legacyContext: true }),
+  );
+  assert.equal(unsupportedClaim.status, 401);
 
   const legacyPaths = [
     "/categorias-produtos",
@@ -168,35 +152,53 @@ test("P0: demo usa tenant dedicado, e somente leitura, e estoque global fica ina
     "/estoque/resumo",
   ];
   for (const pathname of legacyPaths) {
-    const unauthenticated = await request("GET", pathname);
-    assert.equal(unauthenticated.status, 401);
-    const authenticated = await request("GET", pathname, undefined, realToken);
-    assert.equal(authenticated.status, 410);
-    assert.equal(authenticated.body.codigo, "LEGACY_INVENTORY_DISABLED");
+    const withoutToken = await request("GET", pathname);
+    assert.equal(withoutToken.status, 401);
+    const withToken = await request("GET", pathname, undefined, adminLogin.body.access_token);
+    assert.equal(withToken.status, 410);
+    assert.equal(withToken.body.codigo, "LEGACY_INVENTORY_DISABLED");
   }
 
-  const legacyWrite = await request("POST", "/estoque/ajustes", { produtoId: 1, quantidade: 1 }, realToken);
+  const legacyWrite = await request("POST", "/estoque/ajustes", { produtoId: 1, quantidade: 1 }, adminLogin.body.access_token);
   assert.equal(legacyWrite.status, 410);
   assert.equal(legacyWrite.body.codigo, "LEGACY_INVENTORY_DISABLED");
 
-  const canonicalStock = await request("GET", "/hub/produtos", undefined, realToken);
-  assert.equal(canonicalStock.status, 200);
-  assert.deepEqual(canonicalStock.body.data, []);
-
-  await prisma.usuario.update({ where: { id: demoUser.id }, data: { ativo: false } });
-  const inactiveDemo = await request("POST", "/auth/demo");
-  assert.equal(inactiveDemo.status, 403);
-  assert.equal(inactiveDemo.body.codigo, "DEMO_CONTEXT_INVALID");
-  const inactiveDemoToken = await request("GET", "/clientes", undefined, demo.body.access_token);
-  assert.equal(inactiveDemoToken.status, 403);
-  assert.equal(inactiveDemoToken.body.codigo, "USER_INACTIVE");
+  const primaryStock = await request("GET", "/hub/produtos", undefined, adminLogin.body.access_token);
+  const secondaryStock = await request("GET", "/hub/produtos", undefined, secondaryLogin.body.access_token);
+  assert.equal(primaryStock.status, 200);
+  assert.equal(secondaryStock.status, 200);
+  assert.deepEqual(primaryStock.body.data, []);
+  assert.deepEqual(secondaryStock.body.data, []);
 });
 
-function signedToken(usuarioId, empresaId) {
+async function createUser(empresaId, nome, email, papel, ativo = true) {
+  return prisma.usuario.create({
+    data: {
+      empresaId,
+      nome,
+      email,
+      senhaHash: await bcrypt.hash("SenhaNormalSegura123", 12),
+      papel,
+      ativo,
+    },
+  });
+}
+
+async function login(email) {
+  const response = await request("POST", "/auth/login", {
+    email,
+    senha: "SenhaNormalSegura123",
+  });
+  assert.equal(response.status, 200);
+  return response;
+}
+
+function signedToken(usuarioId, empresaId, extraClaims = {}) {
   return jwt.sign(
     {
       ...(empresaId === undefined ? {} : { empresaId }),
       papel: "VENDEDOR",
+      ...extraClaims,
     },
     jwtSecret,
     {
@@ -224,8 +226,13 @@ async function request(method, pathname, body, token) {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const text = await response.text();
-  return {
-    status: response.status,
-    body: text ? JSON.parse(text) : null,
-  };
+  let parsed = text;
+  if (text) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = text;
+    }
+  }
+  return { status: response.status, body: parsed || null };
 }
