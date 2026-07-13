@@ -6,7 +6,7 @@ const JWT_ISSUER = "crm-agro-saas-api";
 const JWT_AUDIENCE = "crm-agro-saas";
 const LOCAL_JWT_SECRET = "local-development-only-change-me";
 
-function createAuth({ prisma, demo }) {
+function createAuth({ prisma }) {
   const production = process.env.NODE_ENV === "production";
   const jwtSecret = String(process.env.JWT_SECRET || "").trim();
 
@@ -25,7 +25,17 @@ function createAuth({ prisma, demo }) {
       process.env.ALLOW_COMPANY_REGISTRATION,
       !production,
     ),
+    demo: {
+      enabled: parseBoolean(process.env.ALLOW_DEMO_MODE, false),
+      companySlug: normalizeSlug(process.env.DEMO_COMPANY_SLUG),
+      userEmail: normalizeEmail(process.env.DEMO_USER_EMAIL),
+      expiresIn: String(process.env.DEMO_JWT_EXPIRES_IN || "30m").trim(),
+    },
   };
+
+  if (config.demo.enabled && (!config.demo.companySlug || !config.demo.userEmail)) {
+    throw new Error("DEMO_COMPANY_SLUG e DEMO_USER_EMAIL sao obrigatorios quando ALLOW_DEMO_MODE=true.");
+  }
 
   async function authenticate(req, res, next) {
     const authorization = String(req.headers.authorization || "");
@@ -33,18 +43,6 @@ function createAuth({ prisma, demo }) {
 
     if (scheme !== "Bearer" || !token) {
       return authError(res, 401, "Token de autenticacao obrigatorio.", "AUTH_TOKEN_REQUIRED");
-    }
-
-    if (token === demo.token) {
-      req.auth = {
-        isDemo: true,
-        usuarioId: null,
-        empresaId: null,
-        papel: "ADMIN",
-        usuario: demo.usuario,
-        empresa: demo.empresa,
-      };
-      return next();
     }
 
     let payload;
@@ -79,7 +77,7 @@ function createAuth({ prisma, demo }) {
       }
 
       req.auth = {
-        isDemo: false,
+        isDemo: payload.demo === true,
         usuarioId: usuario.id,
         empresaId: usuario.empresaId,
         papel: usuario.papel,
@@ -93,6 +91,13 @@ function createAuth({ prisma, demo }) {
     }
   }
 
+  function requireDemoReadOnly(req, res, next) {
+    if (req.auth && req.auth.isDemo && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+      return authError(res, 403, "O modo demonstrativo permite apenas leitura.", "DEMO_READ_ONLY");
+    }
+    return next();
+  }
+
   function requireRole(...allowedRoles) {
     return (req, res, next) => {
       if (!req.auth || req.auth.isDemo || !allowedRoles.includes(req.auth.papel)) {
@@ -103,10 +108,36 @@ function createAuth({ prisma, demo }) {
   }
 
   function mountRoutes(app) {
-    app.post("/auth/demo", (req, res) => res.json(demoResponse(demo)));
+    app.post("/auth/demo", async (req, res) => {
+      if (!config.demo.enabled) {
+        return authError(res, 404, "Modo demonstrativo indisponivel.", "DEMO_DISABLED");
+      }
+
+      try {
+        const usuario = await prisma.usuario.findFirst({
+          where: {
+            email: config.demo.userEmail,
+            empresa: { slug: config.demo.companySlug },
+          },
+          include: { empresa: true },
+        });
+
+        if (!usuario || usuario.papel !== "VENDEDOR" || !usuario.ativo || !usuario.empresa || !usuario.empresa.ativo) {
+          return authError(res, 403, "Modo demonstrativo indisponivel.", "DEMO_CONTEXT_INVALID");
+        }
+
+        return res.json(loginResponse(usuario, config, {
+          isDemo: true,
+          expiresIn: config.demo.expiresIn,
+        }));
+      } catch (error) {
+        console.error("Falha ao validar o contexto demonstrativo.", error);
+        return authError(res, 500, "Modo demonstrativo indisponivel.", "DEMO_CONTEXT_ERROR");
+      }
+    });
 
     app.post("/auth/register-company", async (req, res) => {
-      if (String(req.headers.authorization || "") === `Bearer ${demo.token}`) {
+      if (hasDemoBearer(req, config.secret)) {
         return authError(res, 403, "O contexto demonstrativo nao pode cadastrar empresas.", "AUTH_FORBIDDEN");
       }
       if (!config.allowCompanyRegistration) {
@@ -157,10 +188,14 @@ function createAuth({ prisma, demo }) {
       const senha = String((req.body && req.body.senha) || "");
       const slug = normalizeSlug(req.body && (req.body.empresaSlug || req.body.slug));
 
-      if (email === demo.email && senha === demo.senha && !slug) {
-        return res.json(demoResponse(demo));
-      }
       if (!email || !senha) {
+        return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
+      }
+      if (
+        config.demo.enabled &&
+        email === config.demo.userEmail &&
+        (!slug || slug === config.demo.companySlug)
+      ) {
         return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
       }
 
@@ -311,7 +346,7 @@ function createAuth({ prisma, demo }) {
     });
   }
 
-  return { authenticate, requireRole, mountRoutes, config };
+  return { authenticate, requireRole, requireDemoReadOnly, mountRoutes, config };
 }
 
 const publicUsuarioSelect = {
@@ -326,13 +361,18 @@ const publicUsuarioSelect = {
   updatedAt: true,
 };
 
-function loginResponse(usuario, config) {
+function loginResponse(usuario, config, options = {}) {
+  const isDemo = options.isDemo === true;
   const token = jwt.sign(
-    { empresaId: usuario.empresaId, papel: usuario.papel },
+    {
+      empresaId: usuario.empresaId,
+      papel: usuario.papel,
+      ...(isDemo ? { demo: true } : {}),
+    },
     config.secret,
     {
       subject: String(usuario.id),
-      expiresIn: config.expiresIn,
+      expiresIn: options.expiresIn || config.expiresIn,
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
     },
@@ -345,18 +385,24 @@ function loginResponse(usuario, config) {
     user: publicUsuario(usuario),
     empresa: publicEmpresa(usuario.empresa),
     papel: usuario.papel,
+    ...(isDemo ? { isDemo: true } : {}),
   };
 }
 
-function demoResponse(demo) {
-  return {
-    access_token: demo.token,
-    user: demo.usuario,
-    usuario: demo.usuario,
-    empresa: demo.empresa,
-    papel: "ADMIN",
-    isDemo: true,
-  };
+function hasDemoBearer(req, secret) {
+  const authorization = String(req.headers.authorization || "");
+  const [scheme, token] = authorization.split(" ");
+  if (scheme !== "Bearer" || !token) return false;
+
+  try {
+    const payload = jwt.verify(token, secret, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
+    return payload.demo === true;
+  } catch {
+    return false;
+  }
 }
 
 function publicUsuario(usuario) {

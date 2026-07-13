@@ -15,6 +15,7 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "manual-import-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
+process.env.ALLOW_DEMO_MODE = "false";
 process.env.INTEGRATION_ENCRYPTION_KEY = "manual-import-test-encryption-key-32-bytes";
 process.env.IMPORT_MAX_FILE_SIZE_BYTES = String(1024 * 1024);
 process.env.IMPORT_MAX_ROWS = "500";
@@ -59,9 +60,8 @@ test("importacao manual CSV e XLSX valida, processa, isola empresas e evita dupl
   const gerente = await createUserAndLogin(adminA.token, "Gerente Import", "gerente-import@qa.test", "GERENTE");
   const vendedor = await createUserAndLogin(adminA.token, "Vendedor Import", "vendedor-import@qa.test", "VENDEDOR");
   const demo = await request("POST", "/auth/demo");
+  assert.equal(demo.status, 404);
 
-  const demoUpload = await uploadFixture("produtos-valido.csv", "text/csv", demo.body.access_token);
-  assert.equal(demoUpload.status, 403);
   const gerenteUpload = await uploadFixture("produtos-valido.csv", "text/csv", gerente.token);
   assert.equal(gerenteUpload.status, 403);
   const vendedorUpload = await uploadFixture("produtos-valido.csv", "text/csv", vendedor.token);

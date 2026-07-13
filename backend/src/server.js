@@ -36,44 +36,27 @@ app.use(
   }),
 );
 
-const DEMO_EMAIL = "demo@crm.com";
-const DEMO_PASSWORD = "123456";
-const DEMO_TOKEN = "demo-sqlite-backend";
 const UNIDADES_MEDIDA = new Set(["UN", "KG", "L", "SC", "TON"]);
 const SORT_DIRECTIONS = new Set(["asc", "desc"]);
 const TIPOS_MOVIMENTACAO_ESTOQUE = new Set(["ENTRADA", "SAIDA", "AJUSTE"]);
 const STATUS_ACOMPANHAMENTO = new Set(["PENDENTE", "CONCLUIDO", "CANCELADO"]);
 const PRIORIDADES_ACOMPANHAMENTO = new Set(["BAIXA", "MEDIA", "ALTA", "CRITICA"]);
 const TIPOS_ACOMPANHAMENTO = new Set(["LIGACAO", "WHATSAPP", "EMAIL", "REUNIAO", "VISITA", "OUTRO"]);
-const auth = createAuth({
-  prisma,
-  demo: {
-    email: DEMO_EMAIL,
-    senha: DEMO_PASSWORD,
-    token: DEMO_TOKEN,
-    usuario: {
-      id: 1,
-      nome: "Marco Admin",
-      email: DEMO_EMAIL,
-      role: "ADMIN",
-      papel: "ADMIN",
-    },
-    empresa: {
-      id: 1,
-      nome: "CRM Agro Demo",
-      slug: "crm-agro-demo",
-      ativo: true,
-    },
-  },
-});
+const auth = createAuth({ prisma });
 const requireAuth = auth.authenticate;
 const requireRole = auth.requireRole;
-const commercialAuth = [requireAuth, requireCommercialTenant];
+const commercialAuth = [requireAuth, auth.requireDemoReadOnly, requireCommercialTenant];
 
 auth.mountRoutes(app);
 mountIntegrationHubRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountChannelRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountWhatsappSimulationRoutes({ app, prisma, authenticate: requireAuth, requireRole });
+
+app.use(
+  ["/categorias-produtos", "/produtos", "/estoque"],
+  requireAuth,
+  legacyInventoryUnavailable,
+);
 
 app.get("/dashboard", ...commercialAuth, async (req, res) => {
   try {
@@ -2248,12 +2231,19 @@ function validationError(error, status = 400) {
 }
 
 function requireCommercialTenant(req, res, next) {
-  const empresaId = req.auth && req.auth.empresaId ? req.auth.empresaId : req.auth && req.auth.isDemo && req.auth.empresa ? req.auth.empresa.id : null;
+  const empresaId = req.auth && req.auth.empresaId ? req.auth.empresaId : null;
   if (!empresaId) {
     return res.status(403).json({ erro: "Empresa da sessao obrigatoria.", codigo: "COMPANY_CONTEXT_REQUIRED" });
   }
   req.commercialEmpresaId = empresaId;
   return next();
+}
+
+function legacyInventoryUnavailable(req, res) {
+  return res.status(410).json({
+    erro: "Estoque legado indisponivel ate a conclusao do isolamento por empresa.",
+    codigo: "LEGACY_INVENTORY_DISABLED",
+  });
 }
 
 function hasEmpresaIdInput(source) {

@@ -14,6 +14,7 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "integration-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
+process.env.ALLOW_DEMO_MODE = "false";
 process.env.DATABASE_URL = `file:./${databaseName}`;
 
 let api;
@@ -46,7 +47,7 @@ after(async () => {
   }
 });
 
-test("fundacao SaaS autentica, autoriza e preserva o token demo", async () => {
+test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", async () => {
   const initialCompanies = await prisma.empresa.count();
   const initialUsers = await prisma.usuario.count();
 
@@ -198,50 +199,31 @@ test("fundacao SaaS autentica, autoriza e preserva o token demo", async () => {
   const inactiveCompanyMe = await request("GET", "/auth/me", undefined, secondToken);
   assert.equal(inactiveCompanyMe.status, 403);
 
-  const demo = await request("POST", "/auth/demo");
-  assert.equal(demo.status, 200);
-  assert.equal(demo.body.access_token, "demo-sqlite-backend");
-  const demoProtectedLegacy = await request(
-    "POST",
-    "/categorias-produtos",
-    { nome: "" },
-    demo.body.access_token,
-  );
-  assert.equal(demoProtectedLegacy.status, 400);
-  const demoAdminBlocked = await request("GET", "/usuarios", undefined, demo.body.access_token);
-  assert.equal(demoAdminBlocked.status, 403);
-  const demoCompanyBlocked = await request(
-    "POST",
-    "/auth/register-company",
-    {
-      empresaNome: "Empresa Indevida",
-      adminNome: "Demo",
-      email: "demo-indevido@qa.example",
-      senha: "SenhaValida123",
-    },
-    demo.body.access_token,
-  );
-  assert.equal(demoCompanyBlocked.status, 403);
-
   const health = await request("GET", "/health");
-  const dashboard = await request("GET", "/dashboard", undefined, demo.body.access_token);
-  const clientes = await request("GET", "/clientes", undefined, demo.body.access_token);
-  const clienteId = clientes.body[0].id;
-  const notas = await request("GET", `/clientes/${clienteId}/notas`, undefined, demo.body.access_token);
-  const acompanhamentos = await request("GET", "/acompanhamentos", undefined, demo.body.access_token);
+  const dashboard = await request("GET", "/dashboard", undefined, adminToken);
+  const demoDisabled = await request("POST", "/auth/demo");
+  const oldDemoToken = await request("GET", "/clientes", undefined, "demo-sqlite-backend");
   const categorias = await request("GET", "/categorias-produtos");
   const produtos = await request("GET", "/produtos");
   const movimentacoes = await request("GET", "/estoque/movimentacoes");
   const estoqueResumo = await request("GET", "/estoque/resumo");
+  const categoriasAuthenticated = await request("GET", "/categorias-produtos", undefined, adminToken);
+  const produtosAuthenticated = await request("GET", "/produtos", undefined, adminToken);
+  const movimentacoesAuthenticated = await request("GET", "/estoque/movimentacoes", undefined, adminToken);
+  const estoqueResumoAuthenticated = await request("GET", "/estoque/resumo", undefined, adminToken);
   assert.equal(health.status, 200);
   assert.equal(dashboard.status, 200);
-  assert.equal(clientes.status, 200);
-  assert.equal(notas.status, 200);
-  assert.equal(acompanhamentos.status, 200);
-  assert.equal(categorias.status, 200);
-  assert.equal(produtos.status, 200);
-  assert.equal(movimentacoes.status, 200);
-  assert.equal(estoqueResumo.status, 200);
+  assert.equal(demoDisabled.status, 404);
+  assert.equal(demoDisabled.body.codigo, "DEMO_DISABLED");
+  assert.equal(oldDemoToken.status, 401);
+  assert.equal(categorias.status, 401);
+  assert.equal(produtos.status, 401);
+  assert.equal(movimentacoes.status, 401);
+  assert.equal(estoqueResumo.status, 401);
+  for (const response of [categoriasAuthenticated, produtosAuthenticated, movimentacoesAuthenticated, estoqueResumoAuthenticated]) {
+    assert.equal(response.status, 410);
+    assert.equal(response.body.codigo, "LEGACY_INVENTORY_DISABLED");
+  }
 });
 
 async function request(method, pathname, body, token) {

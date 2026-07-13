@@ -14,6 +14,7 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "bling-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
+process.env.ALLOW_DEMO_MODE = "false";
 process.env.INTEGRATION_ENCRYPTION_KEY = "bling-test-encryption-key-with-32-bytes";
 process.env.BLING_CLIENT_ID = "client-id-test";
 process.env.BLING_CLIENT_SECRET = "client-secret-test";
@@ -62,8 +63,8 @@ test("Bling OAuth bloqueia perfis, usa state persistente e criptografa tokens", 
   const gerente = await createUserAndLogin(admin.token, "Gerente Bling", "gerente-bling@test.local", "GERENTE");
   const vendedor = await createUserAndLogin(admin.token, "Vendedor Bling", "vendedor-bling@test.local", "VENDEDOR");
   const demo = await request("POST", "/auth/demo");
+  assert.equal(demo.status, 404);
 
-  assert.equal((await request("POST", "/integracoes/bling/iniciar", {}, demo.body.access_token)).status, 403);
   assert.equal((await request("POST", "/integracoes/bling/iniciar", {}, gerente.token)).status, 403);
   assert.equal((await request("POST", "/integracoes/bling/iniciar", {}, vendedor.token)).status, 403);
 

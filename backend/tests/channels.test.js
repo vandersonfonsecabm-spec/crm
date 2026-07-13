@@ -13,6 +13,7 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "channels-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
+process.env.ALLOW_DEMO_MODE = "false";
 process.env.INTEGRATION_ENCRYPTION_KEY = "channels-test-encryption-key-with-32-bytes-minimum";
 process.env.DATABASE_URL = `file:./${databaseName}`;
 
@@ -59,10 +60,10 @@ test("fundacao multiempresa de canais isola, autoriza e nao altera CRM comercial
   const gerente = await createUserAndLogin(adminA.token, "Gerente Canais", "gerente@canais.test", "GERENTE");
   const vendedor = await createUserAndLogin(adminA.token, "Vendedor Canais", "vendedor@canais.test", "VENDEDOR");
   const demo = await request("POST", "/auth/demo");
+  assert.equal(demo.status, 404);
 
   assert.equal((await request("GET", "/canais")).status, 401);
   assert.equal((await request("GET", "/canais", undefined, "token-invalido")).status, 401);
-  assert.equal((await request("GET", "/canais", undefined, demo.body.access_token)).status, 403);
   assert.equal((await request("POST", "/canais/whatsapp/teste", {}, gerente.token)).status, 403);
   assert.equal((await request("POST", "/canais/whatsapp/teste", {}, vendedor.token)).status, 403);
 
