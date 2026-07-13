@@ -704,32 +704,6 @@ button {
   color: var(--sidebar-indicator);
 }
 
-.crm-workspace .sidebar-nav-item {
-  border: 1px solid transparent;
-  color: var(--sidebar-text-secondary);
-  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
-}
-
-.crm-workspace .sidebar-nav-item:hover {
-  border-color: var(--sidebar-border);
-  background: var(--sidebar-hover);
-  color: var(--sidebar-text);
-}
-
-.crm-workspace .sidebar-nav-item.is-active {
-  border-color: var(--sidebar-active);
-  background: var(--sidebar-active);
-  color: var(--sidebar-text);
-}
-
-.crm-workspace .sidebar-nav-indicator {
-  background: var(--sidebar-text-muted);
-}
-
-.crm-workspace .sidebar-nav-item.is-active .sidebar-nav-indicator {
-  background: var(--sidebar-indicator);
-}
-
 .crm-workspace .sidebar-context {
   border: 1px solid var(--sidebar-border);
   background: var(--sidebar-surface);
@@ -1289,21 +1263,6 @@ button {
   color: var(--sidebar-text);
 }
 
-.crm-workspace .sidebar-brand,
-.crm-workspace .sidebar-account {
-  border-color: var(--sidebar-border);
-}
-
-.crm-workspace .sidebar-brand p:last-child,
-.crm-workspace .sidebar-account p:last-child,
-.crm-workspace .sidebar-group-label {
-  color: var(--sidebar-text-muted);
-}
-
-.crm-workspace .sidebar-group-label {
-  letter-spacing: 0;
-}
-
 .crm-workspace .sidebar-account > div:hover {
   background: var(--sidebar-hover);
 }
@@ -1311,15 +1270,6 @@ button {
 .crm-workspace .sidebar-avatar {
   border: 1px solid var(--sidebar-active);
   background: var(--sidebar-surface);
-  color: var(--sidebar-text);
-}
-
-.crm-workspace .sidebar-nav-icon {
-  color: var(--sidebar-text-muted);
-}
-
-.crm-workspace .sidebar-nav-item:hover .sidebar-nav-icon,
-.crm-workspace .sidebar-nav-item.is-active .sidebar-nav-icon {
   color: var(--sidebar-text);
 }
 

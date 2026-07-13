@@ -1,0 +1,86 @@
+.crm-workspace .sidebar-shell .sidebar-brand,
+.crm-workspace .sidebar-shell .sidebar-account {
+  border-color: color-mix(in srgb, var(--sidebar-border) 55%, transparent);
+}
+
+.crm-workspace .sidebar-shell .sidebar-brand p:last-child,
+.crm-workspace .sidebar-shell .sidebar-account p:last-child,
+.crm-workspace .sidebar-shell .sidebar-group-label {
+  color: var(--sidebar-text-muted);
+}
+
+.crm-workspace .sidebar-shell .sidebar-navigation {
+  padding: 16px 12px;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-group {
+  min-width: 0;
+}
+
+.crm-workspace .sidebar-shell .sidebar-group-label {
+  margin: 0 8px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-list {
+  display: grid;
+  gap: 4px;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-item {
+  border-color: transparent;
+  background: transparent;
+  color: var(--sidebar-text-secondary);
+  box-shadow: none;
+  outline: none;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-item:hover {
+  border-color: transparent;
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-item.is-active {
+  border-color: transparent;
+  background: var(--sidebar-active);
+  color: var(--sidebar-text);
+  box-shadow: none;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-item:focus {
+  outline: none;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-item:focus-visible {
+  border-color: transparent;
+  outline: 1px solid var(--sidebar-indicator);
+  outline-offset: -2px;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-icon {
+  color: var(--sidebar-text-muted);
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-item:hover .sidebar-nav-icon,
+.crm-workspace .sidebar-shell .sidebar-nav-item.is-active .sidebar-nav-icon {
+  color: var(--sidebar-text);
+}

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { AuthSession } from "../../services/crmApi";
 import type { ActivePage } from "../../types/dashboard";
+import "./DashboardSidebar.css";
 
 type DashboardSidebarProps = {
   activePage: ActivePage;
@@ -92,14 +93,12 @@ export default function DashboardSidebar({
         </div>
       </div>
 
-      <nav aria-label="Navegação principal" className="min-h-0 flex-1 overflow-y-auto px-3 py-5">
-        <div className="space-y-5">
+      <nav aria-label="Navegação principal" className="sidebar-navigation min-h-0 flex-1 overflow-y-auto">
+        <div className="sidebar-nav-groups">
           {visibleGroups.map((group) => (
-            <div key={group.label}>
-              <p className="sidebar-group-label mb-1.5 px-2 text-[10px] font-semibold">
-                {group.label}
-              </p>
-              <div className="space-y-1">
+            <div className="sidebar-nav-group" key={group.label}>
+              <p className="sidebar-group-label">{group.label}</p>
+              <div className="sidebar-nav-list">
                 {group.items.map((item) => (
                   <SidebarButton
                     key={item.page}
@@ -150,7 +149,6 @@ function SidebarButton({
     >
       <span className="sidebar-nav-icon flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="sidebar-nav-indicator h-1.5 w-1.5 shrink-0 rounded-full" aria-hidden="true" />
     </button>
   );
 }
