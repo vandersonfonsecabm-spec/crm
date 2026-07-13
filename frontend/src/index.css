@@ -29,6 +29,18 @@
   --focus-ring: rgba(20, 122, 82, 0.58);
   --disabled-bg: #edf1ee;
   --disabled-text: #7b8780;
+  --control-border: #d9e1dc;
+  --control-border-hover: #b8c5be;
+  --control-border-focus: #147a52;
+  --control-ring: rgba(20, 122, 82, 0.14);
+  --control-bg: #ffffff;
+  --control-bg-disabled: #edf1ee;
+  --control-text: #37433d;
+  --control-placeholder: #7b8780;
+  --control-error: #b33a45;
+  --filter-active-bg: #eef7f2;
+  --filter-active-text: #106b47;
+  --filter-active-border: #9bc8b2;
   --sidebar-bg: #14241e;
   --sidebar-hover: #1d342b;
   --sidebar-surface: #1a3027;
@@ -599,6 +611,33 @@ button {
   color: var(--text-primary);
 }
 
+.crm-workspace input.premium-ghost,
+.crm-workspace select.premium-ghost,
+.crm-workspace textarea.premium-ghost,
+.crm-workspace label.premium-ghost:has(input, select, textarea) {
+  border-color: var(--control-border);
+  background: var(--control-bg);
+  color: var(--control-text);
+  box-shadow: none;
+}
+
+.crm-workspace input.premium-ghost:hover,
+.crm-workspace select.premium-ghost:hover,
+.crm-workspace textarea.premium-ghost:hover,
+.crm-workspace label.premium-ghost:has(input, select, textarea):hover {
+  border-color: var(--control-border-hover);
+  background: var(--control-bg);
+}
+
+.crm-workspace input.premium-ghost:focus,
+.crm-workspace select.premium-ghost:focus,
+.crm-workspace textarea.premium-ghost:focus,
+.crm-workspace label.premium-ghost:has(input, select, textarea):focus-within {
+  border-color: var(--control-border-focus);
+  background: var(--control-bg);
+  box-shadow: 0 0 0 3px var(--control-ring);
+}
+
 .crm-workspace .topbar-shell {
   border-color: var(--border);
   background: transparent;
@@ -1033,6 +1072,16 @@ button {
 .crm-workspace textarea:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+.crm-workspace [data-ui-control]:focus-visible,
+.crm-workspace .premium-ghost input:focus-visible,
+.crm-workspace .premium-ghost select:focus-visible,
+.crm-workspace .premium-ghost textarea:focus-visible,
+.crm-workspace input.premium-ghost:focus-visible,
+.crm-workspace select.premium-ghost:focus-visible,
+.crm-workspace textarea.premium-ghost:focus-visible {
+  outline: none;
 }
 
 .login-shell {

@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock, Edit3, Loader2, Plus, RotateCcw, Search, X } from "lucide-react";
+import { AlertTriangle, Bell, CalendarDays, CheckCircle2, Clock, Edit3, Plus, RotateCcw, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -17,6 +17,7 @@ import {
   type ApiAcompanhamentoResumo,
 } from "../../services/crmApi";
 import type { Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
+import { Button, EmptyState, ErrorState, Input, LoadingState, Pagination, SectionHeader, Select, Surface, Textarea, Toolbar } from "../ui";
 
 type FollowUpGroup = {
   label: string;
@@ -242,87 +243,79 @@ export default function DashboardAgendaPanel({
 
   if (error) {
     return (
-      <section className="saas-panel rounded-2xl p-4">
-        <PanelTitle icon={<AlertTriangle size={15} className="text-rose-300" />} title="Agenda" hint="Acompanhamentos persistentes da carteira." />
-        <div className="mt-4 rounded-xl border border-rose-300/20 bg-rose-300/[0.055] p-3">
-          <p className="text-sm font-semibold text-rose-100">{error}</p>
-          <button className="premium-ghost mt-3 rounded-xl px-3 py-2 text-xs text-slate-200" onClick={() => setRefreshKey((current) => current + 1)} type="button">
-            Tentar novamente
-          </button>
-        </div>
-      </section>
+      <Surface>
+        <ErrorState description="Verifique a conexão e tente novamente em instantes." onRetry={() => setRefreshKey((current) => current + 1)} title={error} />
+      </Surface>
     );
   }
 
   return (
     <div className="space-y-4 pb-8">
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-2xl border border-teal-300/20 bg-slate-950/95 px-4 py-3 text-xs font-semibold text-teal-100 shadow-2xl">
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3 text-xs font-semibold text-[var(--text-primary)] shadow-[var(--shadow-md)]">
           {toast}
         </div>
       )}
 
-      <section className="grid gap-3 md:grid-cols-5">
-        <AgendaMetric icon={<Clock size={15} />} title="Pendentes" value={String(summary?.indicadores.pendentes ?? 0)} caption="Fila aberta" tone="pipeline" />
-        <AgendaMetric icon={<CalendarDays size={15} />} title="Hoje" value={String(summary?.indicadores.paraHoje ?? 0)} caption="Acoes do dia" tone="revenue" />
-        <AgendaMetric icon={<AlertTriangle size={15} />} title="Atrasados" value={String(summary?.indicadores.atrasados ?? 0)} caption="Pedir atencao" tone="risk" />
-        <AgendaMetric icon={<Bell size={15} />} title="Criticos" value={String(summary?.indicadores.criticos ?? 0)} caption="Prioridade alta" tone="risk" />
-        <AgendaMetric icon={<CheckCircle2 size={15} />} title="Concluidos" value={String(summary?.indicadores.concluidosPeriodo ?? 0)} caption="Periodo atual" tone="revenue" />
-      </section>
+      <AgendaStatusSummary
+        active={onlyToday ? "today" : onlyLate ? "late" : priority === "CRITICA" ? "critical" : status === "CONCLUIDO" ? "done" : status === "PENDENTE" ? "pending" : null}
+        summary={summary}
+        onSelect={(next) => {
+          setOnlyToday(next === "today");
+          setOnlyLate(next === "late");
+          setPriority(next === "critical" ? "CRITICA" : "Todas");
+          setStatus(next === "done" ? "CONCLUIDO" : next === "pending" ? "PENDENTE" : "Todos");
+          setPage(1);
+        }}
+      />
 
-      <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="saas-panel min-w-0 rounded-2xl p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <PanelTitle icon={<CalendarDays size={15} className="text-sky-300" />} title="Agenda e acompanhamentos" hint="Contatos, retornos e janelas comerciais com persistencia real." />
-            <button className="premium-button inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold" onClick={openCreate} type="button">
-              <Plus size={14} />
-              Novo acompanhamento
-            </button>
-          </div>
+      <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <Surface className="min-w-0 overflow-hidden">
+          <SectionHeader
+            actions={<Button leftIcon={<Plus size={14} />} onClick={openCreate} size="sm">Novo acompanhamento</Button>}
+            description="Contatos, retornos e janelas comerciais organizados por prioridade temporal."
+            icon={<CalendarDays size={15} />}
+            title="Agenda e acompanhamentos"
+          />
 
-          <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_140px_140px_140px]">
-            <label className="premium-ghost flex h-10 min-w-0 items-center gap-2 rounded-xl px-3 text-xs text-slate-400">
-              <Search size={14} className="shrink-0" />
-              <input className="min-w-0 flex-1 bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-600" onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente ou titulo" value={search} />
-            </label>
+          <div className="border-b border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
+            <Toolbar className="items-end justify-start">
+              <Input aria-label="Buscar cliente ou título" containerClassName="min-w-[240px] flex-[1_1_300px]" onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente ou título" value={search} />
 
-            <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none" onChange={(event) => { setStatus(event.target.value as typeof status); setPage(1); }} value={status}>
+              <Select aria-label="Filtrar por status" className="w-auto min-w-[132px]" onChange={(event) => { setStatus(event.target.value as typeof status); setPage(1); }} value={status}>
               {STATUSES.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}
-            </select>
+              </Select>
 
-            <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none" onChange={(event) => { setPriority(event.target.value as typeof priority); setPage(1); }} value={priority}>
+              <Select aria-label="Filtrar por prioridade" className="w-auto min-w-[145px]" onChange={(event) => { setPriority(event.target.value as typeof priority); setPage(1); }} value={priority}>
               {PRIORITIES.map((item) => <option key={item} value={item}>{priorityLabel(item)}</option>)}
-            </select>
+              </Select>
 
-            <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none" onChange={(event) => { setType(event.target.value as typeof type); setPage(1); }} value={type}>
+              <Select aria-label="Filtrar por tipo" className="w-auto min-w-[130px]" onChange={(event) => { setType(event.target.value as typeof type); setPage(1); }} value={type}>
               {TYPES.map((item) => <option key={item} value={item}>{typeLabel(item)}</option>)}
-            </select>
+              </Select>
 
-            <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none md:col-span-2 xl:col-span-1" onChange={(event) => { setClientFilter(event.target.value); setPage(1); }} value={clientFilter}>
+              <Select aria-label="Filtrar por cliente" className="w-auto min-w-[190px]" onChange={(event) => { setClientFilter(event.target.value); setPage(1); }} value={clientFilter}>
               <option value="Todos">Todos os clientes</option>
               {clientOptions.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}
-            </select>
+              </Select>
 
-            <label className="premium-ghost flex h-10 items-center gap-2 rounded-xl px-3 text-xs text-slate-300">
-              <input checked={onlyToday} className="h-4 w-4 accent-teal-300" onChange={(event) => { setOnlyToday(event.target.checked); setOnlyLate(false); setPage(1); }} type="checkbox" />
+              <Button aria-pressed={onlyToday} className={onlyToday ? "border-[var(--filter-active-border)] bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""} onClick={() => { setOnlyToday((current) => !current); setOnlyLate(false); setPage(1); }} size="sm" variant="secondary">
               Hoje
-            </label>
+              </Button>
 
-            <label className="premium-ghost flex h-10 items-center gap-2 rounded-xl px-3 text-xs text-slate-300">
-              <input checked={onlyLate} className="h-4 w-4 accent-rose-300" onChange={(event) => { setOnlyLate(event.target.checked); setOnlyToday(false); setPage(1); }} type="checkbox" />
+              <Button aria-pressed={onlyLate} className={onlyLate ? "border-[var(--filter-active-border)] bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""} onClick={() => { setOnlyLate((current) => !current); setOnlyToday(false); setPage(1); }} size="sm" variant="secondary">
               Atrasados
-            </label>
+              </Button>
 
-            {hasFilters && (
-              <button className="premium-ghost h-10 rounded-xl px-3 text-xs font-semibold text-slate-200" onClick={() => { setSearch(""); setDebouncedSearch(""); setStatus("Todos"); setPriority("Todas"); setType("Todos"); setClientFilter("Todos"); setOnlyLate(false); setOnlyToday(false); setPage(1); }} type="button">
+              <Button disabled={!hasFilters} leftIcon={<RotateCcw size={13} />} onClick={() => { setSearch(""); setDebouncedSearch(""); setStatus("Todos"); setPriority("Todas"); setType("Todos"); setClientFilter("Todos"); setOnlyLate(false); setOnlyToday(false); setPage(1); }} size="sm" variant="ghost">
                 Limpar filtros
-              </button>
-            )}
+              </Button>
+            </Toolbar>
           </div>
 
-          <div className="mt-4 space-y-2">
-            {isLoading && Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-24 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />)}
-            {!isLoading && items.length === 0 && <EmptyLine text={hasFilters ? "Nenhum acompanhamento encontrado para os filtros selecionados." : "Nenhum acompanhamento encontrado."} />}
+          <div aria-busy={isLoading} className="divide-y divide-[var(--border-default)]">
+            {isLoading && <LoadingState className="p-4" label="Carregando acompanhamentos" rows={4} />}
+            {!isLoading && items.length === 0 && <EmptyState description={hasFilters ? "Ajuste ou limpe os filtros para ampliar a consulta." : "Crie um acompanhamento para organizar o próximo contato comercial."} title={hasFilters ? "Nenhum acompanhamento para os filtros" : "Nenhum acompanhamento encontrado"} />}
             {!isLoading && items.map((item) => (
               <AgendaRow
                 key={item.id}
@@ -336,49 +329,43 @@ export default function DashboardAgendaPanel({
             ))}
           </div>
 
-          <div className="mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-            <span>{total} acompanhamento{total === 1 ? "" : "s"}</span>
-            <div className="flex items-center gap-2">
-              <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} type="button">Anterior</button>
-              <span className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">{total === 0 ? "0/0" : `${page}/${totalPages}`}</span>
-              <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={total === 0 || page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} type="button">Proxima</button>
-            </div>
-          </div>
-        </div>
+          <Pagination disabled={isLoading} itemLabel="acompanhamentos" onPageChange={setPage} page={page} total={total} totalPages={totalPages} visibleCount={items.length} />
+        </Surface>
 
-        <div className="min-w-0 space-y-4">
-          <SidePanel title="Proximos acompanhamentos" icon={<Clock size={15} className="text-sky-300" />}>
-            {(summary?.proximos ?? []).length === 0 && <EmptyLine text="Nenhum acompanhamento pendente." />}
+        <Surface className="min-w-0 self-start overflow-hidden">
+          <SectionHeader description="Contexto temporal e sinais que pedem ação." icon={<Clock size={15} />} title="Painel operacional" />
+          <SideSection title="Próximos acompanhamentos">
+            {(summary?.proximos ?? []).length === 0 && <p className="px-4 py-3 text-[11px] text-[var(--text-muted)]">Nenhum acompanhamento pendente.</p>}
             {(summary?.proximos ?? []).map((item) => (
-              <button key={item.id} className="saas-row w-full rounded-xl px-3 py-2 text-left" onClick={() => onSelectClient(item.clienteId)} type="button">
-                <p className="truncate text-xs font-semibold text-slate-100">{item.titulo}</p>
-                <p className="mt-0.5 truncate text-[10px] text-slate-500">{item.cliente?.nome ?? "Cliente"} - {formatDateTime(item.dataHora)}</p>
+              <button key={item.id} className="w-full px-4 py-2.5 text-left transition-colors hover:bg-[var(--bg-muted)]" onClick={() => onSelectClient(item.clienteId)} type="button">
+                <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{item.titulo}</p>
+                <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Cliente"} · {formatDateTime(item.dataHora)}</p>
               </button>
             ))}
-          </SidePanel>
+          </SideSection>
 
-          <SidePanel title="Alertas operacionais" icon={<AlertTriangle size={15} className="text-rose-300" />}>
+          <SideSection title="Alertas operacionais">
             {smartAlerts.map((alert, index) => (
-              <button key={alert} onClick={() => onApplySmartFilter(index === 0 ? "risk" : index === 1 ? "proposal" : "silent")} className="saas-row w-full rounded-xl p-3 text-left transition" type="button">
-                <p className="text-xs font-semibold text-slate-200">{alert}</p>
-                <p className="mt-1 text-[10px] text-slate-500">Aplicar filtro inteligente</p>
+              <button key={alert} onClick={() => onApplySmartFilter(index === 0 ? "risk" : index === 1 ? "proposal" : "silent")} className="w-full px-4 py-2.5 text-left transition-colors hover:bg-[var(--bg-muted)]" type="button">
+                <p className="text-xs font-medium text-[var(--text-secondary)]">{alert}</p>
+                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Aplicar filtro inteligente</p>
               </button>
             ))}
-          </SidePanel>
+          </SideSection>
 
-          <SidePanel title="Atividades recentes" icon={<Bell size={15} className="text-amber-300" />}>
-            {recentActivities.length === 0 && <EmptyLine text="Nenhuma atividade recente registrada." />}
+          <SideSection title="Atividades recentes">
+            {recentActivities.length === 0 && <p className="px-4 py-3 text-[11px] text-[var(--text-muted)]">Nenhuma atividade recente registrada.</p>}
             {recentActivities.slice(0, 4).map((activity) => (
-              <div key={activity.id} className="metric-card rounded-xl p-3">
+              <div key={activity.id} className="px-4 py-2.5">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="truncate text-xs font-semibold text-slate-100">{activity.client}</p>
-                  <span className="shrink-0 text-[10px] text-slate-500">{activity.date}</span>
+                  <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{activity.client}</p>
+                  <span className="shrink-0 text-[10px] text-[var(--text-muted)]">{activity.date}</span>
                 </div>
-                <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-slate-500">{activity.text}</p>
+                <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[var(--text-muted)]">{activity.text}</p>
               </div>
             ))}
-          </SidePanel>
-        </div>
+          </SideSection>
+        </Surface>
       </section>
 
       {modalMode && (
@@ -418,27 +405,28 @@ function AgendaRow({
   onAction: (item: ApiAcompanhamento, action: "concluir" | "reabrir" | "cancelar") => void;
 }) {
   return (
-    <article className="saas-row rounded-2xl p-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <article className="px-4 py-3 transition-colors hover:bg-[var(--bg-muted)]">
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[150px_minmax(0,1fr)_140px_120px] lg:items-center">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`saas-chip ${statusTone(item.status)}`}>{statusLabel(item.status)}</span>
-            <span className={`saas-chip ${priorityTone(item.prioridade)}`}>{priorityLabel(item.prioridade)}</span>
-            <span className="saas-chip text-slate-300">{typeLabel(item.tipo)}</span>
-            {item.atrasado && <span className="saas-chip border-rose-300/15 bg-rose-300/[0.07] text-rose-100">Atrasado</span>}
-          </div>
-          <p className="mt-2 text-sm font-semibold text-slate-100">{item.titulo}</p>
-          <p className="mt-1 text-xs text-slate-500">{item.cliente?.nome ?? "Cliente"} - {item.cliente?.empresa || "Carteira comercial"}</p>
-          {item.descricao && <p className="mt-2 break-words text-[11px] leading-relaxed text-slate-500">{item.descricao}</p>}
+          <p className={`text-[11px] font-semibold ${item.atrasado ? "text-[var(--danger)]" : "text-[var(--primary)]"}`}>{formatDateTime(item.dataHora)}</p>
+          <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.responsavel || "Equipe"}</p>
         </div>
-
-        <div className="grid shrink-0 gap-2 text-xs text-slate-400 sm:grid-cols-2 lg:w-56">
-          <Info label="Data" value={formatDateTime(item.dataHora)} />
-          <Info label="Responsavel" value={item.responsavel || "Equipe"} />
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{item.titulo}</p>
+          <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Cliente"} · {item.cliente?.empresa || "Carteira comercial"}</p>
+          {item.descricao && <p className="mt-1 line-clamp-1 text-[11px] text-[var(--text-muted)]">{item.descricao}</p>}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${statusTone(item.status)}`}>{statusLabel(item.status)}</span>
+          {item.atrasado && <span className="rounded-full border border-[var(--danger)] px-2 py-0.5 text-[10px] text-[var(--danger)]">Atrasado</span>}
+        </div>
+        <div className="min-w-0 text-left lg:text-right">
+          <p className="text-[11px] font-medium text-[var(--text-secondary)]">{typeLabel(item.tipo)}</p>
+          <p className={`mt-0.5 text-[11px] ${priorityTone(item.prioridade)}`}>{priorityLabel(item.prioridade)}</p>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2 border-t border-white/[0.06] pt-3">
+      <div className="mt-2 flex flex-wrap gap-1.5">
         <ActionButton onClick={() => onSelectClient(item.clienteId)}>Cliente</ActionButton>
         <ActionButton onClick={() => onEdit(item)} icon={<Edit3 size={12} />}>Editar</ActionButton>
         <ActionButton onClick={() => onReschedule(item)} icon={<RotateCcw size={12} />}>Reagendar</ActionButton>
@@ -475,14 +463,12 @@ function AgendaModal({
   const isReschedule = mode === "reschedule";
   const title = mode === "create" ? "Novo acompanhamento" : isReschedule ? "Reagendar acompanhamento" : "Editar acompanhamento";
   const submitLabel = mode === "create" ? "Criar acompanhamento" : isReschedule ? "Salvar reagendamento" : "Salvar alteracoes";
-  const fieldClass = "w-full rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm text-slate-100 outline-none transition hover:border-slate-400/24 focus:border-teal-300/28 disabled:cursor-not-allowed disabled:opacity-60";
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 text-white shadow-2xl">
+      <div aria-labelledby="agenda-modal-title" aria-modal="true" className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 text-white shadow-2xl" role="dialog">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold">{title}</p>
+            <p className="text-sm font-semibold" id="agenda-modal-title">{title}</p>
             <p className="mt-1 text-[11px] text-slate-500">Registre o proximo contato comercial com persistencia real.</p>
           </div>
           <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">
@@ -493,43 +479,27 @@ function AgendaModal({
         <div className="grid gap-3 md:grid-cols-2">
           {!isReschedule && (
             <>
-              <Field label="Cliente">
-                <select className={fieldClass} disabled={isSubmitting} onChange={(event) => setForm({ ...form, clienteId: event.target.value })} value={form.clienteId}>
+              <Select disabled={isSubmitting} label="Cliente" onChange={(event) => setForm({ ...form, clienteId: event.target.value })} value={form.clienteId}>
                   <option value="">Selecione</option>
                   {clients.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}
-                </select>
-              </Field>
-              <Field label="Titulo">
-                <input className={fieldClass} disabled={isSubmitting} onChange={(event) => setForm({ ...form, titulo: event.target.value })} value={form.titulo} />
-              </Field>
+              </Select>
+              <Input disabled={isSubmitting} label="Título" onChange={(event) => setForm({ ...form, titulo: event.target.value })} value={form.titulo} />
             </>
           )}
 
-          <Field label="Data">
-            <input className={fieldClass} disabled={isSubmitting} onChange={(event) => setForm({ ...form, data: event.target.value })} type="date" value={form.data} />
-          </Field>
-          <Field label="Horario">
-            <input className={fieldClass} disabled={isSubmitting} onChange={(event) => setForm({ ...form, hora: event.target.value })} type="time" value={form.hora} />
-          </Field>
+          <Input disabled={isSubmitting} label="Data" onChange={(event) => setForm({ ...form, data: event.target.value })} type="date" value={form.data} />
+          <Input disabled={isSubmitting} label="Horário" onChange={(event) => setForm({ ...form, hora: event.target.value })} type="time" value={form.hora} />
 
           {!isReschedule && (
             <>
-              <Field label="Prioridade">
-                <select className={fieldClass} disabled={isSubmitting} onChange={(event) => setForm({ ...form, prioridade: event.target.value as ApiAcompanhamentoPrioridade })} value={form.prioridade}>
+              <Select disabled={isSubmitting} label="Prioridade" onChange={(event) => setForm({ ...form, prioridade: event.target.value as ApiAcompanhamentoPrioridade })} value={form.prioridade}>
                   {PRIORITIES.filter((item) => item !== "Todas").map((item) => <option key={item} value={item}>{priorityLabel(item)}</option>)}
-                </select>
-              </Field>
-              <Field label="Tipo">
-                <select className={fieldClass} disabled={isSubmitting} onChange={(event) => setForm({ ...form, tipo: event.target.value as ApiAcompanhamentoTipo })} value={form.tipo}>
+              </Select>
+              <Select disabled={isSubmitting} label="Tipo" onChange={(event) => setForm({ ...form, tipo: event.target.value as ApiAcompanhamentoTipo })} value={form.tipo}>
                   {TYPES.filter((item) => item !== "Todos").map((item) => <option key={item} value={item}>{typeLabel(item)}</option>)}
-                </select>
-              </Field>
-              <Field label="Responsavel">
-                <input className={fieldClass} disabled={isSubmitting} onChange={(event) => setForm({ ...form, responsavel: event.target.value })} value={form.responsavel} />
-              </Field>
-              <Field label="Descricao">
-                <textarea className={`${fieldClass} min-h-[80px] resize-none`} disabled={isSubmitting} onChange={(event) => setForm({ ...form, descricao: event.target.value })} value={form.descricao} />
-              </Field>
+              </Select>
+              <Input disabled={isSubmitting} label="Responsável" onChange={(event) => setForm({ ...form, responsavel: event.target.value })} value={form.responsavel} />
+              <Textarea className="min-h-20 resize-none" disabled={isSubmitting} label="Descrição" onChange={(event) => setForm({ ...form, descricao: event.target.value })} value={form.descricao} />
             </>
           )}
         </div>
@@ -537,91 +507,63 @@ function AgendaModal({
         {error && <div className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/[0.055] px-3 py-2 text-xs text-rose-100">{error}</div>}
 
         <div className="mt-4 flex justify-end gap-2">
-          <button className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-900/70 disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">Cancelar</button>
-          <button className="premium-button inline-flex min-w-36 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-60" disabled={isSubmitting} onClick={onSubmit} type="button">
-            {isSubmitting && <Loader2 size={13} className="animate-spin" />}
+          <Button disabled={isSubmitting} onClick={onClose} size="sm" variant="secondary">Cancelar</Button>
+          <Button className="min-w-36" disabled={isSubmitting} loading={isSubmitting} onClick={onSubmit} size="sm">
             {isSubmitting ? "Salvando" : submitLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
   );
 }
 
-function AgendaMetric({ icon, title, value, caption, tone }: { icon: ReactNode; title: string; value: string; caption: string; tone: "pipeline" | "revenue" | "risk" }) {
-  const toneClass = {
-    pipeline: "metric-pipeline text-teal-100",
-    revenue: "metric-revenue text-sky-100",
-    risk: "metric-risk text-rose-100",
-  };
+type AgendaStatusKey = "pending" | "today" | "late" | "critical" | "done";
+
+function AgendaStatusSummary({ active, summary, onSelect }: { active: AgendaStatusKey | null; summary: ApiAcompanhamentoResumo | null; onSelect: (status: AgendaStatusKey) => void }) {
+  const items: Array<{ key: AgendaStatusKey; label: string; value: number; icon: ReactNode; tone: string }> = [
+    { key: "pending", label: "Pendentes", value: summary?.indicadores.pendentes ?? 0, icon: <Clock size={14} />, tone: "text-[var(--text-secondary)]" },
+    { key: "today", label: "Hoje", value: summary?.indicadores.paraHoje ?? 0, icon: <CalendarDays size={14} />, tone: "text-[var(--info)]" },
+    { key: "late", label: "Atrasados", value: summary?.indicadores.atrasados ?? 0, icon: <AlertTriangle size={14} />, tone: "text-[var(--danger)]" },
+    { key: "critical", label: "Críticos", value: summary?.indicadores.criticos ?? 0, icon: <Bell size={14} />, tone: "text-[var(--warning)]" },
+    { key: "done", label: "Concluídos", value: summary?.indicadores.concluidosPeriodo ?? 0, icon: <CheckCircle2 size={14} />, tone: "text-[var(--success)]" },
+  ];
 
   return (
-    <div className={`metric-card rounded-2xl p-3 ${toneClass[tone]}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] opacity-70">{title}</p>
-          <p className="mt-1.5 truncate text-base font-semibold">{value}</p>
-          <p className="mt-1 truncate text-[11px] text-slate-500">{caption}</p>
-        </div>
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.11] bg-white/[0.045]">{icon}</div>
-      </div>
-    </div>
+    <Surface className="grid overflow-hidden sm:grid-cols-5" aria-label="Resumo de status da agenda">
+      {items.map((item, index) => (
+        <button
+          aria-pressed={active === item.key}
+          className={`flex min-w-0 items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] ${index > 0 ? "border-t border-[var(--border-default)] sm:border-l sm:border-t-0" : ""} ${active === item.key ? "bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""}`}
+          key={item.key}
+          onClick={() => onSelect(item.key)}
+          type="button"
+        >
+          <span className="min-w-0">
+            <span className="block truncate text-[11px] text-[var(--text-muted)]">{item.label}</span>
+            <span className={`mt-0.5 block text-base font-semibold ${active === item.key ? "text-[var(--filter-active-text)]" : item.tone}`}>{item.value}</span>
+          </span>
+          <span className={active === item.key ? "text-[var(--filter-active-text)]" : item.tone}>{item.icon}</span>
+        </button>
+      ))}
+    </Surface>
   );
 }
 
-function SidePanel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
+function SideSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="saas-panel rounded-2xl p-4">
-      <PanelTitle icon={icon} title={title} hint="Dados sincronizados com a operacao comercial." />
-      <div className="mt-4 space-y-2">{children}</div>
-    </div>
-  );
-}
-
-function PanelTitle({ icon, title, hint }: { icon: ReactNode; title: string; hint: string }) {
-  return (
-    <div className="flex items-start gap-2">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/55">{icon}</div>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-100">{title}</p>
-        <p className="mt-0.5 text-[11px] text-slate-500">{hint}</p>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-slate-950/24 px-3 py-2">
-      <p className="text-[9px] uppercase tracking-[0.14em] text-slate-500">{label}</p>
-      <p className="mt-1 break-words text-xs font-semibold text-slate-100">{value}</p>
-    </div>
+    <section className="border-b border-[var(--border-default)] last:border-b-0">
+      <h3 className="px-4 pb-1 pt-3 text-[11px] font-semibold text-[var(--text-secondary)]">{title}</h3>
+      <div className="divide-y divide-[var(--border-default)]">{children}</div>
+    </section>
   );
 }
 
 function ActionButton({ children, icon, disabled, onClick }: { children: ReactNode; icon?: ReactNode; disabled?: boolean; onClick: () => void }) {
   return (
-    <button className="saas-action inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45" disabled={disabled} onClick={onClick} type="button">
+    <button className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:cursor-not-allowed disabled:text-[var(--disabled-text)]" disabled={disabled} onClick={onClick} type="button">
       {icon}
       {children}
     </button>
-  );
-}
-
-function EmptyLine({ text }: { text: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-slate-500/18 bg-slate-950/25 px-3 py-3">
-      <p className="text-[11px] text-slate-500">{text}</p>
-    </div>
   );
 }
 
@@ -703,14 +645,14 @@ function typeLabel(type: ApiAcompanhamentoTipo | "Todos") {
 }
 
 function statusTone(status: ApiAcompanhamentoStatus) {
-  if (status === "PENDENTE") return "border-sky-300/15 bg-sky-300/[0.07] text-sky-100";
-  if (status === "CONCLUIDO") return "border-teal-300/15 bg-teal-300/[0.07] text-teal-100";
-  return "border-slate-400/15 bg-slate-400/[0.07] text-slate-300";
+  if (status === "PENDENTE") return "border-[color:rgba(53,111,152,0.28)] text-[var(--info)]";
+  if (status === "CONCLUIDO") return "border-[color:rgba(36,122,82,0.28)] text-[var(--success)]";
+  return "border-[var(--border-strong)] text-[var(--text-muted)]";
 }
 
 function priorityTone(priority: ApiAcompanhamentoPrioridade) {
-  if (priority === "CRITICA") return "border-rose-300/15 bg-rose-300/[0.07] text-rose-100";
-  if (priority === "ALTA") return "border-amber-300/15 bg-amber-300/[0.07] text-amber-100";
-  if (priority === "MEDIA") return "border-sky-300/15 bg-sky-300/[0.07] text-sky-100";
-  return "border-slate-400/15 bg-slate-400/[0.07] text-slate-300";
+  if (priority === "CRITICA") return "text-[var(--danger)]";
+  if (priority === "ALTA") return "text-[var(--warning)]";
+  if (priority === "MEDIA") return "text-[var(--info)]";
+  return "text-[var(--text-muted)]";
 }

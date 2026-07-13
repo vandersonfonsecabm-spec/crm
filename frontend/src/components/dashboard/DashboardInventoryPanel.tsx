@@ -1,6 +1,8 @@
 import { AlertTriangle, Boxes, CheckCircle2, Edit3, FolderCog, History, Layers3, Loader2, Package, Plus, Search, SlidersHorizontal, TrendingDown, TrendingUp, Wallet, Warehouse, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import DashboardMetricStrip from "./DashboardMetricStrip";
+import { Button, EmptyState as UiEmptyState, ErrorState as UiErrorState, Input, LoadingState, Pagination, SectionHeader, Select, Surface, Toolbar } from "../ui";
 import {
   createCategoriaProduto,
   createProduto,
@@ -750,18 +752,25 @@ export default function DashboardInventoryPanel() {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-        {summaryCards.map((card) => (
-          <InventoryMetricCard
-            key={card.title}
-            title={card.title}
-            value={isLoading ? "..." : card.value}
-            caption={card.caption}
-            icon={card.icon}
-            tone={card.tone}
-          />
+      <DashboardMetricStrip metrics={summaryCards.slice(0, 4).map((card) => ({
+        label: card.title,
+        value: String(isLoading ? "..." : card.value),
+        context: card.caption,
+        icon: card.icon,
+        tone: card.tone === "pipeline" ? "success" : card.tone === "revenue" ? "info" : card.tone === "forecast" ? "warning" : card.tone === "risk" ? "danger" : "default",
+      }))} />
+
+      <Surface className="flex flex-wrap items-center divide-x divide-[var(--border-default)] overflow-hidden">
+        {summaryCards.slice(4).map((card) => (
+          <div className="flex min-w-[210px] flex-1 items-center gap-3 px-4 py-2.5" key={card.title}>
+            <span className="text-[var(--icon-muted)]">{card.icon}</span>
+            <span className="min-w-0">
+              <span className="block truncate text-[11px] text-[var(--text-muted)]">{card.title}</span>
+              <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--text-primary)]">{isLoading ? "..." : card.value}</span>
+            </span>
+          </div>
         ))}
-      </div>
+      </Surface>
 
       <IntegratedProductsPanel
         products={paginatedIntegratedProducts}
@@ -2025,93 +2034,76 @@ function IntegratedProductsPanel({
   const isEmpty = !isLoading && !isError && products.length === 0;
 
   return (
-    <section className="premium-panel min-w-0 rounded-2xl p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-white">Produtos integrados</p>
-          <p className="mt-1 text-xs text-slate-500">Catalogo sincronizado de integracoes, exibido somente para leitura.</p>
-        </div>
+    <Surface className="min-w-0 overflow-hidden">
+      <SectionHeader
+        actions={<span className="text-[11px] text-[var(--text-muted)]">{total} resultado{total === 1 ? "" : "s"}{loadedTotal > total ? ` de ${loadedTotal}` : ""}</span>}
+        description="Catálogo sincronizado das integrações, exibido somente para leitura."
+        icon={<Warehouse size={16} />}
+        title="Produtos integrados"
+      />
 
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_130px_120px_150px_auto]">
-          <label className="premium-ghost flex h-10 min-w-0 items-center gap-2 rounded-xl px-3 text-xs text-slate-400">
-            <Search className="shrink-0" size={14} />
-            <input
-              className="min-w-0 flex-1 bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-600"
-              disabled={isLoading}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Buscar produto, SKU, unidade ou origem"
-              value={search}
-            />
-          </label>
+      <div className="border-b border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
+        <Toolbar className="items-end justify-start">
+          <Input aria-label="Buscar produtos integrados" containerClassName="min-w-[240px] flex-[1_1_320px]" disabled={isLoading} onChange={(event) => onSearchChange(event.target.value)} placeholder="Buscar produto, SKU, unidade ou origem" value={search} />
 
-          <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onOriginFilterChange(event.target.value)} value={originFilter}>
+          <Select aria-label="Filtrar por origem" className="w-auto min-w-[130px]" disabled={isLoading} onChange={(event) => onOriginFilterChange(event.target.value)} value={originFilter}>
             {originOptions.map((option) => <option key={option} value={option}>{option === "Todos" ? "Todas origens" : option}</option>)}
-          </select>
+          </Select>
 
-          <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onUnitFilterChange(event.target.value)} value={unitFilter}>
+          <Select aria-label="Filtrar por unidade" className="w-auto min-w-[130px]" disabled={isLoading} onChange={(event) => onUnitFilterChange(event.target.value)} value={unitFilter}>
             {unitOptions.map((option) => <option key={option} value={option}>{option === "Todos" ? "Todas unidades" : option}</option>)}
-          </select>
+          </Select>
 
-          <select className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onStockFilterChange(event.target.value as IntegratedStockFilter)} value={stockFilter}>
+          <Select aria-label="Filtrar por saldo" className="w-auto min-w-[145px]" disabled={isLoading} onChange={(event) => onStockFilterChange(event.target.value as IntegratedStockFilter)} value={stockFilter}>
             <option value="todos">Todos estoques</option>
             <option value="disponivel">Disponivel</option>
             <option value="sem-estoque">Sem estoque</option>
-          </select>
+          </Select>
 
-          <button className="premium-ghost h-10 rounded-xl px-3 text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={!hasFilters || isLoading} onClick={onClearFilters} type="button">
+          <Button disabled={!hasFilters || isLoading} onClick={onClearFilters} size="sm" variant="ghost">
             Limpar
-          </button>
-        </div>
+          </Button>
+        </Toolbar>
       </div>
 
-      <div className="mt-4 space-y-2">
-        {isLoading && (
-          <>
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div key={index} className="h-24 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
-            ))}
-          </>
-        )}
+      <div aria-busy={isLoading} className="overflow-x-auto">
+        {isLoading && <LoadingState className="p-4" label="Carregando produtos integrados" rows={4} />}
 
         {isError && (
-          <div className="rounded-2xl border border-rose-300/15 bg-rose-300/[0.045] p-5 text-center">
-            <p className="text-sm font-semibold text-rose-100">Nao foi possivel carregar o estoque integrado.</p>
-            <p className="mt-1 text-xs text-slate-500">A consulta foi interrompida sem alterar dados externos.</p>
-            <button className="premium-ghost mt-4 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200" onClick={onRetry} type="button">Tentar novamente</button>
-          </div>
+          <UiErrorState description="A consulta foi interrompida sem alterar dados externos." onRetry={onRetry} title="Não foi possível carregar o estoque integrado" />
         )}
 
         {isEmpty && (
-          <EmptyState
+          <UiEmptyState
+            description={hasFilters ? "Ajuste os filtros para ampliar a consulta." : "Sincronize os produtos na área de Integrações para atualizar o estoque."}
             icon={<Warehouse size={17} />}
-            title={hasFilters ? "Nao encontramos produtos para esta busca." : "Nenhum produto disponivel no estoque."}
-            text={hasFilters ? "Ajuste os filtros para ampliar a consulta." : "Sincronize os produtos na area de Integracoes para atualizar o estoque."}
+            title={hasFilters ? "Nenhum produto para esta busca" : "Nenhum produto disponível no estoque"}
           />
         )}
 
-        {!isLoading && !isError && products.map((product) => (
-          <IntegratedProductRow key={integratedProductKey(product)} product={product} />
-        ))}
+        {!isLoading && !isError && products.length > 0 && (
+          <table className="w-full min-w-[1060px] table-fixed border-collapse text-left">
+            <thead className="bg-[var(--bg-muted)] text-[11px] font-medium text-[var(--text-secondary)]">
+              <tr className="border-b border-[var(--border-default)]">
+                <th className="w-[24%] px-4 py-2.5 font-medium">Produto</th>
+                <th className="w-[14%] px-3 py-2.5 font-medium">SKU</th>
+                <th className="w-[12%] px-3 py-2.5 text-right font-medium">Preço</th>
+                <th className="w-[8%] px-3 py-2.5 font-medium">Unidade</th>
+                <th className="w-[12%] px-3 py-2.5 text-right font-medium">Saldo</th>
+                <th className="w-[9%] px-3 py-2.5 font-medium">Origem</th>
+                <th className="w-[10%] px-3 py-2.5 font-medium">Status</th>
+                <th className="w-[11%] px-3 py-2.5 font-medium">Atualização</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-default)]">
+              {products.map((product) => <IntegratedProductRow key={integratedProductKey(product)} product={product} />)}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-        <span>
-          {total} produto{total === 1 ? "" : "s"} integrado{total === 1 ? "" : "s"}
-          {loadedTotal > total ? ` de ${loadedTotal} carregados` : ""}
-        </span>
-        <div className="flex items-center gap-2">
-          <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoading || page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} type="button">
-            Anterior
-          </button>
-          <span className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">
-            {total === 0 ? "0/0" : `${page}/${totalPages}`}
-          </span>
-          <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoading || total === 0 || page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} type="button">
-            Proxima
-          </button>
-        </div>
-      </div>
-    </section>
+      <Pagination disabled={isLoading} itemLabel="produtos integrados" onPageChange={onPageChange} page={page} total={total} totalPages={totalPages} visibleCount={products.length} />
+    </Surface>
   );
 }
 
@@ -2120,25 +2112,19 @@ function IntegratedProductRow({ product }: { product: HubProdutoEstoque }) {
   const status = integratedStockStatus(product);
 
   return (
-    <article className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 lg:grid-cols-[minmax(0,1fr)_minmax(460px,0.96fr)] lg:items-start">
-      <div className="min-w-0">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <p className="min-w-0 break-words text-sm font-semibold leading-snug text-white">{product.produto.nome}</p>
-          <span className={`saas-chip shrink-0 ${originTone(product)}`}>{integratedOriginLabel(product)}</span>
-          <span className={`saas-chip shrink-0 ${status.toneClass}`}>{status.label}</span>
-        </div>
-        <p className="mt-1 break-words text-[11px] leading-snug text-slate-500">
-          {product.produto.sku || "Sem SKU"} - {product.produto.categoria || "Sem categoria"}
-        </p>
-      </div>
-
-      <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <InfoCell label="Preco" value={formatOptionalCurrency(integratedPrice(product))} />
-        <InfoCell label="Unidade" value={unit || "Nao informada"} />
-        <InfoCell label="Estoque" value={formatIntegratedStock(product)} tone={status.tone} />
-        <InfoCell label="Atualizado" value={formatOptionalDateTime(integratedUpdatedAt(product))} />
-      </div>
-    </article>
+    <tr className="bg-[var(--bg-surface)] transition-colors hover:bg-[var(--bg-muted)]">
+      <td className="px-4 py-3 align-middle">
+        <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{product.produto.nome}</p>
+        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{product.produto.categoria || "Sem categoria"}</p>
+      </td>
+      <td className="px-3 py-3 align-middle text-[11px] font-medium text-[var(--text-secondary)]">{product.produto.sku || "Sem SKU"}</td>
+      <td className="px-3 py-3 text-right align-middle text-xs font-semibold tabular-nums text-[var(--text-primary)]">{formatOptionalCurrency(integratedPrice(product))}</td>
+      <td className="px-3 py-3 align-middle text-[11px] text-[var(--text-secondary)]">{unit || "Não informada"}</td>
+      <td className={`px-3 py-3 text-right align-middle text-xs font-semibold tabular-nums ${status.tone === "ok" ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>{formatIntegratedStock(product) || "0"}</td>
+      <td className="px-3 py-3 align-middle"><span className="text-[11px] font-medium text-[var(--info)]">{integratedOriginLabel(product)}</span></td>
+      <td className="px-3 py-3 align-middle"><span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${status.tone === "ok" ? "border-[color:rgba(36,122,82,0.28)] text-[var(--success)]" : "border-[color:rgba(179,58,69,0.28)] text-[var(--danger)]"}`}>{status.label}</span></td>
+      <td className="px-3 py-3 align-middle text-[11px] text-[var(--text-muted)]">{formatOptionalDateTime(integratedUpdatedAt(product))}</td>
+    </tr>
   );
 }
 
@@ -2242,56 +2228,6 @@ function InfoCell({ label, value, tone = "default" }: { label: string; value: st
   );
 }
 
-function InventoryMetricCard({
-  title,
-  value,
-  icon,
-  caption,
-  tone = "neutral",
-}: {
-  title: string;
-  value: string | number;
-  icon: ReactNode;
-  caption?: string;
-  tone?: "pipeline" | "revenue" | "forecast" | "risk" | "neutral";
-}) {
-  const toneClass = {
-    pipeline: "metric-pipeline",
-    revenue: "metric-revenue",
-    forecast: "metric-forecast",
-    risk: "metric-risk",
-    neutral: "",
-  }[tone];
-  const iconToneClass = {
-    pipeline: "border-teal-300/18 bg-teal-300/[0.065] text-teal-100",
-    revenue: "border-sky-300/18 bg-sky-300/[0.06] text-sky-100",
-    forecast: "border-amber-300/18 bg-amber-300/[0.06] text-amber-100",
-    risk: "border-rose-300/18 bg-rose-300/[0.06] text-rose-100",
-    neutral: "border-slate-500/16 bg-slate-900/55 text-slate-200",
-  }[tone];
-
-  return (
-    <div className={`metric-card group self-start rounded-xl p-3 ${toneClass}`}>
-      <div className="flex h-full min-w-0 flex-col justify-between">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <p className="min-w-0 max-w-[11rem] break-words text-[10px] font-semibold uppercase leading-4 tracking-[0.12em] text-slate-400">
-            {title}
-          </p>
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${iconToneClass}`}>
-            {icon}
-          </div>
-        </div>
-
-        <h2 className="mt-1.5 max-w-full break-words text-base font-semibold leading-tight text-white">
-          {value}
-        </h2>
-
-        {caption && <p className="mt-1 break-words text-[11px] leading-snug text-slate-500">{caption}</p>}
-      </div>
-    </div>
-  );
-}
-
 function EmptyState({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
   return (
     <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center">
@@ -2341,12 +2277,6 @@ function integratedOriginLabel(product: HubProdutoEstoque) {
   if (type === "CSV") return "CSV";
   if (type === "XLSX") return "XLSX";
   return product.origem?.integracaoNome?.trim() || "Integracao";
-}
-
-function originTone(product: HubProdutoEstoque) {
-  return product.origem?.tipo?.trim().toUpperCase() === "BLING"
-    ? "border-sky-300/15 bg-sky-300/[0.07] text-sky-100"
-    : "text-slate-400";
 }
 
 function integratedUpdatedAt(product: HubProdutoEstoque) {

@@ -85,7 +85,7 @@ export default function DashboardOperationalSearch({
 
       <FilterBar className="border-0 bg-transparent p-0 shadow-none">
         <div
-          className={`flex h-9 min-w-[280px] items-center gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 transition focus-within:border-[var(--primary)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)] ${
+          className={`flex h-9 min-w-[280px] items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--control-bg)] px-3 transition-colors hover:border-[var(--control-border-hover)] focus-within:border-[var(--control-border-focus)] focus-within:ring-2 focus-within:ring-[var(--control-ring)] ${
             activePage === "kanban" ? "flex-[1_1_280px]" : "flex-[1_1_380px]"
           }`}
         >
@@ -98,7 +98,7 @@ export default function DashboardOperationalSearch({
               setPage(1);
             }}
             placeholder="Buscar cliente, empresa, telefone, e-mail ou tag..."
-            className="w-full select-text bg-transparent text-xs outline-none placeholder:text-[var(--text-muted)]"
+            className="w-full select-text bg-transparent text-xs text-[var(--control-text)] outline-none placeholder:text-[var(--control-placeholder)] focus-visible:outline-none"
           />
 
           {search.trim() && (

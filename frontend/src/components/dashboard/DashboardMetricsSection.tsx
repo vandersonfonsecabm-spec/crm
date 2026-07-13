@@ -69,12 +69,12 @@ export default function DashboardMetricsSection({
 
   if (activePage === "agenda") {
     return (
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Acompanhamentos hoje" value={String(clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length)} caption="Agenda imediata" icon={<Bell size={15} />} tone="revenue" />
-        <MetricCard title="Sem contato" value={String(clients.filter((client) => client.lastContactDays >= 7).length)} caption="Retomar relação" icon={<AlertTriangle size={15} />} tone="risk" />
-        <MetricCard title="Propostas" value={String(clients.filter((client) => client.status === "Proposta").length)} caption="Janelas abertas" icon={<Target size={15} />} tone="forecast" />
-        <MetricCard title="Notas recentes" value={String(clients.reduce((sum, client) => sum + client.notes.length, 0))} caption="Histórico comercial" icon={<StickyNote size={15} />} />
-      </section>
+      <DashboardMetricStrip metrics={[
+        { label: "Acompanhamentos hoje", value: String(clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length), context: "Agenda imediata", icon: <Bell size={15} />, tone: "info" },
+        { label: "Sem contato", value: String(clients.filter((client) => client.lastContactDays >= 7).length), context: "Retomar relação", icon: <AlertTriangle size={15} />, tone: "danger" },
+        { label: "Propostas", value: String(clients.filter((client) => client.status === "Proposta").length), context: "Janelas abertas", icon: <Target size={15} />, tone: "warning" },
+        { label: "Notas recentes", value: String(clients.reduce((sum, client) => sum + client.notes.length, 0)), context: "Histórico comercial", icon: <StickyNote size={15} /> },
+      ]} />
     );
   }
 
