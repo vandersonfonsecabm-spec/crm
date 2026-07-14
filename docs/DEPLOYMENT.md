@@ -13,7 +13,8 @@ Nenhum deploy foi executado durante a oficializacao desta arquitetura.
 
 - Plataforma do backend Express.
 - Root Directory esperado: `backend`.
-- Build rastreado: `npm ci --include=dev --no-audit --no-fund && npm run prisma:generate`.
+- As dependencias sao instaladas uma unica vez pela fase automatica do Nixpacks.
+- Build rastreado: `npx prisma generate`, sem repetir `npm ci` no comando customizado.
 - Start rastreado: `npm run start:production`.
 - Entrypoint final: `backend/src/server.js`.
 - Health check: `/health`.

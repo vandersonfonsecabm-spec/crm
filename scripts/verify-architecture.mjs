@@ -68,9 +68,18 @@ for (const [name, command] of Object.entries(backendPackage.scripts || {})) {
 
 const railwayBuild = railway.build?.buildCommand || "";
 const railwayStart = railway.deploy?.startCommand || "";
+const railwayInstallsDependencies = /\b(?:npm\s+(?:ci|install)|yarn\s+install|pnpm\s+install)\b/i.test(railwayBuild);
+const railwayGeneratesPrisma = /^npx\s+prisma\s+generate$/i.test(railwayBuild.trim())
+  || (!railwayBuild && /\bprisma\s+generate\b/i.test(backendPackage.scripts?.postinstall || ""));
 check(railway.build?.builder === "NIXPACKS", "Railway deve usar o builder Nixpacks declarado.");
 check(railwayStart === "npm run start:production", "Railway deve iniciar somente o Express em backend/.");
 check(railway.deploy?.healthcheckPath === "/health", "Railway deve verificar /health.");
+check(
+  !railwayInstallsDependencies,
+  "Railway buildCommand nao deve instalar dependencias: o builder ja executa a instalacao e duplica-la pode causar conflito em node_modules.",
+);
+check(railwayGeneratesPrisma, "Railway deve gerar o Prisma Client no build ou em lifecycle seguro de instalacao.");
+check(!/\.\.[\\/]prisma\b/i.test(railwayBuild), "Railway buildCommand nao pode referenciar o Prisma legado da raiz.");
 check(!/db\s+push|\bseed\b|prisma\s+migrate|\bnest\b/i.test(`${railwayBuild} ${railwayStart}`), "Railway contem comando destrutivo ou Nest.");
 
 const vercelConfig = JSON.stringify(vercel);

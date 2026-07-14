@@ -5,7 +5,7 @@
     "watchPatterns": [
       "/backend/**"
     ],
-    "buildCommand": "npm ci --include=dev --no-audit --no-fund && npm run prisma:generate"
+    "buildCommand": "npx prisma generate"
   },
   "deploy": {
     "startCommand": "npm run start:production",
