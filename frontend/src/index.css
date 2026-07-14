@@ -1170,9 +1170,24 @@ button {
 .login-shell .rounded-lg { border-radius: var(--radius-md) !important; }
 
 /* Global application shell */
+.crm-workspace .crm-shell-layout {
+  background: var(--background);
+}
+
 .crm-workspace .crm-main {
   min-height: 100vh;
   background: var(--background);
+}
+
+@media (min-width: 1024px) {
+  .crm-workspace .crm-shell-layout {
+    gap: 12px;
+  }
+
+  .crm-workspace .crm-main {
+    border-left: 1px solid var(--border);
+    box-shadow: -6px 0 18px rgba(20, 36, 30, 0.045);
+  }
 }
 
 .crm-workspace .topbar-shell {

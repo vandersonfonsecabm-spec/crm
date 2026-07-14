@@ -474,7 +474,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   return (
     <div className="crm-workspace premium-shell min-h-screen select-none overflow-x-hidden">
-      <div className="flex min-h-screen">
+      <div className="crm-shell-layout flex min-h-screen">
         <DashboardSidebar
           activePage={activePage}
           setActivePage={handleSetActivePage}
