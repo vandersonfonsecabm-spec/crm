@@ -8,6 +8,12 @@ import {
   Sprout,
   Users,
 } from "lucide-react";
+import type { MouseEvent, ReactNode } from "react";
+import { Link } from "react-router-dom";
+import {
+  dashboardNavigationGroups,
+  getDashboardRoute,
+} from "../../navigation/dashboardNavigation";
 import type { AuthSession } from "../../services/crmApi";
 import type { ActivePage } from "../../types/dashboard";
 import "./DashboardSidebar.css";
@@ -19,48 +25,16 @@ type DashboardSidebarProps = {
   canManageIntegrations?: boolean;
 };
 
-const navigationGroups: Array<{
-  label: string;
-  items: Array<{
-    page: ActivePage;
-    label: string;
-    icon: React.ReactNode;
-    requiresIntegrationAccess?: boolean;
-  }>;
-}> = [
-  {
-    label: "Visão geral",
-    items: [
-      { page: "dashboard", label: "Visão Geral", icon: <BarChart3 size={16} /> },
-    ],
-  },
-  {
-    label: "Comercial",
-    items: [
-      { page: "comercial", label: "Central Comercial", icon: <BriefcaseBusiness size={16} /> },
-      { page: "clientes", label: "Clientes", icon: <Users size={16} /> },
-      { page: "kanban", label: "Negócios", icon: <KanbanSquare size={16} /> },
-      { page: "agenda", label: "Agenda", icon: <CalendarCheck size={16} /> },
-    ],
-  },
-  {
-    label: "Operação",
-    items: [
-      { page: "estoque", label: "Estoque", icon: <Package size={16} /> },
-    ],
-  },
-  {
-    label: "Administração",
-    items: [
-      {
-        page: "integracoes",
-        label: "Integrações",
-        icon: <PlugZap size={16} />,
-        requiresIntegrationAccess: true,
-      },
-    ],
-  },
-];
+const navigationIcons: Record<ActivePage, ReactNode> = {
+  dashboard: <BarChart3 size={16} />,
+  comercial: <BriefcaseBusiness size={16} />,
+  clientes: <Users size={16} />,
+  kanban: <KanbanSquare size={16} />,
+  agenda: <CalendarCheck size={16} />,
+  estoque: <Package size={16} />,
+  integracoes: <PlugZap size={16} />,
+  automacoes: <Sprout size={16} />,
+};
 
 export default function DashboardSidebar({
   activePage,
@@ -68,10 +42,13 @@ export default function DashboardSidebar({
   authSession,
   canManageIntegrations = false,
 }: DashboardSidebarProps) {
-  const visibleGroups = navigationGroups
+  const visibleGroups = dashboardNavigationGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => !item.requiresIntegrationAccess || canManageIntegrations),
+      items: group.pages
+        .map((page) => getDashboardRoute(page))
+        .filter((route) => route.showInSidebar)
+        .filter((route) => !route.requiresIntegrationAccess || canManageIntegrations),
     }))
     .filter((group) => group.items.length > 0);
 
@@ -101,9 +78,10 @@ export default function DashboardSidebar({
                   <SidebarButton
                     key={item.page}
                     active={activePage === item.page}
-                    icon={item.icon}
+                    href={item.pathname}
+                    icon={navigationIcons[item.page]}
                     label={item.label}
-                    onClick={() => setActivePage(item.page)}
+                    onNavigate={() => setActivePage(item.page)}
                   />
                 ))}
               </div>
@@ -129,25 +107,33 @@ export default function DashboardSidebar({
 
 function SidebarButton({
   active,
+  href,
   icon,
   label,
-  onClick,
+  onNavigate,
 }: {
   active: boolean;
-  icon: React.ReactNode;
+  href: string;
+  icon: ReactNode;
   label: string;
-  onClick: () => void;
+  onNavigate: () => void;
 }) {
+  function handleClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onNavigate();
+  }
+
   return (
-    <button
-      onClick={onClick}
+    <Link
+      to={href}
+      onClick={handleClick}
       aria-current={active ? "page" : undefined}
       className={`sidebar-nav-item relative flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[12px] ${active ? "is-active" : ""}`}
-      type="button"
     >
       <span className="sidebar-nav-icon flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-    </button>
+    </Link>
   );
 }
 

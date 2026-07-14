@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   actionIntensity,
   activitySignalLabel,
@@ -52,12 +53,20 @@ import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
 import { emptyClient, statusList } from "../data/clientDefaults";
 
 import type { ActivePage, Client, KanbanOwner, SortBy, Status } from "../types/dashboard";
+import {
+  getDashboardPath,
+  normalizeDashboardPathname,
+  resolveDashboardPathname,
+} from "../navigation/dashboardNavigation";
 
 type DashboardProps = {
   onLogout: () => void;
 };
 
 export default function Dashboard({ onLogout }: DashboardProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const resolvedNavigation = resolveDashboardPathname(location.pathname);
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
@@ -67,7 +76,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [onlySilent, setOnlySilent] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("score");
   const [kanbanOwnerFilter, setKanbanOwnerFilter] = useState<KanbanOwner>("Todos");
-  const [requestedActivePage, setActivePage] = useState<ActivePage>("dashboard");
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null);
   const [isDraggingKanban, setIsDraggingKanban] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -87,6 +95,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [agendaTodayRequestKey, setAgendaTodayRequestKey] = useState(0);
   const [kanbanStageRequest, setKanbanStageRequest] = useState<{ group: "pipeline" | "resultado"; key: number }>({ group: "pipeline", key: 0 });
   const canManageIntegrations = canAccessIntegrations(authSession);
+  const requestedActivePage = resolvedNavigation.page;
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
 
   const pageSize = 4;
@@ -272,11 +281,35 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setIsCustomerDrawerOpen(false);
     if (page === "integracoes" && !canManageIntegrations) {
       setToast("Acesso negado para Integrações.");
-      setActivePage("dashboard");
+      navigate(getDashboardPath("dashboard"), { replace: true });
       return;
     }
-    setActivePage(page);
-  }, [canManageIntegrations, setToast]);
+
+    const pathname = getDashboardPath(page);
+    if (normalizeDashboardPathname(location.pathname) !== pathname) {
+      navigate(pathname);
+    }
+  }, [canManageIntegrations, location.pathname, navigate, setToast]);
+
+  useEffect(() => {
+    if (!resolvedNavigation.isKnown || resolvedNavigation.needsReplace) {
+      navigate(resolvedNavigation.pathname, { replace: true });
+      return;
+    }
+
+    if (requestedActivePage === "integracoes" && !canManageIntegrations) {
+      setToast("Acesso negado para Integrações.");
+      navigate(getDashboardPath("dashboard"), { replace: true });
+    }
+  }, [
+    canManageIntegrations,
+    navigate,
+    requestedActivePage,
+    resolvedNavigation.isKnown,
+    resolvedNavigation.needsReplace,
+    resolvedNavigation.pathname,
+    setToast,
+  ]);
 
   const backendCaption = dashboardSummary
     ? `${dashboardSummary.indicadores.clientes} clientes sincronizados`
@@ -359,18 +392,19 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     url.searchParams.delete("integracaoId");
     url.searchParams.delete("code");
     url.searchParams.delete("state");
-    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+    const cleanLocation = `${url.pathname}${url.search}${url.hash}`;
 
     const timeout = window.setTimeout(() => {
       if (canManageIntegrations) {
-        setActivePage("integracoes");
         setBlingReturnMessage(message);
+        navigate(getDashboardPath("integracoes"), { replace: true });
       } else {
         setToast(message);
+        navigate(cleanLocation, { replace: true });
       }
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, [canManageIntegrations, setToast]);
+  }, [canManageIntegrations, navigate, setToast]);
 
   const requestExternalWhatsapp = useCallback((client: Client) => {
     setWhatsappExternalRequest({
