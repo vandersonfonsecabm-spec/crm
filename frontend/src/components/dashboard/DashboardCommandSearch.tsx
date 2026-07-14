@@ -71,8 +71,8 @@ export default function DashboardCommandSearch({
     const pages: CommandResult[] = [
       { label: "Visão Geral", type: "Página", searchText: "visao geral dashboard inicio", action: () => onSetActivePage("dashboard") },
       { label: "Central Comercial", type: "Página", searchText: "central comercial operacao", action: () => onSetActivePage("comercial") },
-      { label: "Carteira", type: "Página", searchText: "carteira clientes", action: () => onSetActivePage("clientes") },
-      { label: "Funil Comercial", type: "Página", searchText: "funil comercial kanban oportunidades", action: () => onSetActivePage("kanban") },
+      { label: "Clientes", type: "Página", searchText: "clientes carteira", action: () => onSetActivePage("clientes") },
+      { label: "Negócios", type: "Página", searchText: "negocios funil comercial kanban oportunidades", action: () => onSetActivePage("kanban") },
       { label: "Agenda", type: "Página", searchText: "agenda acompanhamentos calendario", action: () => onSetActivePage("agenda") },
       { label: "Estoque", type: "Página", searchText: "estoque produtos inventario", action: () => onSetActivePage("estoque") },
       { label: "Automações", type: "Página", searchText: "automacoes automacao inteligencia regras", action: () => onSetActivePage("automacoes") },

@@ -137,12 +137,12 @@ const pageMeta: Record<ActivePage, { breadcrumb: string; description: string }> 
     description: "Decisões, oportunidades e ações comerciais em um só contexto.",
   },
   clientes: {
-    breadcrumb: "Carteira",
-    description: "Clientes, responsáveis, interações e próximos passos.",
+    breadcrumb: "Clientes",
+    description: "Gerencie relacionamentos, prioridades e histórico comercial.",
   },
   kanban: {
-    breadcrumb: "Funil Comercial",
-    description: "Acompanhe oportunidades por etapa e mantenha o pipeline em movimento.",
+    breadcrumb: "Negócios",
+    description: "Acompanhe negociações e o avanço no funil comercial.",
   },
   agenda: {
     breadcrumb: "Agenda",

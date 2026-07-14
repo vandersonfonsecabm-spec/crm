@@ -105,8 +105,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const pageTitle = ({
     dashboard: "Visão Geral",
     comercial: "Central Comercial",
-    clientes: "Carteira",
-    kanban: "Funil Comercial",
+    clientes: "Clientes",
+    kanban: "Negócios",
     agenda: "Agenda",
     estoque: "Estoque",
     integracoes: "Integrações e Dados",

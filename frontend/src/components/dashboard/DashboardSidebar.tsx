@@ -7,7 +7,6 @@ import {
   PlugZap,
   Sprout,
   Users,
-  Zap,
 } from "lucide-react";
 import type { AuthSession } from "../../services/crmApi";
 import type { ActivePage } from "../../types/dashboard";
@@ -39,20 +38,19 @@ const navigationGroups: Array<{
     label: "Comercial",
     items: [
       { page: "comercial", label: "Central Comercial", icon: <BriefcaseBusiness size={16} /> },
-      { page: "clientes", label: "Carteira", icon: <Users size={16} /> },
-      { page: "kanban", label: "Funil Comercial", icon: <KanbanSquare size={16} /> },
+      { page: "clientes", label: "Clientes", icon: <Users size={16} /> },
+      { page: "kanban", label: "Negócios", icon: <KanbanSquare size={16} /> },
+      { page: "agenda", label: "Agenda", icon: <CalendarCheck size={16} /> },
     ],
   },
   {
     label: "Operação",
     items: [
-      { page: "agenda", label: "Agenda", icon: <CalendarCheck size={16} /> },
       { page: "estoque", label: "Estoque", icon: <Package size={16} /> },
-      { page: "automacoes", label: "Automações", icon: <Zap size={16} /> },
     ],
   },
   {
-    label: "Conexões",
+    label: "Administração",
     items: [
       {
         page: "integracoes",
