@@ -60,6 +60,18 @@ export type AuthSession = {
   expiresAt?: string;
 };
 
+export class ApiHttpError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiHttpError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 type ApiCliente = {
   id: string | number;
   nome: string;
@@ -1140,21 +1152,26 @@ async function requestApiGet<T>(path: string): Promise<T> {
 
 async function requestApiGetAuthenticated<T>(path: string): Promise<T> {
   if (!hasRemoteApi()) {
-    throw new Error("Nao foi possivel carregar os dados agora.");
+    throw new ApiHttpError("Nao foi possivel se comunicar com o servidor.", 0, "NETWORK_UNAVAILABLE");
   }
 
   const token = getAuthToken();
   if (!token) {
-    throw new Error("Sessao expirada. Entre novamente para continuar.");
+    throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
   }
 
-  const response = await fetch(API_URL + path, {
-    headers: buildHeaders(token),
-  });
+  let response: Response;
+  try {
+    response = await fetch(API_URL + path, {
+      headers: buildHeaders(token),
+    });
+  } catch {
+    throw new ApiHttpError("Nao foi possivel se comunicar com o servidor.", 0, "NETWORK_ERROR");
+  }
 
   if (!response.ok) {
-    const message = await readApiError(response);
-    throw new Error(message);
+    const error = await readApiErrorDetails(response);
+    throw new ApiHttpError(error.message, response.status, error.code);
   }
 
   return (await response.json()) as T;
@@ -1216,11 +1233,18 @@ async function requestApiWrite<T>(method: "POST" | "PATCH", path: string, payloa
 }
 
 async function readApiError(response: Response) {
+  return (await readApiErrorDetails(response)).message;
+}
+
+async function readApiErrorDetails(response: Response) {
   try {
-    const data = (await response.json()) as { erro?: string; error?: string; message?: string };
-    return data.erro || data.error || data.message || "Nao foi possivel concluir a acao agora.";
+    const data = (await response.json()) as { erro?: string; error?: string; message?: string; codigo?: string; code?: string };
+    return {
+      message: data.erro || data.error || data.message || "Nao foi possivel concluir a acao agora.",
+      code: data.codigo || data.code,
+    };
   } catch {
-    return "Nao foi possivel concluir a acao agora.";
+    return { message: "Nao foi possivel concluir a acao agora.", code: undefined };
   }
 }
 

@@ -1,353 +1,91 @@
-import { AlertTriangle, Boxes, CheckCircle2, Edit3, FolderCog, History, Layers3, Loader2, Package, Plus, Search, SlidersHorizontal, TrendingDown, TrendingUp, Wallet, Warehouse, X } from "lucide-react";
+import { AlertTriangle, Boxes, CheckCircle2, Database, Package, RefreshCcw, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import DashboardMetricStrip from "./DashboardMetricStrip";
-import { Button, EmptyState as UiEmptyState, ErrorState as UiErrorState, Input, LoadingState, Pagination, SectionHeader, Select, Surface, Toolbar } from "../ui";
 import {
-  createCategoriaProduto,
-  createProduto,
-  createAjusteEstoque,
-  createEntradaEstoque,
-  createSaidaEstoque,
+  ApiHttpError,
   canAccessIntegrations,
-  fetchCategoriasProdutos,
-  fetchEstoqueMovimentacoes,
-  fetchEstoqueResumo,
   fetchHubProdutosEstoque,
+  fetchIntegracoes,
   getAuthSession,
-  fetchProduto,
-  fetchProdutos,
-  updateCategoriaProduto,
-  updateProduto,
-  type ApiCategoriaProduto,
-  type ApiMovimentacaoEstoque,
-  type ApiProduto,
-  type ApiResumoEstoque,
   type HubProdutoEstoque,
 } from "../../services/crmApi";
+import { Button, EmptyState, ErrorState, Input, LoadingState, Pagination, SectionHeader, Select, Surface, Toolbar } from "../ui";
+import DashboardMetricStrip from "./DashboardMetricStrip";
 
-const PRODUCT_PAGE_SIZE = 5;
-const INTEGRATED_PRODUCT_PAGE_SIZE = 6;
-const INTEGRATED_PRODUCT_FETCH_LIMIT = 250;
-const MOVEMENT_PAGE_SIZE = 5;
-const HISTORY_PAGE_SIZE = 10;
-const UNITS = ["Todos", "UN", "KG", "L", "SC", "TON"];
-const MOVEMENT_TYPES = ["Todos", "ENTRADA", "SAIDA", "AJUSTE"] as const;
-const PRODUCT_UNITS = [
-  { value: "UN", label: "UN - Unidade" },
-  { value: "KG", label: "KG - Quilograma" },
-  { value: "L", label: "L - Litro" },
-  { value: "SC", label: "SC - Saca" },
-  { value: "TON", label: "TON - Tonelada" },
-];
+const PRODUCT_FETCH_LIMIT = 100;
+const PRODUCT_PAGE_SIZE = 10;
 
 type InventoryStatus = "idle" | "loading" | "success" | "error";
-type InventoryAction = "entrada" | "saida" | "ajuste";
-type IntegratedStockFilter = "todos" | "disponivel" | "sem-estoque";
-type CategoryForm = {
-  id: number | null;
-  nome: string;
-  descricao: string;
-  ativo: boolean;
-};
-type ProductForm = {
-  nome: string;
-  codigo: string;
-  descricao: string;
-  categoriaId: string;
-  unidadeMedida: string;
-  estoqueMinimo: string;
-  precoCusto: string;
-  precoVenda: string;
-  ativo: boolean;
+type StockFilter = "todos" | "disponivel" | "sem-estoque";
+type SourceState = "unknown" | "connected" | "disconnected";
+
+type InventoryErrorState = {
+  title: string;
+  description: string;
+  canRetry: boolean;
 };
 
-const initialProductForm: ProductForm = {
-  nome: "",
-  codigo: "",
-  descricao: "",
-  categoriaId: "",
-  unidadeMedida: "KG",
-  estoqueMinimo: "0",
-  precoCusto: "",
-  precoVenda: "",
-  ativo: true,
-};
-
-const initialCategoryForm: CategoryForm = {
-  id: null,
-  nome: "",
-  descricao: "",
-  ativo: true,
-};
-
-type MovementForm = {
-  quantidade: string;
-  novaQuantidade: string;
-  motivo: string;
-  observacao: string;
-};
-
-const initialMovementForm: MovementForm = {
-  quantidade: "",
-  novaQuantidade: "",
-  motivo: "",
-  observacao: "",
-};
-
-export default function DashboardInventoryPanel() {
-  const [summary, setSummary] = useState<ApiResumoEstoque | null>(null);
-  const [categories, setCategories] = useState<ApiCategoriaProduto[]>([]);
-  const [allCategories, setAllCategories] = useState<ApiCategoriaProduto[]>([]);
-  const [products, setProducts] = useState<ApiProduto[]>([]);
-  const [productOptions, setProductOptions] = useState<ApiProduto[]>([]);
-  const [integratedProducts, setIntegratedProducts] = useState<HubProdutoEstoque[]>([]);
-  const [integratedTotal, setIntegratedTotal] = useState(0);
-  const [movements, setMovements] = useState<ApiMovimentacaoEstoque[]>([]);
-  const [productTotal, setProductTotal] = useState(0);
-  const [movementTotal, setMovementTotal] = useState(0);
-  const [productPage, setProductPage] = useState(1);
-  const [integratedPage, setIntegratedPage] = useState(1);
-  const [movementPage, setMovementPage] = useState(1);
+export default function DashboardInventoryPanel({ onOpenIntegrations }: { onOpenIntegrations: () => void }) {
+  const [products, setProducts] = useState<HubProdutoEstoque[]>([]);
+  const [total, setTotal] = useState(0);
+  const [status, setStatus] = useState<InventoryStatus>("idle");
+  const [errorState, setErrorState] = useState<InventoryErrorState | null>(null);
+  const [sourceState, setSourceState] = useState<SourceState>("unknown");
+  const [retryKey, setRetryKey] = useState(0);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [integratedSearch, setIntegratedSearch] = useState("");
-  const [debouncedIntegratedSearch, setDebouncedIntegratedSearch] = useState("");
-  const [movementSearch, setMovementSearch] = useState("");
-  const [debouncedMovementSearch, setDebouncedMovementSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"todos" | "ativos" | "inativos">("todos");
+  const [originFilter, setOriginFilter] = useState("Todos");
   const [unitFilter, setUnitFilter] = useState("Todos");
-  const [categoryFilter, setCategoryFilter] = useState("Todos");
-  const [stockFilter, setStockFilter] = useState<"todos" | "baixo">("todos");
-  const [integratedOriginFilter, setIntegratedOriginFilter] = useState("Todos");
-  const [integratedUnitFilter, setIntegratedUnitFilter] = useState("Todos");
-  const [integratedStockFilter, setIntegratedStockFilter] = useState<IntegratedStockFilter>("todos");
-  const [movementType, setMovementType] = useState<(typeof MOVEMENT_TYPES)[number]>("Todos");
-  const [movementProductFilter, setMovementProductFilter] = useState("Todos");
-  const [movementStartDate, setMovementStartDate] = useState("");
-  const [movementEndDate, setMovementEndDate] = useState("");
-  const [status, setStatus] = useState<InventoryStatus>("idle");
-  const [integratedStatus, setIntegratedStatus] = useState<InventoryStatus>("idle");
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [integratedRetryKey, setIntegratedRetryKey] = useState(0);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showCategoriesModal, setShowCategoriesModal] = useState(false);
-  const [categoryForm, setCategoryForm] = useState<CategoryForm>(initialCategoryForm);
-  const [categoryError, setCategoryError] = useState("");
-  const [categorySubmittingId, setCategorySubmittingId] = useState<number | "new" | null>(null);
-  const [productForm, setProductForm] = useState<ProductForm>(initialProductForm);
-  const [formError, setFormError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [toast, setToast] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState<ApiProduto | null>(null);
-  const [isLoadingProduct, setIsLoadingProduct] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<ApiProduto | null>(null);
-  const [movementProduct, setMovementProduct] = useState<ApiProduto | null>(null);
-  const [movementAction, setMovementAction] = useState<InventoryAction | null>(null);
-  const [movementForm, setMovementForm] = useState<MovementForm>(initialMovementForm);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [historyMovements, setHistoryMovements] = useState<ApiMovimentacaoEstoque[]>([]);
-  const [historyTotal, setHistoryTotal] = useState(0);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historySearch, setHistorySearch] = useState("");
-  const [debouncedHistorySearch, setDebouncedHistorySearch] = useState("");
-  const [historyType, setHistoryType] = useState<(typeof MOVEMENT_TYPES)[number]>("Todos");
-  const [historyProductFilter, setHistoryProductFilter] = useState("Todos");
-  const [historyStartDate, setHistoryStartDate] = useState("");
-  const [historyEndDate, setHistoryEndDate] = useState("");
-  const [historyStatus, setHistoryStatus] = useState<InventoryStatus>("idle");
-  const [historyRetryKey, setHistoryRetryKey] = useState(0);
-  const [selectedMovement, setSelectedMovement] = useState<ApiMovimentacaoEstoque | null>(null);
-
-  const totalPages = Math.max(1, Math.ceil(productTotal / PRODUCT_PAGE_SIZE));
-  const movementTotalPages = Math.max(1, Math.ceil(movementTotal / MOVEMENT_PAGE_SIZE));
-  const historyTotalPages = Math.max(1, Math.ceil(historyTotal / HISTORY_PAGE_SIZE));
-  const hasMovementFilters =
-    Boolean(debouncedMovementSearch) ||
-    movementType !== "Todos" ||
-    movementProductFilter !== "Todos" ||
-    Boolean(movementStartDate) ||
-    Boolean(movementEndDate);
-  const canLoadIntegratedProducts = canAccessIntegrations(getAuthSession());
-
-  useEffect(() => {
-    if (!toast) return;
-    const timeout = window.setTimeout(() => setToast(""), 3200);
-    return () => window.clearTimeout(timeout);
-  }, [toast]);
+  const [stockFilter, setStockFilter] = useState<StockFilter>("todos");
+  const canLoadInventory = canAccessIntegrations(getAuthSession());
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setDebouncedSearch(search.trim());
-      setProductPage(1);
-    }, 350);
+      setPage(1);
+    }, 300);
 
     return () => window.clearTimeout(timeout);
   }, [search]);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setDebouncedIntegratedSearch(integratedSearch.trim());
-      setIntegratedPage(1);
-    }, 350);
-
-    return () => window.clearTimeout(timeout);
-  }, [integratedSearch]);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setDebouncedMovementSearch(movementSearch.trim());
-      setMovementPage(1);
-    }, 350);
-
-    return () => window.clearTimeout(timeout);
-  }, [movementSearch]);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setDebouncedHistorySearch(historySearch.trim());
-      setHistoryPage(1);
-    }, 350);
-
-    return () => window.clearTimeout(timeout);
-  }, [historySearch]);
-
-  useEffect(() => {
-    if (!showHistoryModal) return;
-
-    let ignore = false;
-
-    async function loadFullHistory() {
-      setHistoryStatus("loading");
-
-      try {
-        const response = await fetchEstoqueMovimentacoes({
-          busca: debouncedHistorySearch || undefined,
-          tipo: historyType === "Todos" ? undefined : historyType,
-          produtoId: historyProductFilter === "Todos" ? undefined : Number(historyProductFilter),
-          dataInicial: historyStartDate || undefined,
-          dataFinal: historyEndDate || undefined,
-          page: historyPage,
-          limit: HISTORY_PAGE_SIZE,
-        });
-
-        if (ignore) return;
-        setHistoryMovements(response.data);
-        setHistoryTotal(response.pagination.total);
-        setHistoryStatus("success");
-      } catch (error) {
-        if (ignore) return;
-        console.error("Falha ao carregar historico do estoque", error);
-        setHistoryStatus("error");
-      }
-    }
-
-    void loadFullHistory();
-
-    return () => {
-      ignore = true;
-    };
-  }, [
-    debouncedHistorySearch,
-    historyEndDate,
-    historyPage,
-    historyProductFilter,
-    historyRetryKey,
-    historyStartDate,
-    historyType,
-    refreshKey,
-    showHistoryModal,
-  ]);
-
-  useEffect(() => {
-    let ignore = false;
-
-    async function loadIntegratedProducts() {
-      if (!canLoadIntegratedProducts) {
-        setIntegratedProducts([]);
-        setIntegratedTotal(0);
-        setIntegratedStatus("success");
-        return;
-      }
-
-      setIntegratedStatus("loading");
-
-      try {
-        const response = await fetchHubProdutosEstoque({
-          page: 1,
-          limit: INTEGRATED_PRODUCT_FETCH_LIMIT,
-        });
-
-        if (ignore) return;
-        setIntegratedProducts(response.data);
-        setIntegratedTotal(response.pagination.total);
-        setIntegratedStatus("success");
-      } catch (error) {
-        if (ignore) return;
-        console.error("Falha ao carregar produtos integrados", error);
-        setIntegratedStatus("error");
-      }
-    }
-
-    void loadIntegratedProducts();
-
-    return () => {
-      ignore = true;
-    };
-  }, [canLoadIntegratedProducts, integratedRetryKey, refreshKey]);
-
-  useEffect(() => {
     let ignore = false;
 
     async function loadInventory() {
+      if (!canLoadInventory) {
+        setStatus("error");
+        setErrorState(inventoryErrorForStatus(403));
+        return;
+      }
+
       setStatus("loading");
+      setErrorState(null);
 
       try {
-        const ativo =
-          activeFilter === "ativos" ? true : activeFilter === "inativos" ? false : null;
-        const categoriaId = categoryFilter === "Todos" ? undefined : Number(categoryFilter);
-
-        const movementProdutoId =
-          movementProductFilter === "Todos" ? undefined : Number(movementProductFilter);
-
-        const [summaryData, productsData, movementsData, productOptionsData, categoriesData] = await Promise.all([
-          fetchEstoqueResumo(),
-          fetchProdutos({
-            busca: debouncedSearch,
-            ativo,
-            categoriaId,
-            unidadeMedida: unitFilter === "Todos" ? undefined : unitFilter,
-            estoqueBaixo: stockFilter === "baixo" ? true : undefined,
-            page: productPage,
-            limit: PRODUCT_PAGE_SIZE,
-          }),
-          fetchEstoqueMovimentacoes({
-            busca: debouncedMovementSearch,
-            tipo: movementType === "Todos" ? undefined : movementType,
-            produtoId: movementProdutoId,
-            dataInicial: movementStartDate || undefined,
-            dataFinal: movementEndDate || undefined,
-            page: movementPage,
-            limit: MOVEMENT_PAGE_SIZE,
-          }),
-          fetchProdutos({ page: 1, limit: 100 }),
-          fetchCategoriasProdutos({ limit: 100 }),
-        ]);
-
+        const response = await fetchHubProdutosEstoque({ page: 1, limit: PRODUCT_FETCH_LIMIT });
         if (ignore) return;
 
-        setSummary(summaryData);
-        setAllCategories(sortCategories(categoriesData.data));
-        setCategories(sortCategories(categoriesData.data.filter((category) => category.ativo)));
-        setProducts(productsData.data);
-        setProductOptions(productOptionsData.data);
-        setProductTotal(productsData.pagination.total);
-        setMovements(movementsData.data);
-        setMovementTotal(movementsData.pagination.total);
-        setStatus("success");
+        setProducts(response.data);
+        setTotal(response.pagination.total);
+
+        if (response.pagination.total === 0) {
+          try {
+            const integrations = await fetchIntegracoes({ page: 1, limit: 100 });
+            if (!ignore) {
+              setSourceState(integrations.data.some((integration) => integration.ativo && integration.status === "ATIVA") ? "connected" : "disconnected");
+            }
+          } catch {
+            if (!ignore) setSourceState("unknown");
+          }
+        } else {
+          setSourceState("connected");
+        }
+
+        if (!ignore) setStatus("success");
       } catch (error) {
         if (ignore) return;
-        console.error("Falha ao carregar estoque", error);
+        if (import.meta.env.DEV) console.error("Falha ao carregar estoque canônico", error);
+        setErrorState(toInventoryErrorState(error));
         setStatus("error");
       }
     }
@@ -357,1759 +95,240 @@ export default function DashboardInventoryPanel() {
     return () => {
       ignore = true;
     };
-  }, [
-    activeFilter,
-    categoryFilter,
-    debouncedMovementSearch,
-    debouncedSearch,
-    movementEndDate,
-    movementPage,
-    movementProductFilter,
-    movementStartDate,
-    movementType,
-    productPage,
-    refreshKey,
-    stockFilter,
-    unitFilter,
-  ]);
+  }, [canLoadInventory, retryKey]);
 
-  const isLoading = status === "loading" || status === "idle";
-  const isError = status === "error";
-  const hasProducts = products.length > 0;
-  const hasMovements = movements.length > 0;
-  const filteredIntegratedProducts = useMemo(
+  const filteredProducts = useMemo(
     () =>
-      integratedProducts.filter((product) => {
-        if (integratedOriginFilter !== "Todos" && integratedOriginLabel(product) !== integratedOriginFilter) {
-          return false;
-        }
-
-        if (integratedUnitFilter !== "Todos" && integratedUnit(product) !== integratedUnitFilter) {
-          return false;
-        }
+      products.filter((product) => {
+        if (originFilter !== "Todos" && integratedOriginLabel(product) !== originFilter) return false;
+        if (unitFilter !== "Todos" && integratedUnit(product) !== unitFilter) return false;
 
         const quantity = integratedQuantity(product);
-        if (integratedStockFilter === "disponivel" && quantity <= 0) return false;
-        if (integratedStockFilter === "sem-estoque" && quantity > 0) return false;
+        if (stockFilter === "disponivel" && quantity <= 0) return false;
+        if (stockFilter === "sem-estoque" && quantity > 0) return false;
 
-        const query = normalizeSearchText(debouncedIntegratedSearch);
+        const query = normalizeSearchText(debouncedSearch);
         if (!query) return true;
 
-        return normalizeSearchText([
-          product.produto.nome,
-          product.produto.sku,
-          product.produto.unidade,
-          integratedOriginLabel(product),
-        ].filter(Boolean).join(" ")).includes(query);
+        return normalizeSearchText(
+          [
+            product.produto.nome,
+            product.produto.sku,
+            product.produto.codigoBarras,
+            product.produto.categoria,
+            integratedOriginLabel(product),
+          ]
+            .filter(Boolean)
+            .join(" "),
+        ).includes(query);
       }),
-    [debouncedIntegratedSearch, integratedOriginFilter, integratedProducts, integratedStockFilter, integratedUnitFilter],
+    [debouncedSearch, originFilter, products, stockFilter, unitFilter],
   );
-  const integratedTotalPages = Math.max(1, Math.ceil(filteredIntegratedProducts.length / INTEGRATED_PRODUCT_PAGE_SIZE));
-  const safeIntegratedPage = Math.min(integratedPage, integratedTotalPages);
-  const paginatedIntegratedProducts = filteredIntegratedProducts.slice(
-    (safeIntegratedPage - 1) * INTEGRATED_PRODUCT_PAGE_SIZE,
-    safeIntegratedPage * INTEGRATED_PRODUCT_PAGE_SIZE,
-  );
-  const integratedOriginOptions = useMemo(
-    () => ["Todos", ...uniqueValues(integratedProducts.map(integratedOriginLabel))],
-    [integratedProducts],
-  );
-  const integratedUnitOptions = useMemo(
-    () => ["Todos", ...uniqueValues(integratedProducts.map(integratedUnit).filter(Boolean))],
-    [integratedProducts],
-  );
-  const hasIntegratedFilters =
-    Boolean(debouncedIntegratedSearch) ||
-    integratedOriginFilter !== "Todos" ||
-    integratedUnitFilter !== "Todos" ||
-    integratedStockFilter !== "todos";
 
-  const summaryCards = useMemo(
-    () => [
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCT_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visibleProducts = filteredProducts.slice((safePage - 1) * PRODUCT_PAGE_SIZE, safePage * PRODUCT_PAGE_SIZE);
+  const originOptions = useMemo(() => ["Todos", ...uniqueValues(products.map(integratedOriginLabel))], [products]);
+  const unitOptions = useMemo(() => ["Todos", ...uniqueValues(products.map(integratedUnit).filter(Boolean))], [products]);
+  const hasFilters = Boolean(debouncedSearch) || originFilter !== "Todos" || unitFilter !== "Todos" || stockFilter !== "todos";
+  const partialCatalog = total > products.length;
+
+  const metrics = useMemo(() => {
+    const available = products.filter((product) => integratedQuantity(product) > 0).length;
+    const empty = products.filter((product) => integratedQuantity(product) <= 0).length;
+    const stale = products.filter((product) => product.possivelmenteDesatualizado).length;
+    const sampleContext = partialCatalog ? `nos ${products.length} itens carregados` : "no catálogo canônico";
+
+    return [
       {
-        title: "Produtos ativos",
-        value: summary?.indicadores.produtosAtivos ?? 0,
-        caption: "Itens disponiveis",
+        label: "Produtos integrados",
+        value: String(total),
+        context: "isolados por empresa",
         icon: <Package size={15} />,
-        tone: "pipeline" as const,
+        tone: "info" as const,
       },
       {
-        title: "Com estoque",
-        value: summary?.indicadores.produtosComEstoque ?? 0,
-        caption: "Saldo positivo",
+        label: "Com estoque",
+        value: String(available),
+        context: sampleContext,
         icon: <CheckCircle2 size={15} />,
-        tone: "revenue" as const,
+        tone: "success" as const,
       },
       {
-        title: "Estoque baixo",
-        value: summary?.indicadores.produtosComEstoqueBaixo ?? 0,
-        caption: "Abaixo do minimo",
-        icon: <AlertTriangle size={15} />,
-        tone: "forecast" as const,
-      },
-      {
-        title: "Sem estoque",
-        value: summary?.indicadores.produtosSemEstoque ?? 0,
-        caption: "Saldo zerado",
+        label: "Sem estoque",
+        value: String(empty),
+        context: sampleContext,
         icon: <Boxes size={15} />,
-        tone: "risk" as const,
+        tone: empty > 0 ? ("danger" as const) : ("default" as const),
       },
       {
-        title: "Categorias ativas",
-        value: summary?.indicadores.categoriasAtivas ?? 0,
-        caption: "Grupos em uso",
-        icon: <Layers3 size={15} />,
-        tone: "neutral" as const,
+        label: "Dados desatualizados",
+        value: String(stale),
+        context: sampleContext,
+        icon: <AlertTriangle size={15} />,
+        tone: stale > 0 ? ("warning" as const) : ("default" as const),
       },
-      {
-        title: "Custo em estoque",
-        value: formatCurrency(Number(summary?.indicadores.valorTotalCustoCentavos ?? 0)),
-        caption: "Valor de custo",
-        icon: <Wallet size={15} />,
-        tone: "revenue" as const,
-      },
-      {
-        title: "Venda potencial",
-        value: formatCurrency(Number(summary?.indicadores.valorTotalVendaCentavos ?? 0)),
-        caption: "Valor de venda",
-        icon: <Wallet size={15} />,
-        tone: "pipeline" as const,
-      },
-    ],
-    [summary],
-  );
+    ];
+  }, [partialCatalog, products, total]);
 
-  async function handleCreateProduct() {
-    setFormError("");
-
-    const validation = validateProductForm(productForm);
-    if (validation) {
-      setFormError(validation);
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      await createProduto({
-        nome: productForm.nome.trim(),
-        codigo: productForm.codigo.trim() || undefined,
-        descricao: productForm.descricao.trim() || undefined,
-        categoriaId: productForm.categoriaId ? Number(productForm.categoriaId) : undefined,
-        unidadeMedida: productForm.unidadeMedida,
-        estoqueMinimo: normalizeDecimalInput(productForm.estoqueMinimo),
-        precoCustoCentavos: parseMoneyToCents(productForm.precoCusto),
-        precoVendaCentavos: parseMoneyToCents(productForm.precoVenda),
-      });
-
-      setShowCreateModal(false);
-      setProductForm(initialProductForm);
-      setProductPage(1);
-      setRefreshKey((current) => current + 1);
-      setToast("Produto cadastrado com sucesso.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setFormError(toFriendlyProductError(message));
-    } finally {
-      setIsSubmitting(false);
-    }
+  function clearFilters() {
+    setSearch("");
+    setDebouncedSearch("");
+    setOriginFilter("Todos");
+    setUnitFilter("Todos");
+    setStockFilter("todos");
+    setPage(1);
   }
 
-  function openCategoriesManager() {
-    setCategoryForm(initialCategoryForm);
-    setCategoryError("");
-    setShowCategoriesModal(true);
-  }
-
-  function editCategory(category: ApiCategoriaProduto) {
-    setCategoryForm({
-      id: category.id,
-      nome: category.nome,
-      descricao: category.descricao ?? "",
-      ativo: category.ativo,
-    });
-    setCategoryError("");
-  }
-
-  function applyCategoryUpdate(category: ApiCategoriaProduto) {
-    setAllCategories((current) => sortCategories(upsertCategory(current, category)));
-    setCategories((current) => sortCategories(upsertCategory(current, category).filter((item) => item.ativo)));
-  }
-
-  async function handleSaveCategory() {
-    const normalizedName = normalizeCategoryName(categoryForm.nome);
-    setCategoryError("");
-
-    if (!normalizedName) {
-      setCategoryError("Informe o nome da categoria.");
-      return;
-    }
-    if (normalizedName.length > 80) {
-      setCategoryError("O nome deve ter no maximo 80 caracteres.");
-      return;
-    }
-    if (categoryForm.descricao.trim().length > 240) {
-      setCategoryError("A descricao deve ter no maximo 240 caracteres.");
-      return;
-    }
-
-    setCategorySubmittingId(categoryForm.id ?? "new");
-
-    try {
-      const saved = categoryForm.id
-        ? await updateCategoriaProduto(categoryForm.id, {
-            nome: normalizedName,
-            descricao: categoryForm.descricao.trim() || null,
-            ativo: categoryForm.ativo,
-          })
-        : await createCategoriaProduto({
-            nome: normalizedName,
-            descricao: categoryForm.descricao.trim() || undefined,
-          });
-
-      applyCategoryUpdate(saved);
-      setCategoryForm(initialCategoryForm);
-      setRefreshKey((current) => current + 1);
-      setToast(categoryForm.id ? "Categoria atualizada com sucesso." : "Categoria cadastrada com sucesso.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setCategoryError(toFriendlyCategoryError(message));
-    } finally {
-      setCategorySubmittingId(null);
-    }
-  }
-
-  async function handleToggleCategory(category: ApiCategoriaProduto) {
-    setCategoryError("");
-    setCategorySubmittingId(category.id);
-
-    try {
-      const saved = await updateCategoriaProduto(category.id, { ativo: !category.ativo });
-      applyCategoryUpdate(saved);
-      if (categoryForm.id === category.id) {
-        setCategoryForm((current) => ({ ...current, ativo: saved.ativo }));
-      }
-      setRefreshKey((current) => current + 1);
-      setToast("Categoria atualizada com sucesso.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setCategoryError(toFriendlyCategoryError(message));
-    } finally {
-      setCategorySubmittingId(null);
-    }
-  }
-
-  async function openProductDetails(productId: number) {
-    setIsLoadingProduct(true);
-
-    try {
-      const product = await fetchProduto(productId);
-      setSelectedProduct(product);
-    } catch (error) {
-      console.error("Falha ao carregar produto", error);
-      setToast("Nao foi possivel abrir o produto agora.");
-    } finally {
-      setIsLoadingProduct(false);
-    }
-  }
-
-  function openEditProduct(product: ApiProduto) {
-    setProductForm(productToForm(product));
-    setFormError("");
-    setEditingProduct(product);
-  }
-
-  async function handleUpdateProduct() {
-    if (!editingProduct) return;
-
-    setFormError("");
-    const validation = validateProductForm(productForm);
-    if (validation) {
-      setFormError(validation);
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const updated = await updateProduto(editingProduct.id, {
-        nome: productForm.nome.trim(),
-        codigo: productForm.codigo.trim() || undefined,
-        descricao: productForm.descricao.trim() || undefined,
-        categoriaId: productForm.categoriaId ? Number(productForm.categoriaId) : undefined,
-        unidadeMedida: productForm.unidadeMedida,
-        estoqueMinimo: normalizeDecimalInput(productForm.estoqueMinimo),
-        precoCustoCentavos: parseMoneyToCents(productForm.precoCusto),
-        precoVendaCentavos: parseMoneyToCents(productForm.precoVenda),
-        ativo: productForm.ativo,
-      });
-
-      const detailed = await fetchProduto(updated.id);
-      setEditingProduct(null);
-      setSelectedProduct(detailed);
-      setRefreshKey((current) => current + 1);
-      setToast("Produto atualizado com sucesso.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setFormError(toFriendlyProductError(message));
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  function openMovementModal(product: ApiProduto, action: InventoryAction) {
-    if (!product.ativo) {
-      setToast("Ative o produto para realizar movimentacoes.");
-      return;
-    }
-
-    setMovementProduct(product);
-    setMovementAction(action);
-    setMovementForm(initialMovementForm);
-    setFormError("");
-  }
-
-  async function handleMovementSubmit() {
-    if (!movementProduct || !movementAction) return;
-
-    const validation = validateMovementForm(movementForm, movementProduct, movementAction);
-    if (validation) {
-      setFormError(validation);
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const payloadBase = {
-        produtoId: movementProduct.id,
-        motivo: movementForm.motivo.trim() || undefined,
-        observacao: movementForm.observacao.trim() || undefined,
-      };
-      const response =
-        movementAction === "entrada"
-          ? await createEntradaEstoque({
-              ...payloadBase,
-              quantidade: normalizeDecimalInput(movementForm.quantidade),
-            })
-          : movementAction === "saida"
-            ? await createSaidaEstoque({
-                ...payloadBase,
-                quantidade: normalizeDecimalInput(movementForm.quantidade),
-              })
-            : await createAjusteEstoque({
-                ...payloadBase,
-                motivo: movementForm.motivo.trim(),
-                novaQuantidade: normalizeDecimalInput(movementForm.novaQuantidade),
-              });
-
-      const detailed = await fetchProduto(response.produto.id);
-      setMovementProduct(null);
-      setMovementAction(null);
-      setMovementForm(initialMovementForm);
-      setSelectedProduct(detailed);
-      setRefreshKey((current) => current + 1);
-      setToast(movementSuccessMessage(movementAction));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      setFormError(toFriendlyMovementError(message));
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  if (isError) {
+  if (status === "error" && errorState) {
     return (
-      <section className="premium-panel rounded-2xl p-5">
-        <div className="flex max-w-xl items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-rose-300/20 bg-rose-300/[0.06] text-rose-100">
-            <AlertTriangle size={16} />
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold text-white">Nao foi possivel carregar o estoque agora.</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-500">
-              Verifique a conexao e tente novamente em instantes.
-            </p>
-            <button
-              className="premium-ghost mt-4 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200"
-              onClick={() => setRefreshKey((current) => current + 1)}
-              type="button"
-            >
-              Tentar novamente
-            </button>
-          </div>
-        </div>
-      </section>
+      <Surface>
+        <ErrorState
+          description={errorState.description}
+          onRetry={errorState.canRetry ? () => setRetryKey((current) => current + 1) : undefined}
+          title={errorState.title}
+        />
+      </Surface>
     );
   }
 
   return (
-    <section className="space-y-4">
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-2xl border border-teal-300/20 bg-slate-950/95 px-4 py-3 text-xs font-semibold text-teal-100 shadow-2xl">
-          {toast}
-        </div>
-      )}
+    <section className="space-y-4" aria-busy={status === "loading"}>
+      <DashboardMetricStrip metrics={metrics} />
 
-      <DashboardMetricStrip metrics={summaryCards.slice(0, 4).map((card) => ({
-        label: card.title,
-        value: String(isLoading ? "..." : card.value),
-        context: card.caption,
-        icon: card.icon,
-        tone: card.tone === "pipeline" ? "success" : card.tone === "revenue" ? "info" : card.tone === "forecast" ? "warning" : card.tone === "risk" ? "danger" : "default",
-      }))} />
+      <Surface>
+        <SectionHeader
+          description="Catálogo canônico de produtos e saldos, exibido somente para leitura."
+          icon={<Database size={15} />}
+          status={<span className="text-[11px] text-[var(--text-muted)]">{total} {total === 1 ? "registro" : "registros"}</span>}
+          title="Estoque integrado"
+        />
 
-      <Surface className="flex flex-wrap items-center divide-x divide-[var(--border-default)] overflow-hidden">
-        {summaryCards.slice(4).map((card) => (
-          <div className="flex min-w-[210px] flex-1 items-center gap-3 px-4 py-2.5" key={card.title}>
-            <span className="text-[var(--icon-muted)]">{card.icon}</span>
-            <span className="min-w-0">
-              <span className="block truncate text-[11px] text-[var(--text-muted)]">{card.title}</span>
-              <span className="mt-0.5 block truncate text-xs font-semibold text-[var(--text-primary)]">{isLoading ? "..." : card.value}</span>
-            </span>
+        <Toolbar className="border-b border-[var(--border-default)] px-4 py-3">
+          <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_150px_140px_150px]">
+            <div className="relative min-w-0">
+              <Search className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--icon-muted)]" size={14} />
+              <Input
+                aria-label="Buscar produto, SKU, código ou origem"
+                className="pl-9"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar produto, SKU, código ou origem"
+                value={search}
+              />
+            </div>
+
+            <Select
+              aria-label="Filtrar por origem"
+              onChange={(event) => {
+                setOriginFilter(event.target.value);
+                setPage(1);
+              }}
+              value={originFilter}
+            >
+              {originOptions.map((origin) => <option key={origin} value={origin}>{origin === "Todos" ? "Todas as origens" : origin}</option>)}
+            </Select>
+
+            <Select
+              aria-label="Filtrar por unidade"
+              onChange={(event) => {
+                setUnitFilter(event.target.value);
+                setPage(1);
+              }}
+              value={unitFilter}
+            >
+              {unitOptions.map((unit) => <option key={unit} value={unit}>{unit === "Todos" ? "Todas as unidades" : unit}</option>)}
+            </Select>
+
+            <Select
+              aria-label="Filtrar por saldo"
+              onChange={(event) => {
+                setStockFilter(event.target.value as StockFilter);
+                setPage(1);
+              }}
+              value={stockFilter}
+            >
+              <option value="todos">Todos os saldos</option>
+              <option value="disponivel">Com estoque</option>
+              <option value="sem-estoque">Sem estoque</option>
+            </Select>
           </div>
-        ))}
+
+          <Button disabled={!hasFilters} onClick={clearFilters} size="sm" variant="ghost">Limpar</Button>
+        </Toolbar>
+
+        {status === "loading" && <LoadingState className="p-4" label="Carregando produtos do estoque" rows={6} />}
+
+        {status === "success" && products.length === 0 && (
+          <EmptyState
+            action={
+              sourceState === "disconnected"
+                ? <Button onClick={onOpenIntegrations} size="sm" variant="secondary">Abrir Integrações</Button>
+                : undefined
+            }
+            description={
+              sourceState === "disconnected"
+                ? "Nenhuma integração de produtos está conectada. A conexão pode ser configurada na área de Integrações."
+                : "O catálogo canônico ainda não possui produtos para esta empresa."
+            }
+            icon={<Package size={18} />}
+            title={sourceState === "disconnected" ? "Nenhuma fonte de produtos conectada" : "Nenhum produto foi encontrado"}
+          />
+        )}
+
+        {status === "success" && products.length > 0 && filteredProducts.length === 0 && (
+          <EmptyState
+            action={<Button onClick={clearFilters} size="sm" variant="secondary">Limpar filtros</Button>}
+            description="Revise a busca ou remova os filtros para voltar ao catálogo completo."
+            title="Nenhum produto corresponde aos filtros"
+          />
+        )}
+
+        {status === "success" && visibleProducts.length > 0 && (
+          <>
+            {partialCatalog && (
+              <div className="flex items-center gap-2 border-b border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-2 text-[11px] text-[var(--text-secondary)]">
+                <RefreshCcw size={13} />
+                Exibindo os primeiros {products.length} de {total} produtos retornados pela fonte canônica.
+              </div>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px] table-fixed border-collapse text-left">
+                <thead className="bg-[var(--bg-muted)] text-[11px] font-medium text-[var(--text-secondary)]">
+                  <tr className="border-b border-[var(--border-default)]">
+                    <th className="w-[26%] px-4 py-2.5 font-medium">Produto</th>
+                    <th className="w-[14%] px-3 py-2.5 font-medium">SKU</th>
+                    <th className="w-[12%] px-3 py-2.5 text-right font-medium">Preço</th>
+                    <th className="w-[8%] px-3 py-2.5 font-medium">Unidade</th>
+                    <th className="w-[12%] px-3 py-2.5 text-right font-medium">Saldo</th>
+                    <th className="w-[10%] px-3 py-2.5 font-medium">Origem</th>
+                    <th className="w-[9%] px-3 py-2.5 font-medium">Status</th>
+                    <th className="w-[9%] px-3 py-2.5 font-medium">Atualização</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-default)]">
+                  {visibleProducts.map((product) => <InventoryRow key={integratedProductKey(product)} product={product} />)}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              itemLabel="produtos"
+              onPageChange={setPage}
+              page={safePage}
+              total={filteredProducts.length}
+              totalPages={totalPages}
+              visibleCount={visibleProducts.length}
+            />
+          </>
+        )}
       </Surface>
-
-      <IntegratedProductsPanel
-        products={paginatedIntegratedProducts}
-        status={integratedStatus}
-        total={filteredIntegratedProducts.length}
-        loadedTotal={integratedTotal}
-        page={safeIntegratedPage}
-        totalPages={integratedTotalPages}
-        search={integratedSearch}
-        originFilter={integratedOriginFilter}
-        originOptions={integratedOriginOptions}
-        unitFilter={integratedUnitFilter}
-        unitOptions={integratedUnitOptions}
-        stockFilter={integratedStockFilter}
-        hasFilters={hasIntegratedFilters}
-        onSearchChange={setIntegratedSearch}
-        onOriginFilterChange={(value) => {
-          setIntegratedOriginFilter(value);
-          setIntegratedPage(1);
-        }}
-        onUnitFilterChange={(value) => {
-          setIntegratedUnitFilter(value);
-          setIntegratedPage(1);
-        }}
-        onStockFilterChange={(value) => {
-          setIntegratedStockFilter(value);
-          setIntegratedPage(1);
-        }}
-        onClearFilters={() => {
-          setIntegratedSearch("");
-          setDebouncedIntegratedSearch("");
-          setIntegratedOriginFilter("Todos");
-          setIntegratedUnitFilter("Todos");
-          setIntegratedStockFilter("todos");
-          setIntegratedPage(1);
-        }}
-        onPageChange={setIntegratedPage}
-        onRetry={() => setIntegratedRetryKey((current) => current + 1)}
-      />
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="premium-panel min-w-0 rounded-2xl p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-white">Produtos</p>
-              <p className="mt-1 text-xs text-slate-500">Saldos, estoque minimo e status da carteira de itens.</p>
-            </div>
-
-            <div className="flex flex-col gap-2 xl:items-end">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="premium-ghost inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-900/70"
-                  onClick={openCategoriesManager}
-                  type="button"
-                >
-                  <FolderCog size={14} />
-                  Gerenciar categorias
-                </button>
-                <button
-                  className="premium-button inline-flex h-9 items-center justify-center gap-2 rounded-xl px-3 text-xs font-semibold transition hover:-translate-y-px"
-                  onClick={() => {
-                    setProductForm(initialProductForm);
-                    setFormError("");
-                    setShowCreateModal(true);
-                  }}
-                  type="button"
-                >
-                  <Plus size={14} />
-                  Novo produto
-                </button>
-              </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 xl:w-[620px] xl:grid-cols-[minmax(0,1fr)_120px_120px_105px]">
-              <label className="premium-ghost flex h-10 min-w-0 items-center gap-2 rounded-xl px-3 text-xs text-slate-400">
-                <Search size={14} className="shrink-0" />
-                <input
-                  className="min-w-0 flex-1 bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-600"
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar nome ou codigo"
-                  value={search}
-                />
-              </label>
-
-              <select
-                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
-                onChange={(event) => {
-                  setActiveFilter(event.target.value as typeof activeFilter);
-                  setProductPage(1);
-                }}
-                value={activeFilter}
-              >
-                <option value="todos">Todos</option>
-                <option value="ativos">Ativos</option>
-                <option value="inativos">Inativos</option>
-              </select>
-
-              <select
-                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
-                onChange={(event) => {
-                  setCategoryFilter(event.target.value);
-                  setProductPage(1);
-                }}
-                value={categoryFilter}
-              >
-                <option value="Todos">Categorias</option>
-                {allCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.nome}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
-                onChange={(event) => {
-                  setUnitFilter(event.target.value);
-                  setProductPage(1);
-                }}
-                value={unitFilter}
-              >
-                {UNITS.map((unit) => (
-                  <option key={unit} value={unit}>
-                  {unit}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none sm:col-span-2 xl:col-span-1"
-                onChange={(event) => {
-                  setStockFilter(event.target.value as typeof stockFilter);
-                  setProductPage(1);
-                }}
-                value={stockFilter}
-              >
-                <option value="todos">Todos saldos</option>
-                <option value="baixo">Estoque baixo</option>
-              </select>
-            </div>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            {isLoading && (
-              <>
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={index} className="h-20 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
-                ))}
-              </>
-            )}
-
-            {!isLoading && !hasProducts && (
-              <EmptyState
-                icon={<Warehouse size={17} />}
-                title="Nenhum produto cadastrado"
-                text="Os produtos e seus saldos aparecerao aqui."
-              />
-            )}
-
-            {!isLoading &&
-              products.map((product) => (
-                <ProductRow key={product.id} product={product} onOpen={() => openProductDetails(product.id)} />
-              ))}
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              {productTotal} produto{productTotal === 1 ? "" : "s"} encontrado{productTotal === 1 ? "" : "s"}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={productPage <= 1}
-                onClick={() => setProductPage((current) => Math.max(1, current - 1))}
-                type="button"
-              >
-                Anterior
-              </button>
-              <span className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">
-                {productPage}/{totalPages}
-              </span>
-              <button
-                className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={productPage >= totalPages}
-                onClick={() => setProductPage((current) => Math.min(totalPages, current + 1))}
-                type="button"
-              >
-                Proxima
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="premium-panel min-w-0 rounded-2xl p-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white">Historico de movimentacoes</p>
-                <p className="mt-1 text-xs text-slate-500">Entradas, saidas e ajustes registrados no estoque.</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  className="premium-ghost inline-flex h-9 items-center gap-2 rounded-xl px-3 text-[11px] font-semibold text-slate-200 transition hover:bg-slate-900/70"
-                  onClick={() => setShowHistoryModal(true)}
-                  type="button"
-                >
-                  <History size={14} />
-                  Ver historico completo
-                </button>
-                <div className="hidden h-9 w-9 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/55 text-slate-200 sm:flex">
-                  <SlidersHorizontal size={15} />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-              <label className="premium-ghost flex h-10 min-w-0 items-center gap-2 rounded-xl px-3 text-xs text-slate-400">
-                <Search size={14} className="shrink-0" />
-                <input
-                  className="min-w-0 flex-1 bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-600"
-                  onChange={(event) => setMovementSearch(event.target.value)}
-                  placeholder="Buscar produto ou codigo"
-                  value={movementSearch}
-                />
-              </label>
-
-              <select
-                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
-                onChange={(event) => {
-                  setMovementType(event.target.value as typeof movementType);
-                  setMovementPage(1);
-                }}
-                value={movementType}
-              >
-                {MOVEMENT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type === "Todos" ? "Todos os tipos" : movementLabel(type)}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
-                onChange={(event) => {
-                  setMovementProductFilter(event.target.value);
-                  setMovementPage(1);
-                }}
-                value={movementProductFilter}
-              >
-                <option value="Todos">Todos os produtos</option>
-                {productOptions.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.nome}
-                  </option>
-                ))}
-              </select>
-
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                <input
-                  className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
-                  onChange={(event) => {
-                    setMovementStartDate(event.target.value);
-                    setMovementPage(1);
-                  }}
-                  type="date"
-                  value={movementStartDate}
-                />
-                <input
-                  className="premium-ghost h-10 rounded-xl px-3 text-xs text-slate-200 outline-none"
-                  onChange={(event) => {
-                    setMovementEndDate(event.target.value);
-                    setMovementPage(1);
-                  }}
-                  type="date"
-                  value={movementEndDate}
-                />
-              </div>
-
-              {hasMovementFilters && (
-                <button
-                  className="premium-ghost h-10 rounded-xl px-3 text-xs font-semibold text-slate-200 transition hover:bg-slate-900/70"
-                  onClick={() => {
-                    setMovementSearch("");
-                    setDebouncedMovementSearch("");
-                    setMovementType("Todos");
-                    setMovementProductFilter("Todos");
-                    setMovementStartDate("");
-                    setMovementEndDate("");
-                    setMovementPage(1);
-                  }}
-                  type="button"
-                >
-                  Limpar filtros
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            {isLoading && (
-              <>
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <div key={index} className="h-24 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
-                ))}
-              </>
-            )}
-
-            {!isLoading && !hasMovements && (
-              <EmptyState
-                icon={<Boxes size={17} />}
-                title={hasMovementFilters ? "Nenhuma movimentacao encontrada" : "Nenhuma movimentacao registrada"}
-                text={hasMovementFilters ? "Ajuste os filtros para ampliar a busca." : "Entradas, saidas e ajustes aparecerao aqui."}
-              />
-            )}
-
-            {!isLoading &&
-              movements.map((movement) => (
-                <MovementRow key={movement.id} movement={movement} />
-              ))}
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 border-t border-white/[0.06] pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              {movementTotal} {movementTotal === 1 ? "movimentacao encontrada" : "movimentacoes encontradas"}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={movementPage <= 1}
-                onClick={() => setMovementPage((current) => Math.max(1, current - 1))}
-                type="button"
-              >
-                Anterior
-              </button>
-              <span className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">
-                {movementTotal === 0 ? "0/0" : `${movementPage}/${movementTotalPages}`}
-              </span>
-              <button
-                className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={movementTotal === 0 || movementPage >= movementTotalPages}
-                onClick={() => setMovementPage((current) => Math.min(movementTotalPages, current + 1))}
-                type="button"
-              >
-                Proxima
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {showCreateModal && (
-        <ProductCreateModal
-          categories={categories}
-          form={productForm}
-          error={formError}
-          isSubmitting={isSubmitting}
-          setForm={setProductForm}
-          onClose={() => {
-            if (isSubmitting) return;
-            setShowCreateModal(false);
-            setFormError("");
-          }}
-          onSubmit={handleCreateProduct}
-        />
-      )}
-
-      {showCategoriesModal && (
-        <CategoryManagerModal
-          categories={allCategories}
-          error={categoryError}
-          form={categoryForm}
-          submittingId={categorySubmittingId}
-          onClose={() => {
-            if (categorySubmittingId !== null) return;
-            setShowCategoriesModal(false);
-            setCategoryError("");
-            setCategoryForm(initialCategoryForm);
-          }}
-          onEdit={editCategory}
-          onFormChange={setCategoryForm}
-          onSave={handleSaveCategory}
-          onToggle={handleToggleCategory}
-          onNew={() => {
-            setCategoryForm(initialCategoryForm);
-            setCategoryError("");
-          }}
-        />
-      )}
-
-      {selectedProduct && (
-        <ProductDetailsDrawer
-          product={selectedProduct}
-          isLoading={isLoadingProduct}
-          onClose={() => setSelectedProduct(null)}
-          onEdit={() => openEditProduct(selectedProduct)}
-          onMovement={(action) => openMovementModal(selectedProduct, action)}
-        />
-      )}
-
-      {editingProduct && (
-        <ProductCreateModal
-          categories={productCategoryOptions(categories, editingProduct)}
-          form={productForm}
-          error={formError}
-          isSubmitting={isSubmitting}
-          setForm={setProductForm}
-          onClose={() => {
-            if (isSubmitting) return;
-            setEditingProduct(null);
-            setFormError("");
-          }}
-          onSubmit={handleUpdateProduct}
-          title="Editar produto"
-          submitLabel="Salvar produto"
-          showActiveToggle
-        />
-      )}
-
-      {movementProduct && movementAction && (
-        <StockMovementModal
-          action={movementAction}
-          product={movementProduct}
-          form={movementForm}
-          error={formError}
-          isSubmitting={isSubmitting}
-          setForm={setMovementForm}
-          onClose={() => {
-            if (isSubmitting) return;
-            setMovementProduct(null);
-            setMovementAction(null);
-            setFormError("");
-          }}
-          onSubmit={handleMovementSubmit}
-        />
-      )}
-
-      {showHistoryModal && (
-        <InventoryHistoryModal
-          endDate={historyEndDate}
-          movements={historyMovements}
-          page={historyPage}
-          productFilter={historyProductFilter}
-          productOptions={productOptions}
-          search={historySearch}
-          selectedMovement={selectedMovement}
-          startDate={historyStartDate}
-          status={historyStatus}
-          total={historyTotal}
-          totalPages={historyTotalPages}
-          type={historyType}
-          onClearFilters={() => {
-            setHistorySearch("");
-            setDebouncedHistorySearch("");
-            setHistoryType("Todos");
-            setHistoryProductFilter("Todos");
-            setHistoryStartDate("");
-            setHistoryEndDate("");
-            setHistoryPage(1);
-          }}
-          onClose={() => {
-            setShowHistoryModal(false);
-            setSelectedMovement(null);
-          }}
-          onEndDateChange={(value) => {
-            setHistoryEndDate(value);
-            setHistoryPage(1);
-          }}
-          onMovementSelect={setSelectedMovement}
-          onPageChange={setHistoryPage}
-          onProductChange={(value) => {
-            setHistoryProductFilter(value);
-            setHistoryPage(1);
-          }}
-          onRetry={() => setHistoryRetryKey((current) => current + 1)}
-          onSearchChange={setHistorySearch}
-          onSelectedMovementClose={() => setSelectedMovement(null)}
-          onStartDateChange={(value) => {
-            setHistoryStartDate(value);
-            setHistoryPage(1);
-          }}
-          onTypeChange={(value) => {
-            setHistoryType(value);
-            setHistoryPage(1);
-          }}
-        />
-      )}
     </section>
   );
 }
 
-function InventoryHistoryModal({
-  movements,
-  productOptions,
-  search,
-  type,
-  productFilter,
-  startDate,
-  endDate,
-  page,
-  total,
-  totalPages,
-  status,
-  selectedMovement,
-  onClose,
-  onSearchChange,
-  onTypeChange,
-  onProductChange,
-  onStartDateChange,
-  onEndDateChange,
-  onPageChange,
-  onClearFilters,
-  onRetry,
-  onMovementSelect,
-  onSelectedMovementClose,
-}: {
-  movements: ApiMovimentacaoEstoque[];
-  productOptions: ApiProduto[];
-  search: string;
-  type: (typeof MOVEMENT_TYPES)[number];
-  productFilter: string;
-  startDate: string;
-  endDate: string;
-  page: number;
-  total: number;
-  totalPages: number;
-  status: InventoryStatus;
-  selectedMovement: ApiMovimentacaoEstoque | null;
-  onClose: () => void;
-  onSearchChange: (value: string) => void;
-  onTypeChange: (value: (typeof MOVEMENT_TYPES)[number]) => void;
-  onProductChange: (value: string) => void;
-  onStartDateChange: (value: string) => void;
-  onEndDateChange: (value: string) => void;
-  onPageChange: (page: number) => void;
-  onClearFilters: () => void;
-  onRetry: () => void;
-  onMovementSelect: (movement: ApiMovimentacaoEstoque) => void;
-  onSelectedMovementClose: () => void;
-}) {
-  const hasFilters = Boolean(search.trim()) || type !== "Todos" || productFilter !== "Todos" || Boolean(startDate) || Boolean(endDate);
-  const isLoading = status === "loading" || status === "idle";
-  const isError = status === "error";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
-      <div className="saas-panel flex max-h-[calc(100vh-32px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl text-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] p-4">
-          <div>
-            <p className="text-sm font-semibold">Historico completo de movimentacoes</p>
-            <p className="mt-1 text-[11px] text-slate-500">Consulte entradas, saidas e ajustes sem alterar o registro original.</p>
-          </div>
-          <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200" onClick={onClose} type="button">
-            <X size={15} />
-          </button>
-        </div>
-
-        <div className="border-b border-white/[0.06] p-4">
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_150px_minmax(180px,0.8fr)_150px_150px_auto]">
-            <label className="premium-ghost flex h-10 min-w-0 items-center gap-2 rounded-xl px-3 text-xs text-slate-400">
-              <Search className="shrink-0" size={14} />
-              <input className="min-w-0 flex-1 bg-transparent text-xs text-slate-100 outline-none placeholder:text-slate-600" disabled={isLoading} onChange={(event) => onSearchChange(event.target.value)} placeholder="Buscar produto ou codigo" value={search} />
-            </label>
-            <select className="premium-ghost h-10 min-w-0 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onTypeChange(event.target.value as (typeof MOVEMENT_TYPES)[number])} value={type}>
-              {MOVEMENT_TYPES.map((item) => <option key={item} value={item}>{item === "Todos" ? "Todos os tipos" : movementLabel(item)}</option>)}
-            </select>
-            <select className="premium-ghost h-10 min-w-0 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onProductChange(event.target.value)} value={productFilter}>
-              <option value="Todos">Todos os produtos</option>
-              {productOptions.map((product) => <option key={product.id} value={product.id}>{product.nome}</option>)}
-            </select>
-            <input aria-label="Data inicial" className="premium-ghost h-10 min-w-0 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onStartDateChange(event.target.value)} type="date" value={startDate} />
-            <input aria-label="Data final" className="premium-ghost h-10 min-w-0 rounded-xl px-3 text-xs text-slate-200 outline-none disabled:opacity-60" disabled={isLoading} onChange={(event) => onEndDateChange(event.target.value)} type="date" value={endDate} />
-            <button className="premium-ghost h-10 rounded-xl px-3 text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={!hasFilters || isLoading} onClick={onClearFilters} type="button">Limpar filtros</button>
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {isLoading && <div className="grid gap-2 lg:grid-cols-2">{Array.from({ length: 6 }).map((_, index) => <div className="h-36 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" key={index} />)}</div>}
-
-          {isError && (
-            <div className="rounded-2xl border border-rose-300/15 bg-rose-300/[0.045] p-5 text-center">
-              <p className="text-sm font-semibold text-rose-100">Nao foi possivel carregar o historico.</p>
-              <p className="mt-1 text-xs text-slate-500">Tente novamente em instantes.</p>
-              <button className="premium-ghost mt-4 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200" onClick={onRetry} type="button">Tentar novamente</button>
-            </div>
-          )}
-
-          {!isLoading && !isError && movements.length === 0 && (
-            <EmptyState icon={<History size={17} />} title={hasFilters ? "Nenhuma movimentacao encontrada" : "Nenhuma movimentacao registrada"} text={hasFilters ? "Nenhuma movimentacao encontrada para os filtros selecionados." : "Entradas, saidas e ajustes aparecerao aqui."} />
-          )}
-
-          {!isLoading && !isError && movements.length > 0 && (
-            <div className="grid gap-2 lg:grid-cols-2">
-              {movements.map((movement) => <FullHistoryRow key={movement.id} movement={movement} onOpen={() => onMovementSelect(movement)} />)}
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-2 border-t border-white/[0.06] p-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-          <span>{total} {total === 1 ? "movimentacao encontrada" : "movimentacoes encontradas"}</span>
-          <div className="flex items-center gap-2">
-            <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoading || page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} type="button">Anterior</button>
-            <span className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[11px] text-slate-400">{total === 0 ? "0/0" : `${page}/${totalPages}`}</span>
-            <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200 disabled:cursor-not-allowed disabled:opacity-40" disabled={isLoading || total === 0 || page >= totalPages} onClick={() => onPageChange(Math.min(totalPages, page + 1))} type="button">Proxima</button>
-          </div>
-        </div>
-      </div>
-
-      {selectedMovement && <MovementDetailsModal movement={selectedMovement} onClose={onSelectedMovementClose} />}
-    </div>
-  );
-}
-
-function FullHistoryRow({ movement, onOpen }: { movement: ApiMovimentacaoEstoque; onOpen: () => void }) {
-  const unit = movement.produto?.unidadeMedida ?? "";
-  return (
-    <button className="saas-row min-w-0 rounded-2xl p-3 text-left" onClick={onOpen} type="button">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`saas-chip shrink-0 ${movementTone(movement.tipo)}`}>{movementLabel(movement.tipo)}</span>
-            <p className="min-w-0 break-words text-xs font-semibold text-slate-100">{movement.produto?.nome || "Produto"}</p>
-          </div>
-          <p className="mt-1 break-words text-[10px] text-slate-500">{movement.produto?.codigo || "Sem codigo"} · {formatDateTime(movement.createdAt)}</p>
-        </div>
-        <p className="shrink-0 text-xs font-semibold text-white">{formatDecimal(movement.quantidade)} {unit}</p>
-      </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        <InfoCell label="Saldo anterior" value={`${formatDecimal(movement.quantidadeAnterior)} ${unit}`.trim()} />
-        <InfoCell label="Saldo posterior" value={`${formatDecimal(movement.quantidadePosterior)} ${unit}`.trim()} />
-        <InfoCell label="Diferenca" value={`${formatMovementDifference(movement)} ${unit}`.trim()} />
-      </div>
-      {(movement.motivo || movement.observacao) && <p className="mt-2 line-clamp-2 break-words text-[11px] leading-relaxed text-slate-500">{movement.motivo || movement.observacao}</p>}
-    </button>
-  );
-}
-
-function MovementDetailsModal({ movement, onClose }: { movement: ApiMovimentacaoEstoque; onClose: () => void }) {
-  const unit = movement.produto?.unidadeMedida ?? "";
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4">
-      <div className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-lg overflow-y-auto rounded-2xl p-4 text-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <span className={`saas-chip ${movementTone(movement.tipo)}`}>{movementLabel(movement.tipo)}</span>
-            <p className="mt-2 break-words text-sm font-semibold">{movement.produto?.nome || "Produto"}</p>
-            <p className="mt-1 break-words text-[11px] text-slate-500">{movement.produto?.codigo || "Sem codigo"} · {formatDateTime(movement.createdAt)}</p>
-          </div>
-          <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200" onClick={onClose} type="button"><X size={15} /></button>
-        </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <InfoCell label="Quantidade" value={`${formatDecimal(movement.quantidade)} ${unit}`.trim()} />
-          <InfoCell label="Diferenca" value={`${formatMovementDifference(movement)} ${unit}`.trim()} />
-          <InfoCell label="Saldo anterior" value={`${formatDecimal(movement.quantidadeAnterior)} ${unit}`.trim()} />
-          <InfoCell label="Saldo posterior" value={`${formatDecimal(movement.quantidadePosterior)} ${unit}`.trim()} />
-        </div>
-        <div className="mt-3 space-y-2 rounded-xl border border-white/[0.06] bg-slate-950/24 p-3 text-xs leading-relaxed text-slate-400">
-          <p><span className="font-semibold text-slate-300">Motivo:</span> {movement.motivo || "Nao informado"}</p>
-          <p className="break-words"><span className="font-semibold text-slate-300">Observacao:</span> {movement.observacao || "Nao informada"}</p>
-        </div>
-        <div className="mt-4 flex justify-end"><button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-200" onClick={onClose} type="button">Fechar detalhes</button></div>
-      </div>
-    </div>
-  );
-}
-
-function CategoryManagerModal({
-  categories,
-  form,
-  error,
-  submittingId,
-  onClose,
-  onEdit,
-  onFormChange,
-  onSave,
-  onToggle,
-  onNew,
-}: {
-  categories: ApiCategoriaProduto[];
-  form: CategoryForm;
-  error: string;
-  submittingId: number | "new" | null;
-  onClose: () => void;
-  onEdit: (category: ApiCategoriaProduto) => void;
-  onFormChange: (form: CategoryForm) => void;
-  onSave: () => void;
-  onToggle: (category: ApiCategoriaProduto) => void;
-  onNew: () => void;
-}) {
-  const isSubmitting = submittingId !== null;
-  const fieldBaseClass =
-    "w-full rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm text-slate-100 outline-none transition-all duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-60";
-  const labelClass = "mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="saas-panel flex max-h-[calc(100vh-32px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl text-white shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] p-4">
-          <div>
-            <p className="text-sm font-semibold">Gerenciar categorias</p>
-            <p className="mt-1 text-[11px] text-slate-500">Organize os grupos usados no cadastro e na edicao dos produtos.</p>
-          </div>
-          <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">
-            <X size={15} />
-          </button>
-        </div>
-
-        <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-          <section className="min-w-0 border-b border-white/[0.06] p-4 md:border-b-0 md:border-r">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold text-slate-200">Categorias cadastradas</p>
-                <p className="mt-1 text-[10px] text-slate-500">Ativas primeiro, em ordem alfabetica.</p>
-              </div>
-              <button className="premium-ghost inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-semibold text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={onNew} type="button">
-                <Plus size={12} /> Nova
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {categories.length === 0 && (
-                <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-4 text-center">
-                  <p className="text-xs font-semibold text-slate-200">Nenhuma categoria cadastrada</p>
-                  <p className="mt-1 text-[11px] text-slate-500">Use o formulario ao lado para criar a primeira.</p>
-                </div>
-              )}
-              {categories.map((category) => (
-                <article className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-3" key={category.id}>
-                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="break-words text-xs font-semibold text-slate-100">{category.nome}</p>
-                        <span className={`saas-chip ${category.ativo ? "text-teal-100" : "text-slate-400"}`}>{category.ativo ? "Ativa" : "Inativa"}</span>
-                      </div>
-                      <p className="mt-1 break-words text-[11px] leading-relaxed text-slate-500">{category.descricao || "Sem descricao."}</p>
-                      <p className="mt-2 text-[10px] text-slate-400">{category.produtosCount} produto{category.produtosCount === 1 ? "" : "s"} vinculado{category.produtosCount === 1 ? "" : "s"}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <button className="premium-ghost inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[11px] text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={() => onEdit(category)} type="button">
-                        <Edit3 size={12} /> Editar
-                      </button>
-                      <button className="premium-ghost h-8 rounded-lg px-2.5 text-[11px] text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={() => onToggle(category)} type="button">
-                        {submittingId === category.id ? "Salvando" : category.ativo ? "Desativar" : "Ativar"}
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="min-w-0 p-4">
-            <p className="text-xs font-semibold text-slate-200">{form.id ? "Editar categoria" : "Nova categoria"}</p>
-            <p className="mt-1 text-[10px] text-slate-500">Nome obrigatorio e descricao opcional.</p>
-
-            <div className="mt-4 space-y-3">
-              <Field label="Nome" labelClass={labelClass}>
-                <input className={fieldBaseClass} disabled={isSubmitting} maxLength={80} onChange={(event) => onFormChange({ ...form, nome: event.target.value })} placeholder="Ex: Fertilizantes" value={form.nome} />
-              </Field>
-              <Field label="Descricao" labelClass={labelClass}>
-                <textarea className={`${fieldBaseClass} min-h-[88px] resize-none`} disabled={isSubmitting} maxLength={240} onChange={(event) => onFormChange({ ...form, descricao: event.target.value })} placeholder="Descricao curta da categoria" value={form.descricao} />
-              </Field>
-              {form.id && (
-                <label className="flex items-start gap-2 rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300">
-                  <input checked={form.ativo} className="mt-0.5 h-4 w-4 accent-teal-300" disabled={isSubmitting} onChange={(event) => onFormChange({ ...form, ativo: event.target.checked })} type="checkbox" />
-                  <span>
-                    Categoria ativa
-                    <span className="mt-1 block text-[10px] leading-relaxed text-slate-500">Desativar nao remove nem altera os produtos ja vinculados.</span>
-                  </span>
-                </label>
-              )}
-            </div>
-
-            {error && <div className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/[0.055] px-3 py-2 text-xs text-rose-100">{error}</div>}
-
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              {form.id && <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-300 disabled:opacity-50" disabled={isSubmitting} onClick={onNew} type="button">Cancelar edicao</button>}
-              <button className="premium-button inline-flex min-w-32 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60" disabled={isSubmitting} onClick={onSave} type="button">
-                {submittingId === (form.id ?? "new") && <Loader2 className="animate-spin" size={13} />}
-                {submittingId === (form.id ?? "new") ? "Salvando" : form.id ? "Salvar categoria" : "Cadastrar categoria"}
-              </button>
-            </div>
-          </section>
-        </div>
-
-        <div className="flex justify-end border-t border-white/[0.06] p-4">
-          <button className="premium-ghost rounded-xl px-3 py-2 text-xs text-slate-300 disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">Fechar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ProductCreateModal({
-  categories,
-  form,
-  error,
-  isSubmitting,
-  setForm,
-  onClose,
-  onSubmit,
-  title = "Novo produto",
-  submitLabel = "Cadastrar produto",
-  showActiveToggle = false,
-}: {
-  categories: ApiCategoriaProduto[];
-  form: ProductForm;
-  error: string;
-  isSubmitting: boolean;
-  setForm: (form: ProductForm) => void;
-  onClose: () => void;
-  onSubmit: () => void;
-  title?: string;
-  submitLabel?: string;
-  showActiveToggle?: boolean;
-}) {
-  const fieldBaseClass =
-    "w-full rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm text-slate-100 outline-none transition-all duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-60";
-  const fieldLabelClass = "mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 text-white shadow-2xl">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold">{title}</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Cadastre o item para acompanhar saldos, estoque minimo e movimentacoes.
-            </p>
-          </div>
-
-          <button
-            className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            <X size={15} />
-          </button>
-        </div>
-
-        <div className="saas-card grid gap-3 rounded-2xl p-3 md:grid-cols-2">
-          <Field label="Nome do produto" labelClass={fieldLabelClass}>
-            <input
-              className={fieldBaseClass}
-              disabled={isSubmitting}
-              onChange={(event) => setForm({ ...form, nome: event.target.value })}
-              placeholder="Ex: Fertilizante NPK 10-10-10"
-              value={form.nome}
-            />
-          </Field>
-
-          <Field label="Codigo" labelClass={fieldLabelClass}>
-            <input
-              className={fieldBaseClass}
-              disabled={isSubmitting}
-              onChange={(event) => setForm({ ...form, codigo: event.target.value })}
-              placeholder="Ex: NPK-101010"
-              value={form.codigo}
-            />
-          </Field>
-
-          <Field label="Categoria" labelClass={fieldLabelClass}>
-            <select
-              className={fieldBaseClass}
-              disabled={isSubmitting}
-              onChange={(event) => setForm({ ...form, categoriaId: event.target.value })}
-              value={form.categoriaId}
-            >
-              <option value="">Sem categoria</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.nome}{category.ativo ? "" : " (inativa)"}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Unidade de medida" labelClass={fieldLabelClass}>
-            <select
-              className={fieldBaseClass}
-              disabled={isSubmitting}
-              onChange={(event) => setForm({ ...form, unidadeMedida: event.target.value })}
-              value={form.unidadeMedida}
-            >
-              {PRODUCT_UNITS.map((unit) => (
-                <option key={unit.value} value={unit.value}>
-                  {unit.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Estoque minimo" labelClass={fieldLabelClass}>
-            <input
-              className={fieldBaseClass}
-              disabled={isSubmitting}
-              inputMode="decimal"
-              onChange={(event) => setForm({ ...form, estoqueMinimo: event.target.value })}
-              placeholder="Ex: 10 ou 10,5"
-              value={form.estoqueMinimo}
-            />
-          </Field>
-
-          <Field label="Preco de custo" labelClass={fieldLabelClass}>
-            <input
-              className={fieldBaseClass}
-              disabled={isSubmitting}
-              inputMode="decimal"
-              onChange={(event) => setForm({ ...form, precoCusto: event.target.value })}
-              placeholder="Ex: 125,50"
-              value={form.precoCusto}
-            />
-          </Field>
-
-          <Field label="Preco de venda" labelClass={fieldLabelClass}>
-            <input
-              className={fieldBaseClass}
-              disabled={isSubmitting}
-              inputMode="decimal"
-              onChange={(event) => setForm({ ...form, precoVenda: event.target.value })}
-              placeholder="Ex: 165,00"
-              value={form.precoVenda}
-            />
-          </Field>
-
-          <Field label="Descricao" labelClass={fieldLabelClass} wide>
-            <textarea
-              className={`${fieldBaseClass} min-h-[76px] resize-none`}
-              disabled={isSubmitting}
-              onChange={(event) => setForm({ ...form, descricao: event.target.value })}
-              placeholder="Descricao curta do produto"
-              value={form.descricao}
-            />
-          </Field>
-
-          {showActiveToggle && (
-            <div className="md:col-span-2">
-              <label className="inline-flex items-center gap-2 rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300">
-                <input
-                  checked={form.ativo}
-                  className="h-4 w-4 accent-teal-300"
-                  disabled={isSubmitting}
-                  onChange={(event) => setForm({ ...form, ativo: event.target.checked })}
-                  type="checkbox"
-                />
-                Produto ativo
-              </label>
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <div className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/[0.055] px-3 py-2 text-xs text-rose-100">
-            {error}
-          </div>
-        )}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300 transition hover:border-slate-400/24 hover:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={isSubmitting}
-            onClick={onClose}
-            type="button"
-          >
-            Cancelar
-          </button>
-
-          <button
-            className="premium-button inline-flex min-w-32 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            onClick={onSubmit}
-            type="button"
-          >
-            {isSubmitting && <Loader2 size={13} className="animate-spin" />}
-            {isSubmitting ? "Salvando" : submitLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  labelClass,
-  children,
-  wide = false,
-}: {
-  label: string;
-  labelClass: string;
-  children: ReactNode;
-  wide?: boolean;
-}) {
-  return (
-    <div className={wide ? "md:col-span-2" : ""}>
-      <label className={labelClass}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function ProductDetailsDrawer({
-  product,
-  isLoading,
-  onClose,
-  onEdit,
-  onMovement,
-}: {
-  product: ApiProduto;
-  isLoading: boolean;
-  onClose: () => void;
-  onEdit: () => void;
-  onMovement: (action: InventoryAction) => void;
-}) {
-  const recentMovements = product.ultimasMovimentacoes ?? [];
-
-  return (
-    <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-slate-700/50 bg-[#070b12]/96 text-white shadow-2xl backdrop-blur-xl">
-      <div className="border-b border-white/[0.07] p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">{product.nome}</p>
-            <p className="mt-1 truncate text-[11px] text-slate-500">
-              {product.codigo || "Sem codigo"} - {product.categoria?.nome || "Sem categoria"}
-            </p>
-          </div>
-          <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200" onClick={onClose} type="button">
-            <X size={15} />
-          </button>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-        {isLoading && <div className="h-20 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />}
-
-        <section className="saas-card rounded-2xl p-3">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <InfoCell label="Situacao" value={stockLabel(product)} tone={stockTone(product)} />
-            <InfoCell label="Status" value={product.ativo ? "Ativo" : "Inativo"} tone={product.ativo ? "ok" : "empty"} />
-            <InfoCell label="Saldo" value={`${formatDecimal(product.quantidadeAtual)} ${product.unidadeMedida}`} />
-            <InfoCell label="Minimo" value={formatDecimal(product.estoqueMinimo)} />
-            <InfoCell label="Custo" value={formatCurrency(product.precoCustoCentavos)} />
-            <InfoCell label="Venda" value={formatCurrency(product.precoVendaCentavos)} />
-          </div>
-
-          {product.descricao && (
-            <p className="mt-3 rounded-xl border border-white/[0.06] bg-slate-950/24 p-3 text-xs leading-relaxed text-slate-400">
-              {product.descricao}
-            </p>
-          )}
-        </section>
-
-        {!product.ativo && (
-          <div className="rounded-2xl border border-amber-300/18 bg-amber-300/[0.06] p-3 text-xs text-amber-100">
-            Ative o produto para realizar movimentacoes.
-          </div>
-        )}
-
-        <section className="grid gap-2 sm:grid-cols-2">
-          <button className="saas-action inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200" onClick={onEdit} type="button">
-            <Edit3 size={14} />
-            Editar produto
-          </button>
-          <button className="saas-action inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45" disabled={!product.ativo} onClick={() => onMovement("entrada")} type="button">
-            <TrendingUp size={14} />
-            Dar entrada
-          </button>
-          <button className="saas-action inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45" disabled={!product.ativo} onClick={() => onMovement("saida")} type="button">
-            <TrendingDown size={14} />
-            Registrar saida
-          </button>
-          <button className="saas-action inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 disabled:cursor-not-allowed disabled:opacity-45" disabled={!product.ativo} onClick={() => onMovement("ajuste")} type="button">
-            <SlidersHorizontal size={14} />
-            Ajustar saldo
-          </button>
-        </section>
-
-        <section className="saas-card rounded-2xl p-3">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <p className="text-xs font-semibold text-slate-100">Ultimas movimentacoes</p>
-            <span className="saas-chip rounded-full px-2 py-1 text-[10px]">
-              {product.movimentacoesCount ?? recentMovements.length} registros
-            </span>
-          </div>
-          <div className="space-y-2">
-            {recentMovements.length === 0 && (
-              <p className="rounded-xl border border-dashed border-white/10 bg-black/20 p-3 text-xs text-slate-500">
-                Nenhuma movimentacao registrada para este produto.
-              </p>
-            )}
-            {recentMovements.map((movement) => (
-              <MovementRow key={movement.id} movement={movement} />
-            ))}
-          </div>
-        </section>
-      </div>
-    </aside>
-  );
-}
-
-function StockMovementModal({
-  action,
-  product,
-  form,
-  error,
-  isSubmitting,
-  setForm,
-  onClose,
-  onSubmit,
-}: {
-  action: InventoryAction;
-  product: ApiProduto;
-  form: MovementForm;
-  error: string;
-  isSubmitting: boolean;
-  setForm: (form: MovementForm) => void;
-  onClose: () => void;
-  onSubmit: () => void;
-}) {
-  const isAdjustment = action === "ajuste";
-  const title = action === "entrada" ? "Dar entrada" : action === "saida" ? "Registrar saida" : "Ajustar saldo";
-  const submitLabel = action === "entrada" ? "Registrar entrada" : action === "saida" ? "Registrar saida" : "Salvar ajuste";
-  const current = decimalNumber(product.quantidadeAtual);
-  const movementAmount = decimalNumber(normalizeDecimalInput(form.quantidade));
-  const next = isAdjustment
-    ? decimalNumber(normalizeDecimalInput(form.novaQuantidade))
-    : action === "entrada"
-      ? current + movementAmount
-      : current - movementAmount;
-  const difference = next - current;
-  const fieldBaseClass =
-    "w-full rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm text-slate-100 outline-none transition-all duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-60";
-  const labelClass = "mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500";
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="saas-panel w-full max-w-lg rounded-2xl p-4 text-white shadow-2xl">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold">{title}</p>
-            <p className="mt-1 truncate text-[11px] text-slate-500">
-              {product.nome} - saldo atual: {formatDecimal(product.quantidadeAtual)} {product.unidadeMedida}
-            </p>
-          </div>
-          <button className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">
-            <X size={15} />
-          </button>
-        </div>
-
-        <div className="saas-card grid gap-3 rounded-2xl p-3">
-          <Field label={isAdjustment ? "Nova quantidade" : "Quantidade"} labelClass={labelClass}>
-            <input
-              className={fieldBaseClass}
-              disabled={isSubmitting}
-              inputMode="decimal"
-              onChange={(event) =>
-                setForm(isAdjustment ? { ...form, novaQuantidade: event.target.value } : { ...form, quantidade: event.target.value })
-              }
-              placeholder="Ex: 10 ou 10,5"
-              value={isAdjustment ? form.novaQuantidade : form.quantidade}
-            />
-          </Field>
-
-          <div className="grid gap-2 rounded-xl border border-white/[0.06] bg-slate-950/24 p-3 text-xs sm:grid-cols-3">
-            <div>
-              <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Saldo atual</p>
-              <p className="mt-1 font-semibold text-slate-200">{formatDecimal(String(current))} {product.unidadeMedida}</p>
-            </div>
-            <div>
-              <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Novo saldo</p>
-              <p className={`mt-1 font-semibold ${next < 0 ? "text-rose-100" : "text-slate-100"}`}>{formatDecimal(String(next))} {product.unidadeMedida}</p>
-            </div>
-            <div>
-              <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Diferenca</p>
-              <p className={`mt-1 font-semibold ${difference > 0 ? "text-teal-100" : difference < 0 ? "text-rose-100" : "text-slate-300"}`}>{formatDecimal(String(difference))} {product.unidadeMedida}</p>
-            </div>
-          </div>
-
-          <Field label={isAdjustment ? "Motivo obrigatorio" : "Motivo"} labelClass={labelClass}>
-            <input
-              className={fieldBaseClass}
-              disabled={isSubmitting}
-              onChange={(event) => setForm({ ...form, motivo: event.target.value })}
-              placeholder={isAdjustment ? "Ex: Contagem fisica" : "Ex: Operacao de estoque"}
-              value={form.motivo}
-            />
-          </Field>
-
-          <Field label="Observacao" labelClass={labelClass}>
-            <textarea
-              className={`${fieldBaseClass} min-h-[72px] resize-none`}
-              disabled={isSubmitting}
-              onChange={(event) => setForm({ ...form, observacao: event.target.value })}
-              placeholder="Informacao complementar"
-              value={form.observacao}
-            />
-          </Field>
-        </div>
-
-        {error && <div className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/[0.055] px-3 py-2 text-xs text-rose-100">{error}</div>}
-
-        <div className="mt-4 flex justify-end gap-2">
-          <button className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-50" disabled={isSubmitting} onClick={onClose} type="button">
-            Cancelar
-          </button>
-          <button className="premium-button inline-flex min-w-32 items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60" disabled={isSubmitting} onClick={onSubmit} type="button">
-            {isSubmitting && <Loader2 size={13} className="animate-spin" />}
-            {isSubmitting ? "Salvando" : submitLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function IntegratedProductsPanel({
-  products,
-  status,
-  total,
-  loadedTotal,
-  page,
-  totalPages,
-  search,
-  originFilter,
-  originOptions,
-  unitFilter,
-  unitOptions,
-  stockFilter,
-  hasFilters,
-  onSearchChange,
-  onOriginFilterChange,
-  onUnitFilterChange,
-  onStockFilterChange,
-  onClearFilters,
-  onPageChange,
-  onRetry,
-}: {
-  products: HubProdutoEstoque[];
-  status: InventoryStatus;
-  total: number;
-  loadedTotal: number;
-  page: number;
-  totalPages: number;
-  search: string;
-  originFilter: string;
-  originOptions: string[];
-  unitFilter: string;
-  unitOptions: string[];
-  stockFilter: IntegratedStockFilter;
-  hasFilters: boolean;
-  onSearchChange: (value: string) => void;
-  onOriginFilterChange: (value: string) => void;
-  onUnitFilterChange: (value: string) => void;
-  onStockFilterChange: (value: IntegratedStockFilter) => void;
-  onClearFilters: () => void;
-  onPageChange: (page: number) => void;
-  onRetry: () => void;
-}) {
-  const isLoading = status === "loading" || status === "idle";
-  const isError = status === "error";
-  const isEmpty = !isLoading && !isError && products.length === 0;
-
-  return (
-    <Surface className="min-w-0 overflow-hidden">
-      <SectionHeader
-        actions={<span className="text-[11px] text-[var(--text-muted)]">{total} resultado{total === 1 ? "" : "s"}{loadedTotal > total ? ` de ${loadedTotal}` : ""}</span>}
-        description="Catálogo sincronizado das integrações, exibido somente para leitura."
-        icon={<Warehouse size={16} />}
-        title="Produtos integrados"
-      />
-
-      <div className="border-b border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
-        <Toolbar className="items-end justify-start">
-          <Input aria-label="Buscar produtos integrados" containerClassName="min-w-[240px] flex-[1_1_320px]" disabled={isLoading} onChange={(event) => onSearchChange(event.target.value)} placeholder="Buscar produto, SKU, unidade ou origem" value={search} />
-
-          <Select aria-label="Filtrar por origem" className="w-auto min-w-[130px]" disabled={isLoading} onChange={(event) => onOriginFilterChange(event.target.value)} value={originFilter}>
-            {originOptions.map((option) => <option key={option} value={option}>{option === "Todos" ? "Todas origens" : option}</option>)}
-          </Select>
-
-          <Select aria-label="Filtrar por unidade" className="w-auto min-w-[130px]" disabled={isLoading} onChange={(event) => onUnitFilterChange(event.target.value)} value={unitFilter}>
-            {unitOptions.map((option) => <option key={option} value={option}>{option === "Todos" ? "Todas unidades" : option}</option>)}
-          </Select>
-
-          <Select aria-label="Filtrar por saldo" className="w-auto min-w-[145px]" disabled={isLoading} onChange={(event) => onStockFilterChange(event.target.value as IntegratedStockFilter)} value={stockFilter}>
-            <option value="todos">Todos estoques</option>
-            <option value="disponivel">Disponivel</option>
-            <option value="sem-estoque">Sem estoque</option>
-          </Select>
-
-          <Button disabled={!hasFilters || isLoading} onClick={onClearFilters} size="sm" variant="ghost">
-            Limpar
-          </Button>
-        </Toolbar>
-      </div>
-
-      <div aria-busy={isLoading} className="overflow-x-auto">
-        {isLoading && <LoadingState className="p-4" label="Carregando produtos integrados" rows={4} />}
-
-        {isError && (
-          <UiErrorState description="A consulta foi interrompida sem alterar dados externos." onRetry={onRetry} title="Não foi possível carregar o estoque integrado" />
-        )}
-
-        {isEmpty && (
-          <UiEmptyState
-            description={hasFilters ? "Ajuste os filtros para ampliar a consulta." : "Sincronize os produtos na área de Integrações para atualizar o estoque."}
-            icon={<Warehouse size={17} />}
-            title={hasFilters ? "Nenhum produto para esta busca" : "Nenhum produto disponível no estoque"}
-          />
-        )}
-
-        {!isLoading && !isError && products.length > 0 && (
-          <table className="w-full min-w-[1060px] table-fixed border-collapse text-left">
-            <thead className="bg-[var(--bg-muted)] text-[11px] font-medium text-[var(--text-secondary)]">
-              <tr className="border-b border-[var(--border-default)]">
-                <th className="w-[24%] px-4 py-2.5 font-medium">Produto</th>
-                <th className="w-[14%] px-3 py-2.5 font-medium">SKU</th>
-                <th className="w-[12%] px-3 py-2.5 text-right font-medium">Preço</th>
-                <th className="w-[8%] px-3 py-2.5 font-medium">Unidade</th>
-                <th className="w-[12%] px-3 py-2.5 text-right font-medium">Saldo</th>
-                <th className="w-[9%] px-3 py-2.5 font-medium">Origem</th>
-                <th className="w-[10%] px-3 py-2.5 font-medium">Status</th>
-                <th className="w-[11%] px-3 py-2.5 font-medium">Atualização</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--border-default)]">
-              {products.map((product) => <IntegratedProductRow key={integratedProductKey(product)} product={product} />)}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <Pagination disabled={isLoading} itemLabel="produtos integrados" onPageChange={onPageChange} page={page} total={total} totalPages={totalPages} visibleCount={products.length} />
-    </Surface>
-  );
-}
-
-function IntegratedProductRow({ product }: { product: HubProdutoEstoque }) {
+function InventoryRow({ product }: { product: HubProdutoEstoque }) {
   const unit = integratedUnit(product);
   const status = integratedStockStatus(product);
+  const updatedAt = integratedUpdatedAt(product);
 
   return (
     <tr className="bg-[var(--bg-surface)] transition-colors hover:bg-[var(--bg-muted)]">
@@ -2120,133 +339,43 @@ function IntegratedProductRow({ product }: { product: HubProdutoEstoque }) {
       <td className="px-3 py-3 align-middle text-[11px] font-medium text-[var(--text-secondary)]">{product.produto.sku || "Sem SKU"}</td>
       <td className="px-3 py-3 text-right align-middle text-xs font-semibold tabular-nums text-[var(--text-primary)]">{formatOptionalCurrency(integratedPrice(product))}</td>
       <td className="px-3 py-3 align-middle text-[11px] text-[var(--text-secondary)]">{unit || "Não informada"}</td>
-      <td className={`px-3 py-3 text-right align-middle text-xs font-semibold tabular-nums ${status.tone === "ok" ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>{formatIntegratedStock(product) || "0"}</td>
-      <td className="px-3 py-3 align-middle"><span className="text-[11px] font-medium text-[var(--info)]">{integratedOriginLabel(product)}</span></td>
-      <td className="px-3 py-3 align-middle"><span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${status.tone === "ok" ? "border-[color:rgba(36,122,82,0.28)] text-[var(--success)]" : "border-[color:rgba(179,58,69,0.28)] text-[var(--danger)]"}`}>{status.label}</span></td>
-      <td className="px-3 py-3 align-middle text-[11px] text-[var(--text-muted)]">{formatOptionalDateTime(integratedUpdatedAt(product))}</td>
+      <td className={`px-3 py-3 text-right align-middle text-xs font-semibold tabular-nums ${status.tone === "success" ? "text-[var(--success)]" : status.tone === "danger" ? "text-[var(--danger)]" : "text-[var(--text-secondary)]"}`}>
+        {formatIntegratedStock(product)}
+      </td>
+      <td className="px-3 py-3 align-middle text-[11px] font-medium text-[var(--info)]">{integratedOriginLabel(product)}</td>
+      <td className="px-3 py-3 align-middle">
+        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${status.className}`}>{status.label}</span>
+      </td>
+      <td className="px-3 py-3 align-middle">
+        <p className="text-[11px] text-[var(--text-muted)]">{formatOptionalDateTime(updatedAt)}</p>
+        {product.possivelmenteDesatualizado && <p className="mt-0.5 text-[10px] font-medium text-[var(--warning)]">Desatualizado</p>}
+      </td>
     </tr>
   );
 }
 
-function ProductRow({ product, onOpen }: { product: ApiProduto; onOpen: () => void }) {
-  return (
-    <button className="saas-row grid min-w-0 gap-3 rounded-2xl p-3 text-left lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.88fr)] lg:items-start" onClick={onOpen} type="button">
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-center gap-2">
-          <p className="min-w-0 break-words text-sm font-semibold leading-snug text-white">{product.nome}</p>
-          <span className={`saas-chip shrink-0 ${product.ativo ? "text-teal-100" : "text-slate-400"}`}>
-            {product.ativo ? "Ativo" : "Inativo"}
-          </span>
-        </div>
-        <p className="mt-1 break-words text-[11px] leading-snug text-slate-500">
-          {product.codigo || "Sem codigo"} - {product.categoria?.nome || "Sem categoria"}
-        </p>
-      </div>
-
-      <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        <InfoCell label="Estoque" value={stockLabel(product)} tone={stockTone(product)} />
-        <InfoCell label="Unidade" value={product.unidadeMedida} />
-        <InfoCell label="Saldo" value={formatDecimal(product.quantidadeAtual)} />
-        <InfoCell label="Minimo" value={formatDecimal(product.estoqueMinimo)} />
-        <InfoCell label="Custo" value={formatCurrency(product.precoCustoCentavos)} />
-        <InfoCell label="Venda" value={formatCurrency(product.precoVendaCentavos)} />
-      </div>
-    </button>
-  );
+function toInventoryErrorState(error: unknown): InventoryErrorState {
+  if (error instanceof ApiHttpError) return inventoryErrorForStatus(error.status);
+  return inventoryErrorForStatus(0);
 }
 
-function MovementRow({ movement }: { movement: ApiMovimentacaoEstoque }) {
-  const unit = movement.produto?.unidadeMedida ?? "";
-
-  return (
-    <article className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-3">
-      <div className="flex min-w-0 flex-col gap-3">
-        <div className="flex min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className={`saas-chip shrink-0 ${movementTone(movement.tipo)}`}>
-              {movementLabel(movement.tipo)}
-            </span>
-            <p className="min-w-0 break-words text-xs font-semibold text-slate-100">
-              {movement.produto?.nome || "Produto"}
-            </p>
-              {movement.produto?.codigo && (
-                <span className="saas-chip shrink-0 text-slate-400">
-                  {movement.produto.codigo}
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              {formatDate(movement.createdAt)}
-            </p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-xs font-semibold text-white">
-              {formatDecimal(movement.quantidade)} {unit}
-            </p>
-            <p className="mt-1 text-[10px] text-slate-500">quantidade</p>
-          </div>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          <InfoCell label="Saldo anterior" value={`${formatDecimal(movement.quantidadeAnterior)} ${unit}`.trim()} />
-          <InfoCell label="Saldo posterior" value={`${formatDecimal(movement.quantidadePosterior)} ${unit}`.trim()} />
-        </div>
-
-        {(movement.motivo || movement.observacao) && (
-          <div className="space-y-1 rounded-xl border border-white/[0.06] bg-slate-950/24 p-3 text-[11px] leading-relaxed text-slate-400">
-            {movement.motivo && (
-              <p className="break-words">
-                <span className="font-semibold text-slate-300">Motivo:</span> {movement.motivo}
-              </p>
-            )}
-            {movement.observacao && (
-              <p className="break-words">
-                <span className="font-semibold text-slate-300">Observacao:</span> {movement.observacao}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    </article>
-  );
-}
-
-function InfoCell({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "ok" | "warn" | "empty" }) {
-  const toneClass = {
-    default: "text-slate-100",
-    ok: "text-teal-100",
-    warn: "text-amber-100",
-    empty: "text-rose-100",
-  }[tone];
-
-  return (
-    <div className="min-w-0 rounded-xl border border-white/[0.06] bg-slate-950/24 px-3 py-2">
-      <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">{label}</p>
-      <p className={`mt-1 break-words text-xs font-semibold leading-snug ${toneClass}`}>{value}</p>
-    </div>
-  );
-}
-
-function EmptyState({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center">
-      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-slate-500/16 bg-slate-900/55 text-slate-300">
-        {icon}
-      </div>
-      <p className="mt-3 text-sm font-semibold text-white">{title}</p>
-      <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-slate-500">{text}</p>
-    </div>
-  );
-}
-
-function formatDecimal(value: string) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return value;
-
-  return new Intl.NumberFormat("pt-BR", {
-    maximumFractionDigits: 3,
-  }).format(numeric);
+function inventoryErrorForStatus(status: number): InventoryErrorState {
+  if (status === 401) {
+    return { title: "Sessão expirada", description: "Sua sessão expirou. Entre novamente para continuar.", canRetry: false };
+  }
+  if (status === 403) {
+    return { title: "Acesso ao estoque não permitido", description: "Você não possui permissão para visualizar o estoque.", canRetry: false };
+  }
+  if (status === 410) {
+    return { title: "Fonte de estoque indisponível", description: "Esta fonte de estoque não está mais disponível.", canRetry: false };
+  }
+  if (status >= 500) {
+    return { title: "Erro interno no estoque", description: "Não foi possível carregar os produtos devido a um erro interno.", canRetry: true };
+  }
+  if (status === 0) {
+    return { title: "Servidor indisponível", description: "Não foi possível se comunicar com o servidor.", canRetry: true };
+  }
+  return { title: "Não foi possível carregar o estoque", description: "A consulta foi interrompida sem alterar dados externos.", canRetry: false };
 }
 
 function integratedProductKey(product: HubProdutoEstoque) {
@@ -2263,12 +392,12 @@ function integratedPrice(product: HubProdutoEstoque) {
 }
 
 function integratedQuantity(product: HubProdutoEstoque) {
-  return product.estoques.reduce((total, stock) => total + decimalNumber(stock.disponivel ?? stock.quantidade), 0);
+  return product.estoques.reduce((sum, stock) => sum + decimalNumber(stock.disponivel ?? stock.quantidade), 0);
 }
 
 function formatIntegratedStock(product: HubProdutoEstoque) {
   const unit = integratedUnit(product);
-  return `${formatDecimal(String(integratedQuantity(product)))} ${unit}`.trim();
+  return `${formatDecimal(integratedQuantity(product))} ${unit}`.trim();
 }
 
 function integratedOriginLabel(product: HubProdutoEstoque) {
@@ -2276,7 +405,7 @@ function integratedOriginLabel(product: HubProdutoEstoque) {
   if (type === "BLING") return "Bling";
   if (type === "CSV") return "CSV";
   if (type === "XLSX") return "XLSX";
-  return product.origem?.integracaoNome?.trim() || "Integracao";
+  return product.origem?.integracaoNome?.trim() || "Integração";
 }
 
 function integratedUpdatedAt(product: HubProdutoEstoque) {
@@ -2290,192 +419,36 @@ function integratedUpdatedAt(product: HubProdutoEstoque) {
   );
 }
 
-function integratedStockStatus(product: HubProdutoEstoque): { label: string; tone: "ok" | "empty"; toneClass: string } {
+function integratedStockStatus(product: HubProdutoEstoque) {
   if (!product.produto.ativo) {
-    return { label: "Inativo", tone: "empty", toneClass: "text-slate-400" };
+    return { label: "Inativo", tone: "neutral" as const, className: "border-[var(--border-default)] text-[var(--text-muted)]" };
   }
   if (integratedQuantity(product) <= 0) {
-    return { label: "Sem estoque", tone: "empty", toneClass: "border-rose-300/15 bg-rose-300/[0.07] text-rose-100" };
+    return { label: "Sem estoque", tone: "danger" as const, className: "border-[color:rgba(179,58,69,0.28)] text-[var(--danger)]" };
   }
-  return { label: "Disponivel", tone: "ok", toneClass: "border-teal-300/15 bg-teal-300/[0.07] text-teal-100" };
+  return { label: "Disponível", tone: "success" as const, className: "border-[color:rgba(36,122,82,0.28)] text-[var(--success)]" };
 }
 
 function formatOptionalCurrency(cents: number | null | undefined) {
-  if (cents === null || cents === undefined || !Number.isFinite(cents)) return "Nao informado";
-  return formatCurrency(cents);
+  if (cents === null || cents === undefined || !Number.isFinite(cents)) return "Não informado";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 }
 
 function formatOptionalDateTime(value?: string | null) {
-  if (!value) return "Nao informado";
+  if (!value) return "Não informado";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Nao informado";
-  return formatDateTime(value);
+  if (Number.isNaN(date.getTime())) return "Não informado";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
-function uniqueValues(values: string[]) {
-  return Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right, "pt-BR", { sensitivity: "base" }));
-}
-
-function normalizeSearchText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function validateProductForm(form: ProductForm) {
-  if (!form.nome.trim()) return "Informe o nome do produto.";
-  if (!form.unidadeMedida.trim()) return "Selecione a unidade de medida.";
-  if (!isDecimalInputValid(form.estoqueMinimo)) return "Estoque minimo deve ser zero ou maior.";
-  if (!isMoneyInputValid(form.precoCusto)) return "Preco de custo deve ser zero ou maior.";
-  if (!isMoneyInputValid(form.precoVenda)) return "Preco de venda deve ser zero ou maior.";
-  return "";
-}
-
-function isDecimalInputValid(value: string) {
-  const normalized = normalizeDecimalInput(value);
-  const numeric = Number(normalized);
-  return Number.isFinite(numeric) && numeric >= 0;
-}
-
-function normalizeDecimalInput(value: string) {
-  const normalized = value.trim().replace(/\./g, "").replace(",", ".");
-  return normalized || "0";
-}
-
-function isMoneyInputValid(value: string) {
-  try {
-    return parseMoneyToCents(value) >= 0;
-  } catch {
-    return false;
-  }
-}
-
-function parseMoneyToCents(value: string) {
-  const clean = value.trim();
-  if (!clean) return 0;
-  if (clean.startsWith("-")) throw new Error("Valor negativo");
-
-  const normalized = clean.replace(/[^\d,.]/g, "");
-  const hasComma = normalized.includes(",");
-  const decimalSeparator = hasComma ? "," : normalized.includes(".") ? "." : "";
-  const [integerRaw, decimalRaw = ""] = decimalSeparator
-    ? normalized.split(decimalSeparator)
-    : [normalized, ""];
-  const integerDigits = integerRaw.replace(/\D/g, "") || "0";
-  const decimalDigits = decimalRaw.replace(/\D/g, "").padEnd(2, "0").slice(0, 2);
-  const cents = Number(`${integerDigits}${decimalDigits}`);
-
-  if (!Number.isFinite(cents) || cents < 0) throw new Error("Valor invalido");
-  return cents;
-}
-
-function toFriendlyProductError(message: string) {
-  const normalized = message.toLowerCase();
-  if (normalized.includes("codigo") || normalized.includes("código") || normalized.includes("unique")) {
-    return "Ja existe um produto com esse codigo.";
-  }
-  if (normalized.includes("categoria")) return "Categoria selecionada nao esta disponivel.";
-  if (normalized.includes("nome")) return "Informe um nome valido para o produto.";
-  if (normalized.includes("unidade")) return "Selecione uma unidade de medida valida.";
-  return "Nao foi possivel cadastrar o produto agora.";
-}
-
-function normalizeCategoryName(value: string) {
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function sortCategories(categories: ApiCategoriaProduto[]) {
-  return [...categories].sort((left, right) => {
-    if (left.ativo !== right.ativo) return left.ativo ? -1 : 1;
-    return left.nome.localeCompare(right.nome, "pt-BR", { sensitivity: "base" });
-  });
-}
-
-function upsertCategory(categories: ApiCategoriaProduto[], category: ApiCategoriaProduto) {
-  const exists = categories.some((item) => item.id === category.id);
-  return exists
-    ? categories.map((item) => (item.id === category.id ? category : item))
-    : [...categories, category];
-}
-
-function productCategoryOptions(categories: ApiCategoriaProduto[], product: ApiProduto) {
-  if (!product.categoria || product.categoria.ativo) return categories;
-  return sortCategories([...categories, product.categoria]);
-}
-
-function toFriendlyCategoryError(message: string) {
-  const normalized = message.toLowerCase();
-  if (normalized.includes("existe") || normalized.includes("duplic") || normalized.includes("unique")) {
-    return "Ja existe uma categoria com esse nome.";
-  }
-  if (normalized.includes("nome")) return "Informe um nome valido para a categoria.";
-  if (normalized.includes("descricao")) return "A descricao informada e muito longa.";
-  return "Nao foi possivel salvar a categoria agora.";
-}
-
-function productToForm(product: ApiProduto): ProductForm {
-  return {
-    nome: product.nome,
-    codigo: product.codigo ?? "",
-    descricao: product.descricao ?? "",
-    categoriaId: product.categoriaId ? String(product.categoriaId) : "",
-    unidadeMedida: product.unidadeMedida,
-    estoqueMinimo: formatDecimal(product.estoqueMinimo),
-    precoCusto: centsToMoneyInput(product.precoCustoCentavos),
-    precoVenda: centsToMoneyInput(product.precoVendaCentavos),
-    ativo: product.ativo,
-  };
-}
-
-function validateMovementForm(form: MovementForm, product: ApiProduto, action: InventoryAction) {
-  if (!product.ativo) return "Ative o produto para realizar movimentacoes.";
-
-  if (action === "ajuste") {
-    if (!isDecimalInputValid(form.novaQuantidade)) return "Nova quantidade deve ser zero ou maior.";
-    if (!form.motivo.trim()) return "Informe o motivo do ajuste.";
-    if (decimalNumber(normalizeDecimalInput(form.novaQuantidade)) === decimalNumber(product.quantidadeAtual)) {
-      return "Informe uma quantidade diferente do saldo atual.";
-    }
-    return "";
-  }
-
-  if (!isDecimalInputValid(form.quantidade) || decimalNumber(normalizeDecimalInput(form.quantidade)) <= 0) {
-    return "Informe uma quantidade maior que zero.";
-  }
-
-  if (action === "saida" && decimalNumber(normalizeDecimalInput(form.quantidade)) > decimalNumber(product.quantidadeAtual)) {
-    return "A quantidade informada e maior que o saldo disponivel.";
-  }
-
-  return "";
-}
-
-function movementSuccessMessage(action: InventoryAction) {
-  if (action === "entrada") return "Entrada registrada com sucesso.";
-  if (action === "saida") return "Saida registrada com sucesso.";
-  return "Saldo ajustado com sucesso.";
-}
-
-function toFriendlyMovementError(message: string) {
-  const normalized = message.toLowerCase();
-  if (normalized.includes("saldo") || normalized.includes("insuficiente")) {
-    return "A quantidade informada e maior que o saldo disponivel.";
-  }
-  if (normalized.includes("ativo") || normalized.includes("inativo")) {
-    return "Ative o produto para realizar movimentacoes.";
-  }
-  if (normalized.includes("motivo")) return "Informe o motivo do ajuste.";
-  if (normalized.includes("quantidade")) return "Informe uma quantidade valida.";
-  return "Nao foi possivel concluir a movimentacao agora.";
-}
-
-function centsToMoneyInput(cents: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(cents / 100);
+function formatDecimal(value: number) {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(value);
 }
 
 function decimalNumber(value: string) {
@@ -2483,65 +456,10 @@ function decimalNumber(value: string) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
-function formatCurrency(cents: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(cents / 100);
+function uniqueValues(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right, "pt-BR", { sensitivity: "base" }));
 }
 
-function stockLabel(product: ApiProduto) {
-  const current = decimalNumber(product.quantidadeAtual);
-  const minimum = decimalNumber(product.estoqueMinimo);
-
-  if (current <= 0) return "Sem estoque";
-  if (minimum > 0 && current <= minimum) return "Estoque baixo";
-  return "Estoque normal";
-}
-
-function stockTone(product: ApiProduto): "ok" | "warn" | "empty" {
-  const current = decimalNumber(product.quantidadeAtual);
-  const minimum = decimalNumber(product.estoqueMinimo);
-
-  if (current <= 0) return "empty";
-  if (minimum > 0 && current <= minimum) return "warn";
-  return "ok";
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatMovementDifference(movement: ApiMovimentacaoEstoque) {
-  const difference = decimalNumber(movement.quantidadePosterior) - decimalNumber(movement.quantidadeAnterior);
-  const prefix = difference > 0 ? "+" : "";
-  return `${prefix}${formatDecimal(String(difference))}`;
-}
-
-function movementLabel(type: ApiMovimentacaoEstoque["tipo"] | "Todos") {
-  if (type === "Todos") return "Todos";
-  if (type === "ENTRADA") return "Entrada";
-  if (type === "SAIDA") return "Saida";
-  return "Ajuste";
-}
-
-function movementTone(type: ApiMovimentacaoEstoque["tipo"]) {
-  if (type === "ENTRADA") return "border-teal-300/15 bg-teal-300/[0.07] text-teal-100";
-  if (type === "SAIDA") return "border-rose-300/15 bg-rose-300/[0.07] text-rose-100";
-  return "border-amber-300/15 bg-amber-300/[0.07] text-amber-100";
+function normalizeSearchText(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }

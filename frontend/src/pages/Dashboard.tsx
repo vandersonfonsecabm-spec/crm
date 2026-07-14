@@ -680,7 +680,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 />
               )}
 
-              {activePage === "estoque" && <DashboardInventoryPanel />}
+              {activePage === "estoque" && <DashboardInventoryPanel onOpenIntegrations={() => handleSetActivePage("integracoes")} />}
 
               {activePage === "integracoes" && canManageIntegrations && <DashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />}
 
