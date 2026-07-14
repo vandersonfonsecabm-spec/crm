@@ -102,7 +102,7 @@ export default function DashboardKanbanBoard({
       <Surface className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
           <div>
-            <p className="text-sm font-semibold text-[var(--text-primary)]">Funil Comercial</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Pipeline de negócios</p>
             <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{kanbanClients.length} oportunidades · arraste entre etapas ou abra os detalhes.</p>
           </div>
 
