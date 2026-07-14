@@ -1170,7 +1170,14 @@ button {
 .login-shell .rounded-lg { border-radius: var(--radius-md) !important; }
 
 /* Global application shell */
+.crm-workspace {
+  overflow-x: clip;
+}
+
 .crm-workspace .crm-shell-layout {
+  --crm-sidebar-width: 224px;
+  --crm-shell-gutter: 12px;
+  min-height: 100dvh;
   background: var(--background);
 }
 
@@ -1181,12 +1188,21 @@ button {
 
 @media (min-width: 1024px) {
   .crm-workspace .crm-shell-layout {
-    gap: 12px;
+    gap: var(--crm-shell-gutter);
   }
 
-  .crm-workspace .crm-main {
-    border-left: 1px solid var(--border);
-    box-shadow: -6px 0 18px rgba(20, 36, 30, 0.045);
+  .crm-workspace .crm-shell-layout::before {
+    position: fixed;
+    z-index: 30;
+    top: 0;
+    bottom: 0;
+    left: var(--crm-sidebar-width);
+    width: var(--crm-shell-gutter);
+    border-right: 1px solid var(--border);
+    background: var(--background);
+    box-shadow: 4px 0 14px rgba(20, 36, 30, 0.045);
+    content: "";
+    pointer-events: none;
   }
 }
 
