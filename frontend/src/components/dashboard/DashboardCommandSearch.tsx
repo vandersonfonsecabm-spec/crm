@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import type { ActivePage, Client } from "../../types/dashboard";
 
@@ -27,6 +27,7 @@ export default function DashboardCommandSearch({
   const [commandSearch, setCommandSearch] = useState("");
   const [showCommandResults, setShowCommandResults] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleShortcuts(event: KeyboardEvent) {
@@ -60,6 +61,14 @@ export default function DashboardCommandSearch({
     window.addEventListener("keydown", handleShortcuts);
     return () => window.removeEventListener("keydown", handleShortcuts);
   }, [onCloseQuickActions]);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!searchRef.current?.contains(event.target as Node)) setShowCommandResults(false);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   const commandResults = useMemo(() => {
     const term = normalizeCommandTerm(commandSearch);
@@ -107,7 +116,7 @@ export default function DashboardCommandSearch({
   }
 
   return (
-    <div className="relative hidden min-w-0 flex-1 md:block md:max-w-xl">
+    <div className="relative hidden min-w-0 flex-1 md:block md:max-w-xl" ref={searchRef}>
       <div className="command-search flex h-9 w-full items-center gap-2 rounded-md border px-3 transition">
         <Search size={13} className="text-slate-500" />
 
@@ -150,19 +159,24 @@ export default function DashboardCommandSearch({
           }}
           placeholder="Buscar cliente, empresa ou página..."
           aria-label="Busca global"
-          className="w-full select-text bg-transparent text-[11px] outline-none"
+          aria-autocomplete="list"
+          aria-controls="crm-command-results"
+          aria-expanded={showCommandResults && Boolean(commandSearch)}
+          aria-activedescendant={commandResults.length > 0 ? `crm-command-result-${boundedSelectedIndex}` : undefined}
+          className="w-full select-text bg-transparent text-xs outline-none"
+          role="combobox"
         />
 
       </div>
 
       {showCommandResults && commandSearch && (
-        <div className="command-results absolute left-0 right-0 top-11 z-[130] rounded-lg border p-2 shadow-lg">
+        <div className="command-results absolute left-0 right-0 top-11 z-[130] rounded-lg border p-2 shadow-lg" id="crm-command-results" role="listbox">
           {commandResults.length === 0 && (
             <div className="rounded-md border px-3 py-3">
               <p className="text-[11px] font-semibold text-slate-300">
                 Nenhum resultado encontrado
               </p>
-              <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">
                 Busque pelo nome do cliente, empresa, e-mail ou página do CRM.
               </p>
             </div>
@@ -171,14 +185,16 @@ export default function DashboardCommandSearch({
           {commandResults.map((item, index) => (
             <button
               key={`${item.type}-${item.label}`}
+              id={`crm-command-result-${index}`}
               aria-selected={index === boundedSelectedIndex}
               onClick={() => runCommandResult(item)}
               className={`command-result w-full rounded-md px-3 py-2 text-left transition ${index === boundedSelectedIndex ? "is-selected" : ""}`}
+              role="option"
             >
-              <p className="text-[11px] font-medium text-slate-200">
+              <p className="text-xs font-medium text-slate-200">
                 {item.label}
               </p>
-              <p className="mt-0.5 text-[10px] text-slate-500">
+              <p className="mt-0.5 text-[11px] text-slate-500">
                 {item.type}
               </p>
             </button>

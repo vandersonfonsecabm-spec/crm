@@ -58,7 +58,7 @@ export default function DashboardSidebar({
 
   return (
     <aside className="sidebar-shell hidden h-screen w-[224px] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex">
-      <div className="sidebar-brand flex h-16 shrink-0 items-center gap-3 border-b px-4">
+      <div className="sidebar-brand flex h-14 shrink-0 items-center gap-3 border-b px-4">
         <div className="brand-mark flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
           <Sprout size={16} />
         </div>
@@ -97,7 +97,7 @@ export default function DashboardSidebar({
           </div>
           <div className="min-w-0">
             <p className="truncate text-[11px] font-medium">{displayName}</p>
-            <p className="truncate text-[10px]">{roleLabel} · {companyName}</p>
+            <p className="truncate text-[11px]">{roleLabel} · {companyName}</p>
           </div>
         </div>
       </div>

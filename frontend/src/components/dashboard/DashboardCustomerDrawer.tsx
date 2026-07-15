@@ -209,12 +209,12 @@ export default function DashboardCustomerDrawer({
 
   return (
     <aside key={`${activePage}-${selectedClient?.id ?? "empty"}`} className={`${drawerShellClass(activePage)} decision-drawer-shell`}>
-      <div className="saas-panel decision-drawer rounded-2xl">
+      <div className="saas-panel decision-drawer rounded-lg">
         <div className="border-b border-slate-700/40 bg-slate-950/18 p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold">Central de decisão</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">Dados, ação e histórico do cliente em um só lugar.</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">Dados, ação e histórico do cliente em um só lugar.</p>
             </div>
 
             {selectedClient && (

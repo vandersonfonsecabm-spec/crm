@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 
 export function EmptyDecisionState() {
   return (
-    <div className="metric-card rounded-2xl border-dashed p-4 text-center">
-      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-teal-300/14 bg-teal-300/[0.06] text-teal-100">
+    <div className="metric-card rounded-lg border-dashed p-4 text-center">
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-md border border-teal-300/14 bg-teal-300/[0.06] text-teal-100">
         <Sparkles size={16} />
       </div>
       <p className="mt-3 text-sm font-semibold text-slate-300">Selecione uma oportunidade</p>
@@ -17,9 +17,9 @@ export function EmptyDecisionState() {
 
 export function DecisionMini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="metric-card rounded-xl p-2">
-      <p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">{label}</p>
-      <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-200">{value}</p>
+    <div className="metric-card rounded-md p-2">
+      <p className="text-[11px] text-slate-500">{label}</p>
+      <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-200">{value}</p>
     </div>
   );
 }
@@ -36,10 +36,10 @@ export function ActionButton({
   return (
     <button
       onClick={onClick}
-      className="saas-action rounded-xl px-2 py-1.5 text-left"
+      className="saas-action rounded-md px-2 py-1.5 text-left"
     >
       {icon}
-      <p className="text-[9px] font-semibold text-slate-300">{label}</p>
+      <p className="text-[11px] font-semibold text-slate-300">{label}</p>
     </button>
   );
 }
@@ -80,7 +80,7 @@ export function FilterAction({
   };
 
   return (
-    <button onClick={onClick} className={`saas-action rounded-xl px-2 py-2 text-[10px] font-semibold ${classes[tone]}`}>
+    <button onClick={onClick} className={`saas-action rounded-md px-2 py-2 text-[11px] font-semibold ${classes[tone]}`}>
       {label}
     </button>
   );
@@ -105,9 +105,9 @@ export function RadarMetric({
   };
 
   return (
-    <div className={`metric-card rounded-xl p-2 ${classes[tone]}`}>
+    <div className={`metric-card rounded-md p-2 ${classes[tone]}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[9px] uppercase tracking-[0.12em] opacity-65">{label}</p>
+        <p className="text-[11px] opacity-65">{label}</p>
         {icon}
       </div>
       <p className="mt-1 truncate text-xs font-semibold">{value}</p>

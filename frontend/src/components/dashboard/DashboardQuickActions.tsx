@@ -22,6 +22,7 @@ export default function DashboardQuickActions({
   onExportCsv,
 }: DashboardQuickActionsProps) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -31,6 +32,17 @@ export default function DashboardQuickActions({
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && isOpen) {
+        onClose();
+        buttonRef.current?.focus({ preventScroll: true });
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   return (
     <div ref={menuRef} className="relative z-[180]">
       <button
@@ -38,8 +50,9 @@ export default function DashboardQuickActions({
         aria-haspopup="menu"
         aria-label="Abrir ações rápidas"
         onClick={onToggle}
+        ref={buttonRef}
         className="topbar-icon-button inline-flex h-9 w-9 items-center justify-center rounded-md"
-        title="Esc fecha menus. Ctrl+K abre busca global."
+        title="Ações rápidas"
         type="button"
       >
         <Plus size={16} />
@@ -51,11 +64,6 @@ export default function DashboardQuickActions({
           <ActionItem icon={<Users size={14} />} label="Ir para clientes" onClick={onGoToClients} />
           <ActionItem icon={<KanbanSquare size={14} />} label="Abrir negócios" onClick={onGoToKanban} />
           <ActionItem icon={<Download size={14} />} label="Exportar CSV" onClick={onExportCsv} />
-
-          <div className="quick-actions-hint mt-2 rounded-md border px-3 py-2">
-            <p className="text-[10px] font-semibold text-slate-400">Atalhos</p>
-            <p className="mt-1 text-[10px] text-slate-600">Ctrl+K busca global | Esc fecha menus</p>
-          </div>
         </div>
       )}
     </div>

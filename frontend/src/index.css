@@ -1158,6 +1158,10 @@ button {
   box-shadow: var(--shadow-sm);
 }
 
+.login-shell .login-submit-button {
+  color: #ffffff !important;
+}
+
 .login-shell .premium-ghost {
   border: 1px solid var(--border);
   background: var(--surface);

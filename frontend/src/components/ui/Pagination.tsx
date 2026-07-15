@@ -20,7 +20,7 @@ export function Pagination({ className, disabled = false, itemLabel = "registros
   return (
     <nav {...props} aria-label="Paginação" className={cx("flex min-w-0 items-center justify-between gap-3 border-t border-[var(--border-default)] px-4 py-3", className)}>
       <Button aria-label="Ir para a página anterior" disabled={disabled || !hasPrevious} leftIcon={<ChevronLeft size={13} />} onClick={() => onPageChange(Math.max(1, page - 1))} size="sm" variant="secondary">Anterior</Button>
-      <p aria-live="polite" className="min-w-0 text-center text-[11px] text-[var(--text-muted)]">
+      <p aria-live="polite" className="min-w-0 text-center text-[11px] tabular-nums text-[var(--text-muted)]">
         Página <span className="font-semibold text-[var(--text-secondary)]">{page}</span> de {safeTotalPages}
         {visibleCount !== undefined && total !== undefined && <> · <span className="font-semibold text-[var(--text-secondary)]">{visibleCount}</span> de {total} {itemLabel}</>}
       </p>

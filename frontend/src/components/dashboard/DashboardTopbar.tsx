@@ -33,7 +33,7 @@ export default function DashboardTopbar({
   canManageIntegrations,
 }: DashboardTopbarProps) {
   return (
-    <header className="topbar-shell sticky top-0 z-40 flex h-16 items-center border-b px-5 lg:px-7">
+    <header className="topbar-shell sticky top-0 z-40 flex h-14 items-center border-b px-5 lg:px-7">
       <div className="topbar-content mx-auto flex w-full max-w-[1680px] items-center justify-between gap-4">
         <div className="min-w-0 lg:w-[220px]">
           <p className="hidden text-[11px] font-medium text-slate-500 lg:block">Área de trabalho</p>
@@ -82,13 +82,17 @@ export default function DashboardTopbar({
 function NotificationsMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
       if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsOpen(false);
+      if (event.key === "Escape" && isOpen) {
+        setIsOpen(false);
+        buttonRef.current?.focus({ preventScroll: true });
+      }
     }
     document.addEventListener("mousedown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
@@ -96,7 +100,7 @@ function NotificationsMenu() {
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [isOpen]);
 
   return (
     <div className="relative" ref={menuRef}>
@@ -106,6 +110,7 @@ function NotificationsMenu() {
         aria-label="Notificações"
         className="topbar-icon-button inline-flex h-9 w-9 items-center justify-center rounded-md"
         onClick={() => setIsOpen((current) => !current)}
+        ref={buttonRef}
         title="Notificações"
         type="button"
       >
@@ -116,14 +121,14 @@ function NotificationsMenu() {
         <div aria-label="Notificações" className="user-menu absolute right-0 top-11 z-[240] w-72 overflow-hidden rounded-lg border shadow-lg" role="dialog">
           <div className="border-b border-[var(--border-default)] px-4 py-3">
             <p className="text-[12px] font-semibold text-[var(--text-primary)]">Notificações</p>
-            <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Atualizações da operação comercial</p>
+            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Atualizações da operação comercial</p>
           </div>
           <div className="flex flex-col items-center px-5 py-7 text-center">
             <span className="flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--icon-muted)]">
               <Bell size={16} />
             </span>
             <p className="mt-3 text-[11px] font-semibold text-[var(--text-primary)]">Nenhuma notificação disponível</p>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--text-muted)]">Os alertas operacionais continuam disponíveis nas áreas correspondentes.</p>
+            <p className="mt-1 text-[11px] leading-4 text-[var(--text-muted)]">Os alertas operacionais continuam disponíveis nas áreas correspondentes.</p>
           </div>
         </div>
       )}
@@ -134,6 +139,7 @@ function NotificationsMenu() {
 function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; onLogout: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const displayName = authSession?.usuario.nome || "Usuário local";
   const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel);
   const companyName = authSession?.empresa?.nome || "CRM Agro SaaS";
@@ -143,7 +149,10 @@ function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; 
       if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsOpen(false);
+      if (event.key === "Escape" && isOpen) {
+        setIsOpen(false);
+        buttonRef.current?.focus({ preventScroll: true });
+      }
     }
     document.addEventListener("mousedown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
@@ -151,7 +160,7 @@ function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; 
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [isOpen]);
 
   return (
     <div ref={menuRef} className="relative">
@@ -161,6 +170,7 @@ function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; 
         aria-label="Abrir menu do usuário"
         className="topbar-user-button flex h-9 items-center gap-2 rounded-md px-1.5 pr-2"
         onClick={() => setIsOpen((current) => !current)}
+        ref={buttonRef}
         type="button"
       >
         <span className="user-avatar flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold">
@@ -174,13 +184,13 @@ function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; 
         <div className="user-menu absolute right-0 top-11 z-[240] w-64 rounded-lg border p-2 shadow-lg" role="menu">
           <div className="border-b px-2.5 pb-3 pt-2">
             <p className="truncate text-[12px] font-semibold">{displayName}</p>
-            <p className="mt-0.5 truncate text-[10px] text-slate-500">{roleLabel}</p>
+            <p className="mt-0.5 truncate text-[11px] text-slate-500">{roleLabel}</p>
           </div>
 
           <div className="my-1 flex items-start gap-2.5 rounded-md px-2.5 py-2.5">
             <Building2 size={14} className="mt-0.5 shrink-0 text-slate-500" />
             <div className="min-w-0">
-              <p className="text-[10px] text-slate-500">Empresa</p>
+              <p className="text-[11px] text-slate-500">Empresa</p>
               <p className="truncate text-[11px] font-medium">{companyName}</p>
             </div>
           </div>

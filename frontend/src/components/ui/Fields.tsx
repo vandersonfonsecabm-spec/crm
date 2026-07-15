@@ -18,7 +18,7 @@ function FieldFrame({ children, containerClassName, error, helperText, id, label
       {label && <label className="text-[11px] font-medium text-[var(--text-secondary)]" htmlFor={id}>{label}</label>}
       {children}
       {(error || helperText) && (
-        <p className={cx("text-[10px] leading-4", error ? "text-[var(--danger)]" : "text-[var(--text-muted)]")} id={descriptionId}>
+        <p className={cx("text-[11px] leading-4", error ? "text-[var(--danger)]" : "text-[var(--text-muted)]")} id={descriptionId}>
           {error ?? helperText}
         </p>
       )}
