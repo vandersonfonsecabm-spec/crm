@@ -98,9 +98,9 @@ export default function DashboardKanbanBoard({
   }
 
   return (
-    <section className="space-y-2">
+    <section className="space-y-3">
       <Surface className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
           <div>
             <p className="text-sm font-semibold text-[var(--text-primary)]">Pipeline de negócios</p>
             <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{kanbanClients.length} oportunidades · arraste entre etapas ou abra os detalhes.</p>
@@ -149,7 +149,8 @@ export default function DashboardKanbanBoard({
         </details>
       </Surface>
 
-      <div className={`grid gap-2 ${visibleStatuses.length === 2 ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
+      <div className="overflow-x-auto pb-1">
+        <div className={`grid gap-3 ${visibleStatuses.length === 2 ? "min-w-[680px] grid-cols-2" : "min-w-[960px] grid-cols-3"}`}>
           {visibleStatuses.map((status) => {
             const stageClients = kanbanClients.filter((client) => client.status === status);
             const stageValue = stageClients.reduce((sum, client) => sum + client.value, 0);
@@ -177,7 +178,7 @@ export default function DashboardKanbanBoard({
                   setDragOverStatus(null);
                   setIsDraggingKanban(false);
                 }}
-                className={`min-h-[280px] min-w-0 rounded-lg border bg-[var(--bg-surface)] p-2 transition-colors ${
+                className={`min-h-[340px] min-w-0 rounded-lg border bg-[var(--bg-surface)] p-2.5 transition-colors ${
                   isDropTarget
                     ? "border-[var(--primary)] bg-[var(--surface-subtle)] shadow-[inset_0_0_0_1px_var(--primary)]"
                     : "border-[var(--border-default)]"
@@ -214,13 +215,13 @@ export default function DashboardKanbanBoard({
                         {stageClients.length}
                       </span>
 
-                      <p className="mt-1 max-w-[112px] truncate text-[11px] font-medium text-[var(--text-secondary)]">
+                      <p className="mt-1 max-w-[112px] truncate text-[11px] font-medium tabular-nums text-[var(--text-secondary)]">
                         {money(stageValue)}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-2.5 py-1.5 text-[11px] text-[var(--text-muted)]">
+                  <div className="flex items-center gap-3 border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-2.5 py-1.5 text-[11px] tabular-nums text-[var(--text-muted)]">
                     <span>Score <strong className="font-medium text-[var(--text-secondary)]">{stageScore}</strong></span>
                     <span>Risco <strong className="font-medium text-[var(--text-secondary)]">{stageRiskCount}</strong></span>
                     <span>Hoje <strong className="font-medium text-[var(--text-secondary)]">{stageTodayCount}</strong></span>
@@ -268,6 +269,7 @@ export default function DashboardKanbanBoard({
               </div>
             );
           })}
+        </div>
       </div>
     </section>
   );

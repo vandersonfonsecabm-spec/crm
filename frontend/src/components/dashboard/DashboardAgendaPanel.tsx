@@ -239,6 +239,8 @@ export default function DashboardAgendaPanel({
       .slice(0, 4),
     [periodItems],
   );
+  const silentClientsCount = clients.filter((client) => client.lastContactDays >= 7).length;
+  const proposalClientsCount = clients.filter((client) => client.status === "Proposta").length;
 
   function moveWeek(offset: number) {
     setWeekStart((current) => addDays(current, offset * 7));
@@ -357,7 +359,7 @@ export default function DashboardAgendaPanel({
   }
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-3 pb-8">
       {toast && (
         <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3 text-xs font-semibold text-[var(--text-primary)] shadow-[var(--shadow-md)]">
           {toast}
@@ -368,9 +370,9 @@ export default function DashboardAgendaPanel({
         <Toolbar className="min-h-12 gap-3 px-3 py-2">
           <div className="flex items-center gap-1.5">
             <IconButton aria-label="Semana anterior" onClick={() => moveWeek(-1)} variant="secondary"><ChevronLeft size={14} /></IconButton>
-            <div className="min-w-[154px] text-center">
-              <p className="text-[11px] font-semibold text-[var(--text-primary)]">{formatWeekLabel(weekStart, weekEnd)}</p>
-              <p className="text-[10px] text-[var(--text-muted)]">Semana comercial</p>
+            <div className="min-w-[170px] text-center">
+              <p className="text-xs font-semibold tabular-nums text-[var(--text-primary)]">{formatWeekLabel(weekStart, weekEnd)}</p>
+              <p className="text-[11px] text-[var(--text-muted)]">Semana comercial</p>
             </div>
             <IconButton aria-label="Próxima semana" onClick={() => moveWeek(1)} variant="secondary"><ChevronRight size={14} /></IconButton>
             <Button onClick={goToToday} size="sm" variant="ghost">Hoje</Button>
@@ -385,7 +387,7 @@ export default function DashboardAgendaPanel({
             </button>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-[var(--text-muted)]">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)]">
             <RefreshCw aria-hidden="true" size={12} /> {backendCaption}
           </span>
         </Toolbar>
@@ -402,8 +404,8 @@ export default function DashboardAgendaPanel({
 
       <DashboardMetricStrip metrics={[
         { label: "Acompanhamentos hoje", value: String(statusCounts.today), context: "Agenda imediata", icon: <Bell size={15} />, tone: "info", onClick: goToToday, actionLabel: "Filtrar" },
-        { label: "Sem contato", value: String(clients.filter((client) => client.lastContactDays >= 7).length), context: "Retomar relação", icon: <AlertTriangle size={15} />, tone: "danger" },
-        { label: "Propostas", value: String(clients.filter((client) => client.status === "Proposta").length), context: "Janelas abertas", icon: <Target size={15} />, tone: "warning" },
+        { label: "Sem contato", value: String(silentClientsCount), context: "Retomar relação", icon: <AlertTriangle size={15} />, tone: silentClientsCount > 0 ? "danger" : "default" },
+        { label: "Propostas", value: String(proposalClientsCount), context: "Janelas abertas", icon: <Target size={15} />, tone: proposalClientsCount > 0 ? "warning" : "default" },
         { label: "Notas recentes", value: String(clients.reduce((sum, client) => sum + client.notes.length, 0)), context: "Histórico comercial", icon: <StickyNote size={15} /> },
       ]} />
 
@@ -413,7 +415,7 @@ export default function DashboardAgendaPanel({
         onSelect={selectAgendaStatus}
       />
 
-      <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <section className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
         <Surface className="min-w-0 overflow-hidden">
           <SectionHeader
             description={viewMode === "list" ? "Contatos e retornos da semana, com filtros e ações preservados." : "Acompanhamentos agrupados por dia para leitura temporal rápida."}
@@ -505,7 +507,7 @@ export default function DashboardAgendaPanel({
               <div key={activity.id} className="px-4 py-2.5">
                 <div className="flex items-start justify-between gap-2">
                   <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{activity.client}</p>
-                  <span className="shrink-0 text-[10px] text-[var(--text-muted)]">{activity.date}</span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">{activity.date}</span>
                 </div>
                 <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[var(--text-muted)]">{activity.text}</p>
               </div>
@@ -558,7 +560,7 @@ function AgendaNextCommitment({
             <Clock size={15} />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-medium text-[var(--text-muted)]">Próximo compromisso</p>
+            <p className="text-[11px] font-medium text-[var(--text-muted)]">Próximo compromisso</p>
             {isLoading ? (
               <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Carregando agenda...</p>
             ) : item ? (
@@ -612,7 +614,7 @@ function AgendaWeekView({
           <section className="grid border-b border-[var(--border-default)] last:border-b-0 md:grid-cols-[132px_minmax(0,1fr)]" key={day.toISOString()}>
             <header className="border-b border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 md:border-b-0 md:border-r">
               <p className="text-[11px] font-semibold capitalize text-[var(--text-primary)]">{formatWeekDay(day)}</p>
-              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{dayItems.length} {dayItems.length === 1 ? "compromisso" : "compromissos"}</p>
+              <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{dayItems.length} {dayItems.length === 1 ? "compromisso" : "compromissos"}</p>
             </header>
             <div className="divide-y divide-[var(--border-default)]">
               {dayItems.length === 0 ? (
@@ -651,25 +653,26 @@ function AgendaRow({
   onReschedule: (item: ApiAcompanhamento) => void;
   onAction: (item: ApiAcompanhamento, action: "concluir" | "reabrir" | "cancelar") => void;
 }) {
+  const isNeutral = item.status === "CONCLUIDO" || item.status === "CANCELADO";
   return (
-    <article className="px-4 py-3 transition-colors hover:bg-[var(--bg-muted)]">
-      <div className="grid min-w-0 gap-3 lg:grid-cols-[150px_minmax(0,1fr)_140px_120px] lg:items-center">
+    <article className={`px-4 py-3 transition-colors hover:bg-[var(--bg-muted)] ${isNeutral ? "bg-[var(--bg-muted)]" : ""}`}>
+      <div className="grid min-w-0 gap-3 lg:grid-cols-[112px_minmax(0,1fr)_120px_112px] lg:items-center">
         <div className="min-w-0">
-          <p className={`text-[11px] font-semibold ${item.atrasado ? "text-[var(--danger)]" : "text-[var(--primary)]"}`}>{formatDateTime(item.dataHora)}</p>
-          <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.responsavel || "Equipe"}</p>
+          <p className={`text-sm font-semibold tabular-nums ${item.atrasado ? "text-[var(--danger)]" : "text-[var(--primary)]"}`}>{formatTime(item.dataHora)}</p>
+          <p className="mt-0.5 truncate text-[11px] tabular-nums text-[var(--text-muted)]">{formatDateLabel(item.dataHora)} · {item.responsavel || "Equipe"}</p>
         </div>
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{item.titulo}</p>
           <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Cliente"} · {item.cliente?.empresa || "Carteira comercial"}</p>
           {item.descricao && <p className="mt-1 line-clamp-1 text-[11px] text-[var(--text-muted)]">{item.descricao}</p>}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${statusTone(item.status)}`}>{statusLabel(item.status)}</span>
-          {item.atrasado && <span className="rounded-full border border-[var(--danger)] px-2 py-0.5 text-[10px] text-[var(--danger)]">Atrasado</span>}
-        </div>
-        <div className="min-w-0 text-left lg:text-right">
+        <div className="min-w-0">
           <p className="text-[11px] font-medium text-[var(--text-secondary)]">{typeLabel(item.tipo)}</p>
           <p className={`mt-0.5 text-[11px] ${priorityTone(item.prioridade)}`}>{priorityLabel(item.prioridade)}</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5 lg:justify-end">
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] ${statusTone(item.status)}`}>{statusLabel(item.status)}</span>
+          {item.atrasado && <span className="rounded-full border border-[var(--danger)] px-2 py-0.5 text-[11px] text-[var(--danger)]">Atrasado</span>}
         </div>
       </div>
 
@@ -818,8 +821,8 @@ function AgendaModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div aria-labelledby="agenda-modal-title" aria-modal="true" className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 text-white shadow-2xl" ref={dialogRef} role="dialog">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+      <div aria-labelledby="agenda-modal-title" aria-modal="true" className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-lg p-4 text-white shadow-2xl" ref={dialogRef} role="dialog">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold" id="agenda-modal-title">{title}</p>
@@ -830,31 +833,40 @@ function AgendaModal({
           </button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-3">
           {!isReschedule && (
-            <>
-              <Select disabled={isSubmitting} label="Cliente" onChange={(event) => setForm({ ...form, clienteId: event.target.value })} value={form.clienteId}>
+            <section aria-labelledby="agenda-information-title">
+              <p className="mb-2 text-[11px] font-semibold text-[var(--text-secondary)]" id="agenda-information-title">Informações</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Select disabled={isSubmitting} label="Cliente" onChange={(event) => setForm({ ...form, clienteId: event.target.value })} value={form.clienteId}>
                   <option value="">Selecione</option>
                   {clients.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}
-              </Select>
-              <Input disabled={isSubmitting} label="Título" onChange={(event) => setForm({ ...form, titulo: event.target.value })} value={form.titulo} />
-            </>
+                </Select>
+                <Input disabled={isSubmitting} label="Título" onChange={(event) => setForm({ ...form, titulo: event.target.value })} value={form.titulo} />
+                <Select disabled={isSubmitting} label="Prioridade" onChange={(event) => setForm({ ...form, prioridade: event.target.value as ApiAcompanhamentoPrioridade })} value={form.prioridade}>
+                  {PRIORITIES.filter((item) => item !== "Todas").map((item) => <option key={item} value={item}>{priorityLabel(item)}</option>)}
+                </Select>
+                <Select disabled={isSubmitting} label="Tipo" onChange={(event) => setForm({ ...form, tipo: event.target.value as ApiAcompanhamentoTipo })} value={form.tipo}>
+                  {TYPES.filter((item) => item !== "Todos").map((item) => <option key={item} value={item}>{typeLabel(item)}</option>)}
+                </Select>
+                <Input containerClassName="md:col-span-2" disabled={isSubmitting} label="Responsável" onChange={(event) => setForm({ ...form, responsavel: event.target.value })} value={form.responsavel} />
+              </div>
+            </section>
           )}
 
-          <Input disabled={isSubmitting} label="Data" onChange={(event) => setForm({ ...form, data: event.target.value })} type="date" value={form.data} />
-          <Input disabled={isSubmitting} label="Horário" onChange={(event) => setForm({ ...form, hora: event.target.value })} type="time" value={form.hora} />
+          <section aria-labelledby="agenda-schedule-title" className={isReschedule ? "" : "border-t border-[var(--border-default)] pt-3"}>
+            <p className="mb-2 text-[11px] font-semibold text-[var(--text-secondary)]" id="agenda-schedule-title">Data e horário</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input disabled={isSubmitting} label="Data" onChange={(event) => setForm({ ...form, data: event.target.value })} type="date" value={form.data} />
+              <Input disabled={isSubmitting} label="Horário" onChange={(event) => setForm({ ...form, hora: event.target.value })} type="time" value={form.hora} />
+            </div>
+          </section>
 
           {!isReschedule && (
-            <>
-              <Select disabled={isSubmitting} label="Prioridade" onChange={(event) => setForm({ ...form, prioridade: event.target.value as ApiAcompanhamentoPrioridade })} value={form.prioridade}>
-                  {PRIORITIES.filter((item) => item !== "Todas").map((item) => <option key={item} value={item}>{priorityLabel(item)}</option>)}
-              </Select>
-              <Select disabled={isSubmitting} label="Tipo" onChange={(event) => setForm({ ...form, tipo: event.target.value as ApiAcompanhamentoTipo })} value={form.tipo}>
-                  {TYPES.filter((item) => item !== "Todos").map((item) => <option key={item} value={item}>{typeLabel(item)}</option>)}
-              </Select>
-              <Input disabled={isSubmitting} label="Responsável" onChange={(event) => setForm({ ...form, responsavel: event.target.value })} value={form.responsavel} />
+            <section aria-labelledby="agenda-notes-title" className="border-t border-[var(--border-default)] pt-3">
+              <p className="mb-2 text-[11px] font-semibold text-[var(--text-secondary)]" id="agenda-notes-title">Observação</p>
               <Textarea className="min-h-20 resize-none" disabled={isSubmitting} label="Descrição" onChange={(event) => setForm({ ...form, descricao: event.target.value })} value={form.descricao} />
-            </>
+            </section>
           )}
         </div>
 
@@ -981,6 +993,10 @@ function formatDateTime(value: string) {
     dateStyle: "short",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formatDateLabel(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(new Date(value));
 }
 
 function statusLabel(status: ApiAcompanhamentoStatus | "Todos") {

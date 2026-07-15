@@ -1,4 +1,5 @@
 import { GripVertical, MessageSquareText, Timer } from "lucide-react";
+import { useState } from "react";
 import type { Client, Status } from "../../types/dashboard";
 
 type KanbanLeadCardProps = {
@@ -43,6 +44,7 @@ export default function KanbanLeadCard({
   const isStrongLead = client.hot && score >= 80;
   const isRiskLead = risk === "Alto" || sla === "Crítico";
   const isAttentionLead = !isRiskLead && sla === "Atenção";
+  const [isDragging, setIsDragging] = useState(false);
   const urgencyLabel = isRiskLead ? "Risco" : isStrongLead ? "Quente" : isAttentionLead ? "Atenção" : "Estável";
   const semanticColor = isRiskLead ? "bg-[var(--danger)]" : isAttentionLead ? "bg-[var(--warning)]" : "bg-[var(--success)]";
   const semanticTextColor = isRiskLead ? "text-[var(--danger)]" : isAttentionLead ? "text-[var(--warning)]" : "text-[var(--success)]";
@@ -60,11 +62,13 @@ export default function KanbanLeadCard({
       draggable
       onClick={openDetails}
       onDragEnd={() => {
+        setIsDragging(false);
         setDragOverStatus(null);
         setIsDraggingKanban(false);
       }}
       onDragStart={(event) => {
         event.dataTransfer.setData("clientId", String(client.id));
+        setIsDragging(true);
         setIsDraggingKanban(true);
       }}
       onKeyDown={(event) => {
@@ -75,7 +79,7 @@ export default function KanbanLeadCard({
       }}
       role="button"
       tabIndex={0}
-      className={`group relative min-w-0 cursor-grab overflow-hidden rounded-md border bg-[var(--bg-surface)] p-2.5 text-left shadow-sm transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] active:cursor-grabbing ${
+      className={`group relative min-w-0 cursor-grab overflow-hidden rounded-md border bg-[var(--bg-surface)] p-2.5 text-left shadow-sm transition-[border-color,background-color,opacity,box-shadow] hover:border-[var(--border-strong)] hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] active:cursor-grabbing ${isDragging ? "opacity-60 ring-2 ring-[var(--control-ring)]" : ""} ${
         isSelected ? "border-[var(--primary)] bg-[var(--bg-muted)] ring-1 ring-[var(--control-ring)]" : "border-[var(--border-default)]"
       }`}
     >
@@ -94,11 +98,11 @@ export default function KanbanLeadCard({
 
       <div className="mt-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{money(client.value)}</p>
+          <p className="truncate text-xs font-semibold tabular-nums text-[var(--text-primary)]">{money(client.value)}</p>
           <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{forecastLabel(client)}</p>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-xs font-semibold text-[var(--text-primary)]">{score}</p>
+          <p className="text-xs font-semibold tabular-nums text-[var(--text-primary)]">{score}</p>
           <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Score</p>
         </div>
       </div>

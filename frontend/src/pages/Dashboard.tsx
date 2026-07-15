@@ -546,8 +546,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
             showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes" && activePage !== "kanban"}
-            showBackendCaption={!(["dashboard", "comercial", "clientes", "agenda", "integracoes", "automacoes"] as ActivePage[]).includes(activePage)}
-            compact={(["dashboard", "comercial", "clientes", "agenda"] as ActivePage[]).includes(activePage)}
+            showBackendCaption={!(["dashboard", "comercial", "clientes", "kanban", "agenda", "integracoes", "automacoes"] as ActivePage[]).includes(activePage)}
+            compact={(["dashboard", "comercial", "clientes", "kanban", "agenda"] as ActivePage[]).includes(activePage)}
             primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : undefined}
             actions={pageActions}
           />
@@ -610,7 +610,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && (
             <DashboardOperationalSearch
               activePage={activePage}
-              metadata={activePage === "clientes" ? backendCaption : undefined}
+              metadata={activePage === "clientes" || activePage === "kanban" ? backendCaption : undefined}
               filteredClientsCount={filteredClients.length}
               activeFiltersCount={activeFiltersCount}
               search={search}
@@ -633,7 +633,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           )}
 
           {activePage !== "dashboard" && <section
-            className={`${activePage === "comercial" || activePage === "clientes" ? "mt-3" : "mt-4"} ${
+            className={`${activePage === "comercial" || activePage === "clientes" || activePage === "kanban" ? "mt-3" : "mt-4"} ${
               activePage === "comercial"
                 ? "block"
                 : activePage === "clientes" || activePage === "kanban"
@@ -647,7 +647,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
             }`}
           >
-            <div className={activePage === "comercial" || activePage === "clientes" ? "space-y-3" : "space-y-4"}>
+            <div className={activePage === "comercial" || activePage === "clientes" || activePage === "kanban" ? "space-y-3" : "space-y-4"}>
               {activePage === "clientes" && (
                 <>
                   <DashboardClientsTable
