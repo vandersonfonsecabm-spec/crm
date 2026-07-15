@@ -713,39 +713,7 @@ function AgendaModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const isSubmittingRef = useRef(isSubmitting);
-
-  useEffect(() => {
-    const documentElement = document.documentElement;
-    const body = document.body;
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-    const scrollbarWidth = Math.max(0, window.innerWidth - documentElement.clientWidth);
-    const bodyPaddingRight = Number.parseFloat(window.getComputedStyle(body).paddingRight) || 0;
-    const previousStyles = {
-      documentHadStyleAttribute: documentElement.hasAttribute("style"),
-      documentOverflow: documentElement.style.overflow,
-      bodyHadStyleAttribute: body.hasAttribute("style"),
-      bodyOverflow: body.style.overflow,
-      bodyPaddingRight: body.style.paddingRight,
-    };
-
-    documentElement.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) body.style.paddingRight = `${bodyPaddingRight + scrollbarWidth}px`;
-
-    return () => {
-      documentElement.style.overflow = previousStyles.documentOverflow;
-      body.style.overflow = previousStyles.bodyOverflow;
-      body.style.paddingRight = previousStyles.bodyPaddingRight;
-      if (!previousStyles.documentHadStyleAttribute && documentElement.style.length === 0) {
-        documentElement.removeAttribute("style");
-      }
-      if (!previousStyles.bodyHadStyleAttribute && body.style.length === 0) {
-        body.removeAttribute("style");
-      }
-      window.scrollTo({ left: scrollX, top: scrollY, behavior: "auto" });
-    };
-  }, []);
+  const restoreScrollFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -757,12 +725,43 @@ function AgendaModal({
     const dialog = dialogRef.current;
     if (!dialog) return;
 
+    if (restoreScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(restoreScrollFrameRef.current);
+      restoreScrollFrameRef.current = null;
+    }
+
+    const documentElement = document.documentElement;
+    const body = document.body;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const scrollbarWidth = Math.max(0, window.innerWidth - documentElement.clientWidth);
+    const bodyPaddingRight = Number.parseFloat(window.getComputedStyle(body).paddingRight) || 0;
+    const previousStyles = {
+      documentHadStyleAttribute: documentElement.hasAttribute("style"),
+      documentOverflow: documentElement.style.overflow,
+      bodyHadStyleAttribute: body.hasAttribute("style"),
+      bodyOverflow: body.style.overflow,
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyLeft: body.style.left,
+      bodyWidth: body.style.width,
+      bodyPaddingRight: body.style.paddingRight,
+    };
+
+    body.style.position = "fixed";
+    body.style.top = `${-scrollY}px`;
+    body.style.left = `${-scrollX}px`;
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) body.style.paddingRight = `${bodyPaddingRight + scrollbarWidth}px`;
+    documentElement.style.overflow = "hidden";
+
     const getFocusableElements = () => Array.from(dialog.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     )).filter((element) => !element.hidden);
 
     const initialFocus = dialog.querySelector<HTMLElement>('select:not([disabled]), input:not([disabled]), textarea:not([disabled]), button:not([disabled])');
-    initialFocus?.focus();
+    initialFocus?.focus({ preventScroll: true });
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !isSubmittingRef.current) {
@@ -782,17 +781,39 @@ function AgendaModal({
       const lastElement = focusableElements[focusableElements.length - 1];
       if (event.shiftKey && document.activeElement === firstElement) {
         event.preventDefault();
-        lastElement.focus();
+        lastElement.focus({ preventScroll: true });
       } else if (!event.shiftKey && document.activeElement === lastElement) {
         event.preventDefault();
-        firstElement.focus();
+        firstElement.focus({ preventScroll: true });
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      if (previousFocus && document.contains(previousFocus)) previousFocus.focus();
+
+      documentElement.style.overflow = previousStyles.documentOverflow;
+      body.style.overflow = previousStyles.bodyOverflow;
+      body.style.position = previousStyles.bodyPosition;
+      body.style.top = previousStyles.bodyTop;
+      body.style.left = previousStyles.bodyLeft;
+      body.style.width = previousStyles.bodyWidth;
+      body.style.paddingRight = previousStyles.bodyPaddingRight;
+      if (!previousStyles.documentHadStyleAttribute && documentElement.style.length === 0) {
+        documentElement.removeAttribute("style");
+      }
+      if (!previousStyles.bodyHadStyleAttribute && body.style.length === 0) {
+        body.removeAttribute("style");
+      }
+
+      window.scrollTo({ left: scrollX, top: scrollY, behavior: "auto" });
+      if (previousFocus?.isConnected && document.contains(previousFocus)) {
+        previousFocus.focus({ preventScroll: true });
+      }
+      restoreScrollFrameRef.current = window.requestAnimationFrame(() => {
+        window.scrollTo({ left: scrollX, top: scrollY, behavior: "auto" });
+        restoreScrollFrameRef.current = null;
+      });
     };
   }, []);
 
