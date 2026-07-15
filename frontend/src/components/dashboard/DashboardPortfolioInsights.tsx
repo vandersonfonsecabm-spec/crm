@@ -57,28 +57,29 @@ export default function DashboardPortfolioInsights({
             <div className="divide-y divide-[var(--border-default)]">
               {attentionClients.map((client) => (
                 <button
-                  className="grid w-full min-w-0 gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] md:grid-cols-[minmax(0,1fr)_150px_auto] md:items-center"
+                  aria-label={`Abrir ${client.name}, próxima ação ${client.nextFollowUp}`}
+                  className="grid w-full min-w-0 gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] md:grid-cols-[minmax(0,1fr)_132px_124px] md:items-center"
                   key={client.id}
                   onClick={() => onOpenClient(client.id)}
                   type="button"
                 >
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
-                      <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{client.name}</p>
+                      <p className="truncate text-xs font-semibold text-[var(--text-primary)]" title={client.name}>{client.name}</p>
                       {client.hot && <Flame aria-label="Oportunidade quente" className="shrink-0 text-[var(--warning)]" size={13} />}
                     </div>
                     <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{client.company} · {attentionReason(client, getRisk)} · {enterpriseHealthLabel(client)}</p>
                   </div>
 
                   <div className="min-w-0">
-                    <p className="text-[10px] text-[var(--text-muted)]">Próxima ação</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">Próxima ação</p>
                     <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--text-secondary)]">{client.nextFollowUp}</p>
                   </div>
 
                   <div className="flex items-center justify-between gap-3 md:justify-end">
-                    <div className="text-right">
-                      <p className="text-[10px] text-[var(--text-muted)]">{money(client.value)}</p>
-                      <p className="text-[10px] font-medium text-[var(--text-secondary)]">Score {getLeadScore(client)}</p>
+                    <div className="text-right tabular-nums">
+                      <p className="text-[11px] text-[var(--text-muted)]">{money(client.value)}</p>
+                      <p className="text-[11px] font-medium text-[var(--text-secondary)]">Score {getLeadScore(client)}</p>
                     </div>
                     <ArrowRight aria-hidden="true" className="text-[var(--icon-muted)]" size={14} />
                   </div>
@@ -100,7 +101,7 @@ export default function DashboardPortfolioInsights({
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-xs font-semibold text-[var(--text-primary)]">Resumo comercial</p>
-              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">Distribuição atual do pipeline.</p>
+              <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Distribuição atual do pipeline.</p>
             </div>
             <Target className="text-[var(--icon-muted)]" size={15} />
           </div>
@@ -130,7 +131,7 @@ export default function DashboardPortfolioInsights({
             <SummaryValue icon={<Clock3 size={13} />} label="Propostas" value={money(proposalValue)} />
           </dl>
 
-          <p className="mt-4 border-t border-[var(--border-default)] pt-3 text-[10px] leading-4 text-[var(--text-muted)]">
+          <p className="mt-4 border-t border-[var(--border-default)] pt-3 text-[11px] leading-4 text-[var(--text-muted)]">
             <strong className="font-medium text-[var(--text-secondary)]">Ação sugerida:</strong> {suggestedAction}
           </p>
 
@@ -143,7 +144,7 @@ export default function DashboardPortfolioInsights({
 function SummaryValue({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <div className="flex items-center gap-1 text-[var(--icon-muted)]">{icon}<dt className="text-[10px] text-[var(--text-muted)]">{label}</dt></div>
+      <div className="flex items-center gap-1 text-[var(--icon-muted)]">{icon}<dt className="text-[11px] text-[var(--text-muted)]">{label}</dt></div>
       <dd className="mt-1 truncate text-xs font-semibold text-[var(--text-primary)]">{value}</dd>
     </div>
   );

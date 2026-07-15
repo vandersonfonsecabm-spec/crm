@@ -33,7 +33,7 @@ export default function DashboardClientTimeline({
 
             <div className="min-w-0">
               <p className="text-xs font-semibold">Histórico comercial</p>
-              <p className="mt-0.5 text-[10px] text-slate-500">
+              <p className="mt-0.5 text-[11px] text-slate-500">
                 Últimas interações e próximos contatos
               </p>
             </div>
@@ -66,9 +66,9 @@ export default function DashboardClientTimeline({
               <div className="min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[11px] font-semibold text-slate-100">Ação recomendada</p>
-                  <span className="saas-chip rounded-full px-2 py-0.5 text-[9px]">ação</span>
+                  <span className="saas-chip rounded-full px-2 py-0.5 text-[10px]">ação</span>
                 </div>
-                <p className="mt-1 text-[10px] leading-relaxed text-slate-400">
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
                   {getLeadScore(selectedClient) >= 80
                     ? "Priorizar contato hoje e conduzir para fechamento."
                     : getRisk(selectedClient) === "Alto"
@@ -81,12 +81,12 @@ export default function DashboardClientTimeline({
 
           <div className="rounded-xl border border-slate-500/12 bg-slate-950/18 px-2.5 py-2">
             <div className="mb-1.5 flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              <p className="text-[11px] font-semibold text-slate-500">
                 Próximo contato
               </p>
-              <span className="text-[10px] font-semibold text-slate-300">{selectedClient.nextFollowUp}</span>
+              <span className="text-[11px] font-semibold text-slate-300">{selectedClient.nextFollowUp}</span>
             </div>
-            <p className="text-[10px] text-slate-500">{idleLabel} sem contato registrado.</p>
+            <p className="text-[11px] text-slate-500">{idleLabel} sem contato registrado.</p>
           </div>
 
           {latestNote ? (
@@ -99,7 +99,7 @@ export default function DashboardClientTimeline({
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <p className="text-[11px] font-semibold text-slate-200">Última interação</p>
-                    <span className="shrink-0 text-[9px] text-slate-600">{latestNote.date}</span>
+                    <span className="shrink-0 text-[10px] tabular-nums text-slate-600">{latestNote.date}</span>
                   </div>
 
                   <p className="line-clamp-2 text-[11px] leading-relaxed text-slate-400">{latestNote.text}</p>
@@ -109,13 +109,13 @@ export default function DashboardClientTimeline({
           ) : (
             <div className="saas-tile rounded-xl p-2.5">
               <p className="text-[11px] text-slate-500">Nenhuma nota adicionada ainda.</p>
-              <p className="mt-1 text-[10px] text-slate-600">Registre ligações, propostas, objeções e próximos passos.</p>
+              <p className="mt-1 text-[11px] text-slate-600">Registre ligações, propostas, objeções e próximos passos.</p>
             </div>
           )}
 
           {olderNotes.length > 0 && (
             <details className="rounded-xl border border-slate-500/12 bg-slate-950/18 px-2.5 py-2">
-              <summary className="cursor-pointer select-none text-[10px] font-semibold text-slate-400 transition hover:text-slate-200">
+              <summary className="cursor-pointer select-none text-[11px] font-semibold text-slate-400 transition hover:text-slate-200">
                 Ver histórico completo ({selectedClient.notes.length})
               </summary>
 
@@ -123,10 +123,10 @@ export default function DashboardClientTimeline({
                 {olderNotes.map((note) => (
                   <div key={note.id} className="rounded-lg border border-slate-500/10 bg-slate-950/24 px-2 py-1.5">
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-semibold text-slate-300">Registro comercial</p>
-                      <span className="shrink-0 text-[9px] text-slate-600">{note.date}</span>
+                      <p className="text-[11px] font-semibold text-slate-300">Registro comercial</p>
+                      <span className="shrink-0 text-[10px] tabular-nums text-slate-600">{note.date}</span>
                     </div>
-                    <p className="text-[10px] leading-relaxed text-slate-500">{note.text}</p>
+                    <p className="text-[11px] leading-relaxed text-slate-500">{note.text}</p>
                   </div>
                 ))}
               </div>

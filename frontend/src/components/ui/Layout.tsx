@@ -31,7 +31,7 @@ export function SectionHeader({ actions, className, description, icon, status, t
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h2>
             {status}
           </div>
-          {description && <p className="mt-0.5 text-[10px] leading-4 text-[var(--text-muted)]">{description}</p>}
+          {description && <p className="mt-0.5 text-[11px] leading-4 text-[var(--text-muted)]">{description}</p>}
         </div>
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

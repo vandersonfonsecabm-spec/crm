@@ -65,16 +65,16 @@ export default function DashboardClientsTable({
       />
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1080px] table-fixed border-collapse text-left">
+        <table className="w-full min-w-[1000px] table-fixed border-collapse text-left">
           <thead className="bg-[var(--bg-muted)] text-[11px] font-medium text-[var(--text-secondary)]">
             <tr className="border-b border-[var(--border-default)]">
-              <th className="w-[24%] px-4 py-2.5 font-medium">Cliente</th>
-              <th className="w-[17%] px-3 py-2.5 font-medium">Contato principal</th>
-              <th className="w-[11%] px-3 py-2.5 font-medium">Status</th>
-              <th className="w-[15%] px-3 py-2.5 font-medium">Oportunidade</th>
-              <th className="w-[10%] px-3 py-2.5 font-medium">Score</th>
+              <th className="w-[22%] px-4 py-2.5 font-medium">Cliente</th>
+              <th className="w-[16%] px-3 py-2.5 font-medium">Contato principal</th>
+              <th className="w-[9%] px-3 py-2.5 font-medium">Status</th>
+              <th className="w-[14%] px-3 py-2.5 text-right font-medium">Oportunidade</th>
+              <th className="w-[12%] px-3 py-2.5 font-medium">Score</th>
               <th className="w-[14%] px-3 py-2.5 font-medium">Próxima ação</th>
-              <th className="w-[9%] px-3 py-2.5 text-right font-medium">Ações</th>
+              <th className="w-[13%] px-3 py-2.5 text-right font-medium">Ações</th>
             </tr>
           </thead>
 
@@ -166,17 +166,17 @@ function ClientTableRow({
       className={`group transition-colors hover:bg-[var(--bg-muted)] ${selected ? "bg-[var(--bg-muted)] shadow-[inset_3px_0_0_var(--primary)]" : "bg-[var(--bg-surface)]"}`}
     >
       <td className="px-4 py-3 align-middle">
-        <button className="flex w-full min-w-0 items-center gap-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]" onClick={() => onSelectClient(client.id)} type="button">
+        <button aria-label={`Abrir detalhes de ${client.name}`} className="flex w-full min-w-0 items-center gap-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]" onClick={() => onSelectClient(client.id)} type="button">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--surface-subtle)] text-[11px] font-semibold text-[var(--text-secondary)]">
             {initials(client.name)}
           </span>
           <span className="min-w-0">
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-xs font-semibold text-[var(--text-primary)]">{client.name}</span>
+              <span className="truncate text-xs font-semibold text-[var(--text-primary)]" title={client.name}>{client.name}</span>
               {client.favorite && <Star aria-label="Favorito" className="shrink-0 fill-[var(--warning)] text-[var(--warning)]" size={12} />}
-              {client.hot && <Flame aria-label="Oportunidade quente" className="shrink-0 text-[var(--danger)]" size={12} />}
+              {client.hot && <Flame aria-label="Oportunidade quente" className="shrink-0 text-[var(--warning)]" size={12} />}
             </span>
-            <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]">
+            <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]" title={client.company}>
               {client.company}{tags.length > 0 ? ` · ${tags.join(" · ")}` : ""}{hiddenTags > 0 ? ` · +${hiddenTags}` : ""}
             </span>
           </span>
@@ -192,13 +192,13 @@ function ClientTableRow({
         <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] ${statusClass(client.status)}`}>{client.status}</span>
       </td>
 
-      <td className="px-3 py-3 align-middle">
+      <td className="px-3 py-3 text-right align-middle tabular-nums">
         <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{money(client.value)}</p>
         <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{getPriority(client)} · Risco {getRisk(client)}</p>
       </td>
 
       <td className="px-3 py-3 align-middle">
-        <div className="flex items-center justify-between gap-2 text-[11px]">
+        <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums">
           <span className="font-semibold text-[var(--text-primary)]">{score}</span>
           <span className="truncate text-[var(--text-muted)]">{forecastLabel(client)}</span>
         </div>
@@ -208,7 +208,7 @@ function ClientTableRow({
       </td>
 
       <td className="px-3 py-3 align-middle">
-        <p className="truncate text-[11px] font-medium text-[var(--text-primary)]">{client.nextFollowUp}</p>
+        <p className="truncate text-[11px] font-medium text-[var(--text-primary)]" title={client.nextFollowUp}>{client.nextFollowUp}</p>
         <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{leadOwner(client)} · {idleLabel(client)}</p>
       </td>
 
@@ -218,7 +218,7 @@ function ClientTableRow({
             <Star className={client.favorite ? "fill-[var(--warning)] text-[var(--warning)]" : ""} size={14} />
           </IconButton>
           <IconButton aria-label={client.hot ? "Remover dos quentes" : "Marcar como quente"} aria-pressed={client.hot} onClick={() => onToggleHot(client.id)}>
-            <Flame className={client.hot ? "text-[var(--danger)]" : ""} size={14} />
+            <Flame className={client.hot ? "text-[var(--warning)]" : ""} size={14} />
           </IconButton>
           <IconButton aria-label="Abrir WhatsApp" className="hover:text-[var(--primary)]" onClick={() => onRequestWhatsapp(client)}>
             <MessageCircle size={14} />

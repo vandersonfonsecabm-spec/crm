@@ -66,37 +66,38 @@ export default function DashboardFollowUpCalendar({ todayFollowUps, followUpAgen
               onClick={() => firstClient && onSelectClient(firstClient.id)}
               type="button"
             >
-              <p className="text-[10px] text-[var(--text-muted)]">{group.label}</p>
+              <p className="text-[11px] text-[var(--text-muted)]">{group.label}</p>
               <p className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">{group.clients.length}</p>
-              <p className="truncate text-[10px] text-[var(--text-muted)]">{group.hint} · {money(groupValue)}</p>
+              <p className="truncate text-[11px] text-[var(--text-muted)]">{group.hint} · {money(groupValue)}</p>
             </button>
           );
         })}
       </div>
 
       <div className="divide-y divide-[var(--border-default)]">
-        {criticalClients.length > 0 ? criticalClients.map((client) => (
+        {criticalClients.length > 0 ? criticalClients.map((client, index) => (
           <button
-            className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)]"
+            aria-label={`Abrir próximo compromisso de ${client.name}`}
+            className={`flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] ${index === 0 ? "bg-[var(--surface-subtle)]" : ""}`}
             key={`${client.agendaLabel}-${client.id}`}
             onClick={() => onSelectClient(client.id)}
             type="button"
           >
             <div className="w-14 shrink-0">
-              <p className="text-[10px] font-medium text-[var(--primary)]">{client.agendaLabel}</p>
-              <p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{client.agendaHint}</p>
+              <p className="text-[11px] font-medium text-[var(--primary)]">{client.agendaLabel}</p>
+              <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{client.agendaHint}</p>
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{client.name}</p>
-              <p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">{client.company} · {money(client.value)}</p>
+              <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{client.company} · {money(client.value)}</p>
             </div>
-            <span className={`hidden shrink-0 rounded-full border px-2 py-0.5 text-[9px] sm:inline-flex ${statusClass(client.status)}`}>{client.status}</span>
+            <span className={`hidden shrink-0 rounded-full border px-2 py-0.5 text-[10px] sm:inline-flex ${statusClass(client.status)}`}>{client.status}</span>
             <ChevronRight aria-hidden="true" className="shrink-0 text-[var(--icon-muted)]" size={14} />
           </button>
         )) : <EmptyState description="A agenda não possui acompanhamentos críticos neste momento." title="Agenda em dia" />}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-2.5 text-[10px] text-[var(--text-muted)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-2.5 text-[11px] text-[var(--text-muted)]">
         <span>{pendingCount} acompanhamentos · {criticalCount} críticos</span>
         <span className="font-medium text-[var(--text-secondary)]">{money(totalValue)} em oportunidades</span>
       </div>

@@ -88,7 +88,7 @@ export default function DashboardSelectedClientPanel({
             </div>
           </div>
 
-          <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] ${statusClass(selectedClient.status)}`}>
+          <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] ${statusClass(selectedClient.status)}`}>
             {selectedClient.status}
           </span>
         </div>
@@ -115,7 +115,7 @@ export default function DashboardSelectedClientPanel({
         <div className="mt-3 grid grid-cols-[minmax(0,1fr)_78px] gap-2">
           <div className="metric-card metric-pipeline rounded-xl p-2.5">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[9px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+              <p className="text-[11px] font-medium text-[var(--text-muted)]">
                 Oportunidade
               </p>
               <TrendingUp size={12} className="text-[var(--success)]" />
@@ -123,13 +123,13 @@ export default function DashboardSelectedClientPanel({
             <p className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">
               {money(selectedClient.value)}
             </p>
-            <p className="mt-0.5 truncate text-[10px] text-slate-500">
+            <p className="mt-0.5 truncate text-[11px] text-slate-500">
               Valor potencial
             </p>
           </div>
 
           <div className="metric-card rounded-xl p-2.5">
-            <p className="text-center text-[9px] uppercase tracking-[0.12em] text-slate-500">
+            <p className="text-center text-[11px] font-medium text-slate-500">
               Score
             </p>
             <p className="mt-1 text-center text-xl font-semibold leading-none text-slate-100">
@@ -147,13 +147,13 @@ export default function DashboardSelectedClientPanel({
         <div className="saas-tile mt-3 rounded-xl p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[11px] font-semibold text-slate-100">Ação recomendada</p>
-            <span className="saas-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]">
+            <span className="saas-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]">
               <ShieldCheck size={10} />
               prioridade
             </span>
           </div>
 
-          <p className="text-[10px] leading-relaxed text-slate-400">
+          <p className="text-[11px] leading-relaxed text-slate-400">
             {nextActionLabel(selectedClient)}
           </p>
         </div>
@@ -166,7 +166,7 @@ export default function DashboardSelectedClientPanel({
         </div>
 
         <div className="mt-3 rounded-xl border border-slate-500/12 bg-slate-950/20 px-2.5 py-2">
-          <div className="mb-1.5 flex items-center justify-between text-[10px] text-slate-400">
+          <div className="mb-1.5 flex items-center justify-between text-[11px] text-slate-400">
             <span>Potencial comercial</span>
             <span className="font-semibold text-slate-300">{leadScore}%</span>
           </div>
@@ -203,10 +203,10 @@ export default function DashboardSelectedClientPanel({
 
         <div className="mt-3">
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <p className="text-[11px] font-semibold text-slate-500">
               Tags
             </p>
-            <span className="text-[9px] text-slate-600">{selectedClient.tags.length}</span>
+            <span className="text-[10px] text-slate-600">{selectedClient.tags.length}</span>
           </div>
 
           <div className="flex flex-wrap gap-1.5">
@@ -214,7 +214,7 @@ export default function DashboardSelectedClientPanel({
               <button
                 key={tag}
                 onClick={() => onRemoveTagFromSelected(tag)}
-                className={`rounded-full border px-2 py-0.5 text-[9px] transition hover:border-slate-200/24 hover:brightness-110 ${tagClass(tag)}`}
+                className={`rounded-full border px-2 py-0.5 text-[10px] transition hover:border-slate-200/24 hover:brightness-110 ${tagClass(tag)}`}
                 title="Remover tag"
                 type="button"
               >
@@ -286,8 +286,8 @@ function ContactRow({
     <div className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-500/12 bg-slate-950/22 px-2.5 py-1.5">
       <span className="shrink-0 text-slate-500">{icon}</span>
       <div className="min-w-0 flex-1">
-        <p className="text-[9px] uppercase tracking-[0.12em] text-slate-600">{label}</p>
-        <p className="truncate text-[10px] text-slate-400">{value}</p>
+        <p className="text-[10px] font-medium text-slate-600">{label}</p>
+        <p className="truncate text-[11px] text-slate-400">{value}</p>
       </div>
       {onCopy && (
         <button
@@ -314,8 +314,8 @@ function DecisionStat({
 }) {
   return (
     <div className={`metric-card rounded-xl px-2 py-2 ${tone === "risk" ? "metric-risk" : ""}`}>
-      <p className="text-[8px] uppercase tracking-[0.1em] text-slate-500">{label}</p>
-      <p className="mt-0.5 break-words text-[9px] font-semibold leading-tight text-slate-200">
+      <p className="text-[10px] font-medium text-slate-500">{label}</p>
+      <p className="mt-0.5 break-words text-[11px] font-semibold leading-tight text-slate-200">
         {value}
       </p>
     </div>
@@ -338,7 +338,7 @@ function QuickAction({
       type="button"
     >
       <span className="mb-1 block text-slate-400">{icon}</span>
-      <p className="text-[10px] font-semibold">{label}</p>
+      <p className="text-[11px] font-semibold">{label}</p>
     </button>
   );
 }

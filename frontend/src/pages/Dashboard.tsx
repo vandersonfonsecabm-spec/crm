@@ -546,8 +546,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
             showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes" && activePage !== "kanban"}
-            showBackendCaption={activePage !== "dashboard" && activePage !== "agenda" && activePage !== "integracoes" && activePage !== "automacoes"}
-            compact={activePage === "dashboard" || activePage === "agenda"}
+            showBackendCaption={!(["dashboard", "comercial", "clientes", "agenda", "integracoes", "automacoes"] as ActivePage[]).includes(activePage)}
+            compact={(["dashboard", "comercial", "clientes", "agenda"] as ActivePage[]).includes(activePage)}
             primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : undefined}
             actions={pageActions}
           />
@@ -610,6 +610,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && (
             <DashboardOperationalSearch
               activePage={activePage}
+              metadata={activePage === "clientes" ? backendCaption : undefined}
               filteredClientsCount={filteredClients.length}
               activeFiltersCount={activeFiltersCount}
               search={search}
@@ -632,7 +633,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           )}
 
           {activePage !== "dashboard" && <section
-            className={`mt-4 ${
+            className={`${activePage === "comercial" || activePage === "clientes" ? "mt-3" : "mt-4"} ${
               activePage === "comercial"
                 ? "block"
                 : activePage === "clientes" || activePage === "kanban"
@@ -646,7 +647,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
             }`}
           >
-            <div className="space-y-4">
+            <div className={activePage === "comercial" || activePage === "clientes" ? "space-y-3" : "space-y-4"}>
               {activePage === "clientes" && (
                 <>
                   <DashboardClientsTable
@@ -690,6 +691,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 <DashboardControlCenter
                   clients={clients}
                   analytics={analytics}
+                  backendCaption={backendCaption}
                   smartAlerts={smartAlerts}
                   recentActivities={recentActivities}
                   emptyClient={emptyClient}

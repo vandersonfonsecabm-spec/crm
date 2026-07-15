@@ -4,6 +4,7 @@ import { Button, FilterBar, Select, Surface, Toolbar } from "../ui";
 
 type DashboardOperationalSearchProps = {
   activePage: ActivePage;
+  metadata?: string;
   filteredClientsCount: number;
   activeFiltersCount: number;
   search: string;
@@ -26,6 +27,7 @@ type DashboardOperationalSearchProps = {
 
 export default function DashboardOperationalSearch({
   activePage,
+  metadata,
   filteredClientsCount,
   activeFiltersCount,
   search,
@@ -48,8 +50,8 @@ export default function DashboardOperationalSearch({
   if (activePage === "automacoes") return null;
 
   return (
-    <Surface className="mt-3 p-3">
-      <Toolbar className="mb-2.5">
+    <Surface className="mt-3 overflow-hidden">
+      <Toolbar className="border-b border-[var(--border-default)] px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--icon-default)]">
             <SlidersHorizontal size={15} />
@@ -60,18 +62,12 @@ export default function DashboardOperationalSearch({
               {activePage === "clientes" ? "Filtro da carteira" : "Busca operacional"}
             </p>
             <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-              {filteredClientsCount} encontrados - {activeFiltersCount} filtro(s) ativo(s)
+              {filteredClientsCount} encontrados · {activeFiltersCount > 0 ? `${activeFiltersCount} filtro(s) ativo(s)` : "Sem filtros ativos"}{metadata ? ` · ${metadata}` : ""}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {activeFiltersCount > 0 && (
-            <span className="rounded-full border border-[var(--primary)] bg-[var(--surface-subtle)] px-2 py-1 text-[11px] font-medium text-[var(--primary)]">
-              {activeFiltersCount} ativo(s)
-            </span>
-          )}
-
           <Button
             leftIcon={<Download size={14} />}
             onClick={exportCsv}
@@ -83,7 +79,7 @@ export default function DashboardOperationalSearch({
         </div>
       </Toolbar>
 
-      <FilterBar className="border-0 bg-transparent p-0 shadow-none">
+      <FilterBar className="border-0 bg-transparent p-3 shadow-none">
         <div
           className={`flex h-9 min-w-[280px] items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--control-bg)] px-3 transition-colors hover:border-[var(--control-border-hover)] focus-within:border-[var(--control-border-focus)] focus-within:ring-2 focus-within:ring-[var(--control-ring)] ${
             activePage === "kanban" ? "flex-[1_1_280px]" : "flex-[1_1_380px]"
@@ -92,6 +88,7 @@ export default function DashboardOperationalSearch({
           <Search size={14} className="text-[var(--icon-muted)]" />
 
           <input
+            aria-label="Buscar clientes"
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -109,6 +106,7 @@ export default function DashboardOperationalSearch({
               }}
               className="rounded-md p-1 text-[var(--icon-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)]"
               title="Limpar busca"
+              type="button"
             >
               <X size={13} />
             </button>
@@ -162,7 +160,7 @@ export default function DashboardOperationalSearch({
         <Button
           aria-pressed={onlyFavorites}
           onClick={() => setOnlyFavorites((value) => !value)}
-          className={onlyFavorites ? "border-[var(--warning)] bg-[var(--surface-subtle)] text-[var(--warning)]" : ""}
+          className={onlyFavorites ? "border-[var(--filter-active-border)] bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""}
           leftIcon={<Star size={13} />}
           size="sm"
           variant="secondary"
@@ -173,7 +171,7 @@ export default function DashboardOperationalSearch({
         <Button
           aria-pressed={onlyHot}
           onClick={() => setOnlyHot((value) => !value)}
-          className={onlyHot ? "border-[var(--danger)] bg-[var(--surface-subtle)] text-[var(--danger)]" : ""}
+          className={onlyHot ? "border-amber-300 bg-amber-50 text-amber-800" : ""}
           leftIcon={<Flame size={13} />}
           size="sm"
           variant="secondary"
@@ -181,14 +179,16 @@ export default function DashboardOperationalSearch({
           Quentes
         </Button>
 
-        <Button
-          leftIcon={<RotateCcw size={14} />}
-          onClick={clearFilters}
-          size="sm"
-          variant="secondary"
-        >
-          Limpar
-        </Button>
+        {activeFiltersCount > 0 && (
+          <Button
+            leftIcon={<RotateCcw size={14} />}
+            onClick={clearFilters}
+            size="sm"
+            variant="ghost"
+          >
+            Limpar filtros
+          </Button>
+        )}
       </FilterBar>
     </Surface>
   );
