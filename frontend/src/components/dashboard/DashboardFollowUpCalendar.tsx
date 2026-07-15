@@ -60,7 +60,7 @@ export default function DashboardFollowUpCalendar({ todayFollowUps, followUpAgen
           const groupValue = group.clients.reduce((sum, client) => sum + client.value, 0);
           return (
             <button
-              className={`min-w-0 px-3 py-2.5 text-left transition-colors hover:bg-[var(--bg-muted)] ${index > 0 ? "border-l border-[var(--border-default)]" : ""}`}
+              className={`min-w-0 px-3 py-2.5 text-left transition-colors hover:bg-[var(--bg-muted)] disabled:cursor-default disabled:hover:bg-transparent ${index === 0 ? "bg-[var(--surface-subtle)]" : ""} ${index > 0 ? "border-l border-[var(--border-default)]" : ""}`}
               disabled={!firstClient}
               key={group.label}
               onClick={() => firstClient && onSelectClient(firstClient.id)}

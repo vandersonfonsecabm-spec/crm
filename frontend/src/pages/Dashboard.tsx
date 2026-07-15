@@ -553,7 +553,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           />
 
           {activePage === "dashboard" && (
-            <>
+            <section className="dashboard-overview space-y-3" aria-label="Resumo operacional">
               <DashboardContextToolbar
                 backendCaption={backendCaption}
                 priorityClient={priorityClient}
@@ -572,11 +572,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   handleSetActivePage("agenda");
                 }}
               />
-            </>
+            </section>
           )}
 
           {activePage === "dashboard" && (
-            <section className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.75fr)]">
+            <section className="dashboard-overview-grid mt-3 grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1.68fr)_minmax(320px,0.78fr)]">
               <DashboardPortfolioInsights
                 clients={clients}
                 money={money}

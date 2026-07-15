@@ -153,9 +153,6 @@ export default function DashboardCommandSearch({
           className="w-full select-text bg-transparent text-[11px] outline-none"
         />
 
-        <kbd className="command-search-shortcut rounded border px-1.5 py-0.5 text-[9px]">
-          Ctrl K
-        </kbd>
       </div>
 
       {showCommandResults && commandSearch && (

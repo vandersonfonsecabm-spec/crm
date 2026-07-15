@@ -18,28 +18,29 @@ export default function DashboardContextToolbar({
   onOpenCommercialQueue,
 }: DashboardContextToolbarProps) {
   return (
-    <Surface className="mb-3 overflow-hidden">
-      <Toolbar className="min-h-12 gap-3 px-3 py-2">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="inline-flex shrink-0 items-center gap-1.5 text-[10px] font-medium text-[var(--text-muted)]">
-            <RefreshCw aria-hidden="true" size={12} />
-            {backendCaption}
-          </span>
+    <Surface className="dashboard-overview-toolbar overflow-hidden">
+      <Toolbar className="min-h-12 gap-2 px-3 py-2">
+        {priorityClient && (
+          <button
+            aria-label={`Abrir prioridade atual: ${priorityClient.name}`}
+            className="group flex min-w-0 flex-1 items-center gap-3 rounded-md px-1 py-1 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            onClick={() => onOpenPriority(priorityClient.id)}
+            type="button"
+          >
+            <span className="shrink-0 text-[10px] font-semibold text-[var(--primary)]">Prioridade agora</span>
+            <span className="h-5 w-px shrink-0 bg-[var(--border-default)]" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] font-semibold text-[var(--text-primary)]">{priorityClient.name}</span>
+              <span className="block truncate text-[10px] text-[var(--text-muted)]">{priorityClient.status} · {money(priorityClient.value)} · {priorityClient.nextFollowUp}</span>
+            </span>
+            <ArrowRight className="shrink-0 text-[var(--icon-muted)] group-hover:text-[var(--primary)]" size={13} />
+          </button>
+        )}
 
-          {priorityClient && (
-            <button
-              aria-label={`Abrir prioridade atual: ${priorityClient.name}`}
-              className="group flex min-w-0 flex-1 items-center gap-2 border-l border-[var(--border-default)] pl-3 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-              onClick={() => onOpenPriority(priorityClient.id)}
-              type="button"
-            >
-              <span className="shrink-0 text-[10px] font-medium text-[var(--text-muted)]">Prioridade agora</span>
-              <span className="truncate text-[11px] font-semibold text-[var(--text-primary)]">{priorityClient.name}</span>
-              <span className="hidden truncate text-[10px] text-[var(--text-muted)] md:inline">{priorityClient.status} · {money(priorityClient.value)} · {priorityClient.nextFollowUp}</span>
-              <ArrowRight className="shrink-0 text-[var(--icon-muted)] group-hover:text-[var(--primary)]" size={13} />
-            </button>
-          )}
-        </div>
+        <span className="inline-flex shrink-0 items-center gap-1.5 border-l border-[var(--border-default)] pl-3 text-[10px] font-medium text-[var(--text-muted)]">
+          <RefreshCw aria-hidden="true" size={12} />
+          {backendCaption}
+        </span>
 
         <Button onClick={onOpenCommercialQueue} rightIcon={<ArrowRight size={13} />} size="sm" variant="secondary">
           Abrir fila comercial

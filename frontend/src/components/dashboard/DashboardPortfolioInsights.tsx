@@ -45,10 +45,10 @@ export default function DashboardPortfolioInsights({
   return (
     <Surface className="min-w-0 overflow-hidden">
       <SectionHeader
-        actions={<Badge variant={highAttentionCount > 0 ? "warning" : "success"}>{highAttentionCount} alta atenção</Badge>}
+        actions={<Badge variant={highAttentionCount > 0 ? "warning" : "success"}>{highAttentionCount} em atenção</Badge>}
         description="Clientes e oportunidades que pedem uma próxima ação."
         icon={<AlertTriangle size={16} />}
-        title="Requer atenção"
+        title="Prioridades comerciais"
       />
 
       <div className="grid min-w-0 xl:grid-cols-[minmax(0,1.35fr)_minmax(250px,0.65fr)]">
@@ -65,7 +65,7 @@ export default function DashboardPortfolioInsights({
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
                       <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{client.name}</p>
-                      {client.hot && <Flame aria-label="Oportunidade quente" className="shrink-0 text-[var(--danger)]" size={13} />}
+                      {client.hot && <Flame aria-label="Oportunidade quente" className="shrink-0 text-[var(--warning)]" size={13} />}
                     </div>
                     <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{client.company} · {attentionReason(client, getRisk)} · {enterpriseHealthLabel(client)}</p>
                   </div>
