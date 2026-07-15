@@ -592,8 +592,8 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
   }
 
   return (
-    <div className="space-y-4 overflow-x-hidden">
-      {toast && <div className="fixed right-5 top-5 z-50 rounded-2xl border border-emerald-300/20 bg-slate-950/95 px-4 py-3 text-sm font-semibold text-emerald-100 shadow-2xl">{toast}</div>}
+    <div className="space-y-3 overflow-x-hidden">
+      {toast && <div className="fixed right-5 top-5 z-50 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3 text-xs font-semibold text-[var(--text-primary)] shadow-[var(--shadow-md)]">{toast}</div>}
 
       <UiSurface className="p-3">
         <UiToolbar>
@@ -628,14 +628,14 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
       {state === "success" && activeView === "overview" && (
         <DashboardMetricStrip metrics={[
           { label: "Produtos no Hub", value: String(quality?.totalProdutos ?? 0), context: "Catálogo consolidado", icon: <Database size={15} /> },
-          { label: "Produtos ativos", value: String(quality?.produtosAtivos ?? 0), context: "Disponíveis para consulta", icon: <CheckCircle2 size={15} />, tone: "success" },
-          { label: "Sem estoque", value: String(quality?.produtosSemEstoque ?? 0), context: "Saldo indisponível", icon: <PackageSearch size={15} />, tone: "warning" },
-          { label: "Dados desatualizados", value: String(quality?.produtosComDadosDesatualizados ?? 0), context: "Pedem revisão", icon: <AlertTriangle size={15} />, tone: "danger" },
+          { label: "Produtos ativos", value: String(quality?.produtosAtivos ?? 0), context: "Disponíveis para consulta", icon: <CheckCircle2 size={15} />, tone: (quality?.produtosAtivos ?? 0) > 0 ? "success" : "default" },
+          { label: "Sem estoque", value: String(quality?.produtosSemEstoque ?? 0), context: "Saldo indisponível", icon: <PackageSearch size={15} />, tone: (quality?.produtosSemEstoque ?? 0) > 0 ? "warning" : "default" },
+          { label: "Dados desatualizados", value: String(quality?.produtosComDadosDesatualizados ?? 0), context: "Pedem revisão", icon: <AlertTriangle size={15} />, tone: (quality?.produtosComDadosDesatualizados ?? 0) > 0 ? "warning" : "default" },
         ]} />
       )}
 
       {state === "success" && activeView === "overview" && (
-        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
           <BlingSection
             integrations={blingIntegrations}
             busy={blingBusy}
@@ -669,29 +669,29 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
       )}
 
       {state === "success" && activeView === "imports" && (
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-4">
-          <section className="premium-panel rounded-2xl p-4">
+      <section className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-3">
+          <UiSurface className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-slate-100">Importar arquivo</h3>
-                <p className="mt-1 text-xs text-slate-500">Fluxo real: upload, mapeamento, validação e processamento.</p>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Importar arquivo</h3>
+                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Fluxo real: upload, mapeamento, validação e processamento.</p>
               </div>
-              <button type="button" onClick={resetFlow} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">
+              <button type="button" onClick={resetFlow} className="inline-flex h-8 items-center gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 text-[11px] font-semibold text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
                 <RotateCcw size={13} /> Nova importação
               </button>
             </div>
 
             <div className="mt-4 grid gap-2 sm:grid-cols-5">
               {(["arquivo", "mapeamento", "validacao", "importacao", "resultado"] as StepKey[]).map((key, index) => (
-                <div key={key} className={`rounded-xl border px-3 py-2 text-xs ${step === key ? "border-teal-300/30 bg-teal-300/[0.08] text-teal-100" : "border-white/10 bg-white/[0.03] text-slate-400"}`}>
-                  <span className="text-[10px] text-slate-500">{index + 1}</span>
+                <div key={key} className={`rounded-md border px-3 py-2 text-[11px] ${step === key ? "border-[var(--primary)] bg-[var(--surface-subtle)] text-[var(--primary)]" : "border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--text-muted)]"}`}>
+                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">{index + 1}</span>
                   <span className="ml-2 font-semibold">{stepLabel(key)}</span>
                 </div>
               ))}
             </div>
-            <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.025] p-3 text-xs text-slate-300">
-              <span className="font-semibold text-slate-100">Etapa atual: </span>
+            <div className="mt-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3 text-[11px] text-[var(--text-secondary)]">
+              <span className="font-semibold text-[var(--text-primary)]">Etapa atual: </span>
               {workflowStatusText(step, upload?.importacao.status ?? mappingResult?.importacao.status ?? validation?.importacao.status ?? processResult?.importacao.status)}
             </div>
 
@@ -699,31 +699,31 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
 
             {step === "arquivo" && (
               <div className="mt-4 space-y-3">
-                <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 bg-black/20 p-5 text-center transition hover:border-teal-200/25 hover:bg-teal-300/[0.04]">
-                  <UploadCloud className="text-teal-100" size={24} />
-                  <span className="mt-2 text-sm font-semibold text-slate-100">Selecionar CSV ou XLSX</span>
-                  <span className="mt-1 text-xs text-slate-500">Um arquivo por vez, até 10 MB.</span>
-                  <input className="mt-3 block w-full max-w-md cursor-pointer rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-200 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-300/15 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-teal-50 disabled:cursor-not-allowed disabled:opacity-50" type="file" accept=".csv,.xlsx" onChange={onFileChange} disabled={busy} />
+                <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-[var(--border-strong)] bg-[var(--bg-muted)] p-5 text-center transition-colors hover:border-[var(--primary)] hover:bg-[var(--surface-subtle)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--focus-ring)]">
+                  <UploadCloud className="text-[var(--primary)]" size={24} />
+                  <span className="mt-2 text-sm font-semibold text-[var(--text-primary)]">Selecionar CSV ou XLSX</span>
+                  <span className="mt-1 text-[11px] text-[var(--text-muted)]">Um arquivo por vez, até 10 MB.</span>
+                  <input className="mt-3 block w-full max-w-md cursor-pointer rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-secondary)] file:mr-3 file:rounded file:border-0 file:bg-[var(--surface-subtle)] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-50" type="file" accept=".csv,.xlsx" onChange={onFileChange} disabled={busy} />
                 </label>
                 {selectedFile && (
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <FileSpreadsheet size={18} className="shrink-0 text-teal-100" />
+                      <FileSpreadsheet size={18} className="shrink-0 text-[var(--primary)]" />
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-100">{selectedFile.name}</p>
-                        <p className="text-xs text-slate-500">{formatBytes(selectedFile.size)}</p>
+                        <p className="truncate text-sm font-semibold text-[var(--text-primary)]">{selectedFile.name}</p>
+                        <p className="text-[11px] text-[var(--text-muted)]">{formatBytes(selectedFile.size)}</p>
                       </div>
                     </div>
-                    <button type="button" onClick={() => setSelectedFile(null)} disabled={busy} className="premium-ghost rounded-xl p-2 text-slate-300"><X size={14} /></button>
+                    <button aria-label="Remover arquivo" type="button" onClick={() => setSelectedFile(null)} disabled={busy} className="rounded-md p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-surface)]"><X size={14} /></button>
                   </div>
                 )}
                 {fileError && <Alert tone="error">{fileError}</Alert>}
                 {fileError.toLowerCase().includes("importado") && (
-                  <button type="button" onClick={() => void sendFile(true)} disabled={busy} className="premium-ghost rounded-xl px-3 py-2 text-xs font-semibold text-slate-200">
+                  <button type="button" onClick={() => void sendFile(true)} disabled={busy} className="rounded-md border border-[var(--border-default)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] disabled:opacity-50">
                     Reprocessar mesmo arquivo com confirmacao
                   </button>
                 )}
-                <button type="button" onClick={() => void sendFile(false)} disabled={!selectedFile || busy} className="premium-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                <button type="button" onClick={() => void sendFile(false)} disabled={!selectedFile || busy} className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:opacity-50">
                   {busy ? <Loader2 className="animate-spin" size={14} /> : <UploadCloud size={14} />} Enviar arquivo
                 </button>
               </div>
@@ -735,9 +735,9 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
               <div className="mt-4 space-y-4">
                 <div className="grid gap-2 lg:grid-cols-2">
                   {upload.colunasDetectadas.map((column) => (
-                    <div key={column} className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-[minmax(0,1fr)_190px] sm:items-center">
-                      <span className="truncate text-xs font-semibold text-slate-200" title={column}>{column}</span>
-                      <select value={mapping[column] ?? IGNORE_FIELD} onChange={(event) => setMapping((current) => ({ ...current, [column]: event.target.value as HubCanonicalField | typeof IGNORE_FIELD }))} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-100">
+                    <div key={column} className="grid gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3 sm:grid-cols-[minmax(0,1fr)_190px] sm:items-center">
+                      <span className="truncate text-xs font-semibold text-[var(--text-secondary)]" title={column}>{column}</span>
+                      <select value={mapping[column] ?? IGNORE_FIELD} onChange={(event) => setMapping((current) => ({ ...current, [column]: event.target.value as HubCanonicalField | typeof IGNORE_FIELD }))} className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-primary)]">
                         <option value={IGNORE_FIELD}>Ignorar</option>
                         {CANONICAL_FIELDS.map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}
                       </select>
@@ -748,11 +748,11 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
                   <SelectBox label="Preço" value={priceMode} options={MONEY_MODES} onChange={setPriceMode} />
                   <SelectBox label="Preço promocional" value={promoMode} options={MONEY_MODES} onChange={setPromoMode} />
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3 text-xs text-slate-400">
-                  <span className="font-semibold text-slate-100">Chave principal: </span>
+                <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3 text-xs text-[var(--text-muted)]">
+                  <span className="font-semibold text-[var(--text-primary)]">Chave principal: </span>
                   {primaryKeyLabel(buildFieldMapping(mapping))}
                 </div>
-                <button type="button" onClick={() => void saveMapping()} disabled={busy} className="premium-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50">
+                <button type="button" onClick={() => void saveMapping()} disabled={busy} className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
                   {busy ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} Salvar mapeamento
                 </button>
               </div>
@@ -767,7 +767,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
             )}
 
             {step === "validacao" && (
-              <button type="button" onClick={() => void validateImport()} disabled={busy} className="mt-4 premium-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50">
+              <button type="button" onClick={() => void validateImport()} disabled={busy} className="mt-4 inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
                 {busy ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} Validar arquivo
               </button>
             )}
@@ -785,26 +785,26 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
             )}
 
             {step === "importacao" && (
-              <div className="mt-4 space-y-3 rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+              <div className="mt-4 space-y-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
                 <SelectBox label="Estrategia" value={strategy} options={STRATEGIES} onChange={setStrategy} />
                 {invalidLines > 0 && (
-                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
                     <input type="checkbox" checked={confirmPartial} onChange={(event) => setConfirmPartial(event.target.checked)} />
                     Importar somente as linhas válidas
                   </label>
                 )}
-                <button type="button" onClick={() => void processImport()} disabled={busy || !validation || validation.resumo.linhasValidas === 0} className="premium-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold disabled:opacity-50">
+                <button type="button" onClick={() => void processImport()} disabled={busy || !validation || validation.resumo.linhasValidas === 0} className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
                   {busy ? <Loader2 className="animate-spin" size={14} /> : <UploadCloud size={14} />} Importar linhas válidas
                 </button>
               </div>
             )}
 
             {processResult && step === "resultado" && <ProcessResult result={processResult} />}
-          </section>
+          </UiSurface>
 
         </div>
 
-        <aside className="min-w-0 space-y-4">
+        <aside className="min-w-0 space-y-3">
           <ImportsSection
             imports={filteredImports}
             total={importsTotal}
@@ -831,7 +831,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
       )}
 
       {state === "success" && activeView === "catalog" && (
-        <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
           <CatalogSection
             products={catalog}
             total={catalogTotal}
@@ -874,7 +874,7 @@ function IntegrationTab({ active, icon, label, onClick }: { active: boolean; ico
 
 function UploadSummary({ upload }: { upload: HubImportacaoUploadResponse }) {
   return (
-    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+    <div className="mt-4 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
       <div className="grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
         <Info label="ID" value={upload.importacao.id} />
         <Info label="Arquivo" value={upload.nomeArquivo} />
@@ -888,8 +888,8 @@ function UploadSummary({ upload }: { upload: HubImportacaoUploadResponse }) {
 
 function ProcessResult({ result }: { result: HubImportacaoProcessamentoResponse }) {
   return (
-    <div className="mt-4 space-y-3 rounded-2xl border border-emerald-300/20 bg-emerald-500/10 p-3">
-      <p className="text-sm font-semibold text-emerald-100">
+    <div className="mt-4 space-y-3 rounded-md border border-[color:rgba(36,122,82,0.28)] bg-[var(--surface-subtle)] p-3">
+      <p className="text-sm font-semibold text-[var(--success)]">
         {result.importacao.status === "CONCLUIDO" ? "Importação concluída com sucesso." : "Importação concluída com erros."}
       </p>
       <div className="grid gap-2 md:grid-cols-3">
@@ -926,49 +926,49 @@ function ImportsSection(props: {
   onErrorsPage: (id: number, page: number) => void;
 }) {
   return (
-    <section className="premium-panel rounded-2xl p-4">
-      <h3 className="text-sm font-semibold text-slate-100">Importações recentes</h3>
+    <UiSurface className="p-4">
+      <h3 className="text-sm font-semibold text-[var(--text-primary)]">Importações recentes</h3>
       <div className="mt-3 grid gap-2">
-        <input value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="Buscar arquivo" className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-100" />
+        <UiInput aria-label="Buscar arquivo" value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="Buscar arquivo" />
         <div className="grid gap-2 sm:grid-cols-2">
-          <select value={props.status} onChange={(event) => props.onStatus(event.target.value)} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-100">
+          <UiSelect aria-label="Filtrar importações por status" value={props.status} onChange={(event) => props.onStatus(event.target.value)}>
             {STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}
-          </select>
-          <select value={props.format} onChange={(event) => props.onFormat(event.target.value)} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-xs text-slate-100">
+          </UiSelect>
+          <UiSelect aria-label="Filtrar importações por formato" value={props.format} onChange={(event) => props.onFormat(event.target.value)}>
             {FORMAT_OPTIONS.map((format) => <option key={format}>{format}</option>)}
-          </select>
+          </UiSelect>
         </div>
       </div>
       <div className="mt-3 space-y-2">
         {props.imports.length === 0 && <EmptyState title="Nenhuma importação encontrada" text="As importações enviadas pelo ADMIN aparecerão aqui." />}
         {props.imports.map((item) => (
-          <div key={item.id} className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+          <div key={item.id} className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
             {importPrimaryAction(item.status) && (
-              <div className="mb-3 rounded-xl border border-teal-300/20 bg-teal-300/[0.055] px-3 py-2 text-[11px] text-teal-50">
+              <div className="mb-3 rounded-md border border-[color:rgba(36,122,82,0.28)] bg-[var(--surface-subtle)] px-3 py-2 text-[11px] text-[var(--primary)]">
                 {importActionHint(item.status)}
               </div>
             )}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-slate-100" title={item.nomeArquivo}>{item.nomeArquivo}</p>
-                <p className="mt-1 text-[11px] text-slate-500">{item.formato} · {formatDate(item.createdAt)}</p>
+                <p className="truncate text-xs font-semibold text-[var(--text-primary)]" title={item.nomeArquivo}>{item.nomeArquivo}</p>
+                <p className="mt-1 text-[11px] tabular-nums text-[var(--text-muted)]">{item.formato} · {formatDate(item.createdAt)}</p>
               </div>
               <StatusBadge status={item.status} />
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-slate-400">
+            <div className="mt-2 grid grid-cols-3 gap-2 text-[11px] text-[var(--text-muted)]">
               <Info label="Total" value={item.totalLinhas} />
               <Info label="Válidas" value={item.linhasValidas} />
               <Info label="Erros" value={item.linhasComErro} />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {importPrimaryAction(item.status) && (
-                <button type="button" disabled={props.busy} onClick={() => props.onResume(item.id)} className="premium-button rounded-xl px-3 py-2 text-[11px] font-semibold disabled:opacity-50">
+                <button type="button" disabled={props.busy} onClick={() => props.onResume(item.id)} className="rounded-md bg-[var(--primary)] px-3 py-2 text-[11px] font-semibold text-white disabled:opacity-50">
                   {importPrimaryAction(item.status)}
                 </button>
               )}
-              <button type="button" onClick={() => props.onOpen(item.id)} className="premium-ghost rounded-xl px-3 py-2 text-[11px] font-semibold text-slate-300">Detalhes</button>
+              <button type="button" onClick={() => props.onOpen(item.id)} className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-[11px] font-semibold text-[var(--text-secondary)]">Detalhes</button>
               {!isFinalImportStatus(item.status) && (
-                <button type="button" disabled={props.busy} onClick={() => props.onCancel(item.id)} className="premium-ghost rounded-xl px-3 py-2 text-[11px] font-semibold text-red-100 disabled:opacity-50">Cancelar</button>
+                <button type="button" disabled={props.busy} onClick={() => props.onCancel(item.id)} className="rounded-md px-3 py-2 text-[11px] font-semibold text-[var(--danger)] disabled:opacity-50">Cancelar</button>
               )}
             </div>
           </div>
@@ -976,14 +976,14 @@ function ImportsSection(props: {
       </div>
       <Pagination page={props.page} totalPages={props.totalPages} total={props.total} onPage={props.onPage} />
       {props.selectedImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/10 bg-slate-950 p-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 shadow-[var(--shadow-md)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h4 className="truncate text-sm font-semibold text-slate-100">Importação #{props.selectedImport.id}</h4>
-                <p className="mt-1 text-xs text-slate-500">{props.selectedImport.nomeArquivo}</p>
+                <h4 className="truncate text-sm font-semibold text-[var(--text-primary)]">Importação #{props.selectedImport.id}</h4>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">{props.selectedImport.nomeArquivo}</p>
               </div>
-              <button type="button" onClick={props.onClose} className="premium-ghost rounded-xl p-2"><X size={15} /></button>
+              <button aria-label="Fechar detalhes da importação" type="button" onClick={props.onClose} className="rounded-md p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]"><X size={15} /></button>
             </div>
             <div className="mt-4 grid gap-2 md:grid-cols-3">
               <Info label="Status" value={statusLabel(props.selectedImport.status)} />
@@ -993,12 +993,12 @@ function ImportsSection(props: {
               <Info label="Finalizada em" value={formatDate(props.selectedImport.finalizadaEm)} />
               <Info label="Hash" value={props.selectedImport.hashArquivo ?? "-"} />
             </div>
-            <pre className="mt-4 max-h-44 overflow-auto rounded-2xl border border-white/10 bg-black/30 p-3 text-[11px] text-slate-300">{JSON.stringify(props.selectedImport.mapeamento ?? {}, null, 2)}</pre>
+            <pre className="mt-4 max-h-44 overflow-auto rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3 text-[11px] text-[var(--text-secondary)]">{JSON.stringify(props.selectedImport.mapeamento ?? {}, null, 2)}</pre>
             <ErrorsTable errors={props.errors} onPage={(page) => props.onErrorsPage(props.selectedImport?.id ?? 0, page)} />
           </div>
         </div>
       )}
-    </section>
+    </UiSurface>
   );
 }
 
@@ -1018,13 +1018,13 @@ function CatalogSection(props: {
     props.onFiltersChange({ ...props.filters, [key]: value });
   }
   return (
-    <section className="premium-panel rounded-2xl p-4">
+    <UiSurface className="p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-100">Produtos importados</h3>
-          <p className="mt-1 text-xs text-slate-500">Consulta comercial unificada para atendimento.</p>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Produtos importados</h3>
+          <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Consulta comercial unificada para atendimento.</p>
         </div>
-        <span className="rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-400">{props.total} produtos</span>
+        <span className="text-[11px] tabular-nums text-[var(--text-muted)]">{props.total} produtos</span>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
         <Input icon={<Search size={13} />} value={props.filters.q} placeholder="Nome, SKU, código ou marca" onChange={(value) => setFilter("q", value)} />
@@ -1035,22 +1035,22 @@ function CatalogSection(props: {
         <Input value={props.filters.local} placeholder="Local" onChange={(value) => setFilter("local", value)} />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-300">
+        <label className="inline-flex items-center gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)]">
           <input type="checkbox" checked={props.filters.somenteDisponiveis} onChange={(event) => setFilter("somenteDisponiveis", event.target.checked)} />
           Somente disponíveis
         </label>
-        <button type="button" onClick={props.onApply} className="premium-button inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold"><Filter size={13} /> Filtrar</button>
-        <button type="button" onClick={props.onClear} className="premium-ghost rounded-xl px-3 py-2 text-xs font-semibold text-slate-300">Limpar filtros</button>
+        <button type="button" onClick={props.onApply} className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-white"><Filter size={13} /> Filtrar</button>
+        <button type="button" onClick={props.onClear} className="rounded-md px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]">Limpar filtros</button>
       </div>
       <div className="mt-4 space-y-2">
-        {props.loading && <div className="h-28 animate-pulse rounded-2xl border border-white/10 bg-white/[0.035]" />}
+        {props.loading && <div className="h-28 animate-pulse rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)]" />}
         {!props.loading && props.products.length === 0 && <EmptyState title="Nenhum produto importado" text="Produtos externos importados por CSV ou XLSX aparecerão aqui." />}
         {props.products.map((product) => (
-          <div key={product.idCanonico} className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+          <div key={product.idCanonico} className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-100">{product.nome}</p>
-                <p className="mt-1 text-xs text-slate-500">{product.sku || "Sem SKU"} · {product.codigoBarras || "Sem código"} · {product.categoria || "Sem categoria"}</p>
+                <p className="text-sm font-semibold text-[var(--text-primary)]">{product.nome}</p>
+                <p className="mt-1 text-[11px] text-[var(--text-muted)]">{product.sku || "Sem SKU"} · {product.codigoBarras || "Sem código"} · {product.categoria || "Sem categoria"}</p>
               </div>
               <StatusBadge status={availabilityLabel(product.disponibilidade)} />
             </div>
@@ -1065,7 +1065,7 @@ function CatalogSection(props: {
         ))}
       </div>
       <Pagination page={props.page} totalPages={props.totalPages} total={props.total} onPage={props.onPage} />
-    </section>
+    </UiSurface>
   );
 }
 
@@ -1112,7 +1112,7 @@ function BlingSection({
         )}
         description="Produtos e estoque em modo de leitura. As ações de conexão respeitam as permissões administrativas existentes."
         icon={<PlugZap size={15} />}
-        status={<div className="flex items-center gap-2"><UiStatusBadge label="Somente leitura" status="informacao" /><UiStatusBadge label={statusLabel} status={status} /></div>}
+        status={<UiStatusBadge label={statusLabel} status={status} />}
         title="Bling"
       />
       <div className="grid gap-2 px-4 py-3 md:grid-cols-4">
@@ -1165,28 +1165,28 @@ function WhatsappSimulationSection({
   const canRepeat = Boolean(first) && !busy;
   const canRun = !busy && (!scenario.requiresProduct || Boolean(product));
   return (
-    <section className="premium-panel rounded-2xl p-4">
+    <UiSurface className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-slate-100">Simulador WhatsApp</h3>
-            <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-100">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Simulador WhatsApp</h3>
+            <span className="rounded-full border border-[color:rgba(36,122,82,0.28)] px-2 py-0.5 text-[11px] font-semibold text-[var(--success)]">
               Sem envio real
             </span>
           </div>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500">
+          <p className="mt-0.5 max-w-2xl text-[11px] leading-4 text-[var(--text-muted)]">
             Execute uma simulação interna para validar o fluxo do catálogo e CRM. Nenhuma mensagem será enviada pelo WhatsApp.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={onNewTest} disabled={Boolean(busy)} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" onClick={onNewTest} disabled={Boolean(busy)} className="inline-flex items-center gap-2 rounded-md border border-[var(--border-default)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] disabled:cursor-not-allowed disabled:opacity-50">
             <RefreshCw size={14} /> Novo teste deste cenário
           </button>
-          <button type="button" onClick={onRun} disabled={!canRun} className="premium-action inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+          <button type="button" onClick={onRun} disabled={!canRun} className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
             {busy === "first" ? <Loader2 className="animate-spin" size={14} /> : <PlugZap size={14} />} Executar cenário
           </button>
           {first && (
-            <button type="button" onClick={onRepeat} disabled={!canRepeat} className="premium-ghost inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-slate-300 disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={onRepeat} disabled={!canRepeat} className="inline-flex items-center gap-2 rounded-md border border-[var(--border-default)] px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] disabled:cursor-not-allowed disabled:opacity-50">
               {busy === "repeat" ? <Loader2 className="animate-spin" size={14} /> : <RotateCcw size={14} />} Repetir payload
             </button>
           )}
@@ -1194,26 +1194,26 @@ function WhatsappSimulationSection({
       </div>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <label className="block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <label className="block text-[11px] font-semibold text-[var(--text-secondary)]">
           Cenário
           <select
             value={scenarioId}
             onChange={(event) => onScenarioChange(event.target.value as WhatsappScenarioId)}
             disabled={Boolean(busy)}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm normal-case tracking-normal text-slate-100 outline-none focus:border-emerald-300/40"
+            className="mt-2 w-full rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-sm font-normal text-[var(--text-primary)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--control-ring)]"
           >
             {scenarios.map((item) => (
               <option key={item.id} value={item.id}>{item.title}</option>
             ))}
           </select>
         </label>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+        <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="text-sm font-semibold text-slate-100">{scenario.title}</h4>
+            <h4 className="text-sm font-semibold text-[var(--text-primary)]">{scenario.title}</h4>
             {scenario.requiresProduct && <StatusBadge status={product ? "Produto real selecionado" : "Sem produto"} />}
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">{scenario.description}</p>
-          {scenario.warning && <p className="mt-2 text-xs text-amber-100">{scenario.warning}</p>}
+          <p className="mt-1 text-xs leading-relaxed text-[var(--text-muted)]">{scenario.description}</p>
+          {scenario.warning && <p className="mt-2 text-xs text-[var(--warning)]">{scenario.warning}</p>}
         </div>
       </div>
 
@@ -1222,7 +1222,7 @@ function WhatsappSimulationSection({
         <Info label="Telefone fictício" value={maskSmokePhone(WHATSAPP_SMOKE_PHONE)} />
         <Info label="Mensagem" value={scenario.message} />
         <Info label="Produto usado" value={scenario.requiresProduct ? product?.nome ?? "Indisponível" : "Não aplicável"} />
-        <Info label="Ambiente" value="Produção controlada" />
+        <Info label="Modo" value="Simulação interna" />
       </div>
 
       <Alert tone="info">Resposta apenas preparada — nenhuma mensagem será enviada.</Alert>
@@ -1239,7 +1239,7 @@ function WhatsappSimulationSection({
       {repeat?.data.duplicada === false && (
         <Alert tone="error">A repetição retornou duplicada=false. Não execute uma terceira chamada antes de revisar o resultado.</Alert>
       )}
-    </section>
+    </UiSurface>
   );
 }
 
@@ -1247,9 +1247,9 @@ function WhatsappSimulationResult({ title, result, scenario, original }: { title
   const data = result.data;
   const checks = evaluateWhatsappScenario(result, scenario, original);
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-3">
+    <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{title}</h4>
+        <h4 className="text-xs font-semibold text-[var(--text-secondary)]">{title}</h4>
         <StatusBadge status={data.duplicada ? "Duplicada" : "Processada"} />
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1270,17 +1270,17 @@ function WhatsappSimulationResult({ title, result, scenario, original }: { title
         <Info label="Saída" value={data.respostaPreparada ? `${data.respostaPreparada.status} · simulada` : "-"} />
       </div>
       {data.respostaPreparada?.texto && (
-        <div className="mt-3 rounded-xl border border-emerald-300/10 bg-emerald-300/[0.05] p-3 text-xs leading-relaxed text-emerald-50">
+        <div className="mt-3 rounded-md border border-[color:rgba(36,122,82,0.28)] bg-[var(--surface-subtle)] p-3 text-xs leading-relaxed text-[var(--success)]">
           {data.respostaPreparada.texto}
         </div>
       )}
       <div className="mt-3 space-y-2">
         {checks.map((check) => (
-          <div key={check.label} className="grid gap-2 rounded-xl border border-white/10 bg-slate-950/40 p-2 text-xs md:grid-cols-[120px_minmax(0,1fr)_minmax(0,1fr)_90px]">
-            <span className="font-semibold text-slate-400">{check.label}</span>
-            <span className="text-slate-500">Esperado: {check.expected}</span>
-            <span className="text-slate-300">Obtido: {check.obtained}</span>
-            <span className={check.approved ? "font-semibold text-emerald-200" : "font-semibold text-amber-200"}>{check.approved ? "Aprovado" : "Divergente"}</span>
+          <div key={check.label} className="grid gap-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-2 text-xs md:grid-cols-[120px_minmax(0,1fr)_minmax(0,1fr)_90px]">
+            <span className="font-semibold text-[var(--text-secondary)]">{check.label}</span>
+            <span className="text-[var(--text-muted)]">Esperado: {check.expected}</span>
+            <span className="text-[var(--text-secondary)]">Obtido: {check.obtained}</span>
+            <span className={check.approved ? "font-semibold text-[var(--success)]" : "font-semibold text-[var(--warning)]"}>{check.approved ? "Aprovado" : "Divergente"}</span>
           </div>
         ))}
       </div>
@@ -1327,12 +1327,12 @@ function QualitySection({ quality }: { quality: HubQualidadeDados | null }) {
 function ErrorsTable({ errors, onPage }: { errors: ImportErrors; onPage: (page: number) => void }) {
   if (errors.total === 0) return <EmptyState title="Nenhum erro por linha" text="Quando houver linhas inválidas, os erros sanitizados aparecerão aqui." />;
   return (
-    <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+    <div className="mt-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
       <div className="grid gap-2">
         {errors.data.map((error) => (
-          <div key={error.id} className="grid gap-2 rounded-xl bg-white/[0.035] p-2 text-[11px] text-slate-300 md:grid-cols-[60px_120px_120px_minmax(0,1fr)]">
+          <div key={error.id} className="grid gap-2 rounded-md bg-[var(--bg-surface)] p-2 text-[11px] text-[var(--text-secondary)] md:grid-cols-[60px_120px_120px_minmax(0,1fr)]">
             <span>Linha {error.linha}</span>
-            <span className="font-semibold text-slate-200">{error.campo}</span>
+            <span className="font-semibold text-[var(--text-primary)]">{error.campo}</span>
             <span>{error.codigo}</span>
             <span className="min-w-0 break-words">{error.mensagem}{error.valorSanitizado ? ` · ${error.valorSanitizado}` : ""}</span>
           </div>
@@ -1347,14 +1347,14 @@ function PreviewTable({ rows }: { rows: Record<string, unknown>[] }) {
   const columns = Object.keys(rows[0] ?? {}).slice(0, 6);
   if (!rows.length || !columns.length) return null;
   return (
-    <div className="mt-3 overflow-x-auto rounded-xl border border-white/10">
-      <table className="min-w-full text-left text-[11px] text-slate-300">
-        <thead className="bg-white/[0.04] text-slate-400">
+    <div className="mt-3 overflow-x-auto rounded-md border border-[var(--border-default)]">
+      <table className="min-w-full text-left text-[11px] text-[var(--text-secondary)]">
+        <thead className="bg-[var(--bg-muted)] text-[var(--text-muted)]">
           <tr>{columns.map((column) => <th key={column} className="px-3 py-2 font-semibold">{column}</th>)}</tr>
         </thead>
         <tbody>
           {rows.slice(0, 5).map((row, index) => (
-            <tr key={index} className="border-t border-white/5">
+            <tr key={index} className="border-t border-[var(--border-default)]">
               {columns.map((column) => <td key={column} className="max-w-48 truncate px-3 py-2" title={String(row[column] ?? "")}>{String(row[column] ?? "-")}</td>)}
             </tr>
           ))}
@@ -1367,7 +1367,7 @@ function PreviewTable({ rows }: { rows: Record<string, unknown>[] }) {
 function Metric({ title, value, icon }: { title: string; value: ReactNode; icon: ReactNode }) {
   return (
     <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
-      <div className="flex items-center gap-2 text-[10px] font-semibold text-[var(--text-muted)]">
+      <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text-muted)]">
         <span className="text-[var(--icon-default)]">{icon}</span>
         <span className="leading-snug">{title}</span>
       </div>
@@ -1379,7 +1379,7 @@ function Metric({ title, value, icon }: { title: string; value: ReactNode; icon:
 function Info({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-2">
-      <p className="text-[10px] font-medium text-[var(--text-muted)]">{label}</p>
+      <p className="text-[11px] font-medium text-[var(--text-muted)]">{label}</p>
       <p className="mt-1 break-words text-[11px] font-semibold text-[var(--text-primary)]">{value ?? "-"}</p>
     </div>
   );

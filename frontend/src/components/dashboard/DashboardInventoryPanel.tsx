@@ -193,7 +193,7 @@ export default function DashboardInventoryPanel({ onOpenIntegrations }: { onOpen
   }
 
   return (
-    <section className="space-y-4" aria-busy={status === "loading"}>
+    <section className="space-y-3" aria-busy={status === "loading"}>
       <DashboardMetricStrip metrics={metrics} />
 
       <Surface>
@@ -204,7 +204,7 @@ export default function DashboardInventoryPanel({ onOpenIntegrations }: { onOpen
           title="Estoque integrado"
         />
 
-        <Toolbar className="border-b border-[var(--border-default)] px-4 py-3">
+        <Toolbar className="border-b border-[var(--border-default)] px-4 py-2.5">
           <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(260px,1fr)_150px_140px_150px]">
             <div className="relative min-w-0">
               <Search className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--icon-muted)]" size={14} />
@@ -293,7 +293,7 @@ export default function DashboardInventoryPanel({ onOpenIntegrations }: { onOpen
             )}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] table-fixed border-collapse text-left">
-                <thead className="bg-[var(--bg-muted)] text-[11px] font-medium text-[var(--text-secondary)]">
+                <thead className="sticky top-0 z-10 bg-[var(--bg-muted)] text-[11px] font-medium text-[var(--text-secondary)]">
                   <tr className="border-b border-[var(--border-default)]">
                     <th className="w-[26%] px-4 py-2.5 font-medium">Produto</th>
                     <th className="w-[14%] px-3 py-2.5 font-medium">SKU</th>
@@ -332,23 +332,23 @@ function InventoryRow({ product }: { product: HubProdutoEstoque }) {
 
   return (
     <tr className="bg-[var(--bg-surface)] transition-colors hover:bg-[var(--bg-muted)]">
-      <td className="px-4 py-3 align-middle">
+      <td className="px-4 py-2.5 align-middle">
         <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{product.produto.nome}</p>
         <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{product.produto.categoria || "Sem categoria"}</p>
       </td>
-      <td className="px-3 py-3 align-middle text-[11px] font-medium text-[var(--text-secondary)]">{product.produto.sku || "Sem SKU"}</td>
-      <td className="px-3 py-3 text-right align-middle text-xs font-semibold tabular-nums text-[var(--text-primary)]">{formatOptionalCurrency(integratedPrice(product))}</td>
-      <td className="px-3 py-3 align-middle text-[11px] text-[var(--text-secondary)]">{unit || "Não informada"}</td>
-      <td className={`px-3 py-3 text-right align-middle text-xs font-semibold tabular-nums ${status.tone === "success" ? "text-[var(--success)]" : status.tone === "danger" ? "text-[var(--danger)]" : "text-[var(--text-secondary)]"}`}>
+      <td className="px-3 py-2.5 align-middle text-[11px] font-medium text-[var(--text-secondary)]">{product.produto.sku || "Sem SKU"}</td>
+      <td className="px-3 py-2.5 text-right align-middle text-xs font-semibold tabular-nums text-[var(--text-primary)]">{formatOptionalCurrency(integratedPrice(product))}</td>
+      <td className="px-3 py-2.5 align-middle text-[11px] text-[var(--text-secondary)]">{unit || "Não informada"}</td>
+      <td className={`px-3 py-2.5 text-right align-middle text-xs font-semibold tabular-nums ${status.tone === "success" ? "text-[var(--success)]" : status.tone === "danger" ? "text-[var(--danger)]" : "text-[var(--text-secondary)]"}`}>
         {formatIntegratedStock(product)}
       </td>
-      <td className="px-3 py-3 align-middle text-[11px] font-medium text-[var(--info)]">{integratedOriginLabel(product)}</td>
-      <td className="px-3 py-3 align-middle">
-        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${status.className}`}>{status.label}</span>
+      <td className="px-3 py-2.5 align-middle text-[11px] font-medium text-[var(--text-secondary)]">{integratedOriginLabel(product)}</td>
+      <td className="px-3 py-2.5 align-middle">
+        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${status.className}`}>{status.label}</span>
       </td>
-      <td className="px-3 py-3 align-middle">
-        <p className="text-[11px] text-[var(--text-muted)]">{formatOptionalDateTime(updatedAt)}</p>
-        {product.possivelmenteDesatualizado && <p className="mt-0.5 text-[10px] font-medium text-[var(--warning)]">Desatualizado</p>}
+      <td className="px-3 py-2.5 align-middle">
+        <p className="text-[11px] tabular-nums text-[var(--text-muted)]">{formatOptionalDateTime(updatedAt)}</p>
+        {product.possivelmenteDesatualizado && <p className="mt-0.5 text-[11px] font-medium text-[var(--warning)]">Desatualizado</p>}
       </td>
     </tr>
   );
