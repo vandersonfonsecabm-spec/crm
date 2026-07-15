@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   createNotaOnBackend,
@@ -59,6 +59,7 @@ export default function useDashboardActions({
   setPage,
 }: UseDashboardActionsParams) {
   const [toast, setToast] = useState("");
+  const statusUpdatesInFlight = useRef(new Set<number>());
 
   function showToast(message: string) {
     setToast(message);
@@ -114,10 +115,13 @@ export default function useDashboardActions({
   async function changeStatus(id: number, status: Status) {
     const target = clients.find((client) => client.id === id);
     if (!target) return;
+    if (statusUpdatesInFlight.current.has(id)) return;
     if (target.status === status) {
       showToast("Cliente já está nessa etapa.");
       return;
     }
+
+    statusUpdatesInFlight.current.add(id);
 
     const note: Note = {
       id: Date.now(),
@@ -150,6 +154,8 @@ export default function useDashboardActions({
       showToast(syncedNote ? "Status e histórico sincronizados." : "Status sincronizado; histórico pendente.");
     } catch {
       showToast("Não foi possível atualizar o status.");
+    } finally {
+      statusUpdatesInFlight.current.delete(id);
     }
   }
 
