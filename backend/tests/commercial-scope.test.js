@@ -78,6 +78,16 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   assert.equal(clientA.body.empresaId, companyA.empresa.id);
   assert.equal(clientB.body.empresaId, companyB.empresa.id);
 
+  const invalidClient = await request("POST", "/clientes", {
+    nome: "   ",
+    telefone: "123",
+    email: "email-invalido",
+    valor: -1,
+  }, tokenA);
+  assert.equal(invalidClient.status, 400);
+  assert.equal(invalidClient.body.codigo, "CLIENT_VALIDATION_ERROR");
+  assert.deepEqual(Object.keys(invalidClient.body.campos).sort(), ["email", "nome", "telefone", "valor"]);
+
   const clientWithTenant = await request("POST", "/clientes", {
     empresaId: companyB.empresa.id,
     nome: "Cliente Tenant Indevido",
@@ -111,6 +121,15 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   const updatedClientA = await request("PATCH", `/clientes/${clientA.body.id}`, { status: "Contato", quente: true }, tokenA);
   assert.equal(updatedClientA.status, 200);
   assert.equal(updatedClientA.body.status, "Contato");
+  assert.equal(updatedClientA.body.nome, clientA.body.nome);
+  assert.equal(updatedClientA.body.telefone, clientA.body.telefone);
+  assert.equal(updatedClientA.body.email, clientA.body.email);
+
+  const invalidPatch = await request("PATCH", `/clientes/${clientA.body.id}`, { email: "invalido" }, tokenA);
+  assert.equal(invalidPatch.status, 400);
+  assert.equal(invalidPatch.body.codigo, "CLIENT_VALIDATION_ERROR");
+  const clientAfterInvalidPatch = await prisma.cliente.findUnique({ where: { id: clientA.body.id } });
+  assert.equal(clientAfterInvalidPatch.email, clientA.body.email);
 
   const noteA = await request("POST", `/clientes/${clientA.body.id}/notas`, {
     texto: "Nota isolada da empresa A",

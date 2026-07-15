@@ -10,11 +10,10 @@ type ClientModalProps = {
   client: Client;
   setClient: Dispatch<SetStateAction<Client | null>>;
   onClose: () => void;
-  onSave: () => void | Promise<void>;
-  onDelete?: () => void;
+  onSave: (client: Client) => void | Promise<void>;
+  onDelete?: () => void | Promise<void>;
   saveLabel: string;
   showDelete?: boolean;
-  validateBeforeSave?: boolean;
 };
 
 type ClientValidationErrors = Partial<Record<"name" | "phone" | "email", string>>;
@@ -68,14 +67,19 @@ export default function ClientModal({
   onDelete,
   saveLabel,
   showDelete = false,
-  validateBeforeSave = false,
 }: ClientModalProps) {
   const [errors, setErrors] = useState<ClientValidationErrors>({});
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLFormElement>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  const isBusyRef = useRef(false);
 
   const fieldBaseClass =
     "rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm outline-none transition-all duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70";
@@ -85,16 +89,58 @@ export default function ClientModal({
     "mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500";
 
   useEffect(() => {
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !isSubmitting) {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    isBusyRef.current = isSubmitting || isDeleting;
+  }, [isDeleting, isSubmitting]);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusTimeout = window.setTimeout(() => nameRef.current?.focus(), 0);
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !isBusyRef.current) {
+        event.preventDefault();
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
+        return;
+      }
+
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
       }
     }
 
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [isSubmitting, onClose]);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.clearTimeout(focusTimeout);
+      window.removeEventListener("keydown", handleKeyDown, true);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isDeleteConfirming) deleteCancelRef.current?.focus();
+  }, [isDeleteConfirming]);
 
   function updateField(field: keyof Client, value: string | number | Status | string[]) {
     setClient((current) => (current ? { ...current, [field]: value } : current));
@@ -137,54 +183,74 @@ export default function ClientModal({
 
     const normalizedClient = normalizeClient(client);
 
-    if (validateBeforeSave) {
-      const nextErrors = validateClient(normalizedClient);
+    const nextErrors = validateClient(normalizedClient);
 
-      if (hasErrors(nextErrors)) {
-        setErrors(nextErrors);
-        setFormError("");
-        focusFirstInvalid(nextErrors);
-        return;
-      }
-
-      setClient((current) => (current ? { ...current, ...normalizedClient } : current));
+    if (hasErrors(nextErrors)) {
+      setErrors(nextErrors);
+      setFormError("");
+      focusFirstInvalid(nextErrors);
+      return;
     }
+
+    setClient((current) => (current ? { ...current, ...normalizedClient } : current));
 
     setIsSubmitting(true);
     setFormError("");
 
     try {
-      await onSave();
+      await onSave(normalizedClient);
     } catch {
-      setFormError("Não foi possível criar o cliente agora. Tente novamente.");
+      setFormError("Não foi possível salvar o cliente agora. Tente novamente.");
       setIsSubmitting(false);
     }
   }
 
+  async function handleDelete() {
+    if (!onDelete || isBusyRef.current) return;
+    setIsDeleting(true);
+    setFormError("");
+    try {
+      await onDelete();
+    } catch {
+      setFormError("Não foi possível excluir o cliente agora. Tente novamente.");
+      setIsDeleting(false);
+      setIsDeleteConfirming(false);
+    }
+  }
+
+  const isBusy = isSubmitting || isDeleting;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
       <form
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="client-modal-title"
+        aria-describedby="client-modal-description"
         onSubmit={handleSubmit}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && !isSubmitting) {
+          if (event.key === "Escape" && !isBusy) {
             event.stopPropagation();
-            onClose();
+            if (isDeleteConfirming) setIsDeleteConfirming(false);
+            else onClose();
           }
         }}
         className="saas-panel w-full max-w-2xl rounded-2xl p-4 text-white shadow-2xl"
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold">{title}</p>
-            <p className="mt-1 text-[11px] text-slate-500">
+            <h2 id="client-modal-title" className="text-sm font-semibold">{title}</h2>
+            <p id="client-modal-description" className="mt-1 text-[11px] text-slate-500">
               Preencha os dados principais para manter o funil limpo e organizado.
             </p>
           </div>
 
           <button
+            aria-label="Fechar formulário de cliente"
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
+            disabled={isBusy}
             className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
           >
             <X size={15} />
@@ -202,7 +268,7 @@ export default function ClientModal({
               placeholder="Ex: Mariana Costa"
               aria-invalid={Boolean(errors.name)}
               aria-describedby={errors.name ? "client-name-error" : undefined}
-              disabled={isSubmitting}
+              disabled={isBusy}
               className={`${fieldBaseClass} ${errors.name ? invalidFieldClass : ""} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
             {errors.name ? <p id="client-name-error" className="mt-1 text-[11px] text-rose-200">{errors.name}</p> : null}
@@ -215,7 +281,7 @@ export default function ClientModal({
               value={client.company}
               onChange={(event) => updateField("company", event.target.value)}
               placeholder="Ex: Alpha Digital"
-              disabled={isSubmitting}
+              disabled={isBusy}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
           </div>
@@ -230,7 +296,7 @@ export default function ClientModal({
               placeholder="Ex: 5535999990000"
               aria-invalid={Boolean(errors.phone)}
               aria-describedby={errors.phone ? "client-phone-error" : undefined}
-              disabled={isSubmitting}
+              disabled={isBusy}
               className={`${fieldBaseClass} ${errors.phone ? invalidFieldClass : ""} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
             {errors.phone ? <p id="client-phone-error" className="mt-1 text-[11px] text-rose-200">{errors.phone}</p> : null}
@@ -246,7 +312,7 @@ export default function ClientModal({
               placeholder="Ex: cliente@email.com"
               aria-invalid={Boolean(errors.email)}
               aria-describedby={errors.email ? "client-email-error" : undefined}
-              disabled={isSubmitting}
+              disabled={isBusy}
               className={`${fieldBaseClass} ${errors.email ? invalidFieldClass : ""} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
             {errors.email ? <p id="client-email-error" className="mt-1 text-[11px] text-rose-200">{errors.email}</p> : null}
@@ -262,7 +328,7 @@ export default function ClientModal({
               value={client.value}
               onChange={(event) => updateField("value", Number(event.target.value))}
               placeholder="Ex: 12000"
-              disabled={isSubmitting}
+              disabled={isBusy}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
 
@@ -278,7 +344,7 @@ export default function ClientModal({
               value={client.source}
               onChange={(event) => updateField("source", event.target.value)}
               placeholder="Ex: Instagram, Site, WhatsApp"
-              disabled={isSubmitting}
+              disabled={isBusy}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
 
@@ -294,7 +360,7 @@ export default function ClientModal({
               value={client.nextFollowUp}
               onChange={(event) => updateField("nextFollowUp", event.target.value)}
               placeholder="Ex: Hoje, Amanhã, 30 dias"
-              disabled={isSubmitting}
+              disabled={isBusy}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
           </div>
@@ -305,7 +371,7 @@ export default function ClientModal({
               id="client-status"
               value={client.status}
               onChange={(event) => updateField("status", event.target.value as Status)}
-              disabled={isSubmitting}
+              disabled={isBusy}
               className={`${fieldBaseClass} bg-slate-950 disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {statusList.map((status) => (
@@ -331,7 +397,7 @@ export default function ClientModal({
                 )
               }
               placeholder="Ex: Quente, Alto valor, Urgente"
-              disabled={isSubmitting}
+              disabled={isBusy}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
 
@@ -347,26 +413,51 @@ export default function ClientModal({
           </p>
         ) : null}
 
-        <div className="mt-4 flex justify-between gap-2">
-          {showDelete && onDelete ? (
+        <div className="mt-4 flex items-center justify-between gap-2">
+          {showDelete && onDelete && !isDeleteConfirming ? (
             <button
               type="button"
-              onClick={onDelete}
-              disabled={isSubmitting}
+              onClick={() => setIsDeleteConfirming(true)}
+              disabled={isBusy}
               className="inline-flex items-center gap-2 rounded-xl border border-rose-300/20 bg-slate-950/25 px-3 py-2 text-xs text-rose-100 transition hover:bg-slate-900/70"
             >
               <Trash2 size={14} />
               Excluir
             </button>
-          ) : (
+          ) : !isDeleteConfirming ? (
             <div />
-          )}
+          ) : null}
+
+          {isDeleteConfirming ? (
+            <div className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-300/20 bg-rose-950/15 px-3 py-2">
+              <p className="text-xs text-rose-100">Excluir este cliente e o histórico relacionado?</p>
+              <div className="flex gap-2">
+                <button
+                  ref={deleteCancelRef}
+                  type="button"
+                  onClick={() => setIsDeleteConfirming(false)}
+                  disabled={isBusy}
+                  className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300"
+                >
+                  Cancelar exclusão
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isBusy}
+                  className="rounded-xl border border-rose-300/30 bg-rose-950/30 px-3 py-2 text-xs font-semibold text-rose-100 disabled:opacity-60"
+                >
+                  {isDeleting ? "Excluindo..." : "Confirmar exclusão"}
+                </button>
+              </div>
+            </div>
+          ) : (
 
           <div className="flex gap-2">
             <button
               type="button"
               onClick={onClose}
-              disabled={isSubmitting}
+              disabled={isBusy}
               className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300 transition-all duration-200 hover:border-slate-400/24 hover:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-45"
             >
               Cancelar
@@ -374,13 +465,14 @@ export default function ClientModal({
 
             <button
               type="submit"
-              disabled={isSubmitting}
-              aria-disabled={isSubmitting}
+              disabled={isBusy}
+              aria-disabled={isBusy}
               className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-950 transition-all duration-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? "Salvando..." : saveLabel}
             </button>
           </div>
+          )}
         </div>
       </form>
     </div>

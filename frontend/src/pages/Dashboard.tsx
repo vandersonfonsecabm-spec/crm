@@ -312,7 +312,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   ]);
 
   const backendCaption = dashboardSummary
-    ? `${dashboardSummary.indicadores.clientes} clientes sincronizados`
+    ? `${clients.length} clientes sincronizados`
     : "Dados sincronizados";
 
   const openKanbanWithStatus = useCallback((nextStatus: Status | "Todos") => {
@@ -414,6 +414,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     });
   }, [whatsappMessage]);
 
+  const handleEditClient = useCallback((client: Client) => {
+    setIsCustomerDrawerOpen(false);
+    setEditing({ ...client });
+  }, []);
+
   const customerDrawer = (
     <DashboardCustomerDrawer
       activePage={activePage}
@@ -440,7 +445,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       onAddNote={addNote}
       onAddTagToSelected={addTagToSelected}
       onRemoveTagFromSelected={removeTagFromSelected}
-      onEditClient={setEditing}
+      onEditClient={handleEditClient}
       onCopyText={copyText}
       onRequestWhatsapp={requestExternalWhatsapp}
       onApplySmartFilter={applySmartFilter}
@@ -771,7 +776,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           onClose={() => setCreating(null)}
           onSave={createClient}
           saveLabel="Criar cliente"
-          validateBeforeSave
         />
       )}
 

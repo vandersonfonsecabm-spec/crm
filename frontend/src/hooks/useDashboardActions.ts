@@ -153,33 +153,36 @@ export default function useDashboardActions({
     }
   }
 
-  async function saveEdit() {
-    if (!editing) return;
+  async function saveEdit(clientToSave?: Client) {
+    const target = clientToSave ?? editing;
+    if (!target) throw new Error("Cliente indisponível para edição.");
 
     try {
-      const syncedClient = await updateClienteOnBackend(editing);
-      setClients((current) => current.map((client) => (client.id === editing.id ? syncedClient : client)));
+      const syncedClient = await updateClienteOnBackend(target);
+      setClients((current) => current.map((client) => (client.id === target.id ? syncedClient : client)));
       setSelectedId(syncedClient.id);
       setEditing(null);
       showToast("Cliente atualizado e sincronizado.");
-    } catch {
+    } catch (error) {
       showToast("Não foi possível atualizar o cliente.");
+      throw error;
     }
   }
 
-  async function createClient() {
-    if (!creating || !creating.name.trim()) {
+  async function createClient(clientToCreate?: Client) {
+    const target = clientToCreate ?? creating;
+    if (!target || !target.name.trim()) {
       throw new Error("Informe o nome do cliente.");
     }
 
     const normalizedClient = {
-      ...creating,
-      name: creating.name.trim().replace(/\s+/g, " "),
-      company: creating.company.trim().replace(/\s+/g, " "),
-      phone: creating.phone.trim(),
-      email: creating.email.trim(),
-      source: creating.source.trim().replace(/\s+/g, " "),
-      nextFollowUp: creating.nextFollowUp.trim().replace(/\s+/g, " "),
+      ...target,
+      name: target.name.trim().replace(/\s+/g, " "),
+      company: target.company.trim().replace(/\s+/g, " "),
+      phone: target.phone.trim(),
+      email: target.email.trim(),
+      source: target.source.trim().replace(/\s+/g, " "),
+      nextFollowUp: target.nextFollowUp.trim().replace(/\s+/g, " "),
     };
 
     try {
@@ -208,8 +211,9 @@ export default function useDashboardActions({
       if (selectedId === id) setSelectedId(null);
       setEditing(null);
       showToast("Cliente removido e sincronizado.");
-    } catch {
+    } catch (error) {
       showToast("Não foi possível remover o cliente.");
+      throw error;
     }
   }
 

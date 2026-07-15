@@ -127,6 +127,8 @@ app.get("/clientes", ...commercialAuth, async (req, res) => {
 app.post("/clientes", ...commercialAuth, async (req, res) => {
   try {
     if (hasEmpresaIdInput(req.body)) return tenantInputError(res);
+    const validationErrors = clienteValidationErrors(req.body);
+    if (Object.keys(validationErrors).length > 0) return clienteValidationError(res, validationErrors);
     const empresaId = req.commercialEmpresaId;
     const data = { ...clientePayload(req.body), empresaId };
 
@@ -164,7 +166,9 @@ async function updateCliente(req, res) {
     if (!clienteId) return res.status(400).json({ erro: "ID invalido." });
     const existing = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true } });
     if (!existing) return res.status(404).json({ erro: "Cliente nao encontrado." });
-    const data = clientePayload(req.body);
+    const validationErrors = clienteValidationErrors(req.body, { partial: true });
+    if (Object.keys(validationErrors).length > 0) return clienteValidationError(res, validationErrors);
+    const data = clientePayload(req.body, { partial: true });
 
     const clienteAtualizado = await prisma.cliente.update({
       where: {
@@ -2254,28 +2258,59 @@ function tenantInputError(res) {
   return res.status(400).json({ erro: "empresaId nao pode ser informado pelo cliente.", codigo: "TENANT_INPUT_FORBIDDEN" });
 }
 
-function clientePayload(body) {
+function clientePayload(body, { partial = false } = {}) {
+  const has = (field) => Object.prototype.hasOwnProperty.call(body || {}, field);
   const tags = Array.isArray(body.tags)
     ? body.tags
     : typeof body.tags === "string"
       ? safeParseTags(body.tags)
       : [];
 
-  return {
-    nome: String(body.nome || "").trim(),
-    telefone: String(body.telefone || "").trim(),
-    email: String(body.email || "").trim(),
-    empresa: String(body.empresa || "").trim(),
-    interesse: String(body.interesse || "").trim(),
-    status: String(body.status || "Lead").trim(),
-    valor: Number.isFinite(Number(body.valor)) ? Number(body.valor) : 0,
-    origem: String(body.origem || "Manual").trim(),
-    favorito: Boolean(body.favorito),
-    quente: Boolean(body.quente),
-    ultimoContato: Number.isFinite(Number(body.ultimoContato)) ? Number(body.ultimoContato) : 0,
-    proximoFollowUp: String(body.proximoFollowUp || "Hoje").trim(),
-    tags: JSON.stringify(tags),
-  };
+  const data = {};
+  if (!partial || has("nome")) data.nome = String(body.nome || "").trim();
+  if (!partial || has("telefone")) data.telefone = String(body.telefone || "").trim();
+  if (!partial || has("email")) data.email = String(body.email || "").trim();
+  if (!partial || has("empresa")) data.empresa = String(body.empresa || "").trim();
+  if (!partial || has("interesse")) data.interesse = String(body.interesse || "").trim();
+  if (!partial || has("status")) data.status = String(body.status || "Lead").trim();
+  if (!partial || has("valor")) data.valor = Number.isFinite(Number(body.valor)) ? Number(body.valor) : 0;
+  if (!partial || has("origem")) data.origem = String(body.origem || "Manual").trim();
+  if (!partial || has("favorito")) data.favorito = Boolean(body.favorito);
+  if (!partial || has("quente")) data.quente = Boolean(body.quente);
+  if (!partial || has("ultimoContato")) data.ultimoContato = Number.isFinite(Number(body.ultimoContato)) ? Number(body.ultimoContato) : 0;
+  if (!partial || has("proximoFollowUp")) data.proximoFollowUp = String(body.proximoFollowUp || "Hoje").trim();
+  if (!partial || has("tags")) data.tags = JSON.stringify(tags);
+  return data;
+}
+
+function clienteValidationErrors(body, { partial = false } = {}) {
+  const source = body || {};
+  const has = (field) => Object.prototype.hasOwnProperty.call(source, field);
+  const errors = {};
+  const nome = String(source.nome || "").trim();
+  const telefone = String(source.telefone || "").trim();
+  const email = String(source.email || "").trim();
+
+  if ((!partial || has("nome")) && !nome) errors.nome = "Nome do cliente e obrigatorio.";
+  if (has("telefone") && telefone && telefone.replace(/\D/g, "").length < 10) {
+    errors.telefone = "Telefone invalido.";
+  }
+  if (has("email") && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.email = "E-mail invalido.";
+  }
+  if (has("valor") && (!Number.isFinite(Number(source.valor)) || Number(source.valor) < 0)) {
+    errors.valor = "Valor invalido.";
+  }
+
+  return errors;
+}
+
+function clienteValidationError(res, errors) {
+  return res.status(400).json({
+    erro: "Dados do cliente invalidos.",
+    codigo: "CLIENT_VALIDATION_ERROR",
+    campos: errors,
+  });
 }
 
 function safeParseTags(value) {
