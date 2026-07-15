@@ -192,6 +192,52 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   }, tokenA);
   assert.equal(crossSchedulePatch.status, 404);
 
+  const originalScheduleA = await prisma.acompanhamento.findUnique({ where: { id: scheduleA.body.id } });
+  const rescheduledDate = new Date(originalScheduleA.dataHora.getTime() + 24 * 60 * 60 * 1000).toISOString();
+  const partialSchedulePatch = await request("PATCH", `/acompanhamentos/${scheduleA.body.id}`, {
+    dataHora: rescheduledDate,
+  }, tokenA);
+  assert.equal(partialSchedulePatch.status, 200);
+  assert.equal(partialSchedulePatch.body.titulo, originalScheduleA.titulo);
+  assert.equal(partialSchedulePatch.body.clienteId, originalScheduleA.clienteId);
+  assert.equal(partialSchedulePatch.body.dataHora, rescheduledDate);
+  const storedAfterPartialPatch = await prisma.acompanhamento.findUnique({ where: { id: scheduleA.body.id } });
+  assert.equal(storedAfterPartialPatch.empresaId, originalScheduleA.empresaId);
+  assert.equal(storedAfterPartialPatch.titulo, originalScheduleA.titulo);
+  assert.equal(storedAfterPartialPatch.clienteId, originalScheduleA.clienteId);
+  assert.equal(storedAfterPartialPatch.dataHora.toISOString(), rescheduledDate);
+
+  const invalidScheduleDate = await request("PATCH", `/acompanhamentos/${scheduleA.body.id}`, {
+    dataHora: "data-invalida",
+  }, tokenA);
+  assert.equal(invalidScheduleDate.status, 400);
+  const invalidScheduleStatus = await request("PATCH", `/acompanhamentos/${scheduleA.body.id}`, {
+    status: "INVALIDO",
+  }, tokenA);
+  assert.equal(invalidScheduleStatus.status, 400);
+
+  const completedSchedule = await request("POST", `/acompanhamentos/${scheduleA.body.id}/concluir`, {}, tokenA);
+  assert.equal(completedSchedule.status, 200);
+  assert.equal(completedSchedule.body.status, "CONCLUIDO");
+  assert.ok(completedSchedule.body.concluidoEm);
+  const repeatedCompletion = await request("POST", `/acompanhamentos/${scheduleA.body.id}/concluir`, {}, tokenA);
+  assert.equal(repeatedCompletion.status, 409);
+
+  const reopenedSchedule = await request("POST", `/acompanhamentos/${scheduleA.body.id}/reabrir`, {}, tokenA);
+  assert.equal(reopenedSchedule.status, 200);
+  assert.equal(reopenedSchedule.body.status, "PENDENTE");
+  assert.equal(reopenedSchedule.body.concluidoEm, null);
+
+  const cancelledSchedule = await request("POST", `/acompanhamentos/${scheduleA.body.id}/cancelar`, {}, tokenA);
+  assert.equal(cancelledSchedule.status, 200);
+  assert.equal(cancelledSchedule.body.status, "CANCELADO");
+  assert.equal(cancelledSchedule.body.clienteId, originalScheduleA.clienteId);
+
+  const missingSchedule = await request("PATCH", "/acompanhamentos/2147483647", {
+    titulo: "Agenda inexistente",
+  }, tokenA);
+  assert.equal(missingSchedule.status, 404);
+
   const agendaSummaryA = await request("GET", "/acompanhamentos/resumo", undefined, tokenA);
   assert.equal(agendaSummaryA.status, 200);
   assert.ok(agendaSummaryA.body.proximos.every((item) => item.clienteId !== clientB.body.id));

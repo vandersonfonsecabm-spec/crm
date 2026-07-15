@@ -102,7 +102,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   const handleSelectClient = useCallback((clientId: number | null) => {
     setSelectedId(clientId);
-    if (clientId !== null && ["dashboard", "comercial", "clientes", "kanban"].includes(requestedActivePage)) {
+    if (clientId !== null && ["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(requestedActivePage)) {
       setIsCustomerDrawerOpen(true);
     }
   }, [requestedActivePage]);
@@ -439,7 +439,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       slaLabel={slaLabel}
       priorityLabel={priorityLabel}
       whatsappMessage={whatsappMessage}
-      onClearSelectedClient={["dashboard", "comercial", "clientes", "kanban"].includes(activePage) ? handleCloseCustomerDrawer : () => setSelectedId(null)}
+      onClearSelectedClient={["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(activePage) ? handleCloseCustomerDrawer : () => setSelectedId(null)}
       onSetNoteText={setNoteText}
       onSetTagText={setTagText}
       onAddNote={addNote}
@@ -449,7 +449,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       onCopyText={copyText}
       onRequestWhatsapp={requestExternalWhatsapp}
       onApplySmartFilter={applySmartFilter}
-      overlay={["dashboard", "comercial", "clientes", "kanban"].includes(activePage)}
+      overlay={["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(activePage)}
       open={isCustomerDrawerOpen}
     />
   );
@@ -758,7 +758,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
-            {activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && customerDrawer}
+            {activePage !== "estoque" && activePage !== "integracoes" && customerDrawer}
           </section>}
           </main>
         </div>

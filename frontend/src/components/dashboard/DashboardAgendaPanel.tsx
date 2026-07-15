@@ -103,6 +103,7 @@ export default function DashboardAgendaPanel({
   const [formError, setFormError] = useState("");
   const handledCreateRequest = useRef(createRequestKey);
   const handledTodayRequest = useRef(todayRequestKey);
+  const mutationInFlight = useRef(false);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const weekEnd = useMemo(() => endOfWeek(weekStart), [weekStart]);
@@ -290,7 +291,9 @@ export default function DashboardAgendaPanel({
       setFormError(validation);
       return;
     }
+    if (mutationInFlight.current) return;
 
+    mutationInFlight.current = true;
     setIsSubmitting(true);
     setFormError("");
 
@@ -312,11 +315,15 @@ export default function DashboardAgendaPanel({
       const message = submitError instanceof Error ? submitError.message : "";
       setFormError(toFriendlyAgendaError(message));
     } finally {
+      mutationInFlight.current = false;
       setIsSubmitting(false);
     }
   }
 
   async function runAction(item: ApiAcompanhamento, action: "concluir" | "reabrir" | "cancelar") {
+    if (mutationInFlight.current) return;
+
+    mutationInFlight.current = true;
     setIsSubmitting(true);
 
     try {
@@ -336,6 +343,7 @@ export default function DashboardAgendaPanel({
       const message = actionError instanceof Error ? actionError.message : "";
       setToast(toFriendlyAgendaError(message));
     } finally {
+      mutationInFlight.current = false;
       setIsSubmitting(false);
     }
   }
@@ -702,9 +710,62 @@ function AgendaModal({
   const isReschedule = mode === "reschedule";
   const title = mode === "create" ? "Novo acompanhamento" : isReschedule ? "Reagendar acompanhamento" : "Editar acompanhamento";
   const submitLabel = mode === "create" ? "Criar acompanhamento" : isReschedule ? "Salvar reagendamento" : "Salvar alteracoes";
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const isSubmittingRef = useRef(isSubmitting);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    isSubmittingRef.current = isSubmitting;
+  }, [isSubmitting, onClose]);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const getFocusableElements = () => Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )).filter((element) => !element.hidden);
+
+    const initialFocus = dialog.querySelector<HTMLElement>('select:not([disabled]), input:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+    initialFocus?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !isSubmittingRef.current) {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (previousFocus && document.contains(previousFocus)) previousFocus.focus();
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div aria-labelledby="agenda-modal-title" aria-modal="true" className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 text-white shadow-2xl" role="dialog">
+      <div aria-labelledby="agenda-modal-title" aria-modal="true" className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-2xl p-4 text-white shadow-2xl" ref={dialogRef} role="dialog">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold" id="agenda-modal-title">{title}</p>
@@ -814,12 +875,20 @@ function acompanhamentoToForm(item: ApiAcompanhamento): AgendaForm {
     clienteId: String(item.clienteId),
     titulo: item.titulo,
     descricao: item.descricao ?? "",
-    data: date.toISOString().slice(0, 10),
-    hora: date.toISOString().slice(11, 16),
+    data: formatLocalDateInput(date),
+    hora: `${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`,
     prioridade: item.prioridade,
     tipo: item.tipo,
     responsavel: item.responsavel ?? "",
   };
+}
+
+function formatLocalDateInput(date: Date) {
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
 }
 
 function formToPayload(form: AgendaForm): AcompanhamentoPayload {
