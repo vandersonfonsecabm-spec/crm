@@ -715,6 +715,39 @@ function AgendaModal({
   const isSubmittingRef = useRef(isSubmitting);
 
   useEffect(() => {
+    const documentElement = document.documentElement;
+    const body = document.body;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const scrollbarWidth = Math.max(0, window.innerWidth - documentElement.clientWidth);
+    const bodyPaddingRight = Number.parseFloat(window.getComputedStyle(body).paddingRight) || 0;
+    const previousStyles = {
+      documentHadStyleAttribute: documentElement.hasAttribute("style"),
+      documentOverflow: documentElement.style.overflow,
+      bodyHadStyleAttribute: body.hasAttribute("style"),
+      bodyOverflow: body.style.overflow,
+      bodyPaddingRight: body.style.paddingRight,
+    };
+
+    documentElement.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) body.style.paddingRight = `${bodyPaddingRight + scrollbarWidth}px`;
+
+    return () => {
+      documentElement.style.overflow = previousStyles.documentOverflow;
+      body.style.overflow = previousStyles.bodyOverflow;
+      body.style.paddingRight = previousStyles.bodyPaddingRight;
+      if (!previousStyles.documentHadStyleAttribute && documentElement.style.length === 0) {
+        documentElement.removeAttribute("style");
+      }
+      if (!previousStyles.bodyHadStyleAttribute && body.style.length === 0) {
+        body.removeAttribute("style");
+      }
+      window.scrollTo({ left: scrollX, top: scrollY, behavior: "auto" });
+    };
+  }, []);
+
+  useEffect(() => {
     onCloseRef.current = onClose;
     isSubmittingRef.current = isSubmitting;
   }, [isSubmitting, onClose]);
