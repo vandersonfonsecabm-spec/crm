@@ -27,6 +27,9 @@ model Cliente {
   createdAt       DateTime         @default(now())
   notas           Nota[]
   acompanhamentos Acompanhamento[]
+  leads           Lead[]
+  negocios        Negocio[]
+  contatosCanal   ContatoCanal[]
 
   @@index([empresaId])
   @@index([empresaId, status])
@@ -99,21 +102,27 @@ model MovimentacaoEstoque {
 }
 
 model Acompanhamento {
-  id          Int                      @id @default(autoincrement())
-  empresaId   Int
-  empresa     Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
-  clienteId   Int
-  cliente     Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  titulo      String
-  descricao   String?
-  dataHora    DateTime
-  prioridade  PrioridadeAcompanhamento @default(MEDIA)
-  status      StatusAcompanhamento     @default(PENDENTE)
-  tipo        TipoAcompanhamento       @default(LIGACAO)
-  responsavel String?
-  concluidoEm DateTime?
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
+  id              Int                      @id @default(autoincrement())
+  empresaId       Int
+  empresa         Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  clienteId       Int
+  cliente         Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  leadId          Int?
+  lead            Lead?                    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  conversaCanalId Int?
+  conversaCanal   ConversaCanal?           @relation(fields: [conversaCanalId], references: [id], onDelete: SetNull)
+  negocioId       Int?
+  negocio         Negocio?                 @relation(fields: [negocioId], references: [id], onDelete: SetNull)
+  titulo          String
+  descricao       String?
+  dataHora        DateTime
+  prioridade      PrioridadeAcompanhamento @default(MEDIA)
+  status          StatusAcompanhamento     @default(PENDENTE)
+  tipo            TipoAcompanhamento       @default(LIGACAO)
+  responsavel     String?
+  concluidoEm     DateTime?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
 
   @@index([empresaId])
   @@index([clienteId])
@@ -122,15 +131,18 @@ model Acompanhamento {
   @@index([empresaId, status])
   @@index([empresaId, prioridade])
   @@index([empresaId, tipo])
+  @@index([empresaId, leadId])
+  @@index([empresaId, conversaCanalId])
+  @@index([empresaId, negocioId])
 }
 
 model Empresa {
-  id                         Int                         @id @default(autoincrement())
+  id                         Int                        @id @default(autoincrement())
   nome                       String
-  slug                       String                      @unique
-  ativo                      Boolean                     @default(true)
-  createdAt                  DateTime                    @default(now())
-  updatedAt                  DateTime                    @updatedAt
+  slug                       String                     @unique
+  ativo                      Boolean                    @default(true)
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
   usuarios                   Usuario[]
   clientes                   Cliente[]
   notas                      Nota[]
@@ -148,22 +160,34 @@ model Empresa {
   contatosCanal              ContatoCanal[]
   conversasCanal             ConversaCanal[]
   mensagensCanal             MensagemCanal[]
+  leads                      Lead[]
+  negocios                   Negocio[]
+  notasInternasConversa      NotaInternaConversa[]
+  historicosAtribuicao       HistoricoAtribuicao[]
+  eventosWebhook             EventoWebhook[]
 }
 
 model Usuario {
-  id                  Int               @id @default(autoincrement())
-  empresaId           Int
-  empresa             Empresa           @relation(fields: [empresaId], references: [id])
-  nome                String
-  email               String
-  senhaHash           String
-  papel               PapelUsuario      @default(VENDEDOR)
-  ativo               Boolean           @default(true)
-  ultimoLoginEm       DateTime?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  importacoesCriadas  ImportacaoDados[]
+  id                    Int                    @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa                @relation(fields: [empresaId], references: [id])
+  nome                  String
+  email                 String
+  senhaHash             String
+  papel                 PapelUsuario           @default(VENDEDOR)
+  ativo                 Boolean                @default(true)
+  ultimoLoginEm         DateTime?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  importacoesCriadas    ImportacaoDados[]
   oauthStatesIntegracao IntegracaoOAuthState[]
+  leadsResponsaveis     Lead[]                 @relation("LeadResponsavel")
+  negociosResponsaveis  Negocio[]              @relation("NegocioResponsavel")
+  conversasResponsaveis ConversaCanal[]        @relation("ConversaResponsavel")
+  notasInternasCriadas  NotaInternaConversa[]  @relation("NotaInternaAutor")
+  atribuicoesAnteriores HistoricoAtribuicao[]  @relation("AtribuicaoResponsavelAnterior")
+  atribuicoesNovas      HistoricoAtribuicao[]  @relation("AtribuicaoResponsavelNovo")
+  atribuicoesAlteradas  HistoricoAtribuicao[]  @relation("AtribuicaoAlteradoPor")
 
   @@unique([empresaId, email])
   @@index([empresaId])
@@ -172,16 +196,16 @@ model Usuario {
 }
 
 model IntegracaoOAuthState {
-  id         Int       @id @default(autoincrement())
-  empresaId  Int
-  empresa    Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  usuarioId  Int
-  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  provedor   String
-  stateHash  String    @unique
-  expiresAt  DateTime
-  usedAt     DateTime?
-  createdAt  DateTime  @default(now())
+  id        Int       @id @default(autoincrement())
+  empresaId Int
+  empresa   Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarioId Int
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  provedor  String
+  stateHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([empresaId])
   @@index([usuarioId])
@@ -190,21 +214,21 @@ model IntegracaoOAuthState {
 }
 
 model Integracao {
-  id                        Int                       @id @default(autoincrement())
+  id                        Int                        @id @default(autoincrement())
   empresaId                 Int
-  empresa                   Empresa                   @relation(fields: [empresaId], references: [id])
+  empresa                   Empresa                    @relation(fields: [empresaId], references: [id])
   nome                      String
   tipo                      TipoIntegracao
-  status                    StatusIntegracao          @default(PENDENTE)
-  modo                      ModoIntegracao            @default(SOMENTE_LEITURA)
-  configuracaoJson          String                    @default("{}")
+  status                    StatusIntegracao           @default(PENDENTE)
+  modo                      ModoIntegracao             @default(SOMENTE_LEITURA)
+  configuracaoJson          String                     @default("{}")
   credenciaisCriptografadas String?
   ultimaSincronizacaoEm     DateTime?
   ultimoSucessoEm           DateTime?
   ultimoErroEm              DateTime?
-  ativo                     Boolean                   @default(true)
-  createdAt                 DateTime                  @default(now())
-  updatedAt                 DateTime                  @updatedAt
+  ativo                     Boolean                    @default(true)
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
   sincronizacoes            SincronizacaoIntegracao[]
   erros                     ErroIntegracao[]
   produtosExternos          ProdutoExterno[]
@@ -220,23 +244,23 @@ model Integracao {
 }
 
 model SincronizacaoIntegracao {
-  id                Int                  @id @default(autoincrement())
-  integracaoId      Int
-  integracao        Integracao           @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
-  empresaId         Int
-  empresa           Empresa              @relation(fields: [empresaId], references: [id])
-  status            StatusSincronizacao  @default(PENDENTE)
-  origem            OrigemSincronizacao  @default(MANUAL)
-  iniciadaEm        DateTime             @default(now())
-  finalizadaEm      DateTime?
-  itensRecebidos    Int                  @default(0)
-  itensProcessados  Int                  @default(0)
-  itensComErro      Int                  @default(0)
-  mensagemErro      String?
-  metadadosJson     String?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  erros             ErroIntegracao[]
+  id               Int                 @id @default(autoincrement())
+  integracaoId     Int
+  integracao       Integracao          @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  empresaId        Int
+  empresa          Empresa             @relation(fields: [empresaId], references: [id])
+  status           StatusSincronizacao @default(PENDENTE)
+  origem           OrigemSincronizacao @default(MANUAL)
+  iniciadaEm       DateTime            @default(now())
+  finalizadaEm     DateTime?
+  itensRecebidos   Int                 @default(0)
+  itensProcessados Int                 @default(0)
+  itensComErro     Int                 @default(0)
+  mensagemErro     String?
+  metadadosJson    String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  erros            ErroIntegracao[]
 
   @@index([empresaId])
   @@index([integracaoId])
@@ -246,19 +270,19 @@ model SincronizacaoIntegracao {
 }
 
 model ErroIntegracao {
-  id                   Int                      @id @default(autoincrement())
-  empresaId            Int
-  empresa              Empresa                  @relation(fields: [empresaId], references: [id])
-  integracaoId         Int
-  integracao           Integracao               @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
-  sincronizacaoId      Int?
-  sincronizacao        SincronizacaoIntegracao? @relation(fields: [sincronizacaoId], references: [id], onDelete: SetNull)
-  codigo               String
-  mensagem             String
-  detalhesSanitizados  String?
-  resolvido            Boolean                  @default(false)
-  createdAt            DateTime                 @default(now())
-  resolvedAt           DateTime?
+  id                  Int                      @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa                  @relation(fields: [empresaId], references: [id])
+  integracaoId        Int
+  integracao          Integracao               @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  sincronizacaoId     Int?
+  sincronizacao       SincronizacaoIntegracao? @relation(fields: [sincronizacaoId], references: [id], onDelete: SetNull)
+  codigo              String
+  mensagem            String
+  detalhesSanitizados String?
+  resolvido           Boolean                  @default(false)
+  createdAt           DateTime                 @default(now())
+  resolvedAt          DateTime?
 
   @@index([empresaId])
   @@index([integracaoId])
@@ -268,11 +292,11 @@ model ErroIntegracao {
 }
 
 model ProdutoExterno {
-  id                 Int               @id @default(autoincrement())
+  id                 Int              @id @default(autoincrement())
   empresaId          Int
-  empresa            Empresa           @relation(fields: [empresaId], references: [id])
+  empresa            Empresa          @relation(fields: [empresaId], references: [id])
   integracaoId       Int
-  integracao         Integracao        @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  integracao         Integracao       @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
   externalId         String
   sku                String?
   codigoBarras       String?
@@ -281,11 +305,11 @@ model ProdutoExterno {
   categoria          String?
   marca              String?
   unidade            String?
-  ativo              Boolean           @default(true)
+  ativo              Boolean          @default(true)
   dadosOriginaisJson String?
-  sincronizadoEm     DateTime          @default(now())
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
+  sincronizadoEm     DateTime         @default(now())
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   estoques           EstoqueExterno[]
   precos             PrecoExterno[]
 
@@ -299,21 +323,21 @@ model ProdutoExterno {
 }
 
 model EstoqueExterno {
-  id               Int             @id @default(autoincrement())
+  id               Int            @id @default(autoincrement())
   empresaId        Int
-  empresa          Empresa         @relation(fields: [empresaId], references: [id])
+  empresa          Empresa        @relation(fields: [empresaId], references: [id])
   integracaoId     Int
-  integracao       Integracao      @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  integracao       Integracao     @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
   produtoExternoId Int
-  produtoExterno   ProdutoExterno  @relation(fields: [produtoExternoId], references: [id], onDelete: Cascade)
+  produtoExterno   ProdutoExterno @relation(fields: [produtoExternoId], references: [id], onDelete: Cascade)
   localExternalId  String?
   localNome        String?
-  quantidade       Decimal         @default(0)
+  quantidade       Decimal        @default(0)
   reservado        Decimal?
-  disponivel       Decimal         @default(0)
-  sincronizadoEm   DateTime        @default(now())
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  disponivel       Decimal        @default(0)
+  sincronizadoEm   DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([empresaId])
   @@index([integracaoId])
@@ -322,21 +346,21 @@ model EstoqueExterno {
 }
 
 model PrecoExterno {
-  id                        Int             @id @default(autoincrement())
-  empresaId                 Int
-  empresa                   Empresa         @relation(fields: [empresaId], references: [id])
-  integracaoId              Int
-  integracao                Integracao      @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
-  produtoExternoId          Int
-  produtoExterno            ProdutoExterno  @relation(fields: [produtoExternoId], references: [id], onDelete: Cascade)
-  tabela                    String?
-  precoCentavos             Int
-  precoPromocionalCentavos  Int?
-  inicioPromocao            DateTime?
-  fimPromocao               DateTime?
-  sincronizadoEm            DateTime        @default(now())
-  createdAt                 DateTime        @default(now())
-  updatedAt                 DateTime        @updatedAt
+  id                       Int            @id @default(autoincrement())
+  empresaId                Int
+  empresa                  Empresa        @relation(fields: [empresaId], references: [id])
+  integracaoId             Int
+  integracao               Integracao     @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  produtoExternoId         Int
+  produtoExterno           ProdutoExterno @relation(fields: [produtoExternoId], references: [id], onDelete: Cascade)
+  tabela                   String?
+  precoCentavos            Int
+  precoPromocionalCentavos Int?
+  inicioPromocao           DateTime?
+  fimPromocao              DateTime?
+  sincronizadoEm           DateTime       @default(now())
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
 
   @@index([empresaId])
   @@index([integracaoId])
@@ -345,19 +369,19 @@ model PrecoExterno {
 }
 
 model CondicaoPagamentoExterna {
-  id                  Int             @id @default(autoincrement())
+  id                  Int        @id @default(autoincrement())
   empresaId           Int
-  empresa             Empresa         @relation(fields: [empresaId], references: [id])
+  empresa             Empresa    @relation(fields: [empresaId], references: [id])
   integracaoId        Int
-  integracao          Integracao      @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  integracao          Integracao @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
   externalId          String
   nome                String
   parcelas            Int?
   valorMinimoCentavos Int?
-  ativo               Boolean         @default(true)
-  sincronizadoEm      DateTime        @default(now())
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  ativo               Boolean    @default(true)
+  sincronizadoEm      DateTime   @default(now())
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
   @@unique([integracaoId, externalId])
   @@index([empresaId])
@@ -366,27 +390,27 @@ model CondicaoPagamentoExterna {
 }
 
 model ImportacaoDados {
-  id                 Int                @id @default(autoincrement())
+  id                 Int               @id @default(autoincrement())
   empresaId          Int
-  empresa            Empresa            @relation(fields: [empresaId], references: [id])
+  empresa            Empresa           @relation(fields: [empresaId], references: [id])
   integracaoId       Int?
-  integracao         Integracao?        @relation(fields: [integracaoId], references: [id], onDelete: SetNull)
+  integracao         Integracao?       @relation(fields: [integracaoId], references: [id], onDelete: SetNull)
   formato            FormatoImportacao
-  status             StatusImportacao   @default(ENVIADO)
+  status             StatusImportacao  @default(ENVIADO)
   nomeArquivo        String
   tamanhoBytes       Int
   hashArquivo        String
   tipoEntidade       String
   mapeamentoJson     String?
-  totalLinhas        Int                @default(0)
-  linhasValidas      Int                @default(0)
-  linhasComErro      Int                @default(0)
+  totalLinhas        Int               @default(0)
+  linhasValidas      Int               @default(0)
+  linhasComErro      Int               @default(0)
   iniciadaEm         DateTime?
   finalizadaEm       DateTime?
   createdByUsuarioId Int
-  createdByUsuario   Usuario            @relation(fields: [createdByUsuarioId], references: [id])
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdByUsuario   Usuario           @relation(fields: [createdByUsuarioId], references: [id])
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
   erros              ErroImportacao[]
 
   @@index([empresaId])
@@ -413,20 +437,21 @@ model ErroImportacao {
 }
 
 model CanalIntegracao {
-  id             Int              @id @default(autoincrement())
+  id             Int             @id @default(autoincrement())
   empresaId      Int
-  empresa        Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa        Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   tipo           TipoCanal
   nome           String
   chaveInterna   String
-  status         StatusCanal      @default(MODO_TESTE)
-  modoTeste      Boolean          @default(true)
-  ativo          Boolean          @default(true)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  status         StatusCanal     @default(MODO_TESTE)
+  modoTeste      Boolean         @default(true)
+  ativo          Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
   contatos       ContatoCanal[]
   conversas      ConversaCanal[]
   mensagens      MensagemCanal[]
+  eventosWebhook EventoWebhook[]
 
   @@unique([empresaId, chaveInterna])
   @@index([empresaId])
@@ -435,69 +460,217 @@ model CanalIntegracao {
 }
 
 model ContatoCanal {
-  id                 Int              @id @default(autoincrement())
-  empresaId          Int
-  empresa            Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  canalIntegracaoId  Int
-  canalIntegracao    CanalIntegracao  @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
-  externalId         String
+  id                  Int             @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  canalIntegracaoId   Int
+  canalIntegracao     CanalIntegracao @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  clienteId           Int?
+  cliente             Cliente?        @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  externalId          String
   telefoneNormalizado String?
-  nome               String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  conversas          ConversaCanal[]
+  nome                String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  conversas           ConversaCanal[]
 
   @@unique([canalIntegracaoId, externalId])
   @@index([empresaId])
   @@index([canalIntegracaoId])
   @@index([empresaId, telefoneNormalizado])
+  @@index([empresaId, clienteId])
 }
 
 model ConversaCanal {
-  id                 Int              @id @default(autoincrement())
-  empresaId          Int
-  empresa            Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  canalIntegracaoId  Int
-  canalIntegracao    CanalIntegracao  @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
-  contatoCanalId     Int
-  contatoCanal       ContatoCanal     @relation(fields: [contatoCanalId], references: [id], onDelete: Cascade)
-  status             StatusConversa   @default(ABERTA)
-  chaveAberta        String?          @unique
-  ultimaMensagemEm   DateTime?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  mensagens          MensagemCanal[]
+  id                       Int                   @id @default(autoincrement())
+  empresaId                Int
+  empresa                  Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  canalIntegracaoId        Int
+  canalIntegracao          CanalIntegracao       @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  contatoCanalId           Int
+  contatoCanal             ContatoCanal          @relation(fields: [contatoCanalId], references: [id], onDelete: Cascade)
+  leadId                   Int?
+  lead                     Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  responsavelId            Int?
+  responsavel              Usuario?              @relation("ConversaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  status                   StatusConversa        @default(ABERTA)
+  chaveAberta              String?               @unique
+  primeiraMensagemEm       DateTime?
+  ultimaMensagemEm         DateTime?
+  primeiraRespostaHumanaEm DateTime?
+  aguardandoDesde          DateTime?
+  encerradaEm              DateTime?
+  reabertaEm               DateTime?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  mensagens                MensagemCanal[]
+  notasInternas            NotaInternaConversa[]
+  historicoAtribuicoes     HistoricoAtribuicao[]
+  acompanhamentos          Acompanhamento[]
 
   @@index([empresaId])
   @@index([canalIntegracaoId])
   @@index([contatoCanalId])
   @@index([status])
   @@index([ultimaMensagemEm])
+  @@index([empresaId, status, aguardandoDesde])
+  @@index([empresaId, responsavelId, status])
+  @@index([empresaId, leadId])
 }
 
 model MensagemCanal {
-  id                 Int                 @id @default(autoincrement())
-  empresaId          Int
-  empresa            Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  canalIntegracaoId  Int
-  canalIntegracao    CanalIntegracao     @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
-  conversaCanalId    Int
-  conversaCanal      ConversaCanal       @relation(fields: [conversaCanalId], references: [id], onDelete: Cascade)
-  externalId         String
-  direcao            DirecaoMensagem
-  tipo               TipoMensagemCanal   @default(TEXTO)
-  texto              String?
-  status             StatusMensagem      @default(RECEBIDA)
-  simulada           Boolean             @default(true)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id                Int                    @id @default(autoincrement())
+  empresaId         Int
+  empresa           Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  canalIntegracaoId Int
+  canalIntegracao   CanalIntegracao        @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  conversaCanalId   Int
+  conversaCanal     ConversaCanal          @relation(fields: [conversaCanalId], references: [id], onDelete: Cascade)
+  externalId        String
+  direcao           DirecaoMensagem
+  tipo              TipoMensagemCanal      @default(TEXTO)
+  texto             String?
+  status            StatusMensagem         @default(RECEBIDA)
+  statusEntrega     StatusEntregaMensagem?
+  enviadaEm         DateTime?
+  entregueEm        DateTime?
+  lidaEm            DateTime?
+  falhouEm          DateTime?
+  erroCodigo        String?
+  erroResumo        String?
+  simulada          Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   @@unique([canalIntegracaoId, externalId])
   @@index([empresaId])
   @@index([canalIntegracaoId])
   @@index([conversaCanalId])
   @@index([status])
+  @@index([empresaId, statusEntrega])
   @@index([createdAt])
+}
+
+model Lead {
+  id                    Int                   @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  clienteId             Int
+  cliente               Cliente               @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  responsavelId         Int?
+  responsavel           Usuario?              @relation("LeadResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  status                StatusLead            @default(NOVO)
+  origem                String?
+  campanha              String?
+  interesse             String?
+  motivoDesqualificacao String?
+  qualificadoEm         DateTime?
+  desqualificadoEm      DateTime?
+  convertidoEm          DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  conversas             ConversaCanal[]
+  negocios              Negocio[]
+  acompanhamentos       Acompanhamento[]
+  historicoAtribuicoes  HistoricoAtribuicao[]
+
+  @@index([empresaId, status])
+  @@index([empresaId, responsavelId, status])
+  @@index([empresaId, clienteId])
+  @@index([empresaId, createdAt])
+}
+
+model Negocio {
+  id                   Int                   @id @default(autoincrement())
+  empresaId            Int
+  empresa              Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  clienteId            Int
+  cliente              Cliente               @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  leadId               Int?
+  lead                 Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  responsavelId        Int?
+  responsavel          Usuario?              @relation("NegocioResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  etapa                EtapaNegocio          @default(NOVO)
+  valor                Int?
+  motivoPerda          String?
+  fechadoEm            DateTime?
+  perdidoEm            DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  acompanhamentos      Acompanhamento[]
+  historicoAtribuicoes HistoricoAtribuicao[]
+
+  @@index([empresaId, etapa])
+  @@index([empresaId, responsavelId, etapa])
+  @@index([empresaId, clienteId])
+  @@index([empresaId, leadId])
+}
+
+model NotaInternaConversa {
+  id              Int           @id @default(autoincrement())
+  empresaId       Int
+  empresa         Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  conversaCanalId Int
+  conversaCanal   ConversaCanal @relation(fields: [conversaCanalId], references: [id], onDelete: Restrict)
+  autorId         Int
+  autor           Usuario       @relation("NotaInternaAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  conteudo        String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([empresaId, conversaCanalId, createdAt])
+  @@index([empresaId, autorId, createdAt])
+}
+
+model HistoricoAtribuicao {
+  id                    Int              @id @default(autoincrement())
+  empresaId             Int
+  empresa               Empresa          @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  leadId                Int?
+  lead                  Lead?            @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  conversaCanalId       Int?
+  conversaCanal         ConversaCanal?   @relation(fields: [conversaCanalId], references: [id], onDelete: Restrict)
+  negocioId             Int?
+  negocio               Negocio?         @relation(fields: [negocioId], references: [id], onDelete: Restrict)
+  responsavelAnteriorId Int?
+  responsavelAnterior   Usuario?         @relation("AtribuicaoResponsavelAnterior", fields: [responsavelAnteriorId], references: [id], onDelete: SetNull)
+  responsavelNovoId     Int?
+  responsavelNovo       Usuario?         @relation("AtribuicaoResponsavelNovo", fields: [responsavelNovoId], references: [id], onDelete: SetNull)
+  alteradoPorId         Int?
+  alteradoPor           Usuario?         @relation("AtribuicaoAlteradoPor", fields: [alteradoPorId], references: [id], onDelete: SetNull)
+  tipo                  TipoAtribuicao   @default(ATRIBUIR)
+  origem                OrigemAtribuicao @default(MANUAL)
+  motivo                String?
+  createdAt             DateTime         @default(now())
+
+  @@index([empresaId, leadId, createdAt])
+  @@index([empresaId, conversaCanalId, createdAt])
+  @@index([empresaId, negocioId, createdAt])
+  @@index([empresaId, responsavelNovoId, createdAt])
+}
+
+model EventoWebhook {
+  id                  Int                        @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa                    @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  canalIntegracaoId   Int
+  canalIntegracao     CanalIntegracao            @relation(fields: [canalIntegracaoId], references: [id], onDelete: Restrict)
+  provedor            String
+  externalEventId     String
+  tipoEvento          String?
+  payloadHash         String?
+  statusProcessamento StatusProcessamentoWebhook @default(RECEBIDO)
+  tentativas          Int                        @default(0)
+  recebidoEm          DateTime                   @default(now())
+  processadoEm        DateTime?
+  erroCodigo          String?
+  erroResumo          String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@unique([empresaId, canalIntegracaoId, provedor, externalEventId])
+  @@index([empresaId, statusProcessamento, recebidoEm])
+  @@index([empresaId, canalIntegracaoId, recebidoEm])
 }
 
 enum TipoCanal {
@@ -516,6 +689,11 @@ enum DirecaoMensagem {
 
 enum StatusConversa {
   ABERTA
+  NOVA
+  AGUARDANDO_ATENDIMENTO
+  EM_ATENDIMENTO
+  AGUARDANDO_CLIENTE
+  PENDENTE
   ENCERRADA
 }
 
@@ -524,6 +702,53 @@ enum StatusMensagem {
   PROCESSADA
   PREPARADA
   ERRO
+}
+
+enum StatusEntregaMensagem {
+  RECEBIDA
+  PENDENTE_ENVIO
+  ENVIADA
+  ENTREGUE
+  LIDA
+  FALHOU
+}
+
+enum StatusLead {
+  NOVO
+  EM_ATENDIMENTO
+  QUALIFICADO
+  DESQUALIFICADO
+  CONVERTIDO
+}
+
+enum EtapaNegocio {
+  NOVO
+  CONTATO
+  PROPOSTA
+  FECHADO
+  PERDIDO
+}
+
+enum TipoAtribuicao {
+  ASSUMIR
+  ATRIBUIR
+  TRANSFERIR
+  DESATRIBUIR
+  REDISTRIBUIR
+}
+
+enum OrigemAtribuicao {
+  MANUAL
+  AUTOMATICA
+  MIGRACAO
+}
+
+enum StatusProcessamentoWebhook {
+  RECEBIDO
+  PROCESSANDO
+  PROCESSADO
+  FALHOU
+  IGNORADO_DUPLICADO
 }
 
 enum TipoMensagemCanal {
