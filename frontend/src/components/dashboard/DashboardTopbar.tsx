@@ -17,6 +17,7 @@ type DashboardTopbarProps = {
   onLogout: () => void;
   authSession: AuthSession | null;
   canManageIntegrations: boolean;
+  leadsCommunicationEnabled: boolean;
 };
 
 export default function DashboardTopbar({
@@ -31,6 +32,7 @@ export default function DashboardTopbar({
   onLogout,
   authSession,
   canManageIntegrations,
+  leadsCommunicationEnabled,
 }: DashboardTopbarProps) {
   return (
     <header className="topbar-shell sticky top-0 z-40 flex h-14 items-center border-b px-5 lg:px-7">
@@ -45,6 +47,7 @@ export default function DashboardTopbar({
           onSetActivePage={setActivePage}
           onCloseQuickActions={() => setShowQuickActions(false)}
           canManageIntegrations={canManageIntegrations}
+          leadsCommunicationEnabled={leadsCommunicationEnabled}
         />
 
         <div className="flex min-w-0 items-center justify-end gap-1.5 lg:w-[220px]">

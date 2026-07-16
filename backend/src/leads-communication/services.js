@@ -169,6 +169,7 @@ function createLeadsCommunicationServices({ prisma }) {
     await findLead(context, id);
     return prisma.historicoAtribuicao.findMany({
       where: { empresaId: context.empresaId, leadId: id },
+      include: assignmentHistoryIncludes(),
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
   }
@@ -297,6 +298,7 @@ function createLeadsCommunicationServices({ prisma }) {
     await findConversation(context, id);
     return prisma.historicoAtribuicao.findMany({
       where: { empresaId: context.empresaId, conversaCanalId: id },
+      include: assignmentHistoryIncludes(),
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
   }
@@ -314,6 +316,7 @@ function createLeadsCommunicationServices({ prisma }) {
     await findConversation(context, conversationId);
     return prisma.notaInternaConversa.findMany({
       where: { empresaId: context.empresaId, conversaCanalId: conversationId },
+      include: { autor: { select: { id: true, nome: true } } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
   }
@@ -710,11 +713,41 @@ function leadIncludes() {
 
 function conversationIncludes() {
   return {
-    canalIntegracao: { select: { id: true, nome: true, tipo: true } },
-    contatoCanal: { select: { id: true, nome: true, clienteId: true } },
-    lead: { select: { id: true, clienteId: true, status: true } },
+    canalIntegracao: { select: { id: true, nome: true, tipo: true, status: true, modoTeste: true } },
+    contatoCanal: {
+      select: {
+        id: true,
+        nome: true,
+        clienteId: true,
+        cliente: { select: { id: true, nome: true, telefone: true, email: true, empresa: true } },
+      },
+    },
+    lead: {
+      select: {
+        id: true,
+        clienteId: true,
+        status: true,
+        interesse: true,
+        origem: true,
+        campanha: true,
+        responsavel: { select: { id: true, nome: true } },
+      },
+    },
     responsavel: { select: { id: true, nome: true, papel: true } },
     respostaReservadaPor: { select: { id: true, nome: true } },
+    mensagens: {
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 1,
+      include: messageIncludes(),
+    },
+  };
+}
+
+function assignmentHistoryIncludes() {
+  return {
+    responsavelAnterior: { select: { id: true, nome: true } },
+    responsavelNovo: { select: { id: true, nome: true } },
+    alteradoPor: { select: { id: true, nome: true } },
   };
 }
 
@@ -723,13 +756,14 @@ function messageIncludes() {
 }
 
 function presentConversation(conversation) {
-  const { respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte, ...data } = conversation;
+  const { mensagens, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte, ...data } = conversation;
   return {
     ...data,
     responsavelPrincipal: conversation.responsavel
       ? { id: conversation.responsavel.id, nome: conversation.responsavel.nome }
       : null,
     reservaResposta: replyLeaseView({ ...conversation, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte }),
+    ultimaMensagem: mensagens?.[0] ? presentMessage(mensagens[0]) : null,
   };
 }
 

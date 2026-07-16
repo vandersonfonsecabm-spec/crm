@@ -5,12 +5,15 @@ export type DashboardRoute = {
   pathname: string;
   label: string;
   requiresIntegrationAccess?: boolean;
+  requiresLeadsCommunication?: boolean;
   showInSidebar: boolean;
 };
 
 export const dashboardRoutes = [
   { page: "dashboard", pathname: "/", label: "Visão Geral", showInSidebar: true },
   { page: "comercial", pathname: "/central-comercial", label: "Central Comercial", showInSidebar: true },
+  { page: "inbox", pathname: "/caixa-de-entrada", label: "Caixa de Entrada", requiresLeadsCommunication: true, showInSidebar: true },
+  { page: "leads", pathname: "/leads", label: "Leads", requiresLeadsCommunication: true, showInSidebar: true },
   { page: "clientes", pathname: "/clientes", label: "Clientes", showInSidebar: true },
   { page: "kanban", pathname: "/negocios", label: "Negócios", showInSidebar: true },
   { page: "agenda", pathname: "/agenda", label: "Agenda", showInSidebar: true },
@@ -30,7 +33,7 @@ export const dashboardNavigationGroups: ReadonlyArray<{
   pages: readonly ActivePage[];
 }> = [
   { label: "Visão geral", pages: ["dashboard"] },
-  { label: "Comercial", pages: ["comercial", "clientes", "kanban", "agenda"] },
+  { label: "Comercial", pages: ["comercial", "inbox", "leads", "clientes", "kanban", "agenda"] },
   { label: "Operação", pages: ["estoque"] },
   { label: "Administração", pages: ["integracoes"] },
 ];

@@ -63,12 +63,14 @@ export type AuthSession = {
 export class ApiHttpError extends Error {
   readonly status: number;
   readonly code?: string;
+  readonly details?: Record<string, unknown>;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "ApiHttpError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -151,6 +153,138 @@ export type ApiCategoriaProduto = {
   produtosCount: number;
   createdAt: string;
   updatedAt: string;
+};
+
+export type LeadsCommunicationUser = {
+  id: number;
+  nome: string;
+  papel?: ApiUserRole;
+  ativo?: boolean;
+};
+
+export type LeadStatus = "NOVO" | "EM_ATENDIMENTO" | "QUALIFICADO" | "DESQUALIFICADO" | "CONVERTIDO";
+export type ConversationStatus = "ABERTA" | "NOVA" | "AGUARDANDO_ATENDIMENTO" | "EM_ATENDIMENTO" | "AGUARDANDO_CLIENTE" | "PENDENTE" | "ENCERRADA";
+export type MessageDirection = "ENTRADA" | "SAIDA";
+
+export type CommunicationLead = {
+  id: number;
+  clienteId: number;
+  cliente: { id: number; nome: string };
+  responsavelId: number | null;
+  responsavel: LeadsCommunicationUser | null;
+  status: LeadStatus;
+  origem: string | null;
+  campanha: string | null;
+  interesse: string | null;
+  motivoDesqualificacao: string | null;
+  qualificadoEm: string | null;
+  desqualificadoEm: string | null;
+  convertidoEm: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ReplyLease = {
+  usuarioId: number;
+  nome: string | null;
+  expiraEm: string;
+};
+
+export type CommunicationMessage = {
+  id: number;
+  conversaCanalId: number;
+  autorUsuarioId: number | null;
+  autor: { id: number; nome: string } | null;
+  direcao: MessageDirection;
+  tipo: string;
+  texto: string | null;
+  status: string;
+  statusEntrega: string | null;
+  simulada: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommunicationConversation = {
+  id: number;
+  canalIntegracaoId: number;
+  contatoCanalId: number;
+  leadId: number | null;
+  responsavelId: number | null;
+  status: ConversationStatus;
+  primeiraMensagemEm: string | null;
+  ultimaMensagemEm: string | null;
+  primeiraRespostaHumanaEm: string | null;
+  aguardandoDesde: string | null;
+  encerradaEm: string | null;
+  reabertaEm: string | null;
+  createdAt: string;
+  updatedAt: string;
+  canalIntegracao: { id: number; nome: string; tipo: string; status: string; modoTeste: boolean };
+  contatoCanal: {
+    id: number;
+    nome: string | null;
+    clienteId: number | null;
+    cliente: { id: number; nome: string; telefone: string; email: string; empresa: string } | null;
+  };
+  lead: {
+    id: number;
+    clienteId: number;
+    status: LeadStatus;
+    interesse: string | null;
+    origem: string | null;
+    campanha: string | null;
+    responsavel: { id: number; nome: string } | null;
+  } | null;
+  responsavel: LeadsCommunicationUser | null;
+  responsavelPrincipal: { id: number; nome: string } | null;
+  reservaResposta: ReplyLease | null;
+  ultimaMensagem: CommunicationMessage | null;
+};
+
+export type InternalConversationNote = {
+  id: number;
+  conversaCanalId: number;
+  autorId: number;
+  autor: { id: number; nome: string };
+  conteudo: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AssignmentHistoryEntry = {
+  id: number;
+  tipo: "ATRIBUIR" | "ASSUMIR" | "TRANSFERIR" | "DESATRIBUIR";
+  origem: string;
+  motivo: string | null;
+  responsavelAnterior: { id: number; nome: string } | null;
+  responsavelNovo: { id: number; nome: string } | null;
+  alteradoPor: { id: number; nome: string } | null;
+  createdAt: string;
+};
+
+export type LeadQuery = {
+  page?: number;
+  limit?: number;
+  status?: LeadStatus;
+  responsavelId?: number;
+  clienteId?: number;
+  origem?: string;
+  q?: string;
+  meus?: boolean;
+  semResponsavel?: boolean;
+};
+
+export type ConversationQuery = {
+  page?: number;
+  limit?: number;
+  estado?: ConversationStatus;
+  responsavelId?: number;
+  semResponsavel?: boolean;
+  meus?: boolean;
+  leadId?: number;
+  canalIntegracaoId?: number;
+  q?: string;
 };
 
 export type CategoriaProdutoCreatePayload = {
@@ -1110,6 +1244,110 @@ export async function createNotaOnBackend(client: Client, text: string) {
   return mapApiNotaToNote(nota);
 }
 
+export async function fetchCommunicationLeads(params: LeadQuery = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<CommunicationLead>>(`/leads${toQueryString(params)}`);
+}
+
+export async function fetchCommunicationLead(id: number) {
+  return requestApiGetAuthenticated<CommunicationLead>(`/leads/${id}`);
+}
+
+export async function createCommunicationLead(payload: {
+  clienteId: number;
+  interesse?: string;
+  origem?: string;
+  campanha?: string;
+  responsavelId?: number | null;
+}) {
+  return requestApiWrite<CommunicationLead>("POST", "/leads", payload);
+}
+
+export async function updateCommunicationLead(id: number, payload: {
+  interesse?: string | null;
+  origem?: string | null;
+  campanha?: string | null;
+  motivoDesqualificacao?: string | null;
+  status?: LeadStatus;
+}) {
+  return requestApiWrite<CommunicationLead>("PATCH", `/leads/${id}`, payload);
+}
+
+export async function assumeCommunicationLead(id: number) {
+  return requestApiWrite<CommunicationLead>("POST", `/leads/${id}/assumir`, {});
+}
+
+export async function assignCommunicationLead(id: number, responsavelId: number, motivo?: string) {
+  return requestApiWrite<CommunicationLead>("POST", `/leads/${id}/atribuir`, { responsavelId, ...(motivo ? { motivo } : {}) });
+}
+
+export async function returnCommunicationLeadToQueue(id: number, motivo: string) {
+  return requestApiWrite<CommunicationLead>("POST", `/leads/${id}/devolver-fila`, { motivo });
+}
+
+export async function fetchCommunicationLeadHistory(id: number) {
+  return requestApiGetAuthenticated<AssignmentHistoryEntry[]>(`/leads/${id}/historico-atribuicao`);
+}
+
+export async function fetchCommunicationConversations(params: ConversationQuery = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<CommunicationConversation>>(`/conversas${toQueryString(params)}`);
+}
+
+export async function fetchCommunicationConversation(id: number) {
+  return requestApiGetAuthenticated<CommunicationConversation>(`/conversas/${id}`);
+}
+
+export async function assumeCommunicationConversation(id: number) {
+  return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/assumir`, {});
+}
+
+export async function assignCommunicationConversation(id: number, responsavelId: number, motivo?: string) {
+  return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/atribuir`, { responsavelId, ...(motivo ? { motivo } : {}) });
+}
+
+export async function returnCommunicationConversationToQueue(id: number, motivo: string) {
+  return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/devolver-fila`, { motivo });
+}
+
+export async function updateCommunicationConversationStatus(id: number, estado: ConversationStatus) {
+  return requestApiWrite<CommunicationConversation>("PATCH", `/conversas/${id}/estado`, { estado });
+}
+
+export async function fetchCommunicationMessages(id: number, params: { page?: number; limit?: number } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<CommunicationMessage>>(`/conversas/${id}/mensagens${toQueryString(params)}`);
+}
+
+export async function sendSimulatedCommunicationMessage(id: number, payload: { externalId: string; texto: string }) {
+  return requestApiWrite<CommunicationMessage>("POST", `/conversas/${id}/mensagens/simuladas`, { ...payload, direcao: "SAIDA" });
+}
+
+export async function fetchCommunicationNotes(id: number) {
+  return requestApiGetAuthenticated<InternalConversationNote[]>(`/conversas/${id}/notas-internas`);
+}
+
+export async function createCommunicationNote(id: number, conteudo: string) {
+  return requestApiWrite<InternalConversationNote>("POST", `/conversas/${id}/notas-internas`, { conteudo });
+}
+
+export async function fetchCommunicationConversationHistory(id: number) {
+  return requestApiGetAuthenticated<AssignmentHistoryEntry[]>(`/conversas/${id}/historico-atribuicao`);
+}
+
+export async function acquireCommunicationReplyLease(id: number) {
+  return requestApiWrite<{ reservaResposta: ReplyLease }>("POST", `/conversas/${id}/reserva-resposta`, {});
+}
+
+export async function renewCommunicationReplyLease(id: number) {
+  return requestApiWrite<{ reservaResposta: ReplyLease }>("POST", `/conversas/${id}/reserva-resposta/renovar`, {});
+}
+
+export async function releaseCommunicationReplyLease(id: number) {
+  return requestApiWrite<{ reservaResposta: null }>("DELETE", `/conversas/${id}/reserva-resposta`);
+}
+
+export async function fetchCommunicationTeamUsers() {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<LeadsCommunicationUser>>("/usuarios?limit=100");
+}
+
 async function requestCliente(method: "POST" | "PATCH" | "PUT", path: string, payload: ClientePayload): Promise<ApiCliente>;
 async function requestCliente(method: "DELETE", path: string): Promise<null>;
 async function requestCliente(method: "POST" | "PATCH" | "PUT" | "DELETE", path: string, payload?: ClientePayload) {
@@ -1171,7 +1409,7 @@ async function requestApiGetAuthenticated<T>(path: string): Promise<T> {
 
   if (!response.ok) {
     const error = await readApiErrorDetails(response);
-    throw new ApiHttpError(error.message, response.status, error.code);
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
   return (await response.json()) as T;
@@ -1205,7 +1443,7 @@ async function requestApiPost<T>(path: string, payload: Record<string, unknown>)
   return requestApiWrite<T>("POST", path, payload);
 }
 
-async function requestApiWrite<T>(method: "POST" | "PATCH", path: string, payload: Record<string, unknown>): Promise<T> {
+async function requestApiWrite<T>(method: "POST" | "PATCH" | "DELETE", path: string, payload?: Record<string, unknown>): Promise<T> {
   if (!hasRemoteApi()) {
     throw new Error("Nao foi possivel concluir a acao agora.");
   }
@@ -1219,14 +1457,14 @@ async function requestApiWrite<T>(method: "POST" | "PATCH", path: string, payloa
     method,
     headers: {
       ...buildHeaders(token),
-      "Content-Type": "application/json",
+      ...(payload ? { "Content-Type": "application/json" } : {}),
     },
-    body: JSON.stringify(payload),
+    body: payload ? JSON.stringify(payload) : undefined,
   });
 
   if (!response.ok) {
-    const message = await readApiError(response);
-    throw new Error(message);
+    const error = await readApiErrorDetails(response);
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
   return (await response.json()) as T;
@@ -1238,17 +1476,18 @@ async function readApiError(response: Response) {
 
 async function readApiErrorDetails(response: Response) {
   try {
-    const data = (await response.json()) as { erro?: string; error?: string; message?: string; codigo?: string; code?: string };
+    const data = (await response.json()) as { erro?: string; error?: string; message?: string; codigo?: string; code?: string; [key: string]: unknown };
     return {
       message: data.erro || data.error || data.message || "Nao foi possivel concluir a acao agora.",
       code: data.codigo || data.code,
+      details: data,
     };
   } catch {
-    return { message: "Nao foi possivel concluir a acao agora.", code: undefined };
+    return { message: "Nao foi possivel concluir a acao agora.", code: undefined, details: undefined };
   }
 }
 
-function toQueryString(params: Record<string, string | number | boolean | null | undefined>) {
+function toQueryString<T extends object>(params: T) {
   const query = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {

@@ -136,6 +136,14 @@ const pageMeta: Record<ActivePage, { breadcrumb: string; description: string }> 
     breadcrumb: "Central Comercial",
     description: "Decisões, oportunidades e ações comerciais em um só contexto.",
   },
+  inbox: {
+    breadcrumb: "Caixa de Entrada",
+    description: "Centralize conversas e atendimentos de todos os canais conectados.",
+  },
+  leads: {
+    breadcrumb: "Leads",
+    description: "Acompanhe interesses comerciais, responsáveis e oportunidades antes de entrarem no funil de vendas.",
+  },
   clientes: {
     breadcrumb: "Clientes",
     description: "Gerencie relacionamentos, prioridades e histórico comercial.",

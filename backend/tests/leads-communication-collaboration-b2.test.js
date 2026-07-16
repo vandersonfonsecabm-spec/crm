@@ -96,6 +96,8 @@ test("Release B2 habilita atendimento colaborativo sem misturar autoria e respon
   const returnedHistory = await request("GET", `/leads/${leadFree.id}/historico-atribuicao`, undefined, sellerC.token);
   assert.deepEqual(returnedHistory.body.slice(-2).map((item) => item.tipo), ["ASSUMIR", "DESATRIBUIR"]);
   assert.equal(returnedHistory.body.at(-1).motivo, "Retorno para atendimento geral");
+  assert.equal(returnedHistory.body.at(-1).responsavelAnterior.nome, "Vendedor B");
+  assert.equal(returnedHistory.body.at(-1).alteradoPor.nome, "Vendedor B");
   assert.equal((await request("POST", `/leads/${leadA.id}/devolver-fila`, { motivo: "Tentativa indevida" }, sellerC.token)).status, 403);
   assert.equal((await request("POST", `/leads/${leadA.id}/atribuir`, { responsavelId: sellerC.usuarioId }, sellerC.token)).status, 403);
 
@@ -168,12 +170,18 @@ test("Release B2 habilita atendimento colaborativo sem misturar autoria e respon
   assert.equal(received.body.autorUsuarioId, null);
   const messageList = await request("GET", `/conversas/${conversationA.id}/mensagens`, undefined, sellerB.token);
   assert.ok(messageList.body.data.some((message) => message.autor?.id === sellerC.usuarioId));
+  const conversationProjection = await request("GET", `/conversas/${conversationA.id}`, undefined, sellerA.token);
+  assert.equal(conversationProjection.status, 200);
+  assert.equal(conversationProjection.body.ultimaMensagem.autor, null);
+  assert.equal(conversationProjection.body.contatoCanal.cliente.nome, "QA-B2 Cliente A");
 
   const stateBeforeNote = (await prisma.conversaCanal.findUnique({ where: { id: conversationA.id } })).status;
   const note = await request("POST", `/conversas/${conversationA.id}/notas-internas`, { conteudo: "Nota colaborativa B2" }, sellerB.token);
   assert.equal(note.status, 201);
   assert.equal(note.body.autorId, sellerB.usuarioId);
-  assert.equal((await request("GET", `/conversas/${conversationA.id}/notas-internas`, undefined, sellerC.token)).body.length, 1);
+  const notes = await request("GET", `/conversas/${conversationA.id}/notas-internas`, undefined, sellerC.token);
+  assert.equal(notes.body.length, 1);
+  assert.equal(notes.body[0].autor.nome, "Vendedor B");
   assert.equal((await prisma.conversaCanal.findUnique({ where: { id: conversationA.id } })).status, stateBeforeNote);
 
   const leaseA = await request("POST", `/conversas/${conversationA.id}/reserva-resposta`, {}, sellerA.token);

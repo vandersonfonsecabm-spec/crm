@@ -42,6 +42,8 @@ import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomati
 import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
 import DashboardInventoryPanel from "../components/dashboard/DashboardInventoryPanel";
 import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegrationsPanel";
+import DashboardInboxPanel from "../components/leads-communication/DashboardInboxPanel";
+import DashboardLeadsPanel from "../components/leads-communication/DashboardLeadsPanel";
 import DashboardToast from "../components/dashboard/DashboardToast";
 import WhatsappExternalConfirmDialog from "../components/dashboard/WhatsappExternalConfirmDialog";
 import type { WhatsappExternalRequest } from "../components/dashboard/WhatsappExternalConfirmDialog";
@@ -49,6 +51,9 @@ import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
 import { canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
+import { isLeadsCommunicationEnabled } from "../config/featureFlags";
+import { EmptyState } from "../components/ui";
+import { LockKeyhole } from "lucide-react";
 
 import { emptyClient, statusList } from "../data/clientDefaults";
 
@@ -94,7 +99,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [agendaCreateRequestKey, setAgendaCreateRequestKey] = useState(0);
   const [agendaTodayRequestKey, setAgendaTodayRequestKey] = useState(0);
   const [kanbanStageRequest, setKanbanStageRequest] = useState<{ group: "pipeline" | "resultado"; key: number }>({ group: "pipeline", key: 0 });
+  const [leadsCreateRequestKey, setLeadsCreateRequestKey] = useState(0);
+  const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
   const canManageIntegrations = canAccessIntegrations(authSession);
+  const leadsCommunicationEnabled = isLeadsCommunicationEnabled();
+  const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
   const requestedActivePage = resolvedNavigation.page;
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
 
@@ -114,6 +123,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const pageTitle = ({
     dashboard: "Visão Geral",
     comercial: "Central Comercial",
+    inbox: "Caixa de Entrada",
+    leads: "Leads",
     clientes: "Clientes",
     kanban: "Negócios",
     agenda: "Agenda",
@@ -284,12 +295,21 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       navigate(getDashboardPath("dashboard"), { replace: true });
       return;
     }
+    if ((page === "inbox" || page === "leads") && !leadsCommunicationEnabled) {
+      setToast("Leads e Caixa de Entrada não estão habilitados neste ambiente.");
+      return;
+    }
 
     const pathname = getDashboardPath(page);
     if (normalizeDashboardPathname(location.pathname) !== pathname) {
       navigate(pathname);
     }
-  }, [canManageIntegrations, location.pathname, navigate, setToast]);
+  }, [canManageIntegrations, leadsCommunicationEnabled, location.pathname, navigate, setToast]);
+
+  const openInboxConversation = useCallback((conversationId: number) => {
+    setInboxConversationId(conversationId);
+    handleSetActivePage("inbox");
+  }, [handleSetActivePage]);
 
   useEffect(() => {
     if (!resolvedNavigation.isKnown || resolvedNavigation.needsReplace) {
@@ -519,6 +539,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           setActivePage={handleSetActivePage}
           authSession={authSession}
           canManageIntegrations={canManageIntegrations}
+          leadsCommunicationEnabled={leadsCommunicationEnabled}
         />
 
         <div className="crm-main min-w-0 flex-1 overflow-x-hidden">
@@ -534,6 +555,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             onLogout={onLogout}
             authSession={authSession}
             canManageIntegrations={canManageIntegrations}
+            leadsCommunicationEnabled={leadsCommunicationEnabled}
           />
 
           <main className="crm-content mx-auto w-full max-w-[1680px] px-5 pb-8 pt-5 lg:px-7">
@@ -545,10 +567,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               backendCaption
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
-            showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes" && activePage !== "kanban"}
-            showBackendCaption={!(["dashboard", "comercial", "clientes", "kanban", "agenda", "estoque", "integracoes", "automacoes"] as ActivePage[]).includes(activePage)}
-            compact={(["dashboard", "comercial", "clientes", "kanban", "agenda", "estoque", "integracoes", "automacoes"] as ActivePage[]).includes(activePage)}
-            primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : undefined}
+            showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes" && activePage !== "kanban" && activePage !== "leads" && activePage !== "inbox"}
+            showBackendCaption={false}
+            compact
+            primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : activePage === "leads" && leadsCommunicationEnabled && canManageLeads ? { label: "Novo Lead", onClick: () => setLeadsCreateRequestKey((current) => current + 1) } : undefined}
             actions={pageActions}
           />
 
@@ -598,7 +620,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             </section>
           )}
 
-          {activePage !== "agenda" && (
+          {activePage !== "agenda" && activePage !== "leads" && activePage !== "inbox" && (
             <DashboardMetricsSection
               activePage={activePage}
               clients={clients}
@@ -607,7 +629,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             />
           )}
 
-          {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && (
+          {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && activePage !== "leads" && activePage !== "inbox" && (
             <DashboardOperationalSearch
               activePage={activePage}
               metadata={activePage === "clientes" || activePage === "kanban" ? backendCaption : undefined}
@@ -634,7 +656,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
           {activePage !== "dashboard" && <section
             className={`${activePage === "comercial" || activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" ? "mt-3" : "mt-4"} ${
-              activePage === "comercial"
+              activePage === "comercial" || activePage === "leads" || activePage === "inbox"
                 ? "block"
                 : activePage === "clientes" || activePage === "kanban"
                   ? "block"
@@ -647,7 +669,18 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
             }`}
           >
-            <div className={activePage === "comercial" || activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" ? "space-y-3" : "space-y-4"}>
+            <div className={activePage === "comercial" || activePage === "leads" || activePage === "inbox" || activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" ? "space-y-3" : "space-y-4"}>
+              {(activePage === "leads" || activePage === "inbox") && !leadsCommunicationEnabled && (
+                <EmptyState description="Este recurso permanece indisponível enquanto a feature flag local estiver desligada." icon={<LockKeyhole size={18} />} title="Recurso não habilitado" />
+              )}
+
+              {activePage === "leads" && leadsCommunicationEnabled && authSession && (
+                <DashboardLeadsPanel authSession={authSession} clients={clients} createRequestKey={leadsCreateRequestKey} onOpenConversation={openInboxConversation} />
+              )}
+
+              {activePage === "inbox" && leadsCommunicationEnabled && authSession && (
+                <DashboardInboxPanel authSession={authSession} initialConversationId={inboxConversationId} />
+              )}
               {activePage === "clientes" && (
                 <>
                   <DashboardClientsTable
@@ -760,7 +793,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
-            {activePage !== "estoque" && activePage !== "integracoes" && customerDrawer}
+            {activePage !== "estoque" && activePage !== "integracoes" && activePage !== "leads" && activePage !== "inbox" && customerDrawer}
           </section>}
           </main>
         </div>

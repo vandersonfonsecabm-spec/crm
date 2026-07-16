@@ -8,6 +8,7 @@ type DashboardCommandSearchProps = {
   onSetActivePage: (page: ActivePage) => void;
   onCloseQuickActions: () => void;
   canManageIntegrations: boolean;
+  leadsCommunicationEnabled: boolean;
 };
 
 type CommandResult = {
@@ -23,6 +24,7 @@ export default function DashboardCommandSearch({
   onSetActivePage,
   onCloseQuickActions,
   canManageIntegrations,
+  leadsCommunicationEnabled,
 }: DashboardCommandSearchProps) {
   const [commandSearch, setCommandSearch] = useState("");
   const [showCommandResults, setShowCommandResults] = useState(false);
@@ -80,6 +82,12 @@ export default function DashboardCommandSearch({
     const pages: CommandResult[] = [
       { label: "Visão Geral", type: "Página", searchText: "visao geral dashboard inicio", action: () => onSetActivePage("dashboard") },
       { label: "Central Comercial", type: "Página", searchText: "central comercial operacao", action: () => onSetActivePage("comercial") },
+      ...(leadsCommunicationEnabled
+        ? [
+            { label: "Caixa de Entrada", type: "Página", searchText: "caixa de entrada conversas mensagens inbox atendimento whatsapp instagram facebook omnichannel", action: () => onSetActivePage("inbox") },
+            { label: "Leads", type: "Página", searchText: "leads interesses qualificacao fila atendimento", action: () => onSetActivePage("leads") },
+          ]
+        : []),
       { label: "Clientes", type: "Página", searchText: "clientes carteira", action: () => onSetActivePage("clientes") },
       { label: "Negócios", type: "Página", searchText: "negocios funil comercial kanban oportunidades", action: () => onSetActivePage("kanban") },
       { label: "Agenda", type: "Página", searchText: "agenda acompanhamentos calendario", action: () => onSetActivePage("agenda") },
@@ -104,7 +112,7 @@ export default function DashboardCommandSearch({
       }));
 
     return [...pages, ...clientResults].slice(0, 6);
-  }, [canManageIntegrations, clients, commandSearch, onSelectClient, onSetActivePage]);
+  }, [canManageIntegrations, clients, commandSearch, leadsCommunicationEnabled, onSelectClient, onSetActivePage]);
 
   const boundedSelectedIndex = Math.min(selectedIndex, Math.max(commandResults.length - 1, 0));
 

@@ -2,10 +2,12 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CalendarCheck,
+  Inbox,
   KanbanSquare,
   Package,
   PlugZap,
   Sprout,
+  UserRoundSearch,
   Users,
 } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
@@ -23,11 +25,14 @@ type DashboardSidebarProps = {
   setActivePage: (page: ActivePage) => void;
   authSession: AuthSession | null;
   canManageIntegrations?: boolean;
+  leadsCommunicationEnabled?: boolean;
 };
 
 const navigationIcons: Record<ActivePage, ReactNode> = {
   dashboard: <BarChart3 size={16} />,
   comercial: <BriefcaseBusiness size={16} />,
+  inbox: <Inbox size={16} />,
+  leads: <UserRoundSearch size={16} />,
   clientes: <Users size={16} />,
   kanban: <KanbanSquare size={16} />,
   agenda: <CalendarCheck size={16} />,
@@ -41,6 +46,7 @@ export default function DashboardSidebar({
   setActivePage,
   authSession,
   canManageIntegrations = false,
+  leadsCommunicationEnabled = false,
 }: DashboardSidebarProps) {
   const visibleGroups = dashboardNavigationGroups
     .map((group) => ({
@@ -48,7 +54,8 @@ export default function DashboardSidebar({
       items: group.pages
         .map((page) => getDashboardRoute(page))
         .filter((route) => route.showInSidebar)
-        .filter((route) => !route.requiresIntegrationAccess || canManageIntegrations),
+        .filter((route) => !route.requiresIntegrationAccess || canManageIntegrations)
+        .filter((route) => !route.requiresLeadsCommunication || leadsCommunicationEnabled),
     }))
     .filter((group) => group.items.length > 0);
 
