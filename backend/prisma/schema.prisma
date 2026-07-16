@@ -439,21 +439,23 @@ model ErroImportacao {
 }
 
 model CanalIntegracao {
-  id             Int             @id @default(autoincrement())
-  empresaId      Int
-  empresa        Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  tipo           TipoCanal
-  nome           String
-  chaveInterna   String
-  status         StatusCanal     @default(MODO_TESTE)
-  modoTeste      Boolean         @default(true)
-  ativo          Boolean         @default(true)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  contatos       ContatoCanal[]
-  conversas      ConversaCanal[]
-  mensagens      MensagemCanal[]
-  eventosWebhook EventoWebhook[]
+  id               Int             @id @default(autoincrement())
+  empresaId        Int
+  empresa          Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipo             TipoCanal
+  nome             String
+  chaveInterna     String
+  publicId         String?         @unique
+  configuracaoJson String          @default("{}")
+  status           StatusCanal     @default(MODO_TESTE)
+  modoTeste        Boolean         @default(true)
+  ativo            Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  contatos         ContatoCanal[]
+  conversas        ConversaCanal[]
+  mensagens        MensagemCanal[]
+  eventosWebhook   EventoWebhook[]
 
   @@unique([empresaId, chaveInterna])
   @@index([empresaId])
@@ -562,27 +564,31 @@ model MensagemCanal {
 }
 
 model Lead {
-  id                    Int                   @id @default(autoincrement())
-  empresaId             Int
-  empresa               Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict)
-  clienteId             Int
-  cliente               Cliente               @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  responsavelId         Int?
-  responsavel           Usuario?              @relation("LeadResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
-  status                StatusLead            @default(NOVO)
-  origem                String?
-  campanha              String?
-  interesse             String?
-  motivoDesqualificacao String?
-  qualificadoEm         DateTime?
-  desqualificadoEm      DateTime?
-  convertidoEm          DateTime?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  conversas             ConversaCanal[]
-  negocios              Negocio[]
-  acompanhamentos       Acompanhamento[]
-  historicoAtribuicoes  HistoricoAtribuicao[]
+  id                        Int                   @id @default(autoincrement())
+  empresaId                 Int
+  empresa                   Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  clienteId                 Int
+  cliente                   Cliente               @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  responsavelId             Int?
+  responsavel               Usuario?              @relation("LeadResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  status                    StatusLead            @default(NOVO)
+  origem                    String?
+  campanha                  String?
+  interesse                 String?
+  paginaOrigem              String?
+  aceitePoliticaPrivacidade Boolean?
+  versaoPoliticaPrivacidade String?
+  aceitePoliticaEm          DateTime?
+  motivoDesqualificacao     String?
+  qualificadoEm             DateTime?
+  desqualificadoEm          DateTime?
+  convertidoEm              DateTime?
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  conversas                 ConversaCanal[]
+  negocios                  Negocio[]
+  acompanhamentos           Acompanhamento[]
+  historicoAtribuicoes      HistoricoAtribuicao[]
 
   @@index([empresaId, status])
   @@index([empresaId, responsavelId, status])
@@ -625,6 +631,7 @@ model NotaInternaConversa {
   autorId         Int
   autor           Usuario       @relation("NotaInternaAutor", fields: [autorId], references: [id], onDelete: Restrict)
   conteudo        String
+  sistema         Boolean       @default(false)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -685,10 +692,12 @@ model EventoWebhook {
 
 enum TipoCanal {
   WHATSAPP_META
+  SITE_FORM
 }
 
 enum StatusCanal {
   MODO_TESTE
+  ATIVO
   INATIVO
 }
 

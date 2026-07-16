@@ -42,6 +42,7 @@ import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomati
 import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
 import DashboardInventoryPanel from "../components/dashboard/DashboardInventoryPanel";
 import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegrationsPanel";
+import DashboardSiteLeadIntegrationPanel from "../components/dashboard/DashboardSiteLeadIntegrationPanel";
 import DashboardInboxPanel from "../components/leads-communication/DashboardInboxPanel";
 import DashboardLeadsPanel from "../components/leads-communication/DashboardLeadsPanel";
 import DashboardToast from "../components/dashboard/DashboardToast";
@@ -51,7 +52,7 @@ import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
 import { canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
-import { isLeadsCommunicationEnabled } from "../config/featureFlags";
+import { isLeadsCommunicationEnabled, isSiteLeadCaptureEnabled } from "../config/featureFlags";
 import { EmptyState } from "../components/ui";
 import { LockKeyhole } from "lucide-react";
 
@@ -103,6 +104,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
   const canManageIntegrations = canAccessIntegrations(authSession);
   const leadsCommunicationEnabled = isLeadsCommunicationEnabled();
+  const siteLeadCaptureEnabled = isSiteLeadCaptureEnabled();
   const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
   const requestedActivePage = resolvedNavigation.page;
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
@@ -756,6 +758,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
               {activePage === "estoque" && <DashboardInventoryPanel onOpenIntegrations={() => handleSetActivePage("integracoes")} />}
 
+              {activePage === "integracoes" && canManageIntegrations && siteLeadCaptureEnabled && <DashboardSiteLeadIntegrationPanel />}
               {activePage === "integracoes" && canManageIntegrations && <DashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />}
 
               <DashboardKanbanBoard

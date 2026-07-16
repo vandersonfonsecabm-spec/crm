@@ -205,7 +205,7 @@ test("fundacao suporta cardinalidade, auditoria e idempotencia sem backfill", as
   await migrated.lead.delete({ where: { id: crossTenant.id } });
 });
 
-test("schema possui indices tenant e a fundacao so e ativada pelo modulo protegido da Release B1", async () => {
+test("schema possui indices tenant e a fundacao so e ativada por modulos protegidos", async () => {
   const expectedIndexes = [
     "Lead_empresaId_status_idx",
     "Lead_empresaId_responsavelId_status_idx",
@@ -235,12 +235,20 @@ test("schema possui indices tenant e a fundacao so e ativada pelo modulo protegi
   assert.equal((schema.match(/^model Mensagem \{/gm) || []).length, 0);
 
   const b1Directory = path.join(backendDir, "src", "leads-communication");
-  const runtimeOutsideB1 = readJavaScript(path.join(backendDir, "src"), new Set([path.resolve(b1Directory)]));
-  assert.doesNotMatch(runtimeOutsideB1, /prisma\.(lead|negocio|notaInternaConversa|historicoAtribuicao|eventoWebhook)\b/);
+  const d1Directory = path.join(backendDir, "src", "site-leads");
+  const runtimeOutsideProtectedModules = readJavaScript(
+    path.join(backendDir, "src"),
+    new Set([path.resolve(b1Directory), path.resolve(d1Directory)]),
+  );
+  assert.doesNotMatch(runtimeOutsideProtectedModules, /prisma\.(lead|negocio|notaInternaConversa|historicoAtribuicao|eventoWebhook)\b/);
   const b1Source = readJavaScript(b1Directory);
   assert.match(b1Source, /LEADS_COMMUNICATION_ENABLED/);
   assert.match(b1Source, /featureFlagMiddleware/);
   assert.match(b1Source, /prisma\.(lead|notaInternaConversa|historicoAtribuicao|eventoWebhook)\b/);
+  const d1Source = readJavaScript(d1Directory);
+  assert.match(d1Source, /LEADS_COMMUNICATION_ENABLED/);
+  assert.match(d1Source, /SITE_LEAD_CAPTURE_ENABLED/);
+  assert.match(d1Source, /prisma\.(lead|notaInternaConversa|eventoWebhook)\b/);
 });
 
 function migrate(databasePath) {
@@ -283,24 +291,28 @@ async function seedLegacyRows(databasePath) {
     const empresa = await prisma.empresa.findFirst({ select: { id: true } });
     const cliente = await prisma.cliente.findFirst({ where: { empresaId: empresa.id }, select: { id: true } });
     const suffix = unique("legacy");
-    const channel = await prisma.canalIntegracao.create({
-      data: { empresaId: empresa.id, tipo: "WHATSAPP_META", nome: "Canal legado Foundation A", chaveInterna: `canal-${suffix}` },
-      select: { id: true },
-    });
+    const channelKey = `canal-${suffix}`;
+    await prisma.$executeRaw`
+      INSERT INTO "CanalIntegracao" ("empresaId", "tipo", "nome", "chaveInterna", "updatedAt")
+      VALUES (${empresa.id}, ${"WHATSAPP_META"}, ${"Canal legado Foundation A"}, ${channelKey}, ${new Date()})
+    `;
+    const channel = await prisma.$queryRaw`
+      SELECT "id" FROM "CanalIntegracao" WHERE "empresaId" = ${empresa.id} AND "chaveInterna" = ${channelKey}
+    `;
     const contactExternalId = `contato-${suffix}`;
     const contact = await prisma.contatoCanal.create({
-      data: { empresaId: empresa.id, canalIntegracaoId: channel.id, externalId: contactExternalId, nome: "Contato legado" },
+      data: { empresaId: empresa.id, canalIntegracaoId: channel[0].id, externalId: contactExternalId, nome: "Contato legado" },
       select: { id: true },
     });
     const conversation = await prisma.conversaCanal.create({
-      data: { empresaId: empresa.id, canalIntegracaoId: channel.id, contatoCanalId: contact.id, chaveAberta: `aberta-${suffix}` },
+      data: { empresaId: empresa.id, canalIntegracaoId: channel[0].id, contatoCanalId: contact.id, chaveAberta: `aberta-${suffix}` },
       select: { id: true },
     });
     const messageExternalId = `mensagem-${suffix}`;
     const message = await prisma.mensagemCanal.create({
       data: {
         empresaId: empresa.id,
-        canalIntegracaoId: channel.id,
+        canalIntegracaoId: channel[0].id,
         conversaCanalId: conversation.id,
         externalId: messageExternalId,
         direcao: "ENTRADA",

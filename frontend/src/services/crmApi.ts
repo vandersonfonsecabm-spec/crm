@@ -234,20 +234,40 @@ export type CommunicationConversation = {
     interesse: string | null;
     origem: string | null;
     campanha: string | null;
+    paginaOrigem: string | null;
     responsavel: { id: number; nome: string } | null;
   } | null;
   responsavel: LeadsCommunicationUser | null;
   responsavelPrincipal: { id: number; nome: string } | null;
   reservaResposta: ReplyLease | null;
   ultimaMensagem: CommunicationMessage | null;
+  podeResponderDiretamente: boolean;
+  tipoCanal: string | null;
 };
 
 export type InternalConversationNote = {
   id: number;
   conversaCanalId: number;
   autorId: number;
-  autor: { id: number; nome: string };
+  autor: { id: number; nome: string } | null;
+  autorSistema?: boolean;
+  sistema?: boolean;
   conteudo: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SiteFormIntegration = {
+  id: number;
+  nome: string;
+  tipo: "SITE_FORM";
+  status: "ATIVO" | "INATIVO";
+  ativo: boolean;
+  publicId: string;
+  identificacao: string;
+  origensPermitidas: string[];
+  politicaPrivacidade: string;
+  endpointPath: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -1346,6 +1366,26 @@ export async function releaseCommunicationReplyLease(id: number) {
 
 export async function fetchCommunicationTeamUsers() {
   return requestApiGetAuthenticated<ApiPaginatedResponse<LeadsCommunicationUser>>("/usuarios?limit=100");
+}
+
+export async function fetchSiteFormIntegrations() {
+  return requestApiGetAuthenticated<{ data: SiteFormIntegration[] }>("/canais/site-form");
+}
+
+export async function createSiteFormIntegration(payload: { nome: string; identificacao: string; origensPermitidas: string[]; politicaPrivacidade: string; ativo?: boolean }) {
+  return requestApiWrite<SiteFormIntegration>("POST", "/canais/site-form", payload);
+}
+
+export async function updateSiteFormIntegration(id: number, payload: Partial<{ nome: string; identificacao: string; origensPermitidas: string[]; politicaPrivacidade: string; ativo: boolean }>) {
+  return requestApiWrite<SiteFormIntegration>("PATCH", `/canais/site-form/${id}`, payload);
+}
+
+export async function rotateSiteFormPublicId(id: number) {
+  return requestApiWrite<SiteFormIntegration>("POST", `/canais/site-form/${id}/rotacionar`, {});
+}
+
+export function getApiBaseUrl() {
+  return API_URL;
 }
 
 async function requestCliente(method: "POST" | "PATCH" | "PUT", path: string, payload: ClientePayload): Promise<ApiCliente>;

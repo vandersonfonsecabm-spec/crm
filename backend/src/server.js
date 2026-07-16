@@ -8,6 +8,7 @@ const { mountIntegrationHubRoutes } = require("./integrations/routes");
 const { mountChannelRoutes } = require("./channels/channelRoutes");
 const { mountWhatsappSimulationRoutes } = require("./channels/whatsapp/simulationRoutes");
 const { mountLeadsCommunicationRoutes } = require("./leads-communication/routes");
+const { mountSiteLeadAdminRoutes, mountSiteLeadPublicRoutes, siteLeadBodyLimit } = require("./site-leads/routes");
 const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
 
 const prisma = new PrismaClient();
@@ -22,7 +23,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const allowedOrigins = getAllowedOrigins();
 
+app.use(siteLeadBodyLimit);
 app.use(express.json());
+mountSiteLeadPublicRoutes({ app, prisma });
 app.use(
   cors({
     origin(origin, callback) {
@@ -50,6 +53,7 @@ const commercialAuth = [requireAuth, requireCommercialTenant];
 
 auth.mountRoutes(app);
 mountIntegrationHubRoutes({ app, prisma, authenticate: requireAuth, requireRole });
+mountSiteLeadAdminRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountChannelRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountWhatsappSimulationRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountLeadsCommunicationRoutes({ app, prisma, authenticate: requireAuth });
@@ -2337,6 +2341,22 @@ app.get("/health", (req, res) => {
 });
 
 app.use((error, req, res, next) => {
+  if (req.path.startsWith("/public/site-leads/") && error?.type === "entity.too.large") {
+    return res.status(413).json({
+      accepted: false,
+      erro: "Formulario maior que o limite permitido.",
+      codigo: "BODY_TOO_LARGE",
+    });
+  }
+
+  if (req.path.startsWith("/public/site-leads/") && error?.type === "entity.parse.failed") {
+    return res.status(400).json({
+      accepted: false,
+      erro: "Formulario invalido.",
+      codigo: "VALIDATION_ERROR",
+    });
+  }
+
   if (error.message === "Origem nao permitida pelo CORS.") {
     return res.status(403).json({
       erro: "Origem nao permitida.",

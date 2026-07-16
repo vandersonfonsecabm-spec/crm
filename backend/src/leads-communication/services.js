@@ -314,11 +314,12 @@ function createLeadsCommunicationServices({ prisma }) {
 
   async function listNotes(context, conversationId) {
     await findConversation(context, conversationId);
-    return prisma.notaInternaConversa.findMany({
+    const notes = await prisma.notaInternaConversa.findMany({
       where: { empresaId: context.empresaId, conversaCanalId: conversationId },
       include: { autor: { select: { id: true, nome: true } } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
+    return notes.map((note) => note.sistema ? { ...note, autor: { id: 0, nome: "Sistema" }, autorSistema: true } : note);
   }
 
   async function listMessages(context, conversationId, query = {}) {
@@ -342,11 +343,14 @@ function createLeadsCommunicationServices({ prisma }) {
       const result = await prisma.$transaction(async (tx) => {
         const conversation = await tx.conversaCanal.findFirst({
           where: { id: conversationId, empresaId: context.empresaId },
-          include: { respostaReservadaPor: { select: { id: true, nome: true } } },
+          include: { respostaReservadaPor: { select: { id: true, nome: true } }, canalIntegracao: { select: { tipo: true } } },
         });
         if (!conversation) throw notFound("Conversa nao encontrada.");
         if (conversation.status === "ENCERRADA") {
           throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao aceita novas mensagens nesta release.");
+        }
+        if (direcao === "SAIDA" && conversation.canalIntegracao.tipo === "SITE_FORM") {
+          throw domainError(409, "CHANNEL_DIRECT_REPLY_UNAVAILABLE", "Formulario do Site nao possui resposta direta.");
         }
         if (direcao === "SAIDA") assertReplyLeaseAvailable(conversation, context);
         const existing = await tx.mensagemCanal.findUnique({
@@ -730,6 +734,7 @@ function conversationIncludes() {
         interesse: true,
         origem: true,
         campanha: true,
+        paginaOrigem: true,
         responsavel: { select: { id: true, nome: true } },
       },
     },
@@ -763,6 +768,8 @@ function presentConversation(conversation) {
       ? { id: conversation.responsavel.id, nome: conversation.responsavel.nome }
       : null,
     reservaResposta: replyLeaseView({ ...conversation, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte }),
+    podeResponderDiretamente: conversation.canalIntegracao?.tipo !== "SITE_FORM",
+    tipoCanal: conversation.canalIntegracao?.tipo || null,
     ultimaMensagem: mensagens?.[0] ? presentMessage(mensagens[0]) : null,
   };
 }
