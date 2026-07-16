@@ -8,7 +8,7 @@ function mountWhatsappSimulationRoutes({ app, prisma, authenticate, requireRole 
     try {
       const result = await service.simulateMessage({
         empresaId: req.auth.empresaId,
-        usuarioId: req.auth.sub,
+        usuarioId: req.auth.usuarioId,
         body: req.body,
       });
       return res.status(result.duplicada ? 200 : 201).json(result);

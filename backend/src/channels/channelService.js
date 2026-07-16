@@ -73,7 +73,8 @@ function createChannelService({ prisma }) {
     return prisma.canalIntegracao.update({ where: { id: channel.id }, data: nextData });
   }
 
-  async function createOrFindChannelContact({ empresaId, canalIntegracaoId, externalId, telefoneNormalizado, nome }) {
+  async function createOrFindChannelContact(input) {
+    const { empresaId, canalIntegracaoId, externalId, telefoneNormalizado, nome } = input;
     const cleanExternalId = normalizeRequiredText(externalId, "External ID obrigatorio.", MAX_EXTERNAL_ID);
     const cleanName = normalizeOptionalText(nome, MAX_CONTACT_NAME);
     const cleanPhone = telefoneNormalizado ? normalizePhone(telefoneNormalizado) : null;
@@ -88,8 +89,8 @@ function createChannelService({ prisma }) {
         nome: cleanName,
       },
       update: {
-        telefoneNormalizado: cleanPhone,
-        nome: cleanName,
+        ...(Object.hasOwn(input, "telefoneNormalizado") ? { telefoneNormalizado: cleanPhone } : {}),
+        ...(Object.hasOwn(input, "nome") ? { nome: cleanName } : {}),
       },
     });
   }
@@ -153,13 +154,14 @@ function createChannelService({ prisma }) {
         tipo,
         texto: cleanText,
         status: direcao === "ENTRADA" ? "RECEBIDA" : "PREPARADA",
+        statusEntrega: direcao === "ENTRADA" ? "RECEBIDA" : "PENDENTE_ENVIO",
         simulada: true,
       },
       update: {},
     });
     await prisma.conversaCanal.update({
       where: { id: conversation.id },
-      data: { ultimaMensagemEm: now },
+      data: { primeiraMensagemEm: conversation.primeiraMensagemEm || now, ultimaMensagemEm: now },
     });
     return message;
   }

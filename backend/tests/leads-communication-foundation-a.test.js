@@ -205,7 +205,7 @@ test("fundacao suporta cardinalidade, auditoria e idempotencia sem backfill", as
   await migrated.lead.delete({ where: { id: crossTenant.id } });
 });
 
-test("schema possui indices tenant e nenhuma segunda estrutura de conversa ou mensagem", async () => {
+test("schema possui indices tenant e a fundacao so e ativada pelo modulo protegido da Release B1", async () => {
   const expectedIndexes = [
     "Lead_empresaId_status_idx",
     "Lead_empresaId_responsavelId_status_idx",
@@ -234,8 +234,13 @@ test("schema possui indices tenant e nenhuma segunda estrutura de conversa ou me
   assert.equal((schema.match(/^model Conversa \{/gm) || []).length, 0);
   assert.equal((schema.match(/^model Mensagem \{/gm) || []).length, 0);
 
-  const runtimeSource = readJavaScript(path.join(backendDir, "src"));
-  assert.doesNotMatch(runtimeSource, /prisma\.(lead|negocio|notaInternaConversa|historicoAtribuicao|eventoWebhook)\b/);
+  const b1Directory = path.join(backendDir, "src", "leads-communication");
+  const runtimeOutsideB1 = readJavaScript(path.join(backendDir, "src"), new Set([path.resolve(b1Directory)]));
+  assert.doesNotMatch(runtimeOutsideB1, /prisma\.(lead|negocio|notaInternaConversa|historicoAtribuicao|eventoWebhook)\b/);
+  const b1Source = readJavaScript(b1Directory);
+  assert.match(b1Source, /LEADS_COMMUNICATION_ENABLED/);
+  assert.match(b1Source, /featureFlagMiddleware/);
+  assert.match(b1Source, /prisma\.(lead|notaInternaConversa|historicoAtribuicao|eventoWebhook)\b/);
 });
 
 function migrate(databasePath) {
@@ -331,10 +336,13 @@ async function integrity(prisma) {
   return { quickCheck: quick[0].quick_check, foreignKeyViolations: foreignKeys.length };
 }
 
-function readJavaScript(directory) {
+function readJavaScript(directory, excludedDirectories = new Set()) {
   return fs.readdirSync(directory, { withFileTypes: true }).map((entry) => {
     const fullPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) return readJavaScript(fullPath);
+    if (entry.isDirectory()) {
+      if (excludedDirectories.has(path.resolve(fullPath))) return "";
+      return readJavaScript(fullPath, excludedDirectories);
+    }
     return entry.isFile() && fullPath.endsWith(".js") ? fs.readFileSync(fullPath, "utf8") : "";
   }).join("\n");
 }
