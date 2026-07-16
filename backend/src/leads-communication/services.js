@@ -2,11 +2,10 @@ const crypto = require("node:crypto");
 const { createChannelService } = require("../channels/channelService");
 const { normalizePhone } = require("../channels/phoneNormalizer");
 const {
-  assertItemAccess,
   domainError,
   isManager,
   notFound,
-  ownedScope,
+  requireResponsibleOrManager,
   requireManager,
 } = require("./policy");
 const {
@@ -40,9 +39,13 @@ const CONVERSATION_TRANSITIONS = {
   PENDENTE: new Set(["EM_ATENDIMENTO", "ENCERRADA"]),
   ENCERRADA: new Set(["NOVA", "AGUARDANDO_ATENDIMENTO"]),
 };
+const DEFAULT_REPLY_LEASE_SECONDS = 120;
+const MIN_REPLY_LEASE_SECONDS = 30;
+const MAX_REPLY_LEASE_SECONDS = 300;
 
 function createLeadsCommunicationServices({ prisma }) {
   const channelService = createChannelService({ prisma });
+  const replyLeaseSeconds = getReplyLeaseSeconds(process.env);
 
   async function validateResponsible(client, empresaId, responsavelId) {
     if (responsavelId === null) return null;
@@ -52,7 +55,7 @@ function createLeadsCommunicationServices({ prisma }) {
   }
 
   async function findLead(context, id, client = prisma) {
-    const lead = await client.lead.findFirst({ where: { id, empresaId: context.empresaId, ...ownedScope(context) } });
+    const lead = await client.lead.findFirst({ where: { id, empresaId: context.empresaId } });
     if (!lead) throw notFound("Lead nao encontrado.");
     return lead;
   }
@@ -95,15 +98,20 @@ function createLeadsCommunicationServices({ prisma }) {
 
   async function listLeads(context, query = {}) {
     rejectEmpresaId(query);
-    const allowed = ["page", "limit", "status", "responsavelId", "clienteId", "origem", "q"];
+    const allowed = ["page", "limit", "status", "responsavelId", "clienteId", "origem", "q", "meus", "semResponsavel"];
     rejectUnknown(query, allowed);
     const pageData = pagination(query);
-    const where = { empresaId: context.empresaId, ...ownedScope(context) };
+    const where = { empresaId: context.empresaId };
     const status = enumValue(query.status, "status", LEAD_STATUSES, { optional: true });
     if (status) where.status = status;
+    const meus = optionalBoolean(query.meus, "meus");
+    const semResponsavel = optionalBoolean(query.semResponsavel, "semResponsavel");
+    if (meus && semResponsavel) return emptyPage(pageData);
+    if (meus) where.responsavelId = context.usuarioId;
+    if (semResponsavel) where.responsavelId = null;
     if (query.responsavelId !== undefined && query.responsavelId !== "") {
       const responsible = requiredInteger(query.responsavelId, "responsavelId");
-      if (!isManager(context) && responsible !== context.usuarioId) return emptyPage(pageData);
+      if ((meus && responsible !== context.usuarioId) || semResponsavel) return emptyPage(pageData);
       where.responsavelId = responsible;
     }
     const clienteId = optionalInteger(query.clienteId, "clienteId", { min: 1 });
@@ -131,6 +139,7 @@ function createLeadsCommunicationServices({ prisma }) {
     rejectEmpresaId(body);
     if (!Object.keys(body).length) throw invalid("Informe ao menos um campo para atualizar.");
     const lead = await findLead(context, id);
+    requireResponsibleOrManager(context, lead);
     const data = {};
     for (const field of ["origem", "campanha", "interesse", "motivoDesqualificacao"]) {
       if (Object.hasOwn(body, field)) data[field] = optionalText(body[field], field, field === "interesse" ? 500 : 240);
@@ -152,6 +161,10 @@ function createLeadsCommunicationServices({ prisma }) {
     return assignEntity(context, { model: "lead", id, contextField: "leadId", input, notFoundMessage: "Lead nao encontrado." });
   }
 
+  async function returnLeadToQueue(context, id, input) {
+    return returnEntityToQueue(context, { model: "lead", id, contextField: "leadId", input, notFoundMessage: "Lead nao encontrado." });
+  }
+
   async function leadHistory(context, id) {
     await findLead(context, id);
     return prisma.historicoAtribuicao.findMany({
@@ -161,7 +174,7 @@ function createLeadsCommunicationServices({ prisma }) {
   }
 
   async function findConversation(context, id, client = prisma) {
-    const conversation = await client.conversaCanal.findFirst({ where: { id, empresaId: context.empresaId, ...ownedScope(context) } });
+    const conversation = await client.conversaCanal.findFirst({ where: { id, empresaId: context.empresaId } });
     if (!conversation) throw notFound("Conversa nao encontrada.");
     return conversation;
   }
@@ -201,21 +214,31 @@ function createLeadsCommunicationServices({ prisma }) {
 
   async function listConversations(context, query = {}) {
     rejectEmpresaId(query);
-    rejectUnknown(query, ["page", "limit", "estado", "responsavelId", "semResponsavel", "leadId", "canalIntegracaoId"]);
+    rejectUnknown(query, ["page", "limit", "estado", "responsavelId", "semResponsavel", "meus", "leadId", "canalIntegracaoId", "q"]);
     const pageData = pagination(query);
-    const where = { empresaId: context.empresaId, ...ownedScope(context) };
+    const where = { empresaId: context.empresaId };
     const status = enumValue(query.estado, "estado", CONVERSATION_STATUSES, { optional: true });
     if (status) where.status = status;
     const semResponsavel = optionalBoolean(query.semResponsavel, "semResponsavel");
+    const meus = optionalBoolean(query.meus, "meus");
+    if (meus && semResponsavel) return emptyPage(pageData);
+    if (meus) where.responsavelId = context.usuarioId;
     if (semResponsavel !== undefined) {
-      if (!isManager(context) && semResponsavel) return emptyPage(pageData);
       where.responsavelId = semResponsavel ? null : { not: null };
       if (semResponsavel && !status) where.status = { in: ["NOVA", "AGUARDANDO_ATENDIMENTO"] };
     }
     if (query.responsavelId !== undefined && query.responsavelId !== "") {
       const responsible = requiredInteger(query.responsavelId, "responsavelId");
-      if (!isManager(context) && responsible !== context.usuarioId) return emptyPage(pageData);
+      if ((meus && responsible !== context.usuarioId) || semResponsavel) return emptyPage(pageData);
       where.responsavelId = responsible;
+    }
+    const q = optionalText(query.q, "q", 120);
+    if (q) {
+      where.OR = [
+        { contatoCanal: { nome: { contains: q } } },
+        { contatoCanal: { externalId: { contains: q } } },
+        { lead: { interesse: { contains: q } } },
+      ];
     }
     for (const field of ["leadId", "canalIntegracaoId"]) {
       const value = optionalInteger(query[field], field, { min: 1 });
@@ -225,12 +248,13 @@ function createLeadsCommunicationServices({ prisma }) {
       prisma.conversaCanal.findMany({ where, include: conversationIncludes(), orderBy: [{ ultimaMensagemEm: "desc" }, { id: "desc" }], skip: pageData.skip, take: pageData.limit }),
       prisma.conversaCanal.count({ where }),
     ]);
-    return pageResult(data, total, pageData);
+    return pageResult(data.map(presentConversation), total, pageData);
   }
 
   async function getConversation(context, id) {
     await findConversation(context, id);
-    return prisma.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() });
+    const conversation = await prisma.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() });
+    return presentConversation(conversation);
   }
 
   async function assumeConversation(context, id) {
@@ -241,10 +265,15 @@ function createLeadsCommunicationServices({ prisma }) {
     return assignEntity(context, { model: "conversaCanal", id, contextField: "conversaCanalId", input, notFoundMessage: "Conversa nao encontrada." });
   }
 
+  async function returnConversationToQueue(context, id, input) {
+    return returnEntityToQueue(context, { model: "conversaCanal", id, contextField: "conversaCanalId", input, notFoundMessage: "Conversa nao encontrada." });
+  }
+
   async function updateConversationStatus(context, id, input) {
     const body = rejectUnknown(input, ["estado"]);
     const next = enumValue(body.estado, "estado", CONVERSATION_STATUSES);
     const conversation = await findConversation(context, id);
+    requireResponsibleOrManager(context, conversation);
     if (next === conversation.status) return conversation;
     if (!CONVERSATION_TRANSITIONS[conversation.status]?.has(next)) {
       throw domainError(409, "CONVERSATION_TRANSITION_INVALID", "Transicao de conversa invalida.");
@@ -295,31 +324,152 @@ function createLeadsCommunicationServices({ prisma }) {
     rejectUnknown(query, ["page", "limit"]);
     const where = { empresaId: context.empresaId, conversaCanalId: conversationId };
     const [data, total] = await prisma.$transaction([
-      prisma.mensagemCanal.findMany({ where, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip: pageData.skip, take: pageData.limit }),
+      prisma.mensagemCanal.findMany({ where, include: messageIncludes(), orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip: pageData.skip, take: pageData.limit }),
       prisma.mensagemCanal.count({ where }),
     ]);
-    return pageResult(data, total, pageData);
+    return pageResult(data.map(presentMessage), total, pageData);
   }
 
   async function createSimulatedMessage(context, conversationId, input) {
     const body = rejectUnknown(input, ["externalId", "direcao", "texto"]);
-    const conversation = await findConversation(context, conversationId);
-    if (conversation.status === "ENCERRADA") {
-      throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao aceita novas mensagens nesta release.");
-    }
     const externalId = requiredText(body.externalId, "externalId", 160);
     const direcao = enumValue(body.direcao, "direcao", ["ENTRADA", "SAIDA"]);
     const texto = requiredText(body.texto, "texto", 4000);
-    const message = await channelService.registerSimulatedMessage({
-      empresaId: context.empresaId,
-      canalIntegracaoId: conversation.canalIntegracaoId,
-      conversaCanalId: conversation.id,
-      externalId,
-      direcao,
-      tipo: "TEXTO",
-      texto,
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const conversation = await tx.conversaCanal.findFirst({
+          where: { id: conversationId, empresaId: context.empresaId },
+          include: { respostaReservadaPor: { select: { id: true, nome: true } } },
+        });
+        if (!conversation) throw notFound("Conversa nao encontrada.");
+        if (conversation.status === "ENCERRADA") {
+          throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao aceita novas mensagens nesta release.");
+        }
+        if (direcao === "SAIDA") assertReplyLeaseAvailable(conversation, context);
+        const existing = await tx.mensagemCanal.findUnique({
+          where: { canalIntegracaoId_externalId: { canalIntegracaoId: conversation.canalIntegracaoId, externalId } },
+          include: messageIncludes(),
+        });
+        if (existing) {
+          if (existing.conversaCanalId !== conversation.id) {
+            throw domainError(409, "MESSAGE_IDEMPOTENCY_CONFLICT", "Identificador de mensagem ja utilizado.");
+          }
+          return existing;
+        }
+        const now = new Date();
+        const message = await tx.mensagemCanal.create({
+          data: {
+            empresaId: context.empresaId,
+            canalIntegracaoId: conversation.canalIntegracaoId,
+            conversaCanalId: conversation.id,
+            autorUsuarioId: direcao === "SAIDA" ? context.usuarioId : null,
+            externalId,
+            direcao,
+            tipo: "TEXTO",
+            texto,
+            status: direcao === "ENTRADA" ? "RECEBIDA" : "PREPARADA",
+            statusEntrega: direcao === "ENTRADA" ? "RECEBIDA" : "PENDENTE_ENVIO",
+            simulada: true,
+          },
+          include: messageIncludes(),
+        });
+        const conversationData = {
+          primeiraMensagemEm: conversation.primeiraMensagemEm || now,
+          ultimaMensagemEm: now,
+        };
+        if (direcao === "SAIDA") {
+          conversationData.primeiraRespostaHumanaEm = conversation.primeiraRespostaHumanaEm || now;
+          if (CONVERSATION_TRANSITIONS[conversation.status]?.has("AGUARDANDO_CLIENTE")) {
+            conversationData.status = "AGUARDANDO_CLIENTE";
+          }
+          if (conversation.respostaReservadaPorId === context.usuarioId || isLeaseExpired(conversation, now)) {
+            conversationData.respostaReservadaPorId = null;
+            conversationData.respostaReservadaAte = null;
+          }
+        }
+        await tx.conversaCanal.update({ where: { id: conversation.id }, data: conversationData });
+        return message;
+      });
+      return presentMessage(result);
+    } catch (error) {
+      if (error?.code !== "P2002") throw error;
+      const conversation = await findConversation(context, conversationId);
+      const existing = await prisma.mensagemCanal.findUnique({
+        where: { canalIntegracaoId_externalId: { canalIntegracaoId: conversation.canalIntegracaoId, externalId } },
+        include: messageIncludes(),
+      });
+      if (!existing || existing.conversaCanalId !== conversation.id) throw error;
+      return presentMessage(existing);
+    }
+  }
+
+  async function acquireReplyLease(context, conversationId) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + replyLeaseSeconds * 1000);
+    return prisma.$transaction(async (tx) => {
+      const conversation = await conversationForLease(tx, context, conversationId);
+      if (conversation.status === "ENCERRADA") throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao pode ser reservada.");
+      if (hasValidLeaseFromOther(conversation, context, now)) throw replyLeaseConflict(conversation);
+      const updated = await tx.conversaCanal.updateMany({
+        where: {
+          id: conversationId,
+          empresaId: context.empresaId,
+          OR: [
+            { respostaReservadaPorId: null },
+            { respostaReservadaAte: { lte: now } },
+            { respostaReservadaPorId: context.usuarioId },
+          ],
+        },
+        data: { respostaReservadaPorId: context.usuarioId, respostaReservadaAte: expiresAt },
+      });
+      if (updated.count !== 1) throw replyLeaseConflict(await conversationForLease(tx, context, conversationId));
+      return { reservaResposta: replyLeaseView(await conversationForLease(tx, context, conversationId)) };
     });
-    return message;
+  }
+
+  async function renewReplyLease(context, conversationId) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + replyLeaseSeconds * 1000);
+    return prisma.$transaction(async (tx) => {
+      await conversationForLease(tx, context, conversationId);
+      const updated = await tx.conversaCanal.updateMany({
+        where: {
+          id: conversationId,
+          empresaId: context.empresaId,
+          respostaReservadaPorId: context.usuarioId,
+          respostaReservadaAte: { gt: now },
+        },
+        data: { respostaReservadaAte: expiresAt },
+      });
+      if (updated.count !== 1) throw domainError(409, "REPLY_LEASE_NOT_OWNED", "Reserva de resposta indisponivel para renovacao.");
+      return { reservaResposta: replyLeaseView(await conversationForLease(tx, context, conversationId)) };
+    });
+  }
+
+  async function releaseReplyLease(context, conversationId) {
+    const now = new Date();
+    return prisma.$transaction(async (tx) => {
+      const conversation = await conversationForLease(tx, context, conversationId);
+      if (hasValidLeaseFromOther(conversation, context, now)) throw replyLeaseConflict(conversation);
+      await tx.conversaCanal.updateMany({
+        where: {
+          id: conversationId,
+          empresaId: context.empresaId,
+          OR: [{ respostaReservadaPorId: context.usuarioId }, { respostaReservadaAte: { lte: now } }],
+        },
+        data: { respostaReservadaPorId: null, respostaReservadaAte: null },
+      });
+      return { reservaResposta: null };
+    });
+  }
+
+  async function conversationForLease(client, context, conversationId) {
+    const conversation = await client.conversaCanal.findFirst({
+      where: { id: conversationId, empresaId: context.empresaId },
+      include: { respostaReservadaPor: { select: { id: true, nome: true } } },
+    });
+    if (!conversation) throw notFound("Conversa nao encontrada.");
+    return conversation;
   }
 
   async function registerWebhookEvent(context, input) {
@@ -409,10 +559,12 @@ function createLeadsCommunicationServices({ prisma }) {
   }
 
   async function assumeEntity(context, { model, id, contextField, notFoundMessage }) {
-    requireManager(context);
     return prisma.$transaction(async (tx) => {
       const current = await tx[model].findFirst({ where: { id, empresaId: context.empresaId } });
       if (!current) throw notFound(notFoundMessage);
+      if (model === "conversaCanal" && current.status === "ENCERRADA") {
+        throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao pode ser assumida.");
+      }
       if (current.responsavelId !== null) throw domainError(409, "ASSIGNMENT_ALREADY_TAKEN", "Item ja possui responsavel.");
       const result = await tx[model].updateMany({
         where: { id, empresaId: context.empresaId, responsavelId: null },
@@ -434,19 +586,19 @@ function createLeadsCommunicationServices({ prisma }) {
     requireManager(context);
     const body = rejectUnknown(input, ["responsavelId", "motivo"]);
     rejectEmpresaId(body);
-    const responsibleId = body.responsavelId === null ? null : requiredInteger(body.responsavelId, "responsavelId");
+    const responsibleId = requiredInteger(body.responsavelId, "responsavelId");
     const motivo = optionalText(body.motivo, "motivo", 240);
     return prisma.$transaction(async (tx) => {
       const current = await tx[model].findFirst({ where: { id, empresaId: context.empresaId } });
       if (!current) throw notFound(notFoundMessage);
-      if (responsibleId !== null) await validateResponsible(tx, context.empresaId, responsibleId);
+      await validateResponsible(tx, context.empresaId, responsibleId);
       if (current.responsavelId === responsibleId) return current;
       const result = await tx[model].updateMany({
         where: { id, empresaId: context.empresaId, responsavelId: current.responsavelId },
         data: { responsavelId: responsibleId },
       });
       if (result.count !== 1) throw domainError(409, "ASSIGNMENT_CONFLICT", "Atribuicao foi alterada por outro usuario.");
-      const tipo = responsibleId === null ? "DESATRIBUIR" : current.responsavelId === null ? "ATRIBUIR" : "TRANSFERIR";
+      const tipo = current.responsavelId === null ? "ATRIBUIR" : "TRANSFERIR";
       await createAssignmentHistory(tx, {
         empresaId: context.empresaId,
         [contextField]: id,
@@ -460,9 +612,47 @@ function createLeadsCommunicationServices({ prisma }) {
     });
   }
 
+  async function returnEntityToQueue(context, { model, id, contextField, input, notFoundMessage }) {
+    const body = rejectUnknown(input, ["motivo"]);
+    rejectEmpresaId(body);
+    const motivo = requiredText(body.motivo, "motivo", 240);
+    return prisma.$transaction(async (tx) => {
+      const current = await tx[model].findFirst({ where: { id, empresaId: context.empresaId } });
+      if (!current) throw notFound(notFoundMessage);
+      if (current.responsavelId === null) throw domainError(409, "ASSIGNMENT_ALREADY_IN_QUEUE", "Item ja esta sem responsavel.");
+      if (!isManager(context) && current.responsavelId !== context.usuarioId) {
+        throw domainError(403, "LEADS_COMMUNICATION_FORBIDDEN", "Acesso negado.");
+      }
+      if (model === "conversaCanal" && current.status === "ENCERRADA") {
+        throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao pode ser devolvida a fila.");
+      }
+      const data = { responsavelId: null };
+      if (model === "conversaCanal") {
+        data.status = "AGUARDANDO_ATENDIMENTO";
+        data.aguardandoDesde = new Date();
+      }
+      const result = await tx[model].updateMany({
+        where: { id, empresaId: context.empresaId, responsavelId: current.responsavelId },
+        data,
+      });
+      if (result.count !== 1) throw domainError(409, "ASSIGNMENT_CONFLICT", "Atribuicao foi alterada por outra operacao.");
+      await createAssignmentHistory(tx, {
+        empresaId: context.empresaId,
+        [contextField]: id,
+        responsavelAnteriorId: current.responsavelId,
+        responsavelNovoId: null,
+        alteradoPorId: context.usuarioId,
+        tipo: "DESATRIBUIR",
+        motivo,
+      });
+      return tx[model].findUnique({ where: { id } });
+    });
+  }
+
   return {
     assignConversation,
     assignLead,
+    acquireReplyLease,
     assumeConversation,
     assumeLead,
     conversationHistory,
@@ -478,7 +668,11 @@ function createLeadsCommunicationServices({ prisma }) {
     listLeads,
     listMessages,
     listNotes,
+    releaseReplyLease,
+    renewReplyLease,
     registerWebhookEvent,
+    returnConversationToQueue,
+    returnLeadToQueue,
     updateConversationStatus,
     updateLead,
     updateWebhookEvent,
@@ -520,7 +714,73 @@ function conversationIncludes() {
     contatoCanal: { select: { id: true, nome: true, clienteId: true } },
     lead: { select: { id: true, clienteId: true, status: true } },
     responsavel: { select: { id: true, nome: true, papel: true } },
+    respostaReservadaPor: { select: { id: true, nome: true } },
   };
+}
+
+function messageIncludes() {
+  return { autorUsuario: { select: { id: true, nome: true } } };
+}
+
+function presentConversation(conversation) {
+  const { respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte, ...data } = conversation;
+  return {
+    ...data,
+    responsavelPrincipal: conversation.responsavel
+      ? { id: conversation.responsavel.id, nome: conversation.responsavel.nome }
+      : null,
+    reservaResposta: replyLeaseView({ ...conversation, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte }),
+  };
+}
+
+function presentMessage(message) {
+  const { autorUsuario, ...data } = message;
+  return {
+    ...data,
+    autor: autorUsuario ? { id: autorUsuario.id, nome: autorUsuario.nome } : null,
+  };
+}
+
+function getReplyLeaseSeconds(env = process.env) {
+  const raw = String(env.LEADS_REPLY_LEASE_SECONDS || "").trim();
+  if (!/^\d+$/.test(raw)) return DEFAULT_REPLY_LEASE_SECONDS;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < MIN_REPLY_LEASE_SECONDS || value > MAX_REPLY_LEASE_SECONDS) {
+    return DEFAULT_REPLY_LEASE_SECONDS;
+  }
+  return value;
+}
+
+function isLeaseExpired(conversation, now = new Date()) {
+  return !conversation.respostaReservadaPorId ||
+    !conversation.respostaReservadaAte ||
+    new Date(conversation.respostaReservadaAte).getTime() <= now.getTime();
+}
+
+function hasValidLeaseFromOther(conversation, context, now = new Date()) {
+  return !isLeaseExpired(conversation, now) && conversation.respostaReservadaPorId !== context.usuarioId;
+}
+
+function replyLeaseView(conversation, now = new Date()) {
+  if (isLeaseExpired(conversation, now)) return null;
+  return {
+    usuarioId: conversation.respostaReservadaPorId,
+    nome: conversation.respostaReservadaPor?.nome || null,
+    expiraEm: conversation.respostaReservadaAte,
+  };
+}
+
+function replyLeaseConflict(conversation) {
+  return domainError(
+    409,
+    "REPLY_LEASE_CONFLICT",
+    "Conversa esta sendo respondida por outro usuario.",
+    { reservaResposta: replyLeaseView(conversation) },
+  );
+}
+
+function assertReplyLeaseAvailable(conversation, context, now = new Date()) {
+  if (hasValidLeaseFromOther(conversation, context, now)) throw replyLeaseConflict(conversation);
 }
 
 function pageResult(data, total, { page, limit }) {
@@ -531,4 +791,4 @@ function emptyPage(pageData) {
   return pageResult([], 0, pageData);
 }
 
-module.exports = { createLeadsCommunicationServices, validateAssignmentContext };
+module.exports = { createLeadsCommunicationServices, getReplyLeaseSeconds, validateAssignmentContext };

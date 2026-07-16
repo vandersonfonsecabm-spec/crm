@@ -45,6 +45,7 @@ test("flag fica desligada por padrao e somente o valor exato true habilita as ro
     const response = await request("POST", "/leads", { clienteId: 1 });
     assert.equal(response.status, 404);
     assert.equal(response.body.codigo, "NOT_FOUND");
+    assert.equal((await request("POST", "/conversas/1/reserva-resposta", {})).status, 404);
   }
   assert.equal(await api.prisma.lead.count(), beforeCount);
 

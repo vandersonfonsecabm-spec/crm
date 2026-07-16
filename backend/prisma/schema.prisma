@@ -168,26 +168,28 @@ model Empresa {
 }
 
 model Usuario {
-  id                    Int                    @id @default(autoincrement())
-  empresaId             Int
-  empresa               Empresa                @relation(fields: [empresaId], references: [id])
-  nome                  String
-  email                 String
-  senhaHash             String
-  papel                 PapelUsuario           @default(VENDEDOR)
-  ativo                 Boolean                @default(true)
-  ultimoLoginEm         DateTime?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  importacoesCriadas    ImportacaoDados[]
-  oauthStatesIntegracao IntegracaoOAuthState[]
-  leadsResponsaveis     Lead[]                 @relation("LeadResponsavel")
-  negociosResponsaveis  Negocio[]              @relation("NegocioResponsavel")
-  conversasResponsaveis ConversaCanal[]        @relation("ConversaResponsavel")
-  notasInternasCriadas  NotaInternaConversa[]  @relation("NotaInternaAutor")
-  atribuicoesAnteriores HistoricoAtribuicao[]  @relation("AtribuicaoResponsavelAnterior")
-  atribuicoesNovas      HistoricoAtribuicao[]  @relation("AtribuicaoResponsavelNovo")
-  atribuicoesAlteradas  HistoricoAtribuicao[]  @relation("AtribuicaoAlteradoPor")
+  id                     Int                    @id @default(autoincrement())
+  empresaId              Int
+  empresa                Empresa                @relation(fields: [empresaId], references: [id])
+  nome                   String
+  email                  String
+  senhaHash              String
+  papel                  PapelUsuario           @default(VENDEDOR)
+  ativo                  Boolean                @default(true)
+  ultimoLoginEm          DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  importacoesCriadas     ImportacaoDados[]
+  oauthStatesIntegracao  IntegracaoOAuthState[]
+  leadsResponsaveis      Lead[]                 @relation("LeadResponsavel")
+  negociosResponsaveis   Negocio[]              @relation("NegocioResponsavel")
+  conversasResponsaveis  ConversaCanal[]        @relation("ConversaResponsavel")
+  conversasReservadas    ConversaCanal[]        @relation("ConversaRespostaReservadaPor")
+  mensagensCanalEnviadas MensagemCanal[]        @relation("MensagemCanalAutor")
+  notasInternasCriadas   NotaInternaConversa[]  @relation("NotaInternaAutor")
+  atribuicoesAnteriores  HistoricoAtribuicao[]  @relation("AtribuicaoResponsavelAnterior")
+  atribuicoesNovas       HistoricoAtribuicao[]  @relation("AtribuicaoResponsavelNovo")
+  atribuicoesAlteradas   HistoricoAtribuicao[]  @relation("AtribuicaoAlteradoPor")
 
   @@unique([empresaId, email])
   @@index([empresaId])
@@ -493,6 +495,9 @@ model ConversaCanal {
   lead                     Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
   responsavelId            Int?
   responsavel              Usuario?              @relation("ConversaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  respostaReservadaPorId   Int?
+  respostaReservadaPor     Usuario?              @relation("ConversaRespostaReservadaPor", fields: [respostaReservadaPorId], references: [id], onDelete: SetNull)
+  respostaReservadaAte     DateTime?
   status                   StatusConversa        @default(ABERTA)
   chaveAberta              String?               @unique
   primeiraMensagemEm       DateTime?
@@ -515,6 +520,8 @@ model ConversaCanal {
   @@index([ultimaMensagemEm])
   @@index([empresaId, status, aguardandoDesde])
   @@index([empresaId, responsavelId, status])
+  @@index([empresaId, respostaReservadaPorId])
+  @@index([empresaId, respostaReservadaAte])
   @@index([empresaId, leadId])
 }
 
@@ -526,6 +533,8 @@ model MensagemCanal {
   canalIntegracao   CanalIntegracao        @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
   conversaCanalId   Int
   conversaCanal     ConversaCanal          @relation(fields: [conversaCanalId], references: [id], onDelete: Cascade)
+  autorUsuarioId    Int?
+  autorUsuario      Usuario?               @relation("MensagemCanalAutor", fields: [autorUsuarioId], references: [id], onDelete: SetNull)
   externalId        String
   direcao           DirecaoMensagem
   tipo              TipoMensagemCanal      @default(TEXTO)
@@ -548,6 +557,7 @@ model MensagemCanal {
   @@index([conversaCanalId])
   @@index([status])
   @@index([empresaId, statusEntrega])
+  @@index([empresaId, conversaCanalId, autorUsuarioId])
   @@index([createdAt])
 }
 

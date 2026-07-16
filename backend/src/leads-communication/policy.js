@@ -28,19 +28,22 @@ function requireManager(context) {
   if (!isManager(context)) throw domainError(403, "LEADS_COMMUNICATION_FORBIDDEN", "Acesso negado.");
 }
 
-function ownedScope(context) {
-  return isManager(context) ? {} : { responsavelId: context.usuarioId };
-}
-
 function assertItemAccess(context, item) {
   if (!item || item.empresaId !== context.empresaId) throw notFound();
-  if (!isManager(context) && item.responsavelId !== context.usuarioId) throw notFound();
 }
 
-function domainError(status, codigo, message) {
+function requireResponsibleOrManager(context, item) {
+  assertItemAccess(context, item);
+  if (!isManager(context) && item.responsavelId !== context.usuarioId) {
+    throw domainError(403, "LEADS_COMMUNICATION_FORBIDDEN", "Acesso negado.");
+  }
+}
+
+function domainError(status, codigo, message, details) {
   const error = new Error(message);
   error.status = status;
   error.codigo = codigo;
+  if (details !== undefined) error.details = details;
   return error;
 }
 
@@ -56,6 +59,6 @@ module.exports = {
   isLeadsCommunicationEnabled,
   isManager,
   notFound,
-  ownedScope,
+  requireResponsibleOrManager,
   requireManager,
 };

@@ -31,6 +31,9 @@ function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   app.post("/leads/:id/atribuir", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.assignLead(context, pathId(req), req.body));
   }));
+  app.post("/leads/:id/devolver-fila", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.returnLeadToQueue(context, pathId(req), req.body));
+  }));
   app.get("/leads/:id/historico-atribuicao", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.leadHistory(context, pathId(req)));
   }));
@@ -46,6 +49,18 @@ function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   }));
   app.post("/conversas/:id/atribuir", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.assignConversation(context, pathId(req), req.body));
+  }));
+  app.post("/conversas/:id/devolver-fila", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.returnConversationToQueue(context, pathId(req), req.body));
+  }));
+  app.post("/conversas/:id/reserva-resposta", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.acquireReplyLease(context, pathId(req)));
+  }));
+  app.post("/conversas/:id/reserva-resposta/renovar", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.renewReplyLease(context, pathId(req)));
+  }));
+  app.delete("/conversas/:id/reserva-resposta", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.releaseReplyLease(context, pathId(req)));
   }));
   app.patch("/conversas/:id/estado", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.updateConversationStatus(context, pathId(req), req.body));
@@ -87,6 +102,7 @@ function handleError(res, error) {
   res.status(status).json({
     erro: status >= 500 ? "Erro interno do servidor." : error.message,
     codigo: status >= 500 ? "INTERNAL_ERROR" : error.codigo || "REQUEST_ERROR",
+    ...(status < 500 && error.details ? error.details : {}),
   });
 }
 

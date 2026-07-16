@@ -103,8 +103,9 @@ test("Release B1 protege tenant, RBAC, fila, atribuicoes, mensagens e idempotenc
   assert.equal(partialLeadPatch.body.campanha, "Safra");
 
   const sellerList = await request("GET", "/leads", undefined, sellerA.token);
-  assert.deepEqual(sellerList.body.data.map((item) => item.id), [leadSellerA.body.id]);
-  assert.equal((await request("GET", `/leads/${leadSellerA2.body.id}`, undefined, sellerA.token)).status, 404);
+  assert.equal(sellerList.body.pagination.total, 4);
+  assert.ok(sellerList.body.data.some((item) => item.id === leadSellerA2.body.id));
+  assert.equal((await request("GET", `/leads/${leadSellerA2.body.id}`, undefined, sellerA.token)).status, 200);
   assert.equal((await request("GET", `/leads/${leadB.body.id}`, undefined, adminA.token)).status, 404);
 
   const patched = await request("PATCH", `/leads/${leadSellerA.body.id}`, { interesse: null }, sellerA.token);
@@ -118,7 +119,7 @@ test("Release B1 protege tenant, RBAC, fila, atribuicoes, mensagens e idempotenc
   assert.equal((await request("PATCH", `/leads/${leadSellerA.body.id}`, { status: "CONVERTIDO" }, sellerA.token)).status, 409);
   assert.equal((await request("PATCH", `/leads/${leadSellerA.body.id}`, { status: "NOVO" }, sellerA.token)).status, 409);
 
-  assert.equal((await request("POST", `/leads/${secondLeadSameClient.body.id}/assumir`, {}, sellerA.token)).status, 403);
+  assert.equal((await request("POST", `/leads/${secondLeadSameClient.body.id}/assumir`, {}, sellerA.token)).status, 200);
   const concurrentLead = await request("POST", "/leads", { clienteId: clientA2.id }, adminA.token);
   const leadClaims = await Promise.all([
     request("POST", `/leads/${concurrentLead.body.id}/assumir`, {}, adminA.token),
@@ -201,8 +202,8 @@ test("Release B1 protege tenant, RBAC, fila, atribuicoes, mensagens e idempotenc
   });
   assert.notEqual(secondConversationA.id, conversationA.id);
   assert.equal((await request("GET", "/conversas?semResponsavel=true", undefined, managerA.token)).body.pagination.total, 2);
-  assert.equal((await request("GET", "/conversas?semResponsavel=true", undefined, sellerA.token)).body.pagination.total, 0);
-  assert.equal((await request("GET", `/conversas/${conversationA.id}`, undefined, sellerA.token)).status, 404);
+  assert.equal((await request("GET", "/conversas?semResponsavel=true", undefined, sellerA.token)).body.pagination.total, 2);
+  assert.equal((await request("GET", `/conversas/${conversationA.id}`, undefined, sellerA.token)).status, 200);
 
   const conversationClaims = await Promise.all([
     request("POST", `/conversas/${conversationA.id}/assumir`, {}, adminA.token),
