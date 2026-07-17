@@ -173,6 +173,23 @@ export type LeadStatus = "NOVO" | "EM_ATENDIMENTO" | "QUALIFICADO" | "DESQUALIFI
 export type ConversationStatus = "ABERTA" | "NOVA" | "AGUARDANDO_ATENDIMENTO" | "EM_ATENDIMENTO" | "AGUARDANDO_CLIENTE" | "PENDENTE" | "ENCERRADA";
 export type MessageDirection = "ENTRADA" | "SAIDA";
 
+export type CommunicationBusiness = {
+  id: number;
+  clienteId: number;
+  leadId: number | null;
+  responsavelId: number | null;
+  responsavel: LeadsCommunicationUser | null;
+  convertidoPorId: number | null;
+  convertidoPor: { id: number; nome: string } | null;
+  statusLeadAnterior: LeadStatus | null;
+  titulo: string | null;
+  observacao: string | null;
+  etapa: "NOVO" | "CONTATO" | "PROPOSTA" | "FECHADO" | "PERDIDO";
+  valor: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CommunicationLead = {
   id: number;
   clienteId: number;
@@ -187,6 +204,7 @@ export type CommunicationLead = {
   qualificadoEm: string | null;
   desqualificadoEm: string | null;
   convertidoEm: string | null;
+  negocios: CommunicationBusiness[];
   createdAt: string;
   updatedAt: string;
 };
@@ -1311,6 +1329,10 @@ export async function assignCommunicationLead(id: number, responsavelId: number,
 
 export async function returnCommunicationLeadToQueue(id: number, motivo: string) {
   return requestApiWrite<CommunicationLead>("POST", `/leads/${id}/devolver-fila`, { motivo });
+}
+
+export async function convertCommunicationLeadToBusiness(id: number, payload: { titulo?: string; valor?: number; observacao?: string }) {
+  return requestApiWrite<{ lead: CommunicationLead; negocio: CommunicationBusiness; created: boolean }>("POST", `/leads/${id}/converter-negocio`, payload);
 }
 
 export async function fetchCommunicationLeadHistory(id: number) {

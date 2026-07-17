@@ -39,6 +39,10 @@ function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   app.get("/leads/:id/historico-atribuicao", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.leadHistory(context, pathId(req)));
   }));
+  app.post("/leads/:id/converter-negocio", ...guarded, route(async (req, res, context, api) => {
+    const result = await api.convertLeadToBusiness(context, pathId(req), req.body);
+    res.status(result.created ? 201 : 200).json(result);
+  }));
 
   app.get("/conversas", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.listConversations(context, req.query));

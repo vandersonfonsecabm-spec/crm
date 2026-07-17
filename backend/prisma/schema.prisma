@@ -185,6 +185,7 @@ model Usuario {
   oauthStatesIntegracao      IntegracaoOAuthState[]
   leadsResponsaveis          Lead[]                    @relation("LeadResponsavel")
   negociosResponsaveis       Negocio[]                 @relation("NegocioResponsavel")
+  negociosConvertidos        Negocio[]                 @relation("NegocioConvertidoPor")
   conversasResponsaveis      ConversaCanal[]           @relation("ConversaResponsavel")
   conversasReservadas        ConversaCanal[]           @relation("ConversaRespostaReservadaPor")
   mensagensCanalEnviadas     MensagemCanal[]           @relation("MensagemCanalAutor")
@@ -606,10 +607,15 @@ model Negocio {
   empresa              Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   clienteId            Int
   cliente              Cliente               @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  leadId               Int?
+  leadId               Int?                  @unique
   lead                 Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
   responsavelId        Int?
   responsavel          Usuario?              @relation("NegocioResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  convertidoPorId      Int?
+  convertidoPor        Usuario?              @relation("NegocioConvertidoPor", fields: [convertidoPorId], references: [id], onDelete: SetNull)
+  statusLeadAnterior   StatusLead?
+  titulo               String?
+  observacao           String?
   etapa                EtapaNegocio          @default(NOVO)
   valor                Int?
   motivoPerda          String?
@@ -624,6 +630,7 @@ model Negocio {
   @@index([empresaId, responsavelId, etapa])
   @@index([empresaId, clienteId])
   @@index([empresaId, leadId])
+  @@index([empresaId, convertidoPorId, createdAt])
 }
 
 model NotaInternaConversa {

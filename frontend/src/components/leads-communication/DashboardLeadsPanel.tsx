@@ -1,10 +1,11 @@
-import { ArrowRight, FilterX, History, Search, UserPlus, UserRoundSearch } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, FilterX, History, Search, UserPlus, UserRoundSearch } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AuthSession, CommunicationConversation, CommunicationLead, LeadStatus, LeadsCommunicationUser } from "../../services/crmApi";
 import {
   ApiHttpError,
   assignCommunicationLead,
   assumeCommunicationLead,
+  convertCommunicationLeadToBusiness,
   createCommunicationLead,
   fetchCommunicationConversations,
   fetchCommunicationLead,
@@ -57,9 +58,13 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
   const [actionReason, setActionReason] = useState("");
   const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [conversionLead, setConversionLead] = useState<CommunicationLead | null>(null);
+  const [conversionForm, setConversionForm] = useState({ titulo: "", valor: "", observacao: "" });
+  const [conversionError, setConversionError] = useState("");
   const [closedCreateRequestKey, setClosedCreateRequestKey] = useState(0);
   const [createForm, setCreateForm] = useState({ clienteId: "", interesse: "", origem: "", campanha: "", responsavelId: "" });
   const requestSequence = useRef(0);
+  const conversionInFlight = useRef(false);
   const hasLoaded = useRef(false);
   const manager = ["ADMIN", "GERENTE"].includes(authSession.papel ?? authSession.usuario.papel ?? "");
   const currentUserId = authSession.usuario.id ?? 0;
@@ -219,6 +224,40 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
     } finally { setBusy(false); }
   }
 
+  function openConversion(lead: CommunicationLead) {
+    const parts = ["Oportunidade", lead.cliente.nome, lead.interesse].filter(Boolean);
+    setConversionLead(lead);
+    setConversionForm({ titulo: parts.join(" - ").slice(0, 200), valor: "", observacao: "" });
+    setConversionError("");
+  }
+
+  async function submitConversion() {
+    if (!conversionLead || !conversionForm.titulo.trim() || conversionInFlight.current) return;
+    if (conversionForm.valor && (!Number.isSafeInteger(Number(conversionForm.valor)) || Number(conversionForm.valor) < 0)) {
+      setConversionError("Informe um valor inteiro não negativo ou deixe o campo vazio.");
+      return;
+    }
+    conversionInFlight.current = true;
+    setBusy(true);
+    setConversionError("");
+    try {
+      const result = await convertCommunicationLeadToBusiness(conversionLead.id, {
+        titulo: conversionForm.titulo.trim(),
+        ...(conversionForm.valor ? { valor: Number(conversionForm.valor) } : {}),
+        ...(conversionForm.observacao.trim() ? { observacao: conversionForm.observacao.trim() } : {}),
+      });
+      setSelected(result.lead);
+      setConversionLead(null);
+      setFeedback(result.created ? "Lead convertido em Negócio." : "Este Lead já possui um Negócio vinculado.");
+      setRefreshKey((value) => value + 1);
+    } catch (nextError) {
+      setConversionError(errorMessage(nextError));
+    } finally {
+      conversionInFlight.current = false;
+      setBusy(false);
+    }
+  }
+
   function resetFilters() {
     setQuickView("todos");
     setStatus("");
@@ -232,6 +271,8 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
   const totalPages = Math.max(1, result?.pagination.totalPages ?? 1);
   const selectedIsMine = selected?.responsavelId === currentUserId;
   const canEditSelected = Boolean(selected && (manager || selectedIsMine));
+  const selectedBusiness = selected?.negocios?.[0] ?? null;
+  const canConvertSelected = Boolean(selected && !selectedBusiness && selected.responsavelId !== null && selected.status !== "DESQUALIFICADO" && selected.status !== "CONVERTIDO" && (manager || selectedIsMine));
 
   return (
     <div className="space-y-3" data-testid="leads-page">
@@ -286,8 +327,9 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
         {drawerLoading || !selected ? <LoadingState rows={5} /> : <div className="space-y-4">
           <section><h3 className="mb-1 text-xs font-semibold text-[var(--text-primary)]">Resumo</h3><dl><DetailRow label="Status" value={<LeadStatusBadge status={selected.status} />} /><DetailRow label="Responsável" value={selected.responsavel?.nome ?? "Sem responsável"} /><DetailRow label="Interesse" value={selected.interesse ?? "Não informado"} /></dl></section>
           <section><h3 className="mb-1 text-xs font-semibold text-[var(--text-primary)]">Origem comercial</h3><dl><DetailRow label="Origem" value={selected.origem ?? "Não informado"} /><DetailRow label="Campanha" value={selected.campanha ?? "Não informado"} /></dl></section>
-          <section><h3 className="mb-2 text-xs font-semibold text-[var(--text-primary)]">Ações permitidas</h3><div className="flex flex-wrap gap-2">{selected.responsavelId === null && <Button disabled={busy} leftIcon={<UserPlus size={13} />} onClick={() => void runAssume(selected)} size="sm">Assumir</Button>}{manager && <Button onClick={() => { setActionModal({ kind: "assign", lead: selected }); setActionValue(String(selected.responsavelId ?? "")); }} size="sm" variant="secondary">{selected.responsavelId ? "Transferir" : "Atribuir"}</Button>}{(manager || selectedIsMine) && selected.responsavelId !== null && <Button onClick={() => setActionModal({ kind: "queue", lead: selected })} size="sm" variant="secondary">Devolver à fila</Button>}</div></section>
-          {canEditSelected && <LeadEditor busy={busy} key={`${selected.id}-${selected.updatedAt}`} lead={selected} onSave={async (payload) => { setBusy(true); try { await updateCommunicationLead(selected.id, payload); setFeedback("Lead atualizado."); await refreshLead(selected.id); } catch (nextError) { setFeedback(errorMessage(nextError)); } finally { setBusy(false); } }} />}
+          <section><h3 className="mb-2 text-xs font-semibold text-[var(--text-primary)]">Ações permitidas</h3><div className="flex flex-wrap gap-2">{selected.responsavelId === null && <Button disabled={busy} leftIcon={<UserPlus size={13} />} onClick={() => void runAssume(selected)} size="sm">Assumir</Button>}{manager && <Button onClick={() => { setActionModal({ kind: "assign", lead: selected }); setActionValue(String(selected.responsavelId ?? "")); }} size="sm" variant="secondary">{selected.responsavelId ? "Transferir" : "Atribuir"}</Button>}{(manager || selectedIsMine) && selected.responsavelId !== null && <Button onClick={() => setActionModal({ kind: "queue", lead: selected })} size="sm" variant="secondary">Devolver à fila</Button>}{canConvertSelected && <Button disabled={busy} leftIcon={<BriefcaseBusiness size={13} />} onClick={() => openConversion(selected)} size="sm">Converter em Negócio</Button>}</div>{selected.responsavelId === null && <p className="mt-2 text-[11px] text-[var(--text-muted)]">Assuma o Lead antes de convertê-lo em Negócio.</p>}</section>
+          {selectedBusiness && <section className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3"><div className="mb-2 flex items-center gap-2"><BriefcaseBusiness size={14} /><h3 className="text-xs font-semibold text-[var(--text-primary)]">Negócio vinculado</h3></div><dl><DetailRow label="Título" value={selectedBusiness.titulo ?? `Negócio #${selectedBusiness.id}`} /><DetailRow label="Etapa" value={selectedBusiness.etapa} /><DetailRow label="Responsável" value={selectedBusiness.responsavel?.nome ?? "Sem responsável"} /><DetailRow label="Valor" value={selectedBusiness.valor === null ? "Não informado" : String(selectedBusiness.valor)} /><DetailRow label="Convertido por" value={selectedBusiness.convertidoPor?.nome ?? "Usuário removido"} /><DetailRow label="Convertido em" value={formatCommunicationDate(selectedBusiness.createdAt)} /></dl></section>}
+          {canEditSelected && selected.status !== "CONVERTIDO" && <LeadEditor busy={busy} key={`${selected.id}-${selected.updatedAt}`} lead={selected} onSave={async (payload) => { setBusy(true); try { await updateCommunicationLead(selected.id, payload); setFeedback("Lead atualizado."); await refreshLead(selected.id); } catch (nextError) { setFeedback(errorMessage(nextError)); } finally { setBusy(false); } }} />}
           <section><div className="mb-2 flex items-center gap-2"><Search size={13} /><h3 className="text-xs font-semibold text-[var(--text-primary)]">Conversas relacionadas</h3></div>{selectedConversations.length ? <div className="space-y-2">{selectedConversations.map((conversation) => <button className="flex w-full items-center justify-between rounded-md border border-[var(--border-default)] px-3 py-2 text-left hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]" key={conversation.id} onClick={() => onOpenConversation(conversation.id)} type="button"><span><span className="block text-[11px] font-medium text-[var(--text-primary)]">{conversation.canalIntegracao.nome}</span><span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">{conversation.ultimaMensagem?.texto ?? "Sem mensagens"}</span></span><ArrowRight size={14} /></button>)}</div> : <p className="text-[11px] text-[var(--text-muted)]">Nenhuma conversa vinculada.</p>}</section>
           <section><div className="mb-2 flex items-center gap-2"><History size={13} /><h3 className="text-xs font-semibold text-[var(--text-primary)]">Histórico de atribuição</h3></div>{selectedHistory.length ? <ol className="space-y-2">{selectedHistory.map((entry) => <li className="rounded-md bg-[var(--bg-muted)] px-3 py-2 text-[11px]" key={entry.id}><p className="font-medium text-[var(--text-primary)]">{historyLabel(entry.tipo, entry.responsavelAnterior?.nome, entry.responsavelNovo?.nome)}</p><p className="mt-0.5 text-[var(--text-muted)]">Por {entry.alteradoPor?.nome ?? "Usuário removido"} · {formatCommunicationDate(entry.createdAt)}</p>{entry.motivo && <p className="mt-1 text-[var(--text-secondary)]">{entry.motivo}</p>}</li>)}</ol> : <p className="text-[11px] text-[var(--text-muted)]">Nenhuma alteração de responsável registrada.</p>}</section>
           <section><h3 className="mb-1 text-xs font-semibold text-[var(--text-primary)]">Datas importantes</h3><dl><DetailRow label="Criado em" value={formatCommunicationDate(selected.createdAt)} /><DetailRow label="Atualizado em" value={formatCommunicationDate(selected.updatedAt)} /><DetailRow label="Qualificado em" value={formatCommunicationDate(selected.qualificadoEm)} /></dl></section>
@@ -302,6 +344,10 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
 
       <CommunicationModal description="O Lead será vinculado a um Cliente existente e não criará um Negócio automaticamente." footer={<div className="flex justify-end gap-2"><Button disabled={busy} onClick={() => setClosedCreateRequestKey(createRequestKey)} size="sm" variant="ghost">Cancelar</Button><Button disabled={busy || !createForm.clienteId} onClick={() => void submitCreate()} size="sm">Criar Lead</Button></div>} onClose={() => setClosedCreateRequestKey(createRequestKey)} open={createOpen} title="Novo Lead">
         <div className="grid gap-3"><Select error={actionError} label="Cliente" onChange={(event) => setCreateForm((current) => ({ ...current, clienteId: event.target.value }))} value={createForm.clienteId}><option value="">Selecione um Cliente</option>{clients.map((client) => <option key={client.backendId ?? client.id} value={client.backendId ?? client.id}>{client.name}</option>)}</Select><Textarea label="Interesse" maxLength={500} onChange={(event) => setCreateForm((current) => ({ ...current, interesse: event.target.value }))} value={createForm.interesse} /><div className="grid gap-3 sm:grid-cols-2"><Input label="Origem" maxLength={160} onChange={(event) => setCreateForm((current) => ({ ...current, origem: event.target.value }))} value={createForm.origem} /><Input label="Campanha" maxLength={160} onChange={(event) => setCreateForm((current) => ({ ...current, campanha: event.target.value }))} value={createForm.campanha} /></div><Select label="Responsável (opcional)" onChange={(event) => setCreateForm((current) => ({ ...current, responsavelId: event.target.value }))} value={createForm.responsavelId}><option value="">Sem responsável</option>{teamUsers.map((user) => <option key={user.id} value={user.id}>{user.nome}</option>)}</Select></div>
+      </CommunicationModal>
+
+      <CommunicationModal description="A conversão cria um Negócio vinculado, sem alterar o card do Kanban legado." footer={<div className="flex justify-end gap-2"><Button disabled={busy} onClick={() => setConversionLead(null)} size="sm" variant="ghost">Cancelar</Button><Button disabled={busy || !conversionForm.titulo.trim()} onClick={() => void submitConversion()} size="sm">Converter</Button></div>} onClose={() => { if (!busy) setConversionLead(null); }} open={Boolean(conversionLead)} title="Converter em Negócio">
+        {conversionLead && <div className="grid gap-3"><div className="rounded-md bg-[var(--bg-muted)] px-3 py-2 text-[11px] text-[var(--text-secondary)]"><p><strong className="text-[var(--text-primary)]">Cliente:</strong> {conversionLead.cliente.nome}</p><p className="mt-1"><strong className="text-[var(--text-primary)]">Interesse:</strong> {conversionLead.interesse ?? "Não informado"}</p><p className="mt-1"><strong className="text-[var(--text-primary)]">Responsável:</strong> {conversionLead.responsavel?.nome ?? "Sem responsável"}</p></div><Input error={conversionError} label="Título" maxLength={200} onChange={(event) => setConversionForm((current) => ({ ...current, titulo: event.target.value }))} value={conversionForm.titulo} /><Input label="Valor estimado (opcional)" min="0" onChange={(event) => setConversionForm((current) => ({ ...current, valor: event.target.value }))} step="1" type="number" value={conversionForm.valor} /><Textarea label="Observação (opcional)" maxLength={1000} onChange={(event) => setConversionForm((current) => ({ ...current, observacao: event.target.value }))} value={conversionForm.observacao} /></div>}
       </CommunicationModal>
     </div>
   );

@@ -174,6 +174,72 @@ function createLeadsCommunicationServices({ prisma }) {
     });
   }
 
+  async function convertLeadToBusiness(context, id, input) {
+    const body = rejectUnknown(input, ["titulo", "valor", "observacao"]);
+    rejectEmpresaId(body);
+    const requestedTitle = optionalText(body.titulo, "titulo", 200);
+    const valor = optionalInteger(body.valor, "valor", { min: 0 });
+    const observacao = optionalText(body.observacao, "observacao", 1000);
+
+    const initialLead = await prisma.lead.findFirst({
+      where: { id, empresaId: context.empresaId },
+      include: conversionLeadIncludes(),
+    });
+    if (!initialLead) throw notFound("Lead nao encontrado.");
+    requireResponsibleOrManager(context, initialLead);
+    if (initialLead.negocios[0]) return conversionResult(initialLead, initialLead.negocios[0], false);
+    validateLeadForConversion(initialLead);
+
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const lead = await tx.lead.findFirst({
+          where: { id, empresaId: context.empresaId },
+          include: conversionLeadIncludes(),
+        });
+        if (!lead) throw notFound("Lead nao encontrado.");
+        requireResponsibleOrManager(context, lead);
+        if (lead.negocios[0]) return conversionResult(lead, lead.negocios[0], false);
+        validateLeadForConversion(lead);
+        await validateResponsible(tx, context.empresaId, lead.responsavelId);
+
+        const now = new Date();
+        const negocio = await tx.negocio.create({
+          data: {
+            empresaId: context.empresaId,
+            clienteId: lead.clienteId,
+            leadId: lead.id,
+            responsavelId: lead.responsavelId,
+            convertidoPorId: context.usuarioId,
+            statusLeadAnterior: lead.status,
+            titulo: requestedTitle || defaultBusinessTitle(lead),
+            ...(valor === undefined ? {} : { valor }),
+            ...(observacao === undefined ? {} : { observacao }),
+            etapa: "NOVO",
+          },
+          include: businessIncludes(),
+        });
+        const updated = await tx.lead.updateMany({
+          where: { id: lead.id, empresaId: context.empresaId, status: { not: "CONVERTIDO" } },
+          data: { status: "CONVERTIDO", convertidoEm: now },
+        });
+        if (updated.count !== 1) {
+          throw domainError(409, "LEAD_CONVERSION_CONFLICT", "Lead foi alterado por outra operacao.");
+        }
+        const convertedLead = await tx.lead.findUnique({ where: { id: lead.id }, include: leadIncludes() });
+        return conversionResult(convertedLead, negocio, true);
+      });
+    } catch (error) {
+      if (error?.code !== "P2002") throw error;
+      const convertedLead = await prisma.lead.findFirst({
+        where: { id, empresaId: context.empresaId },
+        include: conversionLeadIncludes(),
+      });
+      if (!convertedLead?.negocios[0]) throw error;
+      requireResponsibleOrManager(context, convertedLead);
+      return conversionResult(convertedLead, convertedLead.negocios[0], false);
+    }
+  }
+
   async function findConversation(context, id, client = prisma) {
     const conversation = await client.conversaCanal.findFirst({ where: { id, empresaId: context.empresaId } });
     if (!conversation) throw notFound("Conversa nao encontrada.");
@@ -663,6 +729,7 @@ function createLeadsCommunicationServices({ prisma }) {
     assumeConversation,
     assumeLead,
     conversationHistory,
+    convertLeadToBusiness,
     createLead,
     createNote,
     createOrFindConversation,
@@ -698,6 +765,28 @@ function leadStatusData(lead, nextStatus) {
   return data;
 }
 
+function validateLeadForConversion(lead) {
+  if (!lead.cliente) throw domainError(409, "LEAD_CLIENT_REQUIRED", "Lead precisa estar vinculado a um Cliente.");
+  if (lead.responsavelId === null) {
+    throw domainError(409, "LEAD_RESPONSIBLE_REQUIRED", "Assuma o Lead antes de converte-lo em Negocio.");
+  }
+  if (lead.status === "DESQUALIFICADO") {
+    throw domainError(409, "LEAD_STATUS_INCOMPATIBLE", "Lead desqualificado nao pode ser convertido.");
+  }
+  if (lead.status === "CONVERTIDO") {
+    throw domainError(409, "LEAD_CONVERSION_INCONSISTENT", "Lead convertido nao possui Negocio vinculado.");
+  }
+}
+
+function defaultBusinessTitle(lead) {
+  const interest = lead.interesse ? ` - ${lead.interesse}` : "";
+  return `Oportunidade - ${lead.cliente.nome}${interest}`.slice(0, 200);
+}
+
+function conversionResult(lead, negocio, created) {
+  return { lead, negocio, created };
+}
+
 async function createAssignmentHistory(tx, data) {
   validateAssignmentContext(data);
   return tx.historicoAtribuicao.create({ data: { origem: "MANUAL", ...data } });
@@ -712,6 +801,22 @@ function leadIncludes() {
   return {
     cliente: { select: { id: true, nome: true } },
     responsavel: { select: { id: true, nome: true, papel: true } },
+    negocios: {
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 1,
+      include: businessIncludes(),
+    },
+  };
+}
+
+function conversionLeadIncludes() {
+  return leadIncludes();
+}
+
+function businessIncludes() {
+  return {
+    responsavel: { select: { id: true, nome: true, papel: true } },
+    convertidoPor: { select: { id: true, nome: true } },
   };
 }
 
