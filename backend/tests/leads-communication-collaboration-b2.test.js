@@ -314,6 +314,7 @@ async function registerAndLogin(empresaNome, adminNome, email) {
   const senha = "SenhaB2Segura123";
   const registration = await request("POST", "/auth/register-company", { empresaNome, adminNome, email, senha });
   assert.equal(registration.status, 201);
+  await prisma.empresaFuncionalidade.create({ data: { empresaId: registration.body.empresa.id, chave: "LEADS_COMMUNICATION", habilitada: true } });
   const login = await request("POST", "/auth/login", { email, senha });
   assert.equal(login.status, 200);
   return { token: login.body.access_token, empresaId: registration.body.empresa.id, usuarioId: registration.body.usuario.id };

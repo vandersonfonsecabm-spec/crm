@@ -5,3 +5,13 @@ export function isLeadsCommunicationEnabled() {
 export function isSiteLeadCaptureEnabled() {
   return isLeadsCommunicationEnabled() && import.meta.env.VITE_SITE_LEAD_CAPTURE_ENABLED === "true";
 }
+
+export function resolveTenantFeatureAccess(capabilities?: {
+  leadsCommunication?: boolean;
+  siteLeadCapture?: boolean;
+}) {
+  return {
+    leadsCommunication: isLeadsCommunicationEnabled() && capabilities?.leadsCommunication === true,
+    siteLeadCapture: isSiteLeadCaptureEnabled() && capabilities?.siteLeadCapture === true,
+  };
+}

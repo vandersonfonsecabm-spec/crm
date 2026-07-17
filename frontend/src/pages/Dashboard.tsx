@@ -52,7 +52,7 @@ import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
 import { canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
-import { isLeadsCommunicationEnabled, isSiteLeadCaptureEnabled } from "../config/featureFlags";
+import { resolveTenantFeatureAccess } from "../config/featureFlags";
 import { EmptyState } from "../components/ui";
 import { LockKeyhole } from "lucide-react";
 
@@ -103,8 +103,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [leadsCreateRequestKey, setLeadsCreateRequestKey] = useState(0);
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
   const canManageIntegrations = canAccessIntegrations(authSession);
-  const leadsCommunicationEnabled = isLeadsCommunicationEnabled();
-  const siteLeadCaptureEnabled = isSiteLeadCaptureEnabled();
+  const {
+    leadsCommunication: leadsCommunicationEnabled,
+    siteLeadCapture: siteLeadCaptureEnabled,
+  } = resolveTenantFeatureAccess(authSession?.capabilities);
   const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
   const requestedActivePage = resolvedNavigation.page;
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;

@@ -272,7 +272,7 @@ async function legacyCounts(databasePath) {
   try {
     const tables = await prisma.$queryRawUnsafe(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' " +
-        "AND name != '_prisma_migrations' AND name NOT IN ('Lead','Negocio','NotaInternaConversa','HistoricoAtribuicao','EventoWebhook') ORDER BY name",
+        "AND name != '_prisma_migrations' AND name NOT IN ('Lead','Negocio','NotaInternaConversa','HistoricoAtribuicao','EventoWebhook','EmpresaFuncionalidade','AuditoriaFuncionalidade') ORDER BY name",
     );
     const result = {};
     for (const { name } of tables) {

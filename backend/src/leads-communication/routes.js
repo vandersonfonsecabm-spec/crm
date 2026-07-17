@@ -1,10 +1,12 @@
 const { authContext, featureFlagMiddleware } = require("./policy");
 const { createLeadsCommunicationServices } = require("./services");
 const { requiredInteger } = require("./validation");
+const { createTenantFeatureMiddleware, FEATURE_KEYS } = require("../tenant-features/service");
 
 function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   const service = createLeadsCommunicationServices({ prisma });
-  const guarded = [featureFlagMiddleware, authenticate];
+  const tenantFeatureGate = createTenantFeatureMiddleware({ prisma, featureKey: FEATURE_KEYS.LEADS_COMMUNICATION });
+  const guarded = [featureFlagMiddleware, authenticate, tenantFeatureGate];
   const route = (handler) => async (req, res) => {
     try {
       await handler(req, res, authContext(req), service);

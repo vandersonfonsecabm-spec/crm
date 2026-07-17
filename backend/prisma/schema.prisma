@@ -165,31 +165,35 @@ model Empresa {
   notasInternasConversa      NotaInternaConversa[]
   historicosAtribuicao       HistoricoAtribuicao[]
   eventosWebhook             EventoWebhook[]
+  funcionalidades            EmpresaFuncionalidade[]
+  auditoriasFuncionalidade   AuditoriaFuncionalidade[]
 }
 
 model Usuario {
-  id                     Int                    @id @default(autoincrement())
-  empresaId              Int
-  empresa                Empresa                @relation(fields: [empresaId], references: [id])
-  nome                   String
-  email                  String
-  senhaHash              String
-  papel                  PapelUsuario           @default(VENDEDOR)
-  ativo                  Boolean                @default(true)
-  ultimoLoginEm          DateTime?
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
-  importacoesCriadas     ImportacaoDados[]
-  oauthStatesIntegracao  IntegracaoOAuthState[]
-  leadsResponsaveis      Lead[]                 @relation("LeadResponsavel")
-  negociosResponsaveis   Negocio[]              @relation("NegocioResponsavel")
-  conversasResponsaveis  ConversaCanal[]        @relation("ConversaResponsavel")
-  conversasReservadas    ConversaCanal[]        @relation("ConversaRespostaReservadaPor")
-  mensagensCanalEnviadas MensagemCanal[]        @relation("MensagemCanalAutor")
-  notasInternasCriadas   NotaInternaConversa[]  @relation("NotaInternaAutor")
-  atribuicoesAnteriores  HistoricoAtribuicao[]  @relation("AtribuicaoResponsavelAnterior")
-  atribuicoesNovas       HistoricoAtribuicao[]  @relation("AtribuicaoResponsavelNovo")
-  atribuicoesAlteradas   HistoricoAtribuicao[]  @relation("AtribuicaoAlteradoPor")
+  id                         Int                       @id @default(autoincrement())
+  empresaId                  Int
+  empresa                    Empresa                   @relation(fields: [empresaId], references: [id])
+  nome                       String
+  email                      String
+  senhaHash                  String
+  papel                      PapelUsuario              @default(VENDEDOR)
+  ativo                      Boolean                   @default(true)
+  ultimoLoginEm              DateTime?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  importacoesCriadas         ImportacaoDados[]
+  oauthStatesIntegracao      IntegracaoOAuthState[]
+  leadsResponsaveis          Lead[]                    @relation("LeadResponsavel")
+  negociosResponsaveis       Negocio[]                 @relation("NegocioResponsavel")
+  conversasResponsaveis      ConversaCanal[]           @relation("ConversaResponsavel")
+  conversasReservadas        ConversaCanal[]           @relation("ConversaRespostaReservadaPor")
+  mensagensCanalEnviadas     MensagemCanal[]           @relation("MensagemCanalAutor")
+  notasInternasCriadas       NotaInternaConversa[]     @relation("NotaInternaAutor")
+  atribuicoesAnteriores      HistoricoAtribuicao[]     @relation("AtribuicaoResponsavelAnterior")
+  atribuicoesNovas           HistoricoAtribuicao[]     @relation("AtribuicaoResponsavelNovo")
+  atribuicoesAlteradas       HistoricoAtribuicao[]     @relation("AtribuicaoAlteradoPor")
+  funcionalidadesHabilitadas EmpresaFuncionalidade[]   @relation("FuncionalidadeHabilitadaPor")
+  auditoriasFuncionalidade   AuditoriaFuncionalidade[] @relation("AuditoriaFuncionalidadeUsuario")
 
   @@unique([empresaId, email])
   @@index([empresaId])
@@ -688,6 +692,49 @@ model EventoWebhook {
   @@unique([empresaId, canalIntegracaoId, provedor, externalEventId])
   @@index([empresaId, statusProcessamento, recebidoEm])
   @@index([empresaId, canalIntegracaoId, recebidoEm])
+}
+
+model EmpresaFuncionalidade {
+  id                     Int                       @id @default(autoincrement())
+  empresaId              Int
+  empresa                Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  chave                  ChaveFuncionalidade
+  habilitada             Boolean                   @default(false)
+  habilitadoEm           DateTime?
+  habilitadoPorUsuarioId Int?
+  habilitadoPorUsuario   Usuario?                  @relation("FuncionalidadeHabilitadaPor", fields: [habilitadoPorUsuarioId], references: [id], onDelete: SetNull)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  auditorias             AuditoriaFuncionalidade[]
+
+  @@unique([empresaId, chave])
+  @@index([empresaId, habilitada])
+  @@index([habilitadoPorUsuarioId])
+}
+
+model AuditoriaFuncionalidade {
+  id               Int                    @id @default(autoincrement())
+  empresaId        Int
+  empresa          Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  funcionalidadeId Int?
+  funcionalidade   EmpresaFuncionalidade? @relation(fields: [funcionalidadeId], references: [id], onDelete: SetNull)
+  chave            ChaveFuncionalidade
+  valorAnterior    Boolean?
+  valorNovo        Boolean
+  operadoPor       String
+  usuarioId        Int?
+  usuario          Usuario?               @relation("AuditoriaFuncionalidadeUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  motivo           String
+  createdAt        DateTime               @default(now())
+
+  @@index([empresaId, chave, createdAt])
+  @@index([funcionalidadeId, createdAt])
+  @@index([usuarioId, createdAt])
+}
+
+enum ChaveFuncionalidade {
+  LEADS_COMMUNICATION
+  SITE_LEAD_CAPTURE
 }
 
 enum TipoCanal {

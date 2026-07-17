@@ -41,7 +41,11 @@ function createSiteLeadService({ prisma }) {
   async function getPublicIntegration(publicId) {
     if (!isEnabled()) return null;
     if (!isUuid(publicId)) return null;
-    return prisma.canalIntegracao.findFirst({ where: { publicId: publicId.toLowerCase(), tipo: "SITE_FORM", ativo: true, status: "ATIVO" } });
+    return prisma.canalIntegracao.findFirst({ where: { publicId: publicId.toLowerCase(), tipo: "SITE_FORM" } });
+  }
+
+  function isPublicIntegrationActive(integration) {
+    return integration?.ativo === true && integration.status === "ATIVO";
   }
 
   function isOriginAllowed(integration, origin) {
@@ -115,7 +119,7 @@ function createSiteLeadService({ prisma }) {
   }
 
   async function getOwnedIntegration(context, id) { const item = await prisma.canalIntegracao.findFirst({ where: { id, empresaId: context.empresaId, tipo: "SITE_FORM" } }); if (!item) throw notFound(); return item; }
-  return { capture, createIntegration, getPublicIntegration, isOriginAllowed, listIntegrations, rotatePublicId, updateIntegration };
+  return { capture, createIntegration, getPublicIntegration, isOriginAllowed, isPublicIntegrationActive, listIntegrations, rotatePublicId, updateIntegration };
 }
 
 function isEnabled(env = process.env) { return env.LEADS_COMMUNICATION_ENABLED === "true" && env.SITE_LEAD_CAPTURE_ENABLED === "true"; }

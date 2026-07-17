@@ -32,6 +32,12 @@ type ApiAuthResponse = {
   };
   empresa?: ApiAuthCompany;
   papel?: ApiUserRole;
+  capabilities?: TenantCapabilities;
+};
+
+export type TenantCapabilities = {
+  leadsCommunication: boolean;
+  siteLeadCapture: boolean;
 };
 
 export type ApiUserRole = "ADMIN" | "GERENTE" | "VENDEDOR";
@@ -58,6 +64,7 @@ export type AuthSession = {
   empresa?: ApiAuthCompany;
   papel?: ApiUserRole;
   expiresAt?: string;
+  capabilities?: TenantCapabilities;
 };
 
 export class ApiHttpError extends Error {
@@ -952,16 +959,18 @@ export async function fetchAuthMe() {
     throw new Error("Sessao expirada.");
   }
 
-  const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "empresa" | "papel">;
+  const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "empresa" | "papel" | "capabilities">;
   const sessionData: ApiAuthResponse = {
     access_token: token,
     usuario: data.usuario,
     user: data.user,
     empresa: data.empresa,
     papel: data.papel,
+    capabilities: normalizeCapabilities(data.capabilities),
   };
   setAuthSessionFromResponse(sessionData);
-  return getAuthSession();
+  const session = getAuthSession();
+  return session ? { ...session, capabilities: sessionData.capabilities } : null;
 }
 
 export async function loginWithBackend(email: string, senha: string) {
@@ -1597,6 +1606,13 @@ function normalizeAuthCompany(company?: ApiAuthCompany): ApiAuthCompany | undefi
     nome: company.nome,
     slug: company.slug,
     ativo: company.ativo,
+  };
+}
+
+function normalizeCapabilities(capabilities?: Partial<TenantCapabilities>): TenantCapabilities {
+  return {
+    leadsCommunication: capabilities?.leadsCommunication === true,
+    siteLeadCapture: capabilities?.siteLeadCapture === true,
   };
 }
 

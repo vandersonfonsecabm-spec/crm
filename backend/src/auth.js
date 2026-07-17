@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { capabilitiesForTenant } = require("./tenant-features/service");
 
 const PAPEIS = new Set(["ADMIN", "GERENTE", "VENDEDOR"]);
 const JWT_ISSUER = "crm-agro-saas-api";
@@ -184,12 +185,14 @@ function createAuth({ prisma }) {
       }
     });
 
-    app.get("/auth/me", authenticate, (req, res) => {
+    app.get("/auth/me", authenticate, async (req, res) => {
+      const capabilities = await capabilitiesForTenant({ prisma, empresaId: req.auth.empresaId });
       res.json({
         usuario: req.auth.usuario,
         empresa: req.auth.empresa,
         papel: req.auth.papel,
         status: "ATIVO",
+        capabilities,
       });
     });
 

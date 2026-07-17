@@ -2,11 +2,17 @@ const crypto = require("node:crypto");
 const { createSiteLeadRateLimiter } = require("./rateLimiter");
 const { createSiteLeadService, isEnabled } = require("./service");
 const { isHoneypotFilled } = require("./validation");
+const {
+  createTenantFeatureMiddleware,
+  FEATURE_KEYS,
+  isFeatureEnabledForTenant,
+} = require("../tenant-features/service");
 
 const MAX_BODY_BYTES = 32 * 1024;
 
 function siteLeadBodyLimit(req, res, next) {
   if (!req.path.startsWith("/public/site-leads/")) return next();
+  if (!isEnabled()) return res.sendStatus(404);
   const length = Number(req.headers["content-length"] || 0);
   if (Number.isFinite(length) && length > MAX_BODY_BYTES) return res.status(413).json({ accepted: false, erro: "Formulario maior que o limite permitido.", codigo: "BODY_TOO_LARGE" });
   return next();
@@ -18,7 +24,9 @@ function mountSiteLeadPublicRoutes({ app, prisma, rateLimiter = createSiteLeadRa
   app.options("/public/site-leads/:publicId", async (req, res) => {
     if (!isEnabled()) return res.sendStatus(404);
     const integration = await service.getPublicIntegration(req.params.publicId);
-    if (!integration || !service.isOriginAllowed(integration, req.headers.origin)) return res.status(integration ? 403 : 404).json({ accepted: false, erro: "Recurso indisponivel.", codigo: "SITE_CAPTURE_UNAVAILABLE" });
+    if (!integration) return res.sendStatus(404);
+    if (!(await isFeatureEnabledForTenant({ prisma, empresaId: integration.empresaId, featureKey: FEATURE_KEYS.SITE_LEAD_CAPTURE }))) return res.sendStatus(404);
+    if (!service.isPublicIntegrationActive(integration) || !service.isOriginAllowed(integration, req.headers.origin)) return res.status(403).json({ accepted: false, erro: "Recurso indisponivel.", codigo: "SITE_CAPTURE_UNAVAILABLE" });
     setCors(res, req.headers.origin);
     return res.sendStatus(204);
   });
@@ -30,6 +38,8 @@ function mountSiteLeadPublicRoutes({ app, prisma, rateLimiter = createSiteLeadRa
       if (!isEnabled()) return res.sendStatus(404);
       const integration = await service.getPublicIntegration(req.params.publicId);
       if (!integration) return res.sendStatus(404);
+      if (!(await isFeatureEnabledForTenant({ prisma, empresaId: integration.empresaId, featureKey: FEATURE_KEYS.SITE_LEAD_CAPTURE }))) return res.sendStatus(404);
+      if (!service.isPublicIntegrationActive(integration)) return res.sendStatus(404);
       const origin = req.headers.origin;
       if (!service.isOriginAllowed(integration, origin)) return res.status(403).json({ accepted: false, erro: "Origem nao permitida.", codigo: "ORIGIN_NOT_ALLOWED" });
       setCors(res, origin);
@@ -51,7 +61,8 @@ function mountSiteLeadPublicRoutes({ app, prisma, rateLimiter = createSiteLeadRa
 
 function mountSiteLeadAdminRoutes({ app, prisma, authenticate, requireRole }) {
   const service = createSiteLeadService({ prisma });
-  const guarded = [siteFeatureFlag, authenticate, requireRole("ADMIN")];
+  const tenantFeatureGate = createTenantFeatureMiddleware({ prisma, featureKey: FEATURE_KEYS.SITE_LEAD_CAPTURE });
+  const guarded = [siteFeatureFlag, authenticate, tenantFeatureGate, requireRole("ADMIN")];
   const route = (handler) => async (req, res) => { try { await handler(req, res, authContext(req), service); } catch (error) { handleError(res, error); } };
   app.get("/canais/site-form", ...guarded, route(async (req, res, context, api) => res.json({ data: await api.listIntegrations(context) })));
   app.post("/canais/site-form", ...guarded, route(async (req, res, context, api) => res.status(201).json(await api.createIntegration(context, req.body))));
