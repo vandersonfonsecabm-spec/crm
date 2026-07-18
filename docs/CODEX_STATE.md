@@ -11,7 +11,7 @@ Data da verificacao: 18/07/2026.
 
 ## Git
 
-- Baseline oficial: `4fea3d532030a5de2914258eb7dd634813ec413a`.
+- Baseline oficial: `8d68687e68a979f2d79e080c04b21fb16eb025e9`.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -22,7 +22,7 @@ Data da verificacao: 18/07/2026.
 - Frontend canonico: https://crm-murex-six-83.vercel.app.
 - Backend: https://api-production-875f9.up.railway.app.
 - Servico Railway: `crm-agro-api`; nao utilizar `crm-agro-demo-api`.
-- Producao possui 16 migrations; health esperado HTTP 200.
+- Producao possui 17 migrations; health esperado HTTP 200.
 
 ## Banco local protegido
 
@@ -79,13 +79,17 @@ Data da verificacao: 18/07/2026.
 - O callback publico retorna `404`, nao processa nem persiste eventos e nenhuma
   chamada a Meta foi feita.
 - O frontend nao recebeu deploy nesta release.
-- F1B-0S implementada localmente: `EventoWebhook` possui `payloadJson`
-  opcional pela migration
-  `20260718205500_add_event_webhook_atomic_payload`, ainda nao publicada.
-- Eventos legados permanecem com `payloadJson` nulo e o fluxo Site continua
-  compativel.
-- O callback WhatsApp ainda nao persiste mensagens; com os gates locais
-  satisfeitos, payload valido continua retornando `503`.
-- Flags e capabilities permanecem desligadas, sem credencial configurada ou
-  chamada a Meta.
-- Proxima release: F1B-0SP, publicacao controlada da coluna aditiva.
+- F1B-0SP publicada no commit
+  `8d68687e68a979f2d79e080c04b21fb16eb025e9`; producao possui 17
+  migrations, incluindo
+  `20260718205500_add_event_webhook_atomic_payload`.
+- `EventoWebhook.payloadJson` esta disponivel como campo opcional; eventos
+  legados permanecem com `payloadJson` nulo e o fluxo Site continua compativel.
+- O callback WhatsApp ainda nao utiliza `payloadJson` nem aceita eventos
+  operacionalmente; GET e POST publicos retornam `404`.
+- Flags e capabilities permanecem desligadas, sem Verify Token, App Secret,
+  credencial Meta ou chamada a Meta.
+- O frontend nao recebeu deploy nesta release.
+- Proxima release: F1B-1, retomada da aceitacao duravel e idempotente do webhook
+  em nova branch criada a partir do novo HEAD. A branch
+  `feature/whatsapp-f1b1-webhook-intake` permanece preservada.
