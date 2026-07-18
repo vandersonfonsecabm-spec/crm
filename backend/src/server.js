@@ -13,7 +13,7 @@ const { mountNegociosKanbanRoutes } = require("./negocios-kanban/routes");
 const { mountSiteLeadAdminRoutes, mountSiteLeadPublicRoutes, siteLeadBodyLimit } = require("./site-leads/routes");
 const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
 const { mountWhatsAppWebhookRoutes } = require("./integrations/whatsappWebhook");
-const { createWhatsAppWebhookIntake } = require("./integrations/whatsappWebhookIntake");
+const { createWhatsAppWebhookOrchestrator } = require("./integrations/whatsappWebhookOrchestrator");
 
 const prisma = createPrismaClient();
 
@@ -27,7 +27,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const allowedOrigins = getAllowedOrigins();
 
-mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookIntake({ prisma }) });
+mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookOrchestrator({ prisma }) });
 app.use(siteLeadBodyLimit);
 app.use(express.json());
 mountSiteLeadPublicRoutes({ app, prisma });

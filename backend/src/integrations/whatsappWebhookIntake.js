@@ -36,8 +36,8 @@ function createWhatsAppWebhookIntake({ prisma }) {
     }
 
     const records = items.map((item) => eventRecord(item, integration));
-    await persistBatch(prisma, records, true);
-    return { accepted: true };
+    const events = await persistBatch(prisma, records, true);
+    return { accepted: true, events };
   };
 }
 
@@ -185,13 +185,24 @@ function eventRecord(item, integration) {
 
 async function persistBatch(prisma, records, allowUniqueRetry) {
   try {
-    await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction(async (tx) => {
       const existing = await findExisting(tx, records);
       assertExistingEquivalent(existing, records);
-      const existingIds = new Set(existing.map((event) => event.externalEventId));
+      const existingById = new Map(existing.map((event) => [event.externalEventId, event]));
+      const accepted = [];
       for (const record of records) {
-        if (!existingIds.has(record.externalEventId)) await tx.eventoWebhook.create({ data: record });
+        const stored = existingById.get(record.externalEventId);
+        if (stored) {
+          accepted.push({ eventoWebhookId: stored.id, created: false });
+          continue;
+        }
+        const created = await tx.eventoWebhook.create({
+          data: record,
+          select: { id: true },
+        });
+        accepted.push({ eventoWebhookId: created.id, created: true });
       }
+      return accepted;
     });
   } catch (error) {
     if (isIntakeError(error)) throw error;
@@ -200,7 +211,13 @@ async function persistBatch(prisma, records, allowUniqueRetry) {
       const existing = await findExisting(prisma, records).catch(() => null);
       if (existing) {
         assertExistingEquivalent(existing, records);
-        if (existing.length === records.length) return;
+        if (existing.length === records.length) {
+          const existingById = new Map(existing.map((event) => [event.externalEventId, event]));
+          return records.map((record) => ({
+            eventoWebhookId: existingById.get(record.externalEventId).id,
+            created: false,
+          }));
+        }
       }
     }
     throw intakeError(503, "WEBHOOK_STORAGE_UNAVAILABLE");
@@ -214,6 +231,7 @@ async function findExisting(client, records) {
       externalEventId: { in: records.map((record) => record.externalEventId) },
     },
     select: {
+      id: true,
       empresaId: true,
       canalIntegracaoId: true,
       provedor: true,

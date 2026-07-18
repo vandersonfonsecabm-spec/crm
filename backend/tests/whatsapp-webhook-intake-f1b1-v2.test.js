@@ -4,8 +4,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { after, before, beforeEach, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
+const express = require("express");
+const { mountWhatsAppWebhookRoutes } = require("../src/integrations/whatsappWebhook");
 const {
   canonicalStringify,
+  createWhatsAppWebhookIntake,
   parseAtomicMessages,
 } = require("../src/integrations/whatsappWebhookIntake");
 
@@ -28,7 +31,6 @@ Object.assign(process.env, {
   INTEGRATION_ENCRYPTION_KEY: crypto.randomBytes(32).toString("hex"),
 });
 
-let api;
 let prisma;
 let server;
 let baseUrl;
@@ -42,8 +44,7 @@ let domainCounts;
 before(async () => {
   fs.mkdirSync(auditDir, { recursive: true });
   fs.copyFileSync(sourceDatabase, databasePath);
-  api = require("../src/server");
-  prisma = api.prisma;
+  prisma = new PrismaClient({ datasourceUrl: databaseUrl(databasePath) });
 
   empresaA = await prisma.empresa.create({ data: { nome: "Empresa WhatsApp A", slug: "empresa-whatsapp-a-f1b1-v2" } });
   empresaB = await prisma.empresa.create({ data: { nome: "Empresa WhatsApp B", slug: "empresa-whatsapp-b-f1b1-v2" } });
@@ -67,9 +68,9 @@ before(async () => {
   legacyEvent = await prisma.eventoWebhook.findUniqueOrThrow({ where: { id: legacyEvent.id } });
   domainCounts = await readDomainCounts();
 
-  await new Promise((resolve) => {
-    server = api.app.listen(0, "127.0.0.1", resolve);
-  });
+  const app = express();
+  mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookIntake({ prisma }) });
+  await new Promise((resolve) => { server = app.listen(0, "127.0.0.1", resolve); });
   baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
 

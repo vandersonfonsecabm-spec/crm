@@ -1,19 +1,19 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const { after, before, test } = require("node:test");
 
 const backendDir = path.resolve(__dirname, "..");
-const auditDir = path.join(os.tmpdir(), "crm-site-leads-d1");
+const auditDir = path.join(requiredEnv("CRM_PRISMA_TEST_RUN_DIR"), "site-leads-d1");
 const databasePath = path.join(auditDir, `site-leads-${process.pid}.db`);
+const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 
 Object.assign(process.env, { NODE_ENV: "test", JWT_SECRET: "site-leads-d1-secret-with-sufficient-entropy", JWT_EXPIRES_IN: "1h", ALLOW_COMPANY_REGISTRATION: "true", INTEGRATION_ENCRYPTION_KEY: "site-leads-d1-encryption-key", DATABASE_URL: `file:${databasePath.replace(/\\/g, "/")}`, LEADS_COMMUNICATION_ENABLED: "true", SITE_LEAD_CAPTURE_ENABLED: "true", SITE_LEAD_RATE_IP_LIMIT: "50", SITE_LEAD_RATE_PUBLIC_LIMIT: "200" });
 
 let api; let prisma; let server; let baseUrl;
-before(async () => { fs.mkdirSync(auditDir, { recursive: true }); fs.copyFileSync(path.join(backendDir, "prisma", "dev.db"), databasePath); migrate(); api = require("../src/server"); prisma = api.prisma; await new Promise((resolve) => { server = api.app.listen(0, "127.0.0.1", resolve); }); baseUrl = `http://127.0.0.1:${server.address().port}`; });
+before(async () => { fs.mkdirSync(auditDir, { recursive: true }); fs.copyFileSync(sourceDatabase, databasePath); migrate(); api = require("../src/server"); prisma = api.prisma; await new Promise((resolve) => { server = api.app.listen(0, "127.0.0.1", resolve); }); baseUrl = `http://127.0.0.1:${server.address().port}`; });
 after(async () => { if (prisma) await prisma.$disconnect(); if (server) await new Promise((resolve) => server.close(resolve)); removeDatabase(databasePath); });
 
 test("D1 capta formulario Site com seguranca, tenant e idempotencia", async () => {
@@ -105,3 +105,4 @@ async function createUser(admin, nome, email, papel) { const senha = "SenhaD1Seg
 async function domainCounts(empresaId) { const [clientes, leads, contatos, conversas, mensagens, eventos] = await Promise.all([prisma.cliente.count({ where: { empresaId } }), prisma.lead.count({ where: { empresaId } }), prisma.contatoCanal.count({ where: { empresaId } }), prisma.conversaCanal.count({ where: { empresaId } }), prisma.mensagemCanal.count({ where: { empresaId } }), prisma.eventoWebhook.count({ where: { empresaId } })]); return { clientes, leads, contatos, conversas, mensagens, eventos }; }
 function migrate() { execFileSync(process.execPath, [path.join(backendDir, "node_modules", "prisma", "build", "index.js"), "migrate", "deploy"], { cwd: backendDir, env: process.env, stdio: "pipe" }); }
 function removeDatabase(file) { for (const suffix of ["", "-wal", "-shm", "-journal"]) { const target = `${file}${suffix}`; if (fs.existsSync(target)) fs.rmSync(target, { force: true }); } }
+function requiredEnv(name) { const value = String(process.env[name] || "").trim(); if (!value) throw new Error(`${name} e obrigatoria para testes isolados.`); return value; }

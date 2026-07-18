@@ -111,5 +111,12 @@ Data da verificacao: 18/07/2026.
 - O callback GET e POST continua retornando `404`; flags e capabilities
   permanecem desligadas, sem Verify Token, App Secret, credencial Meta ou
   chamada a Meta, e o frontend nao recebeu deploy.
-- Proxima release: F1B-3, orquestracao local entre intake duravel e processador,
-  mantendo o callback desligado em producao.
+- F1B-3 implementada localmente; a producao oficial permanece no commit
+  `517fdd7f51c4f310b9a601cae1431af6512fabaf`, com 17 migrations.
+- O callback local chama o intake duravel e, somente depois do commit do
+  `EventoWebhook`, executa o processador interno.
+- HTTP 200 ocorre somente apos processamento completo ou retry equivalente;
+  falha de processamento retorna HTTP 503 e preserva o evento para retomada.
+- Nenhum worker ou fila foi criado; flags e capabilities continuam desligadas,
+  sem credencial, chamada a Meta ou resposta outbound.
+- Proxima release: F1B-3P, publicacao da orquestracao ainda desligada.

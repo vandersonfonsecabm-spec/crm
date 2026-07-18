@@ -88,8 +88,8 @@ async function handleWebhook(req, res, env, processWebhook) {
   }
 
   try {
-    const result = await processWebhook(payload, { env });
-    return res.status(200).json(result);
+    await processWebhook(payload, { env });
+    return res.status(200).json({ accepted: true });
   } catch (error) {
     if (isSafeProcessorError(error)) return sendError(res, error.status, error.code);
     return sendError(res, 503, "WEBHOOK_STORAGE_UNAVAILABLE");
