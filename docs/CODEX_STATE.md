@@ -11,7 +11,7 @@ Data da verificacao: 18/07/2026.
 
 ## Git
 
-- Baseline oficial: `ad1ea62ab3eb8d26470ca3640b9c516905f9e296`.
+- Baseline oficial: `f59c5f52784552936a20c7d99a6477ce38c67383`.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -22,7 +22,7 @@ Data da verificacao: 18/07/2026.
 - Frontend canonico: https://crm-murex-six-83.vercel.app.
 - Backend: https://api-production-875f9.up.railway.app.
 - Servico Railway: `crm-agro-api`; nao utilizar `crm-agro-demo-api`.
-- Producao possui 15 migrations; health esperado HTTP 200.
+- Producao possui 16 migrations; health esperado HTTP 200.
 
 ## Banco local protegido
 
@@ -71,5 +71,11 @@ Data da verificacao: 18/07/2026.
   fundacao permanece desligada.
 - Nenhuma credencial Meta foi configurada, nenhuma chamada a Meta foi feita e o
   frontend nao foi alterado.
-- Proxima release: F1A-2, fundacao segura do webhook sem processamento de
-  mensagens.
+- F1A-2 implementada localmente em `/webhooks/whatsapp`, ainda nao publicada:
+  GET de verificacao com comparacao em tempo constante e POST isolado com raw
+  body e HMAC SHA-256 sobre os bytes exatos.
+- O callback nao processa nem persiste eventos; payload assinado e valido
+  retorna `503 WEBHOOK_PROCESSOR_NOT_READY`.
+- Flags e capabilities continuam desligadas, sem credenciais e sem chamada a
+  Meta.
+- Proxima release: F1A-2P, publicacao do callback ainda desligado.
