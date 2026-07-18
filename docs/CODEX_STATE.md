@@ -101,5 +101,13 @@ Data da verificacao: 18/07/2026.
   comercial foi criada.
 - Flags e capabilities continuam desligadas, sem Verify Token, App Secret,
   credencial Meta ou chamada a Meta; o frontend nao recebeu deploy.
-- Proxima release: F1B-2, processamento local e idempotente de `EventoWebhook`
-  em Cliente, Lead, Conversa e `MensagemCanal`, ainda desligado.
+- F1B-2 implementada localmente; a producao oficial permanece no commit
+  `10fea4c80a065c63cb7b37acbc0369f37f73613a`, com 17 migrations.
+- O processador interno transforma `EventoWebhook` WhatsApp idempotentemente em
+  Cliente, Lead, `ContatoCanal`, `ConversaCanal` e `MensagemCanal`, marcando o
+  evento como processado somente ao final da transacao.
+- O callback ainda nao chama o processador; nenhum Negocio e criado, nenhuma
+  resposta e enviada, e flags e capabilities permanecem desligadas, sem
+  credencial ou chamada a Meta.
+- Proxima release: F1B-2P, publicacao do processador ainda sem execucao
+  automatica.
