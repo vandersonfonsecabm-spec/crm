@@ -8,14 +8,14 @@ const MAX_TOKEN_LENGTH = 256;
 const MAX_CHALLENGE_LENGTH = 256;
 const ALLOWED_QUERY_FIELDS = new Set(["hub.mode", "hub.verify_token", "hub.challenge"]);
 
-function mountWhatsAppWebhookRoutes({ app, env = process.env }) {
+function mountWhatsAppWebhookRoutes({ app, env = process.env, processWebhook = processorNotReady }) {
   app.get(WHATSAPP_WEBHOOK_PATH, (req, res) => handleVerification(req, res, env));
   app.post(
     WHATSAPP_WEBHOOK_PATH,
     (req, res, next) => inboundGate(req, res, next, env),
     requireJsonContentType,
     express.raw({ type: () => true, limit: MAX_WEBHOOK_BODY_BYTES, inflate: false }),
-    (req, res) => handleWebhook(req, res, env),
+    (req, res) => handleWebhook(req, res, env, processWebhook),
   );
   app.use(WHATSAPP_WEBHOOK_PATH, whatsappWebhookErrorHandler);
 }
@@ -60,7 +60,7 @@ function requireJsonContentType(req, res, next) {
   return next();
 }
 
-function handleWebhook(req, res, env) {
+async function handleWebhook(req, res, env, processWebhook) {
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
     return sendError(res, 400, "WEBHOOK_PAYLOAD_INVALID");
   }
@@ -87,7 +87,28 @@ function handleWebhook(req, res, env) {
     return sendError(res, 400, "WEBHOOK_PAYLOAD_INVALID");
   }
 
-  return sendError(res, 503, "WEBHOOK_PROCESSOR_NOT_READY");
+  try {
+    const result = await processWebhook(payload, { env });
+    return res.status(200).json(result);
+  } catch (error) {
+    if (isSafeProcessorError(error)) return sendError(res, error.status, error.code);
+    return sendError(res, 503, "WEBHOOK_STORAGE_UNAVAILABLE");
+  }
+}
+
+async function processorNotReady() {
+  const error = new Error("WEBHOOK_PROCESSOR_NOT_READY");
+  error.status = 503;
+  error.code = "WEBHOOK_PROCESSOR_NOT_READY";
+  throw error;
+}
+
+function isSafeProcessorError(error) {
+  return Number.isInteger(error?.status)
+    && error.status >= 400
+    && error.status <= 599
+    && typeof error.code === "string"
+    && /^WEBHOOK_[A-Z0-9_]+$/.test(error.code);
 }
 
 function readVerificationQuery(query) {

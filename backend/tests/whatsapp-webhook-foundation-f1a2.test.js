@@ -143,10 +143,10 @@ test("POST aplica gates, raw body, tipo, limite, assinatura e envelope", async (
   assert.equal((await rawRequest(invalidEnvelope, { signature: sign(invalidEnvelope) })).status, 400);
 
   const accepted = await rawRequest(validBody, { signature: sign(validBody) });
-  assert.equal(accepted.status, 503);
+  assert.equal(accepted.status, 422);
   assert.deepEqual(accepted.body, {
     erro: "Requisicao nao aceita.",
-    codigo: "WEBHOOK_PROCESSOR_NOT_READY",
+    codigo: "WEBHOOK_EVENT_UNSUPPORTED",
   });
 });
 
@@ -179,7 +179,7 @@ test("parser raw fica isolado e regressao JSON, health, Site Form e gate ADMIN p
   process.env.WHATSAPP_INBOUND_ENABLED = "true";
   process.env.WHATSAPP_APP_SECRET = appSecret;
   const rawBody = Buffer.from('{"object":"whatsapp_business_account","entry":[]}', "utf8");
-  assert.equal((await rawRequest(rawBody, { signature: sign(rawBody) })).status, 503);
+  assert.equal((await rawRequest(rawBody, { signature: sign(rawBody) })).status, 422);
 
   const loginValidation = await request("POST", "/auth/login", { body: {} });
   assert.equal(loginValidation.status, 401);
@@ -193,8 +193,22 @@ test("parser raw fica isolado e regressao JSON, health, Site Form e gate ADMIN p
   process.env.SITE_LEAD_CAPTURE_ENABLED = "false";
 
   process.env.WHATSAPP_INTEGRATION_ENABLED = "false";
-  const usuario = await prisma.usuario.findFirst({ where: { ativo: true }, select: { id: true, empresaId: true, papel: true } });
-  assert.ok(usuario);
+  let usuario = await prisma.usuario.findFirst({ where: { ativo: true }, select: { id: true, empresaId: true, papel: true } });
+  if (!usuario) {
+    const empresa = await prisma.empresa.create({
+      data: { nome: "Empresa webhook F1A2", slug: "empresa-webhook-f1a2" },
+    });
+    usuario = await prisma.usuario.create({
+      data: {
+        empresaId: empresa.id,
+        nome: "Admin webhook F1A2",
+        email: "admin-webhook-f1a2@example.test",
+        senhaHash: "hash-ficticio",
+        papel: "ADMIN",
+      },
+      select: { id: true, empresaId: true, papel: true },
+    });
+  }
   const token = jwt.sign(
     { empresaId: usuario.empresaId, papel: usuario.papel },
     jwtSecret,
@@ -208,10 +222,10 @@ test("parser raw fica isolado e regressao JSON, health, Site Form e gate ADMIN p
   assert.equal((await request("GET", "/integracoes/whatsapp/status", { token })).status, 404);
 
   const serverSource = fs.readFileSync(path.join(backendDir, "src", "server.js"), "utf8");
-  const mountPosition = serverSource.indexOf("mountWhatsAppWebhookRoutes({ app })");
+  const mountPosition = serverSource.indexOf("mountWhatsAppWebhookRoutes({ app, processWebhook:");
   const jsonPosition = serverSource.indexOf("app.use(express.json())");
   assert.ok(mountPosition > 0 && mountPosition < jsonPosition);
-  assert.equal(serverSource.match(/mountWhatsAppWebhookRoutes\(\{ app \}\)/g)?.length, 1);
+  assert.equal(serverSource.match(/mountWhatsAppWebhookRoutes\(\{ app, processWebhook:/g)?.length, 1);
 });
 
 test("modulo nao possui rede, Prisma, persistencia ou escrita em arquivo", () => {

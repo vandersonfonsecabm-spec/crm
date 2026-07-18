@@ -90,6 +90,14 @@ Data da verificacao: 18/07/2026.
 - Flags e capabilities permanecem desligadas, sem Verify Token, App Secret,
   credencial Meta ou chamada a Meta.
 - O frontend nao recebeu deploy nesta release.
-- Proxima release: F1B-1, retomada da aceitacao duravel e idempotente do webhook
-  em nova branch criada a partir do novo HEAD. A branch
-  `feature/whatsapp-f1b1-webhook-intake` permanece preservada.
+- F1B-1 V2 implementada localmente; a producao oficial continua no commit
+  `8d68687e68a979f2d79e080c04b21fb16eb025e9`, com 17 migrations, e o
+  callback ainda nao foi republicado.
+- Mensagens de texto suportadas agora sao persistidas em `EventoWebhook` com
+  evento atomico recuperavel em `payloadJson`, hash deterministico e
+  idempotencia pelo wamid.
+- HTTP 200 ocorre somente depois da persistencia confirmada ou de retry
+  materialmente equivalente. Tipos nao suportados continuam rejeitados.
+- Nenhum Cliente, Lead, Conversa ou `MensagemCanal` e criado; flags e
+  capabilities continuam desligadas, sem credencial ou chamada a Meta.
+- Proxima release: F1B-1P, publicacao da aceitacao duravel ainda desligada.
