@@ -38,6 +38,7 @@ type ApiAuthResponse = {
 export type TenantCapabilities = {
   leadsCommunication: boolean;
   siteLeadCapture: boolean;
+  negociosKanban: boolean;
 };
 
 export type ApiUserRole = "ADMIN" | "GERENTE" | "VENDEDOR";
@@ -173,10 +174,23 @@ export type LeadStatus = "NOVO" | "EM_ATENDIMENTO" | "QUALIFICADO" | "DESQUALIFI
 export type ConversationStatus = "ABERTA" | "NOVA" | "AGUARDANDO_ATENDIMENTO" | "EM_ATENDIMENTO" | "AGUARDANDO_CLIENTE" | "PENDENTE" | "ENCERRADA";
 export type MessageDirection = "ENTRADA" | "SAIDA";
 
+export type BusinessStage = "NOVO" | "CONTATO" | "PROPOSTA" | "FECHADO" | "PERDIDO";
+
 export type CommunicationBusiness = {
   id: number;
+  empresaId?: number;
   clienteId: number;
+  cliente?: { id: number; nome: string; empresa?: string | null; telefone?: string | null; email?: string | null };
   leadId: number | null;
+  lead?: {
+    id: number;
+    origem: string | null;
+    campanha: string | null;
+    interesse: string | null;
+    status: LeadStatus;
+    conversas?: Array<{ id: number; status: string; updatedAt: string; canalIntegracao: { id: number; tipo: string; nome: string } }>;
+  } | null;
+  legacyClienteId?: number | null;
   responsavelId: number | null;
   responsavel: LeadsCommunicationUser | null;
   convertidoPorId: number | null;
@@ -184,10 +198,20 @@ export type CommunicationBusiness = {
   statusLeadAnterior: LeadStatus | null;
   titulo: string | null;
   observacao: string | null;
-  etapa: "NOVO" | "CONTATO" | "PROPOSTA" | "FECHADO" | "PERDIDO";
+  etapa: BusinessStage;
   valor: number | null;
   createdAt: string;
   updatedAt: string;
+  permissoes?: { movimentar: boolean };
+};
+
+export type NegociosKanbanResponse = ApiPaginatedResponse<CommunicationBusiness> & {
+  resumo: {
+    total: number;
+    porEtapa: Record<BusinessStage, number>;
+    fechados: number;
+    perdidos: number;
+  };
 };
 
 export type CommunicationLead = {
@@ -1335,6 +1359,18 @@ export async function convertCommunicationLeadToBusiness(id: number, payload: { 
   return requestApiWrite<{ lead: CommunicationLead; negocio: CommunicationBusiness; created: boolean }>("POST", `/leads/${id}/converter-negocio`, payload);
 }
 
+export async function fetchNegociosKanban(params: { page?: number; limit?: number; etapa?: BusinessStage; responsavelId?: number; q?: string } = {}) {
+  return requestApiGetAuthenticated<NegociosKanbanResponse>(`/negocios${toQueryString(params)}`);
+}
+
+export async function fetchNegocioKanban(id: number) {
+  return requestApiGetAuthenticated<CommunicationBusiness>(`/negocios/${id}`);
+}
+
+export async function updateNegocioKanbanStage(id: number, etapa: BusinessStage, etapaAnterior: BusinessStage) {
+  return requestApiWrite<CommunicationBusiness>("PATCH", `/negocios/${id}/etapa`, { etapa, etapaAnterior });
+}
+
 export async function fetchCommunicationLeadHistory(id: number) {
   return requestApiGetAuthenticated<AssignmentHistoryEntry[]>(`/leads/${id}/historico-atribuicao`);
 }
@@ -1635,6 +1671,7 @@ function normalizeCapabilities(capabilities?: Partial<TenantCapabilities>): Tena
   return {
     leadsCommunication: capabilities?.leadsCommunication === true,
     siteLeadCapture: capabilities?.siteLeadCapture === true,
+    negociosKanban: capabilities?.negociosKanban === true,
   };
 }
 

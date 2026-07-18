@@ -6,10 +6,10 @@ const { after, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 
 const backendDir = path.resolve(__dirname, "..");
-const auditDir = path.join(requiredEnv("CRM_PRISMA_TEST_RUN_DIR"), "g1-migration");
-const sourceDatabase = path.join(auditDir, `g1-source-${process.pid}.db`);
-const emptyDatabase = path.join(auditDir, `g1-empty-${process.pid}.db`);
-const copiedDatabase = path.join(auditDir, `g1-copy-${process.pid}.db`);
+const auditDir = path.join(requiredEnv("CRM_PRISMA_TEST_RUN_DIR"), "g2a-migration");
+const sourceDatabase = path.join(auditDir, `g2a-source-${process.pid}.db`);
+const emptyDatabase = path.join(auditDir, `g2a-empty-${process.pid}.db`);
+const copiedDatabase = path.join(auditDir, `g2a-copy-${process.pid}.db`);
 const prismaCli = path.join(backendDir, "node_modules", "prisma", "build", "index.js");
 let sourceCounts;
 
@@ -29,7 +29,7 @@ after(() => {
   removeDatabase(sourceDatabase);
 });
 
-test("migration G1 e aditiva e garante um Negocio por Lead", async () => {
+test("migration G2A e aditiva, replayable e nao executa backfill", async () => {
   const empty = clientFor(emptyDatabase);
   const copied = clientFor(copiedDatabase);
   try {
@@ -37,28 +37,24 @@ test("migration G1 e aditiva e garante um Negocio por Lead", async () => {
       backendDir,
       "prisma",
       "migrations",
-      "20260717100000_add_lead_to_negocio_conversion_g1",
+      "20260718140000_add_negocios_kanban_g2a",
       "migration.sql",
     ), "utf8");
-    assert.doesNotMatch(sql, /(^|;)\s*(DROP|DELETE|UPDATE)\s+/im);
-    assert.doesNotMatch(sql, /CREATE\s+TABLE/i);
-    assert.equal((sql.match(/ADD COLUMN/gi) || []).length, 4);
+    assert.doesNotMatch(sql, /(^|;)\s*(DROP|DELETE|UPDATE|INSERT)\s+/im);
+    assert.doesNotMatch(sql, /CREATE\s+TABLE|RedefineTables/i);
+    assert.equal((sql.match(/ADD COLUMN/gi) || []).length, 1);
 
     const columns = await empty.$queryRawUnsafe('PRAGMA table_info("Negocio")');
-    for (const name of ["convertidoPorId", "statusLeadAnterior", "titulo", "observacao"]) {
-      assert.ok(columns.some((column) => column.name === name && Number(column.notnull) === 0), `coluna opcional ausente: ${name}`);
-    }
+    assert.ok(columns.some((column) => column.name === "legacyClienteId" && Number(column.notnull) === 0));
     const indexes = await empty.$queryRawUnsafe('PRAGMA index_list("Negocio")');
-    const leadIndex = indexes.find((index) => index.name === "Negocio_leadId_key");
-    assert.ok(leadIndex);
-    assert.equal(Number(leadIndex.unique), 1);
-    assert.ok(indexes.some((index) => index.name === "Negocio_empresaId_convertidoPorId_createdAt_idx"));
+    assert.ok(indexes.some((index) => index.name === "Negocio_legacyClienteId_key" && Number(index.unique) === 1));
+    assert.ok(indexes.some((index) => index.name === "Negocio_empresaId_legacyClienteId_idx"));
 
     const migratedCounts = await tableCounts(copiedDatabase);
     for (const [table, count] of Object.entries(sourceCounts)) {
       assert.equal(migratedCounts[table], count, `contagem alterada: ${table}`);
     }
-    assert.equal(await copied.negocio.count(), 0);
+    assert.equal(await copied.negocio.count(), sourceCounts.Negocio || 0);
     assert.deepEqual(await integrity(empty), { quickCheck: "ok", foreignKeyViolations: 0 });
     assert.deepEqual(await integrity(copied), { quickCheck: "ok", foreignKeyViolations: 0 });
   } finally {
@@ -96,7 +92,7 @@ async function tableCounts(databasePath) {
     );
     const counts = {};
     for (const { name } of tables) {
-      const rows = await prisma.$queryRawUnsafe(`SELECT COUNT(*) AS total FROM \"${name}\"`);
+      const rows = await prisma.$queryRawUnsafe(`SELECT COUNT(*) AS total FROM "${name}"`);
       counts[name] = Number(rows[0].total);
     }
     return counts;

@@ -28,7 +28,8 @@ model Cliente {
   notas           Nota[]
   acompanhamentos Acompanhamento[]
   leads           Lead[]
-  negocios        Negocio[]
+  negocios        Negocio[]        @relation("NegocioCliente")
+  negociosLegados Negocio[]        @relation("NegocioClienteLegado")
   contatosCanal   ContatoCanal[]
 
   @@index([empresaId])
@@ -606,7 +607,9 @@ model Negocio {
   empresaId            Int
   empresa              Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   clienteId            Int
-  cliente              Cliente               @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  cliente              Cliente               @relation("NegocioCliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  legacyClienteId      Int?                  @unique
+  legacyCliente        Cliente?              @relation("NegocioClienteLegado", fields: [legacyClienteId], references: [id], onDelete: SetNull)
   leadId               Int?                  @unique
   lead                 Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
   responsavelId        Int?
@@ -630,6 +633,7 @@ model Negocio {
   @@index([empresaId, responsavelId, etapa])
   @@index([empresaId, clienteId])
   @@index([empresaId, leadId])
+  @@index([empresaId, legacyClienteId])
   @@index([empresaId, convertidoPorId, createdAt])
 }
 
@@ -742,6 +746,7 @@ model AuditoriaFuncionalidade {
 enum ChaveFuncionalidade {
   LEADS_COMMUNICATION
   SITE_LEAD_CAPTURE
+  NEGOCIOS_KANBAN
 }
 
 enum TipoCanal {

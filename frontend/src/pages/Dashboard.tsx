@@ -45,6 +45,7 @@ import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegra
 import DashboardSiteLeadIntegrationPanel from "../components/dashboard/DashboardSiteLeadIntegrationPanel";
 import DashboardInboxPanel from "../components/leads-communication/DashboardInboxPanel";
 import DashboardLeadsPanel from "../components/leads-communication/DashboardLeadsPanel";
+import DashboardNegociosKanbanPanel from "../components/negocios/DashboardNegociosKanbanPanel";
 import DashboardToast from "../components/dashboard/DashboardToast";
 import WhatsappExternalConfirmDialog from "../components/dashboard/WhatsappExternalConfirmDialog";
 import type { WhatsappExternalRequest } from "../components/dashboard/WhatsappExternalConfirmDialog";
@@ -106,10 +107,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const {
     leadsCommunication: leadsCommunicationEnabled,
     siteLeadCapture: siteLeadCaptureEnabled,
+    negociosKanban: negociosKanbanEnabled,
   } = resolveTenantFeatureAccess(authSession?.capabilities);
   const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
   const requestedActivePage = resolvedNavigation.page;
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
+  const usingNegociosKanban = activePage === "kanban" && negociosKanbanEnabled;
 
   const pageSize = 4;
 
@@ -624,7 +627,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             </section>
           )}
 
-          {activePage !== "agenda" && activePage !== "leads" && activePage !== "inbox" && (
+          {activePage !== "agenda" && activePage !== "leads" && activePage !== "inbox" && !usingNegociosKanban && (
             <DashboardMetricsSection
               activePage={activePage}
               clients={clients}
@@ -633,7 +636,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             />
           )}
 
-          {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && activePage !== "leads" && activePage !== "inbox" && (
+          {activePage !== "comercial" && activePage !== "dashboard" && activePage !== "agenda" && activePage !== "estoque" && activePage !== "integracoes" && activePage !== "leads" && activePage !== "inbox" && !usingNegociosKanban && (
             <DashboardOperationalSearch
               activePage={activePage}
               metadata={activePage === "clientes" || activePage === "kanban" ? backendCaption : undefined}
@@ -763,7 +766,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               {activePage === "integracoes" && canManageIntegrations && siteLeadCaptureEnabled && <DashboardSiteLeadIntegrationPanel />}
               {activePage === "integracoes" && canManageIntegrations && <DashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />}
 
-              <DashboardKanbanBoard
+              {usingNegociosKanban && authSession && (
+                <DashboardNegociosKanbanPanel authSession={authSession} onToast={setToast} />
+              )}
+
+              {!negociosKanbanEnabled && <DashboardKanbanBoard
                 key={`kanban-${kanbanStageRequest.key}`}
                 activePage={activePage}
                 initialStageGroup={kanbanStageRequest.group}
@@ -793,12 +800,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 setDragOverStatus={setDragOverStatus}
                 setIsDraggingKanban={setIsDraggingKanban}
                 changeStatus={changeStatus}
-              />
+              />}
 
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
             </div>
 
-            {activePage !== "estoque" && activePage !== "integracoes" && activePage !== "leads" && activePage !== "inbox" && customerDrawer}
+            {activePage !== "estoque" && activePage !== "integracoes" && activePage !== "leads" && activePage !== "inbox" && !usingNegociosKanban && customerDrawer}
           </section>}
           </main>
         </div>

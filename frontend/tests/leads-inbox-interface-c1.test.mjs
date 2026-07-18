@@ -45,13 +45,14 @@ test("C1 preserva autoria, responsabilidade e idempotência no compositor", asyn
   assert.doesNotMatch(inbox, /api\.whatsapp|graph\.facebook|graph\.instagram/i);
 });
 
-test("C1 não adiciona contrato visual fictício de SLA ou conversão", async () => {
+test("C1 não adiciona contrato visual fictício de SLA ou score e preserva a conversão real da G1", async () => {
   const [leads, inbox] = await Promise.all([
     source("src/components/leads-communication/DashboardLeadsPanel.tsx"),
     source("src/components/leads-communication/DashboardInboxPanel.tsx"),
   ]);
 
-  assert.doesNotMatch(leads, /score de ia|converter em negócio|atrasados/i);
+  assert.doesNotMatch(leads, /score de ia|atrasados/i);
+  assert.match(leads, /convertCommunicationLeadToBusiness/);
   assert.doesNotMatch(inbox, /sla oficial|saldo baixo|sincronizar bling/i);
   assert.match(leads, /Não informado/);
   assert.match(inbox, /simulad[ao]/i);

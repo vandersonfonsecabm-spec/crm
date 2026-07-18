@@ -2,16 +2,18 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const { Prisma, PrismaClient } = require("@prisma/client");
+const { Prisma } = require("@prisma/client");
+const { createPrismaClient } = require("./database/prisma-client");
 const { createAuth } = require("./auth");
 const { mountIntegrationHubRoutes } = require("./integrations/routes");
 const { mountChannelRoutes } = require("./channels/channelRoutes");
 const { mountWhatsappSimulationRoutes } = require("./channels/whatsapp/simulationRoutes");
 const { mountLeadsCommunicationRoutes } = require("./leads-communication/routes");
+const { mountNegociosKanbanRoutes } = require("./negocios-kanban/routes");
 const { mountSiteLeadAdminRoutes, mountSiteLeadPublicRoutes, siteLeadBodyLimit } = require("./site-leads/routes");
 const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -57,6 +59,7 @@ mountSiteLeadAdminRoutes({ app, prisma, authenticate: requireAuth, requireRole }
 mountChannelRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountWhatsappSimulationRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountLeadsCommunicationRoutes({ app, prisma, authenticate: requireAuth });
+mountNegociosKanbanRoutes({ app, prisma, authenticate: requireAuth });
 
 app.use(
   ["/categorias-produtos", "/produtos", "/estoque"],

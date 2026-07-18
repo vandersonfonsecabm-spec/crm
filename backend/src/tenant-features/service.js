@@ -1,11 +1,13 @@
 const FEATURE_KEYS = Object.freeze({
   LEADS_COMMUNICATION: "LEADS_COMMUNICATION",
   SITE_LEAD_CAPTURE: "SITE_LEAD_CAPTURE",
+  NEGOCIOS_KANBAN: "NEGOCIOS_KANBAN",
 });
 
 const FEATURE_ENV_KEYS = Object.freeze({
   [FEATURE_KEYS.LEADS_COMMUNICATION]: "LEADS_COMMUNICATION_ENABLED",
   [FEATURE_KEYS.SITE_LEAD_CAPTURE]: "SITE_LEAD_CAPTURE_ENABLED",
+  [FEATURE_KEYS.NEGOCIOS_KANBAN]: "NEGOCIOS_KANBAN_ENABLED",
 });
 
 function isGlobalFeatureEnabled(featureKey, env = process.env) {
@@ -33,7 +35,7 @@ async function isFeatureEnabledForTenant({ prisma, empresaId, featureKey, env = 
 
 async function capabilitiesForTenant({ prisma, empresaId, env = process.env }) {
   const globallyEnabled = Object.values(FEATURE_KEYS).filter((key) => isGlobalFeatureEnabled(key, env));
-  const disabled = { leadsCommunication: false, siteLeadCapture: false };
+  const disabled = { leadsCommunication: false, siteLeadCapture: false, negociosKanban: false };
   if (!Number.isInteger(empresaId) || empresaId < 1 || globallyEnabled.length === 0) return disabled;
 
   try {
@@ -45,6 +47,7 @@ async function capabilitiesForTenant({ prisma, empresaId, env = process.env }) {
     return {
       leadsCommunication: enabled.has(FEATURE_KEYS.LEADS_COMMUNICATION),
       siteLeadCapture: enabled.has(FEATURE_KEYS.SITE_LEAD_CAPTURE),
+      negociosKanban: enabled.has(FEATURE_KEYS.NEGOCIOS_KANBAN),
     };
   } catch (error) {
     console.error("Falha ao carregar funcionalidades do tenant.", safeFeatureError(error));

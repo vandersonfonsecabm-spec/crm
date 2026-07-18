@@ -1,15 +1,12 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const jwt = require("jsonwebtoken");
-const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 
-const backendDir = path.resolve(__dirname, "..");
-const auditDir = path.join(os.tmpdir(), "crm-release-g1");
+const auditDir = path.join(requiredEnv("CRM_PRISMA_TEST_RUN_DIR"), "g1-services");
 const databasePath = path.join(auditDir, `g1-services-${process.pid}.db`);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "lead-to-business-g1-test-secret-with-sufficient-entropy";
@@ -19,6 +16,7 @@ process.env.INTEGRATION_ENCRYPTION_KEY = "lead-to-business-g1-encryption-key";
 process.env.LEADS_COMMUNICATION_ENABLED = "true";
 process.env.SITE_LEAD_CAPTURE_ENABLED = "true";
 process.env.DATABASE_URL = `file:${databasePath.replace(/\\/g, "/")}`;
+process.env.CRM_TEST_DATABASE_URL = process.env.DATABASE_URL;
 
 let api;
 let prisma;
@@ -28,7 +26,6 @@ let baseUrl;
 before(async () => {
   fs.mkdirSync(auditDir, { recursive: true });
   fs.copyFileSync(sourceDatabase, databasePath);
-  migrate();
   api = require("../src/server");
   prisma = api.prisma;
   await new Promise((resolve) => { server = api.app.listen(0, "127.0.0.1", resolve); });
@@ -217,17 +214,14 @@ async function request(method, pathname, body, token) {
   return { status: response.status, body: text ? JSON.parse(text) : null };
 }
 
-function migrate() {
-  execFileSync(process.execPath, [path.join(backendDir, "node_modules", "prisma", "build", "index.js"), "migrate", "deploy"], {
-    cwd: backendDir,
-    env: process.env,
-    stdio: "pipe",
-  });
-}
-
 function removeDatabase(file) {
   for (const suffix of ["", "-wal", "-shm", "-journal"]) {
     const target = `${file}${suffix}`;
     if (fs.existsSync(target)) fs.rmSync(target, { force: true });
   }
+}
+
+function requiredEnv(name) {
+  if (!process.env[name]) throw new Error(`${name} deve ser definido pelo supervisor de testes.`);
+  return process.env[name];
 }

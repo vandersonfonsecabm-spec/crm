@@ -236,9 +236,10 @@ test("schema possui indices tenant e a fundacao so e ativada por modulos protegi
 
   const b1Directory = path.join(backendDir, "src", "leads-communication");
   const d1Directory = path.join(backendDir, "src", "site-leads");
+  const g2aDirectory = path.join(backendDir, "src", "negocios-kanban");
   const runtimeOutsideProtectedModules = readJavaScript(
     path.join(backendDir, "src"),
-    new Set([path.resolve(b1Directory), path.resolve(d1Directory)]),
+    new Set([path.resolve(b1Directory), path.resolve(d1Directory), path.resolve(g2aDirectory)]),
   );
   assert.doesNotMatch(runtimeOutsideProtectedModules, /prisma\.(lead|negocio|notaInternaConversa|historicoAtribuicao|eventoWebhook)\b/);
   const b1Source = readJavaScript(b1Directory);
@@ -249,6 +250,9 @@ test("schema possui indices tenant e a fundacao so e ativada por modulos protegi
   assert.match(d1Source, /LEADS_COMMUNICATION_ENABLED/);
   assert.match(d1Source, /SITE_LEAD_CAPTURE_ENABLED/);
   assert.match(d1Source, /prisma\.(lead|notaInternaConversa|eventoWebhook)\b/);
+  const g2aSource = readJavaScript(g2aDirectory);
+  assert.match(g2aSource, /NEGOCIOS_KANBAN/);
+  assert.match(g2aSource, /prisma\.negocio\b/);
 });
 
 function migrate(databasePath) {

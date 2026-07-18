@@ -1,14 +1,12 @@
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 
-const backendDir = path.resolve(__dirname, "..");
-const auditDir = path.join(os.tmpdir(), "crm-tenant-feature-e1a");
+const auditDir = path.join(requiredEnv("CRM_PRISMA_TEST_RUN_DIR"), "tenant-feature-e1a");
 const databasePath = path.join(auditDir, `tenant-feature-${process.pid}.db`);
+const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 
 Object.assign(process.env, {
   NODE_ENV: "test",
@@ -17,6 +15,7 @@ Object.assign(process.env, {
   ALLOW_COMPANY_REGISTRATION: "true",
   INTEGRATION_ENCRYPTION_KEY: "tenant-feature-e1a-encryption-key",
   DATABASE_URL: `file:${databasePath.replace(/\\/g, "/")}`,
+  CRM_TEST_DATABASE_URL: `file:${databasePath.replace(/\\/g, "/")}`,
   LEADS_COMMUNICATION_ENABLED: "true",
   SITE_LEAD_CAPTURE_ENABLED: "true",
 });
@@ -28,8 +27,7 @@ let baseUrl;
 
 before(async () => {
   fs.mkdirSync(auditDir, { recursive: true });
-  fs.copyFileSync(path.join(backendDir, "prisma", "dev.db"), databasePath);
-  migrate();
+  fs.copyFileSync(sourceDatabase, databasePath);
   api = require("../src/server");
   prisma = api.prisma;
   await new Promise((resolve) => { server = api.app.listen(0, "127.0.0.1", resolve); });
@@ -50,6 +48,7 @@ test("E1A combina kill switch global e liberacao tenant sem vazamento", async ()
   assert.deepEqual((await authRequest("GET", "/auth/me", undefined, pilot.token)).body.capabilities, {
     leadsCommunication: false,
     siteLeadCapture: false,
+    negociosKanban: false,
   });
   assert.equal((await authRequest("GET", "/leads", undefined, pilot.token)).status, 404);
   assert.equal((await authRequest("GET", "/canais/site-form", undefined, pilot.token)).status, 404);
@@ -59,8 +58,8 @@ test("E1A combina kill switch global e liberacao tenant sem vazamento", async ()
 
   const pilotCapabilities = await authRequest("GET", "/auth/me", undefined, pilot.token);
   const controlCapabilities = await authRequest("GET", "/auth/me", undefined, control.token);
-  assert.deepEqual(pilotCapabilities.body.capabilities, { leadsCommunication: true, siteLeadCapture: true });
-  assert.deepEqual(controlCapabilities.body.capabilities, { leadsCommunication: false, siteLeadCapture: false });
+  assert.deepEqual(pilotCapabilities.body.capabilities, { leadsCommunication: true, siteLeadCapture: true, negociosKanban: false });
+  assert.deepEqual(controlCapabilities.body.capabilities, { leadsCommunication: false, siteLeadCapture: false, negociosKanban: false });
   assert.equal((await authRequest("GET", "/leads", undefined, pilot.token)).status, 200);
   assert.equal((await authRequest("GET", "/leads", undefined, control.token)).status, 404);
   assert.equal((await authRequest("POST", "/tenant-features", { chave: "LEADS_COMMUNICATION" }, pilot.token)).status, 404);
@@ -133,5 +132,5 @@ async function domainCounts(empresaId) {
   return { clientes, leads, contatos, conversas, mensagens, eventos };
 }
 
-function migrate() { execFileSync(process.execPath, [path.join(backendDir, "node_modules", "prisma", "build", "index.js"), "migrate", "deploy"], { cwd: backendDir, env: process.env, stdio: "pipe" }); }
 function removeDatabase(file) { for (const suffix of ["", "-wal", "-shm", "-journal"]) { const target = `${file}${suffix}`; if (fs.existsSync(target)) fs.rmSync(target, { force: true }); } }
+function requiredEnv(name) { if (!process.env[name]) throw new Error(`${name} deve ser definido pelo supervisor de testes.`); return process.env[name]; }
