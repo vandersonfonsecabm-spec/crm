@@ -61,11 +61,15 @@ Data da verificacao: 18/07/2026.
 - No piloto, segredos ficam na Railway e o banco guarda somente referencias.
 - Capabilities planejadas: `WHATSAPP_INTEGRATION`, `WHATSAPP_INBOUND` e
   `WHATSAPP_OUTBOUND`.
-- F1A-1 implementada localmente na migration
-  `20260718184500_add_whatsapp_integration_foundation`; ainda nao publicada.
-- Flags globais adicionadas com default `false`; nenhuma flag foi ativada.
-- Capabilities registradas; nenhuma foi atribuida fora dos testes sandbox.
-- Estado local disponivel para ADMIN em `GET /integracoes/whatsapp/status`, sem
-  chamada a Meta e sem exposicao de referencias sensiveis.
-- Nenhuma credencial foi configurada e o frontend nao foi alterado.
-- Proxima release: F1A-1P, publicacao controlada da fundacao desligada.
+- F1A-1P publicada no commit
+  `f59c5f52784552936a20c7d99a6477ce38c67383`, com a migration
+  `20260718184500_add_whatsapp_integration_foundation` aplicada em producao.
+- Producao possui 16 migrations; a fundacao esta implantada, mas permanece
+  operacionalmente desligada.
+- Flags globais continuam `false` e nenhuma capability WhatsApp foi atribuida.
+- O gate ADMIN `GET /integracoes/whatsapp/status` retorna `404` enquanto a
+  fundacao permanece desligada.
+- Nenhuma credencial Meta foi configurada, nenhuma chamada a Meta foi feita e o
+  frontend nao foi alterado.
+- Proxima release: F1A-2, fundacao segura do webhook sem processamento de
+  mensagens.
