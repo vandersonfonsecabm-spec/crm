@@ -711,6 +711,7 @@ model EventoWebhook {
   externalEventId     String
   tipoEvento          String?
   payloadHash         String?
+  payloadJson         String?
   statusProcessamento StatusProcessamentoWebhook @default(RECEBIDO)
   tentativas          Int                        @default(0)
   recebidoEm          DateTime                   @default(now())

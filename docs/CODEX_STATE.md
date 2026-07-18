@@ -79,6 +79,13 @@ Data da verificacao: 18/07/2026.
 - O callback publico retorna `404`, nao processa nem persiste eventos e nenhuma
   chamada a Meta foi feita.
 - O frontend nao recebeu deploy nesta release.
-- Proxima release: F1B-1, aceitacao duravel e idempotente do webhook em
-  `EventoWebhook`, ainda desligada e sem criar Cliente, Lead, Conversa ou
-  Mensagem.
+- F1B-0S implementada localmente: `EventoWebhook` possui `payloadJson`
+  opcional pela migration
+  `20260718205500_add_event_webhook_atomic_payload`, ainda nao publicada.
+- Eventos legados permanecem com `payloadJson` nulo e o fluxo Site continua
+  compativel.
+- O callback WhatsApp ainda nao persiste mensagens; com os gates locais
+  satisfeitos, payload valido continua retornando `503`.
+- Flags e capabilities permanecem desligadas, sem credencial configurada ou
+  chamada a Meta.
+- Proxima release: F1B-0SP, publicacao controlada da coluna aditiva.

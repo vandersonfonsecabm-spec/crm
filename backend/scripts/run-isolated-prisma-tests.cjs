@@ -6,7 +6,6 @@ const { spawnSync } = require("node:child_process");
 const { PrismaClient } = require("@prisma/client");
 
 const backendDir = path.resolve(__dirname, "..");
-const repoDir = path.resolve(backendDir, "..");
 const officialDb = path.join(backendDir, "prisma", "dev.db");
 const resumeDir = path.join(os.tmpdir(), "crm-release-g2a-resume");
 const protectedDir = path.join(resumeDir, "protected");
@@ -19,6 +18,7 @@ const activeBackup = path.join(protectedDir, "dev-original-active.db");
 const command = process.argv.slice(2);
 const expectedHash = "cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a";
 const expectedSize = 532480;
+const prismaCli = resolvePrismaCli();
 let baseline;
 let sentinelActive = false;
 let completed = false;
@@ -64,7 +64,7 @@ async function main() {
   fs.writeFileSync(testDb, "");
   assertTreeEqual(sourceMigrations, path.join(sandboxPrisma, "migrations"));
   const migrationCount = fs.readdirSync(sourceMigrations, { withFileTypes: true }).filter((item) => item.isDirectory()).length;
-  if (migrationCount !== 16) throw new Error(`Esperadas 16 migrations no worktree; encontradas ${migrationCount}.`);
+  if (migrationCount !== 17) throw new Error(`Esperadas 17 migrations no worktree; encontradas ${migrationCount}.`);
 
   fs.renameSync(officialDb, activeBackup);
   fs.mkdirSync(officialDb);
@@ -81,20 +81,75 @@ async function main() {
     CRM_PRISMA_SENTINEL_ACTIVE: "true",
     CRM_OFFICIAL_DATABASE_PATH: officialDb,
   };
-  const prismaCli = path.join(backendDir, "node_modules", "prisma", "build", "index.js");
-  run(process.execPath, [prismaCli, "validate", "--schema", sandboxSchema], runDir, env);
-  run(process.execPath, [prismaCli, "migrate", "deploy", "--schema", sandboxSchema], runDir, env);
-  run(process.execPath, [prismaCli, "migrate", "status", "--schema", sandboxSchema], runDir, env);
+  runPrisma(["validate", "--schema", sandboxSchema], runDir, env);
+  runPrisma(["migrate", "deploy", "--schema", sandboxSchema], runDir, env);
+  runPrisma(["migrate", "status", "--schema", sandboxSchema], runDir, env);
   await assertDatabase(testDb, migrationCount);
-  run(command[0], command.slice(1), repoDir, env);
+  runRequestedCommand(command, env);
   completed = true;
 }
 
-function run(executable, args, cwd, env) {
-  const result = spawnSync(executable, args, { cwd, env, stdio: "inherit", windowsHide: true });
+function runRequestedCommand(args, env) {
+  const [mode, ...modeArgs] = args;
+  if (mode === "prisma") {
+    if (modeArgs.length === 0) throw new Error("Informe o comando logico do Prisma.");
+    runPrisma(modeArgs, backendDir, env);
+    return;
+  }
+  if (mode === "node-test") {
+    if (modeArgs.length !== 1) throw new Error("Informe exatamente um arquivo para o test runner do Node.");
+    const testFile = path.resolve(backendDir, modeArgs[0]);
+    const testsDir = path.join(backendDir, "tests");
+    if (!isPathInside(testFile, testsDir) || !fs.existsSync(testFile) || !fs.statSync(testFile).isFile()) {
+      throw new Error("Arquivo de teste deve existir dentro de backend/tests.");
+    }
+    runNode(["--test", testFile], backendDir, env, "Teste Node");
+    return;
+  }
+  throw new Error("Comando logico permitido: prisma ou node-test.");
+}
+
+function runPrisma(args, cwd, env) {
+  runNode([prismaCli, ...args], cwd, env, `Prisma ${args[0] || "CLI"}`);
+}
+
+function runNode(args, cwd, env, logicalCommand) {
+  const result = spawnSync(process.execPath, args, {
+    cwd,
+    env,
+    stdio: "inherit",
+    windowsHide: true,
+    shell: false,
+  });
   assertSentinel();
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`Comando falhou (${result.status}): ${executable} ${args.join(" ")}`);
+  if (result.error) {
+    throw new Error(`${logicalCommand} nao iniciou (${result.error.code || "SPAWN_ERROR"}).`);
+  }
+  if (!Number.isInteger(result.status)) {
+    throw new Error(`${logicalCommand} terminou sem codigo de saida.`);
+  }
+  if (result.status !== 0) {
+    throw new Error(`${logicalCommand} falhou com codigo ${result.status}.`);
+  }
+}
+
+function resolvePrismaCli() {
+  const packageJsonPath = require.resolve("prisma/package.json", { paths: [backendDir] });
+  const prismaPackage = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+  const relativeBin = typeof prismaPackage.bin === "string"
+    ? prismaPackage.bin
+    : prismaPackage.bin?.prisma;
+  if (!relativeBin) throw new Error("Prisma local nao declara o binario prisma.");
+  const cliPath = path.resolve(path.dirname(packageJsonPath), relativeBin);
+  if (!fs.existsSync(cliPath) || !fs.statSync(cliPath).isFile()) {
+    throw new Error("Binario local do Prisma nao foi encontrado.");
+  }
+  return cliPath;
+}
+
+function isPathInside(candidate, parent) {
+  const relative = path.relative(parent, candidate);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
 async function assertDatabase(databasePath, expectedMigrations) {
