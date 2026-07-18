@@ -49,6 +49,9 @@ test("E1A combina kill switch global e liberacao tenant sem vazamento", async ()
     leadsCommunication: false,
     siteLeadCapture: false,
     negociosKanban: false,
+    whatsappIntegration: false,
+    whatsappInbound: false,
+    whatsappOutbound: false,
   });
   assert.equal((await authRequest("GET", "/leads", undefined, pilot.token)).status, 404);
   assert.equal((await authRequest("GET", "/canais/site-form", undefined, pilot.token)).status, 404);
@@ -58,8 +61,22 @@ test("E1A combina kill switch global e liberacao tenant sem vazamento", async ()
 
   const pilotCapabilities = await authRequest("GET", "/auth/me", undefined, pilot.token);
   const controlCapabilities = await authRequest("GET", "/auth/me", undefined, control.token);
-  assert.deepEqual(pilotCapabilities.body.capabilities, { leadsCommunication: true, siteLeadCapture: true, negociosKanban: false });
-  assert.deepEqual(controlCapabilities.body.capabilities, { leadsCommunication: false, siteLeadCapture: false, negociosKanban: false });
+  assert.deepEqual(pilotCapabilities.body.capabilities, {
+    leadsCommunication: true,
+    siteLeadCapture: true,
+    negociosKanban: false,
+    whatsappIntegration: false,
+    whatsappInbound: false,
+    whatsappOutbound: false,
+  });
+  assert.deepEqual(controlCapabilities.body.capabilities, {
+    leadsCommunication: false,
+    siteLeadCapture: false,
+    negociosKanban: false,
+    whatsappIntegration: false,
+    whatsappInbound: false,
+    whatsappOutbound: false,
+  });
   assert.equal((await authRequest("GET", "/leads", undefined, pilot.token)).status, 200);
   assert.equal((await authRequest("GET", "/leads", undefined, control.token)).status, 404);
   assert.equal((await authRequest("POST", "/tenant-features", { chave: "LEADS_COMMUNICATION" }, pilot.token)).status, 404);

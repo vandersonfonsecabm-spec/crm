@@ -2,17 +2,32 @@ const FEATURE_KEYS = Object.freeze({
   LEADS_COMMUNICATION: "LEADS_COMMUNICATION",
   SITE_LEAD_CAPTURE: "SITE_LEAD_CAPTURE",
   NEGOCIOS_KANBAN: "NEGOCIOS_KANBAN",
+  WHATSAPP_INTEGRATION: "WHATSAPP_INTEGRATION",
+  WHATSAPP_INBOUND: "WHATSAPP_INBOUND",
+  WHATSAPP_OUTBOUND: "WHATSAPP_OUTBOUND",
 });
 
 const FEATURE_ENV_KEYS = Object.freeze({
   [FEATURE_KEYS.LEADS_COMMUNICATION]: "LEADS_COMMUNICATION_ENABLED",
   [FEATURE_KEYS.SITE_LEAD_CAPTURE]: "SITE_LEAD_CAPTURE_ENABLED",
   [FEATURE_KEYS.NEGOCIOS_KANBAN]: "NEGOCIOS_KANBAN_ENABLED",
+  [FEATURE_KEYS.WHATSAPP_INTEGRATION]: "WHATSAPP_INTEGRATION_ENABLED",
+  [FEATURE_KEYS.WHATSAPP_INBOUND]: "WHATSAPP_INBOUND_ENABLED",
+  [FEATURE_KEYS.WHATSAPP_OUTBOUND]: "WHATSAPP_OUTBOUND_ENABLED",
 });
+
+const WHATSAPP_DEPENDENT_FEATURES = new Set([
+  FEATURE_KEYS.WHATSAPP_INBOUND,
+  FEATURE_KEYS.WHATSAPP_OUTBOUND,
+]);
 
 function isGlobalFeatureEnabled(featureKey, env = process.env) {
   if (featureKey === FEATURE_KEYS.SITE_LEAD_CAPTURE) {
     return env.LEADS_COMMUNICATION_ENABLED === "true" && env.SITE_LEAD_CAPTURE_ENABLED === "true";
+  }
+  if (WHATSAPP_DEPENDENT_FEATURES.has(featureKey)) {
+    const envKey = FEATURE_ENV_KEYS[featureKey];
+    return env.WHATSAPP_INTEGRATION_ENABLED === "true" && env[envKey] === "true";
   }
   const envKey = FEATURE_ENV_KEYS[featureKey];
   return Boolean(envKey) && env[envKey] === "true";
@@ -26,7 +41,14 @@ async function isFeatureEnabledForTenant({ prisma, empresaId, featureKey, env = 
       where: { empresaId_chave: { empresaId, chave: featureKey } },
       select: { habilitada: true },
     });
-    return feature?.habilitada === true;
+    if (feature?.habilitada !== true) return false;
+    if (!WHATSAPP_DEPENDENT_FEATURES.has(featureKey)) return true;
+
+    const integration = await prisma.empresaFuncionalidade.findUnique({
+      where: { empresaId_chave: { empresaId, chave: FEATURE_KEYS.WHATSAPP_INTEGRATION } },
+      select: { habilitada: true },
+    });
+    return integration?.habilitada === true;
   } catch (error) {
     console.error("Falha ao consultar funcionalidade do tenant.", safeFeatureError(error, featureKey));
     return false;
@@ -35,7 +57,14 @@ async function isFeatureEnabledForTenant({ prisma, empresaId, featureKey, env = 
 
 async function capabilitiesForTenant({ prisma, empresaId, env = process.env }) {
   const globallyEnabled = Object.values(FEATURE_KEYS).filter((key) => isGlobalFeatureEnabled(key, env));
-  const disabled = { leadsCommunication: false, siteLeadCapture: false, negociosKanban: false };
+  const disabled = {
+    leadsCommunication: false,
+    siteLeadCapture: false,
+    negociosKanban: false,
+    whatsappIntegration: false,
+    whatsappInbound: false,
+    whatsappOutbound: false,
+  };
   if (!Number.isInteger(empresaId) || empresaId < 1 || globallyEnabled.length === 0) return disabled;
 
   try {
@@ -44,10 +73,14 @@ async function capabilitiesForTenant({ prisma, empresaId, env = process.env }) {
       select: { chave: true },
     });
     const enabled = new Set(features.map((item) => item.chave));
+    const whatsappIntegration = enabled.has(FEATURE_KEYS.WHATSAPP_INTEGRATION);
     return {
       leadsCommunication: enabled.has(FEATURE_KEYS.LEADS_COMMUNICATION),
       siteLeadCapture: enabled.has(FEATURE_KEYS.SITE_LEAD_CAPTURE),
       negociosKanban: enabled.has(FEATURE_KEYS.NEGOCIOS_KANBAN),
+      whatsappIntegration,
+      whatsappInbound: whatsappIntegration && enabled.has(FEATURE_KEYS.WHATSAPP_INBOUND),
+      whatsappOutbound: whatsappIntegration && enabled.has(FEATURE_KEYS.WHATSAPP_OUTBOUND),
     };
   } catch (error) {
     console.error("Falha ao carregar funcionalidades do tenant.", safeFeatureError(error));

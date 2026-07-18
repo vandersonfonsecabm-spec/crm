@@ -61,6 +61,11 @@ Data da verificacao: 18/07/2026.
 - No piloto, segredos ficam na Railway e o banco guarda somente referencias.
 - Capabilities planejadas: `WHATSAPP_INTEGRATION`, `WHATSAPP_INBOUND` e
   `WHATSAPP_OUTBOUND`.
-- F1A-1 nao requer frontend.
-- Proxima release: F1A-1, fundacao de dados, referencias, capabilities e health,
-  permanecendo desligada.
+- F1A-1 implementada localmente na migration
+  `20260718184500_add_whatsapp_integration_foundation`; ainda nao publicada.
+- Flags globais adicionadas com default `false`; nenhuma flag foi ativada.
+- Capabilities registradas; nenhuma foi atribuida fora dos testes sandbox.
+- Estado local disponivel para ADMIN em `GET /integracoes/whatsapp/status`, sem
+  chamada a Meta e sem exposicao de referencias sensiveis.
+- Nenhuma credencial foi configurada e o frontend nao foi alterado.
+- Proxima release: F1A-1P, publicacao controlada da fundacao desligada.

@@ -445,28 +445,48 @@ model ErroImportacao {
 }
 
 model CanalIntegracao {
-  id               Int             @id @default(autoincrement())
-  empresaId        Int
-  empresa          Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  tipo             TipoCanal
-  nome             String
-  chaveInterna     String
-  publicId         String?         @unique
-  configuracaoJson String          @default("{}")
-  status           StatusCanal     @default(MODO_TESTE)
-  modoTeste        Boolean         @default(true)
-  ativo            Boolean         @default(true)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  contatos         ContatoCanal[]
-  conversas        ConversaCanal[]
-  mensagens        MensagemCanal[]
-  eventosWebhook   EventoWebhook[]
+  id                  Int                       @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipo                TipoCanal
+  nome                String
+  chaveInterna        String
+  publicId            String?                   @unique
+  configuracaoJson    String                    @default("{}")
+  status              StatusCanal               @default(MODO_TESTE)
+  modoTeste           Boolean                   @default(true)
+  ativo               Boolean                   @default(true)
+  providerEnvironment String?
+  metaAppId           String?
+  metaBusinessId      String?
+  wabaId              String?
+  phoneNumberId       String?
+  displayPhoneMasked  String?
+  verifiedDisplayName String?
+  qualityRating       String?
+  graphApiVersion     String?
+  onboardingMethod    MetodoOnboardingWhatsApp?
+  accessTokenRef      String?
+  credentialStatus    StatusCredencialWhatsApp?
+  connectedAt         DateTime?
+  verifiedAt          DateTime?
+  lastWebhookAt       DateTime?
+  lastFailureAt       DateTime?
+  lastFailureCode     String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  contatos            ContatoCanal[]
+  conversas           ConversaCanal[]
+  mensagens           MensagemCanal[]
+  eventosWebhook      EventoWebhook[]
 
   @@unique([empresaId, chaveInterna])
+  @@unique([tipo, providerEnvironment, metaAppId, phoneNumberId])
   @@index([empresaId])
   @@index([empresaId, tipo])
   @@index([empresaId, ativo])
+  @@index([empresaId, tipo, ativo])
+  @@index([empresaId, tipo, wabaId])
 }
 
 model ContatoCanal {
@@ -747,6 +767,9 @@ enum ChaveFuncionalidade {
   LEADS_COMMUNICATION
   SITE_LEAD_CAPTURE
   NEGOCIOS_KANBAN
+  WHATSAPP_INTEGRATION
+  WHATSAPP_INBOUND
+  WHATSAPP_OUTBOUND
 }
 
 enum TipoCanal {
@@ -758,6 +781,18 @@ enum StatusCanal {
   MODO_TESTE
   ATIVO
   INATIVO
+}
+
+enum MetodoOnboardingWhatsApp {
+  MANUAL
+  EMBEDDED_SIGNUP
+}
+
+enum StatusCredencialWhatsApp {
+  ATIVA
+  ROTACAO_PENDENTE
+  REVOGADA
+  ERRO
 }
 
 enum DirecaoMensagem {

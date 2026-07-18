@@ -3,6 +3,8 @@ const { createIntegrationAdapter } = require("./adapters");
 const { createBlingService } = require("./blingService");
 const { createCanonicalService } = require("./canonicalService");
 const { createCommercialCatalogService } = require("./commercialCatalogService");
+const { createWhatsAppFoundationService } = require("./whatsappFoundation");
+const { FEATURE_KEYS, createTenantFeatureMiddleware } = require("../tenant-features/service");
 const {
   createUploadMiddleware,
   analyzeImportFile,
@@ -26,7 +28,21 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const canonicalService = createCanonicalService({ prisma });
   const commercialCatalogService = createCommercialCatalogService({ prisma });
   const blingService = createBlingService({ prisma });
+  const whatsappFoundationService = createWhatsAppFoundationService({ prisma });
+  const whatsappIntegrationGate = createTenantFeatureMiddleware({
+    prisma,
+    featureKey: FEATURE_KEYS.WHATSAPP_INTEGRATION,
+  });
   const uploadImportFile = createUploadMiddleware();
+
+  app.get("/integracoes/whatsapp/status", ...requireAdmin, whatsappIntegrationGate, async (req, res) => {
+    try {
+      const status = await whatsappFoundationService.getOperationalStatus({ empresaId: req.auth.empresaId });
+      return res.json(status);
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível consultar o estado do WhatsApp.");
+    }
+  });
 
   app.post("/integracoes/bling/iniciar", ...requireAdmin, async (req, res) => {
     try {
