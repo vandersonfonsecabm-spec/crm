@@ -11,7 +11,7 @@ Data da verificacao: 18/07/2026.
 
 ## Git
 
-- Baseline oficial: `f59c5f52784552936a20c7d99a6477ce38c67383`.
+- Baseline oficial: `4fea3d532030a5de2914258eb7dd634813ec413a`.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -71,11 +71,14 @@ Data da verificacao: 18/07/2026.
   fundacao permanece desligada.
 - Nenhuma credencial Meta foi configurada, nenhuma chamada a Meta foi feita e o
   frontend nao foi alterado.
-- F1A-2 implementada localmente em `/webhooks/whatsapp`, ainda nao publicada:
-  GET de verificacao com comparacao em tempo constante e POST isolado com raw
-  body e HMAC SHA-256 sobre os bytes exatos.
-- O callback nao processa nem persiste eventos; payload assinado e valido
-  retorna `503 WEBHOOK_PROCESSOR_NOT_READY`.
-- Flags e capabilities continuam desligadas, sem credenciais e sem chamada a
-  Meta.
-- Proxima release: F1A-2P, publicacao do callback ainda desligado.
+- F1A-2P publicada no commit
+  `4fea3d532030a5de2914258eb7dd634813ec413a`; o callback GET e POST esta
+  implantado em `/webhooks/whatsapp`.
+- Producao continua com 16 migrations; flags e capabilities WhatsApp seguem
+  desligadas, sem Verify Token ou App Secret configurados.
+- O callback publico retorna `404`, nao processa nem persiste eventos e nenhuma
+  chamada a Meta foi feita.
+- O frontend nao recebeu deploy nesta release.
+- Proxima release: F1B-1, aceitacao duravel e idempotente do webhook em
+  `EventoWebhook`, ainda desligada e sem criar Cliente, Lead, Conversa ou
+  Mensagem.
