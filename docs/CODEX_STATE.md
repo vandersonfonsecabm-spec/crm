@@ -11,7 +11,7 @@ Data da verificacao: 18/07/2026.
 
 ## Git
 
-- Baseline oficial: `8d68687e68a979f2d79e080c04b21fb16eb025e9`.
+- Baseline oficial: `10fea4c80a065c63cb7b37acbc0369f37f73613a`.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -85,19 +85,21 @@ Data da verificacao: 18/07/2026.
   `20260718205500_add_event_webhook_atomic_payload`.
 - `EventoWebhook.payloadJson` esta disponivel como campo opcional; eventos
   legados permanecem com `payloadJson` nulo e o fluxo Site continua compativel.
-- O callback WhatsApp ainda nao utiliza `payloadJson` nem aceita eventos
-  operacionalmente; GET e POST publicos retornam `404`.
+- Na F1B-0SP, o callback WhatsApp ainda nao utilizava `payloadJson` nem aceitava
+  eventos operacionalmente; GET e POST publicos retornavam `404`.
 - Flags e capabilities permanecem desligadas, sem Verify Token, App Secret,
   credencial Meta ou chamada a Meta.
 - O frontend nao recebeu deploy nesta release.
-- F1B-1 V2 implementada localmente; a producao oficial continua no commit
-  `8d68687e68a979f2d79e080c04b21fb16eb025e9`, com 17 migrations, e o
-  callback ainda nao foi republicado.
-- Mensagens de texto suportadas agora sao persistidas em `EventoWebhook` com
-  evento atomico recuperavel em `payloadJson`, hash deterministico e
-  idempotencia pelo wamid.
-- HTTP 200 ocorre somente depois da persistencia confirmada ou de retry
-  materialmente equivalente. Tipos nao suportados continuam rejeitados.
-- Nenhum Cliente, Lead, Conversa ou `MensagemCanal` e criado; flags e
-  capabilities continuam desligadas, sem credencial ou chamada a Meta.
-- Proxima release: F1B-1P, publicacao da aceitacao duravel ainda desligada.
+- F1B-1P publicada no commit
+  `10fea4c80a065c63cb7b37acbc0369f37f73613a`; producao continua com 17
+  migrations e a aceitacao duravel esta implantada.
+- `EventoWebhook.payloadJson` e `payloadHash` armazenam o evento atomico, com
+  idempotencia baseada no wamid e HTTP 200 somente apos persistencia confirmada
+  ou retry materialmente equivalente.
+- O callback GET e POST continua retornando `404` pelos gates desligados;
+  nenhuma mensagem WhatsApp foi persistida em producao e nenhuma entidade
+  comercial foi criada.
+- Flags e capabilities continuam desligadas, sem Verify Token, App Secret,
+  credencial Meta ou chamada a Meta; o frontend nao recebeu deploy.
+- Proxima release: F1B-2, processamento local e idempotente de `EventoWebhook`
+  em Cliente, Lead, Conversa e `MensagemCanal`, ainda desligado.
