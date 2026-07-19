@@ -111,12 +111,15 @@ Data da verificacao: 18/07/2026.
 - O callback GET e POST continua retornando `404`; flags e capabilities
   permanecem desligadas, sem Verify Token, App Secret, credencial Meta ou
   chamada a Meta, e o frontend nao recebeu deploy.
-- F1B-3 implementada localmente; a producao oficial permanece no commit
-  `517fdd7f51c4f310b9a601cae1431af6512fabaf`, com 17 migrations.
-- O callback local chama o intake duravel e, somente depois do commit do
-  `EventoWebhook`, executa o processador interno.
-- HTTP 200 ocorre somente apos processamento completo ou retry equivalente;
-  falha de processamento retorna HTTP 503 e preserva o evento para retomada.
-- Nenhum worker ou fila foi criado; flags e capabilities continuam desligadas,
-  sem credencial, chamada a Meta ou resposta outbound.
-- Proxima release: F1B-3P, publicacao da orquestracao ainda desligada.
+- Baseline oficial: `551dee5c785ddb1579214ce7bbb3bf459cfcf5c0`.
+- F1B-3P publicada; a producao continua com 17 migrations.
+- A orquestracao completa esta implantada: o callback conecta o intake duravel
+  ao processador somente depois do commit do `EventoWebhook`.
+- HTTP 200 depende do processamento completo ou de retry equivalente.
+- O callback continua retornando HTTP 404 porque flags e capabilities estao
+  desligadas e Verify Token e App Secret permanecem ausentes.
+- Nenhum `EventoWebhook` WhatsApp ou entidade comercial foi criado em producao;
+  nenhuma chamada Meta ou resposta outbound ocorreu.
+- O frontend permaneceu sem deploy.
+- Proxima release: F1C-0, preparacao operacional do piloto Meta para uma unica
+  empresa e um unico numero de teste, ainda sem ativar o inbound.
