@@ -162,7 +162,7 @@ const pageMeta: Record<ActivePage, { breadcrumb: string; description: string }> 
   },
   integracoes: {
     breadcrumb: "Integrações",
-    description: "Conexões, sincronizações e saúde dos dados externos.",
+    description: "Conecte os canais utilizados no atendimento da sua empresa.",
   },
   automacoes: {
     breadcrumb: "Automações",

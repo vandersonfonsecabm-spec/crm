@@ -46,6 +46,10 @@ const routeByPathname = new Map<string, DashboardRoute>(
   dashboardRoutes.map((route) => [route.pathname, route]),
 );
 
+const dashboardDetailRoutes = new Map([
+  ["/integracoes/whatsapp", { page: "integracoes" as const, detail: "whatsapp" as const }],
+]);
+
 export function getDashboardRoute(page: ActivePage): DashboardRoute {
   const route = routeByPage.get(page);
   if (!route) throw new Error(`Rota não configurada para a página ${page}.`);
@@ -69,11 +73,22 @@ export function normalizeDashboardPathname(pathname: string) {
 
 export function resolveDashboardPathname(pathname: string) {
   const normalizedPathname = normalizeDashboardPathname(pathname);
+  const detailRoute = dashboardDetailRoutes.get(normalizedPathname);
+  if (detailRoute) {
+    return {
+      ...detailRoute,
+      pathname: normalizedPathname,
+      isKnown: true,
+      needsReplace: pathname !== normalizedPathname,
+    };
+  }
+
   const route = routeByPathname.get(normalizedPathname);
 
   if (!route) {
     return {
       page: "dashboard" as const,
+      detail: null,
       pathname: "/",
       isKnown: false,
       needsReplace: true,
@@ -82,6 +97,7 @@ export function resolveDashboardPathname(pathname: string) {
 
   return {
     page: route.page,
+    detail: null,
     pathname: route.pathname,
     isKnown: true,
     needsReplace: pathname !== route.pathname,

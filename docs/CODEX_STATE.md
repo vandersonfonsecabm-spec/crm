@@ -121,5 +121,14 @@ Data da verificacao: 18/07/2026.
 - Nenhum `EventoWebhook` WhatsApp ou entidade comercial foi criado em producao;
   nenhuma chamada Meta ou resposta outbound ocorreu.
 - O frontend permaneceu sem deploy.
-- Proxima release: F1C-0, preparacao operacional do piloto Meta para uma unica
-  empresa e um unico numero de teste, ainda sem ativar o inbound.
+- F1UI-1 implementada localmente com o painel administrativo de integracao nas
+  rotas `/integracoes` e `/integracoes/whatsapp`.
+- O painel suporta os estados `NOT_CONFIGURED`, `WAITING_META_AUTH`,
+  `CONFIGURED_INACTIVE`, `CONNECTED`, `PAUSED`, `ERROR` e `UNAVAILABLE`.
+- O botao de conexao ainda nao inicia OAuth; a URL publica do webhook pode ser
+  copiada, sem exibir ou armazenar credenciais.
+- A conexao real com a Meta continua pendente. O backend oficial permanece em
+  `551dee5c785ddb1579214ce7bbb3bf459cfcf5c0`, a producao permanece com 17
+  migrations e nenhum deploy de frontend foi realizado.
+- Proxima release: F1C-1, ativacao controlada do piloto Meta quando houver
+  autenticacao manual disponivel.

@@ -43,6 +43,10 @@ import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
 import DashboardInventoryPanel from "../components/dashboard/DashboardInventoryPanel";
 import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegrationsPanel";
 import DashboardSiteLeadIntegrationPanel from "../components/dashboard/DashboardSiteLeadIntegrationPanel";
+import {
+  WhatsAppConnectionPanel,
+  WhatsAppIntegrationCard,
+} from "../components/integrations/WhatsAppConnectionPanel";
 import DashboardInboxPanel from "../components/leads-communication/DashboardInboxPanel";
 import DashboardLeadsPanel from "../components/leads-communication/DashboardLeadsPanel";
 import DashboardNegociosKanbanPanel from "../components/negocios/DashboardNegociosKanbanPanel";
@@ -112,6 +116,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
   const requestedActivePage = resolvedNavigation.page;
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
+  const isWhatsAppIntegrationDetail = activePage === "integracoes" && resolvedNavigation.detail === "whatsapp";
   const usingNegociosKanban = activePage === "kanban" && negociosKanbanEnabled;
 
   const pageSize = 4;
@@ -127,7 +132,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setIsCustomerDrawerOpen(false);
   }, []);
 
-  const pageTitle = ({
+  const pageTitle = isWhatsAppIntegrationDetail ? "WhatsApp" : ({
     dashboard: "Visão Geral",
     comercial: "Central Comercial",
     inbox: "Caixa de Entrada",
@@ -763,8 +768,20 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
               {activePage === "estoque" && <DashboardInventoryPanel onOpenIntegrations={() => handleSetActivePage("integracoes")} />}
 
-              {activePage === "integracoes" && canManageIntegrations && siteLeadCaptureEnabled && <DashboardSiteLeadIntegrationPanel />}
-              {activePage === "integracoes" && canManageIntegrations && <DashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />}
+              {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
+                <WhatsAppIntegrationCard
+                  onOpen={() => navigate("/integracoes/whatsapp")}
+                  onUnauthorized={onLogout}
+                />
+              )}
+              {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && siteLeadCaptureEnabled && <DashboardSiteLeadIntegrationPanel />}
+              {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && <DashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />}
+              {isWhatsAppIntegrationDetail && canManageIntegrations && (
+                <WhatsAppConnectionPanel
+                  onBack={() => navigate(getDashboardPath("integracoes"))}
+                  onUnauthorized={onLogout}
+                />
+              )}
 
               {usingNegociosKanban && authSession && (
                 <DashboardNegociosKanbanPanel authSession={authSession} onToast={setToast} />

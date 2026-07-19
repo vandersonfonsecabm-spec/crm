@@ -882,6 +882,15 @@ export type WhatsappSimulationCallResult = {
   data: WhatsappSimulationResponse;
 };
 
+export type WhatsappOperationalStatusResponse = {
+  status?: string;
+  ready?: boolean;
+  connectedAt?: string | null;
+  verifiedAt?: string | null;
+  lastWebhookAt?: string | null;
+  lastFailureAt?: string | null;
+};
+
 export function getAuthToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -1127,6 +1136,10 @@ export async function fetchEstoqueResumo() {
 export async function fetchIntegracoes(params: { page?: number; limit?: number; status?: string; tipo?: string; busca?: string } = {}) {
   const response = await requestApiGetAuthenticated<ApiPaginatedResponse<HubIntegracao> | HubIntegracao[]>("/integracoes" + toQueryString(params));
   return normalizePaginatedResponse(response, { page: params.page, limit: params.limit });
+}
+
+export async function fetchWhatsappOperationalStatus() {
+  return requestApiGetAuthenticated<WhatsappOperationalStatusResponse>("/integracoes/whatsapp/status");
 }
 
 export async function createIntegracao(payload: { nome: string; tipo: HubIntegrationType; status?: HubIntegrationStatus; ativo?: boolean; configuracao?: Record<string, unknown> }) {
