@@ -23,18 +23,35 @@ Data da verificacao: 21/07/2026.
 - Backend: https://api-production-875f9.up.railway.app.
 - Servico Railway: `api`; nao utilizar `crm-agro-demo-api`.
 - Producao possui 18 migrations; health esperado HTTP 200.
-- H1.1 prepara localmente `backend/scripts/start-production.cjs` para executar
-  migrations no processo principal, depois da montagem do volume e antes da
-  API. Nao utiliza Pre-Deploy e nao executa migration durante o build.
+- H1.1 foi publicada no commit
+  `93e1c0b2ea7d9d4f13b06fba2f8c275c734bb312`. O Railway publicou o deployment
+  `769fba0f-d9b5-4076-bbd9-810059f05912` e a Vercel publicou o deployment
+  `Ai35r8GaNCQUGLSEoV5nUhSmprbe`, ambos a partir do commit exato; Railway ficou
+  `Active`, Vercel ficou `Ready` e o health permaneceu HTTP 200.
+- `backend/scripts/start-production.cjs` executa migrations no processo
+  principal, depois da montagem do volume e antes da API. Nao utiliza
+  Pre-Deploy e nao executa migration durante o build.
 - O entrypoint valida o servico Railway, o volume `/app/data`, a
   `DATABASE_URL` SQLite dentro do volume, o schema e a Prisma CLI. Fora do
   Railway, inicia somente o servidor e nao migra automaticamente o banco local.
 - Falha de validacao ou migration impede a API de iniciar. O SQLite operacional
   exige uma unica replica, e o processo encaminha sinais ao servidor filho.
+- O deployment confirmou uma replica, Prisma CLI no runtime, volume
+  `/app/data` e a ordem validacao -> `prisma migrate deploy` -> 18 migrations
+  sem pendencias -> API. `prisma migrate status` confirmou o schema atualizado.
+- O banco permaneceu com 770.048 bytes, SHA-256 fisico
+  `0be2e7280ee4e907d79717c55dfca25c89b8f25ea83afc34225cd007ce2ad30f`,
+  `quick_check` `ok`, zero violacao de foreign key, contagens preservadas e
+  commercial data fingerprint
+  `35745c8292fcb04f43d5c2b76d7db798dbcb59ac4868e8bfe8992384b41aa700`.
+  Nenhum restart adicional ou backup novo foi executado; os backups H1P foram
+  preservados.
 - A automacao nao autoriza migrations futuras sem auditoria, backup, ensaio,
   compatibilidade e rollback. Operacoes destrutivas, etapas contract, colunas
   obrigatorias sem estrategia e data migrations pesadas permanecem bloqueadas
   pelo protocolo de release.
+- O WhatsApp permanece pausado, sem flags, capabilities, segredos ou chamada
+  externa.
 
 ## Banco local protegido
 
