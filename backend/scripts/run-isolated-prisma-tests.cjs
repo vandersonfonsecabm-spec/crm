@@ -64,7 +64,7 @@ async function main() {
   fs.writeFileSync(testDb, "");
   assertTreeEqual(sourceMigrations, path.join(sandboxPrisma, "migrations"));
   const migrationCount = fs.readdirSync(sourceMigrations, { withFileTypes: true }).filter((item) => item.isDirectory()).length;
-  if (migrationCount !== 18) throw new Error(`Esperadas 18 migrations no worktree; encontradas ${migrationCount}.`);
+  if (migrationCount !== 19) throw new Error(`Esperadas 19 migrations no worktree; encontradas ${migrationCount}.`);
 
   fs.renameSync(officialDb, activeBackup);
   fs.mkdirSync(officialDb);

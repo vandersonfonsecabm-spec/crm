@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const { createChannelService } = require("../channels/channelService");
 const { normalizePhone } = require("../channels/phoneNormalizer");
 const { calculateConversationSla, slaFilterWhere } = require("./inboxOperations");
+const { createInboxCommercialQualificationService } = require("./commercialQualification");
 const {
   domainError,
   isManager,
@@ -176,7 +177,7 @@ function createLeadsCommunicationServices({ prisma }) {
     });
   }
 
-  async function convertLeadToBusiness(context, id, input) {
+  async function convertLeadToBusiness(context, id, input, internal = {}) {
     const body = rejectUnknown(input, ["titulo", "valor", "observacao"]);
     rejectEmpresaId(body);
     const requestedTitle = optionalText(body.titulo, "titulo", 200);
@@ -228,6 +229,9 @@ function createLeadsCommunicationServices({ prisma }) {
           throw domainError(409, "LEAD_CONVERSION_CONFLICT", "Lead foi alterado por outra operacao.");
         }
         const convertedLead = await tx.lead.findUnique({ where: { id: lead.id }, include: leadIncludes() });
+        if (typeof internal.afterConvert === "function") {
+          await internal.afterConvert(tx, { lead: convertedLead, negocio });
+        }
         return conversionResult(convertedLead, negocio, true);
       });
     } catch (error) {
@@ -891,7 +895,10 @@ function createLeadsCommunicationServices({ prisma }) {
     });
   }
 
+  const commercialQualification = createInboxCommercialQualificationService({ prisma, convertLeadToBusiness });
+
   return {
+    ...commercialQualification,
     assignConversation,
     assignLead,
     acquireReplyLease,

@@ -304,6 +304,50 @@ export type CommunicationConversation = {
   } | null;
 };
 
+export type CommercialPriority = "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
+
+export type InboxCommercialBusiness = {
+  id: number;
+  titulo: string | null;
+  etapa: BusinessStage;
+  valor: number | null;
+  cliente: { id: number; nome: string } | null;
+  responsavel: { id: number; nome: string } | null;
+  leadId: number | null;
+  elegivel: boolean;
+  createdAt: string;
+};
+
+export type InboxCommercialContext = {
+  estado: "SEM_CONTEXTO" | "NAO_QUALIFICADO" | "QUALIFICADO" | "NEGOCIO_VINCULADO";
+  cliente: { id: number; nome: string; interesse: string; valor: number; origem: string } | null;
+  lead: {
+    id: number;
+    status: LeadStatus;
+    origem: string | null;
+    interesse: string | null;
+    responsavel: { id: number; nome: string; papel?: string } | null;
+  } | null;
+  qualificacao: {
+    interesse: string | null;
+    prioridade: CommercialPriority;
+    valorEstimado: number | null;
+    proximaAcao: string;
+    dataRetorno: string | null;
+    observacao: string | null;
+  } | null;
+  negocio: InboxCommercialBusiness | null;
+  historico: Array<{
+    id: number;
+    acao: "QUALIFICAR" | "CRIAR_NEGOCIO" | "VINCULAR_NEGOCIO";
+    autor: { id: number; nome: string } | null;
+    negocio: { id: number; titulo: string | null; etapa: BusinessStage } | null;
+    observacao: string | null;
+    createdAt: string;
+  }>;
+  permissoes: { qualificar: boolean; criarOuVincular: boolean };
+};
+
 export type InternalConversationNote = {
   id: number;
   conversaCanalId: number;
@@ -1408,6 +1452,33 @@ export async function fetchCommunicationConversations(params: ConversationQuery 
 
 export async function fetchCommunicationConversation(id: number) {
   return requestApiGetAuthenticated<CommunicationConversation>(`/conversas/${id}`);
+}
+
+export async function fetchInboxCommercialContext(id: number) {
+  return requestApiGetAuthenticated<InboxCommercialContext>(`/conversas/${id}/contexto-comercial`);
+}
+
+export async function saveInboxCommercialQualification(id: number, payload: {
+  interesse: string;
+  prioridade: CommercialPriority;
+  valorEstimado?: number | null;
+  proximaAcao: string;
+  dataRetorno?: string | null;
+  observacao?: string | null;
+}) {
+  return requestApiWrite<InboxCommercialContext>("PATCH", `/conversas/${id}/qualificacao-comercial`, payload);
+}
+
+export async function fetchInboxEligibleBusinesses(id: number, query = "") {
+  return requestApiGetAuthenticated<{ data: InboxCommercialBusiness[] }>(`/conversas/${id}/negocios-elegiveis${toQueryString(query.trim() ? { q: query.trim() } : {})}`);
+}
+
+export async function createInboxBusiness(id: number, payload: { titulo?: string; observacao?: string | null; confirmarDuplicidade?: boolean }) {
+  return requestApiWrite<{ created: boolean; negocio: CommunicationBusiness; contexto: InboxCommercialContext }>("POST", `/conversas/${id}/criar-negocio`, payload);
+}
+
+export async function linkInboxBusiness(id: number, negocioId: number) {
+  return requestApiWrite<{ linked: boolean; contexto: InboxCommercialContext }>("POST", `/conversas/${id}/vincular-negocio`, { negocioId });
 }
 
 export async function assumeCommunicationConversation(id: number) {

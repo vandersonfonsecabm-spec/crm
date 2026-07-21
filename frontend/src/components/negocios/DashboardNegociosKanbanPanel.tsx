@@ -24,10 +24,12 @@ const stageLabels: Record<BusinessStage, string> = {
 
 type Props = {
   authSession: AuthSession | null;
+  initialBusinessId?: number | null;
+  onInitialBusinessHandled?: () => void;
   onToast: (message: string) => void;
 };
 
-export default function DashboardNegociosKanbanPanel({ authSession, onToast }: Props) {
+export default function DashboardNegociosKanbanPanel({ authSession, initialBusinessId, onInitialBusinessHandled, onToast }: Props) {
   const [businesses, setBusinesses] = useState<CommunicationBusiness[]>([]);
   const [summary, setSummary] = useState<NegociosKanbanResponse["resumo"] | null>(null);
   const [page, setPage] = useState(1);
@@ -98,6 +100,22 @@ export default function DashboardNegociosKanbanPanel({ authSession, onToast }: P
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [selected]);
+
+  useEffect(() => {
+    if (!initialBusinessId) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setDetailLoading(true);
+      fetchNegocioKanban(initialBusinessId)
+        .then((business) => { if (active) setSelected(business); })
+        .catch(() => { if (active) onToast("Não foi possível abrir o Negócio selecionado."); })
+        .finally(() => {
+          if (active) setDetailLoading(false);
+          onInitialBusinessHandled?.();
+        });
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [initialBusinessId, onInitialBusinessHandled, onToast]);
 
   const metrics = useMemo(() => ({
     total: summary?.total ?? 0,

@@ -107,6 +107,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [kanbanStageRequest, setKanbanStageRequest] = useState<{ group: "pipeline" | "resultado"; key: number }>({ group: "pipeline", key: 0 });
   const [leadsCreateRequestKey, setLeadsCreateRequestKey] = useState(0);
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
+  const [kanbanBusinessId, setKanbanBusinessId] = useState<number | null>(null);
   const canManageIntegrations = canAccessIntegrations(authSession);
   const {
     leadsCommunication: leadsCommunicationEnabled,
@@ -321,6 +322,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const openInboxConversation = useCallback((conversationId: number) => {
     setInboxConversationId(conversationId);
     handleSetActivePage("inbox");
+  }, [handleSetActivePage]);
+
+  const openKanbanBusiness = useCallback((businessId: number) => {
+    setKanbanBusinessId(businessId);
+    handleSetActivePage("kanban");
   }, [handleSetActivePage]);
 
   useEffect(() => {
@@ -691,7 +697,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               )}
 
               {activePage === "inbox" && leadsCommunicationEnabled && authSession && (
-                <DashboardInboxPanel authSession={authSession} initialConversationId={inboxConversationId} />
+                <DashboardInboxPanel authSession={authSession} initialConversationId={inboxConversationId} onOpenBusiness={openKanbanBusiness} />
               )}
               {activePage === "clientes" && (
                 <>
@@ -784,7 +790,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               )}
 
               {usingNegociosKanban && authSession && (
-                <DashboardNegociosKanbanPanel authSession={authSession} onToast={setToast} />
+                <DashboardNegociosKanbanPanel authSession={authSession} initialBusinessId={kanbanBusinessId} onInitialBusinessHandled={() => setKanbanBusinessId(null)} onToast={setToast} />
               )}
 
               {!negociosKanbanEnabled && <DashboardKanbanBoard

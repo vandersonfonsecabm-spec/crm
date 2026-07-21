@@ -153,6 +153,49 @@ Data da verificacao: 21/07/2026.
   e calculado, nao persistido; nao ha lease estrutural novo nem integracao
   externa nesta release. Nenhum `Negocio` e criado pelas acoes da Inbox.
 
+## Qualificacao comercial pela Caixa de Entrada
+
+- H2 foi implementada localmente na branch
+  `feature/inbox-commercial-qualification`; a producao oficial permanece no
+  commit `93e1c0b2ea7d9d4f13b06fba2f8c275c734bb312`, com 18 migrations.
+- O drawer existente da Inbox recebeu um painel comercial compacto para
+  qualificar o atendimento, revisar possiveis duplicidades, criar um Negocio
+  por confirmacao explicita, vincular um Negocio elegivel e abrir o registro
+  correto no Kanban.
+- A qualificacao reutiliza `Cliente.interesse`, `Cliente.valor`,
+  `Cliente.proximoFollowUp`, `Lead.interesse`, `Lead.status`, `Acompanhamento`
+  e o servico oficial `convertLeadToBusiness`. Interesse e proxima acao sao
+  obrigatorios; prioridade e obrigatoria, valor e data de retorno sao
+  opcionais e validados.
+- O vinculo estrutural reutiliza `ConversaCanal.leadId` e o `Negocio.leadId`
+  unico. Nenhum Negocio e criado ao abrir, assumir, qualificar ou encerrar uma
+  conversa; criacao duplicada concorrente retorna conflito controlado.
+- A migration aditiva
+  `20260721213000_add_inbox_commercial_qualification` cria somente
+  `HistoricoQualificacaoConversa`, com vinculos de tenant, conversa, Cliente,
+  Lead, Negocio e autor. Ela foi validada com 19 migrations exclusivamente em
+  sandbox e nao foi aplicada ao `dev.db` protegido nem em producao.
+- ADMIN e GERENTE podem qualificar, criar e vincular no tenant autenticado.
+  VENDEDOR atua somente quando autorizado pela responsabilidade atual; outro
+  tenant recebe `404` e ausencia de permissao recebe `403`. `empresaId` do
+  frontend nunca e autoridade.
+- Testes focais cobriram validacao, isolamento, permissao, duplicidade,
+  concorrencia, criacao pelo conversor oficial, vinculo, historico e
+  preservacao de conversa e mensagens. Regressoes de H1, G1, G2A, Site e
+  frontend passaram, assim como Prisma validate, migration isolada, lint,
+  build, `node --check` e `git diff --check`.
+- O QA visual local em 1366x768, 1440x900, 1920x1080 e 900x768 validou os
+  estados sem qualificacao, qualificado, duplicidade, Negocio vinculado, erro
+  recuperavel e falta de permissao. A data de retorno opcional foi corrigida
+  para permanecer como nao definida quando omitida. Evidencias ficaram somente
+  em `%TEMP%\crm-inbox-h2-visual-qa`.
+- Limitacoes: nao existe remocao de vinculo porque nao ha regra de dominio
+  aprovada; a busca de Negocios e limitada aos ativos do mesmo Cliente; a data
+  interna obrigatoria de `Acompanhamento` usa o momento da qualificacao quando
+  nenhuma data de retorno e informada. Nenhum push ou deploy foi executado.
+- O WhatsApp continua pausado, sem Meta, chamada externa, flags, capabilities
+  ou credenciais ativadas.
+
 ## WhatsApp
 
 - Nenhuma credencial Meta esta configurada e nenhuma chamada externa foi feita.

@@ -50,6 +50,21 @@ function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   app.get("/conversas/equipe", ...guarded, route(async (req, res, context, api) => {
     res.json({ data: await api.listConversationTeam(context) });
   }));
+  app.get("/conversas/:id/contexto-comercial", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.getCommercialContext(context, pathId(req)));
+  }));
+  app.patch("/conversas/:id/qualificacao-comercial", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.saveCommercialQualification(context, pathId(req), req.body));
+  }));
+  app.get("/conversas/:id/negocios-elegiveis", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.listEligibleBusinesses(context, pathId(req), req.query));
+  }));
+  app.post("/conversas/:id/criar-negocio", ...guarded, route(async (req, res, context, api) => {
+    res.status(201).json(await api.createBusinessFromConversation(context, pathId(req), req.body));
+  }));
+  app.post("/conversas/:id/vincular-negocio", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.linkExistingBusiness(context, pathId(req), req.body));
+  }));
   app.get("/conversas/:id", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.getConversation(context, pathId(req)));
   }));

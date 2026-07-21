@@ -31,6 +31,7 @@ model Cliente {
   negocios        Negocio[]        @relation("NegocioCliente")
   negociosLegados Negocio[]        @relation("NegocioClienteLegado")
   contatosCanal   ContatoCanal[]
+  historicosQualificacao HistoricoQualificacaoConversa[]
 
   @@index([empresaId])
   @@index([empresaId, status])
@@ -165,6 +166,7 @@ model Empresa {
   negocios                   Negocio[]
   notasInternasConversa      NotaInternaConversa[]
   historicosAtribuicao       HistoricoAtribuicao[]
+  historicosQualificacaoConversa HistoricoQualificacaoConversa[]
   eventosWebhook             EventoWebhook[]
   funcionalidades            EmpresaFuncionalidade[]
   auditoriasFuncionalidade   AuditoriaFuncionalidade[]
@@ -194,6 +196,7 @@ model Usuario {
   atribuicoesAnteriores      HistoricoAtribuicao[]     @relation("AtribuicaoResponsavelAnterior")
   atribuicoesNovas           HistoricoAtribuicao[]     @relation("AtribuicaoResponsavelNovo")
   atribuicoesAlteradas       HistoricoAtribuicao[]     @relation("AtribuicaoAlteradoPor")
+  qualificacoesComerciaisRegistradas HistoricoQualificacaoConversa[] @relation("QualificacaoComercialAutor")
   funcionalidadesHabilitadas EmpresaFuncionalidade[]   @relation("FuncionalidadeHabilitadaPor")
   auditoriasFuncionalidade   AuditoriaFuncionalidade[] @relation("AuditoriaFuncionalidadeUsuario")
 
@@ -540,6 +543,7 @@ model ConversaCanal {
   notasInternas            NotaInternaConversa[]
   historicoAtribuicoes     HistoricoAtribuicao[]
   acompanhamentos          Acompanhamento[]
+  historicosQualificacao   HistoricoQualificacaoConversa[]
 
   @@index([empresaId])
   @@index([canalIntegracaoId])
@@ -615,6 +619,7 @@ model Lead {
   negocios                  Negocio[]
   acompanhamentos           Acompanhamento[]
   historicoAtribuicoes      HistoricoAtribuicao[]
+  historicosQualificacao    HistoricoQualificacaoConversa[]
 
   @@index([empresaId, status])
   @@index([empresaId, responsavelId, status])
@@ -648,6 +653,7 @@ model Negocio {
   updatedAt            DateTime              @updatedAt
   acompanhamentos      Acompanhamento[]
   historicoAtribuicoes HistoricoAtribuicao[]
+  historicosQualificacao HistoricoQualificacaoConversa[]
 
   @@index([empresaId, etapa])
   @@index([empresaId, responsavelId, etapa])
@@ -702,6 +708,36 @@ model HistoricoAtribuicao {
   @@index([empresaId, conversaCanalId, createdAt])
   @@index([empresaId, negocioId, createdAt])
   @@index([empresaId, responsavelNovoId, createdAt])
+}
+
+model HistoricoQualificacaoConversa {
+  id              Int                              @id @default(autoincrement())
+  empresaId       Int
+  empresa         Empresa                          @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  conversaCanalId Int
+  conversaCanal   ConversaCanal                    @relation(fields: [conversaCanalId], references: [id], onDelete: Restrict)
+  clienteId       Int
+  cliente         Cliente                          @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  leadId          Int
+  lead            Lead                             @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  negocioId       Int?
+  negocio         Negocio?                         @relation(fields: [negocioId], references: [id], onDelete: SetNull)
+  autorId         Int
+  autor           Usuario                          @relation("QualificacaoComercialAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  acao            TipoAcaoQualificacaoConversa
+  interesse       String?
+  prioridade      PrioridadeAcompanhamento?
+  valorEstimado   Int?
+  proximaAcao     String?
+  dataRetorno     DateTime?
+  observacao      String?
+  createdAt       DateTime                         @default(now())
+
+  @@index([empresaId, conversaCanalId, createdAt])
+  @@index([empresaId, clienteId, createdAt])
+  @@index([empresaId, leadId, createdAt])
+  @@index([empresaId, negocioId, createdAt])
+  @@index([empresaId, autorId, createdAt])
 }
 
 model EventoWebhook {
@@ -902,6 +938,12 @@ enum PrioridadeAcompanhamento {
   MEDIA
   ALTA
   CRITICA
+}
+
+enum TipoAcaoQualificacaoConversa {
+  QUALIFICAR
+  CRIAR_NEGOCIO
+  VINCULAR_NEGOCIO
 }
 
 enum TipoAcompanhamento {

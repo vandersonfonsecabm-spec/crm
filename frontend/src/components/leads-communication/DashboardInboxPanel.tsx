@@ -28,11 +28,13 @@ import { Badge, Button, EmptyState, ErrorState, IconButton, Input, LoadingState,
 import { CommunicationDrawer, CommunicationModal } from "./CommunicationOverlay";
 import { ConversationSlaBadge, ConversationStatusBadge, DetailRow } from "./communicationPresentation";
 import { channelLabel, conversationStatusLabels, formatCommunicationDate, formatCommunicationTime, initials } from "./communicationFormatters";
+import InboxCommercialPanel from "./InboxCommercialPanel";
 import "./LeadsCommunication.css";
 
 type InboxPanelProps = {
   authSession: AuthSession;
   initialConversationId?: number | null;
+  onOpenBusiness: (businessId: number) => void;
 };
 
 type QueueView = "todas" | "minhas" | "sem-responsavel" | "sla-atencao" | "sla-critico" | ConversationStatus;
@@ -41,7 +43,7 @@ type ComposerMode = "reply" | "note";
 
 const conversationStates: ConversationStatus[] = ["NOVA", "AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO", "AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"];
 
-export default function DashboardInboxPanel({ authSession, initialConversationId }: InboxPanelProps) {
+export default function DashboardInboxPanel({ authSession, initialConversationId, onOpenBusiness }: InboxPanelProps) {
   const [queueView, setQueueView] = useState<QueueView>("todas");
   const [responsavelId, setResponsavelId] = useState("");
   const [channelId, setChannelId] = useState("");
@@ -443,7 +445,8 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
         </section>
       </Surface>
 
-      <CommunicationDrawer description="Cadastro consolidado, Lead e histórico deste atendimento." onClose={() => setContextOpen(false)} open={contextOpen && Boolean(conversation)} title="Contexto do atendimento">
+      <CommunicationDrawer description="Qualificação comercial, cadastro e histórico deste atendimento." onClose={() => setContextOpen(false)} open={contextOpen && Boolean(conversation)} title="Contexto do atendimento">
+        {conversation && <div className="mb-4 border-b border-[var(--border-default)] pb-4"><InboxCommercialPanel conversationId={conversation.id} onOpenBusiness={onOpenBusiness} /></div>}
         {conversation && <div className="space-y-4"><section><h3 className="mb-1 text-xs font-semibold">Cliente</h3><dl><DetailRow label="Nome" value={conversation.contatoCanal.cliente?.nome ?? conversation.contatoCanal.nome ?? "Não informado"} /><DetailRow label="Telefone" value={conversation.contatoCanal.cliente?.telefone || "Não informado"} /><DetailRow label="E-mail" value={conversation.contatoCanal.cliente?.email || "Não informado"} /><DetailRow label="Empresa / propriedade" value={conversation.contatoCanal.cliente?.empresa || "Não informado"} /></dl></section><section><h3 className="mb-1 text-xs font-semibold">Lead</h3><dl><DetailRow label="Interesse" value={conversation.lead?.interesse ?? "Não informado"} /><DetailRow label="Origem" value={conversation.lead?.origem ?? "Não informado"} /><DetailRow label="Campanha" value={conversation.lead?.campanha ?? "Não informado"} /><DetailRow label="Página de origem" value={conversation.lead?.paginaOrigem ?? "Não informado"} /><DetailRow label="Responsável" value={conversation.lead?.responsavel?.nome ?? "Sem responsável"} /></dl></section><section><h3 className="mb-1 text-xs font-semibold">Conversa</h3><dl><DetailRow label="Canal" value={channelLabel(conversation.canalIntegracao.tipo, conversation.canalIntegracao.nome)} /><DetailRow label="Estado" value={<ConversationStatusBadge status={conversation.status} />} /><DetailRow label="SLA" value={<ConversationSlaBadge sla={conversation.sla} />} /><DetailRow label="Responsável" value={conversation.responsavelPrincipal?.nome ?? "Fila compartilhada"} /><DetailRow label="Criada em" value={formatCommunicationDate(conversation.createdAt)} /><DetailRow label="Última atividade" value={formatCommunicationDate(conversation.ultimaMensagemEm)} /></dl></section><section><div className="mb-2 flex items-center gap-2"><History size={13} /><h3 className="text-xs font-semibold">Histórico de atendimento</h3></div>{history.length ? <ol className="space-y-2">{history.map((entry) => <li className="rounded-md bg-[var(--bg-muted)] px-3 py-2 text-[11px]" key={entry.id}><p className="font-medium">{historyLabel(entry.acaoAtendimento ?? entry.tipo, entry.responsavelAnterior?.nome, entry.responsavelNovo?.nome, entry.estadoAnterior, entry.estadoNovo)}</p><p className="mt-0.5 text-[var(--text-muted)]">Por {entry.alteradoPor?.nome ?? "Usuário removido"} · {formatCommunicationDate(entry.createdAt)}</p>{entry.motivo && <p className="mt-1">{entry.motivo}</p>}</li>)}</ol> : <p className="text-[11px] text-[var(--text-muted)]">Nenhuma ação registrada.</p>}</section></div>}
       </CommunicationDrawer>
 
