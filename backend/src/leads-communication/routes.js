@@ -47,6 +47,9 @@ function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   app.get("/conversas", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.listConversations(context, req.query));
   }));
+  app.get("/conversas/equipe", ...guarded, route(async (req, res, context, api) => {
+    res.json({ data: await api.listConversationTeam(context) });
+  }));
   app.get("/conversas/:id", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.getConversation(context, pathId(req)));
   }));
@@ -58,6 +61,18 @@ function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   }));
   app.post("/conversas/:id/devolver-fila", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.returnConversationToQueue(context, pathId(req), req.body));
+  }));
+  app.post("/conversas/:id/aguardar-cliente", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.waitForCustomer(context, pathId(req), req.body));
+  }));
+  app.post("/conversas/:id/marcar-pendente", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.markConversationPending(context, pathId(req), req.body));
+  }));
+  app.post("/conversas/:id/encerrar", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.closeConversation(context, pathId(req), req.body));
+  }));
+  app.post("/conversas/:id/reabrir", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.reopenConversation(context, pathId(req), req.body));
   }));
   app.post("/conversas/:id/reserva-resposta", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.acquireReplyLease(context, pathId(req)));
@@ -73,6 +88,9 @@ function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   }));
   app.get("/conversas/:id/mensagens", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.listMessages(context, pathId(req), req.query));
+  }));
+  app.post("/conversas/:id/marcar-lida", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.markConversationRead(context, pathId(req)));
   }));
   app.post("/conversas/:id/mensagens/simuladas", ...guarded, route(async (req, res, context, api) => {
     res.status(201).json(await api.createSimulatedMessage(context, pathId(req), req.body));

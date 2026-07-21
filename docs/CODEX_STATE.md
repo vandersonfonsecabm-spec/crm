@@ -33,6 +33,22 @@ Data da verificacao: 18/07/2026.
   zero.
 - Nunca escrever nesse banco durante testes.
 
+## Reconciliacao read-only do banco de producao
+
+- Em 2026-07-21, uma copia consistente do banco oficial foi inspecionada
+  exclusivamente em `%TEMP%\crm-production-db-reconciliation`, sem consulta ou
+  escrita direta no arquivo operacional.
+- O arquivo principal tinha 770.048 bytes e SHA-256 fisico
+  `13aa8b6a88784d48bc4592ff3a2bb33188dcbc51e4ee05af545b822ad206b510`;
+  nao havia arquivos WAL ou SHM e o `journal_mode` observado foi `delete`.
+- O fingerprint logico deterministico das tabelas comerciais foi
+  `30f8f67a2fbce515ed57a8f2d6141adf010d6580eb2b666e9c200f1ef1b71e50`.
+- As 17 migrations, schema, indices, contagens comerciais, `quick_check` e
+  `foreign_key_check` permaneceram consistentes. A diferenca entre os SHAs
+  fisicos historicos foi classificada como nao semantica; a unica variacao
+  logica nao comercial foi o registro normal de ultimo login do usuario.
+- Conclusao: BANCO LOGICAMENTE INTEGRO E SEM ALTERACAO COMERCIAL INESPERADA.
+
 ## Marcos concluidos
 
 - Leads e canais, Inbox colaborativa e captacao de Lead pelo Site.
@@ -47,6 +63,37 @@ Data da verificacao: 18/07/2026.
 - Tenant 1 utiliza um card baseado em Negocio.
 - Kanban legado permanece disponivel para rollback e nao deve ser removido nesta
   fase.
+
+## Caixa de Entrada operacional
+
+- H1 implementada localmente na branch `feature/inbox-operations-mvp`, sem push
+  ou deploy. A producao permanece com 17 migrations.
+- Estados suportados: `NOVA`, `AGUARDANDO_ATENDIMENTO`, `EM_ATENDIMENTO`,
+  `AGUARDANDO_CLIENTE`, `PENDENTE` e `ENCERRADA`.
+- A fila compartilhada permite filtrar todas, nao atribuidas, conversas do
+  usuario, estados e SLAs em atencao ou critico, sempre no tenant autenticado.
+- Assumir, transferir, devolver a fila, aguardar cliente, marcar como pendente,
+  encerrar e reabrir usam acoes explicitas, historico e concorrencia atomica.
+- O lease existente de resposta foi preservado com duracao de dois minutos e
+  relogio do servidor; ele nao altera o responsavel permanente.
+- A migration aditiva local
+  `20260721123000_add_inbox_operational_history` acrescenta somente acao,
+  estado anterior e estado novo ao historico de atribuicao; nao foi aplicada ao
+  banco local protegido nem a producao.
+- O SLA e derivado da espera por atencao humana: ate 10 minutos dentro do prazo,
+  acima de 10 em atencao, acima de 15 atrasado e acima de 30 critico.
+- Mensagens inbound nao lidas sao contadas e marcadas como lidas apenas depois
+  do carregamento bem-sucedido da conversa. Transferencia e retorno a fila nao
+  apagam esse estado.
+- ADMIN, GERENTE e VENDEDOR reutilizam as permissoes existentes de comunicacao;
+  o backend impede acesso entre tenants e limita cada acao conforme autoria e
+  responsabilidade.
+- Testes focados de backend, migration, colaboracao, Site e frontend passaram,
+  assim como lint, build, Prisma validate, verificacoes de sintaxe e QA visual
+  em 1366x768, 1440x900, 1920x1080 e 900x768.
+- Limitacoes: leitura continua sendo global por mensagem, nao por usuario; SLA
+  e calculado, nao persistido; nao ha lease estrutural novo nem integracao
+  externa nesta release. Nenhum `Negocio` e criado pelas acoes da Inbox.
 
 ## WhatsApp
 

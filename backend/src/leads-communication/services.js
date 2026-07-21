@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const { createChannelService } = require("../channels/channelService");
 const { normalizePhone } = require("../channels/phoneNormalizer");
+const { calculateConversationSla, slaFilterWhere } = require("./inboxOperations");
 const {
   domainError,
   isManager,
@@ -23,6 +24,7 @@ const {
 
 const LEAD_STATUSES = ["NOVO", "EM_ATENDIMENTO", "QUALIFICADO", "DESQUALIFICADO", "CONVERTIDO"];
 const CONVERSATION_STATUSES = ["ABERTA", "NOVA", "AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO", "AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"];
+const SLA_FILTERS = ["ATENCAO", "CRITICO"];
 const LEAD_TRANSITIONS = {
   NOVO: new Set(["EM_ATENDIMENTO", "QUALIFICADO", "DESQUALIFICADO"]),
   EM_ATENDIMENTO: new Set(["QUALIFICADO", "DESQUALIFICADO"]),
@@ -37,7 +39,7 @@ const CONVERSATION_TRANSITIONS = {
   EM_ATENDIMENTO: new Set(["AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"]),
   AGUARDANDO_CLIENTE: new Set(["EM_ATENDIMENTO", "PENDENTE", "ENCERRADA"]),
   PENDENTE: new Set(["EM_ATENDIMENTO", "ENCERRADA"]),
-  ENCERRADA: new Set(["NOVA", "AGUARDANDO_ATENDIMENTO"]),
+  ENCERRADA: new Set(["NOVA", "AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO"]),
 };
 const DEFAULT_REPLY_LEASE_SECONDS = 120;
 const MIN_REPLY_LEASE_SECONDS = 30;
@@ -281,11 +283,14 @@ function createLeadsCommunicationServices({ prisma }) {
 
   async function listConversations(context, query = {}) {
     rejectEmpresaId(query);
-    rejectUnknown(query, ["page", "limit", "estado", "responsavelId", "semResponsavel", "meus", "leadId", "canalIntegracaoId", "q"]);
+    rejectUnknown(query, ["page", "limit", "estado", "responsavelId", "semResponsavel", "meus", "leadId", "canalIntegracaoId", "q", "sla"]);
     const pageData = pagination(query);
     const where = { empresaId: context.empresaId };
     const status = enumValue(query.estado, "estado", CONVERSATION_STATUSES, { optional: true });
     if (status) where.status = status;
+    const slaFilter = enumValue(query.sla, "sla", SLA_FILTERS, { optional: true });
+    const slaWhere = slaFilterWhere(slaFilter);
+    if (slaWhere) Object.assign(where, slaWhere);
     const semResponsavel = optionalBoolean(query.semResponsavel, "semResponsavel");
     const meus = optionalBoolean(query.meus, "meus");
     if (meus && semResponsavel) return emptyPage(pageData);
@@ -325,39 +330,186 @@ function createLeadsCommunicationServices({ prisma }) {
   }
 
   async function assumeConversation(context, id) {
-    return assumeEntity(context, { model: "conversaCanal", id, contextField: "conversaCanalId", notFoundMessage: "Conversa nao encontrada." });
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.conversaCanal.findFirst({ where: { id, empresaId: context.empresaId } });
+      if (!current) throw notFound("Conversa nao encontrada.");
+      if (current.status === "ENCERRADA") throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao pode ser assumida.");
+      if (current.responsavelId !== null) throw domainError(409, "ASSIGNMENT_ALREADY_TAKEN", "Esta conversa acabou de ser assumida por outro atendente.");
+      const result = await tx.conversaCanal.updateMany({
+        where: { id, empresaId: context.empresaId, responsavelId: null, status: current.status },
+        data: { responsavelId: context.usuarioId, status: "EM_ATENDIMENTO" },
+      });
+      if (result.count !== 1) throw domainError(409, "ASSIGNMENT_CONFLICT", "Esta conversa acabou de ser assumida por outro atendente.");
+      await createAssignmentHistory(tx, {
+        empresaId: context.empresaId,
+        conversaCanalId: id,
+        responsavelNovoId: context.usuarioId,
+        alteradoPorId: context.usuarioId,
+        tipo: "ASSUMIR",
+        acaoAtendimento: "ASSUMIR",
+        estadoAnterior: current.status,
+        estadoNovo: "EM_ATENDIMENTO",
+      });
+      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+    });
+  }
+
+  async function listConversationTeam(context) {
+    return prisma.usuario.findMany({
+      where: { empresaId: context.empresaId, ativo: true },
+      select: { id: true, nome: true, papel: true, ativo: true },
+      orderBy: [{ nome: "asc" }, { id: "asc" }],
+    });
   }
 
   async function assignConversation(context, id, input) {
-    return assignEntity(context, { model: "conversaCanal", id, contextField: "conversaCanalId", input, notFoundMessage: "Conversa nao encontrada." });
+    const body = rejectUnknown(input, ["responsavelId", "motivo"]);
+    rejectEmpresaId(body);
+    const responsibleId = requiredInteger(body.responsavelId, "responsavelId");
+    const motivo = optionalText(body.motivo, "motivo", 240);
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.conversaCanal.findFirst({ where: { id, empresaId: context.empresaId } });
+      if (!current) throw notFound("Conversa nao encontrada.");
+      if (current.status === "ENCERRADA") throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao pode ser transferida.");
+      if (!isManager(context) && current.responsavelId !== context.usuarioId) {
+        throw domainError(403, "LEADS_COMMUNICATION_FORBIDDEN", "Acesso negado.");
+      }
+      await validateResponsible(tx, context.empresaId, responsibleId);
+      if (current.responsavelId === responsibleId && current.status === "EM_ATENDIMENTO") {
+        return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+      }
+      const result = await tx.conversaCanal.updateMany({
+        where: { id, empresaId: context.empresaId, responsavelId: current.responsavelId, status: current.status },
+        data: { responsavelId: responsibleId, status: "EM_ATENDIMENTO" },
+      });
+      if (result.count !== 1) throw domainError(409, "ASSIGNMENT_CONFLICT", "A conversa foi alterada por outro atendente.");
+      const tipo = current.responsavelId === null ? "ATRIBUIR" : "TRANSFERIR";
+      await createAssignmentHistory(tx, {
+        empresaId: context.empresaId,
+        conversaCanalId: id,
+        responsavelAnteriorId: current.responsavelId,
+        responsavelNovoId: responsibleId,
+        alteradoPorId: context.usuarioId,
+        tipo,
+        acaoAtendimento: tipo,
+        estadoAnterior: current.status,
+        estadoNovo: "EM_ATENDIMENTO",
+        motivo,
+      });
+      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+    });
   }
 
   async function returnConversationToQueue(context, id, input) {
-    return returnEntityToQueue(context, { model: "conversaCanal", id, contextField: "conversaCanalId", input, notFoundMessage: "Conversa nao encontrada." });
+    const body = rejectUnknown(input, ["motivo"]);
+    rejectEmpresaId(body);
+    const motivo = optionalText(body.motivo, "motivo", 240);
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.conversaCanal.findFirst({ where: { id, empresaId: context.empresaId } });
+      if (!current) throw notFound("Conversa nao encontrada.");
+      if (current.responsavelId === null) throw domainError(409, "ASSIGNMENT_ALREADY_IN_QUEUE", "Conversa ja esta na fila compartilhada.");
+      if (!isManager(context) && current.responsavelId !== context.usuarioId) {
+        throw domainError(403, "LEADS_COMMUNICATION_FORBIDDEN", "Acesso negado.");
+      }
+      if (current.status === "ENCERRADA") throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao pode ser devolvida a fila.");
+      const now = new Date();
+      const result = await tx.conversaCanal.updateMany({
+        where: { id, empresaId: context.empresaId, responsavelId: current.responsavelId, status: current.status },
+        data: { responsavelId: null, status: "AGUARDANDO_ATENDIMENTO", aguardandoDesde: current.aguardandoDesde || now },
+      });
+      if (result.count !== 1) throw domainError(409, "ASSIGNMENT_CONFLICT", "A conversa foi alterada por outro atendente.");
+      await createAssignmentHistory(tx, {
+        empresaId: context.empresaId,
+        conversaCanalId: id,
+        responsavelAnteriorId: current.responsavelId,
+        responsavelNovoId: null,
+        alteradoPorId: context.usuarioId,
+        tipo: "DESATRIBUIR",
+        acaoAtendimento: "DEVOLVER_FILA",
+        estadoAnterior: current.status,
+        estadoNovo: "AGUARDANDO_ATENDIMENTO",
+        motivo,
+      });
+      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+    });
   }
 
   async function updateConversationStatus(context, id, input) {
-    const body = rejectUnknown(input, ["estado"]);
+    const body = rejectUnknown(input, ["estado", "motivo"]);
     const next = enumValue(body.estado, "estado", CONVERSATION_STATUSES);
+    const motivo = optionalText(body.motivo, "motivo", 240);
+    return transitionConversation(context, id, next, motivo);
+  }
+
+  async function waitForCustomer(context, id, input = {}) {
+    const body = rejectUnknown(input, ["motivo"]);
+    return transitionConversation(context, id, "AGUARDANDO_CLIENTE", optionalText(body.motivo, "motivo", 240), "AGUARDAR_CLIENTE");
+  }
+
+  async function markConversationPending(context, id, input = {}) {
+    const body = rejectUnknown(input, ["motivo"]);
+    return transitionConversation(context, id, "PENDENTE", optionalText(body.motivo, "motivo", 240), "MARCAR_PENDENTE");
+  }
+
+  async function closeConversation(context, id, input = {}) {
+    const body = rejectUnknown(input, ["motivo"]);
+    return transitionConversation(context, id, "ENCERRADA", optionalText(body.motivo, "motivo", 240), "ENCERRAR");
+  }
+
+  async function reopenConversation(context, id, input = {}) {
+    const body = rejectUnknown(input, ["motivo"]);
     const conversation = await findConversation(context, id);
-    requireResponsibleOrManager(context, conversation);
-    if (next === conversation.status) return conversation;
-    if (!CONVERSATION_TRANSITIONS[conversation.status]?.has(next)) {
-      throw domainError(409, "CONVERSATION_TRANSITION_INVALID", "Transicao de conversa invalida.");
-    }
-    const now = new Date();
-    const data = { status: next };
-    if (["NOVA", "AGUARDANDO_ATENDIMENTO"].includes(next)) data.aguardandoDesde = now;
-    if (next === "ENCERRADA") {
-      data.encerradaEm = now;
-      data.chaveAberta = null;
-    }
-    if (conversation.status === "ENCERRADA") {
-      data.reabertaEm = now;
-      data.encerradaEm = null;
-      data.chaveAberta = `canal:${conversation.canalIntegracaoId}:contato:${conversation.contatoCanalId}`;
-    }
-    return prisma.conversaCanal.update({ where: { id }, data });
+    const next = conversation.responsavelId ? "EM_ATENDIMENTO" : "AGUARDANDO_ATENDIMENTO";
+    return transitionConversation(context, id, next, optionalText(body.motivo, "motivo", 240), "REABRIR");
+  }
+
+  async function transitionConversation(context, id, next, motivo, actionOverride) {
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.conversaCanal.findFirst({ where: { id, empresaId: context.empresaId } });
+      if (!current) throw notFound("Conversa nao encontrada.");
+      requireResponsibleOrManager(context, current);
+      if (next === current.status) {
+        return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+      }
+      if (!CONVERSATION_TRANSITIONS[current.status]?.has(next)) {
+        throw domainError(422, "CONVERSATION_TRANSITION_INVALID", "Esta mudanca de estado nao e permitida agora.");
+      }
+      const now = new Date();
+      const data = { status: next };
+      if (["NOVA", "AGUARDANDO_ATENDIMENTO"].includes(next)) data.aguardandoDesde = current.aguardandoDesde || now;
+      if (next === "AGUARDANDO_CLIENTE") data.aguardandoDesde = null;
+      if (next === "ENCERRADA") {
+        data.encerradaEm = now;
+        data.aguardandoDesde = null;
+        data.chaveAberta = null;
+        data.respostaReservadaPorId = null;
+        data.respostaReservadaAte = null;
+      }
+      if (current.status === "ENCERRADA") {
+        data.reabertaEm = now;
+        data.encerradaEm = null;
+        data.aguardandoDesde = now;
+        data.chaveAberta = `canal:${current.canalIntegracaoId}:contato:${current.contatoCanalId}`;
+      }
+      const updated = await tx.conversaCanal.updateMany({
+        where: { id, empresaId: context.empresaId, status: current.status, responsavelId: current.responsavelId },
+        data,
+      });
+      if (updated.count !== 1) throw domainError(409, "CONVERSATION_CONFLICT", "A conversa foi alterada por outro atendente.");
+      await createAssignmentHistory(tx, {
+        empresaId: context.empresaId,
+        conversaCanalId: id,
+        responsavelAnteriorId: current.responsavelId,
+        responsavelNovoId: current.responsavelId,
+        alteradoPorId: context.usuarioId,
+        tipo: "ATRIBUIR",
+        acaoAtendimento: actionOverride || actionForState(next),
+        estadoAnterior: current.status,
+        estadoNovo: next,
+        motivo,
+      });
+      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+    });
   }
 
   async function conversationHistory(context, id) {
@@ -398,6 +550,20 @@ function createLeadsCommunicationServices({ prisma }) {
       prisma.mensagemCanal.count({ where }),
     ]);
     return pageResult(data.map(presentMessage), total, pageData);
+  }
+
+  async function markConversationRead(context, conversationId) {
+    await findConversation(context, conversationId);
+    const result = await prisma.mensagemCanal.updateMany({
+      where: {
+        empresaId: context.empresaId,
+        conversaCanalId: conversationId,
+        direcao: "ENTRADA",
+        lidaEm: null,
+      },
+      data: { lidaEm: new Date() },
+    });
+    return { marcadasComoLidas: result.count };
   }
 
   async function createSimulatedMessage(context, conversationId, input) {
@@ -459,6 +625,9 @@ function createLeadsCommunicationServices({ prisma }) {
             conversationData.respostaReservadaPorId = null;
             conversationData.respostaReservadaAte = null;
           }
+        } else {
+          conversationData.aguardandoDesde = now;
+          conversationData.status = conversation.responsavelId === null ? "AGUARDANDO_ATENDIMENTO" : "EM_ATENDIMENTO";
         }
         await tx.conversaCanal.update({ where: { id: conversation.id }, data: conversationData });
         return message;
@@ -739,9 +908,14 @@ function createLeadsCommunicationServices({ prisma }) {
     getLead,
     leadHistory,
     listConversations,
+    listConversationTeam,
     listLeads,
     listMessages,
     listNotes,
+    markConversationPending,
+    markConversationRead,
+    closeConversation,
+    reopenConversation,
     releaseReplyLease,
     renewReplyLease,
     registerWebhookEvent,
@@ -751,7 +925,15 @@ function createLeadsCommunicationServices({ prisma }) {
     updateLead,
     updateWebhookEvent,
     validateAssignmentContext: validateAssignmentContext,
+    waitForCustomer,
   };
+}
+
+function actionForState(next) {
+  if (next === "AGUARDANDO_CLIENTE") return "AGUARDAR_CLIENTE";
+  if (next === "PENDENTE") return "MARCAR_PENDENTE";
+  if (next === "ENCERRADA") return "ENCERRAR";
+  return "ALTERAR_ESTADO";
 }
 
 function leadStatusData(lead, nextStatus) {
@@ -850,6 +1032,9 @@ function conversationIncludes() {
       take: 1,
       include: messageIncludes(),
     },
+    _count: {
+      select: { mensagens: { where: { direcao: "ENTRADA", lidaEm: null } } },
+    },
   };
 }
 
@@ -866,7 +1051,7 @@ function messageIncludes() {
 }
 
 function presentConversation(conversation) {
-  const { mensagens, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte, ...data } = conversation;
+  const { mensagens, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte, _count, ...data } = conversation;
   return {
     ...data,
     responsavelPrincipal: conversation.responsavel
@@ -876,6 +1061,8 @@ function presentConversation(conversation) {
     podeResponderDiretamente: conversation.canalIntegracao?.tipo !== "SITE_FORM",
     tipoCanal: conversation.canalIntegracao?.tipo || null,
     ultimaMensagem: mensagens?.[0] ? presentMessage(mensagens[0]) : null,
+    naoLidas: _count?.mensagens || 0,
+    sla: calculateConversationSla(conversation),
   };
 }
 

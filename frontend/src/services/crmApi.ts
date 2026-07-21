@@ -173,6 +173,7 @@ export type LeadsCommunicationUser = {
 export type LeadStatus = "NOVO" | "EM_ATENDIMENTO" | "QUALIFICADO" | "DESQUALIFICADO" | "CONVERTIDO";
 export type ConversationStatus = "ABERTA" | "NOVA" | "AGUARDANDO_ATENDIMENTO" | "EM_ATENDIMENTO" | "AGUARDANDO_CLIENTE" | "PENDENTE" | "ENCERRADA";
 export type MessageDirection = "ENTRADA" | "SAIDA";
+export type ConversationSlaStatus = "DENTRO_PRAZO" | "ATENCAO" | "ATRASADO" | "CRITICO";
 
 export type BusinessStage = "NOVO" | "CONTATO" | "PROPOSTA" | "FECHADO" | "PERDIDO";
 
@@ -250,6 +251,7 @@ export type CommunicationMessage = {
   status: string;
   statusEntrega: string | null;
   simulada: boolean;
+  lidaEm?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -292,6 +294,14 @@ export type CommunicationConversation = {
   ultimaMensagem: CommunicationMessage | null;
   podeResponderDiretamente: boolean;
   tipoCanal: string | null;
+  naoLidas: number;
+  sla: {
+    status: ConversationSlaStatus;
+    label: string;
+    level: number;
+    elapsedMinutes: number;
+    startedAt: string;
+  } | null;
 };
 
 export type InternalConversationNote = {
@@ -325,6 +335,9 @@ export type AssignmentHistoryEntry = {
   id: number;
   tipo: "ATRIBUIR" | "ASSUMIR" | "TRANSFERIR" | "DESATRIBUIR";
   origem: string;
+  acaoAtendimento?: "ASSUMIR" | "ATRIBUIR" | "TRANSFERIR" | "DEVOLVER_FILA" | "AGUARDAR_CLIENTE" | "MARCAR_PENDENTE" | "ENCERRAR" | "REABRIR" | "ALTERAR_ESTADO" | null;
+  estadoAnterior?: ConversationStatus | null;
+  estadoNovo?: ConversationStatus | null;
   motivo: string | null;
   responsavelAnterior: { id: number; nome: string } | null;
   responsavelNovo: { id: number; nome: string } | null;
@@ -354,6 +367,7 @@ export type ConversationQuery = {
   leadId?: number;
   canalIntegracaoId?: number;
   q?: string;
+  sla?: "ATENCAO" | "CRITICO";
 };
 
 export type CategoriaProdutoCreatePayload = {
@@ -1404,16 +1418,36 @@ export async function assignCommunicationConversation(id: number, responsavelId:
   return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/atribuir`, { responsavelId, ...(motivo ? { motivo } : {}) });
 }
 
-export async function returnCommunicationConversationToQueue(id: number, motivo: string) {
-  return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/devolver-fila`, { motivo });
+export async function returnCommunicationConversationToQueue(id: number, motivo?: string) {
+  return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/devolver-fila`, motivo ? { motivo } : {});
 }
 
 export async function updateCommunicationConversationStatus(id: number, estado: ConversationStatus) {
   return requestApiWrite<CommunicationConversation>("PATCH", `/conversas/${id}/estado`, { estado });
 }
 
+export async function waitCommunicationConversationForCustomer(id: number, motivo?: string) {
+  return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/aguardar-cliente`, motivo ? { motivo } : {});
+}
+
+export async function markCommunicationConversationPending(id: number, motivo?: string) {
+  return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/marcar-pendente`, motivo ? { motivo } : {});
+}
+
+export async function closeCommunicationConversation(id: number, motivo?: string) {
+  return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/encerrar`, motivo ? { motivo } : {});
+}
+
+export async function reopenCommunicationConversation(id: number, motivo?: string) {
+  return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/reabrir`, motivo ? { motivo } : {});
+}
+
 export async function fetchCommunicationMessages(id: number, params: { page?: number; limit?: number } = {}) {
   return requestApiGetAuthenticated<ApiPaginatedResponse<CommunicationMessage>>(`/conversas/${id}/mensagens${toQueryString(params)}`);
+}
+
+export async function markCommunicationConversationRead(id: number) {
+  return requestApiWrite<{ marcadasComoLidas: number }>("POST", `/conversas/${id}/marcar-lida`, {});
 }
 
 export async function sendSimulatedCommunicationMessage(id: number, payload: { externalId: string; texto: string }) {
@@ -1445,7 +1479,7 @@ export async function releaseCommunicationReplyLease(id: number) {
 }
 
 export async function fetchCommunicationTeamUsers() {
-  return requestApiGetAuthenticated<ApiPaginatedResponse<LeadsCommunicationUser>>("/usuarios?limit=100");
+  return requestApiGetAuthenticated<{ data: LeadsCommunicationUser[] }>("/conversas/equipe");
 }
 
 export async function fetchSiteFormIntegrations() {

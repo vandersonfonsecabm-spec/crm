@@ -8,7 +8,7 @@ const { after, before, test } = require("node:test");
 const backendDir = path.resolve(__dirname, "..");
 const auditDir = path.join(os.tmpdir(), "crm-leads-collaboration-b2");
 const databasePath = path.join(auditDir, `collaboration-b2-${process.pid}.db`);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+const sourceDatabase = process.env.CRM_TEST_BASE_DATABASE_PATH;
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "leads-collaboration-b2-secret-with-sufficient-entropy";
@@ -25,6 +25,9 @@ let server;
 let baseUrl;
 
 before(async () => {
+  if (!sourceDatabase || !path.isAbsolute(sourceDatabase)) {
+    throw new Error("CRM_TEST_BASE_DATABASE_PATH absoluto e obrigatorio.");
+  }
   fs.mkdirSync(auditDir, { recursive: true });
   fs.copyFileSync(sourceDatabase, databasePath);
   migrate();

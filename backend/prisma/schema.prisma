@@ -692,6 +692,9 @@ model HistoricoAtribuicao {
   alteradoPor           Usuario?         @relation("AtribuicaoAlteradoPor", fields: [alteradoPorId], references: [id], onDelete: SetNull)
   tipo                  TipoAtribuicao   @default(ATRIBUIR)
   origem                OrigemAtribuicao @default(MANUAL)
+  acaoAtendimento       TipoAcaoAtendimento?
+  estadoAnterior        StatusConversa?
+  estadoNovo            StatusConversa?
   motivo                String?
   createdAt             DateTime         @default(now())
 
@@ -855,6 +858,18 @@ enum OrigemAtribuicao {
   MANUAL
   AUTOMATICA
   MIGRACAO
+}
+
+enum TipoAcaoAtendimento {
+  ASSUMIR
+  ATRIBUIR
+  TRANSFERIR
+  DEVOLVER_FILA
+  AGUARDAR_CLIENTE
+  MARCAR_PENDENTE
+  ENCERRAR
+  REABRIR
+  ALTERAR_ESTADO
 }
 
 enum StatusProcessamentoWebhook {

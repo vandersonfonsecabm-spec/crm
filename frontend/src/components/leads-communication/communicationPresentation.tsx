@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
+import { Clock3 } from "lucide-react";
 import { Badge } from "../ui";
-import type { ConversationStatus, LeadStatus } from "../../services/crmApi";
+import type { CommunicationConversation, ConversationStatus, LeadStatus } from "../../services/crmApi";
 import { conversationStatusLabels, leadStatusLabels } from "./communicationFormatters";
 
 export function LeadStatusBadge({ status }: { status: LeadStatus }) {
@@ -11,6 +12,16 @@ export function LeadStatusBadge({ status }: { status: LeadStatus }) {
 export function ConversationStatusBadge({ status }: { status: ConversationStatus }) {
   const variant = status === "AGUARDANDO_ATENDIMENTO" || status === "NOVA" ? "warning" : status === "EM_ATENDIMENTO" || status === "AGUARDANDO_CLIENTE" ? "info" : status === "ENCERRADA" ? "neutral" : "primary";
   return <Badge variant={variant}>{conversationStatusLabels[status]}</Badge>;
+}
+
+export function ConversationSlaBadge({ sla }: { sla: CommunicationConversation["sla"] }) {
+  if (!sla) return <Badge className="gap-1" variant="neutral"><Clock3 size={10} />Sem SLA ativo</Badge>;
+  const variant = sla.status === "CRITICO" || sla.status === "ATRASADO"
+    ? "danger"
+    : sla.status === "ATENCAO"
+      ? "warning"
+      : "success";
+  return <Badge className="gap-1" title={`${sla.elapsedMinutes} min desde a entrada`} variant={variant}><Clock3 size={10} />{sla.label}</Badge>;
 }
 
 export function DetailRow({ label, value }: { label: string; value: ReactNode }) {
