@@ -23,6 +23,18 @@ Data da verificacao: 21/07/2026.
 - Backend: https://api-production-875f9.up.railway.app.
 - Servico Railway: `api`; nao utilizar `crm-agro-demo-api`.
 - Producao possui 18 migrations; health esperado HTTP 200.
+- H1.1 prepara localmente `backend/scripts/start-production.cjs` para executar
+  migrations no processo principal, depois da montagem do volume e antes da
+  API. Nao utiliza Pre-Deploy e nao executa migration durante o build.
+- O entrypoint valida o servico Railway, o volume `/app/data`, a
+  `DATABASE_URL` SQLite dentro do volume, o schema e a Prisma CLI. Fora do
+  Railway, inicia somente o servidor e nao migra automaticamente o banco local.
+- Falha de validacao ou migration impede a API de iniciar. O SQLite operacional
+  exige uma unica replica, e o processo encaminha sinais ao servidor filho.
+- A automacao nao autoriza migrations futuras sem auditoria, backup, ensaio,
+  compatibilidade e rollback. Operacoes destrutivas, etapas contract, colunas
+  obrigatorias sem estrategia e data migrations pesadas permanecem bloqueadas
+  pelo protocolo de release.
 
 ## Banco local protegido
 
