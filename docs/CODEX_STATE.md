@@ -1,6 +1,6 @@
 # Estado atual do CRM
 
-Data da verificacao: 18/07/2026.
+Data da verificacao: 21/07/2026.
 
 ## Estrutura ativa
 
@@ -11,7 +11,7 @@ Data da verificacao: 18/07/2026.
 
 ## Git
 
-- Baseline oficial: `10fea4c80a065c63cb7b37acbc0369f37f73613a`.
+- Baseline oficial: `048ab71025bb55e83bd37a9f587fdc39303d00b1`.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -21,8 +21,8 @@ Data da verificacao: 18/07/2026.
 
 - Frontend canonico: https://crm-murex-six-83.vercel.app.
 - Backend: https://api-production-875f9.up.railway.app.
-- Servico Railway: `crm-agro-api`; nao utilizar `crm-agro-demo-api`.
-- Producao possui 17 migrations; health esperado HTTP 200.
+- Servico Railway: `api`; nao utilizar `crm-agro-demo-api`.
+- Producao possui 18 migrations; health esperado HTTP 200.
 
 ## Banco local protegido
 
@@ -66,8 +66,33 @@ Data da verificacao: 18/07/2026.
 
 ## Caixa de Entrada operacional
 
-- H1 implementada localmente na branch `feature/inbox-operations-mvp`, sem push
-  ou deploy. A producao permanece com 17 migrations.
+- H1 publicada no commit `048ab71025bb55e83bd37a9f587fdc39303d00b1`.
+  O Railway publicou o deployment
+  `e60681ec-89f3-4061-a298-11f24e778066` e a Vercel publicou o deployment
+  `4gTzmSXLvVsCBRMaNyvuRjC2ua6L`, ambos a partir do commit exato.
+- A producao possui 18 migrations. A migration aditiva
+  `20260721123000_add_inbox_operational_history` foi aplicada uma vez e
+  acrescentou somente `acaoAtendimento`, `estadoAnterior` e `estadoNovo`, todos
+  opcionais, a `HistoricoAtribuicao`.
+- O backup consistente pre-H1P
+  `/app/data/crm-agro-pre-h1p-20260721T191606Z.db` possui 761.856 bytes e
+  SHA-256 `8bce2f9ae7469ee768a8b570fc30ae7a302a8a3dc28d7840618762f6c3644434`.
+  O backup consistente pos-H1P
+  `/app/data/crm-agro-post-h1p-20260721T193239Z.db` possui 761.856 bytes e
+  SHA-256 `8d8e44eea60ba2b076f7219ea9b4a34002ed0c80ee26ac01a5573e5c84498cdf`.
+- O banco operacional pos-migration possui 770.048 bytes e SHA-256 fisico
+  `8d354f3f0018fd06fd8640fc217c6eaf4ec9d3229fa34a2d829d2c63bb6aa317`.
+  O schema fingerprint mudou de
+  `215b5db1723bf5c19c46e670e0604ba5e82d302eeb26e8c7bc977f0bfe7c5894`
+  para `500ec113babd15f92a0ee876359dd05fadb4739fa39618e6c43960b25738b79b`.
+  O commercial data fingerprint permaneceu
+  `6096855efb3bb376b99a39580d6ddbf23fcb38e01915700234e4fdb3a8a0ee5e`
+  antes e depois da migration.
+- As contagens permaneceram: Empresa 1, Usuario 1, Cliente 7, Lead 1,
+  Negocio 1, CanalIntegracao 2, ContatoCanal 2, ConversaCanal 2,
+  MensagemCanal 21, EventoWebhook 1, Nota 13, Acompanhamento 2 e
+  HistoricoAtribuicao 2. `quick_check` permaneceu `ok` e
+  `foreign_key_check` permaneceu sem violacoes.
 - Estados suportados: `NOVA`, `AGUARDANDO_ATENDIMENTO`, `EM_ATENDIMENTO`,
   `AGUARDANDO_CLIENTE`, `PENDENTE` e `ENCERRADA`.
 - A fila compartilhada permite filtrar todas, nao atribuidas, conversas do
@@ -76,10 +101,7 @@ Data da verificacao: 18/07/2026.
   encerrar e reabrir usam acoes explicitas, historico e concorrencia atomica.
 - O lease existente de resposta foi preservado com duracao de dois minutos e
   relogio do servidor; ele nao altera o responsavel permanente.
-- A migration aditiva local
-  `20260721123000_add_inbox_operational_history` acrescenta somente acao,
-  estado anterior e estado novo ao historico de atribuicao; nao foi aplicada ao
-  banco local protegido nem a producao.
+- A migration nao foi aplicada ao banco local protegido.
 - O SLA e derivado da espera por atencao humana: ate 10 minutos dentro do prazo,
   acima de 10 em atencao, acima de 15 atrasado e acima de 30 critico.
 - Mensagens inbound nao lidas sao contadas e marcadas como lidas apenas depois
@@ -91,6 +113,13 @@ Data da verificacao: 18/07/2026.
 - Testes focados de backend, migration, colaboracao, Site e frontend passaram,
   assim como lint, build, Prisma validate, verificacoes de sintaxe e QA visual
   em 1366x768, 1440x900, 1920x1080 e 900x768.
+- O QA publico de producao confirmou health, protecao de autenticacao, acesso
+  direto e refresh da Inbox, roteamento SPA e ausencia de overflow nos quatro
+  viewports. Nao havia sessao ADMIN oferecida; por isso, QA autenticado, smoke
+  operacional e concorrencia em producao nao foram executados. Nenhum dado foi
+  alterado e a cobertura dessas operacoes permaneceu nos testes isolados.
+- O warning conhecido do bundle acima de 500 kB permanece; o build terminou
+  com sucesso.
 - Limitacoes: leitura continua sendo global por mensagem, nao por usuario; SLA
   e calculado, nao persistido; nao ha lease estrutural novo nem integracao
   externa nesta release. Nenhum `Negocio` e criado pelas acoes da Inbox.
@@ -186,5 +215,8 @@ Data da verificacao: 18/07/2026.
 - Flags, capabilities e segredos permanecem ausentes; nenhuma mensagem real ou
   chamada Meta ocorreu. Outbound nao esta implementado.
 - WhatsApp formalmente pausado aguardando autenticacao manual da Meta.
+- A publicacao H1 nao ativou flags, capabilities, segredos ou integracao
+  operacional do WhatsApp. Os callbacks GET e POST continuam retornando `404`,
+  nenhuma mensagem real foi recebida e nenhuma chamada externa foi realizada.
 - Proxima release: F1C-1, ativacao controlada do piloto Meta quando houver
   autenticacao manual disponivel.
