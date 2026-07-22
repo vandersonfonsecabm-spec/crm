@@ -32,6 +32,7 @@ model Cliente {
   negociosLegados Negocio[]        @relation("NegocioClienteLegado")
   contatosCanal   ContatoCanal[]
   historicosQualificacao HistoricoQualificacaoConversa[]
+  propostasComerciais PropostaComercial[]
 
   @@index([empresaId])
   @@index([empresaId, status])
@@ -167,6 +168,8 @@ model Empresa {
   notasInternasConversa      NotaInternaConversa[]
   historicosAtribuicao       HistoricoAtribuicao[]
   historicosQualificacaoConversa HistoricoQualificacaoConversa[]
+  propostasComerciais          PropostaComercial[]
+  historicosPropostasComerciais HistoricoPropostaComercial[]
   eventosWebhook             EventoWebhook[]
   funcionalidades            EmpresaFuncionalidade[]
   auditoriasFuncionalidade   AuditoriaFuncionalidade[]
@@ -197,6 +200,9 @@ model Usuario {
   atribuicoesNovas           HistoricoAtribuicao[]     @relation("AtribuicaoResponsavelNovo")
   atribuicoesAlteradas       HistoricoAtribuicao[]     @relation("AtribuicaoAlteradoPor")
   qualificacoesComerciaisRegistradas HistoricoQualificacaoConversa[] @relation("QualificacaoComercialAutor")
+  propostasComerciaisResponsaveis PropostaComercial[] @relation("PropostaComercialResponsavel")
+  propostasComerciaisCriadas      PropostaComercial[] @relation("PropostaComercialAutor")
+  historicosPropostasComerciais   HistoricoPropostaComercial[] @relation("HistoricoPropostaComercialAutor")
   funcionalidadesHabilitadas EmpresaFuncionalidade[]   @relation("FuncionalidadeHabilitadaPor")
   auditoriasFuncionalidade   AuditoriaFuncionalidade[] @relation("AuditoriaFuncionalidadeUsuario")
 
@@ -620,6 +626,7 @@ model Lead {
   acompanhamentos           Acompanhamento[]
   historicoAtribuicoes      HistoricoAtribuicao[]
   historicosQualificacao    HistoricoQualificacaoConversa[]
+  propostasComerciais       PropostaComercial[]
 
   @@index([empresaId, status])
   @@index([empresaId, responsavelId, status])
@@ -654,6 +661,7 @@ model Negocio {
   acompanhamentos      Acompanhamento[]
   historicoAtribuicoes HistoricoAtribuicao[]
   historicosQualificacao HistoricoQualificacaoConversa[]
+  propostasComerciais    PropostaComercial[]
 
   @@index([empresaId, etapa])
   @@index([empresaId, responsavelId, etapa])
@@ -737,6 +745,84 @@ model HistoricoQualificacaoConversa {
   @@index([empresaId, clienteId, createdAt])
   @@index([empresaId, leadId, createdAt])
   @@index([empresaId, negocioId, createdAt])
+  @@index([empresaId, autorId, createdAt])
+}
+
+model PropostaComercial {
+  id                       Int                         @id @default(autoincrement())
+  empresaId                Int
+  empresa                  Empresa                     @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  clienteId                Int
+  cliente                  Cliente                     @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  negocioId                Int
+  negocio                  Negocio                     @relation(fields: [negocioId], references: [id], onDelete: Restrict)
+  leadId                   Int?
+  lead                     Lead?                       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  responsavelId            Int?
+  responsavel              Usuario?                    @relation("PropostaComercialResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  autorId                  Int
+  autor                    Usuario                     @relation("PropostaComercialAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  propostaOrigemId         Int?
+  propostaOrigem           PropostaComercial?          @relation("VersoesPropostaComercial", fields: [propostaOrigemId], references: [id], onDelete: SetNull)
+  versoes                  PropostaComercial[]          @relation("VersoesPropostaComercial")
+  codigo                   String
+  titulo                   String
+  descricao                String?
+  descontoGeralCentavos    Int                         @default(0)
+  subtotalCentavos         Int                         @default(0)
+  totalCentavos            Int                         @default(0)
+  validade                 DateTime
+  observacoes              String?
+  condicoesComerciais      String?
+  status                   StatusPropostaComercial     @default(RASCUNHO)
+  versao                   Int                         @default(1)
+  revisao                  Int                         @default(1)
+  createdAt                DateTime                    @default(now())
+  updatedAt                DateTime                    @updatedAt
+  itens                    ItemPropostaComercial[]
+  historico                HistoricoPropostaComercial[]
+
+  @@unique([empresaId, codigo])
+  @@unique([empresaId, propostaOrigemId, versao])
+  @@index([empresaId, clienteId, status])
+  @@index([empresaId, negocioId, status])
+  @@index([empresaId, leadId, status])
+  @@index([empresaId, responsavelId, status])
+}
+
+model ItemPropostaComercial {
+  id                       Int                @id @default(autoincrement())
+  propostaId               Int
+  proposta                 PropostaComercial  @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+  descricao                String
+  quantidade               Decimal
+  valorUnitarioCentavos    Int
+  descontoCentavos         Int                @default(0)
+  subtotalCentavos         Int
+  totalCentavos            Int
+  ordem                    Int                @default(0)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([propostaId, ordem])
+}
+
+model HistoricoPropostaComercial {
+  id                       Int                         @id @default(autoincrement())
+  empresaId                Int
+  empresa                  Empresa                     @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  propostaId               Int
+  proposta                 PropostaComercial           @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+  autorId                  Int
+  autor                    Usuario                     @relation("HistoricoPropostaComercialAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  acao                     TipoAcaoPropostaComercial
+  statusAnterior           StatusPropostaComercial?
+  statusNovo               StatusPropostaComercial?
+  versao                   Int
+  observacao               String?
+  createdAt                DateTime                    @default(now())
+
+  @@index([empresaId, propostaId, createdAt])
   @@index([empresaId, autorId, createdAt])
 }
 
@@ -953,6 +1039,23 @@ enum TipoAcompanhamento {
   REUNIAO
   VISITA
   OUTRO
+}
+
+enum StatusPropostaComercial {
+  RASCUNHO
+  PRONTA
+  ENVIADA
+  ACEITA
+  RECUSADA
+  VENCIDA
+  CANCELADA
+}
+
+enum TipoAcaoPropostaComercial {
+  CRIAR
+  ATUALIZAR
+  ALTERAR_STATUS
+  DUPLICAR_VERSAO
 }
 
 enum PapelUsuario {

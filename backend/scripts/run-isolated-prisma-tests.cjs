@@ -18,6 +18,7 @@ const activeBackup = path.join(protectedDir, "dev-original-active.db");
 const command = process.argv.slice(2);
 const expectedHash = "cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a";
 const expectedSize = 532480;
+const expectedMigrationCount = 20;
 const prismaCli = resolvePrismaCli();
 let baseline;
 let sentinelActive = false;
@@ -64,7 +65,7 @@ async function main() {
   fs.writeFileSync(testDb, "");
   assertTreeEqual(sourceMigrations, path.join(sandboxPrisma, "migrations"));
   const migrationCount = fs.readdirSync(sourceMigrations, { withFileTypes: true }).filter((item) => item.isDirectory()).length;
-  if (migrationCount !== 19) throw new Error(`Esperadas 19 migrations no worktree; encontradas ${migrationCount}.`);
+  if (migrationCount !== expectedMigrationCount) throw new Error(`Esperadas ${expectedMigrationCount} migrations no worktree; encontradas ${migrationCount}.`);
 
   fs.renameSync(officialDb, activeBackup);
   fs.mkdirSync(officialDb);
@@ -82,6 +83,7 @@ async function main() {
     CRM_OFFICIAL_DATABASE_PATH: officialDb,
   };
   runPrisma(["validate", "--schema", sandboxSchema], runDir, env);
+  runPrisma(["generate", "--schema", sourceSchema], backendDir, env);
   runPrisma(["migrate", "deploy", "--schema", sandboxSchema], runDir, env);
   runPrisma(["migrate", "status", "--schema", sandboxSchema], runDir, env);
   await assertDatabase(testDb, migrationCount);

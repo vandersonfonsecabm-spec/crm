@@ -10,6 +10,7 @@ const { mountChannelRoutes } = require("./channels/channelRoutes");
 const { mountWhatsappSimulationRoutes } = require("./channels/whatsapp/simulationRoutes");
 const { mountLeadsCommunicationRoutes } = require("./leads-communication/routes");
 const { mountNegociosKanbanRoutes } = require("./negocios-kanban/routes");
+const { mountCommercialProposalRoutes } = require("./commercial-proposals/routes");
 const { mountSiteLeadAdminRoutes, mountSiteLeadPublicRoutes, siteLeadBodyLimit } = require("./site-leads/routes");
 const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
 const { mountWhatsAppWebhookRoutes } = require("./integrations/whatsappWebhook");
@@ -63,6 +64,7 @@ mountChannelRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountWhatsappSimulationRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountLeadsCommunicationRoutes({ app, prisma, authenticate: requireAuth });
 mountNegociosKanbanRoutes({ app, prisma, authenticate: requireAuth });
+mountCommercialProposalRoutes({ app, prisma, authenticate: requireAuth });
 
 app.use(
   ["/categorias-produtos", "/produtos", "/estoque"],

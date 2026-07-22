@@ -304,6 +304,71 @@ export type CommunicationConversation = {
   } | null;
 };
 
+export type CommercialProposalStatus = "RASCUNHO" | "PRONTA" | "ENVIADA" | "ACEITA" | "RECUSADA" | "VENCIDA" | "CANCELADA";
+
+export type CommercialProposalItem = {
+  id: number;
+  descricao: string;
+  quantidade: string;
+  valorUnitarioCentavos: number;
+  descontoCentavos: number;
+  subtotalCentavos: number;
+  totalCentavos: number;
+  ordem: number;
+};
+
+export type CommercialProposal = {
+  id: number;
+  codigo: string;
+  titulo: string;
+  descricao: string | null;
+  clienteId: number;
+  cliente: { id: number; nome: string; empresa?: string | null; email?: string | null; telefone?: string | null };
+  negocioId: number;
+  negocio: { id: number; titulo: string | null; etapa: BusinessStage; responsavelId: number | null };
+  leadId: number | null;
+  lead: { id: number; status: LeadStatus; interesse: string | null } | null;
+  responsavel: { id: number; nome: string } | null;
+  autor: { id: number; nome: string };
+  propostaOrigemId: number | null;
+  descontoGeralCentavos: number;
+  subtotalCentavos: number;
+  totalCentavos: number;
+  validade: string;
+  observacoes: string | null;
+  condicoesComerciais: string | null;
+  status: CommercialProposalStatus;
+  versao: number;
+  revisao: number;
+  itens: CommercialProposalItem[];
+  historico?: CommercialProposalHistory[];
+  permissoes: { editar: boolean; alterarStatus: boolean; duplicar: boolean };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CommercialProposalHistory = {
+  id: number;
+  acao: "CRIAR" | "ATUALIZAR" | "ALTERAR_STATUS" | "DUPLICAR_VERSAO";
+  statusAnterior: CommercialProposalStatus | null;
+  statusNovo: CommercialProposalStatus | null;
+  versao: number;
+  observacao: string | null;
+  autor: { id: number; nome: string };
+  createdAt: string;
+};
+
+export type CommercialProposalPayload = {
+  titulo: string;
+  descricao?: string | null;
+  validade: string;
+  observacoes?: string | null;
+  condicoesComerciais?: string | null;
+  descontoGeralCentavos: number;
+  revisao?: number;
+  itens: Array<{ descricao: string; quantidade: string; valorUnitarioCentavos: number; descontoCentavos: number }>;
+};
+
 export type CommercialPriority = "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
 
 export type InboxCommercialBusiness = {
@@ -1440,6 +1505,50 @@ export async function fetchNegocioKanban(id: number) {
 
 export async function updateNegocioKanbanStage(id: number, etapa: BusinessStage, etapaAnterior: BusinessStage) {
   return requestApiWrite<CommunicationBusiness>("PATCH", `/negocios/${id}/etapa`, { etapa, etapaAnterior });
+}
+
+export async function fetchBusinessProposals(negocioId: number) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<CommercialProposal>>(`/propostas${toQueryString({ negocioId, limit: 100 })}`);
+}
+
+export async function fetchCommercialProposal(id: number) {
+  return requestApiGetAuthenticated<CommercialProposal>(`/propostas/${id}`);
+}
+
+export async function createCommercialProposal(negocioId: number, payload: CommercialProposalPayload) {
+  return requestApiWrite<CommercialProposal>("POST", `/negocios/${negocioId}/propostas`, payload as unknown as Record<string, unknown>);
+}
+
+export async function updateCommercialProposal(id: number, payload: CommercialProposalPayload & { revisao: number }) {
+  return requestApiWrite<CommercialProposal>("PATCH", `/propostas/${id}/rascunho`, payload as unknown as Record<string, unknown>);
+}
+
+export async function changeCommercialProposalStatus(id: number, status: CommercialProposalStatus, revisao: number) {
+  return requestApiWrite<CommercialProposal>("POST", `/propostas/${id}/status`, { status, revisao });
+}
+
+export async function duplicateCommercialProposal(id: number) {
+  return requestApiWrite<CommercialProposal>("POST", `/propostas/${id}/duplicar-versao`, {});
+}
+
+export async function fetchCommercialProposalHistory(id: number) {
+  return requestApiGetAuthenticated<{ data: CommercialProposalHistory[] }>(`/propostas/${id}/historico`);
+}
+
+export async function fetchCommercialProposalPdf(id: number) {
+  const token = getAuthToken();
+  if (!token) throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/propostas/${id}/pdf`, { headers: buildHeaders(token) });
+  } catch {
+    throw new ApiHttpError("Nao foi possivel gerar o PDF agora.", 0, "NETWORK_ERROR");
+  }
+  if (!response.ok) {
+    const error = await readApiErrorDetails(response);
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
+  }
+  return response.blob();
 }
 
 export async function fetchCommunicationLeadHistory(id: number) {

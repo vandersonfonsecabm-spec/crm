@@ -12,6 +12,7 @@ import type {
   NegociosKanbanResponse,
 } from "../../services/crmApi";
 import { Button, EmptyState, ErrorState, Input, LoadingState, Pagination, Select, Surface } from "../ui";
+import CommercialProposalsPanel from "./CommercialProposalsPanel";
 
 const stages: BusinessStage[] = ["NOVO", "CONTATO", "PROPOSTA", "FECHADO", "PERDIDO"];
 const stageLabels: Record<BusinessStage, string> = {
@@ -272,7 +273,7 @@ function BusinessCard({ business, onOpen }: { business: CommunicationBusiness; o
 function BusinessDrawer({ authSession, business, loading, onClose }: { authSession: AuthSession | null; business: CommunicationBusiness; loading: boolean; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/35" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <aside aria-label="Detalhes do Negócio" aria-modal="true" className="flex h-full w-full max-w-[460px] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-xl" role="dialog">
+      <aside aria-label="Detalhes do Negócio" aria-modal="true" className="flex h-full w-full max-w-[760px] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-xl" role="dialog">
         <header className="flex items-start justify-between gap-3 border-b border-[var(--border-default)] px-4 py-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">Negócio #{business.id}</p>
@@ -295,6 +296,9 @@ function BusinessDrawer({ authSession, business, loading, onClose }: { authSessi
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]">Observação</h3>
             <p className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-[var(--text-secondary)]">{business.observacao || "Nenhuma observação registrada."}</p>
+          </section>
+          <section className="mt-5 border-t border-[var(--border-default)] pt-4">
+            <CommercialProposalsPanel businessId={business.id} />
           </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]">Conversas relacionadas</h3>

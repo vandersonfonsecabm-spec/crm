@@ -221,6 +221,36 @@ Data da verificacao: 21/07/2026.
   ou credenciais ativadas. A integracao de fixture permanece em `MODO_TESTE`,
   sem credencial e sem operacao real.
 
+## Propostas comerciais
+
+- H3 foi implementada localmente na branch `feature/commercial-proposals`, sem
+  push ou deploy. A producao permanece no commit `2c0dbe3` e com 19 migrations.
+- A migration aditiva `20260722013000_add_commercial_proposals` cria
+  `PropostaComercial`, `ItemPropostaComercial` e
+  `HistoricoPropostaComercial`, sem alterar registros comerciais existentes.
+  Ela foi aplicada somente em sandbox, que concluiu com 20 migrations.
+- Propostas pertencem ao tenant, Cliente e Negocio, com Lead opcional,
+  responsavel, autor, codigo unico por tenant, versao, revisao e concorrencia
+  otimista. Itens e descontos sao validados e os totais sao calculados pelo
+  backend.
+- Os status suportados sao `RASCUNHO`, `PRONTA`, `ENVIADA`, `ACEITA`,
+  `RECUSADA`, `VENCIDA` e `CANCELADA`. Propostas imutaveis exigem duplicacao
+  como nova versao; `ENVIADA` e somente um estado manual e nao aciona canal
+  externo.
+- O fluxo reutiliza o drawer do Negocio para listar, criar e editar rascunhos,
+  alterar status, duplicar versao, consultar historico e abrir o PDF gerado no
+  backend sem servico externo.
+- Testes focais de migration, backend e frontend passaram, junto das regressoes
+  de H2 e G2A, Prisma validate, lint, build, `node --check` e
+  `git diff --check`. O warning conhecido de chunk acima de 500 kB permanece.
+- O QA local em 1366x768, 1440x900, 1920x1080 e 900x768 validou lista,
+  formulario, itens, totais, status, versionamento, historico, PDF e erro
+  recuperavel, sem overflow horizontal. Evidencias ficaram somente em
+  `%TEMP%\crm-h3-proposals-visual-qa`.
+- Limitacoes: nao existe envio externo, faturamento ou aceite automatico; o PDF
+  e deliberadamente simples e a proposta permanece vinculada ao contexto do
+  Negocio. O WhatsApp continua pausado e nenhuma chamada Meta foi realizada.
+
 ## WhatsApp
 
 - Nenhuma credencial Meta esta configurada e nenhuma chamada externa foi feita.
