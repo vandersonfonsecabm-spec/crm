@@ -155,9 +155,11 @@ Data da verificacao: 21/07/2026.
 
 ## Qualificacao comercial pela Caixa de Entrada
 
-- H2 foi implementada localmente na branch
-  `feature/inbox-commercial-qualification`; a producao oficial permanece no
-  commit `93e1c0b2ea7d9d4f13b06fba2f8c275c734bb312`, com 18 migrations.
+- H2 foi publicada no commit
+  `2c0dbe3cc8cdebc78b7bdd230ef19899edfd787b`. O Railway publicou o deployment
+  `8d28a743-9219-48cb-a8d5-7fe0890df8d9` e a Vercel publicou o deployment
+  `FqAAUyaqukGTFCVopYQUsWQngrbq`, ambos a partir do commit exato; Railway ficou
+  `Active`, Vercel ficou `Ready` e o health permaneceu HTTP 200.
 - O drawer existente da Inbox recebeu um painel comercial compacto para
   qualificar o atendimento, revisar possiveis duplicidades, criar um Negocio
   por confirmacao explicita, vincular um Negocio elegivel e abrir o registro
@@ -173,8 +175,9 @@ Data da verificacao: 21/07/2026.
 - A migration aditiva
   `20260721213000_add_inbox_commercial_qualification` cria somente
   `HistoricoQualificacaoConversa`, com vinculos de tenant, conversa, Cliente,
-  Lead, Negocio e autor. Ela foi validada com 19 migrations exclusivamente em
-  sandbox e nao foi aplicada ao `dev.db` protegido nem em producao.
+  Lead, Negocio e autor. Ela foi validada em sandbox e aplicada uma vez pelo
+  startup automatico do Railway; a producao possui 19 migrations sem
+  pendencias e o `dev.db` protegido permanece com 9 migrations.
 - ADMIN e GERENTE podem qualificar, criar e vincular no tenant autenticado.
   VENDEDOR atua somente quando autorizado pela responsabilidade atual; outro
   tenant recebe `404` e ausencia de permissao recebe `403`. `empresaId` do
@@ -188,13 +191,35 @@ Data da verificacao: 21/07/2026.
   estados sem qualificacao, qualificado, duplicidade, Negocio vinculado, erro
   recuperavel e falta de permissao. A data de retorno opcional foi corrigida
   para permanecer como nao definida quando omitida. Evidencias ficaram somente
-  em `%TEMP%\crm-inbox-h2-visual-qa`.
+  em `%TEMP%\crm-inbox-h2-visual-qa`. Em producao, a sessao ADMIN oferecida
+  confirmou o painel, o vinculo existente e a abertura do Negocio correto no
+  Kanban. O smoke completo de qualificacao e criacao nao foi executado porque
+  uma fixture ja possuia Negocio e a outra nao possuia Lead valido; nenhum
+  Cliente, Lead ou Negocio foi criado ou alterado.
+- O backup consistente pre-H2P
+  `/app/data/crm-agro-pre-h2p-20260722T005707Z.db` possui 761.856 bytes e
+  SHA-256 `f2c987d188608f7963c3c5bac3027d8878555068ee76635f0cd584ac5632455a`.
+  O backup consistente pos-H2P
+  `/app/data/crm-agro-post-h2p-20260722T010651Z.db` possui 790.528 bytes e
+  SHA-256 `8fe3333e94589051c9da9dd64c26c96faa4c6fae3d7fac2d1fba7323cadce6b5`.
+- O banco operacional possui 794.624 bytes, SHA-256 fisico
+  `4d2c796e577ba5ad00cee37076b19cf541050526cfa5ef957d129f99e94b382b`,
+  `quick_check` `ok` e zero violacao de foreign key. As contagens de Cliente 7,
+  Lead 1, Negocio 1, ConversaCanal 2, MensagemCanal 21 e EventoWebhook 1 foram
+  preservadas. O commercial fingerprint mudou de
+  `4fd79f282c7fb18b93256ce15eec2e185a1bbcfc1af3c69b295f3ab810b0544d`
+  para `a27794c633f407555def2c7894be6e7a2c7cd79b01b78f885c45fd65729eb676`
+  somente pelo smoke autorizado: uma conversa simulada foi assumida e
+  devolvida a fila, duas linhas append-only foram adicionadas ao historico e
+  as mensagens abertas foram marcadas como lidas.
 - Limitacoes: nao existe remocao de vinculo porque nao ha regra de dominio
   aprovada; a busca de Negocios e limitada aos ativos do mesmo Cliente; a data
   interna obrigatoria de `Acompanhamento` usa o momento da qualificacao quando
-  nenhuma data de retorno e informada. Nenhum push ou deploy foi executado.
+  nenhuma data de retorno e informada. O smoke comercial completo permanece
+  coberto pelos testes isolados porque nao havia fixture produtiva elegivel.
 - O WhatsApp continua pausado, sem Meta, chamada externa, flags, capabilities
-  ou credenciais ativadas.
+  ou credenciais ativadas. A integracao de fixture permanece em `MODO_TESTE`,
+  sem credencial e sem operacao real.
 
 ## WhatsApp
 
