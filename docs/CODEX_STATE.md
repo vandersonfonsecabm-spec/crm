@@ -274,40 +274,46 @@ Data da verificacao: 21/07/2026.
 
 ## Agenda e acompanhamentos
 
-- H4 implementada localmente na branch `feature/agenda-and-followups`; nenhuma
-  parte desta etapa foi publicada e a producao oficial permanece no commit
-  `7b9f5564272a8df740cfd65e7c10ad9aed234e79`, com 20 migrations.
-- A estrutura existente de `Acompanhamento` foi reutilizada para tarefas,
-  retornos, reunioes, ligacoes, visitas e outros compromissos. Os status
-  operacionais sao `PENDENTE`, `EM_ANDAMENTO`, `CONCLUIDO` e `CANCELADO`, com
-  atraso derivado pelo horario do servidor.
-- A agenda suporta visoes Minha agenda, Hoje, Proximos, Atrasados, Concluidos,
-  Equipe e Todos, com filtros por responsavel, tipo, status, prioridade e
-  vinculos opcionais a Cliente, Lead, Negocio, ConversaCanal e
-  PropostaComercial.
-- Criacao, edicao, transferencia de responsavel, reagendamento, inicio,
-  conclusao idempotente, cancelamento e reabertura usam revisao otimista. Uma
-  disputa preserva a primeira confirmacao e retorna conflito controlado para a
-  segunda.
+- H4 publicada no commit
+  `0bf2fcf3580552ee5f6383b7ff05f6945d8c415a`. O Railway esta Active no
+  deployment `27d5f9b0-95b7-483e-8f69-02b388b0c4df` e a Vercel esta Ready no
+  deployment `BUXM5M2QtYDi9y33bRPQnw3ja7VW`, com o alias canonico preservado.
+- A migration aditiva `20260722043000_add_agenda_and_followups` foi aplicada
+  uma vez pelo startup automatico, elevando producao para 21 migrations. A API
+  iniciou somente depois da migration e permanece com health `200`.
+- A estrutura de `Acompanhamento` atende tarefas, retornos, reunioes, ligacoes,
+  visitas e outros compromissos. Os status publicados sao `PENDENTE`,
+  `EM_ANDAMENTO`, `CONCLUIDO` e `CANCELADO`, com atraso derivado pelo servidor.
+- A agenda oferece Minha agenda, Hoje, Proximos, Atrasados, Concluidos, Equipe
+  e Todos, com filtros por responsavel, tipo, status, prioridade e vinculos a
+  Cliente, Lead, Negocio, ConversaCanal e PropostaComercial.
+- Criacao, edicao, transferencia, reagendamento, inicio, conclusao idempotente,
+  cancelamento e reabertura usam revisao otimista. Conflitos preservam a
+  primeira confirmacao e retornam resposta controlada para a segunda.
 - `HistoricoAcompanhamento` registra autor, acao, estados, responsaveis, datas e
-  observacao sanitizada na mesma transacao da mudanca. ADMIN e GERENTE possuem
-  visao da equipe; VENDEDOR opera apenas o escopo permitido do proprio tenant.
-- A migration aditiva
-  `20260722043000_add_agenda_and_followups` foi aplicada exclusivamente em
-  sandbox, elevando o banco de teste para 21 migrations. Ela preservou os
-  acompanhamentos existentes, tornou o Cliente opcional e adicionou vinculos,
-  revisao, autoria, conclusao, cancelamento e historico estruturado. Nao foi
-  aplicada ao `dev.db` nem a producao.
-- Passaram testes focais de migration, backend, concorrencia, tenant,
-  permissoes e frontend, alem das regressoes de Inbox, Propostas, Site e escopo
-  comercial, Prisma validate, lint, build, `node --check` e
-  `git diff --check`. O warning conhecido do bundle acima de 500 kB permanece.
-- O QA local em 1366x768, 1440x900, 1920x1080 e 900x768 validou lista, filtros,
-  estados, historico, modal, foco, erro recuperavel e responsividade sem
-  overflow horizontal. Evidencias ficaram somente em
-  `%TEMP%\crm-h4-agenda-visual-qa`.
-- Limitacoes: atrasos sao derivados e nao geram notificacao externa; nao existe
-  e-mail, WhatsApp, push ou calendario mensal complexo nesta etapa. O WhatsApp
+  observacao sanitizada na mesma transacao. ADMIN e GERENTE possuem visao da
+  equipe; VENDEDOR opera somente o escopo permitido do proprio tenant.
+- O backup pre-H4P
+  `/app/data/crm-agro-pre-h4p-20260722T042210Z.db` possui 847872 bytes e SHA-256
+  `42099209ba86c6655b36769d72aa19c907f3b399d90608bcc2a9cae5843b686d`.
+  O backup pos-H4P `/app/data/crm-agro-post-h4p-20260722T043522Z.db` possui
+  876544 bytes e SHA-256
+  `17d11d8a77d4c8fc49409adc228cbf9c7d8359d1f9a9f67e192cbbe8856badd3`.
+- O banco pos-migration possui 880640 bytes, SHA-256 fisico
+  `2886f176a37fab3e4643101172217e0c7cf4b4235efddb206a2b7f566592c546`,
+  `quick_check` ok e zero violacoes de foreign key. O fingerprint comercial
+  permaneceu `e2d6ea4c796f56d2871454ae323f3999548927609c20d5ab9e84f91e258766e3`
+  e todas as contagens comerciais anteriores foram preservadas.
+- Testes de migration, backend, concorrencia, tenant, permissoes e frontend,
+  Prisma validate, lint, build, `node --check` e `git diff --check` passaram. O
+  warning conhecido do bundle acima de 500 kB permanece.
+- O QA de producao em 1366x768, 1440x900, 1920x1080 e 900x768 validou agenda,
+  filtros, formulario, responsividade e ausencia de overflow. O smoke de escrita
+  nao foi executado porque a automacao DOM/CDP nao conseguiu preencher com
+  seguranca os controles nativos de data e hora; nenhuma escrita foi contornada
+  por API e `Acompanhamento` permaneceu com 2 registros, sem historico novo.
+- Nao houve chamada externa, conexao Meta ou envio. Atrasos nao geram
+  notificacao externa e nao existe calendario mensal complexo. O WhatsApp
   continua formalmente pausado aguardando autenticacao manual da Meta.
 
 ## WhatsApp
