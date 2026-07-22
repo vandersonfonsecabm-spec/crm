@@ -1,6 +1,6 @@
 # Estado atual do CRM
 
-Data da verificacao: 21/07/2026.
+Data da verificacao: 22/07/2026.
 
 ## Estrutura ativa
 
@@ -11,7 +11,10 @@ Data da verificacao: 21/07/2026.
 
 ## Git
 
-- Baseline oficial: `048ab71025bb55e83bd37a9f587fdc39303d00b1`.
+- Baseline oficial publicado: `0bf2fcf3580552ee5f6383b7ff05f6945d8c415a`.
+- Branch local: `feature/agenda-and-followups`, com HEAD
+  `15bca8ea533f3cfc67803a550ada0d2743824e0c`, um commit documental a frente,
+  zero atras e worktree limpo.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -22,7 +25,10 @@ Data da verificacao: 21/07/2026.
 - Frontend canonico: https://crm-murex-six-83.vercel.app.
 - Backend: https://api-production-875f9.up.railway.app.
 - Servico Railway: `api`; nao utilizar `crm-agro-demo-api`.
-- Producao possui 18 migrations; health esperado HTTP 200.
+- Railway esta `Active`, Vercel esta `Ready` e producao possui 21 migrations;
+  health esperado HTTP 200.
+- H2, H3 e H4 estao publicadas. A qualificacao comercial, as propostas e a
+  Agenda e Acompanhamentos estao disponiveis em producao.
 - H1.1 foi publicada no commit
   `93e1c0b2ea7d9d4f13b06fba2f8c275c734bb312`. O Railway publicou o deployment
   `769fba0f-d9b5-4076-bbd9-810059f05912` e a Vercel publicou o deployment
@@ -315,6 +321,55 @@ Data da verificacao: 21/07/2026.
 - Nao houve chamada externa, conexao Meta ou envio. Atrasos nao geram
   notificacao externa e nao existe calendario mensal complexo. O WhatsApp
   continua formalmente pausado aguardando autenticacao manual da Meta.
+
+## Auditoria final do escopo original
+
+- Em 22/07/2026, o documento oficial `Escopo Completo de CRM para Atendimento
+  e Gestao de Leads` foi reconciliado com Git, codigo, schema, migrations,
+  testes, Railway, Vercel e este documento. Nao foram usados percentuais
+  historicos.
+- CONCLUIDOS: autenticacao basica; multiempresa e tenant; Clientes e Leads
+  basicos; captura pelo Site; conversao de Lead para Negocio; Kanban; Inbox
+  colaborativa; qualificacao comercial; propostas, versoes, calculos e PDF;
+  agenda e acompanhamentos; migrations automaticas; producao Railway e Vercel.
+- PARCIAIS: Cliente 360 graus; proxima acao e tempo parado;
+  resposta real da Inbox; permissoes granulares; relatorios; seguranca, LGPD e
+  backups; cobranca; responsividade mobile-first; especializacao agro.
+- NAO INICIADOS: automacoes; notificacoes reais e checklist; pos-venda;
+  rankings; WhatsApp outbound, midia, templates e status; frete e envio de
+  propostas; 2FA; campos e fluxos agro estruturados.
+- DEPENDENTE EXTERNO: ativacao do inbound textual WhatsApp pela
+  Meta. O WhatsApp continua desligado.
+- FORA DO MVP, MAS EXIGIDOS: Instagram; Facebook;
+  relatorios avancados; entregas formalmente previstas nas fases posteriores.
+- IA permanece uma sugestao, nao uma pendencia obrigatoria. PostgreSQL, AWS,
+  DigitalOcean, Google Maps e SMTP sao sugestoes tecnicas. Bling e itens fora
+  do escopo original nao entram no calculo de aderencia.
+- O `dev.db` permanece intacto com 532.480 bytes, SHA-256
+  `cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a`,
+  9 migrations, `quick_check` `ok`, zero violacoes de foreign key e sem WAL ou
+  SHM.
+
+## Plano oficial pos-auditoria
+
+- H5 - Cliente 360 graus
+- H6 - Tempo de etapa e proxima acao
+- H7 - Automacoes
+- H8 - Notificacoes e checklist
+- H9 - Pos-venda
+- H10 - Relatorios reais
+- H11 - Equipe e permissoes
+- H12 - Complementos de propostas
+- H13 - Seguranca e LGPD
+- H14 - WhatsApp outbound
+- H15 - Ativacao Meta
+- H16 - Vertical agro
+- H17 - Instagram
+- H18 - Facebook
+
+Dependencias: H6 alimenta H7 e H10; H7 alimenta H8 e H9; H14 permanece
+desligada ate H15; H15 depende de autorizacao externa; H17 e H18 dependem de
+integracoes autorizadas.
 
 ## WhatsApp
 
