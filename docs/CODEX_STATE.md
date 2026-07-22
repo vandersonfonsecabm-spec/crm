@@ -223,12 +223,16 @@ Data da verificacao: 21/07/2026.
 
 ## Propostas comerciais
 
-- H3 foi implementada localmente na branch `feature/commercial-proposals`, sem
-  push ou deploy. A producao permanece no commit `2c0dbe3` e com 19 migrations.
+- H3 foi publicada no commit
+  `7b9f5564272a8df740cfd65e7c10ad9aed234e79`. O Railway publicou o deployment
+  `098d27f1-b2d7-486c-874c-4708c8cd223f` e a Vercel publicou o deployment
+  `dpl_6ipwitCh318aBnHjdQaLLprwrxUK`; ambos partiram do commit exato, com
+  Railway `Active`, Vercel `Ready` e health HTTP 200.
 - A migration aditiva `20260722013000_add_commercial_proposals` cria
   `PropostaComercial`, `ItemPropostaComercial` e
   `HistoricoPropostaComercial`, sem alterar registros comerciais existentes.
-  Ela foi aplicada somente em sandbox, que concluiu com 20 migrations.
+  Ela foi validada em sandbox e aplicada uma vez pelo startup automatico do
+  Railway. A producao possui 20 migrations sem pendencias.
 - Propostas pertencem ao tenant, Cliente e Negocio, com Lead opcional,
   responsavel, autor, codigo unico por tenant, versao, revisao e concorrencia
   otimista. Itens e descontos sao validados e os totais sao calculados pelo
@@ -247,6 +251,23 @@ Data da verificacao: 21/07/2026.
   formulario, itens, totais, status, versionamento, historico, PDF e erro
   recuperavel, sem overflow horizontal. Evidencias ficaram somente em
   `%TEMP%\crm-h3-proposals-visual-qa`.
+- O backup consistente pre-H3P
+  `/app/data/crm-agro-pre-h3p-20260722T022813Z.db` possui 790.528 bytes e
+  SHA-256 `8fe3333e94589051c9da9dd64c26c96faa4c6fae3d7fac2d1fba7323cadce6b5`.
+  O backup consistente pos-H3P
+  `/app/data/crm-agro-post-h3p-20260722T023800Z.db` possui 847.872 bytes e
+  SHA-256 `6560787a4bc0aa81765fd6267fc490938d1ff45aef9b6498d338bd466b1a6dd7`.
+- O schema fingerprint mudou de
+  `5e9a0b7f05d9ea323d1841997ed22d8173739b997ae6f7a04164c931d7e0a5b0`
+  para `744018a91d1ed1409332a30e22066319674d670109c4c4bfb508c224776656ac`,
+  enquanto o commercial data fingerprint comparavel permaneceu
+  `71d0be6a879a9e3100cdacf574082b86c5c27084b9f41dbe316b27b2b1b42f02`.
+  `quick_check` ficou `ok`, nao houve violacao de foreign key e Cliente 7,
+  Lead 1, Negocio 1, ConversaCanal 2 e MensagemCanal 21 foram preservados.
+- Nao havia sessao ADMIN oferecida durante a H3P; portanto, o smoke autenticado
+  nao foi executado e nenhuma proposta de producao foi criada. A cobertura
+  funcional permaneceu nos testes isolados e o acesso publico confirmou SPA,
+  alias canonico, health e protecao de autenticacao.
 - Limitacoes: nao existe envio externo, faturamento ou aceite automatico; o PDF
   e deliberadamente simples e a proposta permanece vinculada ao contexto do
   Negocio. O WhatsApp continua pausado e nenhuma chamada Meta foi realizada.
