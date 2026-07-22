@@ -89,6 +89,9 @@ type ApiCliente = {
   email?: string | null;
   empresa?: string | null;
   cidade?: string | null;
+  estado?: string | null;
+  cpfCnpj?: string | null;
+  revisao?: number | null;
   fazenda?: string | null;
   interesse?: string | null;
   observacoes?: string | null;
@@ -118,6 +121,10 @@ type ClientePayload = {
   email?: string;
   telefone?: string;
   empresa?: string;
+  cidade?: string;
+  estado?: string;
+  cpfCnpj?: string;
+  revisao?: number;
   interesse?: string;
   status?: string;
   valor?: number;
@@ -302,6 +309,66 @@ export type CommunicationConversation = {
     elapsedMinutes: number;
     startedAt: string;
   } | null;
+};
+
+export type Customer360TimelineType = "TODOS" | "MENSAGEM" | "LIGACAO" | "VISITA" | "PROPOSTA" | "NEGOCIO" | "ACOMPANHAMENTO" | "NOTA" | "QUALIFICACAO";
+
+export type Customer360Person = { id: number; nome: string };
+
+export type Customer360Overview = {
+  cliente: {
+    id: number;
+    nome: string;
+    telefone: string;
+    email: string;
+    empresa: string;
+    cidade: string | null;
+    estado: string | null;
+    cpfCnpj: string | null;
+    interesse: string;
+    status: string;
+    origem: string;
+    revisao: number;
+    createdAt: string;
+  };
+  resumo: {
+    leadsAtivos: number;
+    negociosAtivos: number;
+    propostasAtivas: number;
+    acompanhamentosPendentes: number;
+    conversas: number;
+    mensagens: number;
+    valorPipeline: number;
+    ultimaAtividade: string | null;
+    responsavelComercial: Customer360Person | null;
+  };
+  comprasAnteriores: Array<{ id: number; titulo: string; valor: number; fechadoEm: string; responsavel: Customer360Person | null }>;
+  contexto: {
+    lead: { id: number; status: string; origem: string | null; interesse: string | null; responsavel: Customer360Person | null } | null;
+    negocio: { id: number; titulo: string; etapa: string; valor: number; responsavel: Customer360Person | null } | null;
+    proposta: { id: number; negocioId: number; codigo: string; titulo: string; status: string; totalCentavos: number; responsavel: Customer360Person | null } | null;
+    proximoAcompanhamento: { id: number; titulo: string; tipo: string; status: string; dataHora: string; responsavel: Customer360Person | null } | null;
+  };
+};
+
+export type Customer360TimelineEvent = {
+  id: string;
+  tipo: Exclude<Customer360TimelineType, "TODOS">;
+  data: string;
+  titulo: string;
+  descricao: string;
+  status: string | null;
+  valor: number | null;
+  responsavel: Customer360Person | null;
+  origem: { entidade: string; id: number };
+  canal: { tipo: string; nome: string } | null;
+  navegacao: { destino: "INBOX" | "KANBAN" | "AGENDA"; id: number } | null;
+};
+
+export type Customer360TimelineResponse = {
+  data: Customer360TimelineEvent[];
+  paginacao: { page: number; limit: number; total: number; totalPages: number };
+  filtros: Customer360TimelineType[];
 };
 
 export type CommercialProposalStatus = "RASCUNHO" | "PRONTA" | "ENVIADA" | "ACEITA" | "RECUSADA" | "VENCIDA" | "CANCELADA";
@@ -1571,6 +1638,25 @@ export async function updateNegocioKanbanStage(id: number, etapa: BusinessStage,
   return requestApiWrite<CommunicationBusiness>("PATCH", `/negocios/${id}/etapa`, { etapa, etapaAnterior });
 }
 
+export async function fetchCustomer360(clienteId: number | string) {
+  return requestApiGetAuthenticated<Customer360Overview>(`/clientes/${clienteId}/360`);
+}
+
+export async function fetchCustomer360Timeline(
+  clienteId: number | string,
+  params: { tipo?: Customer360TimelineType; page?: number; limit?: number } = {},
+) {
+  return requestApiGetAuthenticated<Customer360TimelineResponse>(`/clientes/${clienteId}/timeline${toQueryString(params)}`);
+}
+
+export async function updateCustomerRegistration(
+  clienteId: number | string,
+  payload: Pick<ClientePayload, "nome" | "telefone" | "email" | "empresa" | "cidade" | "estado" | "cpfCnpj" | "revisao">,
+) {
+  const response = await requestApiWrite<ApiCliente>("PATCH", `/clientes/${clienteId}/cadastro`, payload);
+  return mapApiClienteToClient(response);
+}
+
 export async function fetchBusinessProposals(negocioId: number) {
   return requestApiGetAuthenticated<ApiPaginatedResponse<CommercialProposal>>(`/propostas${toQueryString({ negocioId, limit: 100 })}`);
 }
@@ -1764,7 +1850,8 @@ async function requestCliente(method: "POST" | "PATCH" | "PUT" | "DELETE", path:
   });
 
   if (!response.ok) {
-    throw new Error("A sincronização não foi concluída.");
+    const error = await readApiErrorDetails(response);
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
   if (method === "DELETE") return null;
@@ -1990,6 +2077,9 @@ function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
     synced: true,
     name: cliente.nome,
     company,
+    city: cliente.cidade ?? fallback?.city ?? "",
+    state: cliente.estado ?? fallback?.state ?? "",
+    cpfCnpj: cliente.cpfCnpj ?? fallback?.cpfCnpj ?? "",
     phone: cliente.telefone ?? "",
     email: cliente.email ?? "",
     value,
@@ -2001,6 +2091,7 @@ function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
     nextFollowUp: fallback?.nextFollowUp ?? cliente.proximoFollowUp ?? "Hoje",
     tags: fallback?.tags?.length ? fallback.tags : parseTags(cliente.tags),
     notes: fallback?.notes ?? buildNotes(cliente),
+    revision: cliente.revisao ?? fallback?.revision,
   };
 }
 
@@ -2010,6 +2101,10 @@ function clientToPayload(client: Client): ClientePayload {
     email: client.email.trim() || undefined,
     telefone: client.phone.trim() || undefined,
     empresa: client.company.trim() || undefined,
+    cidade: client.city.trim(),
+    estado: client.state.trim().toUpperCase(),
+    cpfCnpj: client.cpfCnpj.replace(/\D/g, ""),
+    revisao: client.revision,
     interesse: client.company.trim() || undefined,
     status: client.status,
     valor: client.value,

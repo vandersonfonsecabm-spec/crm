@@ -18,14 +18,11 @@ type DashboardCustomerDrawerProps = {
   initials: (name: string) => string;
   statusClass: (status: Status) => string;
   tagClass: (tag: string) => string;
-  customerFitLabel: (client: Client) => string;
-  leadOwner: (client: Client) => string;
   nextActionLabel: (client: Client) => string;
   getLeadScore: (client: Client) => number;
   getRisk: (client: Client) => string;
   slaLabel: (client: Client) => string;
   priorityLabel: (client: Client) => string;
-  whatsappMessage: (client: Client) => string;
   onClearSelectedClient: () => void;
   onSetNoteText: (value: string) => void;
   onSetTagText: (value: string) => void;
@@ -35,6 +32,8 @@ type DashboardCustomerDrawerProps = {
   onEditClient: (client: Client) => void;
   onCopyText: (text: string, message: string) => void;
   onRequestWhatsapp: (client: Client) => void;
+  onNavigateContext: (destination: "INBOX" | "KANBAN" | "AGENDA", id: number) => void;
+  onUnauthorized: () => void;
   onApplySmartFilter: (type: SmartFilterType) => void;
   overlay?: boolean;
   open?: boolean;
@@ -66,14 +65,11 @@ export default function DashboardCustomerDrawer({
   initials,
   statusClass,
   tagClass,
-  customerFitLabel,
-  leadOwner,
   nextActionLabel,
   getLeadScore,
   getRisk,
   slaLabel,
   priorityLabel,
-  whatsappMessage,
   onClearSelectedClient,
   onSetNoteText,
   onSetTagText,
@@ -83,6 +79,8 @@ export default function DashboardCustomerDrawer({
   onEditClient,
   onCopyText,
   onRequestWhatsapp,
+  onNavigateContext,
+  onUnauthorized,
   onApplySmartFilter,
   overlay = false,
   open = false,
@@ -162,13 +160,6 @@ export default function DashboardCustomerDrawer({
             initials={initials}
             statusClass={statusClass}
             tagClass={tagClass}
-            customerFitLabel={customerFitLabel}
-            leadOwner={leadOwner}
-            nextActionLabel={nextActionLabel}
-            getLeadScore={getLeadScore}
-            getRisk={getRisk}
-            slaLabel={slaLabel}
-            whatsappMessage={whatsappMessage}
             onSetNoteText={onSetNoteText}
             onSetTagText={onSetTagText}
             onAddNote={onAddNote}
@@ -177,6 +168,8 @@ export default function DashboardCustomerDrawer({
             onEditClient={onEditClient}
             onCopyText={onCopyText}
             onRequestWhatsapp={onRequestWhatsapp}
+            onNavigateContext={onNavigateContext}
+            onUnauthorized={onUnauthorized}
           />
         </aside>
       </div>
@@ -237,13 +230,6 @@ export default function DashboardCustomerDrawer({
             initials={initials}
             statusClass={statusClass}
             tagClass={tagClass}
-            customerFitLabel={customerFitLabel}
-            leadOwner={leadOwner}
-            nextActionLabel={nextActionLabel}
-            getLeadScore={getLeadScore}
-            getRisk={getRisk}
-            slaLabel={slaLabel}
-            whatsappMessage={whatsappMessage}
             onSetNoteText={onSetNoteText}
             onSetTagText={onSetTagText}
             onAddNote={onAddNote}
@@ -252,6 +238,8 @@ export default function DashboardCustomerDrawer({
             onEditClient={onEditClient}
             onCopyText={onCopyText}
             onRequestWhatsapp={onRequestWhatsapp}
+            onNavigateContext={onNavigateContext}
+            onUnauthorized={onUnauthorized}
           />
         ) : (
           <EmptyDecisionState />

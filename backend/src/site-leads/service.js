@@ -97,10 +97,12 @@ function createSiteLeadService({ prisma }) {
       if (!client.telefone && phone) updates.telefone = phone;
       if (!client.email && payload.email) updates.email = payload.email;
       if (!client.empresa && payload.empresa) updates.empresa = payload.empresa;
+      if (!client.cidade && payload.cidade) updates.cidade = payload.cidade;
+      if (!client.estado && payload.estado) updates.estado = payload.estado;
       if (!client.interesse && payload.produtoInteresse) updates.interesse = payload.produtoInteresse;
-      return { cliente: Object.keys(updates).length ? await tx.cliente.update({ where: { id: client.id }, data: updates }) : client, ambiguous: false, phone };
+      return { cliente: Object.keys(updates).length ? await tx.cliente.update({ where: { id: client.id }, data: { ...updates, revisao: { increment: 1 } } }) : client, ambiguous: false, phone };
     }
-    const cliente = await tx.cliente.create({ data: { empresaId: integration.empresaId, nome: payload.nome, telefone: phone || "", email: payload.email || "", empresa: payload.empresa || "", interesse: payload.produtoInteresse || "", origem: "Site" } });
+    const cliente = await tx.cliente.create({ data: { empresaId: integration.empresaId, nome: payload.nome, telefone: phone || "", email: payload.email || "", empresa: payload.empresa || "", cidade: payload.cidade || null, estado: payload.estado || null, interesse: payload.produtoInteresse || "", origem: "Site" } });
     return { cliente, ambiguous: candidates.length > 1, phone };
   }
 

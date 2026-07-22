@@ -15,6 +15,9 @@ model Cliente {
   telefone        String           @default("")
   email           String           @default("")
   empresa         String           @default("")
+  cidade          String?
+  estado          String?
+  cpfCnpj         String?
   interesse       String           @default("")
   status          String           @default("Lead")
   valor           Int              @default(0)
@@ -24,6 +27,7 @@ model Cliente {
   ultimoContato   Int              @default(0)
   proximoFollowUp String           @default("Hoje")
   tags            String           @default("[]")
+  revisao         Int              @default(1)
   createdAt       DateTime         @default(now())
   notas           Nota[]
   acompanhamentos Acompanhamento[]

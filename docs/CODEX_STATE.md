@@ -12,9 +12,8 @@ Data da verificacao: 22/07/2026.
 ## Git
 
 - Baseline oficial publicado: `0bf2fcf3580552ee5f6383b7ff05f6945d8c415a`.
-- Branch local: `feature/agenda-and-followups`, com HEAD
-  `15bca8ea533f3cfc67803a550ada0d2743824e0c`, um commit documental a frente,
-  zero atras e worktree limpo.
+- Branch local: `feature/customer-360`, com tres commits locais a frente de
+  `origin/master`, zero atras e worktree limpo apos o commit funcional H5.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -322,18 +321,60 @@ Data da verificacao: 22/07/2026.
   notificacao externa e nao existe calendario mensal complexo. O WhatsApp
   continua formalmente pausado aguardando autenticacao manual da Meta.
 
+## Cliente 360 graus
+
+- H5 foi implementada localmente na branch `feature/customer-360`, sem push,
+  deploy ou alteracao de producao. A producao oficial permanece no commit
+  `0bf2fcf3580552ee5f6383b7ff05f6945d8c415a`, com 21 migrations.
+- `Cliente` continua sendo a entidade canonica. A migration aditiva
+  `20260722133000_add_customer_360_fields` acrescenta somente `cidade`,
+  `estado`, `cpfCnpj` opcionais e `revisao` com valor inicial 1. Ela foi
+  aplicada apenas em sandbox, onde as 22 migrations foram validadas sem mudar
+  o fingerprint dos dados comerciais preexistentes.
+- A API oferece `GET /clientes/:id/360`, `GET /clientes/:id/timeline` e
+  `PATCH /clientes/:id/cadastro`. Tenant vem exclusivamente da sessao,
+  atualizacoes cadastrais usam revisao otimista e conflitos retornam `409`.
+  CPF/CNPJ e UF sao normalizados e validados; o fluxo Site preenche cidade e
+  estado somente quando os campos existentes estao vazios.
+- A visao consolidada reutiliza Leads, Negocios, Propostas, Acompanhamentos,
+  Contatos e Conversas do Cliente. A timeline paginada e filtravel deriva
+  mensagens, ligacoes, visitas, propostas, negocios, acompanhamentos, notas e
+  qualificacoes das entidades reais, preservando proveniencia e navegacao de
+  contexto, sem criar uma segunda tabela de historico.
+- Compras anteriores sao exibidas somente para `Negocio.etapa = FECHADO`;
+  propostas enviadas ou aceitas nao sao inferidas como compra. O resumo usa
+  apenas pipeline, responsavel, ultima atividade e contagens obtidas das fontes
+  comerciais existentes.
+- ADMIN, GERENTE e VENDEDOR reutilizam o acesso comercial atual dentro do
+  tenant. Outro tenant recebe `404`; nao existe capability granular de Cliente
+  nem responsavel direto no modelo atual, limitacao preservada sem criar regra
+  paralela nesta fase.
+- Testes focais de migration, backend, CPF/CNPJ, tenant, paginacao, filtros,
+  concorrencia, fontes reais e regressao Site passaram. Os 33 testes frontend,
+  lint, build, Prisma validate, `node --check` e `git diff --check` tambem
+  passaram. O warning conhecido do bundle acima de 500 kB permanece.
+- O QA local em 1366x768, 1440x900, 1920x1080 e 900x768 validou cadastro,
+  resumo, compras comprovadas, timeline com varios tipos, filtro de mensagens,
+  navegacao contextual, edicao e erro recuperavel, sem overflow horizontal.
+  Evidencias ficaram somente em `%TEMP%\crm-h5-customer-360-qa`.
+- O `dev.db` permaneceu intacto com 532.480 bytes, SHA-256
+  `cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a`,
+  9 migrations, `quick_check` `ok`, zero violacoes de foreign key e sem WAL ou
+  SHM. Nenhuma chamada externa ocorreu e o WhatsApp continua desligado.
+
 ## Auditoria final do escopo original
 
 - Em 22/07/2026, o documento oficial `Escopo Completo de CRM para Atendimento
   e Gestao de Leads` foi reconciliado com Git, codigo, schema, migrations,
   testes, Railway, Vercel e este documento. Nao foram usados percentuais
   historicos.
-- CONCLUIDOS: autenticacao basica; multiempresa e tenant; Clientes e Leads
+- CONCLUIDOS: autenticacao basica; multiempresa e tenant; Clientes, Cliente 360
+  graus e Leads
   basicos; captura pelo Site; conversao de Lead para Negocio; Kanban; Inbox
   colaborativa; qualificacao comercial; propostas, versoes, calculos e PDF;
   agenda e acompanhamentos; migrations automaticas; producao Railway e Vercel.
-- PARCIAIS: Cliente 360 graus; proxima acao e tempo parado;
-  resposta real da Inbox; permissoes granulares; relatorios; seguranca, LGPD e
+- PARCIAIS: proxima acao e tempo parado; resposta real da Inbox;
+  permissoes granulares; relatorios; seguranca, LGPD e
   backups; cobranca; responsividade mobile-first; especializacao agro.
 - NAO INICIADOS: automacoes; notificacoes reais e checklist; pos-venda;
   rankings; WhatsApp outbound, midia, templates e status; frete e envio de
@@ -352,7 +393,7 @@ Data da verificacao: 22/07/2026.
 
 ## Plano oficial pos-auditoria
 
-- H5 - Cliente 360 graus
+- H5 - Cliente 360 graus (implementada localmente; H5P pendente)
 - H6 - Tempo de etapa e proxima acao
 - H7 - Automacoes
 - H8 - Notificacoes e checklist

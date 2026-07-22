@@ -251,7 +251,7 @@ async function updateFunnelIfNeeded({ tx, cliente, intent }) {
     return { etapaAnterior: previous, etapaAtual: previous, alterado: false };
   }
   if (previous !== "Lead") return { etapaAnterior: previous, etapaAtual: previous, alterado: false };
-  const updated = await tx.cliente.update({ where: { id: cliente.id }, data: { status: "Contato", ultimoContato: 0 } });
+  const updated = await tx.cliente.update({ where: { id: cliente.id }, data: { status: "Contato", ultimoContato: 0, revisao: { increment: 1 } } });
   return { etapaAnterior: previous, etapaAtual: updated.status, alterado: true };
 }
 

@@ -17,6 +17,9 @@ export type Client = {
   synced?: boolean;
   name: string;
   company: string;
+  city: string;
+  state: string;
+  cpfCnpj: string;
   phone: string;
   email: string;
   value: number;
@@ -28,6 +31,7 @@ export type Client = {
   nextFollowUp: string;
   tags: string[];
   notes: Note[];
+  revision?: number;
 };
 
 export type Analytics = {

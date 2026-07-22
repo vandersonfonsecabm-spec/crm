@@ -1,17 +1,26 @@
 import {
+  BriefcaseBusiness,
+  Building2,
+  CalendarClock,
   Copy,
   Edit3,
+  FileText,
   Mail,
+  MapPin,
   MessageCircle,
   Phone,
-  ShieldCheck,
   Tag,
-  TrendingUp,
+  UserRound,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { ApiHttpError, fetchCustomer360 } from "../../services/crmApi";
+import type { Customer360Overview } from "../../services/crmApi";
 import type { Client, Status } from "../../types/dashboard";
 import DashboardClientTimeline from "./DashboardClientTimeline";
 import { SmallButton } from "./DashboardDrawerPrimitives";
+
+type CustomerDestination = "INBOX" | "KANBAN" | "AGENDA";
 
 type DashboardSelectedClientPanelProps = {
   selectedClient: Client;
@@ -21,13 +30,6 @@ type DashboardSelectedClientPanelProps = {
   initials: (name: string) => string;
   statusClass: (status: Status) => string;
   tagClass: (tag: string) => string;
-  customerFitLabel: (client: Client) => string;
-  leadOwner: (client: Client) => string;
-  nextActionLabel: (client: Client) => string;
-  getLeadScore: (client: Client) => number;
-  getRisk: (client: Client) => string;
-  slaLabel: (client: Client) => string;
-  whatsappMessage: (client: Client) => string;
   onSetNoteText: (value: string) => void;
   onSetTagText: (value: string) => void;
   onAddNote: () => void;
@@ -36,6 +38,8 @@ type DashboardSelectedClientPanelProps = {
   onEditClient: (client: Client) => void;
   onCopyText: (text: string, message: string) => void;
   onRequestWhatsapp: (client: Client) => void;
+  onNavigateContext: (destination: CustomerDestination, id: number) => void;
+  onUnauthorized: () => void;
 };
 
 export default function DashboardSelectedClientPanel({
@@ -46,13 +50,6 @@ export default function DashboardSelectedClientPanel({
   initials,
   statusClass,
   tagClass,
-  customerFitLabel,
-  leadOwner,
-  nextActionLabel,
-  getLeadScore,
-  getRisk,
-  slaLabel,
-  whatsappMessage,
   onSetNoteText,
   onSetTagText,
   onAddNote,
@@ -61,303 +58,179 @@ export default function DashboardSelectedClientPanel({
   onEditClient,
   onCopyText,
   onRequestWhatsapp,
+  onNavigateContext,
+  onUnauthorized,
 }: DashboardSelectedClientPanelProps) {
-  const leadScore = getLeadScore(selectedClient);
-  const risk = getRisk(selectedClient);
-  const sla = slaLabel(selectedClient);
-  const fit = customerFitLabel(selectedClient);
-  const owner = leadOwner(selectedClient);
-  const message = whatsappMessage(selectedClient);
+  const [overview, setOverview] = useState<Customer360Overview | null>(null);
+  const [overviewError, setOverviewError] = useState("");
+  const [overviewRequest, setOverviewRequest] = useState(0);
+
+  useEffect(() => {
+    if (!selectedClient.backendId) return;
+    let ignore = false;
+    void fetchCustomer360(selectedClient.backendId)
+      .then((response) => { if (!ignore) { setOverview(response); setOverviewError(""); } })
+      .catch((error) => {
+        if (ignore) return;
+        if (error instanceof ApiHttpError && error.status === 401) {
+          onUnauthorized();
+          return;
+        }
+        setOverviewError(error instanceof ApiHttpError && error.status === 403
+          ? "Você não tem permissão para consultar este cliente."
+          : "Não foi possível carregar o resumo 360° agora.");
+      });
+    return () => { ignore = true; };
+  }, [onUnauthorized, overviewRequest, selectedClient.backendId, selectedClient.revision]);
+
+  const customer = overview?.cliente;
+  const summary = overview?.resumo;
+  const location = [customer?.cidade || selectedClient.city, customer?.estado || selectedClient.state].filter(Boolean).join(" / ") || "Localização não informada";
+  const document = formatDocument(customer?.cpfCnpj || selectedClient.cpfCnpj);
+
+  function retryOverview() {
+    setOverview(null);
+    setOverviewError("");
+    setOverviewRequest((value) => value + 1);
+  }
 
   return (
     <div className="p-3">
-      <div className="saas-card rounded-2xl p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--border-default)] bg-[var(--surface-subtle)] text-xs font-bold text-[var(--primary)]">
-              {initials(selectedClient.name)}
+      <section className="saas-card overflow-hidden rounded-lg" aria-label="Visão 360 graus do cliente">
+        <div className="border-b border-[var(--border-default)] p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--border-default)] bg-[var(--surface-subtle)] text-xs font-bold text-[var(--primary)]">
+                {initials(selectedClient.name)}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold leading-tight text-slate-100">{selectedClient.name}</p>
+                <p className="mt-0.5 truncate text-[11px] text-slate-500">{selectedClient.company || "Empresa não informada"}</p>
+              </div>
+            </div>
+            <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] ${statusClass(selectedClient.status)}`}>{selectedClient.status}</span>
+          </div>
+
+          <div className="mt-3 grid gap-1.5">
+            <ContactRow icon={<Phone size={12} />} label="Telefone" value={selectedClient.phone || "Não informado"} onCopy={selectedClient.phone ? () => onCopyText(selectedClient.phone, "Telefone copiado.") : undefined} />
+            <ContactRow icon={<Mail size={12} />} label="E-mail" value={selectedClient.email || "Não informado"} onCopy={selectedClient.email ? () => onCopyText(selectedClient.email, "E-mail copiado.") : undefined} />
+            <ContactRow icon={<MapPin size={12} />} label="Cidade / UF" value={location} />
+            <ContactRow icon={<Building2 size={12} />} label="CPF / CNPJ" value={document || "Não informado"} />
+          </div>
+        </div>
+
+        {overviewError ? (
+          <div className="flex items-center justify-between gap-3 border-b border-amber-300/15 bg-amber-300/[0.04] px-3 py-2.5">
+            <p className="text-[11px] text-amber-100">{overviewError}</p>
+            <button className="text-[11px] font-semibold text-amber-100 hover:text-white" onClick={retryOverview} type="button">Tentar novamente</button>
+          </div>
+        ) : !overview ? (
+          <div className="grid grid-cols-2 gap-px border-b border-[var(--border-default)] bg-[var(--border-default)]" aria-label="Carregando resumo do cliente">
+            {[0, 1, 2, 3].map((item) => <div className="h-[58px] animate-pulse bg-[var(--bg-surface)] p-3" key={item}><div className="h-2 w-16 rounded bg-white/8" /><div className="mt-2 h-3 w-10 rounded bg-white/10" /></div>)}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-px border-b border-[var(--border-default)] bg-[var(--border-default)]">
+              <SummaryStat label="Pipeline ativo" value={money(summary?.valorPipeline || 0)} />
+              <SummaryStat label="Negócios ativos" value={String(summary?.negociosAtivos || 0)} />
+              <SummaryStat label="Propostas abertas" value={String(summary?.propostasAtivas || 0)} />
+              <SummaryStat label="Acompanhamentos" value={String(summary?.acompanhamentosPendentes || 0)} />
             </div>
 
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold leading-tight text-slate-100">
-                {selectedClient.name}
-              </p>
-              <p className="mt-0.5 truncate text-[11px] text-slate-500">
-                {selectedClient.company}
-              </p>
+            <div className="border-b border-[var(--border-default)] px-3 py-2.5">
+              <div className="grid gap-1.5">
+                <ContextLine icon={<UserRound size={12} />} label="Responsável" value={summary?.responsavelComercial?.nome || "Não atribuído"} />
+                <ContextLine icon={<CalendarClock size={12} />} label="Última atividade" value={summary?.ultimaAtividade ? formatDateTime(summary.ultimaAtividade) : "Sem atividade"} />
+              </div>
+              <div className="mt-2 grid gap-1.5">
+                {overview.contexto.negocio ? <ContextAction icon={<BriefcaseBusiness size={13} />} label="Negócio atual" value={overview.contexto.negocio.titulo} onClick={() => onNavigateContext("KANBAN", overview.contexto.negocio!.id)} /> : null}
+                {overview.contexto.proposta ? <ContextAction icon={<FileText size={13} />} label="Proposta atual" value={`${overview.contexto.proposta.codigo} · ${overview.contexto.proposta.status}`} onClick={() => onNavigateContext("KANBAN", overview.contexto.proposta!.negocioId)} /> : null}
+                {overview.contexto.proximoAcompanhamento ? <ContextAction icon={<CalendarClock size={13} />} label="Próxima ação" value={`${overview.contexto.proximoAcompanhamento.titulo} · ${formatDateTime(overview.contexto.proximoAcompanhamento.dataHora)}`} onClick={() => onNavigateContext("AGENDA", overview.contexto.proximoAcompanhamento!.id)} /> : null}
+              </div>
             </div>
+
+            <details className="border-b border-[var(--border-default)] px-3 py-2.5">
+              <summary className="cursor-pointer select-none text-[11px] font-semibold text-slate-400 hover:text-slate-200">Compras anteriores comprovadas ({overview.comprasAnteriores.length})</summary>
+              <div className="mt-2 space-y-1.5">
+                {overview.comprasAnteriores.length ? overview.comprasAnteriores.map((purchase) => (
+                  <button className="flex w-full items-center justify-between gap-3 rounded-md border border-slate-500/12 bg-slate-950/20 px-2.5 py-2 text-left hover:border-teal-300/20" key={purchase.id} onClick={() => onNavigateContext("KANBAN", purchase.id)} type="button">
+                    <span className="min-w-0"><span className="block truncate text-[11px] font-medium text-slate-300">{purchase.titulo}</span><span className="mt-0.5 block text-[10px] text-slate-600">Fechado em {formatDate(purchase.fechadoEm)}</span></span>
+                    <span className="shrink-0 text-[11px] font-semibold text-emerald-200">{money(purchase.valor)}</span>
+                  </button>
+                )) : <p className="text-[11px] text-slate-600">Nenhuma compra confirmada por Negócio fechado.</p>}
+              </div>
+            </details>
+          </>
+        )}
+
+        <div className="p-3">
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={() => onRequestWhatsapp(selectedClient)} className="saas-action rounded-lg border-emerald-300/18 bg-emerald-300/[0.075] px-2 py-2 text-left text-emerald-50 hover:border-emerald-200/28 hover:bg-emerald-300/[0.11]" type="button">
+              <MessageCircle size={14} className="mb-1 text-emerald-200" /><p className="text-[10px] font-semibold">WhatsApp</p>
+            </button>
+            <QuickAction icon={<Phone size={13} />} label="Telefone" disabled={!selectedClient.phone} onClick={() => onCopyText(selectedClient.phone, "Telefone copiado.")} />
+            <QuickAction icon={<Copy size={13} />} label="Resumo" onClick={() => onCopyText(`${selectedClient.name} | ${selectedClient.company} | ${location}`, "Resumo copiado.")} />
           </div>
 
-          <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] ${statusClass(selectedClient.status)}`}>
-            {selectedClient.status}
-          </span>
-        </div>
-
-        <div className="mt-3 grid gap-1.5">
-          <ContactRow
-            icon={<Phone size={12} />}
-            label="Telefone"
-            value={selectedClient.phone}
-            onCopy={() => onCopyText(selectedClient.phone, "Telefone copiado.")}
-          />
-          <ContactRow
-            icon={<Mail size={12} />}
-            label="E-mail"
-            value={selectedClient.email || "E-mail não informado"}
-            onCopy={
-              selectedClient.email
-                ? () => onCopyText(selectedClient.email, "E-mail copiado.")
-                : undefined
-            }
-          />
-        </div>
-
-        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_78px] gap-2">
-          <div className="metric-card metric-pipeline rounded-xl p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] font-medium text-[var(--text-muted)]">
-                Oportunidade
-              </p>
-              <TrendingUp size={12} className="text-[var(--success)]" />
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {selectedClient.tags.map((tag) => <button key={tag} onClick={() => onRemoveTagFromSelected(tag)} className={`rounded-full border px-2 py-0.5 text-[10px] transition hover:brightness-110 ${tagClass(tag)}`} title="Remover tag" type="button">{tag} ×</button>)}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md border border-slate-500/16 bg-slate-950/24 px-2">
+              <Tag size={12} className="shrink-0 text-slate-500" />
+              <input value={tagText} onChange={(event) => onSetTagText(event.target.value)} placeholder="Nova tag..." className="min-w-0 flex-1 select-text bg-transparent py-1.5 text-xs outline-none placeholder:text-slate-500" />
             </div>
-            <p className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">
-              {money(selectedClient.value)}
-            </p>
-            <p className="mt-0.5 truncate text-[11px] text-slate-500">
-              Valor potencial
-            </p>
+            <button onClick={onAddTagToSelected} className="rounded-md border border-slate-200/14 bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-950 hover:bg-white" type="button">Adicionar</button>
           </div>
-
-          <div className="metric-card rounded-xl p-2.5">
-            <p className="text-center text-[11px] font-medium text-slate-500">
-              Score
-            </p>
-            <p className="mt-1 text-center text-xl font-semibold leading-none text-slate-100">
-              {leadScore}
-            </p>
-            <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-              <div
-                className={leadScore >= 80 ? "h-full rounded-full bg-[var(--success)]" : leadScore >= 60 ? "h-full rounded-full bg-[var(--warning)]" : "h-full rounded-full bg-[var(--icon-muted)]"}
-                style={{ width: `${leadScore}%` }}
-              />
-            </div>
+          <div className="mt-3 border-t border-slate-700/35 pt-3">
+            <SmallButton onClick={() => onEditClient(selectedClient)} icon={<Edit3 size={12} />} label="Editar cadastro" />
           </div>
         </div>
-
-        <div className="saas-tile mt-3 rounded-xl p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold text-slate-100">Ação recomendada</p>
-            <span className="saas-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]">
-              <ShieldCheck size={10} />
-              prioridade
-            </span>
-          </div>
-
-          <p className="text-[11px] leading-relaxed text-slate-400">
-            {nextActionLabel(selectedClient)}
-          </p>
-        </div>
-
-        <div className="mt-3 grid grid-cols-4 gap-1.5">
-          <DecisionStat label="Perfil" value={compactFit(fit)} />
-          <DecisionStat label="Resp." value={owner} />
-          <DecisionStat label="Risco" value={risk} tone={risk === "Alto" ? "risk" : "neutral"} />
-          <DecisionStat label="Saúde" value={compactHealth(sla)} tone={sla === "Crítico" ? "risk" : "neutral"} />
-        </div>
-
-        <div className="mt-3 rounded-xl border border-slate-500/12 bg-slate-950/20 px-2.5 py-2">
-          <div className="mb-1.5 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Potencial comercial</span>
-            <span className="font-semibold text-slate-300">{leadScore}%</span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-            <div
-              className={`h-full rounded-full ${leadScore >= 80 ? "bg-[var(--success)]" : leadScore >= 60 ? "bg-[var(--warning)]" : "bg-[var(--icon-muted)]"}`}
-              style={{ width: `${leadScore}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <button
-            onClick={() => onRequestWhatsapp(selectedClient)}
-            className="saas-action rounded-xl border-emerald-300/18 bg-emerald-300/[0.075] px-2 py-2 text-left text-emerald-50 hover:border-emerald-200/28 hover:bg-emerald-300/[0.11]"
-            type="button"
-          >
-            <MessageCircle size={14} className="mb-1 text-emerald-200" />
-            <p className="text-[10px] font-semibold">WhatsApp</p>
-          </button>
-
-          <QuickAction
-            icon={<Phone size={13} />}
-            label="Telefone"
-            onClick={() => onCopyText(selectedClient.phone, "Telefone copiado.")}
-          />
-
-          <QuickAction
-            icon={<Copy size={13} />}
-            label="Mensagem"
-            onClick={() => onCopyText(message, "Mensagem copiada.")}
-          />
-        </div>
-
-        <div className="mt-3">
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold text-slate-500">
-              Tags
-            </p>
-            <span className="text-[10px] text-slate-600">{selectedClient.tags.length}</span>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {selectedClient.tags.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => onRemoveTagFromSelected(tag)}
-                className={`rounded-full border px-2 py-0.5 text-[10px] transition hover:border-slate-200/24 hover:brightness-110 ${tagClass(tag)}`}
-                title="Remover tag"
-                type="button"
-              >
-                {tag} ×
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-3 flex gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-slate-500/16 bg-slate-950/24 px-2">
-            <Tag size={12} className="shrink-0 text-slate-500" />
-            <input
-              value={tagText}
-              onChange={(event) => onSetTagText(event.target.value)}
-              placeholder="Nova tag..."
-              className="min-w-0 flex-1 select-text bg-transparent py-1.5 text-xs outline-none placeholder:text-slate-500"
-            />
-          </div>
-
-          <button
-            onClick={onAddTagToSelected}
-            className="rounded-lg border border-slate-200/14 bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-white"
-            type="button"
-          >
-            Adicionar
-          </button>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-700/35 pt-3">
-          <SmallButton onClick={() => onEditClient(selectedClient)} icon={<Edit3 size={12} />} label="Editar" />
-          <SmallButton
-            onClick={() =>
-              onCopyText(
-                `${selectedClient.name} | ${selectedClient.company} | ${money(selectedClient.value)} | ${selectedClient.status}`,
-                "Resumo copiado."
-              )
-            }
-            icon={<Copy size={12} />}
-            label="Resumo"
-          />
-        </div>
-      </div>
+      </section>
 
       <DashboardClientTimeline
         selectedClient={selectedClient}
         noteText={noteText}
-        getLeadScore={getLeadScore}
-        getRisk={getRisk}
         onSetNoteText={onSetNoteText}
         onAddNote={onAddNote}
+        onNavigateContext={onNavigateContext}
+        onUnauthorized={onUnauthorized}
       />
     </div>
   );
 }
 
-function ContactRow({
-  icon,
-  label,
-  value,
-  onCopy,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  onCopy?: () => void;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-500/12 bg-slate-950/22 px-2.5 py-1.5">
-      <span className="shrink-0 text-slate-500">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-medium text-slate-600">{label}</p>
-        <p className="truncate text-[11px] text-slate-400">{value}</p>
-      </div>
-      {onCopy && (
-        <button
-          onClick={onCopy}
-          className="shrink-0 rounded-md border border-slate-500/12 bg-slate-900/45 p-1 text-slate-500 transition hover:border-slate-300/18 hover:text-slate-200"
-          title={`Copiar ${label.toLowerCase()}`}
-          type="button"
-        >
-          <Copy size={11} />
-        </button>
-      )}
-    </div>
-  );
+function ContactRow({ icon, label, value, onCopy }: { icon: ReactNode; label: string; value: string; onCopy?: () => void }) {
+  return <div className="flex min-w-0 items-center gap-2 rounded-md border border-slate-500/12 bg-slate-950/22 px-2.5 py-1.5"><span className="shrink-0 text-slate-500">{icon}</span><div className="min-w-0 flex-1"><p className="text-[10px] font-medium text-slate-600">{label}</p><p className="truncate text-[11px] text-slate-400">{value}</p></div>{onCopy ? <button aria-label={`Copiar ${label.toLowerCase()}`} className="rounded p-1 text-slate-600 hover:bg-slate-800 hover:text-slate-300" onClick={onCopy} type="button"><Copy size={11} /></button> : null}</div>;
 }
 
-function DecisionStat({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: string;
-  tone?: "neutral" | "risk";
-}) {
-  return (
-    <div className={`metric-card rounded-xl px-2 py-2 ${tone === "risk" ? "metric-risk" : ""}`}>
-      <p className="text-[10px] font-medium text-slate-500">{label}</p>
-      <p className="mt-0.5 break-words text-[11px] font-semibold leading-tight text-slate-200">
-        {value}
-      </p>
-    </div>
-  );
+function SummaryStat({ label, value }: { label: string; value: string }) {
+  return <div className="bg-[var(--bg-surface)] px-3 py-2.5"><p className="text-[10px] text-slate-600">{label}</p><p className="mt-1 truncate text-sm font-semibold text-slate-200">{value}</p></div>;
 }
 
-function QuickAction({
-  icon,
-  label,
-  onClick,
-}: {
-  icon: ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="saas-action rounded-xl px-2 py-2 text-left text-slate-300 hover:text-slate-100"
-      type="button"
-    >
-      <span className="mb-1 block text-slate-400">{icon}</span>
-      <p className="text-[11px] font-semibold">{label}</p>
-    </button>
-  );
+function ContextLine({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return <div className="flex min-w-0 items-center gap-2"><span className="text-slate-600">{icon}</span><span className="text-[10px] text-slate-600">{label}</span><span className="ml-auto truncate text-[11px] font-medium text-slate-300">{value}</span></div>;
 }
 
-function compactFit(value: string) {
-  const normalized = value.toLowerCase();
-
-  if (normalized.includes("premium")) return "Premium";
-  if (normalized.includes("validado")) return "Cliente";
-  if (normalized.includes("bom")) return "Bom";
-  if (normalized.includes("recuper")) return "Recup.";
-  if (normalized.includes("qualifica")) return "Qualif.";
-  return value.split(" ")[0] || value;
+function ContextAction({ icon, label, value, onClick }: { icon: ReactNode; label: string; value: string; onClick: () => void }) {
+  return <button className="flex w-full items-center gap-2 rounded-md border border-slate-500/12 bg-slate-950/18 px-2.5 py-2 text-left hover:border-teal-300/20 hover:bg-teal-300/[0.035]" onClick={onClick} type="button"><span className="shrink-0 text-teal-200">{icon}</span><span className="min-w-0 flex-1"><span className="block text-[10px] text-slate-600">{label}</span><span className="block truncate text-[11px] font-medium text-slate-300">{value}</span></span><span aria-hidden="true" className="text-xs text-slate-600">›</span></button>;
 }
 
-function compactHealth(value: string) {
-  const normalized = value.toLowerCase();
+function QuickAction({ icon, label, onClick, disabled = false }: { icon: ReactNode; label: string; onClick: () => void; disabled?: boolean }) {
+  return <button className="saas-action rounded-lg px-2 py-2 text-left disabled:cursor-not-allowed disabled:opacity-40" disabled={disabled} onClick={onClick} type="button">{icon}<p className="mt-1 text-[10px] font-semibold">{label}</p></button>;
+}
 
-  if (normalized.includes("cr")) return "Crítica";
-  if (normalized.includes("aten")) return "Atenção";
-  return "Boa";
+function formatDocument(value?: string | null) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 11) return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  if (digits.length === 14) return digits.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  return digits;
+}
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(new Date(value));
 }

@@ -47,6 +47,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
           proximoFollowUp: qualification.dataRetorno
             ? qualification.dataRetorno.toISOString().slice(0, 10)
             : qualification.proximaAcao,
+          revisao: { increment: 1 },
         },
       });
       await tx.acompanhamento.create({

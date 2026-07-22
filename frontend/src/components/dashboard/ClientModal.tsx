@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Client, Status } from "../../types/dashboard";
+import { ApiHttpError } from "../../services/crmApi";
 
 const statusList: Status[] = ["Novo", "Contato", "Proposta", "Fechado", "Perdido"];
 
@@ -16,7 +17,7 @@ type ClientModalProps = {
   showDelete?: boolean;
 };
 
-type ClientValidationErrors = Partial<Record<"name" | "phone" | "email", string>>;
+type ClientValidationErrors = Partial<Record<"name" | "phone" | "email" | "state" | "cpfCnpj", string>>;
 
 function normalizeFormText(value: string) {
   return value.trim().replace(/\s+/g, " ");
@@ -27,6 +28,9 @@ function normalizeClient(client: Client): Client {
     ...client,
     name: normalizeFormText(client.name),
     company: normalizeFormText(client.company),
+    city: normalizeFormText(client.city),
+    state: client.state.trim().toUpperCase(),
+    cpfCnpj: client.cpfCnpj.replace(/\D/g, ""),
     phone: client.phone.trim(),
     email: client.email.trim(),
     source: normalizeFormText(client.source),
@@ -50,12 +54,42 @@ function validateClient(client: Client): ClientValidationErrors {
   if (normalized.phone && phoneDigits.length < 10) {
     errors.phone = "Informe um telefone válido.";
   }
+  if (normalized.state && !/^[A-Z]{2}$/.test(normalized.state)) {
+    errors.state = "Use a sigla do estado com duas letras.";
+  }
+  if (normalized.cpfCnpj && !isValidCpfCnpj(normalized.cpfCnpj)) {
+    errors.cpfCnpj = "Informe um CPF ou CNPJ válido.";
+  }
 
   return errors;
 }
 
 function hasErrors(errors: ClientValidationErrors) {
   return Object.values(errors).some(Boolean);
+}
+
+function isValidCpfCnpj(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits || /^(\d)\1+$/.test(digits)) return false;
+  if (digits.length === 11) {
+    const digit = (length: number) => {
+      let sum = 0;
+      for (let index = 0; index < length; index += 1) sum += Number(digits[index]) * (length + 1 - index);
+      const result = (sum * 10) % 11;
+      return result === 10 ? 0 : result;
+    };
+    return digit(9) === Number(digits[9]) && digit(10) === Number(digits[10]);
+  }
+  if (digits.length === 14) {
+    const calculate = (length: number) => {
+      const weights = length === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+      const sum = weights.reduce((total, weight, index) => total + Number(digits[index]) * weight, 0);
+      const remainder = sum % 11;
+      return remainder < 2 ? 0 : 11 - remainder;
+    };
+    return calculate(12) === Number(digits[12]) && calculate(13) === Number(digits[13]);
+  }
+  return false;
 }
 
 export default function ClientModal({
@@ -76,6 +110,8 @@ export default function ClientModal({
   const nameRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
+  const stateRef = useRef<HTMLInputElement>(null);
+  const documentRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLFormElement>(null);
   const deleteCancelRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
@@ -146,7 +182,7 @@ export default function ClientModal({
     setClient((current) => (current ? { ...current, [field]: value } : current));
     setFormError("");
 
-    if (field === "name" || field === "phone" || field === "email") {
+    if (field === "name" || field === "phone" || field === "email" || field === "state" || field === "cpfCnpj") {
       setErrors((current) => {
         if (!current[field]) return current;
 
@@ -173,7 +209,10 @@ export default function ClientModal({
 
     if (nextErrors.email) {
       emailRef.current?.focus();
+      return;
     }
+    if (nextErrors.state) stateRef.current?.focus();
+    else if (nextErrors.cpfCnpj) documentRef.current?.focus();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -199,8 +238,12 @@ export default function ClientModal({
 
     try {
       await onSave(normalizedClient);
-    } catch {
-      setFormError("Não foi possível salvar o cliente agora. Tente novamente.");
+    } catch (error) {
+      setFormError(error instanceof ApiHttpError && error.status === 409
+        ? "Este cadastro foi atualizado por outra pessoa. Feche, abra novamente e revise os dados."
+        : error instanceof ApiHttpError && error.status === 422
+          ? error.message
+          : "Não foi possível salvar o cliente agora. Tente novamente.");
       setIsSubmitting(false);
     }
   }
@@ -316,6 +359,53 @@ export default function ClientModal({
               className={`${fieldBaseClass} ${errors.email ? invalidFieldClass : ""} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
             {errors.email ? <p id="client-email-error" className="mt-1 text-[11px] text-rose-200">{errors.email}</p> : null}
+          </div>
+
+          <div>
+            <label htmlFor="client-city" className={fieldLabelClass}>Cidade</label>
+            <input
+              id="client-city"
+              value={client.city}
+              onChange={(event) => updateField("city", event.target.value)}
+              placeholder="Ex: Campinas"
+              disabled={isBusy}
+              className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
+            />
+          </div>
+
+          <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-3">
+            <div>
+              <label htmlFor="client-state" className={fieldLabelClass}>UF</label>
+              <input
+                ref={stateRef}
+                id="client-state"
+                value={client.state}
+                maxLength={2}
+                onChange={(event) => updateField("state", event.target.value.toUpperCase())}
+                placeholder="SP"
+                aria-invalid={Boolean(errors.state)}
+                aria-describedby={errors.state ? "client-state-error" : undefined}
+                disabled={isBusy}
+                className={`${fieldBaseClass} ${errors.state ? invalidFieldClass : ""} w-full select-text uppercase disabled:cursor-not-allowed disabled:opacity-70`}
+              />
+              {errors.state ? <p id="client-state-error" className="mt-1 text-[11px] text-rose-200">{errors.state}</p> : null}
+            </div>
+            <div>
+              <label htmlFor="client-document" className={fieldLabelClass}>CPF / CNPJ</label>
+              <input
+                ref={documentRef}
+                id="client-document"
+                value={client.cpfCnpj}
+                inputMode="numeric"
+                onChange={(event) => updateField("cpfCnpj", event.target.value)}
+                placeholder="Somente números"
+                aria-invalid={Boolean(errors.cpfCnpj)}
+                aria-describedby={errors.cpfCnpj ? "client-document-error" : undefined}
+                disabled={isBusy}
+                className={`${fieldBaseClass} ${errors.cpfCnpj ? invalidFieldClass : ""} w-full select-text disabled:cursor-not-allowed disabled:opacity-70`}
+              />
+              {errors.cpfCnpj ? <p id="client-document-error" className="mt-1 text-[11px] text-rose-200">{errors.cpfCnpj}</p> : null}
+            </div>
           </div>
         </div>
 

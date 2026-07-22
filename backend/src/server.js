@@ -11,6 +11,8 @@ const { mountWhatsappSimulationRoutes } = require("./channels/whatsapp/simulatio
 const { mountLeadsCommunicationRoutes } = require("./leads-communication/routes");
 const { mountNegociosKanbanRoutes } = require("./negocios-kanban/routes");
 const { mountCommercialProposalRoutes } = require("./commercial-proposals/routes");
+const { mountCustomer360Routes } = require("./customer-360/routes");
+const { isValidCpfCnpj } = require("./customer-360/service");
 const { createAgendaService } = require("./agenda/service");
 const { authContext } = require("./leads-communication/policy");
 const { mountSiteLeadAdminRoutes, mountSiteLeadPublicRoutes, siteLeadBodyLimit } = require("./site-leads/routes");
@@ -65,6 +67,7 @@ mountWhatsappSimulationRoutes({ app, prisma, authenticate: requireAuth, requireR
 mountLeadsCommunicationRoutes({ app, prisma, authenticate: requireAuth });
 mountNegociosKanbanRoutes({ app, prisma, authenticate: requireAuth });
 mountCommercialProposalRoutes({ app, prisma, authenticate: requireAuth });
+mountCustomer360Routes({ app, prisma, authenticate: requireAuth });
 
 app.use(
   ["/categorias-produtos", "/produtos", "/estoque"],
@@ -178,25 +181,31 @@ async function updateCliente(req, res) {
     const empresaId = req.commercialEmpresaId;
     const clienteId = parsePositiveId(id);
     if (!clienteId) return res.status(400).json({ erro: "ID invalido." });
-    const existing = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true } });
+    const existing = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true, revisao: true } });
     if (!existing) return res.status(404).json({ erro: "Cliente nao encontrado." });
     const validationErrors = clienteValidationErrors(req.body, { partial: true });
     if (Object.keys(validationErrors).length > 0) return clienteValidationError(res, validationErrors);
     const data = clientePayload(req.body, { partial: true });
+    const hasRevision = Object.prototype.hasOwnProperty.call(req.body || {}, "revisao");
+    if (hasRevision) {
+      const revisao = Number(req.body.revisao);
+      if (!Number.isInteger(revisao) || revisao < 1) return clienteValidationError(res, { revisao: "Revisao invalida." }, 422);
+      const updated = await prisma.cliente.updateMany({ where: { id: clienteId, empresaId, revisao }, data: { ...data, revisao: { increment: 1 } } });
+      if (updated.count !== 1) {
+        const current = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { revisao: true } });
+        return res.status(409).json({
+          erro: "O cadastro foi alterado por outra pessoa. Atualize os dados e tente novamente.",
+          codigo: "CUSTOMER_REGISTRATION_CONFLICT",
+          revisaoAtual: current?.revisao || existing.revisao,
+        });
+      }
+    } else {
+      await prisma.cliente.update({ where: { id: clienteId }, data: { ...data, revisao: { increment: 1 } } });
+    }
 
-    const clienteAtualizado = await prisma.cliente.update({
-      where: {
-        id: clienteId,
-      },
-      data,
-      include: {
-        notas: {
-          where: { empresaId },
-          orderBy: {
-            createdAt: "desc",
-          },
-        },
-      },
+    const clienteAtualizado = await prisma.cliente.findFirst({
+      where: { id: clienteId, empresaId },
+      include: { notas: { where: { empresaId }, orderBy: { createdAt: "desc" } } },
     });
 
     res.json(clienteAtualizado);
@@ -1894,6 +1903,9 @@ function clientePayload(body, { partial = false } = {}) {
   if (!partial || has("telefone")) data.telefone = String(body.telefone || "").trim();
   if (!partial || has("email")) data.email = String(body.email || "").trim();
   if (!partial || has("empresa")) data.empresa = String(body.empresa || "").trim();
+  if (!partial || has("cidade")) data.cidade = String(body.cidade || "").trim() || null;
+  if (!partial || has("estado")) data.estado = String(body.estado || "").trim().toUpperCase() || null;
+  if (!partial || has("cpfCnpj")) data.cpfCnpj = String(body.cpfCnpj || "").replace(/\D/g, "") || null;
   if (!partial || has("interesse")) data.interesse = String(body.interesse || "").trim();
   if (!partial || has("status")) data.status = String(body.status || "Lead").trim();
   if (!partial || has("valor")) data.valor = Number.isFinite(Number(body.valor)) ? Number(body.valor) : 0;
@@ -1913,6 +1925,8 @@ function clienteValidationErrors(body, { partial = false } = {}) {
   const nome = String(source.nome || "").trim();
   const telefone = String(source.telefone || "").trim();
   const email = String(source.email || "").trim();
+  const estado = String(source.estado || "").trim().toUpperCase();
+  const cpfCnpj = String(source.cpfCnpj || "").replace(/\D/g, "");
 
   if ((!partial || has("nome")) && !nome) errors.nome = "Nome do cliente e obrigatorio.";
   if (has("telefone") && telefone && telefone.replace(/\D/g, "").length < 10) {
@@ -1921,6 +1935,8 @@ function clienteValidationErrors(body, { partial = false } = {}) {
   if (has("email") && email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     errors.email = "E-mail invalido.";
   }
+  if (has("estado") && estado && !/^[A-Z]{2}$/.test(estado)) errors.estado = "Estado invalido.";
+  if (has("cpfCnpj") && cpfCnpj && !isValidCpfCnpj(cpfCnpj)) errors.cpfCnpj = "CPF ou CNPJ invalido.";
   if (has("valor") && (!Number.isFinite(Number(source.valor)) || Number(source.valor) < 0)) {
     errors.valor = "Valor invalido.";
   }
@@ -1928,8 +1944,8 @@ function clienteValidationErrors(body, { partial = false } = {}) {
   return errors;
 }
 
-function clienteValidationError(res, errors) {
-  return res.status(400).json({
+function clienteValidationError(res, errors, status = 400) {
+  return res.status(status).json({
     erro: "Dados do cliente invalidos.",
     codigo: "CLIENT_VALIDATION_ERROR",
     campos: errors,

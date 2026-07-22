@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   actionIntensity,
   activitySignalLabel,
-  customerFitLabel,
   enterpriseHealthLabel,
   forecastLabel,
   getLeadScore,
@@ -329,6 +328,19 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     handleSetActivePage("kanban");
   }, [handleSetActivePage]);
 
+  const openCustomerContext = useCallback((destination: "INBOX" | "KANBAN" | "AGENDA", id: number) => {
+    setIsCustomerDrawerOpen(false);
+    if (destination === "INBOX") {
+      openInboxConversation(id);
+      return;
+    }
+    if (destination === "KANBAN") {
+      openKanbanBusiness(id);
+      return;
+    }
+    handleSetActivePage("agenda");
+  }, [handleSetActivePage, openInboxConversation, openKanbanBusiness]);
+
   useEffect(() => {
     if (!resolvedNavigation.isKnown || resolvedNavigation.needsReplace) {
       navigate(resolvedNavigation.pathname, { replace: true });
@@ -469,14 +481,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       initials={initials}
       statusClass={statusClass}
       tagClass={tagClass}
-      customerFitLabel={customerFitLabel}
-      leadOwner={leadOwner}
       nextActionLabel={nextActionLabel}
       getLeadScore={getLeadScore}
       getRisk={getRisk}
       slaLabel={slaLabel}
       priorityLabel={priorityLabel}
-      whatsappMessage={whatsappMessage}
       onClearSelectedClient={["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(activePage) ? handleCloseCustomerDrawer : () => setSelectedId(null)}
       onSetNoteText={setNoteText}
       onSetTagText={setTagText}
@@ -486,6 +495,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       onEditClient={handleEditClient}
       onCopyText={copyText}
       onRequestWhatsapp={requestExternalWhatsapp}
+      onNavigateContext={openCustomerContext}
+      onUnauthorized={onLogout}
       onApplySmartFilter={applySmartFilter}
       overlay={["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(activePage)}
       open={isCustomerDrawerOpen}

@@ -39,6 +39,7 @@ test("D1 capta formulario Site com seguranca, tenant e idempotencia", async () =
   assert.equal(lead.status, "NOVO"); assert.equal(lead.responsavelId, null); assert.equal(lead.campanha, "Safra D1"); assert.equal(lead.paginaOrigem, "http://127.0.0.1:4178/tratores"); assert.equal(lead.aceitePoliticaPrivacidade, true);
   const conversation = await prisma.conversaCanal.findFirst({ where: { leadId: lead.id }, include: { canalIntegracao: true, mensagens: true, contatoCanal: { include: { cliente: true } } } });
   assert.equal(conversation.status, "AGUARDANDO_ATENDIMENTO"); assert.equal(conversation.responsavelId, null); assert.equal(conversation.canalIntegracao.tipo, "SITE_FORM"); assert.equal(conversation.mensagens.length, 1); assert.equal(conversation.mensagens[0].direcao, "ENTRADA"); assert.equal(conversation.mensagens[0].autorUsuarioId, null); assert.equal(conversation.mensagens[0].simulada, false);
+  assert.equal(conversation.contatoCanal.cliente.cidade, "Campinas"); assert.equal(conversation.contatoCanal.cliente.estado, "SP");
   assert.equal((await authRequest("POST", `/conversas/${conversation.id}/mensagens/simuladas`, { externalId: "site-reply", texto: "Resposta indevida", direcao: "SAIDA" }, seller.token)).status, 409);
   const detail = await authRequest("GET", `/conversas/${conversation.id}`, undefined, seller.token);
   assert.equal(detail.body.podeResponderDiretamente, false); assert.equal(detail.body.tipoCanal, "SITE_FORM");
@@ -51,10 +52,10 @@ test("D1 capta formulario Site com seguranca, tenant e idempotencia", async () =
   assert.deepEqual(race.map((item) => item.status), [202, 202]);
   assert.equal(await prisma.eventoWebhook.count({ where: { canalIntegracaoId: integration.id, externalEventId: raceId } }), 1);
 
-  const existingClient = await prisma.cliente.create({ data: { empresaId: adminA.empresaId, nome: "Cliente Existente", telefone: "5511988887777", email: "preservar@d1.test", empresa: "Empresa preservada" } });
+  const existingClient = await prisma.cliente.create({ data: { empresaId: adminA.empresaId, nome: "Cliente Existente", telefone: "5511988887777", email: "preservar@d1.test", empresa: "Empresa preservada", cidade: "Sao Paulo", estado: "SP" } });
   await publicRequest(integration.publicId, submission(crypto.randomUUID(), { nome: "Nome recebido", telefone: "11 98888-7777", email: null, empresa: "Nao sobrescrever" }));
   const preserved = await prisma.cliente.findUnique({ where: { id: existingClient.id } });
-  assert.equal(preserved.nome, "Cliente Existente"); assert.equal(preserved.empresa, "Empresa preservada");
+  assert.equal(preserved.nome, "Cliente Existente"); assert.equal(preserved.empresa, "Empresa preservada"); assert.equal(preserved.cidade, "Sao Paulo"); assert.equal(preserved.estado, "SP");
 
   const beforeBlocked = await domainCounts(adminA.empresaId);
   assert.equal((await publicRequest(integration.publicId, submission(crypto.randomUUID()), "http://malicioso.local")).status, 403);
