@@ -1,18 +1,26 @@
-import { AlertTriangle, Bell, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, Columns3, Edit3, List, Plus, RefreshCw, RotateCcw, StickyNote, Target, X } from "lucide-react";
+import { AlertTriangle, Bell, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, Columns3, Edit3, History, Link2, List, Play, Plus, RefreshCw, RotateCcw, StickyNote, Target, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import {
   cancelarAcompanhamento,
   concluirAcompanhamento,
   createAcompanhamento,
+  fetchAcompanhamentoHistorico,
   fetchAcompanhamentos,
+  fetchAgendaOptions,
+  iniciarAcompanhamento,
   reabrirAcompanhamento,
   updateAcompanhamento,
+  ApiHttpError,
   type AcompanhamentoPayload,
   type ApiAcompanhamento,
+  type ApiAcompanhamentoHistorico,
   type ApiAcompanhamentoPrioridade,
   type ApiAcompanhamentoStatus,
   type ApiAcompanhamentoTipo,
+  type ApiAcompanhamentoVisao,
+  type ApiAgendaOptions,
   type AcompanhamentoQueryParams,
 } from "../../services/crmApi";
 import type { Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
@@ -41,29 +49,49 @@ type DashboardAgendaPanelProps = {
 
 type AgendaForm = {
   clienteId: string;
+  leadId: string;
+  negocioId: string;
+  conversaCanalId: string;
+  propostaComercialId: string;
   titulo: string;
   descricao: string;
   data: string;
   hora: string;
   prioridade: ApiAcompanhamentoPrioridade;
   tipo: ApiAcompanhamentoTipo;
-  responsavel: string;
+  responsavelId: string;
+  observacao: string;
 };
 
 const PAGE_SIZE = 6;
-const STATUSES: Array<"Todos" | ApiAcompanhamentoStatus> = ["Todos", "PENDENTE", "CONCLUIDO", "CANCELADO"];
-const PRIORITIES: Array<"Todas" | ApiAcompanhamentoPrioridade> = ["Todas", "BAIXA", "MEDIA", "ALTA", "CRITICA"];
-const TYPES: Array<"Todos" | ApiAcompanhamentoTipo> = ["Todos", "LIGACAO", "WHATSAPP", "EMAIL", "REUNIAO", "VISITA", "OUTRO"];
+const STATUSES: Array<"Todos" | ApiAcompanhamentoStatus> = ["Todos", "PENDENTE", "EM_ANDAMENTO", "CONCLUIDO", "CANCELADO"];
+const PRIORITIES: Array<"Todas" | ApiAcompanhamentoPrioridade> = ["Todas", "BAIXA", "MEDIA", "ALTA", "URGENTE", "CRITICA"];
+const TYPES: Array<"Todos" | ApiAcompanhamentoTipo> = ["Todos", "TAREFA", "RETORNO", "REUNIAO", "LIGACAO", "VISITA", "OUTRO", "WHATSAPP", "EMAIL"];
+const CREATE_TYPES: ApiAcompanhamentoTipo[] = ["TAREFA", "RETORNO", "REUNIAO", "LIGACAO", "VISITA", "OUTRO"];
+const VIEWS: Array<{ value: ApiAcompanhamentoVisao; label: string }> = [
+  { value: "MINHA", label: "Minha agenda" },
+  { value: "HOJE", label: "Hoje" },
+  { value: "PROXIMOS", label: "Próximos" },
+  { value: "ATRASADOS", label: "Atrasados" },
+  { value: "CONCLUIDOS", label: "Concluídos" },
+  { value: "EQUIPE", label: "Equipe" },
+  { value: "TODOS", label: "Todos" },
+];
 
 const initialForm: AgendaForm = {
   clienteId: "",
+  leadId: "",
+  negocioId: "",
+  conversaCanalId: "",
+  propostaComercialId: "",
   titulo: "",
   descricao: "",
   data: "",
   hora: "09:00",
   prioridade: "MEDIA",
-  tipo: "LIGACAO",
-  responsavel: "",
+  tipo: "TAREFA",
+  responsavelId: "",
+  observacao: "",
 };
 
 export default function DashboardAgendaPanel({
@@ -87,8 +115,8 @@ export default function DashboardAgendaPanel({
   const [priority, setPriority] = useState<"Todas" | ApiAcompanhamentoPrioridade>("Todas");
   const [type, setType] = useState<"Todos" | ApiAcompanhamentoTipo>("Todos");
   const [clientFilter, setClientFilter] = useState("Todos");
-  const [onlyLate, setOnlyLate] = useState(false);
-  const [onlyToday, setOnlyToday] = useState(false);
+  const [responsibleFilter, setResponsibleFilter] = useState("Todos");
+  const [agendaView, setAgendaView] = useState<ApiAcompanhamentoVisao>("MINHA");
   const [viewMode, setViewMode] = useState<"list" | "week">("list");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [isLoading, setIsLoading] = useState(true);
@@ -100,6 +128,10 @@ export default function DashboardAgendaPanel({
   const [modalMode, setModalMode] = useState<"create" | "edit" | "reschedule" | null>(null);
   const [editing, setEditing] = useState<ApiAcompanhamento | null>(null);
   const [form, setForm] = useState<AgendaForm>(initialForm);
+  const [options, setOptions] = useState<ApiAgendaOptions | null>(null);
+  const [historyItem, setHistoryItem] = useState<ApiAcompanhamento | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<ApiAcompanhamentoHistorico[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [formError, setFormError] = useState("");
   const handledCreateRequest = useRef(createRequestKey);
   const handledTodayRequest = useRef(todayRequestKey);
@@ -128,17 +160,16 @@ export default function DashboardAgendaPanel({
     if (handledCreateRequest.current === createRequestKey) return;
     handledCreateRequest.current = createRequestKey;
     setEditing(null);
-    setForm({ ...initialForm, clienteId: clients[0] ? String(clients[0].backendId || clients[0].id) : "" });
+    setForm({ ...initialForm, responsavelId: options?.usuarios[0] ? String(options.usuarios[0].id) : "" });
     setFormError("");
     setModalMode("create");
-  }, [clients, createRequestKey]);
+  }, [createRequestKey, options]);
 
   useEffect(() => {
     if (handledTodayRequest.current === todayRequestKey) return;
     handledTodayRequest.current = todayRequestKey;
     setWeekStart(startOfWeek(new Date()));
-    setOnlyToday(true);
-    setOnlyLate(false);
+    setAgendaView("HOJE");
     setStatus("Todos");
     setPriority("Todas");
     setPage(1);
@@ -158,9 +189,9 @@ export default function DashboardAgendaPanel({
           status: status === "Todos" ? undefined : status,
           prioridade: priority === "Todas" ? undefined : priority,
           tipo: type === "Todos" ? undefined : type,
-          atrasados: onlyLate || undefined,
-          hoje: onlyToday || undefined,
-          ...periodQuery,
+          responsavelId: responsibleFilter === "Todos" ? undefined : Number(responsibleFilter),
+          visao: agendaView,
+          ...(viewMode === "week" ? periodQuery : {}),
         };
         const list = viewMode === "week"
           ? await fetchAllAcompanhamentos(params)
@@ -174,10 +205,10 @@ export default function DashboardAgendaPanel({
           setItems(list.data);
           setTotal(list.pagination.total);
         }
-      } catch (loadError) {
+      } catch {
         if (ignore) return;
-        console.error("Falha ao carregar acompanhamentos", loadError);
-        setError("Nao foi possivel carregar os acompanhamentos.");
+        console.error("AGENDA_LOAD_FAILED");
+        setError("Não foi possível carregar os acompanhamentos.");
       } finally {
         if (!ignore) setIsLoading(false);
       }
@@ -188,7 +219,7 @@ export default function DashboardAgendaPanel({
     return () => {
       ignore = true;
     };
-  }, [clientFilter, debouncedSearch, onlyLate, onlyToday, page, periodQuery, priority, refreshKey, status, type, viewMode]);
+  }, [agendaView, clientFilter, debouncedSearch, page, periodQuery, priority, refreshKey, responsibleFilter, status, type, viewMode]);
 
   useEffect(() => {
     let ignore = false;
@@ -197,15 +228,15 @@ export default function DashboardAgendaPanel({
       setIsContextLoading(true);
       try {
         const [period, next] = await Promise.all([
-          fetchAllAcompanhamentos(periodQuery),
-          fetchAcompanhamentos({ dataInicial: new Date().toISOString(), status: "PENDENTE", page: 1, limit: 1 }),
+          fetchAllAcompanhamentos({ ...periodQuery, visao: "TODOS" }),
+          fetchAcompanhamentos({ visao: "PROXIMOS", page: 1, limit: 1 }),
         ]);
         if (ignore) return;
         setPeriodItems(period);
         setNextCommitment(next.data[0] ?? null);
-      } catch (contextError) {
+      } catch {
         if (ignore) return;
-        console.error("Falha ao carregar contexto da agenda", contextError);
+        console.error("AGENDA_CONTEXT_LOAD_FAILED");
         setPeriodItems([]);
         setNextCommitment(null);
       } finally {
@@ -219,8 +250,22 @@ export default function DashboardAgendaPanel({
     };
   }, [periodQuery, refreshKey]);
 
+  useEffect(() => {
+    let ignore = false;
+    void fetchAgendaOptions()
+      .then((result) => {
+        if (ignore) return;
+        setOptions(result);
+        setForm((current) => current.responsavelId || !result.usuarios[0] ? current : { ...current, responsavelId: String(result.usuarios[0].id) });
+      })
+      .catch(() => {
+        if (!ignore) setOptions(null);
+      });
+    return () => { ignore = true; };
+  }, [refreshKey]);
+
   const hasFilters =
-    Boolean(debouncedSearch) || clientFilter !== "Todos" || status !== "Todos" || priority !== "Todas" || type !== "Todos" || onlyLate || onlyToday;
+    Boolean(debouncedSearch) || clientFilter !== "Todos" || responsibleFilter !== "Todos" || status !== "Todos" || priority !== "Todas" || type !== "Todos" || agendaView !== "MINHA";
 
   const clientOptions = useMemo(
     () =>
@@ -234,7 +279,7 @@ export default function DashboardAgendaPanel({
   const statusCounts = useMemo(() => agendaStatusCounts(periodItems), [periodItems]);
   const upcomingThisWeek = useMemo(
     () => periodItems
-      .filter((item) => item.status === "PENDENTE" && !item.atrasado)
+      .filter((item) => (item.status === "PENDENTE" || item.status === "EM_ANDAMENTO") && !item.atrasado)
       .sort((first, second) => new Date(first.dataHora).getTime() - new Date(second.dataHora).getTime())
       .slice(0, 4),
     [periodItems],
@@ -244,14 +289,12 @@ export default function DashboardAgendaPanel({
 
   function moveWeek(offset: number) {
     setWeekStart((current) => addDays(current, offset * 7));
-    setOnlyToday(false);
     setPage(1);
   }
 
   function goToToday() {
     setWeekStart(startOfWeek(new Date()));
-    setOnlyToday(true);
-    setOnlyLate(false);
+    setAgendaView("HOJE");
     setStatus("Todos");
     setPriority("Todas");
     setPage(1);
@@ -259,16 +302,15 @@ export default function DashboardAgendaPanel({
 
   function selectAgendaStatus(next: AgendaStatusKey) {
     if (next === "today") setWeekStart(startOfWeek(new Date()));
-    setOnlyToday(next === "today");
-    setOnlyLate(next === "late");
-    setPriority(next === "critical" ? "CRITICA" : "Todas");
-    setStatus(next === "done" ? "CONCLUIDO" : next === "pending" || next === "critical" ? "PENDENTE" : "Todos");
+    setAgendaView(next === "today" ? "HOJE" : next === "late" ? "ATRASADOS" : next === "done" ? "CONCLUIDOS" : next === "all" ? "TODOS" : "MINHA");
+    setPriority(next === "critical" ? "URGENTE" : "Todas");
+    setStatus(next === "pending" || next === "critical" ? "PENDENTE" : "Todos");
     setPage(1);
   }
 
   function openCreate() {
     setEditing(null);
-    setForm({ ...initialForm, clienteId: clientOptions[0]?.id ?? "" });
+    setForm({ ...initialForm, responsavelId: options?.usuarios[0] ? String(options.usuarios[0].id) : "" });
     setFormError("");
     setModalMode("create");
   }
@@ -306,7 +348,7 @@ export default function DashboardAgendaPanel({
         await createAcompanhamento(payload);
         setToast("Acompanhamento criado com sucesso.");
       } else if (editing) {
-        await updateAcompanhamento(editing.id, modalMode === "reschedule" ? { dataHora: payload.dataHora } : payload);
+        await updateAcompanhamento(editing.id, modalMode === "reschedule" ? { dataHora: payload.dataHora, revisao: editing.revisao } : { ...payload, revisao: editing.revisao });
         setToast(modalMode === "reschedule" ? "Acompanhamento reagendado com sucesso." : "Acompanhamento atualizado com sucesso.");
       }
 
@@ -322,21 +364,24 @@ export default function DashboardAgendaPanel({
     }
   }
 
-  async function runAction(item: ApiAcompanhamento, action: "concluir" | "reabrir" | "cancelar") {
+  async function runAction(item: ApiAcompanhamento, action: "iniciar" | "concluir" | "reabrir" | "cancelar") {
     if (mutationInFlight.current) return;
 
     mutationInFlight.current = true;
     setIsSubmitting(true);
 
     try {
-      if (action === "concluir") {
-        await concluirAcompanhamento(item.id);
+      if (action === "iniciar") {
+        await iniciarAcompanhamento(item.id, item.revisao);
+        setToast("Acompanhamento iniciado.");
+      } else if (action === "concluir") {
+        await concluirAcompanhamento(item.id, item.revisao);
         setToast("Acompanhamento concluido.");
       } else if (action === "reabrir") {
-        await reabrirAcompanhamento(item.id);
+        await reabrirAcompanhamento(item.id, item.revisao);
         setToast("Acompanhamento reaberto.");
       } else {
-        await cancelarAcompanhamento(item.id);
+        await cancelarAcompanhamento(item.id, item.revisao);
         setToast("Acompanhamento cancelado.");
       }
 
@@ -344,9 +389,25 @@ export default function DashboardAgendaPanel({
     } catch (actionError) {
       const message = actionError instanceof Error ? actionError.message : "";
       setToast(toFriendlyAgendaError(message));
+      if (actionError instanceof ApiHttpError && actionError.status === 409) setRefreshKey((current) => current + 1);
     } finally {
       mutationInFlight.current = false;
       setIsSubmitting(false);
+    }
+  }
+
+  async function openHistory(item: ApiAcompanhamento) {
+    setHistoryItem(item);
+    setHistoryEntries([]);
+    setIsHistoryLoading(true);
+    try {
+      const result = await fetchAcompanhamentoHistorico(item.id);
+      setHistoryEntries(result.data);
+    } catch (historyError) {
+      const message = historyError instanceof Error ? historyError.message : "";
+      setToast(toFriendlyAgendaError(message));
+    } finally {
+      setIsHistoryLoading(false);
     }
   }
 
@@ -410,7 +471,7 @@ export default function DashboardAgendaPanel({
       ]} />
 
       <AgendaStatusSummary
-        active={onlyToday ? "today" : onlyLate ? "late" : priority === "CRITICA" && status === "PENDENTE" ? "critical" : status === "CONCLUIDO" ? "done" : status === "PENDENTE" ? "pending" : status === "Todos" ? "all" : null}
+        active={agendaView === "HOJE" ? "today" : agendaView === "ATRASADOS" ? "late" : priority === "URGENTE" && status === "PENDENTE" ? "critical" : agendaView === "CONCLUIDOS" ? "done" : status === "PENDENTE" ? "pending" : agendaView === "TODOS" ? "all" : null}
         counts={statusCounts}
         onSelect={selectAgendaStatus}
       />
@@ -426,6 +487,10 @@ export default function DashboardAgendaPanel({
           <div className="border-b border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
             <Toolbar className="items-end justify-start">
               <Input aria-label="Buscar cliente ou título" containerClassName="min-w-[240px] flex-[1_1_300px]" onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente ou título" value={search} />
+
+              <Select aria-label="Selecionar visão da agenda" className="w-auto min-w-[145px]" onChange={(event) => { setAgendaView(event.target.value as ApiAcompanhamentoVisao); setPage(1); }} value={agendaView}>
+                {VIEWS.filter((item) => item.value !== "EQUIPE" || options?.podeVerEquipe).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </Select>
 
               <Select aria-label="Filtrar por status" className="w-auto min-w-[132px]" onChange={(event) => { setStatus(event.target.value as typeof status); setPage(1); }} value={status}>
               {STATUSES.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}
@@ -444,7 +509,14 @@ export default function DashboardAgendaPanel({
               {clientOptions.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}
               </Select>
 
-              <Button disabled={!hasFilters} leftIcon={<RotateCcw size={13} />} onClick={() => { setSearch(""); setDebouncedSearch(""); setStatus("Todos"); setPriority("Todas"); setType("Todos"); setClientFilter("Todos"); setOnlyLate(false); setOnlyToday(false); setPage(1); }} size="sm" variant="ghost">
+              {options?.podeVerEquipe && (
+                <Select aria-label="Filtrar por responsável" className="w-auto min-w-[180px]" onChange={(event) => { setResponsibleFilter(event.target.value); setPage(1); }} value={responsibleFilter}>
+                  <option value="Todos">Todos os responsáveis</option>
+                  {options.usuarios.map((user) => <option key={user.id} value={user.id}>{user.nome}</option>)}
+                </Select>
+              )}
+
+              <Button disabled={!hasFilters} leftIcon={<RotateCcw size={13} />} onClick={() => { setSearch(""); setDebouncedSearch(""); setStatus("Todos"); setPriority("Todas"); setType("Todos"); setClientFilter("Todos"); setResponsibleFilter("Todos"); setAgendaView("MINHA"); setPage(1); }} size="sm" variant="ghost">
                 Limpar filtros
               </Button>
             </Toolbar>
@@ -461,6 +533,7 @@ export default function DashboardAgendaPanel({
                 onSelectClient={onSelectClient}
                 onEdit={openEdit}
                 onReschedule={openReschedule}
+                onHistory={openHistory}
                 onAction={runAction}
               />
             ))}
@@ -472,6 +545,7 @@ export default function DashboardAgendaPanel({
                 onAction={runAction}
                 onEdit={openEdit}
                 onReschedule={openReschedule}
+                onHistory={openHistory}
                 onSelectClient={onSelectClient}
               />
             )}
@@ -485,9 +559,9 @@ export default function DashboardAgendaPanel({
           <SideSection title="Próximos nesta semana">
             {upcomingThisWeek.length === 0 && <p className="px-4 py-3 text-[11px] text-[var(--text-muted)]">Nenhum acompanhamento pendente.</p>}
             {upcomingThisWeek.map((item) => (
-              <button key={item.id} className="w-full px-4 py-2.5 text-left transition-colors hover:bg-[var(--bg-muted)]" onClick={() => onSelectClient(item.clienteId)} type="button">
+              <button key={item.id} className="w-full px-4 py-2.5 text-left transition-colors hover:bg-[var(--bg-muted)] disabled:cursor-default" disabled={!item.clienteId} onClick={() => item.clienteId && onSelectClient(item.clienteId)} type="button">
                 <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{item.titulo}</p>
-                <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Cliente"} · {formatDateTime(item.dataHora)}</p>
+                <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Sem cliente"} · {formatDateTime(item.dataHora)}</p>
               </button>
             ))}
           </SideSection>
@@ -521,6 +595,7 @@ export default function DashboardAgendaPanel({
           mode={modalMode}
           form={form}
           clients={clientOptions}
+          options={options}
           error={formError}
           isSubmitting={isSubmitting}
           setForm={setForm}
@@ -532,6 +607,10 @@ export default function DashboardAgendaPanel({
           }}
           onSubmit={submitForm}
         />
+      )}
+
+      {historyItem && (
+        <AgendaHistoryModal entries={historyEntries} isLoading={isHistoryLoading} item={historyItem} onClose={() => setHistoryItem(null)} />
       )}
     </div>
   );
@@ -565,7 +644,7 @@ function AgendaNextCommitment({
               <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Carregando agenda...</p>
             ) : item ? (
               <p className="mt-0.5 truncate text-xs font-semibold text-[var(--text-primary)]">
-                {formatTime(item.dataHora)} · {item.cliente?.nome ?? "Cliente"} · {typeLabel(item.tipo)} · {item.titulo}
+                {formatTime(item.dataHora)} · {item.cliente?.nome ?? "Sem cliente"} · {typeLabel(item.tipo)} · {item.titulo}
               </p>
             ) : (
               <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Nenhum compromisso futuro agendado.</p>
@@ -577,7 +656,7 @@ function AgendaNextCommitment({
           {item ? (
             <>
               <Button onClick={() => onOpen(item)} size="sm" variant="secondary">Abrir</Button>
-              <Button disabled={disabled} onClick={() => onComplete(item)} size="sm" variant="subtle">Concluir</Button>
+              <Button disabled={disabled || !item.permissoes?.concluir} onClick={() => onComplete(item)} size="sm" variant="subtle">Concluir</Button>
             </>
           ) : (
             <Button leftIcon={<Plus size={13} />} onClick={onSchedule} size="sm">Agendar</Button>
@@ -594,14 +673,16 @@ function AgendaWeekView({
   weekStart,
   onAction,
   onEdit,
+  onHistory,
   onReschedule,
   onSelectClient,
 }: {
   disabled: boolean;
   items: ApiAcompanhamento[];
   weekStart: Date;
-  onAction: (item: ApiAcompanhamento, action: "concluir" | "reabrir" | "cancelar") => void;
+  onAction: (item: ApiAcompanhamento, action: "iniciar" | "concluir" | "reabrir" | "cancelar") => void;
   onEdit: (item: ApiAcompanhamento) => void;
+  onHistory: (item: ApiAcompanhamento) => void;
   onReschedule: (item: ApiAcompanhamento) => void;
   onSelectClient: (clientId: number) => void;
 }) {
@@ -626,6 +707,7 @@ function AgendaWeekView({
                   key={item.id}
                   onAction={onAction}
                   onEdit={onEdit}
+                  onHistory={onHistory}
                   onReschedule={onReschedule}
                   onSelectClient={onSelectClient}
                 />
@@ -643,6 +725,7 @@ function AgendaRow({
   disabled,
   onSelectClient,
   onEdit,
+  onHistory,
   onReschedule,
   onAction,
 }: {
@@ -650,8 +733,9 @@ function AgendaRow({
   disabled: boolean;
   onSelectClient: (clientId: number) => void;
   onEdit: (item: ApiAcompanhamento) => void;
+  onHistory: (item: ApiAcompanhamento) => void;
   onReschedule: (item: ApiAcompanhamento) => void;
-  onAction: (item: ApiAcompanhamento, action: "concluir" | "reabrir" | "cancelar") => void;
+  onAction: (item: ApiAcompanhamento, action: "iniciar" | "concluir" | "reabrir" | "cancelar") => void;
 }) {
   const isNeutral = item.status === "CONCLUIDO" || item.status === "CANCELADO";
   return (
@@ -659,11 +743,11 @@ function AgendaRow({
       <div className="grid min-w-0 gap-3 lg:grid-cols-[112px_minmax(0,1fr)_120px_112px] lg:items-center">
         <div className="min-w-0">
           <p className={`text-sm font-semibold tabular-nums ${item.atrasado ? "text-[var(--danger)]" : "text-[var(--primary)]"}`}>{formatTime(item.dataHora)}</p>
-          <p className="mt-0.5 truncate text-[11px] tabular-nums text-[var(--text-muted)]">{formatDateLabel(item.dataHora)} · {item.responsavel || "Equipe"}</p>
+          <p className="mt-0.5 truncate text-[11px] tabular-nums text-[var(--text-muted)]">{formatDateLabel(item.dataHora)} · {item.responsavelUsuario?.nome || item.responsavel || "Sem responsável"}</p>
         </div>
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{item.titulo}</p>
-          <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Cliente"} · {item.cliente?.empresa || "Carteira comercial"}</p>
+          <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Sem vínculo comercial"} · {linkSummary(item)}</p>
           {item.descricao && <p className="mt-1 line-clamp-1 text-[11px] text-[var(--text-muted)]">{item.descricao}</p>}
         </div>
         <div className="min-w-0">
@@ -677,15 +761,20 @@ function AgendaRow({
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1.5">
-        <ActionButton onClick={() => onSelectClient(item.clienteId)}>Cliente</ActionButton>
-        <ActionButton onClick={() => onEdit(item)} icon={<Edit3 size={12} />}>Editar</ActionButton>
-        <ActionButton onClick={() => onReschedule(item)} icon={<RotateCcw size={12} />}>Reagendar</ActionButton>
-        {item.status === "CONCLUIDO" ? (
-          <ActionButton disabled={disabled} onClick={() => onAction(item, "reabrir")}>Reabrir</ActionButton>
+        {item.clienteId && <ActionButton onClick={() => onSelectClient(item.clienteId as number)}>Cliente</ActionButton>}
+        {item.negocioId && <EntityLink href={`/kanban?negocioId=${item.negocioId}`} icon={<BriefcaseBusiness size={12} />}>Negócio</EntityLink>}
+        {item.conversaCanalId && <EntityLink href={`/inbox?conversaId=${item.conversaCanalId}`} icon={<Link2 size={12} />}>Conversa</EntityLink>}
+        {item.propostaComercialId && <EntityLink href={`/kanban?negocioId=${item.negocioId || ""}&propostaId=${item.propostaComercialId}`} icon={<StickyNote size={12} />}>Proposta</EntityLink>}
+        <ActionButton onClick={() => onHistory(item)} icon={<History size={12} />}>Histórico</ActionButton>
+        <ActionButton disabled={!item.permissoes?.editar} onClick={() => onEdit(item)} icon={<Edit3 size={12} />}>Editar</ActionButton>
+        <ActionButton disabled={!item.permissoes?.editar} onClick={() => onReschedule(item)} icon={<RotateCcw size={12} />}>Reagendar</ActionButton>
+        {item.status === "PENDENTE" && <ActionButton disabled={disabled || !item.permissoes?.editar} onClick={() => onAction(item, "iniciar")} icon={<Play size={12} />}>Iniciar</ActionButton>}
+        {item.status === "CONCLUIDO" || item.status === "CANCELADO" ? (
+          <ActionButton disabled={disabled || !item.permissoes?.reabrir} onClick={() => onAction(item, "reabrir")}>Reabrir</ActionButton>
         ) : (
-          <ActionButton disabled={disabled || item.status === "CANCELADO"} onClick={() => onAction(item, "concluir")}>Concluir</ActionButton>
+          <ActionButton disabled={disabled || !item.permissoes?.concluir} onClick={() => onAction(item, "concluir")}>Concluir</ActionButton>
         )}
-        <ActionButton disabled={disabled || item.status === "CANCELADO"} onClick={() => onAction(item, "cancelar")}>Cancelar</ActionButton>
+        {item.status !== "CANCELADO" && item.status !== "CONCLUIDO" && <ActionButton disabled={disabled || !item.permissoes?.cancelar} onClick={() => onAction(item, "cancelar")}>Cancelar</ActionButton>}
       </div>
     </article>
   );
@@ -695,6 +784,7 @@ function AgendaModal({
   mode,
   form,
   clients,
+  options,
   error,
   isSubmitting,
   setForm,
@@ -704,6 +794,7 @@ function AgendaModal({
   mode: "create" | "edit" | "reschedule";
   form: AgendaForm;
   clients: Array<{ id: string; label: string }>;
+  options: ApiAgendaOptions | null;
   error: string;
   isSubmitting: boolean;
   setForm: (form: AgendaForm) => void;
@@ -712,7 +803,7 @@ function AgendaModal({
 }) {
   const isReschedule = mode === "reschedule";
   const title = mode === "create" ? "Novo acompanhamento" : isReschedule ? "Reagendar acompanhamento" : "Editar acompanhamento";
-  const submitLabel = mode === "create" ? "Criar acompanhamento" : isReschedule ? "Salvar reagendamento" : "Salvar alteracoes";
+  const submitLabel = mode === "create" ? "Criar acompanhamento" : isReschedule ? "Salvar reagendamento" : "Salvar alterações";
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const isSubmittingRef = useRef(isSubmitting);
@@ -826,7 +917,7 @@ function AgendaModal({
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold" id="agenda-modal-title">{title}</p>
-            <p className="mt-1 text-[11px] text-slate-500">Registre o proximo contato comercial com persistencia real.</p>
+            <p className="mt-1 text-[11px] text-slate-500">Registre o próximo contato comercial com persistência real.</p>
           </div>
           <button aria-label="Fechar modal de acompanhamento" className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:opacity-50" disabled={isSubmitting} onClick={onClose} title="Fechar" type="button">
             <X size={15} />
@@ -838,19 +929,44 @@ function AgendaModal({
             <section aria-labelledby="agenda-information-title">
               <p className="mb-2 text-[11px] font-semibold text-[var(--text-secondary)]" id="agenda-information-title">Informações</p>
               <div className="grid gap-3 md:grid-cols-2">
-                <Select disabled={isSubmitting} label="Cliente" onChange={(event) => setForm({ ...form, clienteId: event.target.value })} value={form.clienteId}>
-                  <option value="">Selecione</option>
-                  {clients.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}
+                <Select disabled={isSubmitting} label="Cliente (opcional)" onChange={(event) => setForm({ ...form, clienteId: event.target.value })} value={form.clienteId}>
+                  <option value="">Sem cliente vinculado</option>
+                  {(options?.clientes.map((client) => ({ id: String(client.id), label: client.nome })) ?? clients).map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}
                 </Select>
                 <Input disabled={isSubmitting} label="Título" onChange={(event) => setForm({ ...form, titulo: event.target.value })} value={form.titulo} />
                 <Select disabled={isSubmitting} label="Prioridade" onChange={(event) => setForm({ ...form, prioridade: event.target.value as ApiAcompanhamentoPrioridade })} value={form.prioridade}>
-                  {PRIORITIES.filter((item) => item !== "Todas").map((item) => <option key={item} value={item}>{priorityLabel(item)}</option>)}
+                  {PRIORITIES.filter((item) => item !== "Todas" && (item !== "CRITICA" || form.prioridade === "CRITICA")).map((item) => <option key={item} value={item}>{priorityLabel(item)}</option>)}
                 </Select>
                 <Select disabled={isSubmitting} label="Tipo" onChange={(event) => setForm({ ...form, tipo: event.target.value as ApiAcompanhamentoTipo })} value={form.tipo}>
-                  {TYPES.filter((item) => item !== "Todos").map((item) => <option key={item} value={item}>{typeLabel(item)}</option>)}
+                  {[...CREATE_TYPES, ...(CREATE_TYPES.includes(form.tipo) ? [] : [form.tipo])].map((item) => <option key={item} value={item}>{typeLabel(item)}</option>)}
                 </Select>
-                <Input containerClassName="md:col-span-2" disabled={isSubmitting} label="Responsável" onChange={(event) => setForm({ ...form, responsavel: event.target.value })} value={form.responsavel} />
+                <Select containerClassName="md:col-span-2" disabled={isSubmitting} label="Responsável" onChange={(event) => setForm({ ...form, responsavelId: event.target.value })} value={form.responsavelId}>
+                  <option value="">Selecione um responsável</option>
+                  {options?.usuarios.map((user) => <option key={user.id} value={user.id}>{user.nome} · {user.papel}</option>)}
+                </Select>
               </div>
+
+              <details className="mt-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-2">
+                <summary className="cursor-pointer text-[11px] font-semibold text-[var(--text-secondary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">Vínculos comerciais opcionais</summary>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <Select disabled={isSubmitting} label="Lead" onChange={(event) => setForm({ ...form, leadId: event.target.value })} value={form.leadId}>
+                    <option value="">Sem lead vinculado</option>
+                    {options?.leads.map((lead) => <option key={lead.id} value={lead.id}>{lead.cliente.nome} · {lead.interesse || lead.status}</option>)}
+                  </Select>
+                  <Select disabled={isSubmitting} label="Negócio" onChange={(event) => setForm({ ...form, negocioId: event.target.value })} value={form.negocioId}>
+                    <option value="">Sem negócio vinculado</option>
+                    {options?.negocios.map((business) => <option key={business.id} value={business.id}>{business.titulo || business.cliente.nome} · {business.etapa}</option>)}
+                  </Select>
+                  <Select disabled={isSubmitting} label="Conversa" onChange={(event) => setForm({ ...form, conversaCanalId: event.target.value })} value={form.conversaCanalId}>
+                    <option value="">Sem conversa vinculada</option>
+                    {options?.conversas.map((conversation) => <option key={conversation.id} value={conversation.id}>{conversation.contatoCanal.nome || conversation.contatoCanal.cliente?.nome || `Conversa ${conversation.id}`} · {conversation.status}</option>)}
+                  </Select>
+                  <Select disabled={isSubmitting} label="Proposta" onChange={(event) => setForm({ ...form, propostaComercialId: event.target.value })} value={form.propostaComercialId}>
+                    <option value="">Sem proposta vinculada</option>
+                    {options?.propostas.map((proposal) => <option key={proposal.id} value={proposal.id}>{proposal.codigo} · {proposal.titulo}</option>)}
+                  </Select>
+                </div>
+              </details>
             </section>
           )}
 
@@ -866,6 +982,7 @@ function AgendaModal({
             <section aria-labelledby="agenda-notes-title" className="border-t border-[var(--border-default)] pt-3">
               <p className="mb-2 text-[11px] font-semibold text-[var(--text-secondary)]" id="agenda-notes-title">Observação</p>
               <Textarea className="min-h-20 resize-none" disabled={isSubmitting} label="Descrição" onChange={(event) => setForm({ ...form, descricao: event.target.value })} value={form.descricao} />
+              <Input containerClassName="mt-3" disabled={isSubmitting} label="Registro da alteração (opcional)" maxLength={500} onChange={(event) => setForm({ ...form, observacao: event.target.value })} value={form.observacao} />
             </section>
           )}
         </div>
@@ -935,17 +1052,100 @@ function ActionButton({ children, icon, disabled, onClick }: { children: ReactNo
   );
 }
 
+function EntityLink({ children, href, icon }: { children: ReactNode; href: string; icon: ReactNode }) {
+  return (
+    <Link className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-[var(--primary)] transition-colors hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]" to={href}>
+      {icon}
+      {children}
+    </Link>
+  );
+}
+
+function AgendaHistoryModal({ entries, isLoading, item, onClose }: { entries: ApiAcompanhamentoHistorico[]; isLoading: boolean; item: ApiAcompanhamento; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const closeButton = dialog?.querySelector<HTMLElement>("button");
+    closeButton?.focus({ preventScroll: true });
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus({ preventScroll: true });
+    };
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+      <div aria-labelledby="agenda-history-title" aria-modal="true" className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-xl overflow-y-auto rounded-lg p-4 text-white shadow-2xl" ref={dialogRef} role="dialog">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--border-default)] pb-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold" id="agenda-history-title">Histórico do acompanhamento</p>
+            <p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">{item.titulo}</p>
+          </div>
+          <IconButton aria-label="Fechar histórico" onClick={onClose} size="sm" title="Fechar"><X size={15} /></IconButton>
+        </div>
+
+        {isLoading ? (
+          <LoadingState className="py-10" label="Carregando histórico" />
+        ) : entries.length === 0 ? (
+          <EmptyState className="py-10" description="As alterações aparecerão aqui." title="Nenhum evento registrado" />
+        ) : (
+          <ol className="divide-y divide-[var(--border-default)]">
+            {entries.map((entry) => (
+              <li className="grid grid-cols-[18px_minmax(0,1fr)] gap-3 py-3" key={entry.id}>
+                <span aria-hidden="true" className="mt-1.5 h-2 w-2 rounded-full bg-[var(--primary)]" />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-xs font-semibold text-[var(--text-primary)]">{historyActionLabel(entry.acao)}</p>
+                    <time className="text-[11px] tabular-nums text-[var(--text-muted)]">{formatDateTime(entry.createdAt)}</time>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-[var(--text-secondary)]">{entry.autor.nome}{historyChangeSummary(entry)}</p>
+                  {entry.observacao && <p className="mt-1 whitespace-pre-wrap text-[11px] text-[var(--text-muted)]">{entry.observacao}</p>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function acompanhamentoToForm(item: ApiAcompanhamento): AgendaForm {
   const date = new Date(item.dataHora);
   return {
-    clienteId: String(item.clienteId),
+    clienteId: item.clienteId ? String(item.clienteId) : "",
+    leadId: item.leadId ? String(item.leadId) : "",
+    negocioId: item.negocioId ? String(item.negocioId) : "",
+    conversaCanalId: item.conversaCanalId ? String(item.conversaCanalId) : "",
+    propostaComercialId: item.propostaComercialId ? String(item.propostaComercialId) : "",
     titulo: item.titulo,
     descricao: item.descricao ?? "",
     data: formatLocalDateInput(date),
     hora: `${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`,
     prioridade: item.prioridade,
     tipo: item.tipo,
-    responsavel: item.responsavel ?? "",
+    responsavelId: item.responsavelId ? String(item.responsavelId) : "",
+    observacao: "",
   };
 }
 
@@ -960,32 +1160,70 @@ function padDatePart(value: number) {
 function formToPayload(form: AgendaForm): AcompanhamentoPayload {
   const dataHora = new Date(`${form.data}T${form.hora || "00:00"}:00`).toISOString();
   return {
-    clienteId: Number(form.clienteId),
+    clienteId: form.clienteId ? Number(form.clienteId) : undefined,
+    leadId: form.leadId ? Number(form.leadId) : undefined,
+    negocioId: form.negocioId ? Number(form.negocioId) : undefined,
+    conversaCanalId: form.conversaCanalId ? Number(form.conversaCanalId) : undefined,
+    propostaComercialId: form.propostaComercialId ? Number(form.propostaComercialId) : undefined,
     titulo: form.titulo.trim(),
     descricao: form.descricao.trim() || undefined,
     dataHora,
     prioridade: form.prioridade,
     tipo: form.tipo,
-    responsavel: form.responsavel.trim() || undefined,
+    responsavelId: form.responsavelId ? Number(form.responsavelId) : undefined,
+    observacao: form.observacao.trim() || undefined,
   };
 }
 
 function validateForm(form: AgendaForm, rescheduleOnly: boolean) {
   if (!form.data) return "Informe a data.";
-  if (!form.hora) return "Informe o horario.";
+  if (!form.hora) return "Informe o horário.";
   if (rescheduleOnly) return "";
-  if (!form.clienteId) return "Selecione o cliente.";
-  if (!form.titulo.trim()) return "Informe o titulo.";
+  if (!form.titulo.trim()) return "Informe o título.";
+  if (!form.responsavelId) return "Selecione o responsável.";
   return "";
 }
 
 function toFriendlyAgendaError(message: string) {
   const normalized = message.toLowerCase();
   if (normalized.includes("cliente")) return "Cliente selecionado nao esta disponivel.";
-  if (normalized.includes("titulo")) return "Informe um titulo valido.";
-  if (normalized.includes("data")) return "Informe uma data e horario validos.";
+  if (normalized.includes("responsavel")) return "Responsável selecionado não está disponível.";
+  if (normalized.includes("conflito") || normalized.includes("alterado")) return "Este acompanhamento foi alterado por outra pessoa. Os dados foram atualizados.";
+  if (normalized.includes("permiss")) return "Voce nao tem permissao para esta acao.";
+  if (normalized.includes("titulo")) return "Informe um título válido.";
+  if (normalized.includes("data")) return "Informe uma data e horário válidos.";
   if (normalized.includes("concluido")) return "Esse acompanhamento ja foi concluido.";
-  return "Nao foi possivel concluir a acao agora.";
+  return "Não foi possível concluir a ação agora.";
+}
+
+function linkSummary(item: ApiAcompanhamento) {
+  if (item.propostaComercial) return `${item.propostaComercial.codigo} · ${item.propostaComercial.titulo}`;
+  if (item.negocio) return item.negocio.titulo || `Negócio ${item.negocio.id}`;
+  if (item.lead) return item.lead.interesse || `Lead ${item.lead.id}`;
+  if (item.conversaCanal) return `Conversa · ${item.conversaCanal.status.replaceAll("_", " ").toLowerCase()}`;
+  return "Sem vínculo adicional";
+}
+
+function historyActionLabel(action: ApiAcompanhamentoHistorico["acao"]) {
+  const labels: Record<ApiAcompanhamentoHistorico["acao"], string> = {
+    CRIAR: "Acompanhamento criado",
+    EDITAR: "Dados atualizados",
+    ALTERAR_RESPONSAVEL: "Responsável alterado",
+    REAGENDAR: "Compromisso reagendado",
+    INICIAR: "Atividade iniciada",
+    CONCLUIR: "Atividade concluída",
+    CANCELAR: "Atividade cancelada",
+    REABRIR: "Atividade reaberta",
+  };
+  return labels[action];
+}
+
+function historyChangeSummary(entry: ApiAcompanhamentoHistorico) {
+  const details: string[] = [];
+  if (entry.statusAnterior !== entry.statusNovo && entry.statusNovo) details.push(statusLabel(entry.statusNovo));
+  if (entry.responsavelAnterior?.id !== entry.responsavelNovo?.id && entry.responsavelNovo) details.push(`responsável: ${entry.responsavelNovo.nome}`);
+  if (entry.dataHoraAnterior !== entry.dataHoraNova && entry.dataHoraNova) details.push(`para ${formatDateTime(entry.dataHoraNova)}`);
+  return details.length > 0 ? ` · ${details.join(" · ")}` : "";
 }
 
 function formatDateTime(value: string) {
@@ -1002,6 +1240,7 @@ function formatDateLabel(value: string) {
 function statusLabel(status: ApiAcompanhamentoStatus | "Todos") {
   if (status === "Todos") return "Todos";
   if (status === "PENDENTE") return "Pendente";
+  if (status === "EM_ANDAMENTO") return "Em andamento";
   if (status === "CONCLUIDO") return "Concluido";
   return "Cancelado";
 }
@@ -1011,11 +1250,14 @@ function priorityLabel(priority: ApiAcompanhamentoPrioridade | "Todas") {
   if (priority === "BAIXA") return "Baixa";
   if (priority === "MEDIA") return "Media";
   if (priority === "ALTA") return "Alta";
-  return "Critica";
+  if (priority === "URGENTE") return "Urgente";
+  return "Crítica (legado)";
 }
 
 function typeLabel(type: ApiAcompanhamentoTipo | "Todos") {
   if (type === "Todos") return "Todos os tipos";
+  if (type === "TAREFA") return "Tarefa";
+  if (type === "RETORNO") return "Retorno";
   if (type === "LIGACAO") return "Ligacao";
   if (type === "WHATSAPP") return "WhatsApp";
   if (type === "EMAIL") return "E-mail";
@@ -1026,12 +1268,13 @@ function typeLabel(type: ApiAcompanhamentoTipo | "Todos") {
 
 function statusTone(status: ApiAcompanhamentoStatus) {
   if (status === "PENDENTE") return "border-[color:rgba(53,111,152,0.28)] text-[var(--info)]";
+  if (status === "EM_ANDAMENTO") return "border-[color:rgba(184,114,22,0.3)] text-[var(--warning)]";
   if (status === "CONCLUIDO") return "border-[color:rgba(36,122,82,0.28)] text-[var(--success)]";
   return "border-[var(--border-strong)] text-[var(--text-muted)]";
 }
 
 function priorityTone(priority: ApiAcompanhamentoPrioridade) {
-  if (priority === "CRITICA") return "text-[var(--danger)]";
+  if (priority === "CRITICA" || priority === "URGENTE") return "text-[var(--danger)]";
   if (priority === "ALTA") return "text-[var(--warning)]";
   if (priority === "MEDIA") return "text-[var(--info)]";
   return "text-[var(--text-muted)]";
@@ -1056,7 +1299,7 @@ function agendaStatusCounts(items: ApiAcompanhamento[]): AgendaStatusCounts {
     pending: items.filter((item) => item.status === "PENDENTE").length,
     today: items.filter((item) => item.status === "PENDENTE" && isSameLocalDay(new Date(item.dataHora), now)).length,
     late: items.filter((item) => item.status === "PENDENTE" && new Date(item.dataHora).getTime() < now.getTime()).length,
-    critical: items.filter((item) => item.status === "PENDENTE" && item.prioridade === "CRITICA").length,
+    critical: items.filter((item) => item.status === "PENDENTE" && (item.prioridade === "URGENTE" || item.prioridade === "CRITICA")).length,
     done: items.filter((item) => item.status === "CONCLUIDO").length,
   };
 }

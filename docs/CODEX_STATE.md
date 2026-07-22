@@ -272,6 +272,44 @@ Data da verificacao: 21/07/2026.
   e deliberadamente simples e a proposta permanece vinculada ao contexto do
   Negocio. O WhatsApp continua pausado e nenhuma chamada Meta foi realizada.
 
+## Agenda e acompanhamentos
+
+- H4 implementada localmente na branch `feature/agenda-and-followups`; nenhuma
+  parte desta etapa foi publicada e a producao oficial permanece no commit
+  `7b9f5564272a8df740cfd65e7c10ad9aed234e79`, com 20 migrations.
+- A estrutura existente de `Acompanhamento` foi reutilizada para tarefas,
+  retornos, reunioes, ligacoes, visitas e outros compromissos. Os status
+  operacionais sao `PENDENTE`, `EM_ANDAMENTO`, `CONCLUIDO` e `CANCELADO`, com
+  atraso derivado pelo horario do servidor.
+- A agenda suporta visoes Minha agenda, Hoje, Proximos, Atrasados, Concluidos,
+  Equipe e Todos, com filtros por responsavel, tipo, status, prioridade e
+  vinculos opcionais a Cliente, Lead, Negocio, ConversaCanal e
+  PropostaComercial.
+- Criacao, edicao, transferencia de responsavel, reagendamento, inicio,
+  conclusao idempotente, cancelamento e reabertura usam revisao otimista. Uma
+  disputa preserva a primeira confirmacao e retorna conflito controlado para a
+  segunda.
+- `HistoricoAcompanhamento` registra autor, acao, estados, responsaveis, datas e
+  observacao sanitizada na mesma transacao da mudanca. ADMIN e GERENTE possuem
+  visao da equipe; VENDEDOR opera apenas o escopo permitido do proprio tenant.
+- A migration aditiva
+  `20260722043000_add_agenda_and_followups` foi aplicada exclusivamente em
+  sandbox, elevando o banco de teste para 21 migrations. Ela preservou os
+  acompanhamentos existentes, tornou o Cliente opcional e adicionou vinculos,
+  revisao, autoria, conclusao, cancelamento e historico estruturado. Nao foi
+  aplicada ao `dev.db` nem a producao.
+- Passaram testes focais de migration, backend, concorrencia, tenant,
+  permissoes e frontend, alem das regressoes de Inbox, Propostas, Site e escopo
+  comercial, Prisma validate, lint, build, `node --check` e
+  `git diff --check`. O warning conhecido do bundle acima de 500 kB permanece.
+- O QA local em 1366x768, 1440x900, 1920x1080 e 900x768 validou lista, filtros,
+  estados, historico, modal, foco, erro recuperavel e responsividade sem
+  overflow horizontal. Evidencias ficaram somente em
+  `%TEMP%\crm-h4-agenda-visual-qa`.
+- Limitacoes: atrasos sao derivados e nao geram notificacao externa; nao existe
+  e-mail, WhatsApp, push ou calendario mensal complexo nesta etapa. O WhatsApp
+  continua formalmente pausado aguardando autenticacao manual da Meta.
+
 ## WhatsApp
 
 - Nenhuma credencial Meta esta configurada e nenhuma chamada externa foi feita.

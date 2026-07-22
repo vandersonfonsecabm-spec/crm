@@ -108,14 +108,24 @@ model Acompanhamento {
   id              Int                      @id @default(autoincrement())
   empresaId       Int
   empresa         Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
-  clienteId       Int
-  cliente         Cliente                  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  clienteId       Int?
+  cliente         Cliente?                 @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   leadId          Int?
   lead            Lead?                    @relation(fields: [leadId], references: [id], onDelete: SetNull)
   conversaCanalId Int?
   conversaCanal   ConversaCanal?           @relation(fields: [conversaCanalId], references: [id], onDelete: SetNull)
   negocioId       Int?
   negocio         Negocio?                 @relation(fields: [negocioId], references: [id], onDelete: SetNull)
+  propostaComercialId Int?
+  propostaComercial   PropostaComercial?   @relation(fields: [propostaComercialId], references: [id], onDelete: SetNull)
+  responsavelId   Int?
+  responsavelUsuario Usuario?               @relation("AcompanhamentoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  autorId         Int?
+  autor            Usuario?                 @relation("AcompanhamentoAutor", fields: [autorId], references: [id], onDelete: SetNull)
+  concluidoPorId  Int?
+  concluidoPor    Usuario?                  @relation("AcompanhamentoConcluidoPor", fields: [concluidoPorId], references: [id], onDelete: SetNull)
+  canceladoPorId  Int?
+  canceladoPor    Usuario?                  @relation("AcompanhamentoCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
   titulo          String
   descricao       String?
   dataHora        DateTime
@@ -124,8 +134,11 @@ model Acompanhamento {
   tipo            TipoAcompanhamento       @default(LIGACAO)
   responsavel     String?
   concluidoEm     DateTime?
+  canceladoEm     DateTime?
+  revisao         Int                      @default(1)
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
+  historico       HistoricoAcompanhamento[]
 
   @@index([empresaId])
   @@index([clienteId])
@@ -137,6 +150,33 @@ model Acompanhamento {
   @@index([empresaId, leadId])
   @@index([empresaId, conversaCanalId])
   @@index([empresaId, negocioId])
+  @@index([empresaId, propostaComercialId])
+  @@index([empresaId, responsavelId, status])
+  @@index([empresaId, autorId, createdAt])
+}
+
+model HistoricoAcompanhamento {
+  id                       Int                        @id @default(autoincrement())
+  empresaId                Int
+  empresa                  Empresa                    @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  acompanhamentoId         Int
+  acompanhamento           Acompanhamento             @relation(fields: [acompanhamentoId], references: [id], onDelete: Cascade)
+  autorId                  Int
+  autor                    Usuario                     @relation("HistoricoAcompanhamentoAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  acao                     TipoAcaoAcompanhamento
+  statusAnterior           StatusAcompanhamento?
+  statusNovo               StatusAcompanhamento?
+  responsavelAnteriorId    Int?
+  responsavelAnterior      Usuario?                    @relation("HistoricoAcompanhamentoResponsavelAnterior", fields: [responsavelAnteriorId], references: [id], onDelete: SetNull)
+  responsavelNovoId        Int?
+  responsavelNovo          Usuario?                    @relation("HistoricoAcompanhamentoResponsavelNovo", fields: [responsavelNovoId], references: [id], onDelete: SetNull)
+  dataHoraAnterior         DateTime?
+  dataHoraNova             DateTime?
+  observacao               String?
+  createdAt                DateTime                    @default(now())
+
+  @@index([empresaId, acompanhamentoId, createdAt])
+  @@index([empresaId, autorId, createdAt])
 }
 
 model Empresa {
@@ -170,6 +210,7 @@ model Empresa {
   historicosQualificacaoConversa HistoricoQualificacaoConversa[]
   propostasComerciais          PropostaComercial[]
   historicosPropostasComerciais HistoricoPropostaComercial[]
+  historicosAcompanhamentos    HistoricoAcompanhamento[]
   eventosWebhook             EventoWebhook[]
   funcionalidades            EmpresaFuncionalidade[]
   auditoriasFuncionalidade   AuditoriaFuncionalidade[]
@@ -203,6 +244,13 @@ model Usuario {
   propostasComerciaisResponsaveis PropostaComercial[] @relation("PropostaComercialResponsavel")
   propostasComerciaisCriadas      PropostaComercial[] @relation("PropostaComercialAutor")
   historicosPropostasComerciais   HistoricoPropostaComercial[] @relation("HistoricoPropostaComercialAutor")
+  acompanhamentosResponsaveis     Acompanhamento[] @relation("AcompanhamentoResponsavel")
+  acompanhamentosCriados          Acompanhamento[] @relation("AcompanhamentoAutor")
+  acompanhamentosConcluidos       Acompanhamento[] @relation("AcompanhamentoConcluidoPor")
+  acompanhamentosCancelados       Acompanhamento[] @relation("AcompanhamentoCanceladoPor")
+  historicosAcompanhamentos       HistoricoAcompanhamento[] @relation("HistoricoAcompanhamentoAutor")
+  historicosAcompanhamentosAnteriores HistoricoAcompanhamento[] @relation("HistoricoAcompanhamentoResponsavelAnterior")
+  historicosAcompanhamentosNovos     HistoricoAcompanhamento[] @relation("HistoricoAcompanhamentoResponsavelNovo")
   funcionalidadesHabilitadas EmpresaFuncionalidade[]   @relation("FuncionalidadeHabilitadaPor")
   auditoriasFuncionalidade   AuditoriaFuncionalidade[] @relation("AuditoriaFuncionalidadeUsuario")
 
@@ -781,6 +829,7 @@ model PropostaComercial {
   updatedAt                DateTime                    @updatedAt
   itens                    ItemPropostaComercial[]
   historico                HistoricoPropostaComercial[]
+  acompanhamentos          Acompanhamento[]
 
   @@unique([empresaId, codigo])
   @@unique([empresaId, propostaOrigemId, versao])
@@ -1015,6 +1064,7 @@ enum TipoMovimentacaoEstoque {
 
 enum StatusAcompanhamento {
   PENDENTE
+  EM_ANDAMENTO
   CONCLUIDO
   CANCELADO
 }
@@ -1023,6 +1073,7 @@ enum PrioridadeAcompanhamento {
   BAIXA
   MEDIA
   ALTA
+  URGENTE
   CRITICA
 }
 
@@ -1033,12 +1084,25 @@ enum TipoAcaoQualificacaoConversa {
 }
 
 enum TipoAcompanhamento {
+  TAREFA
+  RETORNO
   LIGACAO
   WHATSAPP
   EMAIL
   REUNIAO
   VISITA
   OUTRO
+}
+
+enum TipoAcaoAcompanhamento {
+  CRIAR
+  EDITAR
+  ALTERAR_RESPONSAVEL
+  REAGENDAR
+  INICIAR
+  CONCLUIR
+  CANCELAR
+  REABRIR
 }
 
 enum StatusPropostaComercial {

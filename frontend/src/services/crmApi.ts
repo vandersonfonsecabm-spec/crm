@@ -539,13 +539,14 @@ export type ApiResumoEstoque = {
   ultimasMovimentacoes: ApiMovimentacaoEstoque[];
 };
 
-export type ApiAcompanhamentoStatus = "PENDENTE" | "CONCLUIDO" | "CANCELADO";
-export type ApiAcompanhamentoPrioridade = "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
-export type ApiAcompanhamentoTipo = "LIGACAO" | "WHATSAPP" | "EMAIL" | "REUNIAO" | "VISITA" | "OUTRO";
+export type ApiAcompanhamentoStatus = "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDO" | "CANCELADO";
+export type ApiAcompanhamentoPrioridade = "BAIXA" | "MEDIA" | "ALTA" | "URGENTE" | "CRITICA";
+export type ApiAcompanhamentoTipo = "TAREFA" | "RETORNO" | "REUNIAO" | "LIGACAO" | "VISITA" | "OUTRO" | "WHATSAPP" | "EMAIL";
+export type ApiAcompanhamentoVisao = "TODOS" | "HOJE" | "PROXIMOS" | "ATRASADOS" | "CONCLUIDOS" | "MINHA" | "EQUIPE";
 
 export type ApiAcompanhamento = {
   id: number;
-  clienteId: number;
+  clienteId: number | null;
   cliente: {
     id: number;
     nome: string;
@@ -562,8 +563,23 @@ export type ApiAcompanhamento = {
   status: ApiAcompanhamentoStatus;
   tipo: ApiAcompanhamentoTipo;
   responsavel?: string | null;
+  responsavelId?: number | null;
+  responsavelUsuario?: { id: number | null; nome: string; papel?: string | null } | null;
+  autorId?: number | null;
+  autor?: { id: number; nome: string } | null;
+  leadId?: number | null;
+  lead?: { id: number; interesse?: string | null; status: string; responsavelId?: number | null } | null;
+  negocioId?: number | null;
+  negocio?: { id: number; titulo?: string | null; etapa: string; responsavelId?: number | null } | null;
+  conversaCanalId?: number | null;
+  conversaCanal?: { id: number; status: string; responsavelId?: number | null; contatoCanal?: { clienteId?: number | null; nome?: string | null } | null } | null;
+  propostaComercialId?: number | null;
+  propostaComercial?: { id: number; codigo: string; titulo: string; status: string; negocioId: number } | null;
   concluidoEm?: string | null;
+  canceladoEm?: string | null;
+  revisao: number;
   atrasado: boolean;
+  permissoes?: { editar: boolean; concluir: boolean; cancelar: boolean; reabrir: boolean; verEquipe: boolean };
   createdAt: string;
   updatedAt: string;
 };
@@ -586,6 +602,12 @@ export type ApiAcompanhamentoResumo = {
 export type AcompanhamentoQueryParams = {
   busca?: string;
   clienteId?: number;
+  leadId?: number;
+  negocioId?: number;
+  conversaCanalId?: number;
+  propostaComercialId?: number;
+  responsavelId?: number;
+  visao?: ApiAcompanhamentoVisao;
   status?: ApiAcompanhamentoStatus;
   prioridade?: ApiAcompanhamentoPrioridade;
   tipo?: ApiAcompanhamentoTipo;
@@ -598,13 +620,43 @@ export type AcompanhamentoQueryParams = {
 };
 
 export type AcompanhamentoPayload = {
-  clienteId: number;
+  clienteId?: number | null;
+  leadId?: number | null;
+  negocioId?: number | null;
+  conversaCanalId?: number | null;
+  propostaComercialId?: number | null;
   titulo: string;
   descricao?: string;
   dataHora: string;
   prioridade: ApiAcompanhamentoPrioridade;
   tipo: ApiAcompanhamentoTipo;
-  responsavel?: string;
+  responsavelId?: number;
+  revisao?: number;
+  observacao?: string;
+};
+
+export type ApiAcompanhamentoHistorico = {
+  id: number;
+  acao: "CRIAR" | "EDITAR" | "ALTERAR_RESPONSAVEL" | "REAGENDAR" | "INICIAR" | "CONCLUIR" | "CANCELAR" | "REABRIR";
+  statusAnterior?: ApiAcompanhamentoStatus | null;
+  statusNovo?: ApiAcompanhamentoStatus | null;
+  autor: { id: number; nome: string };
+  responsavelAnterior?: { id: number; nome: string } | null;
+  responsavelNovo?: { id: number; nome: string } | null;
+  dataHoraAnterior?: string | null;
+  dataHoraNova?: string | null;
+  observacao?: string | null;
+  createdAt: string;
+};
+
+export type ApiAgendaOptions = {
+  podeVerEquipe: boolean;
+  usuarios: Array<{ id: number; nome: string; papel: string }>;
+  clientes: Array<{ id: number; nome: string; empresa?: string | null }>;
+  leads: Array<{ id: number; interesse?: string | null; status: string; cliente: { nome: string } }>;
+  negocios: Array<{ id: number; titulo?: string | null; etapa: string; cliente: { nome: string } }>;
+  conversas: Array<{ id: number; status: string; contatoCanal: { nome?: string | null; cliente?: { nome: string } | null } }>;
+  propostas: Array<{ id: number; codigo: string; titulo: string; status: string }>;
 };
 
 export type ProdutoQueryParams = {
@@ -1383,6 +1435,14 @@ export async function fetchAcompanhamentoResumo(params: { dataInicial?: string; 
   return requestApiGetAuthenticated<ApiAcompanhamentoResumo>(`/acompanhamentos/resumo${toQueryString(params)}`);
 }
 
+export async function fetchAgendaOptions() {
+  return requestApiGetAuthenticated<ApiAgendaOptions>("/acompanhamentos/opcoes");
+}
+
+export async function fetchAcompanhamentoHistorico(id: number) {
+  return requestApiGetAuthenticated<{ data: ApiAcompanhamentoHistorico[] }>(`/acompanhamentos/${id}/historico`);
+}
+
 export async function createAcompanhamento(payload: AcompanhamentoPayload) {
   return requestApiPost<ApiAcompanhamento>("/acompanhamentos", payload);
 }
@@ -1391,16 +1451,20 @@ export async function updateAcompanhamento(id: number, payload: Partial<Acompanh
   return requestApiWrite<ApiAcompanhamento>("PATCH", `/acompanhamentos/${id}`, payload);
 }
 
-export async function concluirAcompanhamento(id: number) {
-  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/concluir`, {});
+export async function iniciarAcompanhamento(id: number, revisao?: number) {
+  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/iniciar`, revisao ? { revisao } : {});
 }
 
-export async function reabrirAcompanhamento(id: number) {
-  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/reabrir`, {});
+export async function concluirAcompanhamento(id: number, revisao?: number) {
+  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/concluir`, revisao ? { revisao } : {});
 }
 
-export async function cancelarAcompanhamento(id: number) {
-  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/cancelar`, {});
+export async function reabrirAcompanhamento(id: number, revisao?: number) {
+  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/reabrir`, revisao ? { revisao } : {});
+}
+
+export async function cancelarAcompanhamento(id: number, revisao?: number) {
+  return requestApiPost<ApiAcompanhamento>(`/acompanhamentos/${id}/cancelar`, revisao ? { revisao } : {});
 }
 
 export async function createClienteOnBackend(client: Client) {

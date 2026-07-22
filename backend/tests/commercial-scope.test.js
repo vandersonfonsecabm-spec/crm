@@ -1,20 +1,16 @@
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 
-const backendDir = path.resolve(__dirname, "..");
-const databaseName = `commercial-scope-test-${process.pid}.db`;
-const databasePath = path.join(backendDir, "prisma", databaseName);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+if (!process.env.CRM_TEST_DATABASE_URL) {
+  throw new Error("commercial-scope.test.js exige a sandbox oficial do Prisma.");
+}
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "commercial-scope-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
 process.env.INTEGRATION_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-process.env.DATABASE_URL = `file:./${databaseName}`;
+process.env.DATABASE_URL = process.env.CRM_TEST_DATABASE_URL;
 
 let api;
 let prisma;
@@ -22,13 +18,6 @@ let server;
 let baseUrl;
 
 before(async () => {
-  fs.copyFileSync(sourceDatabase, databasePath);
-  execFileSync(process.execPath, [path.join(backendDir, "node_modules", "prisma", "build", "index.js"), "migrate", "deploy"], {
-    cwd: backendDir,
-    env: process.env,
-    stdio: "pipe",
-  });
-
   api = require("../src/server");
   prisma = api.prisma;
   await new Promise((resolve) => {
@@ -40,10 +29,6 @@ before(async () => {
 after(async () => {
   if (prisma) await prisma.$disconnect();
   if (server) await new Promise((resolve) => server.close(resolve));
-  for (const suffix of ["", "-wal", "-shm", "-journal"]) {
-    const file = `${databasePath}${suffix}`;
-    if (fs.existsSync(file)) fs.rmSync(file, { force: true });
-  }
 });
 
 test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empresa", async () => {
@@ -210,18 +195,18 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   const invalidScheduleDate = await request("PATCH", `/acompanhamentos/${scheduleA.body.id}`, {
     dataHora: "data-invalida",
   }, tokenA);
-  assert.equal(invalidScheduleDate.status, 400);
+  assert.equal(invalidScheduleDate.status, 422);
   const invalidScheduleStatus = await request("PATCH", `/acompanhamentos/${scheduleA.body.id}`, {
     status: "INVALIDO",
   }, tokenA);
-  assert.equal(invalidScheduleStatus.status, 400);
+  assert.equal(invalidScheduleStatus.status, 422);
 
   const completedSchedule = await request("POST", `/acompanhamentos/${scheduleA.body.id}/concluir`, {}, tokenA);
   assert.equal(completedSchedule.status, 200);
   assert.equal(completedSchedule.body.status, "CONCLUIDO");
   assert.ok(completedSchedule.body.concluidoEm);
   const repeatedCompletion = await request("POST", `/acompanhamentos/${scheduleA.body.id}/concluir`, {}, tokenA);
-  assert.equal(repeatedCompletion.status, 409);
+  assert.equal(repeatedCompletion.status, 200);
 
   const reopenedSchedule = await request("POST", `/acompanhamentos/${scheduleA.body.id}/reabrir`, {}, tokenA);
   assert.equal(reopenedSchedule.status, 200);

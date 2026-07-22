@@ -18,7 +18,7 @@ const activeBackup = path.join(protectedDir, "dev-original-active.db");
 const command = process.argv.slice(2);
 const expectedHash = "cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a";
 const expectedSize = 532480;
-const expectedMigrationCount = 20;
+const expectedMigrationCount = 21;
 const prismaCli = resolvePrismaCli();
 let baseline;
 let sentinelActive = false;
