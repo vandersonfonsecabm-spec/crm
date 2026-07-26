@@ -11,9 +11,9 @@ Data da verificacao: 22/07/2026.
 
 ## Git
 
-- Baseline oficial publicado: `0bf2fcf3580552ee5f6383b7ff05f6945d8c415a`.
-- Branch local: `feature/customer-360`, com tres commits locais a frente de
-  `origin/master`, zero atras e worktree limpo apos o commit funcional H5.
+- Baseline oficial publicado: `e308b1bd4d554a879dd6a112c4ed82a29598a376`.
+- Branch local: `feature/customer-360`, com um commit documental local a frente
+  de `origin/master`, zero atras e worktree limpo apos a publicacao H5P.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -24,10 +24,11 @@ Data da verificacao: 22/07/2026.
 - Frontend canonico: https://crm-murex-six-83.vercel.app.
 - Backend: https://api-production-875f9.up.railway.app.
 - Servico Railway: `api`; nao utilizar `crm-agro-demo-api`.
-- Railway esta `Active`, Vercel esta `Ready` e producao possui 21 migrations;
+- Railway esta `Active`, Vercel esta `Ready` e producao possui 22 migrations;
   health esperado HTTP 200.
-- H2, H3 e H4 estao publicadas. A qualificacao comercial, as propostas e a
-  Agenda e Acompanhamentos estao disponiveis em producao.
+- H2, H3, H4 e H5 estao publicadas. A qualificacao comercial, as propostas, a
+  Agenda e Acompanhamentos e o Cliente 360 graus estao disponiveis em
+  producao.
 - H1.1 foi publicada no commit
   `93e1c0b2ea7d9d4f13b06fba2f8c275c734bb312`. O Railway publicou o deployment
   `769fba0f-d9b5-4076-bbd9-810059f05912` e a Vercel publicou o deployment
@@ -323,14 +324,16 @@ Data da verificacao: 22/07/2026.
 
 ## Cliente 360 graus
 
-- H5 foi implementada localmente na branch `feature/customer-360`, sem push,
-  deploy ou alteracao de producao. A producao oficial permanece no commit
-  `0bf2fcf3580552ee5f6383b7ff05f6945d8c415a`, com 21 migrations.
+- H5P foi publicada em 26/07/2026 no commit
+  `e308b1bd4d554a879dd6a112c4ed82a29598a376`. O Railway esta `Active` no
+  deployment `f66f3476-3e04-4973-b5dd-0d75f6c8a656` e a Vercel esta `Ready`
+  no deployment `DtRsP7PvEMKBtmthUp7My9hnLgC8`, com o alias canonico
+  preservado.
 - `Cliente` continua sendo a entidade canonica. A migration aditiva
   `20260722133000_add_customer_360_fields` acrescenta somente `cidade`,
   `estado`, `cpfCnpj` opcionais e `revisao` com valor inicial 1. Ela foi
-  aplicada apenas em sandbox, onde as 22 migrations foram validadas sem mudar
-  o fingerprint dos dados comerciais preexistentes.
+  aplicada exatamente uma vez em producao pelo startup automatico, elevando o
+  total de 21 para 22 migrations, sem pendencias.
 - A API oferece `GET /clientes/:id/360`, `GET /clientes/:id/timeline` e
   `PATCH /clientes/:id/cadastro`. Tenant vem exclusivamente da sessao,
   atualizacoes cadastrais usam revisao otimista e conflitos retornam `409`.
@@ -357,6 +360,28 @@ Data da verificacao: 22/07/2026.
   resumo, compras comprovadas, timeline com varios tipos, filtro de mensagens,
   navegacao contextual, edicao e erro recuperavel, sem overflow horizontal.
   Evidencias ficaram somente em `%TEMP%\crm-h5-customer-360-qa`.
+- O backup consistente pre-H5P
+  `/app/data/crm-agro-pre-h5p-20260726T182022Z.db` possui 876.544 bytes e
+  SHA-256
+  `b9a219af857b0e2d4678f20c39f4a2677fed40be7000d10092ae64b3aa46b874`.
+  O backup consistente pos-H5P
+  `/app/data/crm-agro-post-h5p-20260726T182638Z.db` possui 876.544 bytes e
+  SHA-256
+  `0a1e334a2106d1d9dfcf3bb330045830fdd0c9a03ecef154bc4a9254f62b967b`.
+- O banco de producao pos-migration possui 880.640 bytes, SHA-256 fisico
+  `04bc3aa2eff00b137ac792c1a989035145dd327d04d75b802e818ff5ac541ac8`,
+  `quick_check` `ok`, zero violacoes de foreign key e sem WAL ou SHM. O
+  fingerprint estrutural passou de
+  `7439fdffae9da1f553c984f655e42b3270f1d9f1209d19efcfa6a28a12283462`
+  para
+  `602cf1f43bad70d180a421cdcef28703165c2625da98858be0f7762b5bc81172`;
+  o fingerprint comercial compativel permaneceu
+  `709142ef246109fc1ecfa5749786472253fbe0a31e7da9590e188d2d769f2181`.
+- O QA de producao foi somente leitura. Sem sessao ADMIN autenticada
+  disponivel, foram validados health HTTP 200, rotas SPA sem 404 de
+  infraestrutura, protecao por login e respostas HTTP 401 das APIs H5; a
+  cobertura autenticada de cadastro, timeline, filtros e navegacao permanece
+  comprovada pelos testes e pelo QA local aprovado.
 - O `dev.db` permaneceu intacto com 532.480 bytes, SHA-256
   `cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a`,
   9 migrations, `quick_check` `ok`, zero violacoes de foreign key e sem WAL ou
@@ -393,7 +418,7 @@ Data da verificacao: 22/07/2026.
 
 ## Plano oficial pos-auditoria
 
-- H5 - Cliente 360 graus (implementada localmente; H5P pendente)
+- H5 - Cliente 360 graus (publicada)
 - H6 - Tempo de etapa e proxima acao
 - H7 - Automacoes
 - H8 - Notificacoes e checklist
