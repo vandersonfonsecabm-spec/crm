@@ -22,14 +22,14 @@ function handleError(res, error) {
   const status = error && Number.isInteger(error.status) ? error.status : 500;
   if (status >= 500) console.error("Falha na simulacao de WhatsApp.", sanitizeError(error));
   return res.status(status).json({
-    erro: error && error.message ? error.message : "Nao foi possivel simular a mensagem.",
-    codigo: error && error.codigo ? error.codigo : "WHATSAPP_SIMULATION_ERROR",
+    erro: status >= 500 ? "Nao foi possivel simular a mensagem." : error && error.message ? error.message : "Nao foi possivel simular a mensagem.",
+    codigo: status >= 500 ? "WHATSAPP_SIMULATION_ERROR" : error && error.codigo ? error.codigo : "WHATSAPP_SIMULATION_ERROR",
   });
 }
 
 function sanitizeError(error) {
   if (!error) return null;
-  return { name: error.name, message: error.message, code: error.code };
+  return { name: error.name, code: error.code };
 }
 
-module.exports = { mountWhatsappSimulationRoutes };
+module.exports = { mountWhatsappSimulationRoutes, _private: { handleError } };

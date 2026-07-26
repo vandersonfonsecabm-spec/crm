@@ -25,17 +25,26 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
     const { start, end } = dayRange(now);
     const access = visibilityWhere(context);
     const base = { empresaId: context.empresaId, ...access };
-    const [pendentes, paraHoje, atrasados, urgentes, concluidosPeriodo, proximos, porTipo] = await prisma.$transaction([
-      prisma.acompanhamento.count({ where: { ...base, status: { in: ACTIVE_STATUSES } } }),
-      prisma.acompanhamento.count({ where: { ...base, status: { in: ACTIVE_STATUSES }, dataHora: { gte: start, lte: end } } }),
-      prisma.acompanhamento.count({ where: { ...base, status: { in: ACTIVE_STATUSES }, dataHora: { lt: now } } }),
-      prisma.acompanhamento.count({ where: { ...base, status: { in: ACTIVE_STATUSES }, prioridade: { in: ["URGENTE", "CRITICA"] } } }),
-      prisma.acompanhamento.count({ where: { ...base, status: "CONCLUIDO", concluidoEm: { gte: start, lte: end } } }),
-      prisma.acompanhamento.findMany({ where: { ...base, status: { in: ACTIVE_STATUSES }, dataHora: { gte: now } }, include: itemInclude(), orderBy: [{ dataHora: "asc" }, { id: "asc" }], take: 6 }),
-      prisma.acompanhamento.groupBy({ by: ["tipo"], where: { ...base, status: { in: ACTIVE_STATUSES } }, _count: { _all: true } }),
+    const from = optionalDate(query.dataInicial, "dataInicial");
+    const to = optionalDate(query.dataFinal, "dataFinal");
+    const period = from || to ? { dataHora: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {};
+    const todayStart = from && from > start ? from : start;
+    const todayEnd = to && to < end ? to : end;
+    const completionPeriod = from || to
+      ? { concluidoEm: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } }
+      : { concluidoEm: { gte: start, lte: end } };
+    const [total, pendentes, paraHoje, atrasados, urgentes, concluidosPeriodo, proximos, porTipo] = await prisma.$transaction([
+      prisma.acompanhamento.count({ where: { ...base, ...period } }),
+      prisma.acompanhamento.count({ where: { ...base, ...period, status: { in: ACTIVE_STATUSES } } }),
+      prisma.acompanhamento.count({ where: { ...base, status: { in: ACTIVE_STATUSES }, dataHora: { gte: todayStart, lte: todayEnd } } }),
+      prisma.acompanhamento.count({ where: { ...base, ...period, status: { in: ACTIVE_STATUSES }, dataHora: { ...(period.dataHora || {}), lt: now } } }),
+      prisma.acompanhamento.count({ where: { ...base, ...period, status: { in: ACTIVE_STATUSES }, prioridade: { in: ["URGENTE", "CRITICA"] } } }),
+      prisma.acompanhamento.count({ where: { ...base, status: "CONCLUIDO", ...completionPeriod } }),
+      prisma.acompanhamento.findMany({ where: { ...base, ...period, status: { in: ACTIVE_STATUSES }, dataHora: { ...(period.dataHora || {}), gte: now } }, include: itemInclude(), orderBy: [{ dataHora: "asc" }, { id: "asc" }], take: 6 }),
+      prisma.acompanhamento.groupBy({ by: ["tipo"], where: { ...base, ...period, status: { in: ACTIVE_STATUSES } }, _count: { _all: true } }),
     ]);
     return {
-      indicadores: { pendentes, paraHoje, atrasados, criticos: urgentes, concluidosPeriodo },
+      indicadores: { total, pendentes, paraHoje, atrasados, criticos: urgentes, concluidosPeriodo },
       proximos: proximos.map((row) => present(context, row, now)),
       porTipo: porTipo.map((row) => ({ tipo: row.tipo, total: row._count._all })),
     };
@@ -402,10 +411,51 @@ function sanitized(value) {
 }
 
 function requiredDate(value, field) {
-  if (typeof value !== "string" && !(value instanceof Date)) invalid(`${field} invalida.`);
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) invalid(`${field} invalida.`);
+    return new Date(value.getTime());
+  }
+  if (typeof value !== "string") invalid(`${field} invalida.`);
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/,
+  );
+  if (!match) invalid(`${field} invalida.`);
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, , timezone] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const timezoneValid = timezone === "Z" || validTimezoneOffset(timezone);
+  if (
+    year < 1
+      || month < 1
+      || month > 12
+      || day < 1
+      || day > daysInMonth(year, month)
+      || hour > 23
+      || minute > 59
+      || second > 59
+      || !timezoneValid
+  ) {
+    invalid(`${field} invalida.`);
+  }
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) invalid(`${field} invalida.`);
   return date;
+}
+
+function daysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function validTimezoneOffset(value) {
+  const match = value.match(/^([+-])(\d{2}):(\d{2})$/);
+  if (!match) return false;
+  const hours = Number(match[2]);
+  const minutes = Number(match[3]);
+  return hours <= 14 && minutes <= 59 && (hours < 14 || minutes === 0);
 }
 
 function optionalDate(value, field) {

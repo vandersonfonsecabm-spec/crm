@@ -117,11 +117,13 @@ test("P0: autenticacao normal, tenant e estoque permanecem protegidos", async ()
 
   const primaryClients = await request("GET", "/clientes", undefined, adminLogin.body.access_token);
   assert.equal(primaryClients.status, 200);
-  assert.deepEqual(primaryClients.body.map((client) => client.nome), ["Cliente exclusivo primario"]);
+  assert.deepEqual(primaryClients.body.data.map((client) => client.nome), ["Cliente exclusivo primario"]);
+  assert.equal(primaryClients.body.pagination.total, 1);
 
   const secondaryClients = await request("GET", "/clientes", undefined, secondaryLogin.body.access_token);
   assert.equal(secondaryClients.status, 200);
-  assert.deepEqual(secondaryClients.body.map((client) => client.nome), ["Cliente exclusivo secundario"]);
+  assert.deepEqual(secondaryClients.body.data.map((client) => client.nome), ["Cliente exclusivo secundario"]);
+  assert.equal(secondaryClients.body.pagination.total, 1);
 
   const adminUsers = await request("GET", "/usuarios", undefined, adminLogin.body.access_token);
   assert.equal(adminUsers.status, 200);

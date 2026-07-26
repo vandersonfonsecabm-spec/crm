@@ -239,10 +239,11 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     } catch (error) {
       const payload = error.sincronizacao ? { sincronizacao: syncResponse(error.sincronizacao) } : {};
       const status = error.status || statusFromCode(error.code) || 500;
+      if (status >= 500) console.error("Falha ao sincronizar integracao.", sanitizedError(error));
       return res.status(status).json({
-        erro: error.message || "Não foi possível sincronizar a integração.",
-        codigo: error.code || "INTEGRATION_SYNC_ERROR",
-        ...payload,
+        erro: status >= 500 ? "Não foi possível sincronizar a integração." : error.message || "Não foi possível sincronizar a integração.",
+        codigo: status >= 500 ? "INTEGRATION_SYNC_ERROR" : error.code || "INTEGRATION_SYNC_ERROR",
+        ...(status >= 500 ? {} : payload),
       });
     }
   });
@@ -725,13 +726,16 @@ function partialHash(hash) {
 
 function integrationError(res, error, fallbackMessage) {
   const status = error.status || statusFromCode(error.code) || 500;
-  if (status >= 500 && process.env.NODE_ENV !== "production") {
-    console.error(error);
-  }
+  if (status >= 500) console.error(fallbackMessage, sanitizedError(error));
   return res.status(status).json({
-    erro: error.message || fallbackMessage,
-    codigo: error.code || "INTEGRATION_ERROR",
+    erro: status >= 500 ? fallbackMessage : error.message || fallbackMessage,
+    codigo: status >= 500 ? "INTEGRATION_ERROR" : error.code || "INTEGRATION_ERROR",
   });
+}
+
+function sanitizedError(error) {
+  if (!error) return null;
+  return { name: error.name, code: error.code };
 }
 
 function statusFromCode(code) {
@@ -827,6 +831,6 @@ function clean(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
-module.exports = { mountIntegrationHubRoutes };
+module.exports = { mountIntegrationHubRoutes, _private: { integrationError } };
 
 

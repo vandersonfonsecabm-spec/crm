@@ -78,14 +78,14 @@ function handleError(res, error, fallback, code) {
   const status = error && Number.isInteger(error.status) ? error.status : 500;
   if (status >= 500) console.error(fallback, sanitizeError(error));
   return res.status(status).json({
-    erro: error && error.message ? error.message : fallback,
-    codigo: error && error.codigo ? error.codigo : code,
+    erro: status >= 500 ? fallback : error && error.message ? error.message : fallback,
+    codigo: status >= 500 ? code : error && error.codigo ? error.codigo : code,
   });
 }
 
 function sanitizeError(error) {
   if (!error) return null;
-  return { name: error.name, message: error.message, code: error.code };
+  return { name: error.name, code: error.code };
 }
 
-module.exports = { mountChannelRoutes, serializeChannel };
+module.exports = { mountChannelRoutes, serializeChannel, _private: { handleError } };

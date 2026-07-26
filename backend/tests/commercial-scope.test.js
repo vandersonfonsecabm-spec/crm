@@ -73,6 +73,23 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   assert.equal(invalidClient.body.codigo, "CLIENT_VALIDATION_ERROR");
   assert.deepEqual(Object.keys(invalidClient.body.campos).sort(), ["email", "nome", "telefone", "valor"]);
 
+  const ambiguousPayloads = [
+    { favorito: "true" },
+    { favorito: 1 },
+    { quente: "false" },
+    { quente: 0 },
+    { tags: "[\"tag\"]" },
+    { tags: { nome: "tag" } },
+  ];
+  for (const ambiguous of ambiguousPayloads) {
+    const rejected = await request("POST", "/clientes", {
+      nome: "Cliente payload ambiguo",
+      ...ambiguous,
+    }, tokenA);
+    assert.equal(rejected.status, 400);
+    assert.equal(rejected.body.codigo, "CLIENT_VALIDATION_ERROR");
+  }
+
   const clientWithTenant = await request("POST", "/clientes", {
     empresaId: companyB.empresa.id,
     nome: "Cliente Tenant Indevido",
@@ -84,12 +101,14 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
 
   const listA = await request("GET", "/clientes", undefined, tokenA);
   assert.equal(listA.status, 200);
-  assert.ok(listA.body.some((cliente) => cliente.id === clientA.body.id));
-  assert.equal(listA.body.some((cliente) => cliente.id === clientB.body.id), false);
+  assert.ok(listA.body.data.some((cliente) => cliente.id === clientA.body.id));
+  assert.equal(listA.body.data.some((cliente) => cliente.id === clientB.body.id), false);
+  assert.equal(listA.body.pagination.total, 1);
 
   const listB = await request("GET", "/clientes", undefined, tokenB);
-  assert.equal(listB.body.some((cliente) => cliente.id === clientB.body.id), true);
-  assert.equal(listB.body.some((cliente) => cliente.id === clientA.body.id), false);
+  assert.equal(listB.body.data.some((cliente) => cliente.id === clientB.body.id), true);
+  assert.equal(listB.body.data.some((cliente) => cliente.id === clientA.body.id), false);
+  assert.equal(listB.body.pagination.total, 1);
 
   const readCrossClient = await request("GET", `/clientes/${clientB.body.id}/notas`, undefined, tokenA);
   assert.equal(readCrossClient.status, 404);
@@ -115,6 +134,15 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   assert.equal(invalidPatch.body.codigo, "CLIENT_VALIDATION_ERROR");
   const clientAfterInvalidPatch = await prisma.cliente.findUnique({ where: { id: clientA.body.id } });
   assert.equal(clientAfterInvalidPatch.email, clientA.body.email);
+  const tagsBeforeInvalidPatch = clientAfterInvalidPatch.tags;
+  const ambiguousPatch = await request("PATCH", `/clientes/${clientA.body.id}`, {
+    favorito: "false",
+    tags: { apagar: true },
+  }, tokenA);
+  assert.equal(ambiguousPatch.status, 400);
+  const clientAfterAmbiguousPatch = await prisma.cliente.findUnique({ where: { id: clientA.body.id } });
+  assert.equal(clientAfterAmbiguousPatch.favorito, clientAfterInvalidPatch.favorito);
+  assert.equal(clientAfterAmbiguousPatch.tags, tagsBeforeInvalidPatch);
 
   const noteA = await request("POST", `/clientes/${clientA.body.id}/notas`, {
     texto: "Nota isolada da empresa A",
@@ -196,6 +224,29 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
     dataHora: "data-invalida",
   }, tokenA);
   assert.equal(invalidScheduleDate.status, 422);
+  for (const invalidDate of [
+    "2026-02-30T10:00:00Z",
+    "2025-02-29T10:00:00Z",
+    "2026-04-31T10:00:00Z",
+    "2026-13-01T10:00:00Z",
+    "2026-00-01T10:00:00Z",
+    "2026-01-00T10:00:00Z",
+    "2026-01-01T24:00:00Z",
+    "2026-01-01T10:60:00Z",
+    "2026-01-01T10:00:60Z",
+    "2026-01-01",
+    "2026-01-01T10:00:00Zextra",
+  ]) {
+    const rejectedDate = await request("PATCH", `/acompanhamentos/${scheduleA.body.id}`, {
+      dataHora: invalidDate,
+    }, tokenA);
+    assert.equal(rejectedDate.status, 422, invalidDate);
+  }
+  const validLeapDate = await request("PATCH", `/acompanhamentos/${scheduleA.body.id}`, {
+    dataHora: "2024-02-29T10:00:00-03:00",
+  }, tokenA);
+  assert.equal(validLeapDate.status, 200);
+  assert.equal(validLeapDate.body.dataHora, "2024-02-29T13:00:00.000Z");
   const invalidScheduleStatus = await request("PATCH", `/acompanhamentos/${scheduleA.body.id}`, {
     status: "INVALIDO",
   }, tokenA);
@@ -225,7 +276,15 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
 
   const agendaSummaryA = await request("GET", "/acompanhamentos/resumo", undefined, tokenA);
   assert.equal(agendaSummaryA.status, 200);
+  assert.ok(Number.isInteger(agendaSummaryA.body.indicadores.total));
   assert.ok(agendaSummaryA.body.proximos.every((item) => item.clienteId !== clientB.body.id));
+  const invalidSummaryPeriod = await request(
+    "GET",
+    "/acompanhamentos/resumo?dataInicial=2026-02-30T00%3A00%3A00Z",
+    undefined,
+    tokenA,
+  );
+  assert.equal(invalidSummaryPeriod.status, 422);
 
   const dashboardA = await request("GET", "/dashboard", undefined, tokenA);
   const dashboardB = await request("GET", "/dashboard", undefined, tokenB);
@@ -238,8 +297,8 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
 
   const funnelA = await request("GET", "/clientes", undefined, tokenA);
   assert.equal(funnelA.status, 200);
-  assert.ok(funnelA.body.some((cliente) => cliente.id === clientA.body.id && cliente.status === "Contato"));
-  assert.equal(funnelA.body.some((cliente) => cliente.id === clientB.body.id), false);
+  assert.ok(funnelA.body.data.some((cliente) => cliente.id === clientA.body.id && cliente.status === "Contato"));
+  assert.equal(funnelA.body.data.some((cliente) => cliente.id === clientB.body.id), false);
 
   const managerClient = await createClient(managerLogin.body.access_token, "Cliente Gerente A", "Novo", 500);
   assert.equal(managerClient.status, 200);
@@ -261,6 +320,115 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
 
   assert.deepEqual(await channelCounts(), beforeChannelCounts);
   assert.equal((await coreCounts()).cliente, beforeCounts.cliente + 3);
+});
+
+test("clientes usam paginação global, detalhe sob demanda e exclusão protegida", async () => {
+  const company = await registerCompany("Empresa Escala Audit", "admin-escala@comercial.test");
+  const empresaId = company.empresa.id;
+  const token = company.token;
+  const clients = Array.from({ length: 150 }, (_, index) => ({
+    empresaId,
+    nome: `Cliente Escala ${String(index + 1).padStart(3, "0")}`,
+    telefone: `1198${String(index).padStart(7, "0")}`,
+    email: `escala-${index + 1}@example.test`,
+    empresa: "Carteira representativa",
+    interesse: index === 149 ? "Busca global exclusiva" : "Escala",
+    status: index % 5 === 0 ? "Proposta" : "Novo",
+    valor: index * 100,
+    origem: "Teste",
+    favorito: index % 3 === 0,
+    quente: index % 7 === 0,
+    ultimoContato: index % 14,
+    proximoFollowUp: index % 11 === 0 ? "Hoje" : "Depois",
+    tags: JSON.stringify(index === 149 ? ["alvo-global"] : ["escala"]),
+  }));
+  await prisma.cliente.createMany({ data: clients });
+  const stored = await prisma.cliente.findMany({
+    where: { empresaId },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+  await prisma.nota.createMany({
+    data: stored.slice(0, 20).flatMap((client, clientIndex) =>
+      Array.from({ length: 5 }, (_, noteIndex) => ({
+        empresaId,
+        clienteId: client.id,
+        texto: `Nota representativa ${clientIndex}-${noteIndex} com conteúdo suficiente para medir o payload legado.`,
+        tipo: "nota",
+      })),
+    ),
+  });
+
+  const page = await request("GET", "/clientes?page=1&limit=20", undefined, token);
+  const dashboard = await request("GET", "/dashboard", undefined, token);
+  assert.equal(page.status, 200);
+  assert.equal(page.body.data.length, 20);
+  assert.equal(page.body.pagination.total, 150);
+  assert.equal(page.body.pagination.totalPages, 8);
+  assert.ok(page.body.data.every((client) => !Object.prototype.hasOwnProperty.call(client, "notas")));
+  assert.equal(dashboard.body.indicadores.clientes, 150);
+  assert.equal(dashboard.body.atividadesRecentes.length, 5);
+
+  const globalSearch = await request("GET", "/clientes?search=alvo-global&limit=10", undefined, token);
+  assert.equal(globalSearch.status, 200);
+  assert.equal(globalSearch.body.pagination.total, 1);
+  assert.equal(globalSearch.body.data[0].nome, "Cliente Escala 150");
+
+  const proposalFilter = await request("GET", "/clientes?status=Proposta&limit=10", undefined, token);
+  assert.equal(proposalFilter.status, 200);
+  assert.equal(proposalFilter.body.pagination.total, 30);
+  assert.ok(proposalFilter.body.data.every((client) => client.status === "Proposta"));
+
+  const detail = await request("GET", `/clientes/${stored[0].id}`, undefined, token);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.body.notas.length, 5);
+
+  const legacyPayload = await prisma.cliente.findMany({
+    where: { empresaId },
+    include: { notas: true },
+  });
+  const legacyBytes = Buffer.byteLength(JSON.stringify(legacyPayload));
+  const optimizedBytes = Buffer.byteLength(JSON.stringify(page.body)) + Buffer.byteLength(JSON.stringify(dashboard.body));
+  assert.ok(optimizedBytes < legacyBytes / 2, { legacyBytes, optimizedBytes });
+  console.log(`[audit-dashboard] calls_before=2 calls_after=2 legacy_bytes=${legacyBytes} optimized_bytes=${optimizedBytes} legacy_records=150 page_records=20`);
+
+  const freeClient = await createClient(token, "Cliente Excluivel", "Novo", 10);
+  assert.equal((await request("DELETE", `/clientes/${freeClient.body.id}`, undefined, token)).status, 200);
+  assert.equal(await prisma.cliente.count({ where: { id: freeClient.body.id } }), 0);
+
+  const leadClient = await createClient(token, "Cliente com Lead", "Novo", 20);
+  await prisma.lead.create({ data: { empresaId, clienteId: leadClient.body.id, origem: "Teste" } });
+  const leadConflict = await request("DELETE", `/clientes/${leadClient.body.id}`, undefined, token);
+  assert.equal(leadConflict.status, 409);
+  assert.equal(leadConflict.body.codigo, "CLIENT_HAS_RELATIONS");
+
+  const businessClient = await createClient(token, "Cliente com Negocio", "Novo", 30);
+  await prisma.negocio.create({ data: { empresaId, clienteId: businessClient.body.id, titulo: "Negocio protegido" } });
+  const businessConflict = await request("DELETE", `/clientes/${businessClient.body.id}`, undefined, token);
+  assert.equal(businessConflict.status, 409);
+
+  const bothClient = await createClient(token, "Cliente com ambos", "Novo", 40);
+  const linkedLead = await prisma.lead.create({ data: { empresaId, clienteId: bothClient.body.id, origem: "Teste" } });
+  await prisma.negocio.create({ data: { empresaId, clienteId: bothClient.body.id, leadId: linkedLead.id, titulo: "Negocio e Lead" } });
+  assert.equal((await request("DELETE", `/clientes/${bothClient.body.id}`, undefined, token)).status, 409);
+
+  const otherCompany = await registerCompany("Empresa Exclusao Audit", "admin-exclusao@comercial.test");
+  assert.equal((await request("DELETE", `/clientes/${leadClient.body.id}`, undefined, otherCompany.token)).status, 404);
+  assert.equal((await request("DELETE", "/clientes/2147483647", undefined, token)).status, 404);
+
+  const originalDelete = prisma.cliente.delete;
+  prisma.cliente.delete = async () => {
+    throw new Error("SQLITE_INTERNAL at C:\\secret\\database.db");
+  };
+  try {
+    const unexpectedClient = await createClient(token, "Cliente erro inesperado", "Novo", 50);
+    const unexpected = await request("DELETE", `/clientes/${unexpectedClient.body.id}`, undefined, token);
+    assert.equal(unexpected.status, 500);
+    assert.equal(unexpected.body.codigo, "CLIENT_DELETE_ERROR");
+    assert.doesNotMatch(JSON.stringify(unexpected.body), /SQLITE|secret|database\.db/);
+  } finally {
+    prisma.cliente.delete = originalDelete;
+  }
 });
 
 async function registerCompany(nome, email) {

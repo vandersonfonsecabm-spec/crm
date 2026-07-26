@@ -78,38 +78,120 @@ app.use(
 app.get("/dashboard", ...commercialAuth, async (req, res) => {
   try {
     const empresaId = req.commercialEmpresaId;
-    const clientes = await prisma.cliente.findMany({
-      where: { empresaId },
-      include: {
-        notas: { where: { empresaId } },
-      },
-    });
-
-    const totalValue = clientes.reduce((sum, cliente) => sum + Number(cliente.valor || 0), 0);
-    const propostas = clientes.filter((cliente) => cliente.status === "Proposta");
-    const fechados = clientes.filter((cliente) => cliente.status === "Fechado");
-    const quentes = clientes.filter((cliente) => cliente.quente);
+    const [
+      carteira,
+      porStatus,
+      quentes,
+      altoRisco,
+      semContato,
+      followUpsHoje,
+      propostasQuentes,
+      propostasRecentes,
+      contasVencidas,
+      atividadesRecentes,
+      scoreRows,
+    ] = await Promise.all([
+      prisma.cliente.aggregate({
+        where: { empresaId },
+        _count: { _all: true },
+        _sum: { valor: true },
+      }),
+      prisma.cliente.groupBy({
+        by: ["status"],
+        where: { empresaId },
+        _count: { _all: true },
+        _sum: { valor: true },
+      }),
+      prisma.cliente.count({ where: { empresaId, quente: true } }),
+      prisma.cliente.count({ where: { empresaId, OR: [{ status: "Perdido" }, { ultimoContato: { gte: 10 } }] } }),
+      prisma.cliente.count({ where: { empresaId, ultimoContato: { gte: 7 } } }),
+      prisma.cliente.count({ where: { empresaId, proximoFollowUp: { equals: "Hoje" } } }),
+      prisma.cliente.count({ where: { empresaId, status: "Proposta", quente: true } }),
+      prisma.cliente.findMany({
+        where: { empresaId, status: "Proposta" },
+        orderBy: [{ id: "desc" }],
+        take: 5,
+      }),
+      prisma.cliente.findMany({
+        where: { empresaId, ultimoContato: { gte: 7 } },
+        orderBy: [{ ultimoContato: "desc" }, { id: "desc" }],
+        take: 10,
+      }),
+      prisma.nota.findMany({
+        where: { empresaId },
+        include: { cliente: { select: { id: true, nome: true } } },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 5,
+      }),
+      prisma.$queryRaw(Prisma.sql`
+        SELECT AVG(
+          MIN(100, MAX(0,
+            45
+            + CASE WHEN quente = 1 THEN 20 ELSE 0 END
+            + CASE WHEN favorito = 1 THEN 10 ELSE 0 END
+            + CASE WHEN valor >= 12000 THEN 15 ELSE 0 END
+            + CASE WHEN status = 'Proposta' THEN 10 ELSE 0 END
+            + CASE WHEN status = 'Fechado' THEN 20 ELSE 0 END
+            - CASE WHEN status = 'Perdido' THEN 25 ELSE 0 END
+            - CASE WHEN ultimoContato >= 7 THEN 10 ELSE 0 END
+          ))
+        ) AS averageScore
+        FROM Cliente
+        WHERE empresaId = ${empresaId}
+      `),
+    ]);
+    const statusMap = new Map(porStatus.map((item) => [item.status, item]));
+    const statusCount = (status) => statusMap.get(status)?._count?._all || 0;
+    const statusValue = (status) => Number(statusMap.get(status)?._sum?.valor || 0);
+    const pipeline = Number(carteira._sum.valor || 0);
+    const faturamento = statusValue("Fechado");
 
     res.json({
       indicadores: {
-        clientes: clientes.length,
+        clientes: carteira._count._all,
         produtos: 0,
-        pedidos: propostas.length + fechados.length,
-        contasPendentes: propostas.reduce((sum, cliente) => sum + Number(cliente.valor || 0), 0),
-        faturamento: fechados.reduce((sum, cliente) => sum + Number(cliente.valor || 0), 0),
-        pipeline: totalValue,
-        quentes: quentes.length,
+        pedidos: statusCount("Proposta") + statusCount("Fechado"),
+        contasPendentes: statusValue("Proposta"),
+        faturamento,
+        pipeline,
+        quentes,
       },
+      analytics: {
+        totalValue: pipeline,
+        wonValue: faturamento,
+        forecastValue: statusValue("Proposta") + statusValue("Novo"),
+        hotCount: quentes,
+        averageScore: Math.round(Number(scoreRows[0]?.averageScore || 0)),
+        todayFollowUps: followUpsHoje,
+        highRiskCount: altoRisco,
+        silentCount: semContato,
+        hotProposalCount: propostasQuentes,
+        activePipeline: carteira._count._all - statusCount("Fechado") - statusCount("Perdido"),
+        conversionRate: Math.round((faturamento / Math.max(1, pipeline)) * 100),
+      },
+      status: porStatus.map((item) => ({
+        status: item.status,
+        total: item._count._all,
+        valor: Number(item._sum.valor || 0),
+      })),
       estoqueBaixo: [],
-      pedidosRecentes: propostas.slice(0, 5),
-      contasVencidas: clientes.filter((cliente) => Number(cliente.ultimoContato || 0) >= 7),
+      pedidosRecentes: propostasRecentes,
+      contasVencidas,
       produtosMaisVendidos: [],
+      atividadesRecentes: atividadesRecentes.map((nota) => ({
+        id: nota.id,
+        clienteId: nota.clienteId,
+        cliente: nota.cliente.nome,
+        texto: nota.texto,
+        createdAt: nota.createdAt,
+      })),
     });
   } catch (error) {
-    console.log(error);
+    console.error("Falha ao calcular o resumo do dashboard.", { name: error?.name, code: error?.code });
 
     res.status(500).json({
       erro: "Erro ao buscar dashboard",
+      codigo: "DASHBOARD_SUMMARY_ERROR",
     });
   }
 });
@@ -118,26 +200,50 @@ app.get("/clientes", ...commercialAuth, async (req, res) => {
   try {
     if (hasEmpresaIdInput(req.query)) return tenantInputError(res);
     const empresaId = req.commercialEmpresaId;
-    const clientes = await prisma.cliente.findMany({
-      where: { empresaId },
+    const { page, limit, skip } = paginationFromQuery(req.query);
+    const whereResult = clienteListWhere(empresaId, req.query);
+    if (whereResult.error) return clienteValidationError(res, { filtros: whereResult.error }, whereResult.status);
+    const orderBy = clienteOrderBy(req.query);
+    const [total, clientes] = await Promise.all([
+      prisma.cliente.count({ where: whereResult.data }),
+      prisma.cliente.findMany({
+        where: whereResult.data,
+        orderBy,
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    res.json(paginatedResponse(clientes, total, page, limit));
+  } catch (error) {
+    console.error("Falha ao listar clientes.", { name: error?.name, code: error?.code });
+    res.status(500).json({
+      erro: "Erro ao buscar clientes",
+      codigo: "CLIENT_LIST_ERROR",
+    });
+  }
+});
+
+app.get("/clientes/:id", ...commercialAuth, async (req, res) => {
+  try {
+    if (hasEmpresaIdInput(req.query)) return tenantInputError(res);
+    const clienteId = parsePositiveId(req.params.id);
+    if (!clienteId) return res.status(400).json({ erro: "Cliente invalido.", codigo: "CLIENT_INVALID_ID" });
+    const empresaId = req.commercialEmpresaId;
+    const cliente = await prisma.cliente.findFirst({
+      where: { id: clienteId, empresaId },
       include: {
         notas: {
           where: { empresaId },
-          orderBy: {
-            createdAt: "desc",
-          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         },
       },
-      orderBy: {
-        id: "desc",
-      },
     });
-
-    res.json(clientes);
+    if (!cliente) return res.status(404).json({ erro: "Cliente nao encontrado.", codigo: "CLIENT_NOT_FOUND" });
+    return res.json(cliente);
   } catch (error) {
-    res.status(500).json({
-      erro: "Erro ao buscar clientes",
-    });
+    console.error("Falha ao buscar cliente.", { name: error?.name, code: error?.code });
+    return res.status(500).json({ erro: "Erro ao buscar cliente", codigo: "CLIENT_GET_ERROR" });
   }
 });
 
@@ -158,10 +264,11 @@ app.post("/clientes", ...commercialAuth, async (req, res) => {
 
     res.json(cliente);
   } catch (error) {
-    console.log(error);
+    console.error("Falha ao criar cliente.", { name: error?.name, code: error?.code });
 
     res.status(500).json({
       erro: "Erro ao criar cliente",
+      codigo: "CLIENT_CREATE_ERROR",
     });
   }
 });
@@ -210,10 +317,11 @@ async function updateCliente(req, res) {
 
     res.json(clienteAtualizado);
   } catch (error) {
-    console.log(error);
+    console.error("Falha ao atualizar cliente.", { name: error?.name, code: error?.code });
 
     res.status(500).json({
       erro: "Erro ao atualizar cliente",
+      codigo: "CLIENT_UPDATE_ERROR",
     });
   }
 }
@@ -238,10 +346,18 @@ app.delete("/clientes/:id", ...commercialAuth, async (req, res) => {
       sucesso: true,
     });
   } catch (error) {
-    console.log(error);
+    console.error("Falha ao excluir cliente.", { name: error?.name, code: error?.code });
+
+    if (error?.code === "P2003") {
+      return res.status(409).json({
+        erro: "Este cliente possui Leads, Negocios ou outros registros vinculados e nao pode ser excluido.",
+        codigo: "CLIENT_HAS_RELATIONS",
+      });
+    }
 
     res.status(500).json({
       erro: "Erro ao excluir cliente",
+      codigo: "CLIENT_DELETE_ERROR",
     });
   }
 });
@@ -268,7 +384,7 @@ app.get("/clientes/:id/notas", ...commercialAuth, async (req, res) => {
 
     res.json(notas);
   } catch (error) {
-    console.log(error);
+    logServerError("NOTES_LIST_FAILED", error);
 
     res.status(500).json({
       erro: "Erro ao buscar notas",
@@ -310,14 +426,15 @@ app.post("/clientes/:id/notas", ...commercialAuth, async (req, res) => {
 
     res.json(nota);
   } catch (error) {
-    if (error && error.status) {
+    if (error && Number.isInteger(error.status) && error.status < 500) {
       return res.status(error.status).json({ erro: error.message });
     }
 
-    console.log(error);
+    console.error("Falha ao criar nota.", { name: error?.name, code: error?.code });
 
     res.status(500).json({
       erro: "Erro ao criar nota",
+      codigo: "NOTE_CREATE_ERROR",
     });
   }
 });
@@ -377,7 +494,7 @@ app.delete("/clientes/:clienteId/notas/:notaId", ...commercialAuth, async (req, 
       mensagem: "Nota removida com sucesso.",
     });
   } catch (error) {
-    console.log(error);
+    logServerError("NOTE_DELETE_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao remover nota",
@@ -532,7 +649,7 @@ app.get("/categorias-produtos", async (req, res) => {
 
     return res.json(paginatedResponse(categorias.map(categoriaProdutoResponse), total, page, limit));
   } catch (error) {
-    console.log(error);
+    logServerError("PRODUCT_CATEGORY_LIST_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao buscar categorias de produtos.",
@@ -571,7 +688,7 @@ app.post("/categorias-produtos", requireAuth, async (req, res) => {
 
     return res.status(201).json(categoriaProdutoResponse(categoria));
   } catch (error) {
-    console.log(error);
+    logServerError("PRODUCT_CATEGORY_CREATE_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao criar categoria de produto.",
@@ -635,7 +752,7 @@ app.patch("/categorias-produtos/:id", requireAuth, async (req, res) => {
 
     return res.json(categoriaProdutoResponse(categoria));
   } catch (error) {
-    console.log(error);
+    logServerError("PRODUCT_CATEGORY_UPDATE_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao atualizar categoria de produto.",
@@ -703,7 +820,7 @@ app.get("/produtos", async (req, res) => {
 
     return res.json(paginatedResponse(produtos.map(produtoResponse), total, page, limit));
   } catch (error) {
-    console.log(error);
+    logServerError("PRODUCT_LIST_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao buscar produtos.",
@@ -759,7 +876,7 @@ app.get("/produtos/:id", async (req, res) => {
 
     return res.json(produtoResponse(produto));
   } catch (error) {
-    console.log(error);
+    logServerError("PRODUCT_GET_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao buscar produto.",
@@ -789,7 +906,7 @@ app.post("/produtos", requireAuth, async (req, res) => {
 
     return res.status(201).json(produtoResponse(produto));
   } catch (error) {
-    console.log(error);
+    logServerError("PRODUCT_CREATE_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao criar produto.",
@@ -839,7 +956,7 @@ app.patch("/produtos/:id", requireAuth, async (req, res) => {
 
     return res.json(produtoResponse(produto));
   } catch (error) {
-    console.log(error);
+    logServerError("PRODUCT_UPDATE_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao atualizar produto.",
@@ -898,7 +1015,7 @@ app.get("/estoque/movimentacoes", async (req, res) => {
       paginatedResponse(movimentacoes.map(movimentacaoResponse), total, page, limit),
     );
   } catch (error) {
-    console.log(error);
+    logServerError("STOCK_MOVEMENT_LIST_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao buscar movimentacoes de estoque.",
@@ -998,7 +1115,7 @@ app.get("/estoque/resumo", async (req, res) => {
       ultimasMovimentacoes: ultimasMovimentacoes.map(movimentacaoResponse),
     });
   } catch (error) {
-    console.log(error);
+    logServerError("STOCK_SUMMARY_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao buscar resumo de estoque.",
@@ -1115,7 +1232,7 @@ async function criarMovimentacaoEstoque(req, res, tipo) {
 
     return res.status(201).json(resultado);
   } catch (error) {
-    console.log(error);
+    logServerError("STOCK_MOVEMENT_CREATE_FAILED", error);
 
     return res.status(500).json({
       erro: "Erro ao movimentar estoque.",
@@ -1858,6 +1975,11 @@ function validationError(error, status = 400) {
   };
 }
 
+function logServerError(code, error) {
+  const prismaCode = typeof error?.code === "string" ? error.code : undefined;
+  console.error("[server-error]", { code, prismaCode });
+}
+
 function agendaError(res, error) {
   const status = Number.isInteger(error?.status) ? error.status : 500;
   return res.status(status).json({
@@ -1892,11 +2014,7 @@ function tenantInputError(res) {
 
 function clientePayload(body, { partial = false } = {}) {
   const has = (field) => Object.prototype.hasOwnProperty.call(body || {}, field);
-  const tags = Array.isArray(body.tags)
-    ? body.tags
-    : typeof body.tags === "string"
-      ? safeParseTags(body.tags)
-      : [];
+  const tags = Array.isArray(body.tags) ? body.tags.map((tag) => String(tag).trim()) : [];
 
   const data = {};
   if (!partial || has("nome")) data.nome = String(body.nome || "").trim();
@@ -1910,8 +2028,8 @@ function clientePayload(body, { partial = false } = {}) {
   if (!partial || has("status")) data.status = String(body.status || "Lead").trim();
   if (!partial || has("valor")) data.valor = Number.isFinite(Number(body.valor)) ? Number(body.valor) : 0;
   if (!partial || has("origem")) data.origem = String(body.origem || "Manual").trim();
-  if (!partial || has("favorito")) data.favorito = Boolean(body.favorito);
-  if (!partial || has("quente")) data.quente = Boolean(body.quente);
+  if (!partial || has("favorito")) data.favorito = has("favorito") ? body.favorito : false;
+  if (!partial || has("quente")) data.quente = has("quente") ? body.quente : false;
   if (!partial || has("ultimoContato")) data.ultimoContato = Number.isFinite(Number(body.ultimoContato)) ? Number(body.ultimoContato) : 0;
   if (!partial || has("proximoFollowUp")) data.proximoFollowUp = String(body.proximoFollowUp || "Hoje").trim();
   if (!partial || has("tags")) data.tags = JSON.stringify(tags);
@@ -1940,6 +2058,16 @@ function clienteValidationErrors(body, { partial = false } = {}) {
   if (has("valor") && (!Number.isFinite(Number(source.valor)) || Number(source.valor) < 0)) {
     errors.valor = "Valor invalido.";
   }
+  for (const field of ["favorito", "quente"]) {
+    if (has(field) && typeof source[field] !== "boolean") errors[field] = "O valor deve ser booleano.";
+  }
+  if (has("tags")) {
+    if (!Array.isArray(source.tags)) {
+      errors.tags = "Tags devem ser enviadas como uma lista.";
+    } else if (source.tags.length > 50 || source.tags.some((tag) => typeof tag !== "string" || !tag.trim() || tag.trim().length > 60)) {
+      errors.tags = "Tags devem conter ate 50 textos nao vazios, com no maximo 60 caracteres.";
+    }
+  }
 
   return errors;
 }
@@ -1952,13 +2080,57 @@ function clienteValidationError(res, errors, status = 400) {
   });
 }
 
-function safeParseTags(value) {
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.map(String) : [];
-  } catch {
-    return [];
+function clienteListWhere(empresaId, query) {
+  const where = { empresaId, AND: [] };
+  const search = cleanOptionalString(query.search || query.busca);
+  const status = cleanOptionalString(query.status);
+  const statuses = new Set(["Novo", "Contato", "Proposta", "Fechado", "Perdido"]);
+  if (status && !statuses.has(status)) return validationError("Status invalido.", 422);
+  if (status) where.status = status;
+
+  for (const [queryField, databaseField] of [["favorito", "favorito"], ["quente", "quente"]]) {
+    const parsed = parseBooleanFilter(query, queryField);
+    if (!parsed.valid) return validationError(`Filtro ${queryField} deve ser verdadeiro ou falso.`, 422);
+    if (parsed.provided) where[databaseField] = parsed.value;
   }
+
+  const risk = parseBooleanFilter(query, "risco");
+  if (!risk.valid) return validationError("Filtro risco deve ser verdadeiro ou falso.", 422);
+  if (risk.provided && risk.value) {
+    where.AND.push({ OR: [{ status: "Perdido" }, { ultimoContato: { gte: 10 } }] });
+  }
+  const silent = parseBooleanFilter(query, "silencioso");
+  if (!silent.valid) return validationError("Filtro silencioso deve ser verdadeiro ou falso.", 422);
+  if (silent.provided && silent.value) where.ultimoContato = { gte: 7 };
+
+  if (search) {
+    where.AND.push({
+      OR: [
+        { nome: { contains: search } },
+        { empresa: { contains: search } },
+        { email: { contains: search } },
+        { telefone: { contains: search } },
+        { tags: { contains: search } },
+      ],
+    });
+  }
+  if (where.AND.length === 0) delete where.AND;
+  return { data: where };
+}
+
+function clienteOrderBy(query) {
+  const sortBy = cleanOptionalString(query.sortBy || query.ordenarPor);
+  if (sortBy === "value") return [{ valor: "desc" }, { id: "desc" }];
+  if (sortBy === "name") return [{ nome: "asc" }, { id: "desc" }];
+  if (sortBy === "status") return [{ status: "asc" }, { id: "desc" }];
+  if (sortBy && sortBy !== "score") return [{ id: "desc" }];
+  return [
+    { quente: "desc" },
+    { favorito: "desc" },
+    { valor: "desc" },
+    { ultimoContato: "asc" },
+    { id: "desc" },
+  ];
 }
 
 function parsePositiveId(value) {
@@ -1996,7 +2168,7 @@ app.use((error, req, res, next) => {
     });
   }
 
-  console.log(error);
+  logServerError("UNHANDLED_HTTP_ERROR", error);
 
   return res.status(500).json({
     erro: "Erro interno do servidor",
