@@ -17,6 +17,7 @@
     "frontend:dev": "npm --prefix frontend run dev",
     "frontend:build": "npm --prefix frontend run build",
     "frontend:lint": "npm --prefix frontend run lint",
+    "frontend:test": "npm --prefix frontend test",
     "verify:architecture": "node scripts/verify-architecture.mjs",
     "legacy:nest:build": "nest build",
     "legacy:nest:start": "nest start",
