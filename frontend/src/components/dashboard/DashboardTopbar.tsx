@@ -6,7 +6,6 @@ import type { AuthSession } from "../../services/crmApi";
 import type { ActivePage, Client } from "../../types/dashboard";
 
 type DashboardTopbarProps = {
-  clients: Client[];
   showQuickActions: boolean;
   emptyClient: Client;
   setSelectedId: (clientId: number | null) => void;
@@ -21,7 +20,6 @@ type DashboardTopbarProps = {
 };
 
 export default function DashboardTopbar({
-  clients,
   showQuickActions,
   emptyClient,
   setSelectedId,
@@ -42,7 +40,6 @@ export default function DashboardTopbar({
         </div>
 
         <DashboardCommandSearch
-          clients={clients}
           onSelectClient={setSelectedId}
           onSetActivePage={setActivePage}
           onCloseQuickActions={() => setShowQuickActions(false)}

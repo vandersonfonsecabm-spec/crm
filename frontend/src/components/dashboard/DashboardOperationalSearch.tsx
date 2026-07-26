@@ -150,10 +150,7 @@ export default function DashboardOperationalSearch({
             aria-label="Filtrar por responsável"
           >
             <option value="Todos">Todos vendedores</option>
-            <option value="Ana">Ana</option>
-            <option value="Marco">Marco</option>
-            <option value="Bia">Bia</option>
-            <option value="Time">Time</option>
+            <option value="Sem responsável">Sem responsável</option>
           </Select>
         )}
 

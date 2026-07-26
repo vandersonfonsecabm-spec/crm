@@ -12,7 +12,7 @@ type KanbanEnterpriseStats = {
   conversionRate: number;
 };
 
-type KanbanOwnerFilter = "Todos" | "Ana" | "Marco" | "Bia" | "Time";
+type KanbanOwnerFilter = "Todos" | "Sem responsável";
 
 type DashboardKanbanSummaryProps = {
   kanbanClientsCount: number;

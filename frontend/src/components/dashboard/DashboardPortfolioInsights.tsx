@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowRight, Clock3, Flame, Target, Users } from "lucide-react";
 import type { ReactNode } from "react";
+import type { ApiDashboardSummary } from "../../services/crmApi";
 import type { Client, SmartFilterType, Status } from "../../types/dashboard";
 import { Badge, Button, EmptyState, SectionHeader, Surface } from "../ui";
 
@@ -12,6 +13,7 @@ type DashboardPortfolioInsightsProps = {
   enterpriseHealthLabel: (client: Client) => string;
   onOpenClient: (clientId: number) => void;
   onApplySmartFilter: (type: SmartFilterType) => void;
+  summary: ApiDashboardSummary | null;
 };
 
 const pipelineStages: Status[] = ["Novo", "Contato", "Proposta", "Fechado", "Perdido"];
@@ -25,20 +27,23 @@ export default function DashboardPortfolioInsights({
   enterpriseHealthLabel,
   onOpenClient,
   onApplySmartFilter,
+  summary,
 }: DashboardPortfolioInsightsProps) {
-  const activeClients = clients.filter((client) => client.status !== "Perdido");
   const attentionClients = [...clients]
     .filter((client) => client.hot || getPriority(client) === "Alta" || getRisk(client) === "Alto" || client.lastContactDays >= 7)
     .sort((a, b) => attentionWeight(b, getPriority, getRisk, getLeadScore) - attentionWeight(a, getPriority, getRisk, getLeadScore))
     .slice(0, 5);
-  const highRiskCount = clients.filter((client) => getRisk(client) === "Alto").length;
-  const highAttentionCount = clients.filter((client) => client.hot || getPriority(client) === "Alta").length;
-  const hotOpportunities = clients.filter((client) => client.hot || client.value >= 12000);
-  const silentClients = clients.filter((client) => client.lastContactDays >= 7);
-  const proposalValue = clients.filter((client) => client.status === "Proposta").reduce((sum, client) => sum + client.value, 0);
+  const highRiskCount = summary?.analytics.highRiskCount ?? clients.filter((client) => getRisk(client) === "Alto").length;
+  const highAttentionCount = summary?.analytics.hotCount ?? clients.filter((client) => client.hot || getPriority(client) === "Alta").length;
+  const hotOpportunities = summary?.analytics.hotCount ?? clients.filter((client) => client.hot || client.value >= 12000).length;
+  const silentClients = summary?.analytics.silentCount ?? clients.filter((client) => client.lastContactDays >= 7).length;
+  const proposalValue = summary?.status.find((item) => item.status === "Proposta")?.valor
+    ?? clients.filter((client) => client.status === "Proposta").reduce((sum, client) => sum + client.value, 0);
+  const activeClients = summary?.analytics.activePipeline ?? clients.filter((client) => client.status !== "Fechado" && client.status !== "Perdido").length;
+  const totalClients = summary?.indicadores.clientes ?? clients.length;
   const suggestedAction = highRiskCount > 0
     ? "Reativar clientes em risco antes de criar novas oportunidades."
-    : clients.some((client) => client.nextFollowUp.toLowerCase() === "hoje")
+    : (summary?.analytics.todayFollowUps ?? clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length) > 0
       ? "Priorizar acompanhamentos de hoje e propostas abertas."
       : "Revisar oportunidades quentes e manter cadência comercial.";
 
@@ -93,7 +98,7 @@ export default function DashboardPortfolioInsights({
           <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border-default)] px-4 py-3">
             <Button onClick={() => onApplySmartFilter("risk")} size="sm" variant="ghost">Ver riscos ({highRiskCount})</Button>
             <Button onClick={() => onApplySmartFilter("proposal")} size="sm" variant="ghost">Ver propostas</Button>
-            <Button onClick={() => onApplySmartFilter("silent")} size="sm" variant="ghost">Sem contato ({silentClients.length})</Button>
+            <Button onClick={() => onApplySmartFilter("silent")} size="sm" variant="ghost">Sem contato ({silentClients})</Button>
           </div>
         </div>
 
@@ -108,16 +113,18 @@ export default function DashboardPortfolioInsights({
 
           <div className="mt-4 space-y-3">
             {pipelineStages.map((stage) => {
-              const stageClients = clients.filter((client) => client.status === stage);
-              const stageValue = stageClients.reduce((sum, client) => sum + client.value, 0);
+              const stageSummary = summary?.status.find((item) => item.status === stage);
+              const stageCount = stageSummary?.total ?? clients.filter((client) => client.status === stage).length;
+              const stageValue = stageSummary?.valor
+                ?? clients.filter((client) => client.status === stage).reduce((sum, client) => sum + client.value, 0);
               return (
                 <div key={stage}>
                   <div className="flex items-center justify-between gap-3 text-[11px]">
                     <span className="font-medium text-[var(--text-secondary)]">{stage}</span>
-                    <span className="text-[var(--text-muted)]">{stageClients.length} · {money(stageValue)}</span>
+                    <span className="text-[var(--text-muted)]">{stageCount} · {money(stageValue)}</span>
                   </div>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--surface-subtle)]">
-                    <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${Math.max(stageClients.length > 0 ? 8 : 0, (stageClients.length / Math.max(clients.length, 1)) * 100)}%` }} />
+                    <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${Math.max(stageCount > 0 ? 8 : 0, (stageCount / Math.max(totalClients, 1)) * 100)}%` }} />
                   </div>
                 </div>
               );
@@ -125,9 +132,9 @@ export default function DashboardPortfolioInsights({
           </div>
 
           <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--border-default)] pt-4">
-            <SummaryValue icon={<Users size={13} />} label="Ativos" value={String(activeClients.length)} />
+            <SummaryValue icon={<Users size={13} />} label="Ativos" value={String(activeClients)} />
             <SummaryValue icon={<AlertTriangle size={13} />} label="Risco" value={String(highRiskCount)} />
-            <SummaryValue icon={<Flame size={13} />} label="Quentes" value={String(hotOpportunities.length)} />
+            <SummaryValue icon={<Flame size={13} />} label="Quentes" value={String(hotOpportunities)} />
             <SummaryValue icon={<Clock3 size={13} />} label="Propostas" value={money(proposalValue)} />
           </dl>
 

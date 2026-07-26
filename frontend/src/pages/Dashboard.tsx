@@ -54,10 +54,10 @@ import WhatsappExternalConfirmDialog from "../components/dashboard/WhatsappExter
 import type { WhatsappExternalRequest } from "../components/dashboard/WhatsappExternalConfirmDialog";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
-import { canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession } from "../services/crmApi";
+import { ApiHttpError, canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession, shouldInvalidateAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
 import { resolveTenantFeatureAccess } from "../config/featureFlags";
-import { EmptyState } from "../components/ui";
+import { EmptyState, ErrorState } from "../components/ui";
 import { LockKeyhole } from "lucide-react";
 
 import { emptyClient, statusList } from "../data/clientDefaults";
@@ -96,8 +96,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [page, setPage] = useState(1);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
+  const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
   const [isBooting, setIsBooting] = useState(true);
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
+  const [clientPagination, setClientPagination] = useState({ page: 1, limit: 8, total: 0, totalPages: 0 });
+  const [backendLoadError, setBackendLoadError] = useState("");
+  const [backendLoadRequest, setBackendLoadRequest] = useState(0);
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
   const [whatsappExternalRequest, setWhatsappExternalRequest] = useState<WhatsappExternalRequest | null>(null);
   const [blingReturnMessage, setBlingReturnMessage] = useState("");
@@ -119,10 +123,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const isWhatsAppIntegrationDetail = activePage === "integracoes" && resolvedNavigation.detail === "whatsapp";
   const usingNegociosKanban = activePage === "kanban" && negociosKanbanEnabled;
 
-  const pageSize = 4;
+  const pageSize = 8;
 
   const handleSelectClient = useCallback((clientId: number | null) => {
     setSelectedId(clientId);
+    setSelectedClientDetail(null);
     if (clientId !== null && ["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(requestedActivePage)) {
       setIsCustomerDrawerOpen(true);
     }
@@ -148,20 +153,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => {
     let ignore = false;
 
-    async function loadBackendClients() {
+    async function loadBackendSession() {
       const savedSession = getAuthSession();
       setAuthSession(savedSession);
+      setBackendLoadError("");
 
       try {
         const refreshedSession = await fetchAuthMe();
         if (!ignore) setAuthSession(refreshedSession);
-
-        const backendClients = await fetchClientesFromBackend();
-        if (ignore) return;
-        if (!backendClients) throw new Error("Dados indisponiveis.");
-
-        setClients(backendClients);
-        setSelectedId(backendClients[0]?.id ?? null);
 
         try {
           const summary = await fetchDashboardSummaryFromBackend();
@@ -169,19 +168,96 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         } catch {
           if (!ignore) setDashboardSummary(null);
         }
-      } catch {
+      } catch (error) {
         if (ignore) return;
-        clearAuthSession();
-        onLogout();
+        if (shouldInvalidateAuthSession(error)) {
+          clearAuthSession();
+          onLogout();
+          return;
+        }
+        setBackendLoadError("Nao foi possivel carregar os dados agora. Sua sessao foi preservada.");
       }
     }
 
-    void loadBackendClients();
+    void loadBackendSession();
 
     return () => {
       ignore = true;
     };
-  }, [onLogout]);
+  }, [backendLoadRequest, onLogout]);
+
+  useEffect(() => {
+    let ignore = false;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const result = await fetchClientesFromBackend({
+          page,
+          limit: pageSize,
+          search: search.trim() || undefined,
+          status: statusFilter === "Todos" ? undefined : statusFilter,
+          favorito: onlyFavorites || undefined,
+          quente: onlyHot || undefined,
+          risco: onlyRisk || undefined,
+          silencioso: onlySilent || undefined,
+          sortBy,
+        });
+        if (ignore || !result) return;
+        setClients(result.data);
+        setClientPagination(result.pagination);
+        setSelectedId((current) => current !== null && result.data.some((client) => client.id === current)
+          ? current
+          : result.data[0]?.id ?? null);
+        setBackendLoadError("");
+      } catch (error) {
+        if (ignore) return;
+        if (error instanceof ApiHttpError && error.status === 401) {
+          clearAuthSession();
+          onLogout();
+          return;
+        }
+        setBackendLoadError("Nao foi possivel carregar os dados agora. Sua sessao foi preservada.");
+      }
+    }, 250);
+
+    return () => {
+      ignore = true;
+      window.clearTimeout(timeout);
+    };
+  }, [
+    backendLoadRequest,
+    onLogout,
+    onlyFavorites,
+    onlyHot,
+    onlyRisk,
+    onlySilent,
+    page,
+    pageSize,
+    search,
+    sortBy,
+    statusFilter,
+  ]);
+
+  useEffect(() => {
+    if (!isCustomerDrawerOpen || selectedId === null) return;
+    let ignore = false;
+    fetchClienteDetailFromBackend(selectedId)
+      .then((detail) => {
+        if (ignore) return;
+        setSelectedClientDetail(detail);
+        setClients((current) => current.some((client) => client.id === selectedId)
+          ? current.map((client) => client.id === selectedId ? detail : client)
+          : current);
+      })
+      .catch((error) => {
+        if (!ignore && shouldInvalidateAuthSession(error)) {
+          clearAuthSession();
+          onLogout();
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [isCustomerDrawerOpen, onLogout, selectedId]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setIsBooting(false), 650);
@@ -193,40 +269,19 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }, [activePage]);
 
 
-  const selectedClient = useMemo(() => clients.find((client) => client.id === selectedId) || null, [clients, selectedId]);
+  const selectedClient = useMemo(
+    () => selectedClientDetail?.id === selectedId
+      ? selectedClientDetail
+      : clients.find((client) => client.id === selectedId) || null,
+    [clients, selectedClientDetail, selectedId],
+  );
   const priorityClient = useMemo(() => {
     return [...clients]
       .filter((client) => client.hot || getPriority(client) === "Alta" || getRisk(client) === "Alto" || client.lastContactDays >= 7)
       .sort((first, second) => priorityWeight(second) - priorityWeight(first))[0] ?? null;
   }, [clients]);
 
-  const filteredClients = useMemo(() => {
-    const result = clients.filter((client) => {
-      const term = search.toLowerCase();
-
-      const matchSearch =
-        client.name.toLowerCase().includes(term) ||
-        client.company.toLowerCase().includes(term) ||
-        client.email.toLowerCase().includes(term) ||
-        client.phone.includes(term) ||
-        client.tags.some((tag) => tag.toLowerCase().includes(term));
-
-      const matchStatus = statusFilter === "Todos" || client.status === statusFilter;
-      const matchFavorite = !onlyFavorites || client.favorite;
-      const matchHot = !onlyHot || client.hot;
-      const matchRisk = !onlyRisk || getRisk(client) === "Alto";
-      const matchSilent = !onlySilent || client.lastContactDays >= 7;
-
-      return matchSearch && matchStatus && matchFavorite && matchHot && matchRisk && matchSilent;
-    });
-
-    return [...result].sort((a, b) => {
-      if (sortBy === "score") return getLeadScore(b) - getLeadScore(a);
-      if (sortBy === "value") return b.value - a.value;
-      if (sortBy === "name") return a.name.localeCompare(b.name);
-      return a.status.localeCompare(b.status);
-    });
-  }, [clients, onlyFavorites, onlyHot, onlyRisk, onlySilent, search, sortBy, statusFilter]);
+  const filteredClients = clients;
 
   const kanbanClients = useMemo(() => {
     if (kanbanOwnerFilter === "Todos") {
@@ -236,8 +291,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     return filteredClients.filter((client) => leadOwner(client) === kanbanOwnerFilter);
   }, [filteredClients, kanbanOwnerFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize));
-  const paginatedClients = filteredClients.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.max(1, clientPagination.totalPages);
+  const paginatedClients = filteredClients;
 
   const {
     analytics,
@@ -256,6 +311,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     onlyRisk,
     onlySilent,
     sortBy,
+    summary: dashboardSummary,
   });
 
   const {
@@ -279,6 +335,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     clients,
     setClients,
     selectedClient,
+    setSelectedClientDetail,
     selectedId,
     setSelectedId,
     editing,
@@ -362,7 +419,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   ]);
 
   const backendCaption = dashboardSummary
-    ? `${clients.length} clientes sincronizados`
+    ? `${clientPagination.total} clientes encontrados`
     : "Dados sincronizados";
 
   const openKanbanWithStatus = useCallback((nextStatus: Status | "Todos") => {
@@ -400,7 +457,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         resetAction,
       ],
       clientes: [
-        { label: "Exportar clientes", onClick: exportCsv },
+        { label: "Exportar página atual", onClick: exportCsv },
         riskAction,
         { label: "Propostas abertas", onClick: () => applySmartFilter("proposal") },
         silentAction,
@@ -573,7 +630,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
         <div className="crm-main min-w-0 flex-1 overflow-x-hidden">
           <DashboardTopbar
-            clients={clients}
             showQuickActions={showQuickActions}
             emptyClient={emptyClient}
             setSelectedId={handleSelectClient}
@@ -588,6 +644,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           />
 
           <main className="crm-content mx-auto w-full max-w-[1680px] px-5 pb-8 pt-5 lg:px-7">
+          {backendLoadError && clients.length === 0 && (
+            <ErrorState
+              className="mb-4 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)]"
+              description={backendLoadError}
+              onRetry={() => setBackendLoadRequest((current) => current + 1)}
+              title="Dados temporariamente indisponiveis"
+            />
+          )}
           <DashboardHeader
             key={activePage}
             activePage={activePage}
@@ -630,6 +694,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             <section className="dashboard-overview-grid mt-3 grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1.68fr)_minmax(320px,0.78fr)]">
               <DashboardPortfolioInsights
                 clients={clients}
+                summary={dashboardSummary}
                 money={money}
                 getPriority={getPriority}
                 getRisk={getRisk}
@@ -653,8 +718,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             <DashboardMetricsSection
               activePage={activePage}
               clients={clients}
-              kanbanClients={kanbanClients}
-              getRisk={getRisk}
+              summary={dashboardSummary}
             />
           )}
 
@@ -662,7 +726,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             <DashboardOperationalSearch
               activePage={activePage}
               metadata={activePage === "clientes" || activePage === "kanban" ? backendCaption : undefined}
-              filteredClientsCount={filteredClients.length}
+              filteredClientsCount={clientPagination.total}
               activeFiltersCount={activeFiltersCount}
               search={search}
               statusFilter={statusFilter}
@@ -714,7 +778,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 <>
                   <DashboardClientsTable
                     paginatedClients={paginatedClients}
-                    filteredClientsCount={filteredClients.length}
+                    filteredClientsCount={clientPagination.total}
                     selectedId={selectedId}
                     page={page}
                     totalPages={totalPages}
@@ -740,6 +804,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   <DashboardClientsInsights
                     clients={clients}
                     filteredClients={filteredClients}
+                    summary={dashboardSummary}
                     statusList={statusList}
                     money={money}
                     statusClass={statusClass}
@@ -816,6 +881,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 initialStageGroup={kanbanStageRequest.group}
                 clients={clients}
                 kanbanClients={kanbanClients}
+                totalClients={clientPagination.total}
+                loadedPage={clientPagination.page}
                 kanbanOwnerFilter={kanbanOwnerFilter}
                 kanbanEnterpriseStats={kanbanEnterpriseStats}
                 statusList={statusList}

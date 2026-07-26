@@ -22,6 +22,8 @@ type DashboardKanbanBoardProps = {
   initialStageGroup?: "pipeline" | "resultado";
   clients: Client[];
   kanbanClients: Client[];
+  totalClients: number;
+  loadedPage: number;
   kanbanOwnerFilter: KanbanOwner;
   kanbanEnterpriseStats: KanbanEnterpriseStats;
   statusList: Status[];
@@ -53,6 +55,8 @@ export default function DashboardKanbanBoard({
   initialStageGroup = "pipeline",
   clients,
   kanbanClients,
+  totalClients,
+  loadedPage,
   kanbanOwnerFilter,
   kanbanEnterpriseStats,
   statusList,
@@ -103,7 +107,9 @@ export default function DashboardKanbanBoard({
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
           <div>
             <p className="text-sm font-semibold text-[var(--text-primary)]">Pipeline de negócios</p>
-            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{kanbanClients.length} oportunidades · arraste entre etapas ou abra os detalhes.</p>
+            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+              Página {loadedPage}: {kanbanClients.length} de {totalClients} clientes. As métricas consideram a carteira completa.
+            </p>
           </div>
 
           <div className="flex rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-1">

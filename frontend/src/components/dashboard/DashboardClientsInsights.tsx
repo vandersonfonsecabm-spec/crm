@@ -1,5 +1,6 @@
 import { AlertTriangle, ArrowUpRight, Flame, Gauge, Target, Users } from "lucide-react";
 import type { ReactNode } from "react";
+import type { ApiDashboardSummary } from "../../services/crmApi";
 import type { Client, Status } from "../../types/dashboard";
 import { Badge, SectionHeader, Surface } from "../ui";
 
@@ -12,6 +13,7 @@ type DashboardClientsInsightsProps = {
   getRisk: (client: Client) => string;
   getLeadScore: (client: Client) => number;
   onSelectClient: (clientId: number) => void;
+  summary: ApiDashboardSummary | null;
 };
 
 export default function DashboardClientsInsights({
@@ -23,31 +25,33 @@ export default function DashboardClientsInsights({
   getRisk,
   getLeadScore,
   onSelectClient,
+  summary,
 }: DashboardClientsInsightsProps) {
   const baseClients = filteredClients.length > 0 ? filteredClients : clients;
-  const totalPotential = baseClients.reduce((sum, client) => sum + client.value, 0);
-  const hotClients = baseClients.filter((client) => client.hot || getLeadScore(client) >= 80);
-  const riskClients = baseClients.filter((client) => getRisk(client) === "Alto");
-  const todayFollowUps = baseClients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje");
+  const totalPotential = summary?.analytics.totalValue ?? baseClients.reduce((sum, client) => sum + client.value, 0);
+  const hotClients = summary?.analytics.hotCount ?? baseClients.filter((client) => client.hot || getLeadScore(client) >= 80).length;
+  const riskClients = summary?.analytics.highRiskCount ?? baseClients.filter((client) => getRisk(client) === "Alto").length;
+  const todayFollowUps = summary?.analytics.todayFollowUps ?? baseClients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length;
   const topOpportunity = [...baseClients].sort((a, b) => b.value - a.value)[0] || null;
   const bestScore = [...baseClients].sort((a, b) => getLeadScore(b) - getLeadScore(a))[0] || null;
-  const wonClients = clients.filter((client) => client.status === "Fechado").length;
-  const conversionRate = Math.round((wonClients / Math.max(1, clients.length)) * 100);
+  const totalClients = summary?.indicadores.clientes ?? clients.length;
+  const conversionRate = summary?.analytics.conversionRate
+    ?? Math.round((clients.filter((client) => client.status === "Fechado").length / Math.max(1, clients.length)) * 100);
 
   return (
     <section className="grid items-start gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]" aria-label="Leituras complementares da carteira">
       <Surface className="overflow-hidden">
         <SectionHeader
-          actions={<Badge variant="neutral">{baseClients.length} analisados</Badge>}
-          description="Indicadores derivados da carteira e dos filtros atuais."
+          actions={<Badge variant="neutral">{baseClients.length} nesta página</Badge>}
+          description="Indicadores globais da carteira; destaques usam a página atual."
           icon={<Users size={16} />}
           title="Resumo da carteira"
         />
         <div className="grid grid-cols-2">
           <SummaryMetric caption="Receita em carteira" icon={<Target size={14} />} label="Potencial" value={money(totalPotential)} />
-          <SummaryMetric caption="Oportunidades prioritárias" className="border-l border-[var(--border-default)]" icon={<Flame size={14} />} label="Quentes" tone="warning" value={`${hotClients.length} clientes`} />
-          <SummaryMetric caption="Risco alto" className="border-t border-[var(--border-default)]" icon={<AlertTriangle size={14} />} label="Atenção" tone="danger" value={`${riskClients.length} clientes`} />
-          <SummaryMetric caption="Acompanhamentos do dia" className="border-l border-t border-[var(--border-default)]" icon={<Users size={14} />} label="Hoje" tone="info" value={`${todayFollowUps.length} ações`} />
+          <SummaryMetric caption="Oportunidades prioritárias" className="border-l border-[var(--border-default)]" icon={<Flame size={14} />} label="Quentes" tone="warning" value={`${hotClients} clientes`} />
+          <SummaryMetric caption="Risco alto" className="border-t border-[var(--border-default)]" icon={<AlertTriangle size={14} />} label="Atenção" tone="danger" value={`${riskClients} clientes`} />
+          <SummaryMetric caption="Acompanhamentos do dia" className="border-l border-t border-[var(--border-default)]" icon={<Users size={14} />} label="Hoje" tone="info" value={`${todayFollowUps} ações`} />
         </div>
       </Surface>
 
@@ -64,7 +68,7 @@ export default function DashboardClientsInsights({
               <InsightButton
                 badge={topOpportunity.status}
                 badgeClass={statusClass(topOpportunity.status)}
-                label="Maior oportunidade"
+                label="Maior oportunidade na página"
                 onClick={() => onSelectClient(topOpportunity.id)}
                 subtitle={topOpportunity.company}
                 title={topOpportunity.name}
@@ -75,7 +79,7 @@ export default function DashboardClientsInsights({
               <InsightButton
                 badge="Score"
                 badgeClass="border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--text-secondary)]"
-                label="Melhor score"
+                label="Melhor score na página"
                 onClick={() => onSelectClient(bestScore.id)}
                 subtitle={bestScore.company}
                 title={bestScore.name}
@@ -87,12 +91,13 @@ export default function DashboardClientsInsights({
           <div className="border-t border-[var(--border-default)] bg-[var(--bg-muted)] p-4 lg:border-l lg:border-t-0">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold text-[var(--text-primary)]">Distribuição por status</p>
-              <span className="text-[11px] text-[var(--text-muted)]">{clients.length} total</span>
+              <span className="text-[11px] text-[var(--text-muted)]">{totalClients} total</span>
             </div>
             <div className="mt-3 space-y-2.5">
               {statusList.map((status) => {
-                const count = clients.filter((client) => client.status === status).length;
-                const percentage = Math.round((count / Math.max(1, clients.length)) * 100);
+                const count = summary?.status.find((item) => item.status === status)?.total
+                  ?? clients.filter((client) => client.status === status).length;
+                const percentage = Math.round((count / Math.max(1, totalClients)) * 100);
                 return (
                   <div key={status}>
                     <div className="flex items-center justify-between gap-3 text-[11px]">

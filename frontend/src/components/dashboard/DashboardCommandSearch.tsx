@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
+import { fetchClientesFromBackend } from "../../services/crmApi";
 import type { ActivePage, Client } from "../../types/dashboard";
 
 type DashboardCommandSearchProps = {
-  clients: Client[];
   onSelectClient: (clientId: number) => void;
   onSetActivePage: (page: ActivePage) => void;
   onCloseQuickActions: () => void;
@@ -19,7 +19,6 @@ type CommandResult = {
 };
 
 export default function DashboardCommandSearch({
-  clients,
   onSelectClient,
   onSetActivePage,
   onCloseQuickActions,
@@ -29,6 +28,7 @@ export default function DashboardCommandSearch({
   const [commandSearch, setCommandSearch] = useState("");
   const [showCommandResults, setShowCommandResults] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [clientResults, setClientResults] = useState<Client[]>([]);
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,6 +72,25 @@ export default function DashboardCommandSearch({
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
+  useEffect(() => {
+    const term = normalizeCommandTerm(commandSearch);
+    if (term.length < 2) return;
+    let ignore = false;
+    const timeout = window.setTimeout(() => {
+      fetchClientesFromBackend({ search: commandSearch, page: 1, limit: 4, sortBy: "name" })
+        .then((result) => {
+          if (!ignore) setClientResults(result?.data ?? []);
+        })
+        .catch(() => {
+          if (!ignore) setClientResults([]);
+        });
+    }, 250);
+    return () => {
+      ignore = true;
+      window.clearTimeout(timeout);
+    };
+  }, [commandSearch]);
+
   const commandResults = useMemo(() => {
     const term = normalizeCommandTerm(commandSearch);
 
@@ -98,12 +117,8 @@ export default function DashboardCommandSearch({
         : []),
     ].filter((item) => matchesCommandSearch(term, item.label, item.searchText));
 
-    const clientResults = clients
-      .filter(
-        (client) =>
-          matchesCommandSearch(term, client.name, client.company, client.email, client.phone, ...(client.tags ?? []))
-      )
-      .slice(0, 4)
+    const matchingClients = clientResults
+      .filter((client) => matchesCommandSearch(term, client.name, client.company, client.email, client.phone, ...(client.tags ?? [])))
       .map((client) => ({
         label: client.name,
         type: client.company,
@@ -111,8 +126,8 @@ export default function DashboardCommandSearch({
         action: () => onSelectClient(client.id),
       }));
 
-    return [...pages, ...clientResults].slice(0, 6);
-  }, [canManageIntegrations, clients, commandSearch, leadsCommunicationEnabled, onSelectClient, onSetActivePage]);
+    return [...pages, ...matchingClients].slice(0, 6);
+  }, [canManageIntegrations, clientResults, commandSearch, leadsCommunicationEnabled, onSelectClient, onSetActivePage]);
 
   const boundedSelectedIndex = Math.min(selectedIndex, Math.max(commandResults.length - 1, 0));
 

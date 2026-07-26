@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { ApiDashboardSummary } from "../services/crmApi";
 import { getLeadScore, getPriority, getRisk } from "../utils/dashboardHelpers";
 import type { Client, SortBy, Status } from "../types/dashboard";
 
@@ -12,6 +13,7 @@ type UseDashboardAnalyticsParams = {
   onlyRisk: boolean;
   onlySilent: boolean;
   sortBy: SortBy;
+  summary: ApiDashboardSummary | null;
 };
 
 export default function useDashboardAnalytics({
@@ -24,8 +26,21 @@ export default function useDashboardAnalytics({
   onlyRisk,
   onlySilent,
   sortBy,
+  summary,
 }: UseDashboardAnalyticsParams) {
   const kanbanEnterpriseStats = useMemo(() => {
+    if (summary) {
+      return {
+        totalValue: summary.analytics.totalValue,
+        forecastValue: summary.analytics.forecastValue,
+        wonValue: summary.analytics.wonValue,
+        averageScore: summary.analytics.averageScore,
+        highRiskCount: summary.analytics.highRiskCount,
+        todayFollowUps: summary.analytics.todayFollowUps,
+        activePipeline: summary.analytics.activePipeline,
+        conversionRate: summary.analytics.conversionRate,
+      };
+    }
     const totalValue = kanbanClients.reduce((sum, client) => sum + client.value, 0);
     const forecastValue = kanbanClients
       .filter((client) => client.status === "Novo" || client.status === "Contato" || client.status === "Proposta")
@@ -51,9 +66,19 @@ export default function useDashboardAnalytics({
       activePipeline,
       conversionRate,
     };
-  }, [kanbanClients]);
+  }, [kanbanClients, summary]);
 
   const analytics = useMemo(() => {
+    if (summary) {
+      return {
+        totalValue: summary.analytics.totalValue,
+        wonValue: summary.analytics.wonValue,
+        forecastValue: summary.analytics.forecastValue,
+        hotCount: summary.analytics.hotCount,
+        averageScore: summary.analytics.averageScore,
+        todayFollowUps: summary.analytics.todayFollowUps,
+      };
+    }
     const totalValue = clients.reduce((sum, client) => sum + client.value, 0);
     const wonValue = clients.filter((client) => client.status === "Fechado").reduce((sum, client) => sum + client.value, 0);
     const forecastValue = clients
@@ -64,9 +89,20 @@ export default function useDashboardAnalytics({
     const todayFollowUps = clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length;
 
     return { totalValue, wonValue, forecastValue, hotCount, averageScore, todayFollowUps };
-  }, [clients]);
+  }, [clients, summary]);
 
   const recentActivities = useMemo(() => {
+    if (summary) {
+      return summary.atividadesRecentes.map((activity) => ({
+        id: `note-${activity.id}`,
+        client: activity.cliente,
+        text: activity.texto,
+        date: new Date(activity.createdAt).toLocaleString("pt-BR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        }),
+      }));
+    }
     return clients
       .flatMap((client) =>
         client.notes.map((note) => ({
@@ -82,7 +118,7 @@ export default function useDashboardAnalytics({
       .sort((first, second) => second.timestamp - first.timestamp)
       .slice(0, 5)
       .map((item) => item.activity);
-  }, [clients]);
+  }, [clients, summary]);
 
   const followUpAgenda = useMemo(() => {
     const today = clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje");
@@ -102,16 +138,16 @@ export default function useDashboardAnalytics({
   }, [clients]);
 
   const smartAlerts = useMemo(() => {
-    const highRisk = clients.filter((client) => getRisk(client) === "Alto").length;
-    const hotProposals = clients.filter((client) => client.hot && client.status === "Proposta").length;
-    const silentClients = clients.filter((client) => client.lastContactDays >= 7).length;
+    const highRisk = summary?.analytics.highRiskCount ?? clients.filter((client) => getRisk(client) === "Alto").length;
+    const hotProposals = summary?.analytics.hotProposalCount ?? clients.filter((client) => client.hot && client.status === "Proposta").length;
+    const silentClients = summary?.analytics.silentCount ?? clients.filter((client) => client.lastContactDays >= 7).length;
 
     return [
       `${highRisk} clientes em risco alto`,
       `${hotProposals} propostas quentes abertas`,
       `${silentClients} clientes sem contato recente`,
     ];
-  }, [clients]);
+  }, [clients, summary]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;

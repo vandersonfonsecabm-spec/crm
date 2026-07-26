@@ -19,10 +19,8 @@ export function initials(name: string) {
 
 
 export function leadOwner(client: Client) {
-  if (client.source.toLowerCase().includes("instagram")) return "Ana";
-  if (client.source.toLowerCase().includes("whatsapp")) return "Marco";
-  if (client.source.toLowerCase().includes("site")) return "Bia";
-  return "Time";
+  void client;
+  return "Sem responsável";
 }
 
 

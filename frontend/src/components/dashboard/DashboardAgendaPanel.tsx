@@ -6,6 +6,7 @@ import {
   cancelarAcompanhamento,
   concluirAcompanhamento,
   createAcompanhamento,
+  fetchAgendaDashboardContext,
   fetchAcompanhamentoHistorico,
   fetchAcompanhamentos,
   fetchAgendaOptions,
@@ -16,6 +17,7 @@ import {
   type AcompanhamentoPayload,
   type ApiAcompanhamento,
   type ApiAcompanhamentoHistorico,
+  type ApiAcompanhamentoResumo,
   type ApiAcompanhamentoPrioridade,
   type ApiAcompanhamentoStatus,
   type ApiAcompanhamentoTipo,
@@ -106,6 +108,7 @@ export default function DashboardAgendaPanel({
 }: DashboardAgendaPanelProps) {
   const [items, setItems] = useState<ApiAcompanhamento[]>([]);
   const [periodItems, setPeriodItems] = useState<ApiAcompanhamento[]>([]);
+  const [periodSummary, setPeriodSummary] = useState<ApiAcompanhamentoResumo | null>(null);
   const [nextCommitment, setNextCommitment] = useState<ApiAcompanhamento | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -193,18 +196,15 @@ export default function DashboardAgendaPanel({
           visao: agendaView,
           ...(viewMode === "week" ? periodQuery : {}),
         };
-        const list = viewMode === "week"
-          ? await fetchAllAcompanhamentos(params)
-          : await fetchAcompanhamentos({ ...params, page, limit: PAGE_SIZE });
+        const list = await fetchAcompanhamentos({
+          ...params,
+          page: viewMode === "week" ? 1 : page,
+          limit: viewMode === "week" ? 100 : PAGE_SIZE,
+        });
 
         if (ignore) return;
-        if (Array.isArray(list)) {
-          setItems(list);
-          setTotal(list.length);
-        } else {
-          setItems(list.data);
-          setTotal(list.pagination.total);
-        }
+        setItems(list.data);
+        setTotal(list.pagination.total);
       } catch {
         if (ignore) return;
         console.error("AGENDA_LOAD_FAILED");
@@ -227,17 +227,16 @@ export default function DashboardAgendaPanel({
     async function loadAgendaContext() {
       setIsContextLoading(true);
       try {
-        const [period, next] = await Promise.all([
-          fetchAllAcompanhamentos({ ...periodQuery, visao: "TODOS" }),
-          fetchAcompanhamentos({ visao: "PROXIMOS", page: 1, limit: 1 }),
-        ]);
+        const { summary, next } = await fetchAgendaDashboardContext(periodQuery);
         if (ignore) return;
-        setPeriodItems(period);
-        setNextCommitment(next.data[0] ?? null);
+        setPeriodItems(summary.proximos);
+        setPeriodSummary(summary);
+        setNextCommitment(next);
       } catch {
         if (ignore) return;
         console.error("AGENDA_CONTEXT_LOAD_FAILED");
         setPeriodItems([]);
+        setPeriodSummary(null);
         setNextCommitment(null);
       } finally {
         if (!ignore) setIsContextLoading(false);
@@ -276,7 +275,10 @@ export default function DashboardAgendaPanel({
     [clients],
   );
 
-  const statusCounts = useMemo(() => agendaStatusCounts(periodItems), [periodItems]);
+  const statusCounts = useMemo(
+    () => periodSummary ? agendaStatusCountsFromSummary(periodSummary) : agendaStatusCounts(periodItems),
+    [periodItems, periodSummary],
+  );
   const upcomingThisWeek = useMemo(
     () => periodItems
       .filter((item) => (item.status === "PENDENTE" || item.status === "EM_ANDAMENTO") && !item.atrasado)
@@ -548,6 +550,11 @@ export default function DashboardAgendaPanel({
                 onHistory={openHistory}
                 onSelectClient={onSelectClient}
               />
+            )}
+            {!isLoading && viewMode === "week" && total > items.length && (
+              <p className="border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-2 text-[11px] text-[var(--text-muted)]">
+                Exibindo os primeiros {items.length} de {total} acompanhamentos desta semana. Use os filtros para refinar a consulta.
+              </p>
             )}
           </div>
 
@@ -1280,18 +1287,6 @@ function priorityTone(priority: ApiAcompanhamentoPrioridade) {
   return "text-[var(--text-muted)]";
 }
 
-async function fetchAllAcompanhamentos(params: AcompanhamentoQueryParams) {
-  const firstPage = await fetchAcompanhamentos({ ...params, page: 1, limit: 100 });
-  if (firstPage.pagination.totalPages <= 1) return firstPage.data;
-
-  const remainingPages = await Promise.all(
-    Array.from({ length: firstPage.pagination.totalPages - 1 }, (_, index) =>
-      fetchAcompanhamentos({ ...params, page: index + 2, limit: 100 }),
-    ),
-  );
-  return [firstPage.data, ...remainingPages.map((result) => result.data)].flat();
-}
-
 function agendaStatusCounts(items: ApiAcompanhamento[]): AgendaStatusCounts {
   const now = new Date();
   return {
@@ -1301,6 +1296,17 @@ function agendaStatusCounts(items: ApiAcompanhamento[]): AgendaStatusCounts {
     late: items.filter((item) => item.status === "PENDENTE" && new Date(item.dataHora).getTime() < now.getTime()).length,
     critical: items.filter((item) => item.status === "PENDENTE" && (item.prioridade === "URGENTE" || item.prioridade === "CRITICA")).length,
     done: items.filter((item) => item.status === "CONCLUIDO").length,
+  };
+}
+
+function agendaStatusCountsFromSummary(summary: ApiAcompanhamentoResumo): AgendaStatusCounts {
+  return {
+    all: summary.indicadores.total,
+    pending: summary.indicadores.pendentes,
+    today: summary.indicadores.paraHoje,
+    late: summary.indicadores.atrasados,
+    critical: summary.indicadores.criticos,
+    done: summary.indicadores.concluidosPeriodo,
   };
 }
 

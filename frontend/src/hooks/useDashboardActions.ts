@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
+  ApiHttpError,
   createNotaOnBackend,
   createClienteOnBackend,
   deleteClienteOnBackend,
@@ -13,6 +14,7 @@ type UseDashboardActionsParams = {
   clients: Client[];
   setClients: Dispatch<SetStateAction<Client[]>>;
   selectedClient: Client | null;
+  setSelectedClientDetail: Dispatch<SetStateAction<Client | null>>;
   selectedId: number | null;
   setSelectedId: Dispatch<SetStateAction<number | null>>;
   editing: Client | null;
@@ -30,7 +32,7 @@ type UseDashboardActionsParams = {
   setOnlyRisk: Dispatch<SetStateAction<boolean>>;
   setOnlySilent: Dispatch<SetStateAction<boolean>>;
   setSortBy: Dispatch<SetStateAction<SortBy>>;
-  setKanbanOwnerFilter: Dispatch<SetStateAction<"Todos" | "Ana" | "Marco" | "Bia" | "Time">>;
+  setKanbanOwnerFilter: Dispatch<SetStateAction<"Todos" | "Sem responsável">>;
   setPage: Dispatch<SetStateAction<number>>;
 };
 
@@ -38,6 +40,7 @@ export default function useDashboardActions({
   clients,
   setClients,
   selectedClient,
+  setSelectedClientDetail,
   selectedId,
   setSelectedId,
   editing,
@@ -64,6 +67,10 @@ export default function useDashboardActions({
   function showToast(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2400);
+  }
+
+  function syncSelected(client: Client | null) {
+    if (client === null || client.id === selectedId) setSelectedClientDetail(client);
   }
 
   async function copyText(text: string, message: string) {
@@ -93,6 +100,7 @@ export default function useDashboardActions({
     try {
       const syncedClient = await updateClienteOnBackend(updatedClient);
       setClients((current) => current.map((client) => (client.id === id ? syncedClient : client)));
+      syncSelected(syncedClient);
     } catch {
       showToast("Não foi possível alterar o favorito.");
     }
@@ -107,6 +115,7 @@ export default function useDashboardActions({
     try {
       const syncedClient = await updateClienteOnBackend(updatedClient);
       setClients((current) => current.map((client) => (client.id === id ? syncedClient : client)));
+      syncSelected(syncedClient);
     } catch {
       showToast("Não foi possível alterar a marcação quente.");
     }
@@ -151,6 +160,7 @@ export default function useDashboardActions({
         notes: syncedNote ? [syncedNote, ...target.notes] : syncedClient.notes,
       };
       setClients((current) => current.map((client) => (client.id === id ? nextClient : client)));
+      syncSelected(nextClient);
       showToast(syncedNote ? "Status e histórico sincronizados." : "Status sincronizado; histórico pendente.");
     } catch {
       showToast("Não foi possível atualizar o status.");
@@ -167,6 +177,7 @@ export default function useDashboardActions({
       const syncedClient = await updateClienteOnBackend(target);
       setClients((current) => current.map((client) => (client.id === target.id ? syncedClient : client)));
       setSelectedId(syncedClient.id);
+      setSelectedClientDetail(syncedClient);
       setEditing(null);
       showToast("Cliente atualizado e sincronizado.");
     } catch (error) {
@@ -208,17 +219,23 @@ export default function useDashboardActions({
   }
 
   async function deleteClient(id: number) {
-    const target = clients.find((client) => client.id === id);
+    const target = clients.find((client) => client.id === id)
+      ?? (selectedClient?.id === id ? selectedClient : null);
 
     try {
       if (!target) return;
       await deleteClienteOnBackend(target);
       setClients((current) => current.filter((client) => client.id !== id));
-      if (selectedId === id) setSelectedId(null);
+      if (selectedId === id) {
+        setSelectedId(null);
+        setSelectedClientDetail(null);
+      }
       setEditing(null);
       showToast("Cliente removido e sincronizado.");
     } catch (error) {
-      showToast("Não foi possível remover o cliente.");
+      showToast(error instanceof ApiHttpError && error.code === "CLIENT_HAS_RELATIONS"
+        ? "Este cliente possui Leads, Negócios ou outros registros vinculados."
+        : "Não foi possível remover o cliente.");
       throw error;
     }
   }
@@ -238,13 +255,15 @@ export default function useDashboardActions({
     try {
       const syncedNote = await createNotaOnBackend(selectedClient, note.text);
       const syncedClient = await updateClienteOnBackend(updatedClient);
+      const nextClient = { ...syncedClient, notes: [syncedNote, ...selectedClient.notes], lastContactDays: 0 };
       setClients((current) =>
         current.map((client) =>
           client.id === selectedClient.id
-            ? { ...syncedClient, notes: [syncedNote, ...selectedClient.notes], lastContactDays: 0 }
+            ? nextClient
             : client
         )
       );
+      syncSelected(nextClient);
       setNoteText("");
       showToast("Nota sincronizada.");
     } catch {
@@ -262,6 +281,7 @@ export default function useDashboardActions({
     try {
       const syncedClient = await updateClienteOnBackend(updatedClient);
       setClients((current) => current.map((client) => (client.id === selectedClient.id ? syncedClient : client)));
+      syncSelected(syncedClient);
       setTagText("");
       showToast("Tag salva e sincronizada.");
     } catch {
@@ -277,6 +297,7 @@ export default function useDashboardActions({
     try {
       const syncedClient = await updateClienteOnBackend(updatedClient);
       setClients((current) => current.map((client) => (client.id === selectedClient.id ? syncedClient : client)));
+      syncSelected(syncedClient);
       showToast("Tag removida e sincronizada.");
     } catch {
       showToast("Não foi possível remover a tag.");
