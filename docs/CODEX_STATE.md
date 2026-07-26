@@ -11,9 +11,9 @@ Data da verificacao: 26/07/2026.
 
 ## Git
 
-- Baseline oficial publicado: `e308b1bd4d554a879dd6a112c4ed82a29598a376`.
-- Branch local: `feature/customer-360`, com tres commits locais a frente de
-  `origin/master`, zero atras e worktree limpo apos a implementacao H6B.
+- Baseline oficial publicado: `2819c1da4db8c68446df001f996b0d57ab735843`.
+- Branch local: `feature/customer-360`, com um commit documental local a frente
+  de `origin/master`, zero atras e worktree limpo apos a publicacao H6.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -24,11 +24,11 @@ Data da verificacao: 26/07/2026.
 - Frontend canonico: https://crm-murex-six-83.vercel.app.
 - Backend: https://api-production-875f9.up.railway.app.
 - Servico Railway: `api`; nao utilizar `crm-agro-demo-api`.
-- Railway esta `Active`, Vercel esta `Ready` e producao possui 22 migrations;
+- Railway esta `Active`, Vercel esta `Ready` e producao possui 23 migrations;
   health esperado HTTP 200.
-- H2, H3, H4 e H5 estao publicadas. A qualificacao comercial, as propostas, a
-  Agenda e Acompanhamentos e o Cliente 360 graus estao disponiveis em
-  producao.
+- H2, H3, H4, H5 e H6 estao publicadas. A qualificacao comercial, as propostas,
+  a Agenda e Acompanhamentos, o Cliente 360 graus e o tempo de etapa com
+  proxima acao estao disponiveis em producao.
 - H1.1 foi publicada no commit
   `93e1c0b2ea7d9d4f13b06fba2f8c275c734bb312`. O Railway publicou o deployment
   `769fba0f-d9b5-4076-bbd9-810059f05912` e a Vercel publicou o deployment
@@ -389,9 +389,11 @@ Data da verificacao: 26/07/2026.
 
 ## Tempo de etapa e proxima acao
 
-- H6A e H6B foram implementadas localmente, sem push ou deploy. A producao
-  oficial permanece no commit
-  `e308b1bd4d554a879dd6a112c4ed82a29598a376`, com 22 migrations.
+- H6A e H6B foram publicadas em 26/07/2026 no commit
+  `2819c1da4db8c68446df001f996b0d57ab735843`. O Railway esta `Active` no
+  deployment `69782023-900a-43c8-9e07-25e84f6e13be` e a Vercel esta `Ready`
+  no deployment `5KKhvvV6jgQPNMaiKcAcErxfpja2`, ambos no commit exato e com
+  health HTTP 200.
 - A migration aditiva
   `20260726123000_add_business_stage_timing` acrescenta a `Negocio` somente as
   datas opcionais de entrada na etapa e ultima movimentacao. O
@@ -432,15 +434,26 @@ Data da verificacao: 26/07/2026.
   conversao Lead para Negocio, qualificacao da Inbox, Site e Cliente 360
   passaram, assim como Prisma validate, lint, build, `node --check` e
   `git diff --check`. O warning conhecido do bundle acima de 500 kB permanece.
+- O startup oficial do Railway encontrou 23 migrations, aplicou uma unica vez
+  `20260726123000_add_business_stage_timing`, concluiu `prisma migrate deploy`
+  e iniciou a API somente depois do sucesso. Nao houve comando manual de
+  migration nem deployment duplicado.
 - O QA local em 1366x768, 1440x900, 1920x1080 e 900x768 validou cards,
   filtros, drawer, tempos, proxima acao, negocio parado, historico paginado,
   estado estimado, textos longos, loading, vazio e erro recuperavel. Nao houve
   erro React no console nem loop observado; as evidencias permaneceram somente
   em `%TEMP%\crm-h6b-stage-timing-qa`.
+- O QA autenticado de producao nas mesmas quatro larguras confirmou Kanban,
+  filtro operacional, card, tempo estimado na etapa, negocio parado, proxima
+  acao, drawer, historico parcial, vazio e paginacao. As rotas de Negocios e
+  historico responderam sem HTTP 500 e o console permaneceu sem erros. As
+  evidencias ficaram somente em `%TEMP%\crm-h6-production-qa`.
 - Limitacoes: o teste legado de integracao de autenticacao tenta copiar o
   `dev.db` protegido e foi bloqueado pelo supervisor antes de executar a
-  aplicacao; autenticacao permaneceu coberta pelos testes H6A/H6B. H6 nao
+  aplicacao; autenticacao permaneceu coberta pelos testes H6A/H6B. O estado de
+  erro recuperavel nao foi provocado deliberadamente em producao. H6 nao
   implementa automacoes, notificacoes, backfill historico nem relatorios.
+  O WhatsApp continua desligado e H7 nao foi iniciada.
 
 ## Auditoria final do escopo original
 
@@ -474,7 +487,7 @@ Data da verificacao: 26/07/2026.
 ## Plano oficial pos-auditoria
 
 - H5 - Cliente 360 graus (publicada)
-- H6 - Tempo de etapa e proxima acao (H6A e H6B concluidas localmente)
+- H6 - Tempo de etapa e proxima acao (publicada)
 - H7 - Automacoes
 - H8 - Notificacoes e checklist
 - H9 - Pos-venda
