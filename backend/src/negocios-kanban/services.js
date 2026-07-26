@@ -9,27 +9,47 @@ const {
 } = require("../leads-communication/validation");
 
 const BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA", "FECHADO", "PERDIDO"];
+const ACTIVE_BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA"];
 const ACTIVE_FOLLOW_UP_STATUSES = ["PENDENTE", "EM_ANDAMENTO"];
 const TERMINAL_BUSINESS_STAGES = new Set(["FECHADO", "PERDIDO"]);
+const OPERATIONAL_FILTERS = [
+  "PARADOS",
+  "SEM_PROXIMA_ACAO",
+  "PROXIMA_ACAO_ATRASADA",
+  "PROXIMA_ACAO_HOJE",
+];
 
 function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
   async function listBusinesses(context, query = {}) {
     rejectEmpresaId(query);
-    rejectUnknown(query, ["page", "limit", "etapa", "responsavelId", "q"]);
+    rejectUnknown(query, ["page", "limit", "etapa", "responsavelId", "q", "filtroOperacional"]);
     const pageData = pagination(query);
-    const where = { empresaId: context.empresaId };
+    const where = { empresaId: context.empresaId, AND: [] };
     const etapa = enumValue(query.etapa, "etapa", BUSINESS_STAGES, { optional: true });
     if (etapa) where.etapa = etapa;
     const responsavelId = optionalInteger(query.responsavelId, "responsavelId", { min: 1 });
     if (responsavelId) where.responsavelId = responsavelId;
     const q = optionalText(query.q, "q", 120);
     if (q) {
-      where.OR = [
-        { titulo: { contains: q } },
-        { cliente: { nome: { contains: q } } },
-        { cliente: { empresa: { contains: q } } },
-      ];
+      where.AND.push({
+        OR: [
+          { titulo: { contains: q } },
+          { cliente: { nome: { contains: q } } },
+          { cliente: { empresa: { contains: q } } },
+        ],
+      });
     }
+    const now = clock();
+    const operationalFilter = enumValue(
+      query.filtroOperacional,
+      "filtroOperacional",
+      OPERATIONAL_FILTERS,
+      { optional: true },
+    );
+    if (operationalFilter) {
+      where.AND.push(operationalFilterWhere(context.empresaId, operationalFilter, now));
+    }
+    if (where.AND.length === 0) delete where.AND;
 
     const [data, total, grouped] = await prisma.$transaction([
       prisma.negocio.findMany({
@@ -43,7 +63,6 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
       prisma.negocio.groupBy({ by: ["etapa"], where: { empresaId: context.empresaId }, _count: { _all: true } }),
     ]);
 
-    const now = clock();
     return {
       data: data.map((business) => businessView(context, business, now)),
       pagination: {
@@ -65,23 +84,32 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
     return businessView(context, business, clock());
   }
 
-  async function listBusinessStageHistory(context, id) {
+  async function listBusinessStageHistory(context, id, query = {}) {
+    rejectEmpresaId(query);
+    rejectUnknown(query, ["page", "limit"]);
+    const pageData = pagination(query);
     const business = await prisma.negocio.findFirst({
       where: { id, empresaId: context.empresaId },
       select: { id: true },
     });
     if (!business) throw notFound("Negocio nao encontrado.");
-    const data = await prisma.historicoAtribuicao.findMany({
-      where: {
-        empresaId: context.empresaId,
-        negocioId: id,
-        tipo: "MOVIMENTAR_ETAPA",
-      },
-      include: {
-        alteradoPor: { select: { id: true, nome: true } },
-      },
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    });
+    const where = {
+      empresaId: context.empresaId,
+      negocioId: id,
+      tipo: "MOVIMENTAR_ETAPA",
+    };
+    const [data, total] = await prisma.$transaction([
+      prisma.historicoAtribuicao.findMany({
+        where,
+        include: {
+          alteradoPor: { select: { id: true, nome: true } },
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        skip: pageData.skip,
+        take: pageData.limit,
+      }),
+      prisma.historicoAtribuicao.count({ where }),
+    ]);
     return {
       data: data.map((entry) => ({
         id: entry.id,
@@ -94,6 +122,12 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
         autor: entry.alteradoPor,
         createdAt: entry.createdAt,
       })),
+      pagination: {
+        total,
+        page: pageData.page,
+        limit: pageData.limit,
+        totalPages: total === 0 ? 0 : Math.ceil(total / pageData.limit),
+      },
     };
   }
 
@@ -249,6 +283,48 @@ function stalledBusinessView(stage, nextAction, now) {
   return { parado: false, motivo: null };
 }
 
+function operationalFilterWhere(empresaId, filter, now) {
+  const activeFollowUps = {
+    empresaId,
+    status: { in: ACTIVE_FOLLOW_UP_STATUSES },
+  };
+  if (filter === "SEM_PROXIMA_ACAO") {
+    return {
+      etapa: { in: ACTIVE_BUSINESS_STAGES },
+      acompanhamentos: { none: activeFollowUps },
+    };
+  }
+  if (filter === "PROXIMA_ACAO_ATRASADA") {
+    return {
+      etapa: { in: ACTIVE_BUSINESS_STAGES },
+      acompanhamentos: { some: { ...activeFollowUps, dataHora: { lt: now } } },
+    };
+  }
+  if (filter === "PROXIMA_ACAO_HOJE") {
+    const { start, end } = dayRange(now);
+    return {
+      acompanhamentos: {
+        some: { ...activeFollowUps, dataHora: { gte: start, lte: end } },
+      },
+    };
+  }
+  return {
+    etapa: { in: ACTIVE_BUSINESS_STAGES },
+    OR: [
+      { acompanhamentos: { none: activeFollowUps } },
+      { acompanhamentos: { some: { ...activeFollowUps, dataHora: { lt: now } } } },
+    ],
+  };
+}
+
+function dayRange(value) {
+  const start = new Date(value);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(value);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
 function elapsedSeconds(start, end) {
   const startTime = new Date(start).getTime();
   const endTime = new Date(end).getTime();
@@ -273,6 +349,7 @@ function summary(grouped) {
 
 module.exports = {
   BUSINESS_STAGES,
+  OPERATIONAL_FILTERS,
   createNegociosKanbanServices,
   elapsedSeconds,
   stageTimingView,

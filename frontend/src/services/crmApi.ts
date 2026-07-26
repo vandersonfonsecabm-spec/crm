@@ -183,6 +183,39 @@ export type MessageDirection = "ENTRADA" | "SAIDA";
 export type ConversationSlaStatus = "DENTRO_PRAZO" | "ATENCAO" | "ATRASADO" | "CRITICO";
 
 export type BusinessStage = "NOVO" | "CONTATO" | "PROPOSTA" | "FECHADO" | "PERDIDO";
+export type BusinessOperationalFilter = "PARADOS" | "SEM_PROXIMA_ACAO" | "PROXIMA_ACAO_ATRASADA" | "PROXIMA_ACAO_HOJE";
+export type BusinessStalledReason = "SEM_PROXIMA_ACAO" | "PROXIMA_ACAO_ATRASADA";
+
+export type BusinessNextAction = {
+  id: number;
+  titulo: string;
+  dataHora: string;
+  prioridade: ApiAcompanhamentoPrioridade;
+  status: ApiAcompanhamentoStatus;
+  tipo: ApiAcompanhamentoTipo;
+  responsavelUsuario: { id: number; nome: string } | null;
+  atrasada: boolean;
+};
+
+export type BusinessStageTiming = {
+  entrouEm: string;
+  ultimaMovimentacaoEm: string | null;
+  atualSegundos: number;
+  acumuladoSegundos: number;
+  estimado: boolean;
+};
+
+export type BusinessStageHistoryEntry = {
+  id: number;
+  etapaAnterior: BusinessStage | null;
+  etapaNova: BusinessStage | null;
+  etapaEntrouEm: string | null;
+  etapaSaiuEm: string | null;
+  duracaoEtapaSegundos: number | null;
+  duracaoEtapaEstimada: boolean;
+  autor: { id: number; nome: string } | null;
+  createdAt: string;
+};
 
 export type CommunicationBusiness = {
   id: number;
@@ -208,6 +241,12 @@ export type CommunicationBusiness = {
   observacao: string | null;
   etapa: BusinessStage;
   valor: number | null;
+  etapaEntrouEm?: string | null;
+  ultimaMovimentacaoEm?: string | null;
+  proximaAcao?: BusinessNextAction | null;
+  tempoEtapa?: BusinessStageTiming;
+  negocioParado?: boolean;
+  motivoParado?: BusinessStalledReason | null;
   createdAt: string;
   updatedAt: string;
   permissoes?: { movimentar: boolean };
@@ -1626,12 +1665,25 @@ export async function convertCommunicationLeadToBusiness(id: number, payload: { 
   return requestApiWrite<{ lead: CommunicationLead; negocio: CommunicationBusiness; created: boolean }>("POST", `/leads/${id}/converter-negocio`, payload);
 }
 
-export async function fetchNegociosKanban(params: { page?: number; limit?: number; etapa?: BusinessStage; responsavelId?: number; q?: string } = {}) {
+export async function fetchNegociosKanban(params: {
+  page?: number;
+  limit?: number;
+  etapa?: BusinessStage;
+  responsavelId?: number;
+  q?: string;
+  filtroOperacional?: BusinessOperationalFilter;
+} = {}) {
   return requestApiGetAuthenticated<NegociosKanbanResponse>(`/negocios${toQueryString(params)}`);
 }
 
 export async function fetchNegocioKanban(id: number) {
   return requestApiGetAuthenticated<CommunicationBusiness>(`/negocios/${id}`);
+}
+
+export async function fetchBusinessStageHistory(id: number, params: { page?: number; limit?: number } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<BusinessStageHistoryEntry>>(
+    `/negocios/${id}/historico-etapas${toQueryString(params)}`,
+  );
 }
 
 export async function updateNegocioKanbanStage(id: number, etapa: BusinessStage, etapaAnterior: BusinessStage) {

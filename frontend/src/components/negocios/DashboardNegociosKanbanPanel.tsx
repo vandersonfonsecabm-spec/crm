@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, GripVertical, UserRound, X } from "lucide-react";
+import { AlertTriangle, BriefcaseBusiness, CalendarClock, Clock3, GripVertical, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchNegocioKanban,
@@ -7,11 +7,14 @@ import {
 } from "../../services/crmApi";
 import type {
   AuthSession,
+  BusinessOperationalFilter,
   BusinessStage,
   CommunicationBusiness,
   NegociosKanbanResponse,
 } from "../../services/crmApi";
 import { Button, EmptyState, ErrorState, Input, LoadingState, Pagination, Select, Surface } from "../ui";
+import BusinessStageTimingPanel from "./BusinessStageTimingPanel";
+import { formatBusinessDuration } from "./businessStagePresentation";
 import CommercialProposalsPanel from "./CommercialProposalsPanel";
 
 const stages: BusinessStage[] = ["NOVO", "CONTATO", "PROPOSTA", "FECHADO", "PERDIDO"];
@@ -27,10 +30,11 @@ type Props = {
   authSession: AuthSession | null;
   initialBusinessId?: number | null;
   onInitialBusinessHandled?: () => void;
+  onOpenAgenda: () => void;
   onToast: (message: string) => void;
 };
 
-export default function DashboardNegociosKanbanPanel({ authSession, initialBusinessId, onInitialBusinessHandled, onToast }: Props) {
+export default function DashboardNegociosKanbanPanel({ authSession, initialBusinessId, onInitialBusinessHandled, onOpenAgenda, onToast }: Props) {
   const [businesses, setBusinesses] = useState<CommunicationBusiness[]>([]);
   const [summary, setSummary] = useState<NegociosKanbanResponse["resumo"] | null>(null);
   const [page, setPage] = useState(1);
@@ -38,6 +42,7 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<BusinessStage | "">("");
+  const [operationalFilter, setOperationalFilter] = useState<BusinessOperationalFilter | "">("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -58,6 +63,7 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
         page,
         limit: 100,
         ...(stageFilter ? { etapa: stageFilter } : {}),
+        ...(operationalFilter ? { filtroOperacional: operationalFilter } : {}),
         ...(search ? { q: search } : {}),
       });
       if (sequence !== requestSequence.current) return;
@@ -72,7 +78,7 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
         setRefreshing(false);
       }
     }
-  }, [page, search, stageFilter]);
+  }, [operationalFilter, page, search, stageFilter]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -190,7 +196,19 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
             <option value="">Todas as etapas</option>
             {stages.map((stage) => <option key={stage} value={stage}>{stageLabels[stage]}</option>)}
           </Select>
-          <Button disabled={!query && !stageFilter} onClick={() => { setQuery(""); setSearch(""); setStageFilter(""); setPage(1); }} size="sm" variant="secondary">Limpar</Button>
+          <Select
+            aria-label="Filtrar por situação operacional"
+            containerClassName="w-56"
+            onChange={(event) => { setOperationalFilter(event.target.value as BusinessOperationalFilter | ""); setPage(1); }}
+            value={operationalFilter}
+          >
+            <option value="">Todas as situações</option>
+            <option value="PARADOS">Negócios parados</option>
+            <option value="SEM_PROXIMA_ACAO">Sem próxima ação</option>
+            <option value="PROXIMA_ACAO_ATRASADA">Próxima ação atrasada</option>
+            <option value="PROXIMA_ACAO_HOJE">Próxima ação hoje</option>
+          </Select>
+          <Button disabled={!query && !stageFilter && !operationalFilter} onClick={() => { setQuery(""); setSearch(""); setStageFilter(""); setOperationalFilter(""); setPage(1); }} size="sm" variant="secondary">Limpar</Button>
         </div>
       </Surface>
 
@@ -236,13 +254,15 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
         <Pagination disabled={refreshing} itemLabel="Negócios" onPageChange={setPage} page={page} total={pagination.total} totalPages={pagination.totalPages} visibleCount={businesses.length} />
       </Surface>
 
-      {selected && <BusinessDrawer authSession={authSession} business={selected} loading={detailLoading} onClose={() => { setSelected(null); window.setTimeout(() => detailTrigger.current?.focus(), 0); }} />}
+      {selected && <BusinessDrawer authSession={authSession} business={selected} loading={detailLoading} onClose={() => { setSelected(null); window.setTimeout(() => detailTrigger.current?.focus(), 0); }} onOpenAgenda={onOpenAgenda} />}
     </section>
   );
 }
 
 function BusinessCard({ business, onOpen }: { business: CommunicationBusiness; onOpen: (business: CommunicationBusiness, trigger: HTMLElement) => void }) {
   const canMove = business.permissoes?.movimentar === true;
+  const currentStageTime = formatBusinessDuration(business.tempoEtapa?.atualSegundos);
+  const nextAction = business.proximaAcao;
   return (
     <div
       aria-label={`Abrir Negócio ${business.titulo || business.id}`}
@@ -262,15 +282,38 @@ function BusinessCard({ business, onOpen }: { business: CommunicationBusiness; o
         {canMove && <GripVertical aria-hidden="true" className="shrink-0 text-[var(--icon-muted)]" size={14} />}
       </div>
       <div className="mt-2 border-t border-[var(--border-default)] pt-2 text-[11px] text-[var(--text-secondary)]">
-        <p className="truncate">{business.responsavel?.nome || "Sem responsável"}</p>
-        <p className="mt-1 truncate text-[var(--text-muted)]">{business.lead?.origem || "Origem não informada"}</p>
-        <p className="mt-1 tabular-nums text-[var(--text-muted)]">{business.valor === null ? "Valor não informado" : `Valor cadastrado: ${business.valor.toLocaleString("pt-BR")}`}</p>
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <p className="truncate">{business.responsavel?.nome || "Sem responsável"}</p>
+          <p className="shrink-0 tabular-nums text-[var(--text-muted)]">{business.valor === null ? "Sem valor" : business.valor.toLocaleString("pt-BR")}</p>
+        </div>
+        <div className="mt-2 flex min-w-0 items-center justify-between gap-2 rounded-sm bg-[var(--bg-muted)] px-2 py-1.5">
+          <span className="inline-flex min-w-0 items-center gap-1.5 truncate font-medium tabular-nums text-[var(--text-secondary)]" title={business.tempoEtapa?.estimado ? "Tempo estimado na etapa" : "Tempo na etapa atual"}>
+            <Clock3 aria-hidden="true" className="shrink-0" size={12} />
+            {business.tempoEtapa?.estimado ? "~ " : ""}{currentStageTime}
+          </span>
+          {business.negocioParado && (
+            <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-[var(--warning)]" title={business.motivoParado === "PROXIMA_ACAO_ATRASADA" ? "Próxima ação atrasada" : "Sem próxima ação"}>
+              <AlertTriangle aria-hidden="true" size={11} />
+              Parado
+            </span>
+          )}
+        </div>
+        <div className="mt-2 min-w-0">
+          <p className="inline-flex items-center gap-1 text-[10px] text-[var(--text-muted)]"><CalendarClock aria-hidden="true" size={11} /> Próxima ação</p>
+          {nextAction ? (
+            <p className={`mt-0.5 truncate font-medium ${nextAction.atrasada ? "text-[var(--danger)]" : "text-[var(--text-primary)]"}`} title={`${nextAction.titulo} · ${formatCompactDateTime(nextAction.dataHora)}`}>
+              {nextAction.titulo} · {formatCompactDateTime(nextAction.dataHora)}
+            </p>
+          ) : (
+            <p className="mt-0.5 truncate text-[var(--text-muted)]">Nenhuma ação agendada</p>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function BusinessDrawer({ authSession, business, loading, onClose }: { authSession: AuthSession | null; business: CommunicationBusiness; loading: boolean; onClose: () => void }) {
+function BusinessDrawer({ authSession, business, loading, onClose, onOpenAgenda }: { authSession: AuthSession | null; business: CommunicationBusiness; loading: boolean; onClose: () => void; onOpenAgenda: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/35" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside aria-label="Detalhes do Negócio" aria-modal="true" className="flex h-full w-full max-w-[760px] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-xl" role="dialog">
@@ -296,6 +339,9 @@ function BusinessDrawer({ authSession, business, loading, onClose }: { authSessi
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]">Observação</h3>
             <p className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-[var(--text-secondary)]">{business.observacao || "Nenhuma observação registrada."}</p>
+          </section>
+          <section className="mt-5 border-t border-[var(--border-default)] pt-4">
+            <BusinessStageTimingPanel business={business} key={business.id} onOpenAgenda={onOpenAgenda} />
           </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
             <CommercialProposalsPanel businessId={business.id} />
@@ -324,4 +370,13 @@ function BusinessDrawer({ authSession, business, loading, onClose }: { authSessi
 
 function Detail({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0"><dt className="text-[10px] font-medium text-[var(--text-muted)]">{label}</dt><dd className="mt-1 break-words font-medium text-[var(--text-primary)]">{value}</dd></div>;
+}
+
+function formatCompactDateTime(value: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }

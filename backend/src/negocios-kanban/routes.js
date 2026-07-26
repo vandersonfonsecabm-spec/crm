@@ -28,7 +28,7 @@ function mountNegociosKanbanRoutes({ app, prisma, authenticate }) {
     res.json(await api.getBusiness(context, pathId(req)));
   }));
   app.get("/negocios/:id/historico-etapas", ...guarded, route(async (req, res, context, api) => {
-    res.json(await api.listBusinessStageHistory(context, pathId(req)));
+    res.json(await api.listBusinessStageHistory(context, pathId(req), req.query));
   }));
   app.patch("/negocios/:id/etapa", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.updateBusinessStage(context, pathId(req), req.body));

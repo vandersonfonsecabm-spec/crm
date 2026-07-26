@@ -801,7 +801,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               )}
 
               {usingNegociosKanban && authSession && (
-                <DashboardNegociosKanbanPanel authSession={authSession} initialBusinessId={kanbanBusinessId} onInitialBusinessHandled={() => setKanbanBusinessId(null)} onToast={setToast} />
+                <DashboardNegociosKanbanPanel
+                  authSession={authSession}
+                  initialBusinessId={kanbanBusinessId}
+                  onInitialBusinessHandled={() => setKanbanBusinessId(null)}
+                  onOpenAgenda={() => handleSetActivePage("agenda")}
+                  onToast={setToast}
+                />
               )}
 
               {!negociosKanbanEnabled && <DashboardKanbanBoard

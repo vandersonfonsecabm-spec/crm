@@ -12,8 +12,8 @@ Data da verificacao: 26/07/2026.
 ## Git
 
 - Baseline oficial publicado: `e308b1bd4d554a879dd6a112c4ed82a29598a376`.
-- Branch local: `feature/customer-360`, com dois commits locais a frente de
-  `origin/master`, zero atras e worktree limpo apos a implementacao H6A.
+- Branch local: `feature/customer-360`, com tres commits locais a frente de
+  `origin/master`, zero atras e worktree limpo apos a implementacao H6B.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -389,9 +389,9 @@ Data da verificacao: 26/07/2026.
 
 ## Tempo de etapa e proxima acao
 
-- A H6A foi implementada localmente, sem push ou deploy. A producao oficial
-  permanece no commit `e308b1bd4d554a879dd6a112c4ed82a29598a376`, com 22
-  migrations.
+- H6A e H6B foram implementadas localmente, sem push ou deploy. A producao
+  oficial permanece no commit
+  `e308b1bd4d554a879dd6a112c4ed82a29598a376`, com 22 migrations.
 - A migration aditiva
   `20260726123000_add_business_stage_timing` acrescenta a `Negocio` somente as
   datas opcionais de entrada na etapa e ultima movimentacao. O
@@ -414,15 +414,33 @@ Data da verificacao: 26/07/2026.
 - `GET /negocios`, `GET /negocios/:id` e
   `GET /negocios/:id/historico-etapas` entregam a infraestrutura tecnica de
   tempo atual, tempo acumulado, proxima acao, estado parado e movimentos
-  registrados. Nenhum indicador visual foi adicionado nesta fase.
+  registrados. O historico possui paginacao estavel e preserva o isolamento
+  por tenant.
+- O Kanban apresenta tempo na etapa, proxima acao e indicador moderado de
+  negocio parado. Os filtros server-side cobrem negocios parados, sem proxima
+  acao, com proxima acao atrasada e com proxima acao hoje.
+- O drawer do Negocio apresenta etapa atual, tempo atual, tempo acumulado,
+  proxima acao e historico incremental. Referencias estimadas e historicos
+  parciais sao identificados explicitamente, e a etapa atual aberta nao e
+  confundida com uma movimentacao concluida.
+- A carga inicial do historico foi estruturada em fluxo assincrono agendado,
+  com sequencia de requisicao e descarte de respostas obsoletas. Isso evita
+  atualizacao sincrona de estado no efeito, requisicao duplicada em StrictMode
+  e atualizacao apos desmontagem, preservando loading, vazio, erro e paginacao.
 - A migration representativa preservou os dados comerciais e completou 23
   migrations em sandbox. Testes focais e regressoes de Kanban, Agenda,
   conversao Lead para Negocio, qualificacao da Inbox, Site e Cliente 360
   passaram, assim como Prisma validate, lint, build, `node --check` e
   `git diff --check`. O warning conhecido do bundle acima de 500 kB permanece.
-- Limitacoes para H6B: criar somente a apresentacao visual dos dados ja
-  expostos, sem nova regra de dominio. A H6A nao implementa automacoes,
-  notificacoes, backfill historico nem relatorios.
+- O QA local em 1366x768, 1440x900, 1920x1080 e 900x768 validou cards,
+  filtros, drawer, tempos, proxima acao, negocio parado, historico paginado,
+  estado estimado, textos longos, loading, vazio e erro recuperavel. Nao houve
+  erro React no console nem loop observado; as evidencias permaneceram somente
+  em `%TEMP%\crm-h6b-stage-timing-qa`.
+- Limitacoes: o teste legado de integracao de autenticacao tenta copiar o
+  `dev.db` protegido e foi bloqueado pelo supervisor antes de executar a
+  aplicacao; autenticacao permaneceu coberta pelos testes H6A/H6B. H6 nao
+  implementa automacoes, notificacoes, backfill historico nem relatorios.
 
 ## Auditoria final do escopo original
 
@@ -456,7 +474,7 @@ Data da verificacao: 26/07/2026.
 ## Plano oficial pos-auditoria
 
 - H5 - Cliente 360 graus (publicada)
-- H6 - Tempo de etapa e proxima acao (H6A local; H6B visual pendente)
+- H6 - Tempo de etapa e proxima acao (H6A e H6B concluidas localmente)
 - H7 - Automacoes
 - H8 - Notificacoes e checklist
 - H9 - Pos-venda
