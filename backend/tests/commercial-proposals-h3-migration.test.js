@@ -5,6 +5,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { test } = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
+const { copyMigrationsBefore, copyTargetMigration } = require("./fixtures/migration-sandbox");
 
 const backendDir = path.resolve(__dirname, "..");
 const migrationName = "20260722013000_add_commercial_proposals";
@@ -19,8 +20,7 @@ test("H3 aplica somente estruturas aditivas de propostas e preserva dados comerc
   const databasePath = path.join(prismaDir, "representative.db");
   fs.mkdirSync(prismaDir, { recursive: true });
   fs.copyFileSync(path.join(backendDir, "prisma", "schema.prisma"), schemaPath);
-  fs.cpSync(path.join(backendDir, "prisma", "migrations"), migrationsDir, { recursive: true });
-  fs.rmSync(path.join(migrationsDir, migrationName), { recursive: true, force: true });
+  copyMigrationsBefore({ backendDir, migrationsDir, migrationName });
   fs.writeFileSync(databasePath, "");
 
   runPrisma(schemaPath, databasePath, ["migrate", "deploy"]);
@@ -31,7 +31,7 @@ test("H3 aplica somente estruturas aditivas de propostas e preserva dados comerc
   const before = commercialFingerprint(database);
   database.close();
 
-  fs.cpSync(path.join(backendDir, "prisma", "migrations", migrationName), path.join(migrationsDir, migrationName), { recursive: true });
+  copyTargetMigration({ backendDir, migrationsDir, migrationName });
   runPrisma(schemaPath, databasePath, ["migrate", "deploy"]);
 
   database = new DatabaseSync(databasePath, { readOnly: true });

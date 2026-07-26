@@ -5,6 +5,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { test } = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
+const { copyMigrationsBefore, copyTargetMigration } = require("./fixtures/migration-sandbox");
 
 const backendDir = path.resolve(__dirname, "..");
 const migrationName = "20260721213000_add_inbox_commercial_qualification";
@@ -19,8 +20,7 @@ test("H2 aplica somente historico comercial aditivo e preserva dados existentes"
   const databasePath = path.join(prismaDir, "representative.db");
   fs.mkdirSync(prismaDir, { recursive: true });
   fs.copyFileSync(path.join(backendDir, "prisma", "schema.prisma"), schemaPath);
-  fs.cpSync(path.join(backendDir, "prisma", "migrations"), migrationsDir, { recursive: true });
-  fs.rmSync(path.join(migrationsDir, migrationName), { recursive: true, force: true });
+  copyMigrationsBefore({ backendDir, migrationsDir, migrationName });
   fs.writeFileSync(databasePath, "");
 
   runPrisma(schemaPath, databasePath, ["migrate", "deploy"]);
@@ -33,7 +33,7 @@ test("H2 aplica somente historico comercial aditivo e preserva dados existentes"
   const before = commercialFingerprint(database);
   database.close();
 
-  fs.cpSync(path.join(backendDir, "prisma", "migrations", migrationName), path.join(migrationsDir, migrationName), { recursive: true });
+  copyTargetMigration({ backendDir, migrationsDir, migrationName });
   runPrisma(schemaPath, databasePath, ["migrate", "deploy"]);
 
   database = new DatabaseSync(databasePath, { readOnly: true });

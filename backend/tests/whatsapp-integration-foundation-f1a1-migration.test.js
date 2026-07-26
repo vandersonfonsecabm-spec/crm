@@ -5,18 +5,25 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
+const {
+  copyMigrationsBefore,
+  copyTargetMigration,
+} = require("./fixtures/migration-sandbox");
 
 const backendDir = path.resolve(__dirname, "..");
 const auditDir = path.join(requiredEnv("CRM_PRISMA_TEST_RUN_DIR"), "whatsapp-f1a1-migration");
 const sourceDatabase = path.join(auditDir, `source-${process.pid}.db`);
 const emptyDatabase = path.join(auditDir, `empty-${process.pid}.db`);
 const copiedDatabase = path.join(auditDir, `copy-${process.pid}.db`);
+const targetPrismaDir = path.join(auditDir, "target-prisma");
+const targetSchema = path.join(targetPrismaDir, "schema.prisma");
 const prismaCli = path.join(backendDir, "node_modules", "prisma", "build", "index.js");
+const migrationName = "20260718184500_add_whatsapp_integration_foundation";
 const migrationDir = path.join(
   backendDir,
   "prisma",
   "migrations",
-  "20260718184500_add_whatsapp_integration_foundation",
+  migrationName,
 );
 const newColumns = [
   "accessTokenRef",
@@ -41,6 +48,7 @@ let sourceCounts;
 
 before(async () => {
   fs.mkdirSync(auditDir, { recursive: true });
+  prepareTargetSchema();
   fs.copyFileSync(requiredEnv("CRM_TEST_SOURCE_DATABASE_PATH"), sourceDatabase);
   fs.writeFileSync(emptyDatabase, "");
   fs.copyFileSync(sourceDatabase, copiedDatabase);
@@ -104,7 +112,7 @@ test("migration F1A-1 e aditiva, preserva dados e tem deploy idempotente", async
 });
 
 function migrate(databasePath) {
-  execFileSync(process.execPath, [prismaCli, "migrate", "deploy"], {
+  execFileSync(process.execPath, [prismaCli, "migrate", "deploy", "--schema", targetSchema], {
     cwd: backendDir,
     env: {
       ...process.env,
@@ -114,6 +122,14 @@ function migrate(databasePath) {
     },
     stdio: "pipe",
   });
+}
+
+function prepareTargetSchema() {
+  fs.mkdirSync(targetPrismaDir, { recursive: true });
+  fs.copyFileSync(path.join(backendDir, "prisma", "schema.prisma"), targetSchema);
+  const migrationsDir = path.join(targetPrismaDir, "migrations");
+  copyMigrationsBefore({ backendDir, migrationsDir, migrationName });
+  copyTargetMigration({ backendDir, migrationsDir, migrationName });
 }
 
 function clientFor(databasePath) {

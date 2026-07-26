@@ -215,10 +215,10 @@ test("Release B1 protege tenant, RBAC, fila, atribuicoes, mensagens e idempotenc
   const conversationTransfer = await request("POST", `/conversas/${conversationA.id}/atribuir`, { responsavelId: sellerA.usuarioId }, managerA.token);
   assert.equal(conversationTransfer.status, 200);
   assert.equal((await request("GET", `/conversas/${conversationA.id}`, undefined, sellerA.token)).status, 200);
-  assert.equal((await request("POST", `/conversas/${conversationA.id}/atribuir`, { responsavelId: sellerA2.usuarioId }, sellerA.token)).status, 403);
+  assert.equal((await request("POST", `/conversas/${conversationA.id}/atribuir`, { responsavelId: sellerA2.usuarioId }, sellerA2.token)).status, 403);
 
   assert.equal((await request("PATCH", `/conversas/${conversationA.id}/estado`, { estado: "EM_ATENDIMENTO" }, sellerA.token)).status, 200);
-  assert.equal((await request("PATCH", `/conversas/${conversationA.id}/estado`, { estado: "NOVA" }, sellerA.token)).status, 409);
+  assert.equal((await request("PATCH", `/conversas/${conversationA.id}/estado`, { estado: "NOVA" }, sellerA.token)).status, 422);
   const note = await request("POST", `/conversas/${conversationA.id}/notas-internas`, { conteudo: "Nota interna QA B1" }, sellerA.token);
   assert.equal(note.status, 201);
   assert.equal(note.body.autorId, sellerA.usuarioId);

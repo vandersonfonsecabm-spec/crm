@@ -14,6 +14,8 @@ const {
 const backendDirectory = path.resolve(__dirname, "..");
 const sourcePrismaDirectory = path.join(backendDirectory, "prisma");
 const migrationName = "20260721123000_add_inbox_operational_history";
+const currentMigrationCount = fs.readdirSync(path.join(sourcePrismaDirectory, "migrations"), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory()).length;
 const testServiceId = "railway-service-test";
 
 test("cenario 1: fora do Railway inicia servidor sem executar migration", async () => {
@@ -40,8 +42,8 @@ test("cenario 1: fora do Railway inicia servidor sem executar migration", async 
   assert.equal(spawnCalls.every((call) => call.options.shell === false), true);
 });
 
-test("cenario 2: Railway com 17 migrations aplica a 18 antes do servidor", async () => {
-  const fixture = createPrismaFixture("seventeen", { migrations: 17, legacyHistory: true });
+test("cenario 2: Railway aplica migration pendente antes do servidor", async () => {
+  const fixture = createPrismaFixture("pending", { pendingTarget: true, legacyHistory: true });
   const order = [];
 
   const code = await runStartup({
@@ -60,7 +62,7 @@ test("cenario 2: Railway com 17 migrations aplica a 18 antes do servidor", async
 
   assert.equal(code, 0);
   assert.deepEqual(order, ["migration:start", "migration:end", "server"]);
-  assertDatabase(fixture.databasePath, { migrations: 18, history: 1 });
+  assertDatabase(fixture.databasePath, { migrations: currentMigrationCount, history: 1 });
   const database = new DatabaseSync(fixture.databasePath, { readOnly: true });
   const history = database.prepare('SELECT "motivo", "acaoAtendimento", "estadoAnterior", "estadoNovo" FROM "HistoricoAtribuicao"').get();
   database.close();
@@ -72,8 +74,8 @@ test("cenario 2: Railway com 17 migrations aplica a 18 antes do servidor", async
   });
 });
 
-test("cenario 3: Railway com 18 migrations executa no-op e inicia servidor", async () => {
-  const fixture = createPrismaFixture("eighteen", { migrations: 18 });
+test("cenario 3: Railway atualizado executa no-op e inicia servidor", async () => {
+  const fixture = createPrismaFixture("up-to-date");
   const before = migrationRows(fixture.databasePath);
   let serverCalls = 0;
 
@@ -89,11 +91,11 @@ test("cenario 3: Railway com 18 migrations executa no-op e inicia servidor", asy
   assert.equal(code, 0);
   assert.equal(serverCalls, 1);
   assert.equal(migrationRows(fixture.databasePath), before);
-  assertDatabase(fixture.databasePath, { migrations: 18, history: 0 });
+  assertDatabase(fixture.databasePath, { migrations: currentMigrationCount, history: 0 });
 });
 
 test("cenario 4: falha de migration impede servidor e nao vaza segredo", async () => {
-  const fixture = createPrismaFixture("migration-failure", { migrations: 18 });
+  const fixture = createPrismaFixture("migration-failure");
   const logs = capturedLogger();
   let serverCalls = 0;
 
@@ -117,7 +119,7 @@ test("cenario 4: falha de migration impede servidor e nao vaza segredo", async (
 });
 
 test("cenario 5: volume invalido falha antes de migration e servidor", async () => {
-  const fixture = createPrismaFixture("invalid-volume", { migrations: 18 });
+  const fixture = createPrismaFixture("invalid-volume");
   let migrationCalls = 0;
   let serverCalls = 0;
 
@@ -140,7 +142,7 @@ test("cenario 5: volume invalido falha antes de migration e servidor", async () 
 });
 
 test("cenario 6: DATABASE_URL fora do volume falha fechada", async () => {
-  const fixture = createPrismaFixture("database-outside-volume", { migrations: 18 });
+  const fixture = createPrismaFixture("database-outside-volume");
   const outsideDatabase = path.join(path.dirname(fixture.mountPath), "outside.db");
   fs.writeFileSync(outsideDatabase, "");
   let migrationCalls = 0;
@@ -190,7 +192,7 @@ test("cenario 7: SIGTERM e encaminhado uma vez e exit code e preservado", async 
   assert.equal(signalSource.listenerCount("SIGINT"), 0);
 });
 
-function createPrismaFixture(name, { migrations, legacyHistory = false }) {
+function createPrismaFixture(name, { pendingTarget = false, legacyHistory = false } = {}) {
   const supervisorRunDirectory = process.env.CRM_PRISMA_TEST_RUN_DIR;
   if (!supervisorRunDirectory || !path.isAbsolute(supervisorRunDirectory)) {
     throw new Error("CRM_PRISMA_TEST_RUN_DIR absoluto e obrigatorio.");
@@ -205,7 +207,7 @@ function createPrismaFixture(name, { migrations, legacyHistory = false }) {
   fs.copyFileSync(path.join(sourcePrismaDirectory, "schema.prisma"), schemaPath);
   fs.cpSync(path.join(sourcePrismaDirectory, "migrations"), migrationsDirectory, { recursive: true });
 
-  if (migrations === 17) {
+  if (pendingTarget) {
     fs.rmSync(path.join(migrationsDirectory, migrationName), { recursive: true, force: true });
   }
 
@@ -221,7 +223,7 @@ function createPrismaFixture(name, { migrations, legacyHistory = false }) {
     database.close();
   }
 
-  if (migrations === 17) {
+  if (pendingTarget) {
     fs.cpSync(
       path.join(sourcePrismaDirectory, "migrations", migrationName),
       path.join(migrationsDirectory, migrationName),

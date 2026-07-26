@@ -4,6 +4,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { test } = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
+const { copyMigrationsBefore, copyTargetMigration } = require("./fixtures/migration-sandbox");
 
 const backendDir = path.resolve(__dirname, "..");
 const migrationName = "20260721123000_add_inbox_operational_history";
@@ -18,8 +19,7 @@ test("H1 aplica migration aditiva sobre historico legado e segunda execucao e in
   const databasePath = path.join(prismaDir, "representative.db");
   fs.mkdirSync(prismaDir, { recursive: true });
   fs.copyFileSync(path.join(backendDir, "prisma", "schema.prisma"), schemaPath);
-  fs.cpSync(path.join(backendDir, "prisma", "migrations"), migrationsDir, { recursive: true });
-  fs.rmSync(path.join(migrationsDir, migrationName), { recursive: true, force: true });
+  copyMigrationsBefore({ backendDir, migrationsDir, migrationName });
   fs.writeFileSync(databasePath, "");
 
   runPrisma(schemaPath, databasePath, ["migrate", "deploy"]);
@@ -32,11 +32,7 @@ test("H1 aplica migration aditiva sobre historico legado e segunda execucao e in
   const before = database.prepare('SELECT "id", "empresaId", "tipo", "origem", "motivo", "createdAt" FROM "HistoricoAtribuicao"').get();
   database.close();
 
-  fs.cpSync(
-    path.join(backendDir, "prisma", "migrations", migrationName),
-    path.join(migrationsDir, migrationName),
-    { recursive: true },
-  );
+  copyTargetMigration({ backendDir, migrationsDir, migrationName });
   runPrisma(schemaPath, databasePath, ["migrate", "deploy"]);
 
   database = new DatabaseSync(databasePath, { readOnly: true });

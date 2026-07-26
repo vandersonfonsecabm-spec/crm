@@ -6,6 +6,10 @@ const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const { createSiteLeadService } = require("../src/site-leads/service");
+const {
+  copyMigrationsBefore,
+  copyTargetMigration,
+} = require("./fixtures/migration-sandbox");
 
 const backendDir = path.resolve(__dirname, "..");
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
@@ -15,6 +19,8 @@ const representativeDatabase = path.join(auditDir, "representative.db");
 const siteDatabase = path.join(auditDir, "site.db");
 const previousPrismaDir = path.join(auditDir, "previous-prisma");
 const previousSchema = path.join(previousPrismaDir, "schema.prisma");
+const targetPrismaDir = path.join(auditDir, "target-prisma");
+const targetSchema = path.join(targetPrismaDir, "schema.prisma");
 const prismaCli = resolvePrismaCli();
 const migrationName = "20260718205500_add_event_webhook_atomic_payload";
 const migrationDir = path.join(backendDir, "prisma", "migrations", migrationName);
@@ -24,10 +30,10 @@ let replayFingerprint;
 
 before(async () => {
   fs.mkdirSync(auditDir, { recursive: true });
+  prepareSchemas();
   fs.writeFileSync(emptyDatabase, "");
-  migrate(emptyDatabase);
+  migrate(emptyDatabase, targetSchema);
 
-  preparePreviousSchema();
   fs.writeFileSync(representativeDatabase, "");
   migrate(representativeDatabase, previousSchema);
   await createLegacyEvent(representativeDatabase);
@@ -35,11 +41,11 @@ before(async () => {
   countsBefore = await tableCounts(representativeDatabase);
   assert.equal(await migrationCount(representativeDatabase), 16);
 
-  migrate(representativeDatabase);
+  migrate(representativeDatabase, targetSchema);
   replayFingerprint = fingerprint(representativeDatabase);
-  migrate(representativeDatabase);
+  migrate(representativeDatabase, targetSchema);
 
-  fs.copyFileSync(emptyDatabase, siteDatabase);
+  fs.copyFileSync(supervisorDatabasePath(), siteDatabase);
 });
 
 after(() => {
@@ -138,17 +144,26 @@ test("fluxo Site continua sem preencher payloadJson", async () => {
   }
 });
 
-function preparePreviousSchema() {
-  fs.mkdirSync(path.join(previousPrismaDir, "migrations"), { recursive: true });
+function prepareSchemas() {
+  fs.mkdirSync(previousPrismaDir, { recursive: true });
+  fs.mkdirSync(targetPrismaDir, { recursive: true });
   fs.copyFileSync(path.join(backendDir, "prisma", "schema.prisma"), previousSchema);
-  const migrationsDir = path.join(backendDir, "prisma", "migrations");
-  for (const entry of fs.readdirSync(migrationsDir, { withFileTypes: true })) {
-    if (entry.name === migrationName) continue;
-    const source = path.join(migrationsDir, entry.name);
-    const target = path.join(previousPrismaDir, "migrations", entry.name);
-    if (entry.isDirectory()) fs.cpSync(source, target, { recursive: true });
-    else fs.copyFileSync(source, target);
-  }
+  fs.copyFileSync(path.join(backendDir, "prisma", "schema.prisma"), targetSchema);
+  copyMigrationsBefore({
+    backendDir,
+    migrationsDir: path.join(previousPrismaDir, "migrations"),
+    migrationName,
+  });
+  copyMigrationsBefore({
+    backendDir,
+    migrationsDir: path.join(targetPrismaDir, "migrations"),
+    migrationName,
+  });
+  copyTargetMigration({
+    backendDir,
+    migrationsDir: path.join(targetPrismaDir, "migrations"),
+    migrationName,
+  });
 }
 
 async function createLegacyEvent(databasePath) {
@@ -270,6 +285,14 @@ function databaseUrl(databasePath) {
 function requiredEnv(name) {
   if (!process.env[name]) throw new Error(`${name} deve ser definido pelo supervisor de testes.`);
   return process.env[name];
+}
+
+function supervisorDatabasePath() {
+  const databaseUrl = requiredEnv("CRM_TEST_DATABASE_URL");
+  if (!databaseUrl.startsWith("file:")) {
+    throw new Error("CRM_TEST_DATABASE_URL deve apontar para SQLite na sandbox.");
+  }
+  return path.normalize(decodeURIComponent(databaseUrl.slice("file:".length)));
 }
 
 function resolvePrismaCli() {

@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -44,19 +45,17 @@ test("desenvolvimento preserva a configuracao padrao", () => {
   assert.equal(received, undefined);
 });
 
-test("sentinela fisica impede abertura do dev.db oficial", async () => {
-  assert.equal(process.env.CRM_PRISMA_SENTINEL_ACTIVE, "true");
+test("guard rejeita o dev.db oficial sem renomear ou abrir o arquivo", () => {
+  assert.equal(process.env.CRM_PRISMA_SENTINEL_ACTIVE, "false");
   const officialPath = process.env.CRM_OFFICIAL_DATABASE_PATH;
   assert.ok(officialPath);
-  assert.equal(fs.statSync(officialPath).isDirectory(), true);
-  assert.deepEqual(fs.readdirSync(officialPath), []);
-
-  const { PrismaClient } = require("@prisma/client");
-  const unsafe = new PrismaClient({ datasourceUrl: `file:${officialPath.replace(/\\/g, "/")}` });
-  try {
-    await assert.rejects(unsafe.$queryRawUnsafe("PRAGMA quick_check"));
-  } finally {
-    await unsafe.$disconnect();
-  }
-  assert.deepEqual(fs.readdirSync(officialPath), []);
+  assert.equal(fs.statSync(officialPath).isFile(), true);
+  assert.equal(fs.statSync(officialPath).size, 532480);
+  assert.equal(
+    crypto.createHash("sha256").update(fs.readFileSync(officialPath)).digest("hex"),
+    "cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a",
+  );
+  assert.throws(() => validateTestDatabaseUrl(`file:${officialPath.replace(/\\/g, "/")}`), /crm-prisma-tests/);
+  assert.equal(fs.existsSync(`${officialPath}-wal`), false);
+  assert.equal(fs.existsSync(`${officialPath}-shm`), false);
 });
