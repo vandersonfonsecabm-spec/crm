@@ -1,7 +1,8 @@
 import type { Client, Note, Status } from "../types/dashboard";
 
-const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
-const API_URL = configuredApiUrl || (import.meta.env.PROD ? "" : "http://localhost:3001");
+const runtimeEnv = import.meta.env as ImportMetaEnv | undefined;
+const configuredApiUrl = runtimeEnv?.VITE_API_URL?.trim();
+const API_URL = configuredApiUrl || (runtimeEnv?.PROD ? "" : "http://localhost:3001");
 const TOKEN_KEY = "crm-auth-token";
 const USER_KEY = "crm-auth-user";
 const COMPANY_KEY = "crm-auth-company";
@@ -143,11 +144,51 @@ export type ApiDashboardSummary = {
     pedidos: number;
     contasPendentes: number;
     faturamento: number;
+    pipeline: number;
+    quentes: number;
   };
+  analytics: {
+    totalValue: number;
+    wonValue: number;
+    forecastValue: number;
+    hotCount: number;
+    averageScore: number;
+    todayFollowUps: number;
+    highRiskCount: number;
+    silentCount: number;
+    hotProposalCount: number;
+    activePipeline: number;
+    conversionRate: number;
+  };
+  status: Array<{ status: string; total: number; valor: number }>;
   estoqueBaixo: unknown[];
-  pedidosRecentes: unknown[];
-  contasVencidas: unknown[];
+  pedidosRecentes: ApiCliente[];
+  contasVencidas: ApiCliente[];
   produtosMaisVendidos: unknown[];
+  atividadesRecentes: Array<{
+    id: number;
+    clienteId: number;
+    cliente: string;
+    texto: string;
+    createdAt: string;
+  }>;
+};
+
+export type ClientListQuery = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  favorito?: boolean;
+  quente?: boolean;
+  risco?: boolean;
+  silencioso?: boolean;
+  sortBy?: "score" | "value" | "name" | "status";
+};
+
+export type ClientPage = {
+  data: Client[];
+  pagination: ApiPaginatedResponse<never>["pagination"];
 };
 
 export type ApiPaginatedResponse<T> = {
@@ -692,6 +733,7 @@ export type ApiAcompanhamento = {
 
 export type ApiAcompanhamentoResumo = {
   indicadores: {
+    total: number;
     pendentes: number;
     paraHoje: number;
     atrasados: number;
@@ -1282,13 +1324,19 @@ export async function fetchAuthMe() {
     throw new Error("Sessao indisponivel.");
   }
 
-  const response = await fetch(`${API_URL}/auth/me`, {
-    headers: buildHeaders(token),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/auth/me`, {
+      headers: buildHeaders(token),
+    });
+  } catch {
+    throw new ApiHttpError("Nao foi possivel validar a sessao agora.", 0, "NETWORK_ERROR");
+  }
 
   if (!response.ok) {
-    clearAuthSession();
-    throw new Error("Sessao expirada.");
+    const error = await readApiErrorDetails(response);
+    if (response.status === 401) clearAuthSession();
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
   const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "empresa" | "papel" | "capabilities">;
@@ -1305,7 +1353,7 @@ export async function fetchAuthMe() {
   return session ? { ...session, capabilities: sessionData.capabilities } : null;
 }
 
-export async function loginWithBackend(email: string, senha: string) {
+export async function loginWithBackend(email: string, senha: string, empresaSlug?: string) {
   if (!hasRemoteApi()) {
     throw new Error("Sincronização indisponível.");
   }
@@ -1315,7 +1363,7 @@ export async function loginWithBackend(email: string, senha: string) {
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ email, senha }),
+    body: JSON.stringify({ email, senha, ...(empresaSlug ? { empresaSlug } : {}) }),
   });
 
   if (!response.ok) {
@@ -1327,32 +1375,56 @@ export async function loginWithBackend(email: string, senha: string) {
   return data;
 }
 
-export async function fetchClientesFromBackend() {
+export async function fetchClientesFromBackend(params: ClientListQuery = {}): Promise<ClientPage | null> {
   const token = getAuthToken();
   if (!token || !hasRemoteApi()) return null;
 
-  const response = await fetch(`${API_URL}/clientes`, {
-    headers: buildHeaders(token),
-  });
-
-  if (!response.ok) {
-    throw new Error("Não foi possível carregar clientes sincronizados.");
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/clientes${toQueryString(params)}`, {
+      headers: buildHeaders(token),
+    });
+  } catch {
+    throw new ApiHttpError("Nao foi possivel carregar clientes agora.", 0, "NETWORK_ERROR");
   }
 
-  const clientes = (await response.json()) as ApiCliente[];
-  return clientes.map((cliente) => mapApiClienteToClient(cliente));
+  if (!response.ok) {
+    const error = await readApiErrorDetails(response);
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
+  }
+
+  const payload = (await response.json()) as ApiPaginatedResponse<ApiCliente>;
+  return {
+    data: payload.data.map((cliente) => mapApiClienteToClient(cliente)),
+    pagination: payload.pagination,
+  };
+}
+
+export function shouldInvalidateAuthSession(error: unknown) {
+  return error instanceof ApiHttpError && error.status === 401;
+}
+
+export async function fetchClienteDetailFromBackend(id: number | string) {
+  const response = await requestApiGetAuthenticated<ApiCliente>(`/clientes/${id}`);
+  return mapApiClienteToClient(response);
 }
 
 export async function fetchDashboardSummaryFromBackend() {
   const token = getAuthToken();
   if (!token || !hasRemoteApi()) return null;
 
-  const response = await fetch(`${API_URL}/dashboard`, {
-    headers: buildHeaders(token),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/dashboard`, {
+      headers: buildHeaders(token),
+    });
+  } catch {
+    throw new ApiHttpError("Nao foi possivel carregar o resumo agora.", 0, "NETWORK_ERROR");
+  }
 
   if (!response.ok) {
-    throw new Error("Não foi possível carregar o resumo sincronizado.");
+    const error = await readApiErrorDetails(response);
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
   return (await response.json()) as ApiDashboardSummary;
@@ -1539,6 +1611,14 @@ export async function fetchAcompanhamentos(params: AcompanhamentoQueryParams = {
 
 export async function fetchAcompanhamentoResumo(params: { dataInicial?: string; dataFinal?: string } = {}) {
   return requestApiGetAuthenticated<ApiAcompanhamentoResumo>(`/acompanhamentos/resumo${toQueryString(params)}`);
+}
+
+export async function fetchAgendaDashboardContext(params: { dataInicial?: string; dataFinal?: string } = {}) {
+  const [summary, next] = await Promise.all([
+    fetchAcompanhamentoResumo(params),
+    fetchAcompanhamentos({ visao: "PROXIMOS", page: 1, limit: 1 }),
+  ]);
+  return { summary, next: next.data[0] ?? null };
 }
 
 export async function fetchAgendaOptions() {

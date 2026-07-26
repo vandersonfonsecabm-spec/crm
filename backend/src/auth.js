@@ -1,13 +1,18 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { capabilitiesForTenant } = require("./tenant-features/service");
+const {
+  authIdentity,
+  createAuthRateLimiter,
+  requestIp,
+} = require("./auth-rate-limiter");
 
 const PAPEIS = new Set(["ADMIN", "GERENTE", "VENDEDOR"]);
 const JWT_ISSUER = "crm-agro-saas-api";
 const JWT_AUDIENCE = "crm-agro-saas";
 const LOCAL_JWT_SECRET = "local-development-only-change-me";
 
-function createAuth({ prisma }) {
+function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
   const production = process.env.NODE_ENV === "production";
   const jwtSecret = String(process.env.JWT_SECRET || "").trim();
 
@@ -80,7 +85,7 @@ function createAuth({ prisma }) {
       };
       return next();
     } catch (error) {
-      console.error("Falha ao validar contexto autenticado.", error);
+      logInternalError("Falha ao validar contexto autenticado.", error);
       return authError(res, 500, "Nao foi possivel validar a autenticacao.", "AUTH_CONTEXT_ERROR");
     }
   }
@@ -134,7 +139,7 @@ function createAuth({ prisma }) {
         if (error && error.code === "P2002") {
           return authError(res, 409, "Empresa ou e-mail ja cadastrado.", "EMAIL_ALREADY_EXISTS");
         }
-        console.error("Falha ao cadastrar empresa.", error);
+        logInternalError("Falha ao cadastrar empresa.", error);
         return authError(res, 500, "Nao foi possivel cadastrar a empresa.", "AUTH_REGISTRATION_ERROR");
       }
     });
@@ -143,8 +148,20 @@ function createAuth({ prisma }) {
       const email = normalizeEmail(req.body && req.body.email);
       const senha = String((req.body && req.body.senha) || "");
       const slug = normalizeSlug(req.body && (req.body.empresaSlug || req.body.slug));
+      const limiterContext = {
+        identity: authIdentity(email, slug),
+        ip: requestIp(req),
+      };
+
+      try {
+        loginRateLimiter.check(limiterContext);
+      } catch (error) {
+        if (error.retryAfterSeconds) res.set("Retry-After", String(error.retryAfterSeconds));
+        return authError(res, 429, "Nao foi possivel autenticar agora.", "AUTH_RATE_LIMITED");
+      }
 
       if (!email || !senha) {
+        loginRateLimiter.recordFailure(limiterContext);
         return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
       }
 
@@ -158,12 +175,14 @@ function createAuth({ prisma }) {
           take: 2,
         });
         if (usuarios.length !== 1) {
+          loginRateLimiter.recordFailure(limiterContext);
           return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
         }
 
         const usuario = usuarios[0];
         const senhaCorreta = await bcrypt.compare(senha, usuario.senhaHash);
         if (!senhaCorreta) {
+          loginRateLimiter.recordFailure(limiterContext);
           return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
         }
         if (!usuario.ativo) {
@@ -178,9 +197,10 @@ function createAuth({ prisma }) {
           data: { ultimoLoginEm: new Date() },
           include: { empresa: true },
         });
+        loginRateLimiter.recordSuccess(limiterContext);
         return res.json(loginResponse(updated, config));
       } catch (error) {
-        console.error("Falha ao autenticar usuario.", error);
+        logInternalError("Falha ao autenticar usuario.", error);
         return authError(res, 500, "Nao foi possivel autenticar agora.", "AUTH_LOGIN_ERROR");
       }
     });
@@ -223,7 +243,7 @@ function createAuth({ prisma }) {
           pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         });
       } catch (error) {
-        console.error("Falha ao listar usuarios.", error);
+        logInternalError("Falha ao listar usuarios.", error);
         return authError(res, 500, "Nao foi possivel listar os usuarios.", "USER_LIST_ERROR");
       }
     });
@@ -251,7 +271,7 @@ function createAuth({ prisma }) {
         if (error && error.code === "P2002") {
           return authError(res, 409, "Ja existe um usuario com este e-mail na empresa.", "EMAIL_ALREADY_EXISTS");
         }
-        console.error("Falha ao criar usuario.", error);
+        logInternalError("Falha ao criar usuario.", error);
         return authError(res, 500, "Nao foi possivel criar o usuario.", "USER_CREATE_ERROR");
       }
     });
@@ -290,7 +310,7 @@ function createAuth({ prisma }) {
         });
         return res.json(updated);
       } catch (error) {
-        console.error("Falha ao atualizar usuario.", error);
+        logInternalError("Falha ao atualizar usuario.", error);
         return authError(res, 500, "Nao foi possivel atualizar o usuario.", "USER_UPDATE_ERROR");
       }
     });
@@ -410,6 +430,10 @@ function validateUserUpdate(body = {}) {
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function logInternalError(message, error) {
+  console.error(message, { name: error?.name, code: error?.code });
 }
 
 function normalizeSlug(value) {

@@ -1,20 +1,16 @@
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 const bcrypt = require("bcryptjs");
 
-const backendDir = path.resolve(__dirname, "..");
-const databaseName = `auth-test-${process.pid}.db`;
-const databasePath = path.join(backendDir, "prisma", databaseName);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+const testDatabaseUrl = requiredTestDatabaseUrl();
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "integration-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
-process.env.DATABASE_URL = `file:./${databaseName}`;
+process.env.DATABASE_URL = testDatabaseUrl;
 
 let api;
 let prisma;
@@ -22,13 +18,6 @@ let server;
 let baseUrl;
 
 before(async () => {
-  fs.copyFileSync(sourceDatabase, databasePath);
-  execFileSync(process.execPath, [path.join(backendDir, "node_modules", "prisma", "build", "index.js"), "migrate", "deploy"], {
-    cwd: backendDir,
-    env: process.env,
-    stdio: "pipe",
-  });
-
   api = require("../src/server");
   prisma = api.prisma;
   await new Promise((resolve) => {
@@ -40,10 +29,6 @@ before(async () => {
 after(async () => {
   if (prisma) await prisma.$disconnect();
   if (server) await new Promise((resolve) => server.close(resolve));
-  for (const suffix of ["", "-wal", "-shm", "-journal"]) {
-    const file = `${databasePath}${suffix}`;
-    if (fs.existsSync(file)) fs.rmSync(file, { force: true });
-  }
 });
 
 test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", async () => {
@@ -142,6 +127,44 @@ test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", 
     senha: "SenhaIsolada123",
   });
   assert.equal(secondRegistration.status, 201);
+  const duplicateEmailPassword = "SenhaOutroTenant123";
+  await prisma.usuario.create({
+    data: {
+      empresaId: secondRegistration.body.empresa.id,
+      nome: "Admin com e-mail compartilhado",
+      email: "admin@qa.example",
+      senhaHash: await bcrypt.hash(duplicateEmailPassword, 12),
+      papel: "ADMIN",
+    },
+  });
+  const ambiguousLogin = await request("POST", "/auth/login", {
+    email: "admin@qa.example",
+    senha: "SenhaSegura123",
+  });
+  assert.equal(ambiguousLogin.status, 401);
+  assert.equal(ambiguousLogin.body.erro, unknown.body.erro);
+  const wrongCompanyLogin = await request("POST", "/auth/login", {
+    email: "admin@qa.example",
+    senha: "SenhaSegura123",
+    empresaSlug: "empresa-inexistente",
+  });
+  assert.equal(wrongCompanyLogin.status, 401);
+  assert.equal(wrongCompanyLogin.body.erro, unknown.body.erro);
+  const primaryCompanyLogin = await request("POST", "/auth/login", {
+    email: "admin@qa.example",
+    senha: "SenhaSegura123",
+    empresaSlug: "fazenda-qa-principal",
+  });
+  assert.equal(primaryCompanyLogin.status, 200);
+  assert.equal(primaryCompanyLogin.body.empresa.id, registration.body.empresa.id);
+  const secondarySharedLogin = await request("POST", "/auth/login", {
+    email: "admin@qa.example",
+    senha: duplicateEmailPassword,
+    empresaSlug: "empresa-qa-isolada",
+  });
+  assert.equal(secondarySharedLogin.status, 200);
+  assert.equal(secondarySharedLogin.body.empresa.id, secondRegistration.body.empresa.id);
+
   const secondLogin = await request("POST", "/auth/login", {
     email: "admin-isolado@qa.example",
     senha: "SenhaIsolada123",
@@ -198,6 +221,26 @@ test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", 
   const inactiveCompanyMe = await request("GET", "/auth/me", undefined, secondToken);
   assert.equal(inactiveCompanyMe.status, 403);
 
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const rejected = await request("POST", "/auth/login", {
+      email: "limitado@qa.example",
+      senha: "senha-incorreta",
+    });
+    assert.equal(rejected.status, 401);
+  }
+  const limited = await request("POST", "/auth/login", {
+    email: "limitado@qa.example",
+    senha: "senha-incorreta",
+  });
+  assert.equal(limited.status, 429);
+  assert.equal(limited.body.codigo, "AUTH_RATE_LIMITED");
+  assert.ok(Number(limited.headers.get("retry-after")) > 0);
+  const otherIdentity = await request("POST", "/auth/login", {
+    email: "outra-identidade@qa.example",
+    senha: "senha-incorreta",
+  });
+  assert.equal(otherIdentity.status, 401);
+
   const health = await request("GET", "/health");
   const dashboard = await request("GET", "/dashboard", undefined, adminToken);
   const categorias = await request("GET", "/categorias-produtos");
@@ -233,5 +276,18 @@ async function request(method, pathname, body, token) {
   return {
     status: response.status,
     body: text ? JSON.parse(text) : null,
+    headers: response.headers,
   };
+}
+
+function requiredTestDatabaseUrl() {
+  const value = String(process.env.CRM_TEST_DATABASE_URL || "").trim();
+  if (!value.startsWith("file:")) throw new Error("CRM_TEST_DATABASE_URL absoluta e obrigatoria.");
+  const databasePath = path.resolve(value.slice("file:".length));
+  const testRoot = path.join(os.tmpdir(), "crm-prisma-tests");
+  const relative = path.relative(testRoot, databasePath);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("O teste de autenticacao deve usar somente %TEMP%\\crm-prisma-tests.");
+  }
+  return `file:${databasePath.replace(/\\/g, "/")}`;
 }

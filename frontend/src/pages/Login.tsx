@@ -10,6 +10,7 @@ type LoginProps = {
 export function Login({ onLogin }: LoginProps) {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [empresaSlug, setEmpresaSlug] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -23,7 +24,7 @@ export function Login({ onLogin }: LoginProps) {
     setMessage("");
 
     try {
-      await loginWithBackend(email.trim(), senha);
+      await loginWithBackend(email.trim(), senha, empresaSlug.trim() || undefined);
       onLogin();
     } catch {
       setMessage("Não foi possível conectar com estes dados. Revise o e-mail, a senha e a disponibilidade do serviço.");
@@ -73,6 +74,19 @@ export function Login({ onLogin }: LoginProps) {
             type="password"
             value={senha}
           />
+
+          <Input
+            autoComplete="organization"
+            disabled={isLoading}
+            label="Empresa (opcional)"
+            onChange={(event) => setEmpresaSlug(event.target.value)}
+            placeholder="identificador-da-empresa"
+            value={empresaSlug}
+          />
+
+          <p className="-mt-2 text-[11px] leading-4 text-[var(--text-muted)]">
+            Informe apenas quando o mesmo e-mail for usado em mais de uma empresa.
+          </p>
 
           {message && (
             <p aria-live="polite" className="rounded-md border border-[color:rgba(179,58,69,0.28)] bg-[#fff1f2] px-3 py-2.5 text-[11px] leading-4 text-[var(--danger)]" role="alert">
