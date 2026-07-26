@@ -1,6 +1,6 @@
 # Estado atual do CRM
 
-Data da verificacao: 22/07/2026.
+Data da verificacao: 26/07/2026.
 
 ## Estrutura ativa
 
@@ -12,8 +12,8 @@ Data da verificacao: 22/07/2026.
 ## Git
 
 - Baseline oficial publicado: `e308b1bd4d554a879dd6a112c4ed82a29598a376`.
-- Branch local: `feature/customer-360`, com um commit documental local a frente
-  de `origin/master`, zero atras e worktree limpo apos a publicacao H5P.
+- Branch local: `feature/customer-360`, com dois commits locais a frente de
+  `origin/master`, zero atras e worktree limpo apos a implementacao H6A.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
@@ -387,6 +387,43 @@ Data da verificacao: 22/07/2026.
   9 migrations, `quick_check` `ok`, zero violacoes de foreign key e sem WAL ou
   SHM. Nenhuma chamada externa ocorreu e o WhatsApp continua desligado.
 
+## Tempo de etapa e proxima acao
+
+- A H6A foi implementada localmente, sem push ou deploy. A producao oficial
+  permanece no commit `e308b1bd4d554a879dd6a112c4ed82a29598a376`, com 22
+  migrations.
+- A migration aditiva
+  `20260726123000_add_business_stage_timing` acrescenta a `Negocio` somente as
+  datas opcionais de entrada na etapa e ultima movimentacao. O
+  `HistoricoAtribuicao` existente foi ampliado com etapa anterior, etapa nova,
+  entrada, saida, duracao em segundos e marcador opcional de estimativa. Nao
+  foi criada uma segunda timeline ou tabela de historico.
+- A movimentacao do Kanban continua tenant-scoped e respeita ADMIN, GERENTE e
+  VENDEDOR responsavel. A atualizacao da etapa e o registro do historico
+  ocorrem na mesma transacao; duas movimentacoes concorrentes preservam a
+  primeira confirmacao e a segunda recebe conflito `409`.
+- Negocios novos criados pelo conversor oficial registram a entrada inicial na
+  etapa `NOVO`. Para registros anteriores sem a nova data, o backend usa
+  `updatedAt` como referencia estimada ate a primeira movimentacao rastreada,
+  expondo explicitamente `estimado: true`.
+- A proxima acao reutiliza o `Acompanhamento` ativo mais proximo, vinculado ao
+  mesmo Negocio e tenant. Alteracoes feitas pela Agenda aparecem na API do
+  Kanban sem duplicar persistencia. Negocio ativo e considerado parado quando
+  nao possui proxima acao ou quando ela esta atrasada; `FECHADO` e `PERDIDO`
+  nunca sao classificados como parados.
+- `GET /negocios`, `GET /negocios/:id` e
+  `GET /negocios/:id/historico-etapas` entregam a infraestrutura tecnica de
+  tempo atual, tempo acumulado, proxima acao, estado parado e movimentos
+  registrados. Nenhum indicador visual foi adicionado nesta fase.
+- A migration representativa preservou os dados comerciais e completou 23
+  migrations em sandbox. Testes focais e regressoes de Kanban, Agenda,
+  conversao Lead para Negocio, qualificacao da Inbox, Site e Cliente 360
+  passaram, assim como Prisma validate, lint, build, `node --check` e
+  `git diff --check`. O warning conhecido do bundle acima de 500 kB permanece.
+- Limitacoes para H6B: criar somente a apresentacao visual dos dados ja
+  expostos, sem nova regra de dominio. A H6A nao implementa automacoes,
+  notificacoes, backfill historico nem relatorios.
+
 ## Auditoria final do escopo original
 
 - Em 22/07/2026, o documento oficial `Escopo Completo de CRM para Atendimento
@@ -419,7 +456,7 @@ Data da verificacao: 22/07/2026.
 ## Plano oficial pos-auditoria
 
 - H5 - Cliente 360 graus (publicada)
-- H6 - Tempo de etapa e proxima acao
+- H6 - Tempo de etapa e proxima acao (H6A local; H6B visual pendente)
 - H7 - Automacoes
 - H8 - Notificacoes e checklist
 - H9 - Pos-venda

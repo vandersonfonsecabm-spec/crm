@@ -708,6 +708,8 @@ model Negocio {
   motivoPerda          String?
   fechadoEm            DateTime?
   perdidoEm            DateTime?
+  etapaEntrouEm        DateTime?
+  ultimaMovimentacaoEm DateTime?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   acompanhamentos      Acompanhamento[]
@@ -761,6 +763,12 @@ model HistoricoAtribuicao {
   acaoAtendimento       TipoAcaoAtendimento?
   estadoAnterior        StatusConversa?
   estadoNovo            StatusConversa?
+  etapaAnterior         EtapaNegocio?
+  etapaNova             EtapaNegocio?
+  etapaEntrouEm         DateTime?
+  etapaSaiuEm           DateTime?
+  duracaoEtapaSegundos  Int?
+  duracaoEtapaEstimada  Boolean?
   motivo                String?
   createdAt             DateTime         @default(now())
 
@@ -1027,6 +1035,7 @@ enum TipoAtribuicao {
   TRANSFERIR
   DESATRIBUIR
   REDISTRIBUIR
+  MOVIMENTAR_ETAPA
 }
 
 enum OrigemAtribuicao {

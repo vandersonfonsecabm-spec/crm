@@ -218,6 +218,8 @@ function createLeadsCommunicationServices({ prisma }) {
             ...(valor === undefined ? {} : { valor }),
             ...(observacao === undefined ? {} : { observacao }),
             etapa: "NOVO",
+            etapaEntrouEm: now,
+            ultimaMovimentacaoEm: now,
           },
           include: businessIncludes(),
         });

@@ -27,6 +27,9 @@ function mountNegociosKanbanRoutes({ app, prisma, authenticate }) {
   app.get("/negocios/:id", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.getBusiness(context, pathId(req)));
   }));
+  app.get("/negocios/:id/historico-etapas", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.listBusinessStageHistory(context, pathId(req)));
+  }));
   app.patch("/negocios/:id/etapa", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.updateBusinessStage(context, pathId(req), req.body));
   }));
@@ -40,12 +43,23 @@ function pathId(req) {
 
 function handleError(res, error) {
   if (res.headersSent) return;
+  if (isConcurrentPrismaError(error)) {
+    res.status(409).json({
+      erro: "O Negocio foi alterado por outra operacao.",
+      codigo: "NEGOCIO_STAGE_CONFLICT",
+    });
+    return;
+  }
   const status = Number.isInteger(error?.status) ? error.status : 500;
   res.status(status).json({
     erro: status >= 500 ? "Erro interno do servidor." : error.message,
     codigo: status >= 500 ? "INTERNAL_ERROR" : error.codigo || "REQUEST_ERROR",
     ...(status < 500 && error.details ? { detalhes: error.details } : {}),
   });
+}
+
+function isConcurrentPrismaError(error) {
+  return ["P2028", "P2034"].includes(error?.code) || /database is locked/i.test(String(error?.message || ""));
 }
 
 module.exports = { mountNegociosKanbanRoutes };
