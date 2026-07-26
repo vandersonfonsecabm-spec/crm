@@ -18,7 +18,10 @@ Nenhum deploy foi executado durante a oficializacao desta arquitetura.
 - Start rastreado: `npm run start:production`.
 - Entrypoint final: `backend/src/server.js`.
 - Health check: `/health`.
-- Build e start nao executam seed, `prisma db push` ou migrations.
+- Build nao executa seed, `prisma db push` ou migration.
+- Start rastreado executa `backend/scripts/start-production.cjs`, que valida o
+  ambiente Railway e roda `prisma migrate deploy` no conteiner principal,
+  depois da montagem do volume e antes da API aceitar requisicoes.
 
 O Root Directory configurado no painel da plataforma nao e verificavel pelo repositorio. Antes de uma futura publicacao, ele deve ser confirmado por processo de release; uma configuracao incorreta na raiz falhara pelo root runtime guard em vez de iniciar o Nest.
 
@@ -26,7 +29,7 @@ O Root Directory configurado no painel da plataforma nao e verificavel pelo repo
 
 O provider operacional atual e SQLite. `DATABASE_URL` deve ser definida explicitamente para um arquivo em armazenamento persistente. Um filesystem efemero perde dados entre recriacoes. O runtime bloqueia o banco de desenvolvimento rastreado `backend/prisma/dev.db` em producao e nao imprime a URL configurada.
 
-O caminho do volume pertence a configuracao da plataforma e nao e definido neste repositorio. Nao ha seed, `db push` ou migration automatica no deploy.
+O caminho do volume pertence a configuracao da plataforma e nao e definido neste repositorio. Nao ha seed nem `db push` no deploy. Migrations automaticas existem somente no startup do Railway oficial, com `DATABASE_URL` SQLite dentro do volume persistente e uma unica replica.
 
 ## Variaveis por nome
 
@@ -57,5 +60,7 @@ O Render nao e uma plataforma ativa deste CRM. O manifesto da raiz foi removido 
 3. Confirmar Root Directory `backend` no Railway por processo autorizado.
 4. Confirmar armazenamento persistente e variaveis apenas por nome.
 5. Verificar `/health` antes de liberar trafego.
-6. Nao executar seed, `db push` ou migration automaticamente.
+6. Confirmar que migrations futuras foram auditadas, testadas em sandbox,
+   acompanhadas de backup e compativeis com rollout gradual antes de confiar no
+   startup automatico.
 7. Em rollback, selecionar o artefato anterior e preservar o arquivo SQLite persistente; qualquer restauracao de banco exige procedimento separado e autorizado.

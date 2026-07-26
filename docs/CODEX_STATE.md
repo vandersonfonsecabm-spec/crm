@@ -484,6 +484,59 @@ Data da verificacao: 26/07/2026.
   9 migrations, `quick_check` `ok`, zero violacoes de foreign key e sem WAL ou
   SHM.
 
+## AUDIT-FIX local
+
+- Em 26/07/2026, a correcao integral dos problemas da auditoria foi executada
+  localmente na branch `feature/customer-360`, sem push, deploy, migration nova
+  ou escrita em producao. H7 e H8 nao foram iniciadas.
+- Autenticacao: login multiempresa passou a aceitar slug opcional quando o
+  email for ambiguo, manteve erros genericos e recebeu rate limit em memoria
+  por identidade e IP direto. O limitador ignora cabecalhos spoofaveis; em
+  topologias com proxy real, a origem confiavel ainda precisa ser formalizada.
+- Respostas e logs: handlers de canais, integracoes, estoque, notas, clientes e
+  erros globais passaram a responder 5xx sanitizado, sem stack trace, payload
+  bruto, objeto Prisma ou identificadores sensiveis no console. Erros 4xx
+  controlados permanecem especificos.
+- Dados comerciais: validacoes rejeitam payloads invalidos sem sobrescrever
+  valores anteriores, tags e booleanos sao tratados estritamente, exclusao de
+  Cliente com relacoes retorna conflito controlado e a interface sincroniza o
+  drawer apos erro recuperavel.
+- Dashboard e Agenda: `/dashboard` passou a usar agregacoes bounded,
+  `/clientes` passou a ser paginado e pesquisado no servidor, o detalhe do
+  Cliente carrega sob demanda, a busca operacional e server-side e a Agenda
+  evita fan-out semanal. O ensaio com 150 clientes e 100 notas manteve duas
+  chamadas e reduziu o payload representativo de 80.756 para 15.829 bytes.
+- Datas da Agenda: datas impossiveis, formatos sem timezone e intervalos
+  invalidos sao rejeitados; resumo e semana usam janelas bounded e preservam
+  respostas recuperaveis.
+- Testes e supervisor: `backend/scripts/run-isolated-prisma-tests.cjs` passou a
+  criar sandboxes somente em `%TEMP%\crm-prisma-tests`, validar Sandbox A limpa
+  com 23 migrations e Sandbox B 9 -> 23, e comparar fingerprints dos bancos
+  protegidos antes e depois de cada subprocesso. O supervisor bloqueia sidecars
+  WAL/SHM e nao copia nem abre os bancos versionados do repositorio.
+- Banco historico aceito: `backend/dev.db` e uma excecao historica rastreada no
+  Git, com 20.480 bytes e blob
+  `08e74cce58db4394dcac2f8568676f4319bf2d2e`. Ele nao foi removido,
+  versionado de novo, aberto, migrado ou alterado nesta execucao. A regra
+  operacional passa a ser: nenhum banco novo, temporario, WAL ou SHM pode ser
+  criado no repositorio e nenhum banco existente pode aparecer no diff.
+- Interface: Dashboard e Agenda foram validados localmente em 1366x768,
+  1440x900, 1920x1080 e 900x768. As evidencias ficaram somente em
+  `%TEMP%\crm-audit-fix-qa-20260726`; nao houve overflow horizontal, erro React
+  ou loop de requisicoes observado.
+- Testes aprovados: backend completo com 115 testes em 45 arquivos, frontend
+  com 42 testes, arquitetura com 3 testes, Prisma validate, lint, build,
+  `node --check`, `git diff --check` e QA local. O warning conhecido do bundle
+  acima de 500 kB permanece.
+- Limitacoes residuais: o frontend ainda guarda JWT em `localStorage`; a
+  migracao completa para cookie HttpOnly exige desenho de CSRF, CORS, logout e
+  refresh em tarefa propria. O rate limit em memoria e adequado para uma
+  replica, mas nao substitui politica distribuida quando houver escala
+  horizontal.
+- Os bancos `backend/prisma/dev.db` e `backend/dev.db` permaneceram identicos
+  ao baseline, sem WAL ou SHM. O WhatsApp continua pausado, sem Meta, flags,
+  capabilities, credenciais ou chamada externa.
+
 ## Plano oficial pos-auditoria
 
 - H5 - Cliente 360 graus (publicada)

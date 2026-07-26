@@ -58,4 +58,4 @@ VITE_API_URL=http://localhost:3001
 
 Abra `http://localhost:5173` e autentique-se pelo formulário normal. Sem uma sessão validada em `/auth/me`, nenhuma tela privada é montada.
 
-O Railway deve usar `backend/` como Root Directory. O Vercel constrói exclusivamente `frontend/`. Nenhum deploy ativo executa seed, `prisma db push` ou migration automaticamente.
+O Railway deve usar `backend/` como Root Directory. O Vercel constrói exclusivamente `frontend/`. O build nao executa seed nem `prisma db push`; em producao, o startup versionado do backend roda `prisma migrate deploy` somente no Railway oficial, depois do volume SQLite persistente estar montado e antes da API iniciar.
