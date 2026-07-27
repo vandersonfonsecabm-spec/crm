@@ -1,6 +1,6 @@
 const crypto = require("node:crypto");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
-const { presentRule, safeJson, snapshotRule, validateRulePayload } = require("./validation");
+const { presentRule, safeJson, snapshotRule, validatePilotEventPayload, validateRulePayload } = require("./validation");
 
 const ACTIVE_FOLLOW_UP_STATUSES = ["PENDENTE", "EM_ANDAMENTO"];
 const TERMINAL_JOB_STATUSES = ["CONCLUIDO", "CANCELADO", "FALHA_DEFINITIVA"];
@@ -60,7 +60,7 @@ function createAutomationService({ prisma, env = process.env }) {
   async function updateRule(context, id, input) {
     requireAutomationAdmin(context);
     await requireTenantFeature(context);
-    await findRule(context, id);
+    const rule = await findRule(context, id);
     const data = validateRulePayload(input, { partial: true });
     if (!Object.keys(data).length) throw domainError(422, "VALIDATION_ERROR", "Informe ao menos um campo para atualizar.");
     const update = { updatedById: context.usuarioId, versao: { increment: 1 } };
@@ -68,7 +68,7 @@ function createAutomationService({ prisma, env = process.env }) {
     if (Object.hasOwn(data, "condicoes")) update.condicoesJson = JSON.stringify(data.condicoes);
     if (Object.hasOwn(data, "acoes")) update.acoesJson = JSON.stringify(data.acoes);
     if (Object.hasOwn(data, "janela")) update.janelaJson = data.janela ? JSON.stringify(data.janela) : null;
-    const row = await prisma.automacaoRegra.update({ where: { id }, data: update });
+    const row = await prisma.automacaoRegra.update({ where: { id: rule.id }, data: update });
     return presentRule(row);
   }
 
@@ -78,7 +78,7 @@ function createAutomationService({ prisma, env = process.env }) {
     const rule = await findRule(context, id);
     if (rule.ativa) return presentRule(rule);
     const row = await prisma.automacaoRegra.update({
-      where: { id },
+      where: { id: rule.id },
       data: { ativa: true, activatedAt: new Date(), updatedById: context.usuarioId, versao: { increment: 1 } },
     });
     return presentRule(row);
@@ -87,20 +87,79 @@ function createAutomationService({ prisma, env = process.env }) {
   async function deactivateRule(context, id) {
     requireAutomationAdmin(context);
     await requireTenantFeature(context);
+    const parsed = positiveInteger(id, null);
+    if (!parsed) throw domainError(422, "VALIDATION_ERROR", "ID invalido.");
     const row = await prisma.$transaction(async (tx) => {
-      const rule = await tx.automacaoRegra.findFirst({ where: { id, empresaId: context.empresaId } });
+      const rule = await tx.automacaoRegra.findFirst({ where: { id: parsed, empresaId: context.empresaId } });
       if (!rule) throw notFound("Regra nao encontrada.");
       await tx.automacaoAcaoJob.updateMany({
-        where: { empresaId: context.empresaId, execucao: { regraId: id }, status: "PENDENTE" },
+        where: { empresaId: context.empresaId, execucao: { regraId: rule.id }, status: "PENDENTE" },
         data: { status: "CANCELADO", erroCodigo: "RULE_DISABLED", erroResumo: "Regra desativada antes da execucao." },
       });
-      return tx.automacaoRegra.update({ where: { id }, data: { ativa: false, updatedById: context.usuarioId, versao: { increment: 1 } } });
+      return tx.automacaoRegra.update({ where: { id: rule.id }, data: { ativa: false, updatedById: context.usuarioId, versao: { increment: 1 } } });
     });
     return presentRule(row);
   }
 
   async function enqueueLeadCreated({ tx, empresaId, leadId, originalEventId = null, occurredAt = new Date() }) {
     return enqueueOccurrence(tx, { empresaId, trigger: "LEAD_CREATED", entityType: "LEAD", entityId: leadId, leadId, originalEventId, occurredAt });
+  }
+
+  async function producePilotEvent(context, input) {
+    requireAutomationAdmin(context);
+    await requireTenantFeature(context);
+    const data = validatePilotEventPayload(input);
+    const result = await produceAutomationEvent({
+      tenantId: context.empresaId,
+      eventType: data.eventType,
+      sourceType: data.sourceType,
+      sourceId: data.sourceId,
+      idempotencyKey: data.idempotencyKey,
+      occurredAt: data.occurredAt,
+      payload: data.payload,
+    });
+    if (result.duplicate) throw domainError(409, "PILOT_EVENT_DUPLICATE", "Evento piloto ja registrado.");
+    return result;
+  }
+
+  async function produceAutomationEvent({ tenantId, eventType, sourceType, sourceId, idempotencyKey, occurredAt = new Date(), payload = {} }) {
+    if (!Number.isInteger(tenantId) || tenantId < 1) throw domainError(422, "VALIDATION_ERROR", "Tenant invalido.");
+    const data = validatePilotEventPayload({ eventType, sourceType, sourceId, idempotencyKey, occurredAt, payload });
+    const entityId = syntheticEntityId(data.sourceId);
+    const sourcePayload = {
+      name: data.payload.name,
+      origin: data.payload.origin,
+    };
+    const entity = syntheticLeadEntity({ empresaId: tenantId, entityId, sourcePayload, occurredAt: data.occurredAt });
+    const result = await prisma.$transaction(async (tx) => enqueueOccurrence(tx, {
+      empresaId: tenantId,
+      trigger: data.eventType,
+      entityType: "LEAD",
+      entityId,
+      originalEventId: data.idempotencyKey,
+      occurredAt: data.occurredAt,
+      sourceType: data.sourceType,
+      sourceId: data.sourceId,
+      entity,
+      supportedActionTypes: DEFAULT_WORKER_ACTIONS,
+      resumoJson: {
+        sourceType: data.sourceType,
+        sourceId: data.sourceId,
+        idempotencyKey: data.idempotencyKey,
+        synthetic: true,
+        payload: sourcePayload,
+      },
+    }));
+    return {
+      accepted: true,
+      eventType: data.eventType,
+      sourceType: data.sourceType,
+      sourceId: data.sourceId,
+      createdExecutions: result.created,
+      createdJobs: result.createdJobs,
+      evaluatedRules: result.evaluatedRules,
+      duplicate: result.duplicates > 0 && result.created === 0,
+    };
   }
 
   async function scanTemporalTriggers({ now = new Date(), limit = 50 } = {}) {
@@ -184,22 +243,34 @@ function createAutomationService({ prisma, env = process.env }) {
       featureKey: FEATURE_KEYS.AUTOMATIONS,
       env,
     });
-    if (!featureEnabled) return { created: 0 };
+    if (!featureEnabled) return { created: 0, createdJobs: 0, duplicates: 0, evaluatedRules: 0 };
 
     const rules = occurrence.onlyRuleId
       ? await client.automacaoRegra.findMany({ where: { id: occurrence.onlyRuleId, empresaId: occurrence.empresaId, ativa: true } })
       : await client.automacaoRegra.findMany({ where: { empresaId: occurrence.empresaId, gatilho: occurrence.trigger, ativa: true }, orderBy: [{ prioridade: "asc" }, { id: "asc" }] });
     let created = 0;
+    let createdJobs = 0;
+    let duplicates = 0;
+    let evaluatedRules = 0;
     for (const rule of rules) {
       if (!rule.activatedAt || new Date(occurrence.occurredAt) < new Date(rule.activatedAt)) continue;
-      const entity = await loadEntity(client, occurrence.empresaId, occurrence.entityType, occurrence.entityId);
+      evaluatedRules += 1;
+      const entity = occurrence.entity || await loadEntity(client, occurrence.empresaId, occurrence.entityType, occurrence.entityId);
       if (!entity || !conditionsPass(rule, entity, { ...occurrence, timezone: rule.timezone })) continue;
       const key = occurrenceKey(rule, occurrence);
       const snapshot = snapshotRule(rule);
+      if (Array.isArray(occurrence.supportedActionTypes) && !snapshot.acoes.every((action) => occurrence.supportedActionTypes.includes(action.tipo))) {
+        continue;
+      }
       const execution = await upsertExecution(client, rule, occurrence, key, snapshot);
-      if (execution.created) created += 1;
+      if (execution.created) {
+        created += 1;
+        createdJobs += execution.execution.jobs.length;
+      } else {
+        duplicates += 1;
+      }
     }
-    return { created };
+    return { created, createdJobs, duplicates, evaluatedRules };
   }
 
   async function upsertExecution(client, rule, occurrence, key, snapshot) {
@@ -217,6 +288,7 @@ function createAutomationService({ prisma, env = process.env }) {
           occurrenceKey: key,
           idempotencyKey: hashKey(`${occurrence.empresaId}:${rule.id}:${key}`),
           status: "PENDENTE",
+          resumoJson: occurrence.resumoJson ? JSON.stringify(occurrence.resumoJson) : null,
           jobs: { create: snapshot.acoes.map((action, index) => ({ empresaId: occurrence.empresaId, indice: index, tipo: action.tipo, actionKey: hashKey(`${occurrence.empresaId}:${rule.id}:${key}:${index}:${action.tipo}`), status: "PENDENTE", nextAttemptAt: new Date() })) },
         },
         include: { jobs: true },
@@ -322,7 +394,7 @@ function createAutomationService({ prisma, env = process.env }) {
       throw domainError(404, "FEATURE_DISABLED", "Recurso nao encontrado.", { permanent: true });
     }
     return prisma.$transaction(async (tx) => {
-      const entity = await loadEntity(tx, job.empresaId, job.execucao.entidadeTipo, job.execucao.entidadeId);
+      const entity = await loadExecutionEntity(tx, job);
       if (!entity) throw notFound("Entidade da automacao nao encontrada.", { permanent: true });
       if (action.tipo === "ASSIGN_OWNER") return assignOwner(tx, job, entity, action.usuarioId);
       if (action.tipo === "ASSIGN_ROUND_ROBIN") return assignRoundRobin(tx, job, entity, action.usuarioIds);
@@ -475,12 +547,19 @@ function createAutomationService({ prisma, env = process.env }) {
   async function summary(context) {
     requireAutomationAdmin(context);
     await requireTenantFeature(context);
-    const [rules, activeRulesCount, failedJobs] = await Promise.all([
+    const [rules, activeRulesCount, jobs, pendingJobs, processingJobs, succeededJobs, executions, succeededExecutions, failedJobs, internalEvents] = await Promise.all([
       prisma.automacaoRegra.count({ where: { empresaId: context.empresaId } }),
       prisma.automacaoRegra.count({ where: { empresaId: context.empresaId, ativa: true } }),
+      prisma.automacaoAcaoJob.count({ where: { empresaId: context.empresaId } }),
+      prisma.automacaoAcaoJob.count({ where: { empresaId: context.empresaId, status: "PENDENTE" } }),
+      prisma.automacaoAcaoJob.count({ where: { empresaId: context.empresaId, status: "PROCESSANDO" } }),
+      prisma.automacaoAcaoJob.count({ where: { empresaId: context.empresaId, status: "CONCLUIDO" } }),
+      prisma.automacaoExecucao.count({ where: { empresaId: context.empresaId } }),
+      prisma.automacaoExecucao.count({ where: { empresaId: context.empresaId, status: "CONCLUIDA" } }),
       prisma.automacaoAcaoJob.count({ where: { empresaId: context.empresaId, status: { in: ["FALHOU", "FALHA_DEFINITIVA"] } } }),
+      prisma.automacaoEventoInterno.count({ where: { empresaId: context.empresaId } }),
     ]);
-    return { rules, activeRules: activeRulesCount, failedJobs };
+    return { rules, activeRules: activeRulesCount, jobs, pendingJobs, processingJobs, succeededJobs, executions, succeededExecutions, failedJobs, internalEvents };
   }
 
   async function options(context) {
@@ -532,13 +611,43 @@ function createAutomationService({ prisma, env = process.env }) {
     });
   }
 
-  return { activateRule, createRule, deactivateRule, enqueueLeadCreated, getRule, listExecutions, listFailures, listRules, options, processDueJobs, retryJob, scanTemporalTriggers, simulate, summary, updateRule };
+  return { activateRule, createRule, deactivateRule, enqueueLeadCreated, getRule, listExecutions, listFailures, listRules, options, processDueJobs, produceAutomationEvent, producePilotEvent, retryJob, scanTemporalTriggers, simulate, summary, updateRule };
 }
 
 async function loadEntity(client, empresaId, entityType, entityId) {
   if (entityType === "LEAD") return client.lead.findFirst({ where: { id: entityId, empresaId } });
   if (entityType === "NEGOCIO") return client.negocio.findFirst({ where: { id: entityId, empresaId } });
   return null;
+}
+
+async function loadExecutionEntity(client, job) {
+  const entity = await loadEntity(client, job.empresaId, job.execucao.entidadeTipo, job.execucao.entidadeId);
+  if (entity) return entity;
+  const meta = safeJson(job.execucao.resumoJson, null);
+  if (job.execucao.entidadeTipo === "LEAD" && meta?.sourceType === "PILOT_SYNTHETIC" && meta?.synthetic === true) {
+    return syntheticLeadEntity({
+      empresaId: job.empresaId,
+      entityId: job.execucao.entidadeId,
+      sourcePayload: meta.payload || {},
+      occurredAt: job.execucao.createdAt,
+    });
+  }
+  return null;
+}
+
+function syntheticLeadEntity({ empresaId, entityId, sourcePayload, occurredAt }) {
+  return {
+    __automationSynthetic: true,
+    id: entityId,
+    empresaId,
+    clienteId: null,
+    leadId: null,
+    status: "NOVO",
+    origem: String(sourcePayload?.origin || "PILOT").trim(),
+    interesse: String(sourcePayload?.name || "Lead sintetico").trim(),
+    responsavelId: null,
+    createdAt: occurredAt,
+  };
 }
 
 function conditionsPass(rule, entity, occurrence) {
@@ -645,10 +754,11 @@ function historyData(job, entity, previousId, nextId, tipo) {
 }
 
 function eventData(job, entity, tipo, resumo, idempotencyKey, extra = {}) {
+  const synthetic = entity.__automationSynthetic === true;
   return {
     empresaId: job.empresaId,
     execucaoId: job.execucaoId,
-    leadId: job.execucao.entidadeTipo === "LEAD" ? entity.id : entity.leadId,
+    leadId: synthetic ? null : job.execucao.entidadeTipo === "LEAD" ? entity.id : entity.leadId,
     negocioId: job.execucao.entidadeTipo === "NEGOCIO" ? entity.id : null,
     tipo,
     resumo,
@@ -656,6 +766,11 @@ function eventData(job, entity, tipo, resumo, idempotencyKey, extra = {}) {
     payloadJson: JSON.stringify(extra),
     ...extra,
   };
+}
+
+function syntheticEntityId(sourceId) {
+  const hash = crypto.createHash("sha256").update(String(sourceId)).digest("hex");
+  return (parseInt(hash.slice(0, 8), 16) % 2147480000) + 1;
 }
 
 function requireAutomationAdmin(context) {

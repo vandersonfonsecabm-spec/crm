@@ -16,6 +16,7 @@ const WEEKDAYS = Object.freeze([0, 1, 2, 3, 4, 5, 6]);
 const MAX_CONDITIONS = 8;
 const MAX_ACTIONS = 6;
 const MAX_PAYLOAD_CHARS = 12000;
+const MAX_PILOT_PAYLOAD_CHARS = 2000;
 const DEFAULT_PRIORITY = 100;
 
 function validateRulePayload(input = {}, { partial = false } = {}) {
@@ -33,6 +34,33 @@ function validateRulePayload(input = {}, { partial = false } = {}) {
 
   const size = JSON.stringify({ condicoes: data.condicoes ?? body.condicoes, acoes: data.acoes ?? body.acoes, janela: data.janela ?? body.janela }).length;
   if (size > MAX_PAYLOAD_CHARS) throw invalid("Configuracao da automacao excede o limite seguro.", "AUTOMATION_PAYLOAD_TOO_LARGE");
+  return data;
+}
+
+function validatePilotEventPayload(input = {}) {
+  const body = object(input, "payload");
+  rejectUnknown(body, ["eventType", "sourceType", "sourceId", "idempotencyKey", "occurredAt", "payload"]);
+  const eventType = enumValue(body.eventType, "eventType", ["LEAD_CREATED"]);
+  const sourceType = enumValue(body.sourceType, "sourceType", ["PILOT_SYNTHETIC"]);
+  const sourceId = safeIdentifier(body.sourceId, "sourceId", 160);
+  const idempotencyKey = safeIdentifier(body.idempotencyKey, "idempotencyKey", 180);
+  const occurredAt = optionalDate(body.occurredAt);
+  const payload = object(body.payload || {}, "payload.payload");
+  rejectUnknown(payload, ["name", "origin"]);
+  const data = {
+    eventType,
+    sourceType,
+    sourceId,
+    idempotencyKey,
+    occurredAt,
+    payload: {
+      name: requiredText(payload.name, "payload.name", 120),
+      origin: optionalText(payload.origin, "payload.origin", 80) || "PILOT",
+    },
+  };
+  if (JSON.stringify(data).length > MAX_PILOT_PAYLOAD_CHARS) {
+    throw invalid("Evento piloto excede o limite seguro.", "PILOT_EVENT_PAYLOAD_TOO_LARGE");
+  }
   return data;
 }
 
@@ -209,6 +237,19 @@ function enumValue(value, field, allowed) {
   return text;
 }
 
+function safeIdentifier(value, field, max) {
+  const text = requiredText(value, field, max);
+  if (!/^[A-Za-z0-9._:-]+$/.test(text)) throw invalid(`${field} invalido.`, "VALIDATION_ERROR");
+  return text;
+}
+
+function optionalDate(value) {
+  if (value === undefined || value === null || value === "") return new Date();
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw invalid("occurredAt invalido.", "VALIDATION_ERROR");
+  return date;
+}
+
 function invalid(message, codigo) {
   const error = new Error(message);
   error.status = codigo === "VALIDATION_ERROR" ? 422 : 409;
@@ -222,6 +263,7 @@ module.exports = {
   presentRule,
   safeJson,
   snapshotRule,
+  validatePilotEventPayload,
   validateActions,
   validateConditions,
   validateRulePayload,
