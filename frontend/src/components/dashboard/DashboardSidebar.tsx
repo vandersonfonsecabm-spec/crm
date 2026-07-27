@@ -6,6 +6,7 @@ import {
   KanbanSquare,
   Package,
   PlugZap,
+  ShieldCheck,
   Sprout,
   UserRoundSearch,
   Users,
@@ -25,6 +26,7 @@ type DashboardSidebarProps = {
   setActivePage: (page: ActivePage) => void;
   authSession: AuthSession | null;
   canManageIntegrations?: boolean;
+  isPlatformOperator?: boolean;
   leadsCommunicationEnabled?: boolean;
 };
 
@@ -39,6 +41,7 @@ const navigationIcons: Record<ActivePage, ReactNode> = {
   estoque: <Package size={16} />,
   integracoes: <PlugZap size={16} />,
   automacoes: <Sprout size={16} />,
+  platformTenants: <ShieldCheck size={16} />,
 };
 
 export default function DashboardSidebar({
@@ -46,6 +49,7 @@ export default function DashboardSidebar({
   setActivePage,
   authSession,
   canManageIntegrations = false,
+  isPlatformOperator = false,
   leadsCommunicationEnabled = false,
 }: DashboardSidebarProps) {
   const visibleGroups = dashboardNavigationGroups
@@ -55,7 +59,8 @@ export default function DashboardSidebar({
         .map((page) => getDashboardRoute(page))
         .filter((route) => route.showInSidebar)
         .filter((route) => !route.requiresIntegrationAccess || canManageIntegrations)
-        .filter((route) => !route.requiresLeadsCommunication || leadsCommunicationEnabled),
+        .filter((route) => !route.requiresLeadsCommunication || leadsCommunicationEnabled)
+        .filter((route) => !route.requiresPlatformOperator || isPlatformOperator),
     }))
     .filter((group) => group.items.length > 0);
 

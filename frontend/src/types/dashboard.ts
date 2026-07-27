@@ -1,6 +1,6 @@
 export type Status = "Novo" | "Contato" | "Proposta" | "Fechado" | "Perdido";
 export type SortBy = "score" | "value" | "name" | "status";
-export type ActivePage = "dashboard" | "comercial" | "inbox" | "leads" | "clientes" | "kanban" | "agenda" | "estoque" | "integracoes" | "automacoes";
+export type ActivePage = "dashboard" | "comercial" | "inbox" | "leads" | "clientes" | "kanban" | "agenda" | "estoque" | "integracoes" | "automacoes" | "platformTenants";
 export type SmartFilterType = "risk" | "proposal" | "silent";
 export type KanbanOwner = "Todos" | "Sem responsável";
 

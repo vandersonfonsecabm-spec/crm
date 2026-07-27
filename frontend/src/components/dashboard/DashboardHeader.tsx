@@ -168,4 +168,8 @@ const pageMeta: Record<ActivePage, { breadcrumb: string; description: string }> 
     breadcrumb: "Automações",
     description: "Módulo em preparação, sem regras ou execuções ativas.",
   },
+  platformTenants: {
+    breadcrumb: "Plataforma",
+    description: "Operações internas restritas para tenants e capabilities.",
+  },
 };

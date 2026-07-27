@@ -38,6 +38,7 @@ import DashboardOperationalSearch from "../components/dashboard/DashboardOperati
 import DashboardControlCenter from "../components/dashboard/DashboardControlCenter";
 import DashboardKanbanBoard from "../components/dashboard/DashboardKanbanBoard";
 import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomationsPanel";
+import DashboardPlatformTenantsPanel from "../components/dashboard/DashboardPlatformTenantsPanel";
 import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
 import DashboardInventoryPanel from "../components/dashboard/DashboardInventoryPanel";
 import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegrationsPanel";
@@ -112,6 +113,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
   const [kanbanBusinessId, setKanbanBusinessId] = useState<number | null>(null);
   const canManageIntegrations = canAccessIntegrations(authSession);
+  const isPlatformOperator = authSession?.isPlatformOperator === true;
   const {
     leadsCommunication: leadsCommunicationEnabled,
     siteLeadCapture: siteLeadCaptureEnabled,
@@ -119,7 +121,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   } = resolveTenantFeatureAccess(authSession?.capabilities);
   const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
   const requestedActivePage = resolvedNavigation.page;
-  const activePage = requestedActivePage === "integracoes" && !canManageIntegrations ? "dashboard" : requestedActivePage;
+  const activePage = requestedActivePage === "integracoes" && !canManageIntegrations
+    ? "dashboard"
+    : requestedActivePage === "platformTenants" && !isPlatformOperator
+      ? "dashboard"
+      : requestedActivePage;
   const isWhatsAppIntegrationDetail = activePage === "integracoes" && resolvedNavigation.detail === "whatsapp";
   const usingNegociosKanban = activePage === "kanban" && negociosKanbanEnabled;
 
@@ -148,6 +154,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     estoque: "Estoque",
     integracoes: "Integrações e Dados",
     automacoes: "Automações",
+    platformTenants: "Operações da Plataforma",
   } satisfies Record<ActivePage, string>)[activePage];
 
   useEffect(() => {
@@ -368,12 +375,17 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       setToast("Leads e Caixa de Entrada não estão habilitados neste ambiente.");
       return;
     }
+    if (page === "platformTenants" && !isPlatformOperator) {
+      setToast("Acesso restrito ao operador da plataforma.");
+      navigate(getDashboardPath("dashboard"), { replace: true });
+      return;
+    }
 
     const pathname = getDashboardPath(page);
     if (normalizeDashboardPathname(location.pathname) !== pathname) {
       navigate(pathname);
     }
-  }, [canManageIntegrations, leadsCommunicationEnabled, location.pathname, navigate, setToast]);
+  }, [canManageIntegrations, isPlatformOperator, leadsCommunicationEnabled, location.pathname, navigate, setToast]);
 
   const openInboxConversation = useCallback((conversationId: number) => {
     setInboxConversationId(conversationId);
@@ -408,8 +420,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       setToast("Acesso negado para Integrações.");
       navigate(getDashboardPath("dashboard"), { replace: true });
     }
+    if (requestedActivePage === "platformTenants" && !isPlatformOperator) {
+      setToast("Acesso restrito ao operador da plataforma.");
+      navigate(getDashboardPath("dashboard"), { replace: true });
+    }
   }, [
     canManageIntegrations,
+    isPlatformOperator,
     navigate,
     requestedActivePage,
     resolvedNavigation.isKnown,
@@ -625,6 +642,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           setActivePage={handleSetActivePage}
           authSession={authSession}
           canManageIntegrations={canManageIntegrations}
+          isPlatformOperator={isPlatformOperator}
           leadsCommunicationEnabled={leadsCommunicationEnabled}
         />
 
@@ -660,7 +678,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               backendCaption
             }
             onCreateClient={() => setCreating({ ...emptyClient })}
-            showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes" && activePage !== "kanban" && activePage !== "leads" && activePage !== "inbox"}
+            showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes" && activePage !== "platformTenants" && activePage !== "kanban" && activePage !== "leads" && activePage !== "inbox"}
             showBackendCaption={false}
             compact
             primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : activePage === "leads" && leadsCommunicationEnabled && canManageLeads ? { label: "Novo Lead", onClick: () => setLeadsCreateRequestKey((current) => current + 1) } : undefined}
@@ -910,9 +928,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               />}
 
               {activePage === "automacoes" && <DashboardAutomationsPanel />}
+              {activePage === "platformTenants" && isPlatformOperator && <DashboardPlatformTenantsPanel />}
             </div>
 
-            {activePage !== "estoque" && activePage !== "integracoes" && activePage !== "leads" && activePage !== "inbox" && !usingNegociosKanban && customerDrawer}
+            {activePage !== "estoque" && activePage !== "integracoes" && activePage !== "platformTenants" && activePage !== "leads" && activePage !== "inbox" && !usingNegociosKanban && customerDrawer}
           </section>}
           </main>
         </div>

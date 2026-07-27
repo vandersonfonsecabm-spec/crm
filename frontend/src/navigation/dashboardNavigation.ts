@@ -6,6 +6,7 @@ export type DashboardRoute = {
   label: string;
   requiresIntegrationAccess?: boolean;
   requiresLeadsCommunication?: boolean;
+  requiresPlatformOperator?: boolean;
   showInSidebar: boolean;
 };
 
@@ -26,6 +27,7 @@ export const dashboardRoutes = [
     showInSidebar: true,
   },
   { page: "automacoes", pathname: "/automacoes", label: "Automações", showInSidebar: false },
+  { page: "platformTenants", pathname: "/platform/tenants", label: "Tenants", requiresPlatformOperator: true, showInSidebar: true },
 ] as const satisfies readonly DashboardRoute[];
 
 export const dashboardNavigationGroups: ReadonlyArray<{
@@ -36,6 +38,7 @@ export const dashboardNavigationGroups: ReadonlyArray<{
   { label: "Comercial", pages: ["comercial", "inbox", "leads", "clientes", "kanban", "agenda"] },
   { label: "Operação", pages: ["estoque"] },
   { label: "Administração", pages: ["integracoes"] },
+  { label: "Plataforma", pages: ["platformTenants"] },
 ];
 
 const routeByPage = new Map<ActivePage, DashboardRoute>(

@@ -25,5 +25,5 @@ test("E1A nao usa localStorage como fonte de capabilities", () => {
   const api = read("src/services/crmApi.ts");
   assert.doesNotMatch(api, /CAPABILIT(?:Y|IES)_KEY/);
   assert.doesNotMatch(api, /localStorage\.(?:getItem|setItem)\([^\n]*capabilit/i);
-  assert.match(api, /return session \? \{ \.\.\.session, capabilities: sessionData\.capabilities \} : null/);
+  assert.match(api, /return session \? \{ \.\.\.session, capabilities: sessionData\.capabilities, isPlatformOperator: sessionData\.isPlatformOperator === true \} : null/);
 });

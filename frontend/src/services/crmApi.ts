@@ -8,6 +8,7 @@ const USER_KEY = "crm-auth-user";
 const COMPANY_KEY = "crm-auth-company";
 const ROLE_KEY = "crm-auth-role";
 const EXPIRES_KEY = "crm-auth-expires-at";
+const PLATFORM_OPERATOR_KEY = "crm-auth-platform-operator";
 const LEGACY_BYPASS_STORAGE_KEYS = ["crm-auth-demo", "crm-premium-clients"] as const;
 
 type ApiAuthResponse = {
@@ -34,6 +35,7 @@ type ApiAuthResponse = {
   empresa?: ApiAuthCompany;
   papel?: ApiUserRole;
   capabilities?: TenantCapabilities;
+  isPlatformOperator?: boolean;
 };
 
 export type TenantCapabilities = {
@@ -68,6 +70,40 @@ export type AuthSession = {
   papel?: ApiUserRole;
   expiresAt?: string;
   capabilities?: TenantCapabilities;
+  isPlatformOperator?: boolean;
+};
+
+export type PlatformTenant = {
+  id: number;
+  nome: string;
+  slug: string;
+  ativo: boolean;
+  createdAt: string;
+  updatedAt: string;
+  capabilities: {
+    automations: {
+      enabled: boolean;
+      enabledAt?: string | null;
+      updatedAt?: string | null;
+    };
+  };
+};
+
+export type PlatformCapabilityAudit = {
+  id: number;
+  capability: "AUTOMATIONS";
+  previousEnabled: boolean | null;
+  newEnabled: boolean;
+  reason: string;
+  createdAt: string;
+  actor: { id: number; nome: string } | null;
+};
+
+export type PlatformCapabilityChange = {
+  changed: boolean;
+  capability: "AUTOMATIONS";
+  previousEnabled: boolean;
+  newEnabled: boolean;
 };
 
 export class ApiHttpError extends Error {
@@ -1341,6 +1377,7 @@ export function clearAuthSession() {
   localStorage.removeItem(COMPANY_KEY);
   localStorage.removeItem(ROLE_KEY);
   localStorage.removeItem(EXPIRES_KEY);
+  localStorage.removeItem(PLATFORM_OPERATOR_KEY);
 }
 
 export function cleanupLegacyBypassStorage() {
@@ -1357,6 +1394,7 @@ export function getAuthSession(): AuthSession | null {
   const empresa = readStorageJson<ApiAuthCompany>(COMPANY_KEY);
   const papel = localStorage.getItem(ROLE_KEY) as ApiUserRole | null;
   const expiresAt = localStorage.getItem(EXPIRES_KEY) || undefined;
+  const isPlatformOperator = localStorage.getItem(PLATFORM_OPERATOR_KEY) === "true";
 
   if (!usuario?.id || !usuario.empresaId || !usuario.nome || !empresa?.id || !empresa.nome) {
     clearAuthSession();
@@ -1369,6 +1407,7 @@ export function getAuthSession(): AuthSession | null {
     empresa: empresa ?? undefined,
     papel: papel ?? usuario.papel,
     expiresAt,
+    isPlatformOperator,
   };
 }
 
@@ -1416,6 +1455,8 @@ function setAuthSessionFromResponse(data: ApiAuthResponse) {
   } else {
     localStorage.removeItem(EXPIRES_KEY);
   }
+
+  localStorage.setItem(PLATFORM_OPERATOR_KEY, data.isPlatformOperator === true ? "true" : "false");
 }
 
 export async function fetchAuthMe() {
@@ -1439,7 +1480,7 @@ export async function fetchAuthMe() {
     throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
-  const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "empresa" | "papel" | "capabilities">;
+  const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "empresa" | "papel" | "capabilities" | "isPlatformOperator">;
   const sessionData: ApiAuthResponse = {
     access_token: token,
     usuario: data.usuario,
@@ -1447,10 +1488,11 @@ export async function fetchAuthMe() {
     empresa: data.empresa,
     papel: data.papel,
     capabilities: normalizeCapabilities(data.capabilities),
+    isPlatformOperator: data.isPlatformOperator === true,
   };
   setAuthSessionFromResponse(sessionData);
   const session = getAuthSession();
-  return session ? { ...session, capabilities: sessionData.capabilities } : null;
+  return session ? { ...session, capabilities: sessionData.capabilities, isPlatformOperator: sessionData.isPlatformOperator === true } : null;
 }
 
 export async function loginWithBackend(email: string, senha: string, empresaSlug?: string) {
@@ -2102,6 +2144,22 @@ export async function fetchAutomationFailures(params: { page?: number; limit?: n
 
 export async function retryAutomationJob(id: number) {
   return requestApiWrite<AutomationExecution["jobs"][number]>("POST", `/automacoes/jobs/${id}/reprocessar`, {});
+}
+
+export async function fetchPlatformTenants(params: { page?: number; limit?: number; busca?: string } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<PlatformTenant>>(`/platform/tenants${toQueryString(params)}`);
+}
+
+export async function fetchPlatformTenant(id: number) {
+  return requestApiGetAuthenticated<PlatformTenant>(`/platform/tenants/${id}`);
+}
+
+export async function updatePlatformTenantAutomations(id: number, payload: { enabled: boolean; reason?: string }) {
+  return requestApiWrite<PlatformCapabilityChange>("PATCH", `/platform/tenants/${id}/capabilities/automations`, payload);
+}
+
+export async function fetchPlatformTenantAutomationsAudit(id: number, params: { page?: number; limit?: number } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<PlatformCapabilityAudit>>(`/platform/tenants/${id}/capabilities/automations/audit${toQueryString(params)}`);
 }
 
 export function getApiBaseUrl() {
