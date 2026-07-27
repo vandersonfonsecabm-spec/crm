@@ -1,10 +1,13 @@
 const crypto = require("node:crypto");
 const { normalizePhone } = require("../channels/phoneNormalizer");
+const { createAutomationService } = require("../automations/service");
 const { validateIntegrationCreate, validateIntegrationPatch, validateSubmission } = require("./validation");
 
 const PROVIDER = "SITE_FORM";
 
 function createSiteLeadService({ prisma }) {
+  const automationService = createAutomationService({ prisma });
+
   async function listIntegrations(context) {
     requireAdmin(context);
     const items = await prisma.canalIntegracao.findMany({ where: { empresaId: context.empresaId, tipo: "SITE_FORM" }, orderBy: [{ ativo: "desc" }, { createdAt: "desc" }] });
@@ -63,6 +66,13 @@ function createSiteLeadService({ prisma }) {
         const event = await tx.eventoWebhook.create({ data: { empresaId: integration.empresaId, canalIntegracaoId: integration.id, provedor: PROVIDER, externalEventId: payload.submissionId, tipoEvento: "SITE_LEAD_SUBMITTED", payloadHash, statusProcessamento: "PROCESSANDO", tentativas: 1 } });
         const identity = await resolveClient(tx, integration, payload);
         const lead = await tx.lead.create({ data: { empresaId: integration.empresaId, clienteId: identity.cliente.id, status: "NOVO", origem: "SITE", campanha: payload.campanha, interesse: payload.produtoInteresse, paginaOrigem: payload.paginaOrigem, aceitePoliticaPrivacidade: true, versaoPoliticaPrivacidade: payload.versaoPoliticaPrivacidade, aceitePoliticaEm: new Date() } });
+        await automationService.enqueueLeadCreated({
+          tx,
+          empresaId: integration.empresaId,
+          leadId: lead.id,
+          originalEventId: `site:${payload.submissionId}`,
+          occurredAt: lead.createdAt,
+        });
         const contact = await resolveChannelContact(tx, integration, identity, payload);
         const now = new Date();
         const conversation = await tx.conversaCanal.create({ data: { empresaId: integration.empresaId, canalIntegracaoId: integration.id, contatoCanalId: contact.id, leadId: lead.id, responsavelId: null, status: "AGUARDANDO_ATENDIMENTO", chaveAberta: `site:${integration.id}:submission:${payload.submissionId}`, primeiraMensagemEm: now, ultimaMensagemEm: now, aguardandoDesde: now } });

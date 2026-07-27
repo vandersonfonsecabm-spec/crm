@@ -144,6 +144,7 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
     leadsCommunication: false,
     siteLeadCapture: false,
     negociosKanban: false,
+    automations: false,
     whatsappIntegration: true,
     whatsappInbound: false,
     whatsappOutbound: false,

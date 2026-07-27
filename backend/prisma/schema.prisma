@@ -143,6 +143,7 @@ model Acompanhamento {
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
   historico       HistoricoAcompanhamento[]
+  automacaoEventosInternos AutomacaoEventoInterno[]
 
   @@index([empresaId])
   @@index([clienteId])
@@ -215,6 +216,11 @@ model Empresa {
   propostasComerciais          PropostaComercial[]
   historicosPropostasComerciais HistoricoPropostaComercial[]
   historicosAcompanhamentos    HistoricoAcompanhamento[]
+  automacaoRegras              AutomacaoRegra[]
+  automacaoExecucoes           AutomacaoExecucao[]
+  automacaoJobs                AutomacaoAcaoJob[]
+  automacaoRoundRobin          AutomacaoRoundRobinEstado[]
+  automacaoEventosInternos     AutomacaoEventoInterno[]
   eventosWebhook             EventoWebhook[]
   funcionalidades            EmpresaFuncionalidade[]
   auditoriasFuncionalidade   AuditoriaFuncionalidade[]
@@ -255,6 +261,9 @@ model Usuario {
   historicosAcompanhamentos       HistoricoAcompanhamento[] @relation("HistoricoAcompanhamentoAutor")
   historicosAcompanhamentosAnteriores HistoricoAcompanhamento[] @relation("HistoricoAcompanhamentoResponsavelAnterior")
   historicosAcompanhamentosNovos     HistoricoAcompanhamento[] @relation("HistoricoAcompanhamentoResponsavelNovo")
+  automacaoRegrasCriadas        AutomacaoRegra[] @relation("AutomacaoRegraCriador")
+  automacaoRegrasAtualizadas    AutomacaoRegra[] @relation("AutomacaoRegraAtualizador")
+  automacaoEventosInternos      AutomacaoEventoInterno[] @relation("AutomacaoEventoAutor")
   funcionalidadesHabilitadas EmpresaFuncionalidade[]   @relation("FuncionalidadeHabilitadaPor")
   auditoriasFuncionalidade   AuditoriaFuncionalidade[] @relation("AuditoriaFuncionalidadeUsuario")
 
@@ -679,6 +688,8 @@ model Lead {
   historicoAtribuicoes      HistoricoAtribuicao[]
   historicosQualificacao    HistoricoQualificacaoConversa[]
   propostasComerciais       PropostaComercial[]
+  automacaoExecucoes         AutomacaoExecucao[]
+  automacaoEventosInternos   AutomacaoEventoInterno[]
 
   @@index([empresaId, status])
   @@index([empresaId, responsavelId, status])
@@ -716,6 +727,8 @@ model Negocio {
   historicoAtribuicoes HistoricoAtribuicao[]
   historicosQualificacao HistoricoQualificacaoConversa[]
   propostasComerciais    PropostaComercial[]
+  automacaoExecucoes      AutomacaoExecucao[]
+  automacaoEventosInternos AutomacaoEventoInterno[]
 
   @@index([empresaId, etapa])
   @@index([empresaId, responsavelId, etapa])
@@ -912,6 +925,138 @@ model EventoWebhook {
   @@index([empresaId, canalIntegracaoId, recebidoEm])
 }
 
+model AutomacaoRegra {
+  id              Int                 @id @default(autoincrement())
+  empresaId       Int
+  empresa         Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome            String
+  descricao       String?
+  ativa           Boolean             @default(false)
+  prioridade      Int                 @default(100)
+  gatilho         GatilhoAutomacao
+  condicoesJson   String              @default("[]")
+  acoesJson       String              @default("[]")
+  timezone        String
+  janelaJson      String?
+  versao          Int                 @default(1)
+  activatedAt     DateTime?
+  createdById     Int?
+  createdBy       Usuario?            @relation("AutomacaoRegraCriador", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById     Int?
+  updatedBy       Usuario?            @relation("AutomacaoRegraAtualizador", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  execucoes       AutomacaoExecucao[]
+  roundRobinState AutomacaoRoundRobinEstado?
+
+  @@index([empresaId, ativa, prioridade])
+  @@index([empresaId, gatilho, ativa])
+  @@index([empresaId, activatedAt])
+}
+
+model AutomacaoExecucao {
+  id                Int                      @id @default(autoincrement())
+  empresaId         Int
+  empresa           Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  regraId           Int
+  regra             AutomacaoRegra           @relation(fields: [regraId], references: [id], onDelete: Cascade)
+  regraVersao       Int
+  regraSnapshotJson String
+  entidadeTipo      EntidadeAutomacao
+  entidadeId        Int
+  leadId            Int?
+  lead              Lead?                    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  negocioId         Int?
+  negocio           Negocio?                 @relation(fields: [negocioId], references: [id], onDelete: SetNull)
+  occurrenceKey     String
+  idempotencyKey    String
+  status            StatusExecucaoAutomacao  @default(PENDENTE)
+  tentativas        Int                      @default(0)
+  iniciadaEm        DateTime?
+  concluidaEm       DateTime?
+  erroCodigo        String?
+  erroResumo        String?
+  resumoJson        String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  jobs              AutomacaoAcaoJob[]
+  eventosInternos   AutomacaoEventoInterno[]
+
+  @@unique([empresaId, regraId, occurrenceKey])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, status, createdAt])
+  @@index([empresaId, entidadeTipo, entidadeId])
+  @@index([empresaId, leadId])
+  @@index([empresaId, negocioId])
+}
+
+model AutomacaoAcaoJob {
+  id             Int                @id @default(autoincrement())
+  empresaId      Int
+  empresa        Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  execucaoId     Int
+  execucao       AutomacaoExecucao  @relation(fields: [execucaoId], references: [id], onDelete: Cascade)
+  indice         Int
+  tipo           AcaoAutomacao
+  actionKey      String
+  status         StatusJobAutomacao @default(PENDENTE)
+  tentativas     Int                @default(0)
+  nextAttemptAt  DateTime?
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  erroCodigo     String?
+  erroResumo     String?
+  resultadoJson  String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([empresaId, actionKey])
+  @@index([empresaId, status, nextAttemptAt])
+  @@index([empresaId, execucaoId, indice])
+  @@index([empresaId, leaseExpiresAt])
+}
+
+model AutomacaoRoundRobinEstado {
+  id                  Int              @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  regraId             Int              @unique
+  regra               AutomacaoRegra   @relation(fields: [regraId], references: [id], onDelete: Cascade)
+  ultimoResponsavelId Int?
+  revisao             Int              @default(1)
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([empresaId, regraId])
+  @@index([empresaId, ultimoResponsavelId])
+}
+
+model AutomacaoEventoInterno {
+  id               Int                 @id @default(autoincrement())
+  empresaId        Int
+  empresa          Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  execucaoId       Int?
+  execucao         AutomacaoExecucao?  @relation(fields: [execucaoId], references: [id], onDelete: SetNull)
+  leadId           Int?
+  lead             Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  negocioId        Int?
+  negocio          Negocio?            @relation(fields: [negocioId], references: [id], onDelete: SetNull)
+  acompanhamentoId Int?
+  acompanhamento   Acompanhamento?     @relation(fields: [acompanhamentoId], references: [id], onDelete: SetNull)
+  autorId          Int?
+  autor            Usuario?            @relation("AutomacaoEventoAutor", fields: [autorId], references: [id], onDelete: SetNull)
+  tipo             String
+  resumo           String
+  payloadJson      String?
+  idempotencyKey   String
+  createdAt        DateTime            @default(now())
+
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, createdAt])
+  @@index([empresaId, leadId])
+  @@index([empresaId, negocioId])
+  @@index([empresaId, acompanhamentoId])
+}
+
 model EmpresaFuncionalidade {
   id                     Int                       @id @default(autoincrement())
   empresaId              Int
@@ -954,9 +1099,48 @@ enum ChaveFuncionalidade {
   LEADS_COMMUNICATION
   SITE_LEAD_CAPTURE
   NEGOCIOS_KANBAN
+  AUTOMATIONS
   WHATSAPP_INTEGRATION
   WHATSAPP_INBOUND
   WHATSAPP_OUTBOUND
+}
+
+enum GatilhoAutomacao {
+  LEAD_CREATED
+  LEAD_WITHOUT_FOLLOW_UP
+  DEAL_STALLED
+}
+
+enum EntidadeAutomacao {
+  LEAD
+  NEGOCIO
+}
+
+enum AcaoAutomacao {
+  ASSIGN_OWNER
+  ASSIGN_ROUND_ROBIN
+  CREATE_FOLLOW_UP
+  CREATE_INTERNAL_EVENT
+  UPDATE_NEXT_FOLLOW_UP_PROJECTION
+}
+
+enum StatusExecucaoAutomacao {
+  PENDENTE
+  PROCESSANDO
+  CONCLUIDA
+  FALHOU
+  FALHA_DEFINITIVA
+  CANCELADA
+  SIMULADA
+}
+
+enum StatusJobAutomacao {
+  PENDENTE
+  PROCESSANDO
+  CONCLUIDO
+  FALHOU
+  FALHA_DEFINITIVA
+  CANCELADO
 }
 
 enum TipoCanal {

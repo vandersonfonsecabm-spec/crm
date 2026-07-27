@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { normalizePhone } = require("../channels/phoneNormalizer");
+const { createAutomationService } = require("../automations/service");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
 const {
   EVENT_TYPE,
@@ -345,7 +346,7 @@ async function resolveLead(tx, event, client, activeConversation) {
   });
   if (candidates.length > 1) throw processingError("WHATSAPP_LEAD_AMBIGUOUS");
   if (candidates.length === 1) return candidates[0];
-  return tx.lead.create({
+  const lead = await tx.lead.create({
     data: {
       empresaId: event.empresaId,
       clienteId: client.id,
@@ -354,6 +355,14 @@ async function resolveLead(tx, event, client, activeConversation) {
       origem: "WHATSAPP",
     },
   });
+  await createAutomationService({ prisma: tx }).enqueueLeadCreated({
+    tx,
+    empresaId: event.empresaId,
+    leadId: lead.id,
+    originalEventId: `whatsapp:${event.id}`,
+    occurredAt: lead.createdAt,
+  });
+  return lead;
 }
 
 async function resolveConversation(tx, event, contact, client, lead, activeConversation, messageTime) {

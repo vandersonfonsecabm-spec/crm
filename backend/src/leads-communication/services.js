@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const { createChannelService } = require("../channels/channelService");
 const { normalizePhone } = require("../channels/phoneNormalizer");
+const { createAutomationService } = require("../automations/service");
 const { calculateConversationSla, slaFilterWhere } = require("./inboxOperations");
 const { createInboxCommercialQualificationService } = require("./commercialQualification");
 const {
@@ -48,6 +49,7 @@ const MAX_REPLY_LEASE_SECONDS = 300;
 
 function createLeadsCommunicationServices({ prisma }) {
   const channelService = createChannelService({ prisma });
+  const automationService = createAutomationService({ prisma });
   const replyLeaseSeconds = getReplyLeaseSeconds(process.env);
 
   async function validateResponsible(client, empresaId, responsavelId) {
@@ -95,6 +97,13 @@ function createLeadsCommunicationServices({ prisma }) {
           tipo: "ATRIBUIR",
         });
       }
+      await automationService.enqueueLeadCreated({
+        tx,
+        empresaId: context.empresaId,
+        leadId: lead.id,
+        originalEventId: `manual:${lead.id}`,
+        occurredAt: lead.createdAt,
+      });
       return lead;
     });
   }
