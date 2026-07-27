@@ -1,3 +1,5 @@
+const bcrypt = require("bcryptjs");
+const { validateCompanyRegistration } = require("../auth");
 const { FEATURE_KEYS, setTenantFeature } = require("../tenant-features/service");
 
 const MAX_LIMIT = 50;
@@ -40,6 +42,67 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
     res.json({
       data: tenants.map(presentTenant),
       pagination: pagination(page, limit, total),
+    });
+  }));
+
+  app.post("/platform/tenants", ...guarded, route(async (req, res) => {
+    const validation = validateTenantCreationPayload(req.body);
+    if (validation.error) return platformError(res, 422, validation.error, "PLATFORM_TENANT_INVALID");
+
+    const { empresaNome, slug, adminNome, email, senha } = validation.data;
+    const existing = await findTenantProvisioningConflict(prisma, { slug, email });
+    if (existing) return platformError(res, 409, existing.message, existing.code);
+
+    const senhaHash = await bcrypt.hash(senha, 12);
+    let result;
+    try {
+      result = await prisma.$transaction(async (tx) => {
+        const repeated = await findTenantProvisioningConflict(tx, { slug, email });
+        if (repeated) throw tenantProvisioningConflict(repeated.message, repeated.code);
+
+        const empresa = await tx.empresa.create({
+          data: {
+            nome: empresaNome,
+            slug,
+          },
+        });
+        const usuario = await tx.usuario.create({
+          data: {
+            empresaId: empresa.id,
+            nome: adminNome,
+            email,
+            senhaHash,
+            papel: "ADMIN",
+          },
+        });
+        await tx.platformTenantAudit.create({
+          data: {
+            actorUserId: req.auth.usuarioId,
+            tenantId: empresa.id,
+            action: "TENANT_CREATED",
+            tenantName: empresa.nome,
+            tenantSlug: empresa.slug,
+            adminUserId: usuario.id,
+          },
+        });
+        return { empresa, usuario };
+      });
+    } catch (error) {
+      if (error?.code === "PLATFORM_TENANT_CONFLICT" || error?.code === "P2002") {
+        return platformError(res, 409, "Tenant ou e-mail ja cadastrado.", "PLATFORM_TENANT_CONFLICT");
+      }
+      throw error;
+    }
+
+    res.status(201).json({
+      tenant: presentTenant({ ...result.empresa, funcionalidades: [] }),
+      admin: {
+        id: result.usuario.id,
+        nome: result.usuario.nome,
+        email: result.usuario.email,
+        papel: result.usuario.papel,
+        ativo: result.usuario.ativo,
+      },
     });
   }));
 
@@ -214,6 +277,39 @@ function validateAutomationCapabilityPayload(body) {
   const reason = String(input.reason || "").trim().replace(/\s+/g, " ");
   if (reason.length > MAX_REASON_LENGTH) return { error: "Motivo deve ter ate 500 caracteres." };
   return { data: { enabled: input.enabled, reason } };
+}
+
+function validateTenantCreationPayload(body) {
+  const input = body && typeof body === "object" ? body : {};
+  const unknown = Object.keys(input).filter((key) => !["companyName", "slug", "adminName", "adminEmail", "adminPassword"].includes(key));
+  if (unknown.length) return { error: `Campos nao permitidos: ${unknown.join(", ")}.` };
+  const mapped = {
+    empresaNome: input.companyName,
+    adminNome: input.adminName,
+    email: input.adminEmail,
+    senha: input.adminPassword,
+    slug: input.slug,
+  };
+  const validation = validateCompanyRegistration(mapped);
+  if (validation.error) return validation;
+  return validation;
+}
+
+async function findTenantProvisioningConflict(prismaClient, { slug, email }) {
+  const [tenant, user] = await Promise.all([
+    prismaClient.empresa.findUnique({ where: { slug }, select: { id: true } }),
+    prismaClient.usuario.findFirst({ where: { email }, select: { id: true } }),
+  ]);
+  if (tenant) return { code: "PLATFORM_TENANT_SLUG_EXISTS", message: "Slug de tenant ja cadastrado." };
+  if (user) return { code: "PLATFORM_TENANT_EMAIL_EXISTS", message: "E-mail de administrador ja cadastrado." };
+  return null;
+}
+
+function tenantProvisioningConflict(message, code) {
+  const error = new Error(message);
+  error.code = "PLATFORM_TENANT_CONFLICT";
+  error.publicCode = code;
+  return error;
 }
 
 function parseId(value) {

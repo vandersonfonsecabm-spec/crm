@@ -210,6 +210,7 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
       const capabilities = await capabilitiesForTenant({ prisma, empresaId: req.auth.empresaId });
       res.json({
         usuario: req.auth.usuario,
+        email: req.auth.usuario.email,
         empresa: req.auth.empresa,
         papel: req.auth.papel,
         status: "ATIVO",
@@ -488,4 +489,4 @@ function authError(res, status, erro, codigo) {
   return res.status(status).json({ erro, codigo });
 }
 
-module.exports = { createAuth, isPlatformOperator, normalizeEmail, normalizeSlug, parsePlatformAdminEmails };
+module.exports = { createAuth, isPlatformOperator, normalizeEmail, normalizeSlug, parsePlatformAdminEmails, validateCompanyRegistration };

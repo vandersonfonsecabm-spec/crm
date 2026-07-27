@@ -224,6 +224,7 @@ model Empresa {
   eventosWebhook             EventoWebhook[]
   funcionalidades            EmpresaFuncionalidade[]
   auditoriasFuncionalidade   AuditoriaFuncionalidade[]
+  auditoriasPlataforma       PlatformTenantAudit[]
 }
 
 model Usuario {
@@ -266,6 +267,8 @@ model Usuario {
   automacaoEventosInternos      AutomacaoEventoInterno[] @relation("AutomacaoEventoAutor")
   funcionalidadesHabilitadas EmpresaFuncionalidade[]   @relation("FuncionalidadeHabilitadaPor")
   auditoriasFuncionalidade   AuditoriaFuncionalidade[] @relation("AuditoriaFuncionalidadeUsuario")
+  auditoriasPlataforma       PlatformTenantAudit[]      @relation("PlatformTenantAuditActor")
+  tenantsCriadosPlataforma   PlatformTenantAudit[]      @relation("PlatformTenantAuditAdmin")
 
   @@unique([empresaId, email])
   @@index([empresaId])
@@ -1093,6 +1096,24 @@ model AuditoriaFuncionalidade {
   @@index([empresaId, chave, createdAt])
   @@index([funcionalidadeId, createdAt])
   @@index([usuarioId, createdAt])
+}
+
+model PlatformTenantAudit {
+  id           Int      @id @default(autoincrement())
+  actorUserId  Int
+  actor        Usuario  @relation("PlatformTenantAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  tenantId     Int
+  tenant       Empresa  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  action       String
+  tenantName   String
+  tenantSlug   String
+  adminUserId  Int
+  adminUser    Usuario  @relation("PlatformTenantAuditAdmin", fields: [adminUserId], references: [id], onDelete: Restrict)
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
 }
 
 enum ChaveFuncionalidade {
