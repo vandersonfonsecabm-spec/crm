@@ -101,7 +101,7 @@ function createTenantFeatureMiddleware({ prisma, featureKey }) {
   };
 }
 
-async function setTenantFeature({ prisma, empresaId, featureKey, enabled, operatedBy, reason, usuarioId = null }) {
+async function setTenantFeature({ prisma, empresaId, featureKey, enabled, operatedBy, reason, usuarioId = null, allowExternalAuditUser = false }) {
   validateFeatureChange({ empresaId, featureKey, enabled, operatedBy, reason, usuarioId });
 
   return prisma.$transaction(async (tx) => {
@@ -109,7 +109,10 @@ async function setTenantFeature({ prisma, empresaId, featureKey, enabled, operat
     if (!empresa) throw featureChangeError("Empresa nao encontrada.");
 
     if (usuarioId !== null) {
-      const usuario = await tx.usuario.findFirst({ where: { id: usuarioId, empresaId }, select: { id: true } });
+      const usuario = await tx.usuario.findFirst({
+        where: { id: usuarioId, ...(allowExternalAuditUser ? {} : { empresaId }) },
+        select: { id: true },
+      });
       if (!usuario) throw featureChangeError("Usuario de auditoria invalido para a empresa.");
     }
 
@@ -117,6 +120,7 @@ async function setTenantFeature({ prisma, empresaId, featureKey, enabled, operat
       where: { empresaId_chave: { empresaId, chave: featureKey } },
     });
     const now = new Date();
+    const featureUserId = allowExternalAuditUser ? null : usuarioId;
     const feature = await tx.empresaFuncionalidade.upsert({
       where: { empresaId_chave: { empresaId, chave: featureKey } },
       create: {
@@ -124,12 +128,12 @@ async function setTenantFeature({ prisma, empresaId, featureKey, enabled, operat
         chave: featureKey,
         habilitada: enabled,
         habilitadoEm: enabled ? now : null,
-        habilitadoPorUsuarioId: enabled ? usuarioId : null,
+        habilitadoPorUsuarioId: enabled ? featureUserId : null,
       },
       update: {
         habilitada: enabled,
         habilitadoEm: enabled ? now : null,
-        habilitadoPorUsuarioId: enabled ? usuarioId : null,
+        habilitadoPorUsuarioId: enabled ? featureUserId : null,
       },
     });
 

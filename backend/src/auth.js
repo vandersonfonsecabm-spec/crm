@@ -82,6 +82,7 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
         papel: usuario.papel,
         usuario: publicUsuario(usuario),
         empresa: publicEmpresa(usuario.empresa),
+        isPlatformOperator: isPlatformOperator(usuario, process.env),
       };
       return next();
     } catch (error) {
@@ -213,6 +214,7 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
         papel: req.auth.papel,
         status: "ATIVO",
         capabilities,
+        isPlatformOperator: req.auth.isPlatformOperator === true,
       });
     });
 
@@ -353,6 +355,7 @@ function loginResponse(usuario, config) {
     user: publicUsuario(usuario),
     empresa: publicEmpresa(usuario.empresa),
     papel: usuario.papel,
+    isPlatformOperator: isPlatformOperator(usuario, process.env),
   };
 }
 
@@ -465,8 +468,24 @@ function parseBoolean(value, fallback) {
   return String(value).trim().toLowerCase() === "true";
 }
 
+function parsePlatformAdminEmails(value) {
+  return new Set(
+    String(value || "")
+      .split(",")
+      .map((item) => normalizeEmail(item))
+      .filter(Boolean),
+  );
+}
+
+function isPlatformOperator(usuario, env = process.env) {
+  if (!usuario || usuario.ativo !== true) return false;
+  const email = normalizeEmail(usuario.email);
+  if (!email) return false;
+  return parsePlatformAdminEmails(env.PLATFORM_ADMIN_EMAILS).has(email);
+}
+
 function authError(res, status, erro, codigo) {
   return res.status(status).json({ erro, codigo });
 }
 
-module.exports = { createAuth, normalizeEmail, normalizeSlug };
+module.exports = { createAuth, isPlatformOperator, normalizeEmail, normalizeSlug, parsePlatformAdminEmails };
