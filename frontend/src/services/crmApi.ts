@@ -2146,20 +2146,20 @@ export async function retryAutomationJob(id: number) {
   return requestApiWrite<AutomationExecution["jobs"][number]>("POST", `/automacoes/jobs/${id}/reprocessar`, {});
 }
 
-export async function fetchPlatformTenants(params: { page?: number; limit?: number; busca?: string } = {}) {
-  return requestApiGetAuthenticated<ApiPaginatedResponse<PlatformTenant>>(`/platform/tenants${toQueryString(params)}`);
+export async function fetchPlatformTenants(params: { page?: number; limit?: number; busca?: string } = {}, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<PlatformTenant>>(`/platform/tenants${toQueryString(params)}`, options);
 }
 
-export async function fetchPlatformTenant(id: number) {
-  return requestApiGetAuthenticated<PlatformTenant>(`/platform/tenants/${id}`);
+export async function fetchPlatformTenant(id: number, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<PlatformTenant>(`/platform/tenants/${id}`, options);
 }
 
 export async function updatePlatformTenantAutomations(id: number, payload: { enabled: boolean; reason?: string }) {
   return requestApiWrite<PlatformCapabilityChange>("PATCH", `/platform/tenants/${id}/capabilities/automations`, payload);
 }
 
-export async function fetchPlatformTenantAutomationsAudit(id: number, params: { page?: number; limit?: number } = {}) {
-  return requestApiGetAuthenticated<ApiPaginatedResponse<PlatformCapabilityAudit>>(`/platform/tenants/${id}/capabilities/automations/audit${toQueryString(params)}`);
+export async function fetchPlatformTenantAutomationsAudit(id: number, params: { page?: number; limit?: number } = {}, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<PlatformCapabilityAudit>>(`/platform/tenants/${id}/capabilities/automations/audit${toQueryString(params)}`, options);
 }
 
 export function getApiBaseUrl() {
@@ -2207,7 +2207,7 @@ async function requestApiGet<T>(path: string): Promise<T> {
 }
 
 
-async function requestApiGetAuthenticated<T>(path: string): Promise<T> {
+async function requestApiGetAuthenticated<T>(path: string, options: { signal?: AbortSignal } = {}): Promise<T> {
   if (!hasRemoteApi()) {
     throw new ApiHttpError("Nao foi possivel se comunicar com o servidor.", 0, "NETWORK_UNAVAILABLE");
   }
@@ -2221,8 +2221,10 @@ async function requestApiGetAuthenticated<T>(path: string): Promise<T> {
   try {
     response = await fetch(API_URL + path, {
       headers: buildHeaders(token),
+      signal: options.signal,
     });
-  } catch {
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
     throw new ApiHttpError("Nao foi possivel se comunicar com o servidor.", 0, "NETWORK_ERROR");
   }
 

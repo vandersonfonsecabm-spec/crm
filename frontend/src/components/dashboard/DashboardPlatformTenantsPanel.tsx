@@ -1,5 +1,5 @@
 import { Building2, History, RefreshCw, Search, ShieldCheck, ShieldOff } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchPlatformTenant,
   fetchPlatformTenantAutomationsAudit,
@@ -31,15 +31,21 @@ export default function DashboardPlatformTenantsPanel() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const tenantsRequestRef = useRef(0);
+  const tenantDetailRequestRef = useRef(0);
+  const auditRequestRef = useRef(0);
 
   const automationsEnabled = selected?.capabilities.automations.enabled === true;
   const selectedTenantId = selected?.id ?? null;
 
-  const loadTenants = useCallback(async () => {
+  const loadTenants = useCallback(async (signal?: AbortSignal) => {
+    const requestId = tenantsRequestRef.current + 1;
+    tenantsRequestRef.current = requestId;
     setLoading(true);
     setError("");
     try {
-      const response = await fetchPlatformTenants({ page, limit: pageSize, busca: appliedSearch });
+      const response = await fetchPlatformTenants({ page, limit: pageSize, busca: appliedSearch }, { signal });
+      if (signal?.aborted || requestId !== tenantsRequestRef.current) return;
       setTenants(response.data);
       setTotalPages(response.pagination.totalPages);
       setSelected((current) => {
@@ -55,49 +61,69 @@ export default function DashboardPlatformTenantsPanel() {
         setAudit([]);
       }
     } catch (apiError) {
+      if (isAbortError(apiError) || signal?.aborted || requestId !== tenantsRequestRef.current) return;
       setError(platformErrorMessage(apiError));
     } finally {
-      setLoading(false);
+      if (!signal?.aborted && requestId === tenantsRequestRef.current) setLoading(false);
     }
   }, [appliedSearch, page]);
 
-  const loadTenant = useCallback(async (id: number) => {
+  const loadTenant = useCallback(async (id: number, signal?: AbortSignal) => {
+    const requestId = tenantDetailRequestRef.current + 1;
+    tenantDetailRequestRef.current = requestId;
     setDetailLoading(true);
     setError("");
     try {
-      setSelected(await fetchPlatformTenant(id));
+      const tenant = await fetchPlatformTenant(id, { signal });
+      if (signal?.aborted || requestId !== tenantDetailRequestRef.current) return;
+      setSelected(tenant);
       setAuditPage(1);
     } catch (apiError) {
+      if (isAbortError(apiError) || signal?.aborted || requestId !== tenantDetailRequestRef.current) return;
       setError(platformErrorMessage(apiError));
     } finally {
-      setDetailLoading(false);
+      if (!signal?.aborted && requestId === tenantDetailRequestRef.current) setDetailLoading(false);
     }
   }, []);
 
-  const loadAudit = useCallback(async (id: number) => {
+  const loadAudit = useCallback(async (id: number, signal?: AbortSignal) => {
+    const requestId = auditRequestRef.current + 1;
+    auditRequestRef.current = requestId;
     try {
-      const response = await fetchPlatformTenantAutomationsAudit(id, { page: auditPage, limit: auditPageSize });
+      const response = await fetchPlatformTenantAutomationsAudit(id, { page: auditPage, limit: auditPageSize }, { signal });
+      if (signal?.aborted || requestId !== auditRequestRef.current) return;
       setAudit(response.data);
       setAuditTotalPages(response.pagination.totalPages);
-    } catch {
+    } catch (apiError) {
+      if (isAbortError(apiError) || signal?.aborted || requestId !== auditRequestRef.current) return;
       setAudit([]);
       setAuditTotalPages(0);
     }
   }, [auditPage]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const timeout = window.setTimeout(() => {
-      void loadTenants();
+      void loadTenants(controller.signal);
     }, 0);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      controller.abort();
+      tenantsRequestRef.current += 1;
+      window.clearTimeout(timeout);
+    };
   }, [loadTenants]);
 
   useEffect(() => {
     if (!selectedTenantId) return;
+    const controller = new AbortController();
     const timeout = window.setTimeout(() => {
-      void loadAudit(selectedTenantId);
+      void loadAudit(selectedTenantId, controller.signal);
     }, 0);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      controller.abort();
+      auditRequestRef.current += 1;
+      window.clearTimeout(timeout);
+    };
   }, [selectedTenantId, loadAudit]);
 
   async function submitCapabilityChange(enabled: boolean) {
@@ -317,6 +343,10 @@ function platformErrorMessage(error: unknown) {
   if (apiError?.status === 422) return apiError.message;
   if (apiError?.status === 429) return "Muitas operações em pouco tempo. Aguarde e tente novamente.";
   return "Não foi possível carregar operações da plataforma agora.";
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function formatDate(value?: string | null) {
