@@ -35,10 +35,15 @@ test("H7.1 usa endpoints internos fechados para tenants e capability AUTOMATIONS
 
   for (const endpoint of [
     "/platform/tenants",
+    "POST\", \"/platform/tenants",
     "/capabilities/automations",
     "/capabilities/automations/audit",
   ]) assert.match(api, new RegExp(endpoint.replaceAll("/", "\\/")));
 
+  assert.match(api, /email\?: string/);
+  assert.match(api, /PlatformTenantCreatePayload/);
+  assert.match(api, /companyName: string/);
+  assert.match(api, /adminPassword: string/);
   assert.match(api, /enabled: boolean/);
   assert.match(api, /reason\?: string/);
   assert.doesNotMatch(api, /PLATFORM_ADMIN_EMAILS/);
@@ -49,6 +54,9 @@ test("H7.1 entrega painel discreto sem dados comerciais, JSON cru ou acao em mas
 
   for (const label of [
     "Tenants da plataforma",
+    "Criar tenant",
+    "Criar tenant interno",
+    "Senha inicial",
     "Buscar por nome ou slug",
     "Capability AUTOMATIONS",
     "Histórico de Automações",
@@ -58,6 +66,8 @@ test("H7.1 entrega painel discreto sem dados comerciais, JSON cru ou acao em mas
   ]) assert.match(panel, new RegExp(label));
 
   assert.match(panel, /window\.confirm/);
+  assert.match(panel, /setCreateForm\(emptyCreateForm\)/);
+  assert.match(panel, /adminPassword: ""/);
   assert.match(panel, /Nenhuma regra será criada ou executada/);
   assert.match(panel, /Regras e histórico serão preservados/);
   assert.doesNotMatch(panel, /<pre|JSON\.stringify|allowlist|PLATFORM_ADMIN_EMAILS|ativar para todos|selecionar todos/i);

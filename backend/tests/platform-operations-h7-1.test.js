@@ -52,6 +52,9 @@ test("H7.1 protege operacoes de plataforma por allowlist backend e sem acesso te
   const operatorMe = await request("GET", "/auth/me", undefined, operator.token);
   assert.equal(operatorMe.status, 200);
   assert.equal(operatorMe.body.isPlatformOperator, true);
+  assert.equal(operatorMe.body.email, "operator-h71@platform.test");
+  assert.equal(operatorMe.body.usuario.email, "operator-h71@platform.test");
+  assert.equal(JSON.stringify(operatorMe.body).includes("senhaHash"), false);
   assert.equal(JSON.stringify(operatorMe.body).includes("PLATFORM_ADMIN_EMAILS"), false);
   assert.equal(JSON.stringify(operatorMe.body).includes("outra@platform.test"), false);
 
@@ -74,6 +77,72 @@ test("H7.1 protege operacoes de plataforma por allowlist backend e sem acesso te
   assert.equal(detail.status, 200);
   assert.equal(detail.body.id, control.empresaId);
   assert.equal(detail.body.capabilities.automations.enabled, false);
+
+  assert.equal((await request("POST", "/platform/tenants", {
+    companyName: "Tenant Negado H72",
+    slug: "tenant-negado-h72",
+    adminName: "Admin Negado",
+    adminEmail: "admin-negado-h72@platform.test",
+    adminPassword: "SenhaH72Segura123",
+  }, control.token)).status, 403);
+  assert.equal((await request("POST", "/platform/tenants", {
+    companyName: "Tenant Invalido H72",
+    slug: "tenant-invalido-h72",
+    adminName: "Admin Invalido",
+    adminEmail: "admin-invalido-h72@platform.test",
+    adminPassword: "curta",
+  }, operator.token)).status, 422);
+  assert.equal((await request("POST", "/platform/tenants", {
+    companyName: "Tenant Campo Extra H72",
+    slug: "tenant-campo-extra-h72",
+    adminName: "Admin Extra",
+    adminEmail: "admin-extra-h72@platform.test",
+    adminPassword: "SenhaH72Segura123",
+    papel: "ADMIN",
+  }, operator.token)).status, 422);
+
+  const tenantCountsBefore = await automationCounts(0);
+  const provisioned = await request("POST", "/platform/tenants", {
+    companyName: "Provisionado H72",
+    slug: "provisionado-h72",
+    adminName: "Admin Provisionado H72",
+    adminEmail: "admin-provisionado-h72@platform.test",
+    adminPassword: "SenhaH72Segura123",
+  }, operator.token);
+  assert.equal(provisioned.status, 201);
+  assert.equal(provisioned.body.tenant.nome, "Provisionado H72");
+  assert.equal(provisioned.body.tenant.slug, "provisionado-h72");
+  assert.equal(provisioned.body.tenant.capabilities.automations.enabled, false);
+  assert.equal(provisioned.body.admin.papel, "ADMIN");
+  assert.equal(provisioned.body.admin.ativo, true);
+  assert.equal(JSON.stringify(provisioned.body).includes("SenhaH72Segura123"), false);
+  assert.equal(JSON.stringify(provisioned.body).includes("senhaHash"), false);
+  const provisionedUser = await prisma.usuario.findUnique({ where: { id: provisioned.body.admin.id } });
+  assert.equal(provisionedUser.papel, "ADMIN");
+  assert.notEqual(provisionedUser.senhaHash, "SenhaH72Segura123");
+  assert.equal(await prisma.empresaFuncionalidade.count({ where: { empresaId: provisioned.body.tenant.id } }), 0);
+  assert.deepEqual(await automationCounts(provisioned.body.tenant.id), tenantCountsBefore);
+  const tenantAudit = await prisma.platformTenantAudit.findMany({ where: { tenantId: provisioned.body.tenant.id } });
+  assert.equal(tenantAudit.length, 1);
+  assert.equal(tenantAudit[0].actorUserId, operator.usuarioId);
+  assert.equal(tenantAudit[0].action, "TENANT_CREATED");
+  assert.equal(tenantAudit[0].tenantSlug, "provisionado-h72");
+  assert.equal(tenantAudit[0].adminUserId, provisioned.body.admin.id);
+  assert.equal(JSON.stringify(tenantAudit).includes("SenhaH72Segura123"), false);
+  assert.equal((await request("POST", "/platform/tenants", {
+    companyName: "Provisionado H72",
+    slug: "provisionado-h72",
+    adminName: "Admin Provisionado H72",
+    adminEmail: "admin-provisionado-2-h72@platform.test",
+    adminPassword: "SenhaH72Segura123",
+  }, operator.token)).status, 409);
+  assert.equal((await request("POST", "/platform/tenants", {
+    companyName: "Provisionado Outro H72",
+    slug: "provisionado-outro-h72",
+    adminName: "Admin Provisionado H72",
+    adminEmail: "admin-provisionado-h72@platform.test",
+    adminPassword: "SenhaH72Segura123",
+  }, operator.token)).status, 409);
 
   assert.equal((await request("PATCH", `/platform/tenants/${control.empresaId}/capabilities/automations`, { enabled: "true" }, operator.token)).status, 422);
   assert.equal((await request("PATCH", `/platform/tenants/${control.empresaId}/capabilities/automations`, { enabled: true, outra: true }, operator.token)).status, 422);
