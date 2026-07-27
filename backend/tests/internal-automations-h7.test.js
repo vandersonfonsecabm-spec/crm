@@ -248,6 +248,43 @@ test("H8.1 shutdown aguarda ciclo ativo e nao agenda novo polling", async () => 
   assert.equal(scheduled.length, 1);
 });
 
+test("H8.2 produtor controlado cria jobs idempotentes sem entidade comercial", async () => {
+  const tenant = await seedTenant("h8-producer");
+  const context = adminContext(tenant);
+  const rule = await internalEventRule(context, "Piloto produtor interno");
+  const disabled = await service.produceAutomationEvent(pilotEvent(tenant.empresa.id, "h8-2-disabled"));
+  assert.equal(disabled.createdJobs, 0);
+
+  const offService = createAutomationService({ prisma, env: { AUTOMATIONS_ENABLED: "false", NODE_ENV: "test" } });
+  await service.activateRule(context, rule.id);
+  const featureOff = await offService.produceAutomationEvent(pilotEvent(tenant.empresa.id, "h8-2-feature-off"));
+  assert.equal(featureOff.createdJobs, 0);
+
+  const created = await service.produceAutomationEvent(pilotEvent(tenant.empresa.id, "h8-2-event-001"));
+  assert.equal(created.createdExecutions, 1);
+  assert.equal(created.createdJobs, 1);
+
+  const duplicate = await service.produceAutomationEvent(pilotEvent(tenant.empresa.id, "h8-2-event-001"));
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(await prisma.automacaoAcaoJob.count({ where: { empresaId: tenant.empresa.id } }), 1);
+
+  const [left, right] = await Promise.all([
+    service.produceAutomationEvent(pilotEvent(tenant.empresa.id, "h8-2-race-001")),
+    service.produceAutomationEvent(pilotEvent(tenant.empresa.id, "h8-2-race-001")),
+  ]);
+  assert.equal(left.createdJobs + right.createdJobs, 1);
+  assert.equal(await prisma.automacaoAcaoJob.count({ where: { empresaId: tenant.empresa.id } }), 2);
+
+  await service.processDueJobs({ now: new Date(), limit: 10, leaseOwner: "producer-worker" });
+  assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: tenant.empresa.id } }), 2);
+  await service.processDueJobs({ now: new Date(), limit: 10, leaseOwner: "producer-worker" });
+  assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: tenant.empresa.id } }), 2);
+  assert.equal(await prisma.lead.count({ where: { empresaId: tenant.empresa.id } }), 0);
+  assert.equal(await prisma.cliente.count({ where: { empresaId: tenant.empresa.id } }), 0);
+  assert.equal(await prisma.negocio.count({ where: { empresaId: tenant.empresa.id } }), 0);
+  assert.equal(await prisma.acompanhamento.count({ where: { empresaId: tenant.empresa.id } }), 0);
+});
+
 function adminContext(tenant) {
   return { empresaId: tenant.empresa.id, usuarioId: tenant.admin.id, papel: "ADMIN" };
 }
@@ -298,4 +335,16 @@ async function internalEventRule(context, nome) {
     condicoes: [],
     acoes: [{ tipo: "CREATE_INTERNAL_EVENT", eventoTipo: "LEAD_CREATED_TEST", resumo: "Evento tecnico." }],
   });
+}
+
+function pilotEvent(empresaId, key) {
+  return {
+    tenantId: empresaId,
+    eventType: "LEAD_CREATED",
+    sourceType: "PILOT_SYNTHETIC",
+    sourceId: key,
+    idempotencyKey: key,
+    occurredAt: new Date(),
+    payload: { name: "Lead Sintetico H8.2", origin: "PILOT" },
+  };
 }
