@@ -22,10 +22,12 @@ Nenhum deploy foi executado durante a oficializacao desta arquitetura.
 - Start rastreado executa `backend/scripts/start-production.cjs`, que valida o
   ambiente Railway e roda `prisma migrate deploy` no conteiner principal,
   depois da montagem do volume e antes da API aceitar requisicoes.
-- O worker de automacoes internas da H7 permanece desligado por padrao. Quando
-  uma release futura autorizar sua ativacao, `AUTOMATION_WORKER_ENABLED=true`
-  deve ser configurado somente no backend oficial, mantendo uma unica replica
-  SQLite e sem usar Pre-Deploy.
+- O worker de automacoes internas permanece desligado por padrao. A H8.1
+  separa a fundacao em processo dedicado (`npm run worker:automations` dentro
+  de `backend/`); o processo HTTP nao inicia polling. Quando uma release futura
+  autorizar sua ativacao, `AUTOMATION_WORKER_ENABLED=true` ou `1` deve ser
+  configurado somente no processo dedicado do backend oficial, mantendo uma
+  unica replica SQLite e sem usar Pre-Deploy.
 
 O Root Directory configurado no painel da plataforma nao e verificavel pelo repositorio. Antes de uma futura publicacao, ele deve ser confirmado por processo de release; uma configuracao incorreta na raiz falhara pelo root runtime guard em vez de iniciar o Nest.
 
@@ -54,7 +56,11 @@ O caminho do volume pertence a configuracao da plataforma e nao e definido neste
 - `BLING_PAGE_SIZE`
 - `PLATFORM_ADMIN_EMAILS`
 - `AUTOMATION_WORKER_ENABLED`
-- `AUTOMATION_WORKER_INTERVAL_MS`
+- `AUTOMATION_WORKER_BATCH_SIZE`
+- `AUTOMATION_WORKER_POLL_INTERVAL_MS`
+- `AUTOMATION_WORKER_LEASE_MS`
+- `AUTOMATION_WORKER_EXECUTION_TIMEOUT_MS`
+- `AUTOMATION_WORKER_MAX_ATTEMPTS`
 
 `PLATFORM_ADMIN_EMAILS` e uma allowlist operacional separada por virgulas,
 normalizada com `trim` e comparacao case-insensitive. Quando ausente ou vazia,
@@ -69,6 +75,14 @@ confirmar o proprio e-mail via `/auth/me`, configurar somente
 `POST /platform/tenants` cria tenant e primeiro usuario ADMIN sem habilitar
 `/auth/register-company`, sem enviar e-mail, sem ativar capabilities, sem criar
 regras e sem iniciar worker.
+
+Defaults H8.1 do worker dedicado: lote 5, polling 5000 ms, lease 60000 ms,
+timeout de acao 30000 ms e maximo de 3 tentativas. Valores invalidos voltam ao
+default seguro e o lote/polling/timeout nunca ficam ilimitados. A fundacao H8.1
+processa somente jobs existentes de `CREATE_INTERNAL_EVENT`, com claim atomico,
+lease recuperavel, idempotencia por `actionKey`/`idempotencyKey`, logs
+estruturados sanitizados e shutdown por `SIGTERM`/`SIGINT`. Acoes comerciais ou
+externas nao suportadas falham sem efeito e sem retry infinito.
 
 ## Render
 

@@ -13,7 +13,6 @@ const { mountNegociosKanbanRoutes } = require("./negocios-kanban/routes");
 const { mountCommercialProposalRoutes } = require("./commercial-proposals/routes");
 const { mountCustomer360Routes } = require("./customer-360/routes");
 const { mountAutomationRoutes } = require("./automations/routes");
-const { startAutomationWorker } = require("./automations/worker");
 const { mountPlatformRoutes } = require("./platform/routes");
 const { isValidCpfCnpj } = require("./customer-360/service");
 const { createAgendaService } = require("./agenda/service");
@@ -71,8 +70,7 @@ mountLeadsCommunicationRoutes({ app, prisma, authenticate: requireAuth });
 mountNegociosKanbanRoutes({ app, prisma, authenticate: requireAuth });
 mountCommercialProposalRoutes({ app, prisma, authenticate: requireAuth });
 mountCustomer360Routes({ app, prisma, authenticate: requireAuth });
-const automationService = mountAutomationRoutes({ app, prisma, authenticate: requireAuth });
-const automationWorker = startAutomationWorker({ service: automationService });
+mountAutomationRoutes({ app, prisma, authenticate: requireAuth });
 mountPlatformRoutes({ app, prisma, authenticate: requireAuth });
 
 app.use(

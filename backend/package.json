@@ -11,6 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
     "db:migrate:manual": "prisma migrate deploy",
+    "worker:automations": "node src/automations/worker.js",
     "admin:create": "node scripts/create-admin.js",
     "seed": "node prisma/seed.js",
     "railway:start": "npm run start:production",

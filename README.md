@@ -64,10 +64,13 @@ O Railway deve usar `backend/` como Root Directory. O Vercel constrói exclusiva
 
 A H7 adiciona automacoes internas locais para regras por tenant, execucoes,
 jobs por acao, round-robin, Acompanhamentos automaticos, simulacao sem efeitos
-e historico tecnico. O worker e controlado por `AUTOMATION_WORKER_ENABLED` e
-fica desligado por padrao; a ativacao futura exige uma unica replica SQLite,
-backup e protocolo de release. Nenhuma automacao envia WhatsApp, e-mail, SMS,
-push, webhook ou mensagem externa.
+e historico tecnico. A H8.1 endurece a fundacao do worker em processo dedicado
+(`npm run worker:automations` no backend), controlado por
+`AUTOMATION_WORKER_ENABLED` e desligado por padrao. O processo HTTP nao inicia
+polling. Nesta fundacao, a execucao real do worker suporta somente
+`CREATE_INTERNAL_EVENT`; outras acoes falham de forma definitiva e sanitizada.
+A ativacao futura exige uma unica replica SQLite, backup e protocolo de release.
+Nenhuma automacao envia WhatsApp, e-mail, SMS, push, webhook ou mensagem externa.
 
 ## Operacoes da plataforma
 

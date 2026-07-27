@@ -671,6 +671,49 @@ Data da verificacao: 26/07/2026.
   dos testes e nao devem aparecer no diff. O worker segue desligado, o WhatsApp
   continua pausado e H8 nao foi iniciada.
 
+## H8.1 - Fundacao segura do worker de automacoes
+
+- H8.1 parte do checkpoint publicado `b719be343a16c031376ed9204e37e512c3375e55`
+  e endurece o scaffold existente sem criar migration 26: os modelos atuais ja
+  possuem `status`, `tentativas`, `nextAttemptAt`, `leaseOwner`,
+  `leaseExpiresAt`, `actionKey` e `idempotencyKey`.
+- O worker deixou de ser iniciado pelo processo HTTP. A execucao operacional
+  futura usa processo dedicado via `npm run worker:automations` em `backend/`.
+  `AUTOMATION_WORKER_ENABLED` continua deny-by-default; apenas `true` ou `1`
+  ligam o processo, e em `NODE_ENV=test` ele permanece desligado.
+- Defaults documentados: lote 5, polling 5000 ms, lease 60000 ms, timeout de
+  acao 30000 ms e maximo de 3 tentativas, todos com limites minimos e maximos.
+  Valor invalido volta ao default seguro.
+- O ciclo H8.1 processa somente jobs ja existentes; nao varre gatilhos temporais
+  nem produz jobs. Claim e feito um job por vez com update atomico no SQLite,
+  respeitando `nextAttemptAt`, limite de tentativas, lease ativo e recuperacao
+  de lease expirado.
+- A unica acao com execucao real nesta fundacao e `CREATE_INTERNAL_EVENT`.
+  Acoes como atribuicao, round-robin, Acompanhamento, projecao, WhatsApp,
+  e-mail ou webhook nao sao executadas pelo worker H8.1; quando aparecem em job
+  real, falham definitivamente de forma sanitizada e sem efeito comercial.
+- `CREATE_INTERNAL_EVENT` permanece idempotente pelo indice unico
+  `[empresaId, idempotencyKey]`; reprocessamento nao duplica evento interno.
+  Jobs concluidos nao voltam a pendente; jobs falhos podem ser reprocessados de
+  forma controlada pelo endpoint existente, sem tocar em tenant alheio.
+- Logs do worker sao estruturados e sanitizados para eventos como
+  `worker_disabled`, `worker_started`, `polling_started`, `job_failed`,
+  `worker_stopping` e `worker_stopped`, sem senha, token, cookie, Authorization,
+  payload comercial completo, e-mail completo, telefone, documento ou variavel
+  secreta.
+- Shutdown por `SIGTERM`/`SIGINT` para de agendar novo polling, aguarda o ciclo
+  em andamento e desconecta o Prisma. A infraestrutura SQLite segue limitada a
+  uma replica; escala horizontal exige banco compartilhado e coordenacao
+  distribuida antes de habilitar worker em producao.
+- Testes focais H8.1 cobrem gate, defaults, concorrencia entre dois workers
+  logicos, lease valido, lease expirado, idempotencia de evento interno, acao
+  desconhecida/nao suportada sem efeito, reprocessamento e shutdown. Bancos de
+  teste ficam exclusivamente em `%TEMP%`.
+- Produção deve receber apenas o codigo da fundacao: `AUTOMATION_WORKER_ENABLED`
+  permanece ausente ou `false`, a regra piloto JavaGro segue desativada, nenhum
+  job ou execucao real deve existir, WhatsApp permanece desligado e H8.2 nao foi
+  iniciada.
+
 ## Plano oficial pos-auditoria
 
 - H5 - Cliente 360 graus (publicada)
