@@ -59,3 +59,12 @@ VITE_API_URL=http://localhost:3001
 Abra `http://localhost:5173` e autentique-se pelo formulário normal. Sem uma sessão validada em `/auth/me`, nenhuma tela privada é montada.
 
 O Railway deve usar `backend/` como Root Directory. O Vercel constrói exclusivamente `frontend/`. O build nao executa seed nem `prisma db push`; em producao, o startup versionado do backend roda `prisma migrate deploy` somente no Railway oficial, depois do volume SQLite persistente estar montado e antes da API iniciar.
+
+## Automacoes internas
+
+A H7 adiciona automacoes internas locais para regras por tenant, execucoes,
+jobs por acao, round-robin, Acompanhamentos automaticos, simulacao sem efeitos
+e historico tecnico. O worker e controlado por `AUTOMATION_WORKER_ENABLED` e
+fica desligado por padrao; a ativacao futura exige uma unica replica SQLite,
+backup e protocolo de release. Nenhuma automacao envia WhatsApp, e-mail, SMS,
+push, webhook ou mensagem externa.

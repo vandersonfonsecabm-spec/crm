@@ -22,6 +22,10 @@ Nenhum deploy foi executado durante a oficializacao desta arquitetura.
 - Start rastreado executa `backend/scripts/start-production.cjs`, que valida o
   ambiente Railway e roda `prisma migrate deploy` no conteiner principal,
   depois da montagem do volume e antes da API aceitar requisicoes.
+- O worker de automacoes internas da H7 permanece desligado por padrao. Quando
+  uma release futura autorizar sua ativacao, `AUTOMATION_WORKER_ENABLED=true`
+  deve ser configurado somente no backend oficial, mantendo uma unica replica
+  SQLite e sem usar Pre-Deploy.
 
 O Root Directory configurado no painel da plataforma nao e verificavel pelo repositorio. Antes de uma futura publicacao, ele deve ser confirmado por processo de release; uma configuracao incorreta na raiz falhara pelo root runtime guard em vez de iniciar o Nest.
 
@@ -48,6 +52,8 @@ O caminho do volume pertence a configuracao da plataforma e nao e definido neste
 - `BLING_TIMEOUT_MS`
 - `BLING_MAX_PAGES`
 - `BLING_PAGE_SIZE`
+- `AUTOMATION_WORKER_ENABLED`
+- `AUTOMATION_WORKER_INTERVAL_MS`
 
 ## Render
 

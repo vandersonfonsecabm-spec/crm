@@ -537,6 +537,69 @@ Data da verificacao: 26/07/2026.
   ao baseline, sem WAL ou SHM. O WhatsApp continua pausado, sem Meta, flags,
   capabilities, credenciais ou chamada externa.
 
+## Automacoes internas H7
+
+- H7 foi implementada localmente na branch `feature/h7-automations`, sem push,
+  deploy, Railway, Vercel, Meta, WhatsApp ou alteracao de producao.
+- Fonte canonica de trabalho futuro: `Acompanhamento`. Agenda e apenas a
+  apresentacao operacional de compromissos com data e hora. `Cliente.proximoFollowUp`
+  permanece como projecao derivada do Acompanhamento aberto mais proximo nos
+  fluxos criados pela H7; nao houve backfill historico.
+- Gatilhos implementados: `LEAD_CREATED`, `LEAD_WITHOUT_FOLLOW_UP` e
+  `DEAL_STALLED`. Como nao existe marcador canonico de resposta, a versao H7
+  usa Lead sem Acompanhamento humano em vez de Lead sem resposta. Negocio parado
+  usa `etapaEntrouEm`, nao apenas `updatedAt`.
+- Ativacao: `activatedAt` inicia a observacao de novas ocorrencias, sem
+  processamento retroativo. Edicoes incrementam versao e novas ocorrencias usam
+  snapshot atualizado; execucoes existentes preservam o snapshot anterior.
+- Modelos adicionados por migration aditiva:
+  `AutomacaoRegra`, `AutomacaoExecucao`, `AutomacaoAcaoJob`,
+  `AutomacaoRoundRobinEstado` e `AutomacaoEventoInterno`. A migration
+  `20260726203000_add_internal_automations` eleva os sandboxes para 24
+  migrations e nao altera dados comerciais existentes.
+- Condicoes disponiveis sao somente as sustentadas pelo schema real: etapa,
+  origem, responsavel, ausencia de responsavel, tempo sem Acompanhamento, tempo
+  parado, dia da semana, janela e timezone. Regiao e produto nao possuem campos
+  canonicos nesta fase e nao foram expostos na API ou UI.
+- Acoes implementadas: atribuir responsavel, atribuir por round-robin, criar
+  Acompanhamento, criar evento tecnico interno reservado para H8 e recalcular a
+  projecao de proximo follow-up. Nenhuma acao envia WhatsApp, e-mail, SMS,
+  push, webhook ou mensagem externa.
+- Idempotencia: `occurrenceKey`, `idempotencyKey` e `actionKey` impedem
+  duplicidade por ocorrencia e por acao. Reprocessamento atua somente em jobs
+  falhos elegiveis, preservando acoes concluidas em falhas parciais.
+- Round-robin e persistente por tenant e regra, com lista elegivel ordenada de
+  forma estavel. O estado so avanca quando a atribuicao realmente vence; Leads
+  ou Negocios ja atribuidos nao fazem o ponteiro andar.
+- Worker: controlado por `AUTOMATION_WORKER_ENABLED`, desligado por padrao,
+  desligado em testes e iniciado uma unica vez no processo da API quando a
+  variavel for `true`. Usa lote limitado, lease de 120 segundos, retry por acao
+  e recuperacao de lease expirado. SQLite atual permanece limitado a uma
+  replica; escala horizontal exige banco compartilhado e coordenacao distribuida.
+- Timezone: regras exigem timezone IANA validado e a avaliacao usa `Intl`, sem
+  depender do timezone do servidor. Janelas fora do horario mantem jobs
+  pendentes com nova tentativa controlada.
+- Autorizacao: `AUTOMATIONS` foi adicionada ao modelo de capabilities. ADMIN e
+  GERENTE administram regras; tenant sem capability recebe `404` e nao entra em
+  varreduras ou execucoes. `empresaId` do frontend nunca e autoridade.
+- API local: listar, criar, ler, atualizar, ativar, desativar, simular, listar
+  execucoes, listar falhas, reprocessar job falho e consultar resumo.
+- Interface: a area existente de Automações foi substituida por workspace
+  administrativo compacto com regras, status, prioridade, gatilho, condicoes
+  reais, acoes, simulacao sem efeitos, execucoes, falhas e retry. A UI nao
+  mostra JSON cru e nao promete notificacoes externas.
+- Testes aprovados: backend completo pelo supervisor isolado, incluindo sandbox
+  A e upgrade historico 9 -> 24 migrations; frontend completo; teste H7
+  frontend; Prisma validate; sintaxe backend; lint; build; verificador
+  arquitetural e `git diff --check`.
+- QA visual local em 1366x768, 1440x900, 1920x1080 e 900x768 validou lista,
+  formulario, simulacao, execucoes, retry, ausencia de overflow horizontal,
+  ausencia de erro no console e ausencia de chamada externa. Evidencias ficaram
+  somente em `%TEMP%\crm-h7-visual-qa`.
+- Limitacoes: nao ha H8, central de notificacoes, backfill, regioes/produtos
+  canonicos ou suporte seguro para multiplas replicas SQLite. O worker nao foi
+  habilitado em producao. O WhatsApp continua desligado.
+
 ## Plano oficial pos-auditoria
 
 - H5 - Cliente 360 graus (publicada)
