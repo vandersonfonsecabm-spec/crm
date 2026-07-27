@@ -625,27 +625,40 @@ Data da verificacao: 26/07/2026.
   da allowlist recebe `403`.
 - Rotas locais criadas: `GET /platform/tenants`,
   `GET /platform/tenants/:tenantId`,
+  `POST /platform/tenants`,
   `PATCH /platform/tenants/:tenantId/capabilities/automations` e
   `GET /platform/tenants/:tenantId/capabilities/automations/audit`.
   A listagem e paginada, busca por nome ou slug e retorna somente dados
   minimos de identificacao e o estado da capability `AUTOMATIONS`.
+- H7.2 adicionou localmente a exposicao segura do proprio e-mail no payload
+  autenticado de `/auth/me`, sem listar outros usuarios e preservando
+  `isPlatformOperator`.
+- H7.2 adicionou localmente `POST /platform/tenants`, exclusivo para operador
+  da plataforma, com payload fechado para nome do tenant, slug, administrador,
+  e-mail e senha inicial. O endpoint reutiliza a validacao do cadastro oficial,
+  normaliza slug/e-mail, gera hash com o mesmo algoritmo, cria `Empresa` e
+  primeiro `Usuario ADMIN` em transacao e bloqueia slug ou e-mail existentes.
+- A criacao interna de tenant nao habilita `/auth/register-company`, nao envia
+  e-mail, nao ativa capability, nao cria regra, job, execucao, backfill,
+  integracao ou dado comercial.
 - A fonte canonica de capability continua sendo `EmpresaFuncionalidade`, a
   mesma consumida pela H7. Nao foi criada segunda tabela de capability, segundo
   enum ou feature gate paralelo.
-- A auditoria reutiliza `AuditoriaFuncionalidade`; portanto, nao houve migration
-  H7.1. Alteracoes reais em `AUTOMATIONS` sao transacionais e registram actor
-  derivado da sessao, estado anterior, estado novo, motivo sanitizado e tenant.
-  Operacoes idempotentes retornam `changed: false` e nao criam auditoria falsa.
+- A auditoria de capability reutiliza `AuditoriaFuncionalidade`; alteracoes
+  reais em `AUTOMATIONS` sao transacionais e registram actor derivado da sessao,
+  estado anterior, estado novo, motivo sanitizado e tenant. Operacoes
+  idempotentes retornam `changed: false` e nao criam auditoria falsa.
+- H7.2 criou a migration aditiva
+  `20260727103000_add_platform_tenant_audit` com `PlatformTenantAudit` para
+  registrar `TENANT_CREATED` sem misturar criacao de tenant com auditoria de
+  capability. A auditoria registra actor, tenant criado, slug, primeiro ADMIN e
+  data, sem senha, hash, token, cookie ou cabecalhos.
 - A area interna `/platform/tenants` aparece no menu somente quando
   `isPlatformOperator === true` e permite busca, lista paginada, detalhe minimo,
-  ativacao/desativacao individual de `AUTOMATIONS`, confirmacao explicita,
-  motivo opcional, feedback, loading, vazio, erro e historico paginado. Nao ha
-  JSON cru, dados comerciais, impersonacao, edicao em massa ou "ativar para
-  todos".
-- Criacao de tenant nao foi implementada porque o modelo atual nao suporta com
-  seguranca um operador vinculado a multiplos tenants. JavaGro devera ser criada
-  futuramente pelo fluxo oficial `/auth/register-company` com credencial de
-  teste controlada e depois gerenciada por esta area.
+  criacao individual de tenant, ativacao/desativacao individual de `AUTOMATIONS`,
+  confirmacao explicita, motivo opcional, feedback, loading, vazio, erro e
+  historico paginado. Nao ha JSON cru, dados comerciais, impersonacao, edicao em
+  massa ou "ativar para todos".
 - Ativar `AUTOMATIONS` por esta area nao cria regra, job, execucao, backfill ou
   worker. Desativar bloqueia novas execucoes pelo gate existente da H7 e
   preserva regras e historico.

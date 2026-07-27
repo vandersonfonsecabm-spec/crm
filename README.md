@@ -71,10 +71,12 @@ push, webhook ou mensagem externa.
 
 ## Operacoes da plataforma
 
-A H7.1 adiciona localmente uma area interna em `/platform/tenants` para
-operadores da plataforma localizarem tenants e ativarem ou desativarem somente
-a capability `AUTOMATIONS` de forma individual, transacional e auditada. O
-acesso usa `PLATFORM_ADMIN_EMAILS` como allowlist deny-by-default de usuarios
-autenticados e ativos; ADMIN e GERENTE continuam limitados ao proprio tenant.
-Esta area nao cria tenants, nao possui impersonacao, nao ativa worker, nao cria
-regras e nao executa automacoes.
+A H7.1 adiciona uma area interna em `/platform/tenants` para operadores da
+plataforma localizarem tenants e ativarem ou desativarem somente a capability
+`AUTOMATIONS` de forma individual, transacional e auditada. A H7.2 adiciona o
+provisionamento interno de tenant com primeiro usuario ADMIN, tambem restrito ao
+operador da plataforma. O acesso usa `PLATFORM_ADMIN_EMAILS` como allowlist
+deny-by-default de usuarios autenticados e ativos; ADMIN e GERENTE continuam
+limitados ao proprio tenant. Esta area nao possui impersonacao, nao ativa
+capability automaticamente, nao ativa worker, nao cria regras e nao executa
+automacoes.

@@ -63,6 +63,13 @@ existentes como operadores da plataforma e nunca deve ser exposta ao frontend,
 logs ou mensagens de erro. ADMIN e GERENTE continuam sendo papeis de tenant,
 sem autoridade global.
 
+O bootstrap seguro de operacoes da plataforma deve publicar primeiro o codigo,
+confirmar o proprio e-mail via `/auth/me`, configurar somente
+`PLATFORM_ADMIN_EMAILS` no Railway oficial e renovar a sessao. O endpoint interno
+`POST /platform/tenants` cria tenant e primeiro usuario ADMIN sem habilitar
+`/auth/register-company`, sem enviar e-mail, sem ativar capabilities, sem criar
+regras e sem iniciar worker.
+
 ## Render
 
 O Render nao e uma plataforma ativa deste CRM. O manifesto da raiz foi removido porque executava `prisma db push` e seed automaticamente. Nenhuma configuracao Render permanece apta a autodeteccao.
