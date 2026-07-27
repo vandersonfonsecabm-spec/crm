@@ -40,6 +40,7 @@ export type TenantCapabilities = {
   leadsCommunication: boolean;
   siteLeadCapture: boolean;
   negociosKanban: boolean;
+  automations: boolean;
 };
 
 export type ApiUserRole = "ADMIN" | "GERENTE" | "VENDEDOR";
@@ -690,6 +691,105 @@ export type ApiAcompanhamentoStatus = "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDO" 
 export type ApiAcompanhamentoPrioridade = "BAIXA" | "MEDIA" | "ALTA" | "URGENTE" | "CRITICA";
 export type ApiAcompanhamentoTipo = "TAREFA" | "RETORNO" | "REUNIAO" | "LIGACAO" | "VISITA" | "OUTRO" | "WHATSAPP" | "EMAIL";
 export type ApiAcompanhamentoVisao = "TODOS" | "HOJE" | "PROXIMOS" | "ATRASADOS" | "CONCLUIDOS" | "MINHA" | "EQUIPE";
+
+export type AutomationTrigger = "LEAD_CREATED" | "LEAD_WITHOUT_FOLLOW_UP" | "DEAL_STALLED";
+export type AutomationActionType = "ASSIGN_OWNER" | "ASSIGN_ROUND_ROBIN" | "CREATE_FOLLOW_UP" | "CREATE_INTERNAL_EVENT" | "UPDATE_NEXT_FOLLOW_UP_PROJECTION";
+export type AutomationExecutionStatus = "PENDENTE" | "PROCESSANDO" | "CONCLUIDA" | "FALHOU" | "FALHA_DEFINITIVA" | "CANCELADA" | "SIMULADA";
+export type AutomationJobStatus = "PENDENTE" | "PROCESSANDO" | "CONCLUIDO" | "FALHOU" | "FALHA_DEFINITIVA" | "CANCELADO";
+
+export type AutomationCondition = {
+  campo: "etapa" | "origem" | "responsavelId" | "semResponsavel" | "tempoSemAcompanhamentoMinutos" | "tempoParadoMinutos" | "diaSemana" | "janela" | "timezone";
+  operador: "EQUALS" | "NOT_EQUALS" | "IN" | "GTE";
+  valor: unknown;
+};
+
+export type AutomationAction = {
+  tipo: AutomationActionType;
+  usuarioId?: number;
+  usuarioIds?: number[];
+  titulo?: string;
+  descricao?: string | null;
+  delayMinutos?: number;
+  prioridade?: ApiAcompanhamentoPrioridade;
+  tipoAcompanhamento?: ApiAcompanhamentoTipo;
+  eventoTipo?: string;
+  resumo?: string;
+};
+
+export type AutomationRule = {
+  id: number;
+  nome: string;
+  descricao: string | null;
+  ativa: boolean;
+  prioridade: number;
+  gatilho: AutomationTrigger;
+  condicoes: AutomationCondition[];
+  acoes: AutomationAction[];
+  timezone: string;
+  janela: { inicio: string; fim: string; diasSemana: number[] } | null;
+  versao: number;
+  activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AutomationRulePayload = {
+  nome: string;
+  descricao?: string | null;
+  prioridade: number;
+  gatilho: AutomationTrigger;
+  condicoes: AutomationCondition[];
+  acoes: AutomationAction[];
+  timezone: string;
+  janela?: { inicio: string; fim: string; diasSemana: number[] } | null;
+};
+
+export type AutomationExecution = {
+  id: number;
+  regraId: number;
+  regra?: { id: number; nome: string; gatilho: AutomationTrigger };
+  regraVersao: number;
+  entidadeTipo: "LEAD" | "NEGOCIO";
+  entidadeId: number;
+  occurrenceKey: string;
+  status: AutomationExecutionStatus;
+  erroCodigo: string | null;
+  erroResumo: string | null;
+  createdAt: string;
+  jobs: Array<{
+    id: number;
+    indice: number;
+    tipo: AutomationActionType;
+    status: AutomationJobStatus;
+    tentativas: number;
+    nextAttemptAt: string | null;
+    erroCodigo: string | null;
+    erroResumo: string | null;
+  }>;
+};
+
+export type AutomationSummary = {
+  rules: number;
+  activeRules: number;
+  failedJobs: number;
+};
+
+export type AutomationOptions = {
+  triggers: AutomationTrigger[];
+  conditions: AutomationCondition["campo"][];
+  actions: AutomationActionType[];
+  users: LeadsCommunicationUser[];
+  unavailableConditions: string[];
+  priorityConvention: string;
+};
+
+export type AutomationSimulation = {
+  efetivada: false;
+  entidadeEncontrada: boolean;
+  condicoes: Array<{ condition: AutomationCondition; aprovada: boolean }>;
+  acoesPrevistas: AutomationAction[];
+  incompatibilidades: string[];
+};
 
 export type ApiAcompanhamento = {
   id: number;
@@ -1960,6 +2060,50 @@ export async function rotateSiteFormPublicId(id: number) {
   return requestApiWrite<SiteFormIntegration>("POST", `/canais/site-form/${id}/rotacionar`, {});
 }
 
+export async function fetchAutomationSummary() {
+  return requestApiGetAuthenticated<AutomationSummary>("/automacoes/resumo");
+}
+
+export async function fetchAutomationOptions() {
+  return requestApiGetAuthenticated<AutomationOptions>("/automacoes/opcoes");
+}
+
+export async function fetchAutomationRules(params: { page?: number; limit?: number; ativa?: boolean; gatilho?: AutomationTrigger } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<AutomationRule>>(`/automacoes${toQueryString(params)}`);
+}
+
+export async function createAutomationRule(payload: AutomationRulePayload) {
+  return requestApiWrite<AutomationRule>("POST", "/automacoes", payload as unknown as Record<string, unknown>);
+}
+
+export async function updateAutomationRule(id: number, payload: Partial<AutomationRulePayload>) {
+  return requestApiWrite<AutomationRule>("PATCH", `/automacoes/${id}`, payload as unknown as Record<string, unknown>);
+}
+
+export async function activateAutomationRule(id: number) {
+  return requestApiWrite<AutomationRule>("POST", `/automacoes/${id}/ativar`, {});
+}
+
+export async function deactivateAutomationRule(id: number) {
+  return requestApiWrite<AutomationRule>("POST", `/automacoes/${id}/desativar`, {});
+}
+
+export async function simulateAutomationRule(payload: { regraId?: number; regra?: AutomationRulePayload; entidadeTipo?: "LEAD" | "NEGOCIO"; entidadeId?: number }) {
+  return requestApiWrite<AutomationSimulation>("POST", "/automacoes/simular", payload as unknown as Record<string, unknown>);
+}
+
+export async function fetchAutomationExecutions(params: { page?: number; limit?: number; status?: AutomationExecutionStatus } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<AutomationExecution>>(`/automacoes/execucoes${toQueryString(params)}`);
+}
+
+export async function fetchAutomationFailures(params: { page?: number; limit?: number } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<AutomationExecution["jobs"][number] & { execucao: AutomationExecution }>>(`/automacoes/falhas${toQueryString(params)}`);
+}
+
+export async function retryAutomationJob(id: number) {
+  return requestApiWrite<AutomationExecution["jobs"][number]>("POST", `/automacoes/jobs/${id}/reprocessar`, {});
+}
+
 export function getApiBaseUrl() {
   return API_URL;
 }
@@ -2182,6 +2326,7 @@ function normalizeCapabilities(capabilities?: Partial<TenantCapabilities>): Tena
     leadsCommunication: capabilities?.leadsCommunication === true,
     siteLeadCapture: capabilities?.siteLeadCapture === true,
     negociosKanban: capabilities?.negociosKanban === true,
+    automations: capabilities?.automations === true,
   };
 }
 
