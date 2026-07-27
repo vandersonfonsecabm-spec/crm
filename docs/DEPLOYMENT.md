@@ -52,8 +52,16 @@ O caminho do volume pertence a configuracao da plataforma e nao e definido neste
 - `BLING_TIMEOUT_MS`
 - `BLING_MAX_PAGES`
 - `BLING_PAGE_SIZE`
+- `PLATFORM_ADMIN_EMAILS`
 - `AUTOMATION_WORKER_ENABLED`
 - `AUTOMATION_WORKER_INTERVAL_MS`
+
+`PLATFORM_ADMIN_EMAILS` e uma allowlist operacional separada por virgulas,
+normalizada com `trim` e comparacao case-insensitive. Quando ausente ou vazia,
+nega acesso por padrao. Ela somente marca usuarios autenticados, ativos e ja
+existentes como operadores da plataforma e nunca deve ser exposta ao frontend,
+logs ou mensagens de erro. ADMIN e GERENTE continuam sendo papeis de tenant,
+sem autoridade global.
 
 ## Render
 

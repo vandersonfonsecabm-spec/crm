@@ -539,8 +539,16 @@ Data da verificacao: 26/07/2026.
 
 ## Automacoes internas H7
 
-- H7 foi implementada localmente na branch `feature/h7-automations`, sem push,
-  deploy, Railway, Vercel, Meta, WhatsApp ou alteracao de producao.
+- H7 foi publicada no commit
+  `46d4bae6f696e2f1abce045934501b7fc756c0ce`, com Railway oficial saudavel,
+  Vercel Ready, migration `20260726203000_add_internal_automations` aplicada e
+  24 migrations em producao. O worker permaneceu desligado: a variavel
+  `AUTOMATION_WORKER_ENABLED` estava ausente, e ausencia significa `false`.
+  Nenhuma capability foi ativada, nenhuma regra foi criada, nenhum job foi
+  processado e nenhum backfill ocorreu.
+- A implementacao local original da H7 ocorreu na branch
+  `feature/h7-automations`; a publicacao posterior preservou Meta e WhatsApp
+  desligados e nao habilitou o worker.
 - Fonte canonica de trabalho futuro: `Acompanhamento`. Agenda e apenas a
   apresentacao operacional de compromissos com data e hora. `Cliente.proximoFollowUp`
   permanece como projecao derivada do Acompanhamento aberto mais proximo nos
@@ -599,6 +607,56 @@ Data da verificacao: 26/07/2026.
 - Limitacoes: nao ha H8, central de notificacoes, backfill, regioes/produtos
   canonicos ou suporte seguro para multiplas replicas SQLite. O worker nao foi
   habilitado em producao. O WhatsApp continua desligado.
+
+## Operacoes seguras de tenants e capabilities H7.1
+
+- H7.1 foi implementada localmente na branch `feature/h7-platform-operations`,
+  sem push, deploy, Railway, Vercel, alteracao de capability em producao,
+  criacao de JavaGro, regra de automacao, backfill, H8 ou chamada externa.
+- Como nao existe papel global seguro no modelo atual e `Usuario` pertence a
+  uma unica `Empresa`, a autorizacao global foi implementada por allowlist de
+  e-mails em `PLATFORM_ADMIN_EMAILS`. O backend calcula somente o booleano
+  `isPlatformOperator` para a sessao, com deny-by-default quando a variavel
+  esta ausente ou vazia, trim e comparacao case-insensitive. A allowlist nao e
+  retornada ao frontend, persistida ou registrada em logs.
+- ADMIN, GERENTE e VENDEDOR continuam papeis restritos ao tenant. Somente
+  usuario autenticado, ativo, existente e presente na allowlist acessa
+  `/platform/*`; usuario sem sessao recebe `401` e usuario tenant-scoped fora
+  da allowlist recebe `403`.
+- Rotas locais criadas: `GET /platform/tenants`,
+  `GET /platform/tenants/:tenantId`,
+  `PATCH /platform/tenants/:tenantId/capabilities/automations` e
+  `GET /platform/tenants/:tenantId/capabilities/automations/audit`.
+  A listagem e paginada, busca por nome ou slug e retorna somente dados
+  minimos de identificacao e o estado da capability `AUTOMATIONS`.
+- A fonte canonica de capability continua sendo `EmpresaFuncionalidade`, a
+  mesma consumida pela H7. Nao foi criada segunda tabela de capability, segundo
+  enum ou feature gate paralelo.
+- A auditoria reutiliza `AuditoriaFuncionalidade`; portanto, nao houve migration
+  H7.1. Alteracoes reais em `AUTOMATIONS` sao transacionais e registram actor
+  derivado da sessao, estado anterior, estado novo, motivo sanitizado e tenant.
+  Operacoes idempotentes retornam `changed: false` e nao criam auditoria falsa.
+- A area interna `/platform/tenants` aparece no menu somente quando
+  `isPlatformOperator === true` e permite busca, lista paginada, detalhe minimo,
+  ativacao/desativacao individual de `AUTOMATIONS`, confirmacao explicita,
+  motivo opcional, feedback, loading, vazio, erro e historico paginado. Nao ha
+  JSON cru, dados comerciais, impersonacao, edicao em massa ou "ativar para
+  todos".
+- Criacao de tenant nao foi implementada porque o modelo atual nao suporta com
+  seguranca um operador vinculado a multiplos tenants. JavaGro devera ser criada
+  futuramente pelo fluxo oficial `/auth/register-company` com credencial de
+  teste controlada e depois gerenciada por esta area.
+- Ativar `AUTOMATIONS` por esta area nao cria regra, job, execucao, backfill ou
+  worker. Desativar bloqueia novas execucoes pelo gate existente da H7 e
+  preserva regras e historico.
+- Testes focais H7.1 passaram para backend e frontend, cobrindo allowlist,
+  acesso negado por padrao, usuario inativo, ADMIN/GERENTE fora da allowlist,
+  listagem, busca, detalhe, ativacao, desativacao, idempotencia, auditoria,
+  payload invalido, limite de motivo, ausencia de acao em massa, mesma fonte de
+  capability da H7 e ausencia de regra, job ou backfill.
+- Bancos protegidos `backend/prisma/dev.db` e `backend/dev.db` permanecem fora
+  dos testes e nao devem aparecer no diff. O worker segue desligado, o WhatsApp
+  continua pausado e H8 nao foi iniciada.
 
 ## Plano oficial pos-auditoria
 

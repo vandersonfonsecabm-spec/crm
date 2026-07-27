@@ -68,3 +68,13 @@ e historico tecnico. O worker e controlado por `AUTOMATION_WORKER_ENABLED` e
 fica desligado por padrao; a ativacao futura exige uma unica replica SQLite,
 backup e protocolo de release. Nenhuma automacao envia WhatsApp, e-mail, SMS,
 push, webhook ou mensagem externa.
+
+## Operacoes da plataforma
+
+A H7.1 adiciona localmente uma area interna em `/platform/tenants` para
+operadores da plataforma localizarem tenants e ativarem ou desativarem somente
+a capability `AUTOMATIONS` de forma individual, transacional e auditada. O
+acesso usa `PLATFORM_ADMIN_EMAILS` como allowlist deny-by-default de usuarios
+autenticados e ativos; ADMIN e GERENTE continuam limitados ao proprio tenant.
+Esta area nao cria tenants, nao possui impersonacao, nao ativa worker, nao cria
+regras e nao executa automacoes.
