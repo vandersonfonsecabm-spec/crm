@@ -711,8 +711,56 @@ Data da verificacao: 26/07/2026.
   teste ficam exclusivamente em `%TEMP%`.
 - Produção deve receber apenas o codigo da fundacao: `AUTOMATION_WORKER_ENABLED`
   permanece ausente ou `false`, a regra piloto JavaGro segue desativada, nenhum
-  job ou execucao real deve existir, WhatsApp permanece desligado e H8.2 nao foi
-  iniciada.
+  job ou execucao real deve existir, WhatsApp permanece desligado. Antes da
+  etapa seguinte, H8.2 ainda nao havia sido iniciada.
+
+## H8.2 - Produtor controlado e piloto interno
+
+- H8.2 parte do checkpoint publicado `374f0bb8c39453b1acbdb53d564abbb7ab4328f4`
+  e adiciona o produtor interno controlado para o primeiro piloto real da
+  JavaGro, sem migration 27. O schema existente ja possui as restricoes unicas
+  necessarias em `AutomacaoExecucao`, `AutomacaoAcaoJob` e
+  `AutomacaoEventoInterno`.
+- O contrato interno `produceAutomationEvent` aceita evento normalizado com
+  tenant obrigatorio, `LEAD_CREATED`, `PILOT_SYNTHETIC`, `sourceId`,
+  `idempotencyKey`, `occurredAt` e payload minimo. O produtor respeita
+  `AUTOMATIONS_ENABLED`, capability `AUTOMATIONS`, regra ativa, gatilho,
+  condicoes, tenant e acoes suportadas. Ele cria somente execucoes e jobs; nao
+  executa a acao no processo HTTP.
+- A rota temporaria `POST /automacoes/piloto/eventos` fica atras de
+  autenticacao, usuario ativo, operador da plataforma, capability do tenant,
+  gate global `AUTOMATIONS_ENABLED` e gate temporario
+  `AUTOMATION_PILOT_TRIGGER_ENABLED`. Com o gate temporario ausente ou `false`,
+  retorna `404`. O tenant e sempre derivado da sessao.
+- O payload do piloto e fechado e aceita somente `name` e `origin` sinteticos,
+  sem telefone, e-mail, documento, endereco, segredo, escolha de tenant, ruleId,
+  action, lote ou criacao manual de job.
+- A protecao contra loop separa evento de entrada sintetico, evento tecnico de
+  saida, auditoria e simulacao. `CREATE_INTERNAL_EVENT` nao chama o produtor e
+  nao pode alimentar novamente `LEAD_CREATED`.
+- A execucao real continua limitada a `CREATE_INTERNAL_EVENT`, idempotente por
+  `event:${actionKey}`. Para evento sintetico, o worker resolve a entidade pelo
+  `resumoJson` da execucao e nao grava FK de Lead, preservando zero Lead,
+  Cliente, Negocio e Acompanhamento.
+- O resumo de automacoes agora retorna tambem contagens de jobs, jobs pendentes,
+  processando, concluidos, execucoes, execucoes concluidas e eventos internos,
+  mantendo os campos antigos.
+- Foi corrigido um bug focal existente nas rotas de regra: `updateRule`,
+  `activateRule` e `deactivateRule` agora usam o ID inteiro validado em vez do
+  parametro string original antes de chamar Prisma.
+- Testes H8.2 cobrem gates, endpoint piloto, operador, payload fechado,
+  idempotencia sequencial e concorrente, regra desativada sem job, gate global
+  desligado sem job, worker processando exatamente uma vez, ausencia de loop e
+  zero efeito comercial. Bancos de teste ficam exclusivamente em `%TEMP%`.
+- Publicacao e piloto operacional: criar servico Railway dedicado
+  `automation-worker` com Root Directory `backend`, Start Command
+  `npm run worker:automations`, uma replica, sem dominio publico,
+  `AUTOMATIONS_ENABLED=true` e `AUTOMATION_WORKER_ENABLED=true`. O servico
+  `api` deve manter `AUTOMATION_WORKER_ENABLED` ausente ou `false`; o gate
+  `AUTOMATION_PILOT_TRIGGER_ENABLED` deve ser ativado somente durante o piloto e
+  removido depois.
+- WhatsApp, e-mail, webhook, backfill, dados comerciais e H8.3 permanecem fora
+  do escopo.
 
 ## Plano oficial pos-auditoria
 

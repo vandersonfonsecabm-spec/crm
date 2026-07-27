@@ -71,6 +71,10 @@ polling. Nesta fundacao, a execucao real do worker suporta somente
 `CREATE_INTERNAL_EVENT`; outras acoes falham de forma definitiva e sanitizada.
 A ativacao futura exige uma unica replica SQLite, backup e protocolo de release.
 Nenhuma automacao envia WhatsApp, e-mail, SMS, push, webhook ou mensagem externa.
+A H8.2 adiciona um produtor interno controlado para evento sintetico
+`LEAD_CREATED` do piloto, protegido por `AUTOMATION_PILOT_TRIGGER_ENABLED` e
+sem criar Lead, Cliente, Negocio ou Acompanhamento. O endpoint temporario apenas
+enfileira jobs idempotentes; a execucao continua exclusiva do worker dedicado.
 
 ## Operacoes da plataforma
 

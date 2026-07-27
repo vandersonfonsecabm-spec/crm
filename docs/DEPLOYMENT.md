@@ -28,6 +28,17 @@ Nenhum deploy foi executado durante a oficializacao desta arquitetura.
   autorizar sua ativacao, `AUTOMATION_WORKER_ENABLED=true` ou `1` deve ser
   configurado somente no processo dedicado do backend oficial, mantendo uma
   unica replica SQLite e sem usar Pre-Deploy.
+- H8.2 introduz o produtor controlado e o endpoint temporario de piloto. O
+  servico HTTP pode receber `AUTOMATION_PILOT_TRIGGER_ENABLED=true` apenas
+  durante o piloto autorizado, e a variavel deve voltar a ficar ausente ou
+  `false` ao final. O endpoint somente aceita evento sintetico `LEAD_CREATED`,
+  tenant derivado da sessao, operador da plataforma, capability `AUTOMATIONS` e
+  payload fechado; ele nao executa acao nem cria dado comercial.
+- O servico dedicado do worker deve ser criado no mesmo projeto Railway, sem
+  dominio publico, Root Directory `backend`, Start Command
+  `npm run worker:automations`, uma unica replica, `AUTOMATIONS_ENABLED=true` e
+  `AUTOMATION_WORKER_ENABLED=true`. O servico `api` deve manter
+  `AUTOMATION_WORKER_ENABLED` ausente ou `false`.
 
 O Root Directory configurado no painel da plataforma nao e verificavel pelo repositorio. Antes de uma futura publicacao, ele deve ser confirmado por processo de release; uma configuracao incorreta na raiz falhara pelo root runtime guard em vez de iniciar o Nest.
 
@@ -61,6 +72,7 @@ O caminho do volume pertence a configuracao da plataforma e nao e definido neste
 - `AUTOMATION_WORKER_LEASE_MS`
 - `AUTOMATION_WORKER_EXECUTION_TIMEOUT_MS`
 - `AUTOMATION_WORKER_MAX_ATTEMPTS`
+- `AUTOMATION_PILOT_TRIGGER_ENABLED`
 
 `PLATFORM_ADMIN_EMAILS` e uma allowlist operacional separada por virgulas,
 normalizada com `trim` e comparacao case-insensitive. Quando ausente ou vazia,
@@ -83,6 +95,14 @@ processa somente jobs existentes de `CREATE_INTERNAL_EVENT`, com claim atomico,
 lease recuperavel, idempotencia por `actionKey`/`idempotencyKey`, logs
 estruturados sanitizados e shutdown por `SIGTERM`/`SIGINT`. Acoes comerciais ou
 externas nao suportadas falham sem efeito e sem retry infinito.
+
+H8.2 separa produtor e worker: o produtor cria somente execucoes e
+`AutomacaoAcaoJob` idempotentes a partir de evento sintetico protegido; o worker
+dedicado reivindica e processa os jobs. `CREATE_INTERNAL_EVENT` permanece a
+unica acao suportada nesta fase. O evento tecnico de saida nao alimenta o
+produtor novamente, evitando recursao. O piloto operacional deve ativar a regra
+somente pelo tempo necessario, emitir um evento, confirmar uma execucao
+concluida e desativar a regra antes de remover o gate temporario.
 
 ## Render
 
