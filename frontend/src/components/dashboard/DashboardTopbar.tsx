@@ -141,6 +141,7 @@ function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; 
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const displayName = authSession?.usuario.nome || "Usuário local";
+  const userEmail = authSession?.usuario.email;
   const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel);
   const companyName = authSession?.empresa?.nome || "CRM Agro SaaS";
 
@@ -184,6 +185,7 @@ function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; 
         <div className="user-menu absolute right-0 top-11 z-[240] w-64 rounded-lg border p-2 shadow-lg" role="menu">
           <div className="border-b px-2.5 pb-3 pt-2">
             <p className="truncate text-[12px] font-semibold">{displayName}</p>
+            {userEmail && <p className="mt-0.5 truncate text-[11px] text-slate-500">{userEmail}</p>}
             <p className="mt-0.5 truncate text-[11px] text-slate-500">{roleLabel}</p>
           </div>
 
