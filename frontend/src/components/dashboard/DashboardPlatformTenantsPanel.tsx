@@ -1,12 +1,15 @@
-import { Building2, History, RefreshCw, Search, ShieldCheck, ShieldOff } from "lucide-react";
+import { Building2, History, Plus, RefreshCw, Search, ShieldCheck, ShieldOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import {
+  createPlatformTenant,
   fetchPlatformTenant,
   fetchPlatformTenantAutomationsAudit,
   fetchPlatformTenants,
   updatePlatformTenantAutomations,
   type ApiHttpError,
   type PlatformCapabilityAudit,
+  type PlatformTenantCreatePayload,
   type PlatformTenant,
 } from "../../services/crmApi";
 import { Badge, Button, EmptyState, ErrorState, Input, Pagination, SectionHeader, StatusBadge, Surface, Textarea } from "../ui";
@@ -14,6 +17,13 @@ import { cx } from "../ui/utils";
 
 const pageSize = 12;
 const auditPageSize = 6;
+const emptyCreateForm: PlatformTenantCreatePayload = {
+  companyName: "",
+  slug: "",
+  adminName: "",
+  adminEmail: "",
+  adminPassword: "",
+};
 
 export default function DashboardPlatformTenantsPanel() {
   const [tenants, setTenants] = useState<PlatformTenant[]>([]);
@@ -26,9 +36,12 @@ export default function DashboardPlatformTenantsPanel() {
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [reason, setReason] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<PlatformTenantCreatePayload>(emptyCreateForm);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const tenantsRequestRef = useRef(0);
@@ -152,6 +165,40 @@ export default function DashboardPlatformTenantsPanel() {
     }
   }
 
+  async function submitTenantCreation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const confirmed = window.confirm("Criar este tenant com um primeiro usuario ADMIN? Nenhuma capability, regra ou automacao sera ativada.");
+    if (!confirmed) return;
+
+    setCreating(true);
+    setMessage("");
+    setError("");
+    try {
+      const result = await createPlatformTenant({
+        companyName: createForm.companyName.trim(),
+        slug: createForm.slug.trim(),
+        adminName: createForm.adminName.trim(),
+        adminEmail: createForm.adminEmail.trim(),
+        adminPassword: createForm.adminPassword,
+      });
+      setCreateForm(emptyCreateForm);
+      setCreateOpen(false);
+      setSearch("");
+      setAppliedSearch("");
+      setPage(1);
+      setTenants((current) => [result.tenant, ...current.filter((tenant) => tenant.id !== result.tenant.id)]);
+      setSelected(result.tenant);
+      setAudit([]);
+      setAuditPage(1);
+      setMessage(`Tenant ${result.tenant.nome} criado com administrador inicial. Nenhuma capability foi ativada.`);
+    } catch (apiError) {
+      setCreateForm((current) => ({ ...current, adminPassword: "" }));
+      setError(platformErrorMessage(apiError));
+    } finally {
+      setCreating(false);
+    }
+  }
+
   const selectedMeta = useMemo(() => {
     if (!selected) return [];
     return [
@@ -171,19 +218,84 @@ export default function DashboardPlatformTenantsPanel() {
             icon={<ShieldCheck size={15} />}
             title="Tenants da plataforma"
           />
-          <form
-            className="flex w-full max-w-md items-center gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setPage(1);
-              setAppliedSearch(search.trim());
-            }}
-          >
-            <Input aria-label="Buscar tenant" placeholder="Buscar por nome ou slug" value={search} onChange={(event) => setSearch(event.target.value)} />
-            <Button leftIcon={<Search size={14} />} type="submit">Buscar</Button>
-          </form>
+          <div className="flex w-full max-w-2xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <form
+              className="flex min-w-0 flex-1 items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setPage(1);
+                setAppliedSearch(search.trim());
+              }}
+            >
+              <Input aria-label="Buscar tenant" placeholder="Buscar por nome ou slug" value={search} onChange={(event) => setSearch(event.target.value)} />
+              <Button leftIcon={<Search size={14} />} type="submit">Buscar</Button>
+            </form>
+            <Button leftIcon={<Plus size={14} />} onClick={() => setCreateOpen((value) => !value)} type="button" variant="secondary">
+              Criar tenant
+            </Button>
+          </div>
         </div>
       </Surface>
+
+      {createOpen && (
+        <Surface className="p-4">
+          <form className="space-y-3" onSubmit={(event) => void submitTenantCreation(event)}>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-sm font-semibold text-[var(--text-primary)]">Criar tenant interno</h2>
+              <p className="text-[11px] text-[var(--text-muted)]">Cria Empresa e primeiro ADMIN por fluxo restrito. Cadastro publico, capabilities e automacoes permanecem desligados.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <Input
+                autoComplete="organization"
+                label="Empresa"
+                maxLength={120}
+                onChange={(event) => setCreateForm((current) => ({ ...current, companyName: event.target.value }))}
+                required
+                value={createForm.companyName}
+              />
+              <Input
+                autoComplete="off"
+                label="Slug"
+                maxLength={80}
+                onChange={(event) => setCreateForm((current) => ({ ...current, slug: event.target.value }))}
+                required
+                value={createForm.slug}
+              />
+              <Input
+                autoComplete="name"
+                label="Administrador"
+                maxLength={120}
+                onChange={(event) => setCreateForm((current) => ({ ...current, adminName: event.target.value }))}
+                required
+                value={createForm.adminName}
+              />
+              <Input
+                autoComplete="email"
+                label="E-mail"
+                onChange={(event) => setCreateForm((current) => ({ ...current, adminEmail: event.target.value }))}
+                required
+                type="email"
+                value={createForm.adminEmail}
+              />
+              <Input
+                autoComplete="new-password"
+                helperText="Nao e salvo apos o envio."
+                label="Senha inicial"
+                maxLength={128}
+                minLength={8}
+                onChange={(event) => setCreateForm((current) => ({ ...current, adminPassword: event.target.value }))}
+                required
+                type="password"
+                value={createForm.adminPassword}
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button disabled={creating} onClick={() => { setCreateOpen(false); setCreateForm(emptyCreateForm); }} type="button" variant="secondary">Cancelar</Button>
+              <Button disabled={creating} leftIcon={<Plus size={14} />} loading={creating} type="submit">Criar tenant</Button>
+            </div>
+          </form>
+        </Surface>
+      )}
 
       {message && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">{message}</div>}
       {error && <ErrorState className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)]" description={error} onRetry={() => void loadTenants()} title="Operação indisponível" />}
@@ -340,6 +452,7 @@ function platformErrorMessage(error: unknown) {
   if (apiError?.status === 401) return "Sessão expirada. Entre novamente para continuar.";
   if (apiError?.status === 403) return "Acesso restrito ao operador da plataforma.";
   if (apiError?.status === 404) return "Tenant não encontrado.";
+  if (apiError?.status === 409) return apiError.message || "Tenant ou e-mail já cadastrado.";
   if (apiError?.status === 422) return apiError.message;
   if (apiError?.status === 429) return "Muitas operações em pouco tempo. Aguarde e tente novamente.";
   return "Não foi possível carregar operações da plataforma agora.";

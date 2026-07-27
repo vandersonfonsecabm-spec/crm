@@ -14,6 +14,7 @@ const LEGACY_BYPASS_STORAGE_KEYS = ["crm-auth-demo", "crm-premium-clients"] as c
 type ApiAuthResponse = {
   access_token: string;
   expires_at?: string;
+  email?: string;
   user?: {
     id?: number;
     nome?: string;
@@ -104,6 +105,25 @@ export type PlatformCapabilityChange = {
   capability: "AUTOMATIONS";
   previousEnabled: boolean;
   newEnabled: boolean;
+};
+
+export type PlatformTenantCreatePayload = {
+  companyName: string;
+  slug: string;
+  adminName: string;
+  adminEmail: string;
+  adminPassword: string;
+};
+
+export type PlatformTenantCreateResponse = {
+  tenant: PlatformTenant;
+  admin: {
+    id: number;
+    nome: string;
+    email: string;
+    papel: ApiUserRole;
+    ativo: boolean;
+  };
 };
 
 export class ApiHttpError extends Error {
@@ -1480,11 +1500,14 @@ export async function fetchAuthMe() {
     throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
-  const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "empresa" | "papel" | "capabilities" | "isPlatformOperator">;
+  const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "email" | "empresa" | "papel" | "capabilities" | "isPlatformOperator">;
+  const usuario = data.usuario ?? data.user;
+  if (data.email && usuario && !usuario.email) usuario.email = data.email;
   const sessionData: ApiAuthResponse = {
     access_token: token,
     usuario: data.usuario,
     user: data.user,
+    email: data.email,
     empresa: data.empresa,
     papel: data.papel,
     capabilities: normalizeCapabilities(data.capabilities),
@@ -2152,6 +2175,10 @@ export async function fetchPlatformTenants(params: { page?: number; limit?: numb
 
 export async function fetchPlatformTenant(id: number, options: { signal?: AbortSignal } = {}) {
   return requestApiGetAuthenticated<PlatformTenant>(`/platform/tenants/${id}`, options);
+}
+
+export async function createPlatformTenant(payload: PlatformTenantCreatePayload) {
+  return requestApiWrite<PlatformTenantCreateResponse>("POST", "/platform/tenants", payload as unknown as Record<string, unknown>);
 }
 
 export async function updatePlatformTenantAutomations(id: number, payload: { enabled: boolean; reason?: string }) {
