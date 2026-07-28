@@ -12,6 +12,12 @@ const DEFAULT_WORKER_ACTIONS = Object.freeze(["CREATE_INTERNAL_EVENT"]);
 const RETRYABLE_JOB_STATUSES = Object.freeze(["PENDENTE", "FALHOU"]);
 
 function createAutomationService({ prisma, env = process.env }) {
+  const isPostgresRuntime = () => {
+    const mergedEnv = { ...process.env, ...env };
+    if (String(mergedEnv.CRM_TEST_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql") return true;
+    return /^postgres(ql)?:\/\//i.test(String(mergedEnv.CRM_TEST_DATABASE_URL || mergedEnv.DATABASE_URL || ""));
+  };
+
   async function listRules(context, query = {}) {
     requireAutomationAdmin(context);
     await requireTenantFeature(context);
@@ -274,31 +280,185 @@ function createAutomationService({ prisma, env = process.env }) {
   }
 
   async function upsertExecution(client, rule, occurrence, key, snapshot) {
-    try {
-      const exec = await client.automacaoExecucao.create({
-        data: {
-          empresaId: occurrence.empresaId,
-          regraId: rule.id,
-          regraVersao: rule.versao,
-          regraSnapshotJson: JSON.stringify(snapshot),
-          entidadeTipo: occurrence.entityType,
-          entidadeId: occurrence.entityId,
-          leadId: occurrence.leadId || null,
-          negocioId: occurrence.negocioId || null,
-          occurrenceKey: key,
-          idempotencyKey: hashKey(`${occurrence.empresaId}:${rule.id}:${key}`),
-          status: "PENDENTE",
-          resumoJson: occurrence.resumoJson ? JSON.stringify(occurrence.resumoJson) : null,
-          jobs: { create: snapshot.acoes.map((action, index) => ({ empresaId: occurrence.empresaId, indice: index, tipo: action.tipo, actionKey: hashKey(`${occurrence.empresaId}:${rule.id}:${key}:${index}:${action.tipo}`), status: "PENDENTE", nextAttemptAt: new Date() })) },
-        },
-        include: { jobs: true },
-      });
-      return { execution: exec, created: true };
-    } catch (error) {
-      if (error?.code !== "P2002") throw error;
-      const exec = await client.automacaoExecucao.findUnique({ where: { empresaId_regraId_occurrenceKey: { empresaId: occurrence.empresaId, regraId: rule.id, occurrenceKey: key } } });
+    const idempotencyKey = hashKey(`${occurrence.empresaId}:${rule.id}:${key}`);
+    const now = new Date();
+    const inserted = isPostgresRuntime()
+      ? await insertExecutionPostgres(client, { rule, occurrence, key, snapshot, idempotencyKey, now })
+      : await insertExecutionSqlite(client, { rule, occurrence, key, snapshot, idempotencyKey, now });
+    const exec = await client.automacaoExecucao.findUnique({
+      where: { empresaId_regraId_occurrenceKey: { empresaId: occurrence.empresaId, regraId: rule.id, occurrenceKey: key } },
+      include: { jobs: true },
+    });
+    if (inserted === 0) {
+      if (!exec) throw new Error("Conflito de idempotencia sem execucao correspondente.");
       return { execution: exec, created: false };
     }
+    if (!exec) throw new Error("Execucao de automacao criada nao encontrada.");
+    for (const [index, action] of snapshot.acoes.entries()) {
+      const jobInserted = isPostgresRuntime()
+        ? await insertJobPostgres(client, {
+          empresaId: occurrence.empresaId,
+          execucaoId: exec.id,
+          indice: index,
+          tipo: action.tipo,
+          actionKey: hashKey(`${occurrence.empresaId}:${rule.id}:${key}:${index}:${action.tipo}`),
+          now,
+        })
+        : await insertJobSqlite(client, {
+          empresaId: occurrence.empresaId,
+          execucaoId: exec.id,
+          indice: index,
+          tipo: action.tipo,
+          actionKey: hashKey(`${occurrence.empresaId}:${rule.id}:${key}:${index}:${action.tipo}`),
+          now,
+        });
+      if (jobInserted !== 1) throw new Error("Conflito inesperado de actionKey ao criar job de automacao.");
+    }
+    const created = await client.automacaoExecucao.findUnique({
+      where: { id: exec.id },
+      include: { jobs: { orderBy: { indice: "asc" } } },
+    });
+    return { execution: created, created: true };
+  }
+
+  async function insertExecutionSqlite(client, { rule, occurrence, key, snapshot, idempotencyKey, now }) {
+    return client.$executeRaw`
+      INSERT INTO "AutomacaoExecucao" (
+        "empresaId",
+        "regraId",
+        "regraVersao",
+        "regraSnapshotJson",
+        "entidadeTipo",
+        "entidadeId",
+        "leadId",
+        "negocioId",
+        "occurrenceKey",
+        "idempotencyKey",
+        "status",
+        "tentativas",
+        "resumoJson",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${occurrence.empresaId},
+        ${rule.id},
+        ${rule.versao},
+        ${JSON.stringify(snapshot)},
+        ${occurrence.entityType},
+        ${occurrence.entityId},
+        ${occurrence.leadId || null},
+        ${occurrence.negocioId || null},
+        ${key},
+        ${idempotencyKey},
+        ${"PENDENTE"},
+        ${0},
+        ${occurrence.resumoJson ? JSON.stringify(occurrence.resumoJson) : null},
+        ${now},
+        ${now}
+      )
+      ON CONFLICT("empresaId", "regraId", "occurrenceKey") DO NOTHING
+    `;
+  }
+
+  async function insertExecutionPostgres(client, { rule, occurrence, key, snapshot, idempotencyKey, now }) {
+    return client.$executeRaw`
+      INSERT INTO "AutomacaoExecucao" (
+        "empresaId",
+        "regraId",
+        "regraVersao",
+        "regraSnapshotJson",
+        "entidadeTipo",
+        "entidadeId",
+        "leadId",
+        "negocioId",
+        "occurrenceKey",
+        "idempotencyKey",
+        "status",
+        "tentativas",
+        "resumoJson",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${occurrence.empresaId},
+        ${rule.id},
+        ${rule.versao},
+        ${JSON.stringify(snapshot)},
+        CAST(${occurrence.entityType} AS "EntidadeAutomacao"),
+        ${occurrence.entityId},
+        ${occurrence.leadId || null},
+        ${occurrence.negocioId || null},
+        ${key},
+        ${idempotencyKey},
+        CAST(${"PENDENTE"} AS "StatusExecucaoAutomacao"),
+        ${0},
+        ${occurrence.resumoJson ? JSON.stringify(occurrence.resumoJson) : null},
+        ${now},
+        ${now}
+      )
+      ON CONFLICT("empresaId", "regraId", "occurrenceKey") DO NOTHING
+    `;
+  }
+
+  async function insertJobSqlite(client, { empresaId, execucaoId, indice, tipo, actionKey, now }) {
+    return client.$executeRaw`
+      INSERT INTO "AutomacaoAcaoJob" (
+        "empresaId",
+        "execucaoId",
+        "indice",
+        "tipo",
+        "actionKey",
+        "status",
+        "tentativas",
+        "nextAttemptAt",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${empresaId},
+        ${execucaoId},
+        ${indice},
+        ${tipo},
+        ${actionKey},
+        ${"PENDENTE"},
+        ${0},
+        ${now},
+        ${now},
+        ${now}
+      )
+      ON CONFLICT("empresaId", "actionKey") DO NOTHING
+    `;
+  }
+
+  async function insertJobPostgres(client, { empresaId, execucaoId, indice, tipo, actionKey, now }) {
+    return client.$executeRaw`
+      INSERT INTO "AutomacaoAcaoJob" (
+        "empresaId",
+        "execucaoId",
+        "indice",
+        "tipo",
+        "actionKey",
+        "status",
+        "tentativas",
+        "nextAttemptAt",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${empresaId},
+        ${execucaoId},
+        ${indice},
+        CAST(${tipo} AS "AcaoAutomacao"),
+        ${actionKey},
+        CAST(${"PENDENTE"} AS "StatusJobAutomacao"),
+        ${0},
+        ${now},
+        ${now},
+        ${now}
+      )
+      ON CONFLICT("empresaId", "actionKey") DO NOTHING
+    `;
   }
 
   async function processDueJobs({

@@ -147,7 +147,7 @@ async function resetSequences(pgClient, tables) {
         AND column_name = 'id'
     `, [table]);
     if (columns.rowCount !== 1) continue;
-    const sequence = await pgClient.query("SELECT pg_get_serial_sequence($1, 'id') AS seq", [table]);
+    const sequence = await pgClient.query("SELECT pg_get_serial_sequence($1, 'id') AS seq", [quoteIdentifier(table)]);
     const seq = sequence.rows[0]?.seq;
     if (!seq) continue;
     await pgClient.query(`SELECT setval($1::regclass, GREATEST((SELECT COALESCE(MAX("id"), 0) FROM ${quoteIdentifier(table)}), 1), true)`, [seq]);

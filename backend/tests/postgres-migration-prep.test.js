@@ -5,7 +5,8 @@ const { createPrismaClient, validateTestPostgresUrl } = require("../src/database
 const { postgresUrlFromEnv } = require("../scripts/check-postgres-connection.cjs");
 const { databaseEngine, resolveSqliteDatabasePath } = require("../scripts/start-production.cjs");
 const { convertValue, orderedTables, sanitizeError } = require("../scripts/migrate-sqlite-to-postgres.cjs");
-const { postgresSchemaText, sanitize } = require("../scripts/postgres-prisma.cjs");
+const { postgresSchemaText, postgresSchemaWithClientOutput, sanitize } = require("../scripts/postgres-prisma.cjs");
+const { main: runPostgresTests, restoreSqlitePrismaClient } = require("../scripts/run-postgres-tests.cjs");
 
 test("preparacao PostgreSQL deriva provider sem alterar o schema canonico SQLite", () => {
   const sqliteSchema = [
@@ -17,6 +18,62 @@ test("preparacao PostgreSQL deriva provider sem alterar o schema canonico SQLite
   const pgSchema = postgresSchemaText(sqliteSchema);
   assert.match(pgSchema, /provider = "postgresql"/);
   assert.match(sqliteSchema, /provider = "sqlite"/);
+});
+
+test("preparacao PostgreSQL direciona client temporario para output explicito", () => {
+  const schema = [
+    "generator client {",
+    '  provider = "prisma-client-js"',
+    "}",
+  ].join("\n");
+  const pgSchema = postgresSchemaWithClientOutput(schema, "C:/repo/backend/node_modules/.prisma/client");
+  assert.match(pgSchema, /output\s*=\s*"C:\/repo\/backend\/node_modules\/\.prisma\/client"/);
+});
+
+test("runner PostgreSQL restaura Prisma Client SQLite apos sucesso", () => {
+  const calls = [];
+  runPostgresTests({
+    env: { POSTGRES_TEST_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test" },
+    runCommand: (command, args, env) => calls.push({ command, args, env }),
+  });
+  const last = calls.at(-1);
+  assert.match(last.args.join(" "), /generate --schema prisma[\\/]schema\.prisma/);
+  assert.equal(last.env.DATABASE_URL, "file:./prisma/dev.db");
+  assert.equal(last.env.CRM_TEST_DATABASE_PROVIDER, "");
+  assert.equal(calls.filter((call) => call.args.includes("generate")).length, 2);
+});
+
+test("runner PostgreSQL restaura Prisma Client SQLite apos falha sem esconder o erro original", () => {
+  const calls = [];
+  const original = new Error("falha controlada do teste PostgreSQL");
+  assert.throws(() => runPostgresTests({
+    env: { POSTGRES_TEST_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test" },
+    runCommand: (command, args, env) => {
+      calls.push({ command, args, env });
+      if (args.includes("migrate-empty")) throw original;
+    },
+  }), /falha controlada/);
+  const last = calls.at(-1);
+  assert.match(last.args.join(" "), /generate --schema prisma[\\/]schema\.prisma/);
+  assert.equal(last.env.DATABASE_URL, "file:./prisma/dev.db");
+});
+
+test("restauracao do Prisma Client SQLite limpa variaveis temporarias PostgreSQL", () => {
+  const calls = [];
+  restoreSqlitePrismaClient({
+    env: {
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+      CRM_TEST_DATABASE_PROVIDER: "postgresql",
+      CRM_TEST_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+      CRM_TEST_POSTGRES_ALLOW: "true",
+    },
+    runCommand: (command, args, env) => calls.push({ command, args, env }),
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].env.DATABASE_URL, "file:./prisma/dev.db");
+  assert.equal(calls[0].env.CRM_TEST_DATABASE_PROVIDER, "");
+  assert.equal(calls[0].env.CRM_TEST_DATABASE_URL, "");
+  assert.equal(calls[0].env.CRM_TEST_POSTGRES_ALLOW, "");
 });
 
 test("guard de teste PostgreSQL exige URL e confirmacao explicita", () => {

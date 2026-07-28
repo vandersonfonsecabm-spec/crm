@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const { afterEach, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const { createAutomationService } = require("../src/automations/service");
@@ -285,6 +286,66 @@ test("H8.2 produtor controlado cria jobs idempotentes sem entidade comercial", a
   assert.equal(await prisma.acompanhamento.count({ where: { empresaId: tenant.empresa.id } }), 0);
 });
 
+test("H8.2 rollback preserva atomicidade quando conflito inesperado ocorre em regra posterior", async () => {
+  const tenant = await seedTenant("h8-atomicity");
+  const context = adminContext(tenant);
+  const firstRule = await internalEventRule(context, "Primeira regra atomica");
+  const secondRule = await internalEventRule(context, "Segunda regra com conflito");
+  await service.activateRule(context, firstRule.id);
+  await service.activateRule(context, secondRule.id);
+  const lead = await seedLead(tenant);
+  const marker = "unexpected-idempotency-conflict";
+  const key = `LEAD_CREATED:LEAD:${lead.id}:${marker}`;
+
+  await prisma.automacaoExecucao.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      regraId: secondRule.id,
+      regraVersao: secondRule.versao,
+      regraSnapshotJson: JSON.stringify({ acoes: [] }),
+      entidadeTipo: "LEAD",
+      entidadeId: lead.id,
+      leadId: lead.id,
+      occurrenceKey: "different-occurrence",
+      idempotencyKey: hashKey(`${tenant.empresa.id}:${secondRule.id}:${key}`),
+      status: "PENDENTE",
+    },
+  });
+
+  await assert.rejects(
+    prisma.$transaction((tx) => service.enqueueLeadCreated({
+      tx,
+      empresaId: tenant.empresa.id,
+      leadId: lead.id,
+      originalEventId: marker,
+      occurredAt: lead.createdAt,
+    })),
+    /constraint|unique|P2002|P2010|23505|idempotencyKey|already exists/i,
+  );
+
+  assert.equal(await prisma.automacaoExecucao.count({ where: { empresaId: tenant.empresa.id, regraId: firstRule.id, occurrenceKey: key } }), 0);
+  assert.equal(await prisma.automacaoAcaoJob.count({ where: { empresaId: tenant.empresa.id, execucao: { regraId: firstRule.id } } }), 0);
+});
+
+test("H8.2 idempotencia de produtor e isolada por tenant", async () => {
+  const tenantA = await seedTenant("h8-tenant-a");
+  const tenantB = await seedTenant("h8-tenant-b");
+  const contextA = adminContext(tenantA);
+  const contextB = adminContext(tenantB);
+  await service.activateRule(contextA, (await internalEventRule(contextA, "Regra tenant A")).id);
+  await service.activateRule(contextB, (await internalEventRule(contextB, "Regra tenant B")).id);
+
+  const [createdA, createdB] = await Promise.all([
+    service.produceAutomationEvent(pilotEvent(tenantA.empresa.id, "same-business-marker")),
+    service.produceAutomationEvent(pilotEvent(tenantB.empresa.id, "same-business-marker")),
+  ]);
+
+  assert.equal(createdA.createdJobs, 1);
+  assert.equal(createdB.createdJobs, 1);
+  assert.equal(await prisma.automacaoAcaoJob.count({ where: { empresaId: tenantA.empresa.id } }), 1);
+  assert.equal(await prisma.automacaoAcaoJob.count({ where: { empresaId: tenantB.empresa.id } }), 1);
+});
+
 function adminContext(tenant) {
   return { empresaId: tenant.empresa.id, usuarioId: tenant.admin.id, papel: "ADMIN" };
 }
@@ -347,4 +408,8 @@ function pilotEvent(empresaId, key) {
     occurredAt: new Date(),
     payload: { name: "Lead Sintetico H8.2", origin: "PILOT" },
   };
+}
+
+function hashKey(value) {
+  return crypto.createHash("sha256").update(String(value)).digest("hex");
 }

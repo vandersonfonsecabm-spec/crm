@@ -16,7 +16,8 @@ function preparePostgresWorkspace(options = {}) {
   const migrationDir = path.join(migrationsDir, migrationName);
   const schemaPath = path.join(prismaDir, "schema.prisma");
   fs.mkdirSync(migrationDir, { recursive: true });
-  fs.writeFileSync(schemaPath, postgresSchemaText(fs.readFileSync(sqliteSchemaPath, "utf8")));
+  const clientOutput = path.join(backendDir, "node_modules", ".prisma", "client").replace(/\\/g, "/");
+  fs.writeFileSync(schemaPath, postgresSchemaWithClientOutput(postgresSchemaText(fs.readFileSync(sqliteSchemaPath, "utf8")), clientOutput));
   fs.writeFileSync(path.join(migrationsDir, "migration_lock.toml"), 'provider = "postgresql"\n');
   const sql = options.migrationSql || generatePostgresMigrationSql(schemaPath);
   fs.writeFileSync(path.join(migrationDir, "migration.sql"), sql);
@@ -27,6 +28,13 @@ function postgresSchemaText(sqliteSchema) {
   const replaced = sqliteSchema.replace(/provider\s*=\s*"sqlite"/, 'provider = "postgresql"');
   if (replaced === sqliteSchema) throw new Error("Provider SQLite nao encontrado no schema Prisma canonico.");
   return replaced;
+}
+
+function postgresSchemaWithClientOutput(schema, outputPath) {
+  return schema.replace(/generator\s+client\s*{([\s\S]*?)}/, (block, body) => {
+    if (/^\s*output\s*=/m.test(body)) return block;
+    return `generator client {${body}  output   = "${outputPath}"\n}`;
+  });
 }
 
 function generatePostgresMigrationSql(schemaPath) {
@@ -144,7 +152,9 @@ if (require.main === module) {
 
 module.exports = {
   generatePostgresMigrationSql,
+  postgresSchemaWithClientOutput,
   postgresSchemaText,
   preparePostgresWorkspace,
+  resolvePrismaCli,
   sanitize,
 };
