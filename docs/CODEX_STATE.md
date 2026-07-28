@@ -879,3 +879,28 @@ integracoes autorizadas.
   nenhuma mensagem real foi recebida e nenhuma chamada externa foi realizada.
 - Proxima release: F1C-1, ativacao controlada do piloto Meta quando houver
   autenticacao manual disponivel.
+
+## PostgreSQL migration prep
+
+- Preparacao local para migracao SQLite -> PostgreSQL adicionada na branch
+  `feature/postgres-migration-prep`; nenhum cutover de producao foi executado.
+- O schema operacional SQLite em `backend/prisma/schema.prisma` permanece
+  canonico. Scripts em `backend/scripts/postgres-prisma.cjs` derivam um schema
+  PostgreSQL temporario em `%TEMP%`, validam o provider e geram uma baseline
+  SQL reproduzivel para banco PostgreSQL vazio.
+- `backend/scripts/migrate-sqlite-to-postgres.cjs` ensaia ou executa copia de
+  snapshot SQLite para PostgreSQL com origem read-only, batches, ordem por
+  foreign keys, preservacao de IDs/timestamps/tenant/chaves de idempotencia,
+  `ON CONFLICT DO NOTHING`, reset de sequences e validacao de contagens.
+- `backend/scripts/check-postgres-connection.cjs` valida conectividade
+  PostgreSQL sem imprimir URL ou segredo.
+- Guards de runtime passam a reconhecer `postgresql://` para a janela futura,
+  mantendo a protecao atual do SQLite em volume e bloqueio do `dev.db`.
+- Docker local nao estava disponivel nesta execucao; testes PostgreSQL reais
+  dependem de `POSTGRES_TEST_DATABASE_URL` e devem ser executados antes do
+  cutover.
+- `docs/POSTGRES_CUTOVER_RUNBOOK.md` documenta pre-requisitos, backup,
+  congelamento de escrita, baseline, importacao, validacao, troca controlada de
+  `DATABASE_URL`, smoke tests e rollback.
+- Producao, Railway, Vercel, worker, piloto JavaGro, tenant principal e
+  WhatsApp nao foram alterados nesta preparacao.

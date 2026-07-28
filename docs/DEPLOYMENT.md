@@ -48,11 +48,42 @@ O provider operacional atual e SQLite. `DATABASE_URL` deve ser definida explicit
 
 O caminho do volume pertence a configuracao da plataforma e nao e definido neste repositorio. Nao ha seed nem `db push` no deploy. Migrations automaticas existem somente no startup do Railway oficial, com `DATABASE_URL` SQLite dentro do volume persistente e uma unica replica.
 
+## Preparacao PostgreSQL futura
+
+O bloqueio operacional do worker dedicado vem do SQLite preso ao volume do
+servico `api`. Para uma fase futura, o repositorio agora possui scripts de
+preparacao PostgreSQL sem alterar a producao atual:
+
+- `npm --prefix backend run prisma:validate:postgres`: deriva e valida schema
+  PostgreSQL em `%TEMP%`.
+- `npm --prefix backend run prisma:generate:postgres`: gera Prisma Client para
+  PostgreSQL durante uma janela aprovada.
+- `npm --prefix backend run prisma:postgres:migration-sql`: gera a baseline SQL
+  PostgreSQL reproduzivel.
+- `CRM_POSTGRES_MIGRATE_CONFIRM=apply-empty-postgres npm --prefix backend run db:migrate:postgres:empty`:
+  aplica a baseline em um PostgreSQL vazio explicitamente informado.
+- `npm --prefix backend run db:import:sqlite-to-postgres`: ensaia ou executa a
+  copia SQLite -> PostgreSQL com confirmacao separada.
+- `npm --prefix backend run db:postgres:check`: verifica conectividade sem
+  imprimir segredo.
+
+O cutover real deve seguir `docs/POSTGRES_CUTOVER_RUNBOOK.md`. Antes de trocar
+`DATABASE_URL` no Railway, validar contagens, relacoes, login, tenants,
+automacoes e rollback. Durante o cutover, o worker permanece desligado; a
+ativacao do piloto JavaGro e do worker fica para tarefa posterior.
+
 ## Variaveis por nome
 
 - `NODE_ENV`
 - `PORT`
 - `DATABASE_URL`
+- `POSTGRES_TEST_DATABASE_URL`
+- `POSTGRES_TARGET_URL`
+- `CRM_POSTGRES_MIGRATE_CONFIRM`
+- `CRM_POSTGRES_IMPORT_CONFIRM`
+- `POSTGRES_IMPORT_MODE`
+- `POSTGRES_IMPORT_BATCH_SIZE`
+- `SQLITE_SOURCE_PATH`
 - `FRONTEND_URL`
 - `ALLOWED_ORIGINS`
 - `JWT_SECRET`

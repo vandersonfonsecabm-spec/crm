@@ -1,6 +1,8 @@
 # CRM Agro SaaS
 
 CRM para atendimento e gestão comercial, com frontend React/Vite e backend Express + Prisma/SQLite.
+A migracao futura para PostgreSQL esta preparada por scripts e runbook, mas o
+cutover de producao ainda nao foi executado.
 
 ## Estrutura
 
@@ -9,6 +11,7 @@ CRM para atendimento e gestão comercial, com frontend React/Vite e backend Expr
 - `src/` e `prisma/`: Nest/PostgreSQL legado congelado, fora do runtime e do deploy.
 - `docs/ARCHITECTURE.md`: fonte de verdade da arquitetura.
 - `docs/DEPLOYMENT.md`: comandos e restrições de publicação.
+- `docs/POSTGRES_CUTOVER_RUNBOOK.md`: preparacao, cutover e rollback SQLite -> PostgreSQL.
 - `docs/LEGACY_NEST.md`: limites do código legado preservado.
 
 ## Comandos explícitos
@@ -19,6 +22,7 @@ Na raiz, comandos genéricos de runtime falham de propósito para impedir que o 
 npm run backend:dev
 npm run backend:start
 npm run backend:test
+npm --prefix backend run prisma:validate:postgres
 npm run frontend:dev
 npm run frontend:build
 npm run frontend:lint
@@ -59,6 +63,37 @@ VITE_API_URL=http://localhost:3001
 Abra `http://localhost:5173` e autentique-se pelo formulário normal. Sem uma sessão validada em `/auth/me`, nenhuma tela privada é montada.
 
 O Railway deve usar `backend/` como Root Directory. O Vercel constrói exclusivamente `frontend/`. O build nao executa seed nem `prisma db push`; em producao, o startup versionado do backend roda `prisma migrate deploy` somente no Railway oficial, depois do volume SQLite persistente estar montado e antes da API iniciar.
+
+## Preparacao PostgreSQL
+
+O schema SQLite em `backend/prisma/schema.prisma` permanece canonico para o
+runtime atual. A preparacao PostgreSQL deriva um schema equivalente em `%TEMP%`
+para validacao, geracao do Prisma Client PostgreSQL e baseline migration:
+
+```bash
+npm --prefix backend run prisma:validate:postgres
+npm --prefix backend run prisma:postgres:migration-sql
+```
+
+Para um banco PostgreSQL vazio de teste:
+
+```bash
+set POSTGRES_TEST_DATABASE_URL=postgresql://crm_saas_test:crm_saas_test@127.0.0.1:54329/crm_saas_test?schema=public
+set CRM_POSTGRES_MIGRATE_CONFIRM=apply-empty-postgres
+npm --prefix backend run db:migrate:postgres:empty
+```
+
+Para ensaiar importacao de snapshot SQLite:
+
+```bash
+set SQLITE_SOURCE_PATH=C:\caminho\snapshot.db
+set POSTGRES_TARGET_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE?schema=public
+set POSTGRES_IMPORT_MODE=dry-run
+npm --prefix backend run db:import:sqlite-to-postgres
+```
+
+O modo `apply` exige `CRM_POSTGRES_IMPORT_CONFIRM=copy-sqlite-to-postgres`.
+Nao coloque credenciais reais no repositorio.
 
 ## Automacoes internas
 
