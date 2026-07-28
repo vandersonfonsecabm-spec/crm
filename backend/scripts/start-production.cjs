@@ -5,6 +5,7 @@ const { spawn } = require("node:child_process");
 const {
   databaseEngineFromUrl,
   databaseProviderFromEnv,
+  databaseUrlForProvider,
   runtimePrismaConfig,
 } = require("./prisma-runtime.cjs");
 const { maintenanceReadOnlyEnabled } = require("../src/database/maintenance-read-only");
@@ -94,8 +95,8 @@ function validateRailwayEnvironment({
     throw startupError("RAILWAY_DEPLOYMENT_MISSING");
   }
 
-  const databaseUrl = String(env.DATABASE_URL || "").trim();
   const provider = databaseProviderFromEnv(env);
+  const databaseUrl = databaseUrlForProvider(env, provider);
   const engine = databaseEngineFromUrl(databaseUrl);
 
   if (!engine) {

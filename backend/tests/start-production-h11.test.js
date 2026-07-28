@@ -208,10 +208,12 @@ test("cenario 6b: provider PostgreSQL usa schema PostgreSQL e nao exige volume S
     env: {
       ...process.env,
       CRM_DATABASE_PROVIDER: "postgresql",
-      DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+      DATABASE_URL: "file:/app/data/dev.db",
       NODE_ENV: "test",
+      POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
       RAILWAY_DEPLOYMENT_ID: "deployment-postgres",
       RAILWAY_SERVICE_ID: testServiceId,
+      RAILWAY_VOLUME_MOUNT_PATH: "/app/data",
     },
     expectedServiceId: testServiceId,
     logger: quietLogger(),
