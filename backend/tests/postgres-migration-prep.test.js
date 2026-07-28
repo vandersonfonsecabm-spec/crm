@@ -5,7 +5,12 @@ const { createPrismaClient, validateTestPostgresUrl } = require("../src/database
 const { postgresUrlFromEnv } = require("../scripts/check-postgres-connection.cjs");
 const { resolveSqliteDatabasePath } = require("../scripts/start-production.cjs");
 const { convertValue, orderedTables, sanitizeError } = require("../scripts/migrate-sqlite-to-postgres.cjs");
-const { postgresSchemaText, postgresSchemaWithClientOutput, sanitize } = require("../scripts/postgres-prisma.cjs");
+const {
+  postgresSchemaText,
+  postgresSchemaWithClientOutput,
+  preparePostgresWorkspace,
+  sanitize,
+} = require("../scripts/postgres-prisma.cjs");
 const {
   databaseEngineFromUrl,
   databaseUrlForProvider,
@@ -35,6 +40,31 @@ test("preparacao PostgreSQL direciona client temporario para output explicito", 
   ].join("\n");
   const pgSchema = postgresSchemaWithClientOutput(schema, "C:/repo/backend/node_modules/.prisma/client");
   assert.match(pgSchema, /output\s*=\s*"C:\/repo\/backend\/node_modules\/\.prisma\/client"/);
+});
+
+test("workspace PostgreSQL padrao permanece sob o package root do backend", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const backendDirectory = path.resolve(__dirname, "..");
+  const workspace = preparePostgresWorkspace({
+    migrationSql: "-- baseline test\n",
+  });
+  const relativeWorkspace = path.relative(backendDirectory, workspace.root);
+
+  assert.equal(relativeWorkspace.startsWith(".."), false);
+  assert.match(
+    relativeWorkspace,
+    /^node_modules[\\/]\.cache[\\/]crm-postgres-prisma[\\/]/,
+  );
+
+  let packageRoot = path.dirname(workspace.schemaPath);
+  while (
+    packageRoot !== path.dirname(packageRoot) &&
+    !fs.existsSync(path.join(packageRoot, "package.json"))
+  ) {
+    packageRoot = path.dirname(packageRoot);
+  }
+  assert.equal(packageRoot, backendDirectory);
 });
 
 test("runner PostgreSQL restaura Prisma Client SQLite apos sucesso", () => {

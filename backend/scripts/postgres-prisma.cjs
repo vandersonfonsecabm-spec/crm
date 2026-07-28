@@ -1,12 +1,16 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const backendDir = path.resolve(__dirname, "..");
 const sqliteSchemaPath = path.join(backendDir, "prisma", "schema.prisma");
-const workspaceRoot = path.join(os.tmpdir(), "crm-postgres-prisma");
+const workspaceRoot = path.join(
+  backendDir,
+  "node_modules",
+  ".cache",
+  "crm-postgres-prisma",
+);
 const migrationName = "20260728090000_postgres_baseline";
 
 function preparePostgresWorkspace(options = {}) {
