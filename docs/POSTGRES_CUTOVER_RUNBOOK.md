@@ -24,39 +24,67 @@ continuar desligado durante o cutover e so pode ser ativado em etapa posterior.
 - Uma replica para `api` e uma replica para `automation-worker`.
 - `AUTOMATION_WORKER_ENABLED=false` no `api` e no worker durante o cutover.
 - `AUTOMATION_PILOT_TRIGGER_ENABLED` ausente ou `false`.
+- Build com o guard de `CRM_MAINTENANCE_READ_ONLY` publicado e validado.
+- Token autenticado de curta duracao preparado somente em memoria para o smoke
+  de leitura durante o freeze. O login normal atualiza `ultimoLoginEm`.
 
 ## Checklist curta Railway
 
-1. Congelar escrita na aplicacao ou colocar janela de manutencao.
-2. Confirmar ultimo backup SQLite e registrar horario.
-3. Criar PostgreSQL gerenciado vazio.
-4. Rodar conectividade contra PostgreSQL de teste:
+1. Configurar `CRM_MAINTENANCE_READ_ONLY=true` somente na API e aguardar o
+   restart/deploy minimo.
+2. Provar o freeze: `/health` 200, leitura autenticada 200, uma requisicao HTTP
+   mutavel recebe `503`/`MAINTENANCE_READ_ONLY`, worker inativo e nenhuma
+   contagem do SQLite muda.
+3. Confirmar ultimo backup SQLite e registrar horario.
+4. Criar PostgreSQL gerenciado vazio.
+5. Rodar conectividade contra PostgreSQL de teste:
    `npm --prefix backend run db:postgres:check`.
-5. Aplicar baseline PostgreSQL em banco vazio:
+6. Aplicar baseline PostgreSQL em banco vazio:
    `CRM_POSTGRES_MIGRATE_CONFIRM=apply-empty-postgres npm --prefix backend run db:migrate:postgres:empty`.
-6. Importar snapshot SQLite:
+7. Importar snapshot SQLite:
    `POSTGRES_IMPORT_MODE=apply CRM_POSTGRES_IMPORT_CONFIRM=copy-sqlite-to-postgres npm --prefix backend run db:import:sqlite-to-postgres`.
-7. Validar contagens:
+8. Validar contagens:
    `POSTGRES_IMPORT_MODE=validate npm --prefix backend run db:import:sqlite-to-postgres`.
-8. Configurar `POSTGRES_DATABASE_URL` na API com o PostgreSQL validado, manter
+9. Configurar `POSTGRES_DATABASE_URL` na API com o PostgreSQL validado, manter
    `DATABASE_URL` apontando para o SQLite de rollback e configurar
    `CRM_DATABASE_PROVIDER=postgresql`.
-9. Confirmar que o build versionado usa `npm run prisma:generate:runtime`.
-10. Deploy da API com worker desligado.
-11. Smoke autenticado somente leitura: `/health`, login, `/auth/me`,
+10. Confirmar que o build versionado usa `npm run prisma:generate:runtime`.
+11. Deploy da API com worker desligado e maintenance ainda ativo.
+12. Smoke autenticado somente leitura com token curto em memoria: `/health`, `/auth/me`,
    `/clientes`, detalhe de cliente, notas e Cliente 360 quando houver cliente.
-12. Configurar o worker dedicado com a mesma `DATABASE_URL`, ainda desligado.
-13. Somente em tarefa posterior, ativar worker e piloto JavaGro.
+13. Remover `CRM_MAINTENANCE_READ_ONLY` ou configurar `false`, aguardar a API
+    ficar saudavel e confirmar novamente provider e leituras.
+14. Configurar o worker dedicado com o PostgreSQL, ainda desligado.
+15. Somente em tarefa posterior, ativar worker e piloto JavaGro.
 
 ## Sequencia detalhada
 
 ### 1. Congelamento e backup
 
-- Bloquear novas escritas comerciais durante a janela.
+- Configurar `CRM_MAINTENANCE_READ_ONLY=true` somente no servico `api`.
+- Aguardar o restart/deploy minimo e confirmar o log sanitizado
+  `maintenance_read_only_enabled`, sem dump de ambiente.
+- Confirmar `/health` 200 e uma leitura autenticada segura.
+- Confirmar que `POST`, `PUT`, `PATCH` e `DELETE` retornam HTTP `503` com
+  `MAINTENANCE_READ_ONLY`. O callback GET do Bling tambem deve retornar `503`
+  porque ele troca estado OAuth e pode persistir dados.
+- O guard central bloqueia `create`, `createMany`, `update`, `updateMany`,
+  `upsert`, `delete`, `deleteMany`, equivalentes com retorno, SQL raw mutavel e
+  transacoes que tentem executar essas operacoes. Somente consultas raw
+  `SELECT` estaticas, auditadas e marcadas no codigo sao permitidas.
+- O startup pula migrations enquanto maintenance estiver ativo, e o worker
+  recusa iniciar mesmo que seu gate seja ligado por engano.
+- Nao executar, durante o freeze, scripts administrativos, seeds, importadores,
+  Prisma Studio ou qualquer processo separado da API apontado ao SQLite. O
+  guard pertence ao processo da aplicacao e nao substitui controle operacional.
+- Registrar contagens antes do freeze; depois de ativar, tentar os caminhos
+  bloqueados previstos e confirmar que contagens e estado do SQLite nao mudam.
 - Exportar snapshot consistente do SQLite do volume da API.
 - Preservar o arquivo original intacto; o importador abre a origem em modo
   somente leitura quando o runtime suporta.
 - Nao executar `prisma db push`, reset ou seed.
+- Se `/health` cair, uma escrita for aceita, um job surgir ou o volume deixar
+  de ficar acessivel, desativar maintenance, manter SQLite e abortar o cutover.
 
 ### 2. Preparacao PostgreSQL
 
@@ -127,20 +155,24 @@ perdida, abortar o cutover. Esse desenho nao atende rollback seguro.
 
 ### 4.2 Smoke autenticado somente leitura
 
-O smoke operacional usa credenciais temporarias fornecidas no momento da janela,
-somente em memoria:
+O login atualiza `Usuario.ultimoLoginEm` e, por isso, recebe `503` durante o
+freeze. O smoke preferencial nessa etapa usa um token curto emitido pela propria
+logica da aplicacao e mantido somente em memoria:
 
 - `CRM_SMOKE_API_URL`;
-- `CRM_SMOKE_EMAIL`;
-- `CRM_SMOKE_PASSWORD`;
-- `CRM_SMOKE_EMPRESA_SLUG`, apenas quando o e-mail existir em mais de um tenant.
+- `CRM_SMOKE_BEARER_TOKEN`.
 
 Executar `npm --prefix backend run smoke:postgres:readonly` depois da API subir.
-O script faz `POST /auth/login` apenas para obter a sessao e, depois, somente
-`GET /auth/me`, `GET /clientes?page=1&limit=1`, `GET /clientes/:id`,
+Com bearer token, o script nao chama login e executa somente `GET /auth/me`,
+`GET /clientes?page=1&limit=1`, `GET /clientes/:id`,
 `GET /clientes/:id/notas` e `GET /clientes/:id/360` quando existir cliente.
-Ele nao imprime token, cookie, senha ou payload sensivel e nao chama rotas de
-automacao, WhatsApp, e-mail, webhook ou escrita comercial.
+O token deve expirar em ate cinco minutos, nunca ser gravado em `.env`, arquivo
+ou linha de comando persistente, e deve ser removido da memoria ao concluir. O
+script nao imprime token, cookie, senha ou payload sensivel e nao chama rotas
+de automacao, WhatsApp, e-mail, webhook ou escrita comercial.
+
+Fora do freeze, o mesmo smoke ainda pode usar `CRM_SMOKE_EMAIL`,
+`CRM_SMOKE_PASSWORD` e `CRM_SMOKE_EMPRESA_SLUG` para validar o login real.
 
 ### 5. Worker dedicado
 
@@ -169,6 +201,8 @@ automacao, WhatsApp, e-mail, webhook ou escrita comercial.
   intacta e reiniciar/deployar minimamente a API.
 - Nao usar `git reset`, force push, seed, `db push` ou limpeza manual de dados.
 - Reabrir escrita somente apos smoke test do banco restaurado.
+- Remover `CRM_MAINTENANCE_READ_ONLY` ou configurar `false` somente depois de
+  confirmar que o provider restaurado esta saudavel.
 
 ## Criterios para abortar
 
@@ -181,6 +215,9 @@ automacao, WhatsApp, e-mail, webhook ou escrita comercial.
 - Necessidade de sobrescrever `DATABASE_URL` sem copia de rollback comprovada.
 - Falha do smoke autenticado somente leitura.
 - Qualquer chamada externa inesperada.
+- Valor invalido de `CRM_MAINTENANCE_READ_ONLY`.
+- Qualquer tentativa mutavel que nao retorne `503` durante o freeze.
+- Execucao de migration, job, produtor ou script administrativo durante o freeze.
 
 ## Estado atual
 

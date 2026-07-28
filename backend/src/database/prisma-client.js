@@ -1,6 +1,7 @@
 const os = require("node:os");
 const path = require("node:path");
 const { PrismaClient } = require("@prisma/client");
+const { applyMaintenanceReadOnlyGuard } = require("./maintenance-read-only");
 
 const TEST_DATABASE_ROOT = path.resolve(os.tmpdir(), "crm-prisma-tests");
 const REPOSITORY_ROOT = path.resolve(__dirname, "..", "..", "..");
@@ -31,12 +32,17 @@ function validateTestDatabaseUrl(rawUrl, options = {}) {
 function createPrismaClient(options = {}) {
   const env = options.env || process.env;
   const PrismaClientClass = options.PrismaClientClass || PrismaClient;
-  if (env.NODE_ENV !== "test") return new PrismaClientClass();
+  if (env.NODE_ENV !== "test") {
+    return applyMaintenanceReadOnlyGuard(new PrismaClientClass(), { env });
+  }
   if (String(env.CRM_TEST_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql") {
-    return new PrismaClientClass({ datasourceUrl: validateTestPostgresUrl(env.CRM_TEST_DATABASE_URL, env) });
+    return applyMaintenanceReadOnlyGuard(
+      new PrismaClientClass({ datasourceUrl: validateTestPostgresUrl(env.CRM_TEST_DATABASE_URL, env) }),
+      { env },
+    );
   }
   const datasourceUrl = validateTestDatabaseUrl(env.CRM_TEST_DATABASE_URL, options);
-  return new PrismaClientClass({ datasourceUrl });
+  return applyMaintenanceReadOnlyGuard(new PrismaClientClass({ datasourceUrl }), { env });
 }
 
 function validateTestPostgresUrl(rawUrl, env = process.env) {

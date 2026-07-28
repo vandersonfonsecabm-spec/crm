@@ -54,6 +54,28 @@ test("smoke sem cliente pula notas e Cliente 360 sem falhar", async () => {
   assert.deepEqual(result.routes.map((route) => route.path), ["/health", "/auth/login", "/auth/me", "/clientes?page=1&limit=1"]);
 });
 
+test("smoke aceita token curto em memoria e nao chama login durante maintenance", async () => {
+  const calls = [];
+  const result = await runAuthenticatedReadOnlySmoke({
+    baseUrl: "https://api.example.test",
+    fetchImpl: async (url, options = {}) => {
+      const path = new URL(url).pathname;
+      calls.push({ authorization: options.headers?.authorization, method: options.method, path });
+      if (path === "/health") return jsonResponse(200, { status: "ok" });
+      if (path === "/auth/me") return jsonResponse(200, { papel: "ADMIN" });
+      if (path === "/clientes") return jsonResponse(200, { data: [], pagination: { total: 0 } });
+      return jsonResponse(500, {});
+    },
+    token: "temporary-maintenance-token",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.authentication, "bearer-token");
+  assert.deepEqual(calls.map((call) => call.path), ["/health", "/auth/me", "/clientes"]);
+  assert.equal(calls.some((call) => call.path === "/auth/login"), false);
+  assert.equal(JSON.stringify(result).includes("temporary-maintenance-token"), false);
+});
+
 test("smoke bloqueia escrita de negocio e origem externa", async () => {
   assert.throws(() => assertAllowedSmokeRequest("POST", "/clientes"), { code: "SMOKE_WRITE_BLOCKED" });
 

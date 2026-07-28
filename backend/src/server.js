@@ -4,6 +4,12 @@ const express = require("express");
 const cors = require("cors");
 const { Prisma } = require("@prisma/client");
 const { createPrismaClient } = require("./database/prisma-client");
+const {
+  createMaintenanceReadOnlyMiddleware,
+  isMaintenanceReadOnlyError,
+  maintenanceReadOnlyEnabled,
+  markMaintenanceReadOnlyQuery,
+} = require("./database/maintenance-read-only");
 const { createAuth } = require("./auth");
 const { mountIntegrationHubRoutes } = require("./integrations/routes");
 const { mountChannelRoutes } = require("./channels/channelRoutes");
@@ -34,6 +40,10 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const allowedOrigins = getAllowedOrigins();
 
+app.use(createMaintenanceReadOnlyMiddleware({
+  env: process.env,
+  mutatingGetPaths: ["/integracoes/bling/callback"],
+}));
 mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookOrchestrator({ prisma }) });
 app.use(siteLeadBodyLimit);
 app.use(express.json());
@@ -127,7 +137,7 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: 5,
       }),
-      prisma.$queryRaw(Prisma.sql`
+      prisma.$queryRaw(markMaintenanceReadOnlyQuery(Prisma.sql`
         SELECT AVG(
           MIN(100, MAX(0,
             45
@@ -142,7 +152,7 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         ) AS averageScore
         FROM Cliente
         WHERE empresaId = ${empresaId}
-      `),
+      `)),
     ]);
     const statusMap = new Map(porStatus.map((item) => [item.status, item]));
     const statusCount = (status) => statusMap.get(status)?._count?._all || 0;
@@ -2150,6 +2160,13 @@ app.get("/health", (req, res) => {
 });
 
 app.use((error, req, res, next) => {
+  if (isMaintenanceReadOnlyError(error)) {
+    res.set("Retry-After", "60");
+    return res.status(503).json({
+      erro: "Sistema temporariamente em manutencao somente leitura.",
+      codigo: "MAINTENANCE_READ_ONLY",
+    });
+  }
   if (req.path.startsWith("/public/site-leads/") && error?.type === "entity.too.large") {
     return res.status(413).json({
       accepted: false,
@@ -2180,6 +2197,9 @@ app.use((error, req, res, next) => {
 });
 
 function startServer(port = PORT) {
+  if (maintenanceReadOnlyEnabled(process.env)) {
+    console.log(JSON.stringify({ event: "maintenance_read_only_enabled", status: "active" }));
+  }
   return app.listen(port, HOST, () => {
     console.log(`Servidor rodando em ${HOST}:${port}`);
   });

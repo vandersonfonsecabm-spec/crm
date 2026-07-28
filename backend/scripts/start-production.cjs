@@ -7,6 +7,7 @@ const {
   databaseProviderFromEnv,
   runtimePrismaConfig,
 } = require("./prisma-runtime.cjs");
+const { maintenanceReadOnlyEnabled } = require("../src/database/maintenance-read-only");
 
 const BACKEND_DIRECTORY = path.resolve(__dirname, "..");
 const SCHEMA_PATH = path.join(BACKEND_DIRECTORY, "prisma", "schema.prisma");
@@ -21,6 +22,7 @@ async function runStartup(options = {}) {
   const spawnImpl = options.spawnImpl || spawn;
   const signalSource = options.signalSource || process;
   const railway = isRailwayEnvironment(env);
+  const maintenanceReadOnly = maintenanceReadOnlyEnabled(env);
   let runtime = {
     backendDirectory: options.backendDirectory || BACKEND_DIRECTORY,
     schemaPath: options.schemaPath || SCHEMA_PATH,
@@ -45,16 +47,20 @@ async function runStartup(options = {}) {
       throw error;
     }
 
-    logger.log("Executando migrations pendentes");
+    if (maintenanceReadOnly) {
+      logger.log("Maintenance read-only ativo; migrations nao executadas.");
+    } else {
+      logger.log("Executando migrations pendentes");
 
-    try {
-      await (options.runMigration || runPrismaMigration)(runtime, { spawnImpl });
-    } catch (error) {
-      logger.error("Migration falhou; API nao iniciada.");
-      throw error;
+      try {
+        await (options.runMigration || runPrismaMigration)(runtime, { spawnImpl });
+      } catch (error) {
+        logger.error("Migration falhou; API nao iniciada.");
+        throw error;
+      }
+
+      logger.log("Migrations concluidas");
     }
-
-    logger.log("Migrations concluidas");
   }
 
   logger.log("Iniciando API");

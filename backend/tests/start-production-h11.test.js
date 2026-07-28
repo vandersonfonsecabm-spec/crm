@@ -94,6 +94,36 @@ test("cenario 3: Railway atualizado executa no-op e inicia servidor", async () =
   assertDatabase(fixture.databasePath, { migrations: currentMigrationCount, history: 0 });
 });
 
+test("cenario 3b: maintenance read-only pula migration e inicia API", async () => {
+  const fixture = createPrismaFixture("maintenance-read-only");
+  const logs = capturedLogger();
+  const before = migrationRows(fixture.databasePath);
+  let migrationCalls = 0;
+  let serverCalls = 0;
+
+  const code = await runStartup({
+    ...fixture.startupOptions,
+    env: {
+      ...fixture.startupOptions.env,
+      CRM_MAINTENANCE_READ_ONLY: "true",
+    },
+    logger: logs.logger,
+    runMigration: async () => {
+      migrationCalls += 1;
+    },
+    startServer: async () => {
+      serverCalls += 1;
+      return closingChild(0);
+    },
+  });
+
+  assert.equal(code, 0);
+  assert.equal(migrationCalls, 0);
+  assert.equal(serverCalls, 1);
+  assert.equal(migrationRows(fixture.databasePath), before);
+  assert.equal(logs.entries.includes("Maintenance read-only ativo; migrations nao executadas."), true);
+});
+
 test("cenario 4: falha de migration impede servidor e nao vaza segredo", async () => {
   const fixture = createPrismaFixture("migration-failure");
   const logs = capturedLogger();

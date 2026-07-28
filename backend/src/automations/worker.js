@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const { maintenanceReadOnlyEnabled } = require("../database/maintenance-read-only");
 
 const WORKER_DEFAULTS = Object.freeze({
   batchSize: 5,
@@ -17,6 +18,7 @@ const WORKER_LIMITS = Object.freeze({
 });
 
 function shouldStartAutomationWorker(env = process.env) {
+  if (maintenanceReadOnlyEnabled(env)) return false;
   const flag = String(env.AUTOMATION_WORKER_ENABLED || "").trim().toLowerCase();
   return env.NODE_ENV !== "test" && (flag === "true" || flag === "1");
 }

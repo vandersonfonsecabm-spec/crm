@@ -22,6 +22,11 @@ Nenhum deploy foi executado durante a oficializacao desta arquitetura.
 - Start rastreado executa `backend/scripts/start-production.cjs`, que valida o
   ambiente Railway e roda `prisma migrate deploy` no conteiner principal,
   depois da montagem do volume e antes da API aceitar requisicoes.
+- Com `CRM_MAINTENANCE_READ_ONLY=true`, o startup valida provider e volume,
+  gera o Prisma Client correto, pula migrations e inicia a API com uma barreira
+  central de escrita. `/health` e leituras permanecem disponiveis; metodos HTTP
+  mutaveis retornam `503`, o worker nao inicia e mutacoes Prisma/SQL raw sao
+  bloqueadas antes de chegar ao banco.
 - O worker de automacoes internas permanece desligado por padrao. A H8.1
   separa a fundacao em processo dedicado (`npm run worker:automations` dentro
   de `backend/`); o processo HTTP nao inicia polling. Quando uma release futura
@@ -90,6 +95,7 @@ ativacao do piloto JavaGro e do worker fica para tarefa posterior.
 - `NODE_ENV`
 - `PORT`
 - `CRM_DATABASE_PROVIDER`
+- `CRM_MAINTENANCE_READ_ONLY`
 - `DATABASE_URL`
 - `POSTGRES_TEST_DATABASE_URL`
 - `POSTGRES_TARGET_URL`
@@ -119,6 +125,12 @@ ativacao do piloto JavaGro e do worker fica para tarefa posterior.
 - `AUTOMATION_WORKER_EXECUTION_TIMEOUT_MS`
 - `AUTOMATION_WORKER_MAX_ATTEMPTS`
 - `AUTOMATION_PILOT_TRIGGER_ENABLED`
+
+`CRM_MAINTENANCE_READ_ONLY` aceita estritamente `true`/`1` para ativar e
+`false`/`0` ou ausencia para desativar. Valor diferente falha fechado. O modo
+serve somente para a janela de cutover: ele nao troca provider ou URL, nao roda
+migrations e nao substitui backup. Scripts administrativos, seeds, importadores
+e outros processos separados da API devem permanecer parados durante o freeze.
 
 `PLATFORM_ADMIN_EMAILS` e uma allowlist operacional separada por virgulas,
 normalizada com `trim` e comparacao case-insensitive. Quando ausente ou vazia,
