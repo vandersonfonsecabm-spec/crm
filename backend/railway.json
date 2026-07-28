@@ -5,7 +5,7 @@
     "watchPatterns": [
       "/backend/**"
     ],
-    "buildCommand": "npx prisma generate"
+    "buildCommand": "npm run prisma:generate:runtime"
   },
   "deploy": {
     "startCommand": "npm run start:production",

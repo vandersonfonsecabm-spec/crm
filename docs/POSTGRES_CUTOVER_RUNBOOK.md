@@ -16,7 +16,7 @@ continuar desligado durante o cutover e so pode ser ativado em etapa posterior.
 - Backup testado do SQLite do volume da API.
 - PostgreSQL gerenciado criado, vazio e acessivel pela Railway.
 - `POSTGRES_TARGET_URL` disponivel apenas como segredo operacional.
-- Build validado com `npm --prefix backend run prisma:generate:postgres`.
+- Build validado com `CRM_DATABASE_PROVIDER=postgresql npm --prefix backend run prisma:generate:runtime`.
 - Migration baseline validada com `npm --prefix backend run prisma:postgres:migration-sql`.
 - Importador validado em banco de ensaio.
 - Uma replica para `api` e uma replica para `automation-worker`.
@@ -36,8 +36,9 @@ continuar desligado durante o cutover e so pode ser ativado em etapa posterior.
    `POSTGRES_IMPORT_MODE=apply CRM_POSTGRES_IMPORT_CONFIRM=copy-sqlite-to-postgres npm --prefix backend run db:import:sqlite-to-postgres`.
 7. Validar contagens:
    `POSTGRES_IMPORT_MODE=validate npm --prefix backend run db:import:sqlite-to-postgres`.
-8. Trocar `DATABASE_URL` da API para PostgreSQL somente depois da validacao.
-9. Ajustar build da API para gerar Prisma Client PostgreSQL.
+8. Trocar `DATABASE_URL` da API para PostgreSQL somente depois da validacao e
+   configurar `CRM_DATABASE_PROVIDER=postgresql`.
+9. Confirmar que o build versionado usa `npm run prisma:generate:runtime`.
 10. Deploy da API com worker desligado.
 11. Smoke test: `/health`, login, tenants, funil, clientes, agenda e automacoes.
 12. Configurar o worker dedicado com a mesma `DATABASE_URL`, ainda desligado.
@@ -86,8 +87,10 @@ O script nao imprime URL, senha, token, cookie nem payload sensivel.
 ### 4. Cutover da API
 
 - Trocar `DATABASE_URL` da API para PostgreSQL apenas apos importacao validada.
-- Ajustar build para gerar client PostgreSQL:
-  `npm --prefix backend run prisma:generate:postgres`.
+- Configurar `CRM_DATABASE_PROVIDER=postgresql`; se essa variavel divergir da
+  URL, o startup deve falhar antes de iniciar a API.
+- Confirmar build provider-aware:
+  `npm --prefix backend run prisma:generate:runtime`.
 - Deploy da API com `AUTOMATION_WORKER_ENABLED` ausente ou `false`.
 - Confirmar `/health` 200 e ausencia de erro Prisma.
 

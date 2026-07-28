@@ -166,6 +166,73 @@ test("cenario 6: DATABASE_URL fora do volume falha fechada", async () => {
   assert.equal(serverCalls, 0);
 });
 
+test("cenario 6b: provider PostgreSQL usa schema PostgreSQL e nao exige volume SQLite", async () => {
+  const supervisorRunDirectory = process.env.CRM_PRISMA_TEST_RUN_DIR;
+  const schemaPath = path.join(supervisorRunDirectory, "postgres-runtime", "schema.prisma");
+  fs.mkdirSync(path.dirname(schemaPath), { recursive: true });
+  fs.writeFileSync(schemaPath, "generator client {\n  provider = \"prisma-client-js\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url = env(\"DATABASE_URL\")\n}\n");
+  let runtimeSeen = null;
+
+  const code = await runStartup({
+    backendDirectory,
+    env: {
+      ...process.env,
+      CRM_DATABASE_PROVIDER: "postgresql",
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+      NODE_ENV: "test",
+      RAILWAY_DEPLOYMENT_ID: "deployment-postgres",
+      RAILWAY_SERVICE_ID: testServiceId,
+    },
+    expectedServiceId: testServiceId,
+    logger: quietLogger(),
+    preparePrismaRuntime: ({ env, provider }) => ({
+      env,
+      provider,
+      schemaPath,
+    }),
+    prismaCliPath: resolvePrismaCli(backendDirectory),
+    runMigration: async (runtime) => {
+      runtimeSeen = runtime;
+    },
+    startServer: async () => closingChild(0),
+  });
+
+  assert.equal(code, 0);
+  assert.equal(runtimeSeen.provider, "postgresql");
+  assert.equal(runtimeSeen.engine, "postgresql");
+  assert.equal(runtimeSeen.mountPath, null);
+  assert.equal(runtimeSeen.schemaPath, schemaPath);
+});
+
+test("cenario 6c: provider divergente falha antes de migration e servidor", async () => {
+  let migrationCalls = 0;
+  let serverCalls = 0;
+
+  await assert.rejects(runStartup({
+    backendDirectory,
+    env: {
+      ...process.env,
+      CRM_DATABASE_PROVIDER: "postgresql",
+      DATABASE_URL: "file:/app/data/dev.db",
+      NODE_ENV: "test",
+      RAILWAY_DEPLOYMENT_ID: "deployment-provider-mismatch",
+      RAILWAY_SERVICE_ID: testServiceId,
+      RAILWAY_VOLUME_MOUNT_PATH: "/app/data",
+    },
+    expectedMountPath: "/app/data",
+    expectedServiceId: testServiceId,
+    logger: quietLogger(),
+    runMigration: async () => { migrationCalls += 1; },
+    startServer: async () => {
+      serverCalls += 1;
+      return closingChild(0);
+    },
+  }), { code: "DATABASE_PROVIDER_MISMATCH" });
+
+  assert.equal(migrationCalls, 0);
+  assert.equal(serverCalls, 0);
+});
+
 test("cenario 7: SIGTERM e encaminhado uma vez e exit code e preservado", async () => {
   const signalSource = new EventEmitter();
   const child = new EventEmitter();

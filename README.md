@@ -35,7 +35,7 @@ Configure `backend/.env` a partir de `backend/.env.example`, gere o cliente Pris
 
 ```bash
 cd backend
-npm run prisma:generate
+npm run prisma:generate:runtime
 npm start
 ```
 
@@ -67,10 +67,16 @@ O Railway deve usar `backend/` como Root Directory. O Vercel constrói exclusiva
 ## Preparacao PostgreSQL
 
 O schema SQLite em `backend/prisma/schema.prisma` permanece canonico para o
-runtime atual. A preparacao PostgreSQL deriva um schema equivalente em `%TEMP%`
-para validacao, geracao do Prisma Client PostgreSQL e baseline migration:
+runtime atual. O build/start seleciona explicitamente o provider por
+`CRM_DATABASE_PROVIDER`, com default `sqlite` para preservar a producao atual.
+Para cutover PostgreSQL, configure `CRM_DATABASE_PROVIDER=postgresql` junto da
+`DATABASE_URL` PostgreSQL; se provider e URL divergirem, o startup falha antes
+de iniciar a API. A preparacao PostgreSQL deriva um schema equivalente em
+`%TEMP%` para validacao, geracao do Prisma Client PostgreSQL e baseline
+migration:
 
 ```bash
+npm --prefix backend run prisma:generate:runtime
 npm --prefix backend run prisma:validate:postgres
 npm --prefix backend run prisma:postgres:migration-sql
 ```

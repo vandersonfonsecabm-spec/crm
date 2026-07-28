@@ -2,6 +2,11 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const {
+  databaseEngineFromUrl,
+  databaseProviderFromEnv,
+  runtimePrismaConfig,
+} = require("./prisma-runtime.cjs");
 
 const BACKEND_DIRECTORY = path.resolve(__dirname, "..");
 const SCHEMA_PATH = path.join(BACKEND_DIRECTORY, "prisma", "schema.prisma");
@@ -32,6 +37,7 @@ async function runStartup(options = {}) {
         schemaPath: runtime.schemaPath,
         expectedServiceId: options.expectedServiceId || OFFICIAL_SERVICE_ID,
         expectedMountPath: options.expectedMountPath || OFFICIAL_MOUNT_PATH,
+        preparePrismaRuntime: options.preparePrismaRuntime || runtimePrismaConfig,
         prismaCliPath: options.prismaCliPath,
       });
     } catch (error) {
@@ -71,6 +77,7 @@ function validateRailwayEnvironment({
   schemaPath = SCHEMA_PATH,
   expectedServiceId = OFFICIAL_SERVICE_ID,
   expectedMountPath = OFFICIAL_MOUNT_PATH,
+  preparePrismaRuntime = runtimePrismaConfig,
   prismaCliPath,
 }) {
   if (env.RAILWAY_SERVICE_ID !== expectedServiceId) {
@@ -82,10 +89,14 @@ function validateRailwayEnvironment({
   }
 
   const databaseUrl = String(env.DATABASE_URL || "").trim();
-  const engine = databaseEngine(databaseUrl);
+  const provider = databaseProviderFromEnv(env);
+  const engine = databaseEngineFromUrl(databaseUrl);
 
   if (!engine) {
     throw startupError("DATABASE_URL_INVALID");
+  }
+  if (engine !== provider) {
+    throw startupError("DATABASE_PROVIDER_MISMATCH");
   }
 
   let databasePath = null;
@@ -108,24 +119,33 @@ function validateRailwayEnvironment({
     }
   }
 
-  if (!fs.existsSync(schemaPath) || !fs.statSync(schemaPath).isFile()) {
-    throw startupError("PRISMA_SCHEMA_MISSING");
-  }
-
   const resolvedPrismaCli = prismaCliPath || resolvePrismaCli(backendDirectory);
 
   if (!fs.existsSync(resolvedPrismaCli) || !fs.statSync(resolvedPrismaCli).isFile()) {
     throw startupError("PRISMA_CLI_MISSING");
+  }
+  const prismaRuntime = preparePrismaRuntime({
+    backendDirectory,
+    command: "migrate-deploy",
+    env,
+    provider,
+    sqliteSchemaPath: schemaPath,
+  });
+  const runtimeSchemaPath = prismaRuntime.schemaPath;
+
+  if (!fs.existsSync(runtimeSchemaPath) || !fs.statSync(runtimeSchemaPath).isFile()) {
+    throw startupError("PRISMA_SCHEMA_MISSING");
   }
 
   return {
     backendDirectory,
     databasePath,
     engine,
-    env,
+    env: prismaRuntime.env,
     mountPath,
+    provider,
     prismaCliPath: resolvedPrismaCli,
-    schemaPath,
+    schemaPath: runtimeSchemaPath,
   };
 }
 
@@ -223,12 +243,6 @@ function resolvePrismaCli(backendDirectory = BACKEND_DIRECTORY) {
   return path.resolve(path.dirname(packageJsonPath), relativeBin);
 }
 
-function databaseEngine(databaseUrl) {
-  if (String(databaseUrl || "").startsWith("file:")) return "sqlite";
-  if (/^postgres(ql)?:\/\//i.test(String(databaseUrl || ""))) return "postgresql";
-  return null;
-}
-
 function resolveSqliteDatabasePath(databaseUrl, schemaDirectory) {
   const configuredPath = decodeURIComponent(databaseUrl.slice("file:".length).split("?")[0]);
   return path.isAbsolute(configuredPath)
@@ -273,7 +287,6 @@ if (require.main === module) {
 module.exports = {
   OFFICIAL_MOUNT_PATH,
   OFFICIAL_SERVICE_ID,
-  databaseEngine,
   isRailwayEnvironment,
   resolveSqliteDatabasePath,
   resolvePrismaCli,

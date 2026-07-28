@@ -14,7 +14,7 @@ Nenhum deploy foi executado durante a oficializacao desta arquitetura.
 - Plataforma do backend Express.
 - Root Directory esperado: `backend`.
 - As dependencias sao instaladas uma unica vez pela fase automatica do Nixpacks.
-- Build rastreado: `npx prisma generate`, sem repetir `npm ci` no comando customizado.
+- Build rastreado: `npm run prisma:generate:runtime`, sem repetir `npm ci` no comando customizado.
 - Start rastreado: `npm run start:production`.
 - Entrypoint final: `backend/src/server.js`.
 - Health check: `/health`.
@@ -44,9 +44,13 @@ O Root Directory configurado no painel da plataforma nao e verificavel pelo repo
 
 ## SQLite em producao
 
-O provider operacional atual e SQLite. `DATABASE_URL` deve ser definida explicitamente para um arquivo em armazenamento persistente. Um filesystem efemero perde dados entre recriacoes. O runtime bloqueia o banco de desenvolvimento rastreado `backend/prisma/dev.db` em producao e nao imprime a URL configurada.
+O provider operacional atual e SQLite. `CRM_DATABASE_PROVIDER` fica ausente ou
+`sqlite`, e `DATABASE_URL` deve ser definida explicitamente para um arquivo em
+armazenamento persistente. Um filesystem efemero perde dados entre recriacoes. O
+runtime bloqueia o banco de desenvolvimento rastreado `backend/prisma/dev.db` em
+producao e nao imprime a URL configurada.
 
-O caminho do volume pertence a configuracao da plataforma e nao e definido neste repositorio. Nao ha seed nem `db push` no deploy. Migrations automaticas existem somente no startup do Railway oficial, com `DATABASE_URL` SQLite dentro do volume persistente e uma unica replica.
+O caminho do volume pertence a configuracao da plataforma e nao e definido neste repositorio. Nao ha seed nem `db push` no deploy. Migrations automaticas existem somente no startup do Railway oficial. Em SQLite, o startup usa o schema canonico `backend/prisma/schema.prisma` com `DATABASE_URL` dentro do volume persistente e uma unica replica.
 
 ## Preparacao PostgreSQL futura
 
@@ -58,6 +62,8 @@ preparacao PostgreSQL sem alterar a producao atual:
   PostgreSQL em `%TEMP%`.
 - `npm --prefix backend run prisma:generate:postgres`: gera Prisma Client para
   PostgreSQL durante uma janela aprovada.
+- `npm --prefix backend run prisma:generate:runtime`: gera o Prisma Client do
+  provider selecionado por `CRM_DATABASE_PROVIDER`.
 - `npm --prefix backend run prisma:postgres:migration-sql`: gera a baseline SQL
   PostgreSQL reproduzivel.
 - `CRM_POSTGRES_MIGRATE_CONFIRM=apply-empty-postgres npm --prefix backend run db:migrate:postgres:empty`:
@@ -68,14 +74,16 @@ preparacao PostgreSQL sem alterar a producao atual:
   imprimir segredo.
 
 O cutover real deve seguir `docs/POSTGRES_CUTOVER_RUNBOOK.md`. Antes de trocar
-`DATABASE_URL` no Railway, validar contagens, relacoes, login, tenants,
-automacoes e rollback. Durante o cutover, o worker permanece desligado; a
-ativacao do piloto JavaGro e do worker fica para tarefa posterior.
+`DATABASE_URL` no Railway, configurar tambem `CRM_DATABASE_PROVIDER=postgresql`,
+validar contagens, relacoes, login, tenants, automacoes e rollback. Durante o
+cutover, o worker permanece desligado; a ativacao do piloto JavaGro e do worker
+fica para tarefa posterior.
 
 ## Variaveis por nome
 
 - `NODE_ENV`
 - `PORT`
+- `CRM_DATABASE_PROVIDER`
 - `DATABASE_URL`
 - `POSTGRES_TEST_DATABASE_URL`
 - `POSTGRES_TARGET_URL`

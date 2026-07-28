@@ -1,4 +1,8 @@
 const path = require("node:path");
+const {
+  databaseEngineFromUrl,
+  databaseProviderFromEnv,
+} = require("./prisma-runtime.cjs");
 require("dotenv").config();
 
 if (process.env.NODE_ENV !== "production") {
@@ -11,9 +15,20 @@ if (!databaseUrl) {
   fail("DATABASE_URL e obrigatoria em producao.");
 }
 
-const engine = databaseEngine(databaseUrl);
+let provider;
+try {
+  provider = databaseProviderFromEnv(process.env);
+} catch (error) {
+  fail(error.message);
+}
+
+const engine = databaseEngineFromUrl(databaseUrl);
 if (!engine) {
   fail("DATABASE_URL deve apontar explicitamente para SQLite file: ou PostgreSQL postgresql://.");
+}
+
+if (engine !== provider) {
+  fail("CRM_DATABASE_PROVIDER inconsistente com DATABASE_URL.");
 }
 
 if (engine === "sqlite") {
@@ -29,13 +44,7 @@ if (engine === "sqlite") {
   }
 }
 
-console.log(`Configuracao de runtime Express validada para producao (${engine}).`);
-
-function databaseEngine(databaseUrl) {
-  if (databaseUrl.startsWith("file:")) return "sqlite";
-  if (/^postgres(ql)?:\/\//i.test(databaseUrl)) return "postgresql";
-  return null;
-}
+console.log(`Configuracao de runtime Express validada para producao (${provider}).`);
 
 function samePath(left, right) {
   return process.platform === "win32"

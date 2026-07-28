@@ -9,6 +9,8 @@
     "start:production": "node scripts/start-production.cjs",
     "dev": "nodemon src/server.js",
     "prisma:generate": "prisma generate",
+    "prisma:generate:runtime": "node scripts/prisma-runtime.cjs generate",
+    "prisma:migrate:runtime": "node scripts/prisma-runtime.cjs migrate-deploy",
     "prisma:generate:postgres": "node scripts/postgres-prisma.cjs generate",
     "prisma:validate": "prisma validate",
     "prisma:validate:postgres": "node scripts/postgres-prisma.cjs validate",

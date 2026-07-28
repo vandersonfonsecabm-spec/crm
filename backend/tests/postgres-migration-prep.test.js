@@ -3,9 +3,15 @@ const { test } = require("node:test");
 
 const { createPrismaClient, validateTestPostgresUrl } = require("../src/database/prisma-client");
 const { postgresUrlFromEnv } = require("../scripts/check-postgres-connection.cjs");
-const { databaseEngine, resolveSqliteDatabasePath } = require("../scripts/start-production.cjs");
+const { resolveSqliteDatabasePath } = require("../scripts/start-production.cjs");
 const { convertValue, orderedTables, sanitizeError } = require("../scripts/migrate-sqlite-to-postgres.cjs");
 const { postgresSchemaText, postgresSchemaWithClientOutput, sanitize } = require("../scripts/postgres-prisma.cjs");
+const {
+  databaseEngineFromUrl,
+  databaseProviderFromEnv,
+  runPrismaForProvider,
+  runtimePrismaConfig,
+} = require("../scripts/prisma-runtime.cjs");
 const { main: runPostgresTests, restoreSqlitePrismaClient } = require("../scripts/run-postgres-tests.cjs");
 
 test("preparacao PostgreSQL deriva provider sem alterar o schema canonico SQLite", () => {
@@ -104,11 +110,83 @@ test("createPrismaClient seleciona datasource PostgreSQL somente no modo de test
 });
 
 test("startup reconhece SQLite e PostgreSQL sem expor URL", () => {
-  assert.equal(databaseEngine("file:/tmp/crm.db"), "sqlite");
-  assert.equal(databaseEngine("postgresql://user:pass@host:5432/db"), "postgresql");
-  assert.equal(databaseEngine("postgres://user:pass@host:5432/db"), "postgresql");
-  assert.equal(databaseEngine("mysql://host/db"), null);
+  assert.equal(databaseEngineFromUrl("file:/tmp/crm.db"), "sqlite");
+  assert.equal(databaseEngineFromUrl("postgresql://user:pass@host:5432/db"), "postgresql");
+  assert.equal(databaseEngineFromUrl("postgres://user:pass@host:5432/db"), "postgresql");
+  assert.equal(databaseEngineFromUrl("mysql://host/db"), null);
   assert.ok(resolveSqliteDatabasePath("file:./runtime.db", "C:\\app\\prisma").endsWith("runtime.db"));
+});
+
+test("provider de banco usa SQLite por padrao e rejeita valor invalido", () => {
+  assert.equal(databaseProviderFromEnv({}), "sqlite");
+  assert.equal(databaseProviderFromEnv({ CRM_DATABASE_PROVIDER: " PostgreSQL " }), "postgresql");
+  assert.throws(() => databaseProviderFromEnv({ CRM_DATABASE_PROVIDER: "mysql" }), /CRM_DATABASE_PROVIDER/);
+});
+
+test("runtime Prisma seleciona schema SQLite somente para provider SQLite", () => {
+  const config = runtimePrismaConfig({
+    env: { DATABASE_URL: "file:./prisma/dev.db" },
+    provider: "sqlite",
+  });
+  assert.match(config.schemaPath, /backend[\\/]prisma[\\/]schema\.prisma$/);
+  assert.equal(config.env.DATABASE_URL, "file:./prisma/dev.db");
+});
+
+test("runtime Prisma seleciona schema PostgreSQL derivado para provider PostgreSQL", () => {
+  const config = runtimePrismaConfig({
+    env: {
+      CRM_DATABASE_PROVIDER: "postgresql",
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+    },
+    provider: "postgresql",
+    postgresWorkspaceOptions: {
+      root: require("node:fs").mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "crm-pg-runtime-test-")),
+      migrationSql: "-- baseline test\n",
+    },
+  });
+  assert.doesNotMatch(config.schemaPath, /backend[\\/]prisma[\\/]schema\.prisma$/);
+  assert.match(require("node:fs").readFileSync(config.schemaPath, "utf8"), /provider = "postgresql"/);
+  assert.equal(config.env.DATABASE_URL, "postgresql://user:pass@localhost:5432/crm_migration_test");
+});
+
+test("runtime Prisma falha quando provider e DATABASE_URL divergem", () => {
+  assert.throws(() => runtimePrismaConfig({
+    env: {
+      CRM_DATABASE_PROVIDER: "postgresql",
+      DATABASE_URL: "file:./prisma/dev.db",
+    },
+  }), /inconsistente/);
+  assert.throws(() => runtimePrismaConfig({
+    env: {
+      CRM_DATABASE_PROVIDER: "sqlite",
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/db",
+    },
+  }), /inconsistente/);
+});
+
+test("script de build runtime executa Prisma com schema do provider escolhido", () => {
+  const calls = [];
+  const sqlite = runPrismaForProvider("generate", {
+    env: { CRM_DATABASE_PROVIDER: "sqlite", DATABASE_URL: "file:./prisma/dev.db" },
+    runCommand: (command, args, env) => calls.push({ command, args, env }),
+  });
+  assert.match(sqlite.schemaPath, /backend[\\/]prisma[\\/]schema\.prisma$/);
+  assert.match(calls.at(-1).args.join(" "), /generate .*--schema .*backend[\\/]prisma[\\/]schema\.prisma/);
+
+  const postgres = runPrismaForProvider("generate", {
+    env: {
+      CRM_DATABASE_PROVIDER: "postgresql",
+      DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+    },
+    postgresWorkspaceOptions: {
+      root: require("node:fs").mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "crm-pg-build-test-")),
+      migrationSql: "-- baseline test\n",
+    },
+    runCommand: (command, args, env) => calls.push({ command, args, env }),
+  });
+  assert.doesNotMatch(postgres.schemaPath, /backend[\\/]prisma[\\/]schema\.prisma$/);
+  assert.match(calls.at(-1).args.join(" "), /generate .*--schema/);
+  assert.equal(calls.at(-1).env.DATABASE_URL, "postgresql://user:pass@localhost:5432/crm_migration_test");
 });
 
 test("check de conexao PostgreSQL aceita somente URL PostgreSQL explicita", () => {
