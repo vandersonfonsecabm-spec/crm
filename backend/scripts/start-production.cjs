@@ -81,26 +81,31 @@ function validateRailwayEnvironment({
     throw startupError("RAILWAY_DEPLOYMENT_MISSING");
   }
 
-  const mountPath = path.resolve(String(env.RAILWAY_VOLUME_MOUNT_PATH || ""));
-  const requiredMountPath = path.resolve(expectedMountPath);
-
-  if (!env.RAILWAY_VOLUME_MOUNT_PATH || !samePath(mountPath, requiredMountPath)) {
-    throw startupError("RAILWAY_VOLUME_INVALID");
-  }
-
   const databaseUrl = String(env.DATABASE_URL || "").trim();
+  const engine = databaseEngine(databaseUrl);
 
-  if (!databaseUrl.startsWith("file:")) {
+  if (!engine) {
     throw startupError("DATABASE_URL_INVALID");
   }
 
-  const databasePath = resolveDatabasePath(databaseUrl, path.dirname(schemaPath));
-  const trackedDevelopmentDatabase = path.resolve(path.dirname(schemaPath), "dev.db");
-  if (
-    !isPathInside(databasePath, mountPath)
-      || samePath(databasePath, trackedDevelopmentDatabase)
-  ) {
-    throw startupError("DATABASE_PATH_INVALID");
+  let databasePath = null;
+  let mountPath = null;
+  if (engine === "sqlite") {
+    mountPath = path.resolve(String(env.RAILWAY_VOLUME_MOUNT_PATH || ""));
+    const requiredMountPath = path.resolve(expectedMountPath);
+
+    if (!env.RAILWAY_VOLUME_MOUNT_PATH || !samePath(mountPath, requiredMountPath)) {
+      throw startupError("RAILWAY_VOLUME_INVALID");
+    }
+
+    databasePath = resolveSqliteDatabasePath(databaseUrl, path.dirname(schemaPath));
+    const trackedDevelopmentDatabase = path.resolve(path.dirname(schemaPath), "dev.db");
+    if (
+      !isPathInside(databasePath, mountPath)
+        || samePath(databasePath, trackedDevelopmentDatabase)
+    ) {
+      throw startupError("DATABASE_PATH_INVALID");
+    }
   }
 
   if (!fs.existsSync(schemaPath) || !fs.statSync(schemaPath).isFile()) {
@@ -116,6 +121,7 @@ function validateRailwayEnvironment({
   return {
     backendDirectory,
     databasePath,
+    engine,
     env,
     mountPath,
     prismaCliPath: resolvedPrismaCli,
@@ -217,7 +223,13 @@ function resolvePrismaCli(backendDirectory = BACKEND_DIRECTORY) {
   return path.resolve(path.dirname(packageJsonPath), relativeBin);
 }
 
-function resolveDatabasePath(databaseUrl, schemaDirectory) {
+function databaseEngine(databaseUrl) {
+  if (String(databaseUrl || "").startsWith("file:")) return "sqlite";
+  if (/^postgres(ql)?:\/\//i.test(String(databaseUrl || ""))) return "postgresql";
+  return null;
+}
+
+function resolveSqliteDatabasePath(databaseUrl, schemaDirectory) {
   const configuredPath = decodeURIComponent(databaseUrl.slice("file:".length).split("?")[0]);
   return path.isAbsolute(configuredPath)
     ? path.resolve(configuredPath)
@@ -261,8 +273,9 @@ if (require.main === module) {
 module.exports = {
   OFFICIAL_MOUNT_PATH,
   OFFICIAL_SERVICE_ID,
+  databaseEngine,
   isRailwayEnvironment,
-  resolveDatabasePath,
+  resolveSqliteDatabasePath,
   resolvePrismaCli,
   runPrismaMigration,
   runStartup,

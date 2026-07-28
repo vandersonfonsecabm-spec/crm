@@ -32,8 +32,21 @@ function createPrismaClient(options = {}) {
   const env = options.env || process.env;
   const PrismaClientClass = options.PrismaClientClass || PrismaClient;
   if (env.NODE_ENV !== "test") return new PrismaClientClass();
+  if (String(env.CRM_TEST_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql") {
+    return new PrismaClientClass({ datasourceUrl: validateTestPostgresUrl(env.CRM_TEST_DATABASE_URL, env) });
+  }
   const datasourceUrl = validateTestDatabaseUrl(env.CRM_TEST_DATABASE_URL, options);
   return new PrismaClientClass({ datasourceUrl });
+}
+
+function validateTestPostgresUrl(rawUrl, env = process.env) {
+  const value = typeof rawUrl === "string" ? rawUrl.trim() : "";
+  if (!value) throw new Error("CRM_TEST_DATABASE_URL e obrigatoria para testes PostgreSQL.");
+  if (!/^postgres(ql)?:\/\//i.test(value)) throw new Error("CRM_TEST_DATABASE_URL deve usar postgresql:// ou postgres://.");
+  if (env.CRM_TEST_POSTGRES_ALLOW !== "true") {
+    throw new Error("CRM_TEST_POSTGRES_ALLOW=true e obrigatorio para testes PostgreSQL.");
+  }
+  return value;
 }
 
 function isWithin(candidate, parent) {
@@ -41,4 +54,4 @@ function isWithin(candidate, parent) {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-module.exports = { createPrismaClient, validateTestDatabaseUrl, TEST_DATABASE_ROOT };
+module.exports = { createPrismaClient, validateTestDatabaseUrl, validateTestPostgresUrl, TEST_DATABASE_ROOT };

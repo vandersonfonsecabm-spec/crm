@@ -9,13 +9,20 @@
     "start:production": "node scripts/start-production.cjs",
     "dev": "nodemon src/server.js",
     "prisma:generate": "prisma generate",
+    "prisma:generate:postgres": "node scripts/postgres-prisma.cjs generate",
     "prisma:validate": "prisma validate",
+    "prisma:validate:postgres": "node scripts/postgres-prisma.cjs validate",
+    "prisma:postgres:migration-sql": "node scripts/postgres-prisma.cjs migration-sql",
     "db:migrate:manual": "prisma migrate deploy",
+    "db:migrate:postgres:empty": "node scripts/postgres-prisma.cjs migrate-empty",
+    "db:postgres:check": "node scripts/check-postgres-connection.cjs",
+    "db:import:sqlite-to-postgres": "node scripts/migrate-sqlite-to-postgres.cjs",
     "worker:automations": "node src/automations/worker.js",
     "admin:create": "node scripts/create-admin.js",
     "seed": "node prisma/seed.js",
     "railway:start": "npm run start:production",
     "test": "node scripts/run-isolated-prisma-tests.cjs node-suite",
+    "test:postgres": "node scripts/run-postgres-tests.cjs",
     "test:auth": "node --test tests/auth.integration.test.js"
   },
   "keywords": [],
@@ -32,6 +39,7 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
+    "pg": "^8.20.0",
     "prisma": "^6.19.3"
   },
   "devDependencies": {
