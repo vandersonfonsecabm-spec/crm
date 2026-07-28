@@ -19,6 +19,8 @@
     "db:migrate:postgres:empty": "node scripts/postgres-prisma.cjs migrate-empty",
     "db:postgres:check": "node scripts/check-postgres-connection.cjs",
     "db:import:sqlite-to-postgres": "node scripts/migrate-sqlite-to-postgres.cjs",
+    "cutover:postgres:dry-run": "node scripts/postgres-cutover-workflow.cjs --dry-run",
+    "smoke:postgres:readonly": "node scripts/postgres-cutover-smoke.cjs",
     "worker:automations": "node src/automations/worker.js",
     "admin:create": "node scripts/create-admin.js",
     "seed": "node prisma/seed.js",

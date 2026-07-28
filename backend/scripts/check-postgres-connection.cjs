@@ -1,6 +1,6 @@
 function postgresUrlFromEnv(env = process.env) {
-  const value = String(env.POSTGRES_TARGET_URL || env.POSTGRES_TEST_DATABASE_URL || env.DATABASE_URL || "").trim();
-  if (!/^postgres(ql)?:\/\//i.test(value)) throw new Error("Informe uma URL PostgreSQL por POSTGRES_TARGET_URL, POSTGRES_TEST_DATABASE_URL ou DATABASE_URL.");
+  const value = String(env.POSTGRES_TARGET_URL || env.POSTGRES_TEST_DATABASE_URL || env.POSTGRES_DATABASE_URL || env.DATABASE_URL || "").trim();
+  if (!/^postgres(ql)?:\/\//i.test(value)) throw new Error("Informe uma URL PostgreSQL por POSTGRES_TARGET_URL, POSTGRES_TEST_DATABASE_URL, POSTGRES_DATABASE_URL ou DATABASE_URL.");
   return value;
 }
 

@@ -8,6 +8,7 @@ const { convertValue, orderedTables, sanitizeError } = require("../scripts/migra
 const { postgresSchemaText, postgresSchemaWithClientOutput, sanitize } = require("../scripts/postgres-prisma.cjs");
 const {
   databaseEngineFromUrl,
+  databaseUrlForProvider,
   databaseProviderFromEnv,
   runPrismaForProvider,
   runtimePrismaConfig,
@@ -114,6 +115,11 @@ test("startup reconhece SQLite e PostgreSQL sem expor URL", () => {
   assert.equal(databaseEngineFromUrl("postgresql://user:pass@host:5432/db"), "postgresql");
   assert.equal(databaseEngineFromUrl("postgres://user:pass@host:5432/db"), "postgresql");
   assert.equal(databaseEngineFromUrl("mysql://host/db"), null);
+  assert.equal(databaseUrlForProvider({
+    CRM_DATABASE_PROVIDER: "postgresql",
+    DATABASE_URL: "file:/app/data/dev.db",
+    POSTGRES_DATABASE_URL: "postgresql://user:pass@host:5432/db",
+  }, "postgresql"), "postgresql://user:pass@host:5432/db");
   assert.ok(resolveSqliteDatabasePath("file:./runtime.db", "C:\\app\\prisma").endsWith("runtime.db"));
 });
 
@@ -136,7 +142,8 @@ test("runtime Prisma seleciona schema PostgreSQL derivado para provider PostgreS
   const config = runtimePrismaConfig({
     env: {
       CRM_DATABASE_PROVIDER: "postgresql",
-      DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+      DATABASE_URL: "file:/app/data/dev.db",
+      POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
     },
     provider: "postgresql",
     postgresWorkspaceOptions: {
@@ -176,7 +183,8 @@ test("script de build runtime executa Prisma com schema do provider escolhido", 
   const postgres = runPrismaForProvider("generate", {
     env: {
       CRM_DATABASE_PROVIDER: "postgresql",
-      DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+      DATABASE_URL: "file:/app/data/dev.db",
+      POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
     },
     postgresWorkspaceOptions: {
       root: require("node:fs").mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "crm-pg-build-test-")),
@@ -193,6 +201,10 @@ test("check de conexao PostgreSQL aceita somente URL PostgreSQL explicita", () =
   assert.throws(() => postgresUrlFromEnv({ DATABASE_URL: "file:./dev.db" }), /PostgreSQL/);
   assert.equal(
     postgresUrlFromEnv({ POSTGRES_TEST_DATABASE_URL: "postgresql://user:pass@localhost:5432/db" }),
+    "postgresql://user:pass@localhost:5432/db",
+  );
+  assert.equal(
+    postgresUrlFromEnv({ DATABASE_URL: "file:/app/data/dev.db", POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/db" }),
     "postgresql://user:pass@localhost:5432/db",
   );
 });

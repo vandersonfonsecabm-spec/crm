@@ -72,12 +72,18 @@ preparacao PostgreSQL sem alterar a producao atual:
   copia SQLite -> PostgreSQL com confirmacao separada.
 - `npm --prefix backend run db:postgres:check`: verifica conectividade sem
   imprimir segredo.
+- `npm --prefix backend run cutover:postgres:dry-run`: simula localmente o fluxo
+  seguro de cutover/rollback sem chamar Railway real.
+- `npm --prefix backend run smoke:postgres:readonly`: executa smoke autenticado
+  somente leitura durante janela autorizada, com credenciais temporarias em
+  memoria.
 
-O cutover real deve seguir `docs/POSTGRES_CUTOVER_RUNBOOK.md`. Antes de trocar
-`DATABASE_URL` no Railway, configurar tambem `CRM_DATABASE_PROVIDER=postgresql`,
-validar contagens, relacoes, login, tenants, automacoes e rollback. Durante o
-cutover, o worker permanece desligado; a ativacao do piloto JavaGro e do worker
-fica para tarefa posterior.
+O cutover real deve seguir `docs/POSTGRES_CUTOVER_RUNBOOK.md`. Durante a
+primeira troca, manter `DATABASE_URL` apontando para o SQLite de rollback,
+configurar o PostgreSQL em `POSTGRES_DATABASE_URL`, configurar
+`CRM_DATABASE_PROVIDER=postgresql`, validar contagens, relacoes, login, tenants,
+automacoes e rollback. Durante o cutover, o worker permanece desligado; a
+ativacao do piloto JavaGro e do worker fica para tarefa posterior.
 
 ## Variaveis por nome
 
@@ -87,6 +93,7 @@ fica para tarefa posterior.
 - `DATABASE_URL`
 - `POSTGRES_TEST_DATABASE_URL`
 - `POSTGRES_TARGET_URL`
+- `POSTGRES_DATABASE_URL`
 - `CRM_POSTGRES_MIGRATE_CONFIRM`
 - `CRM_POSTGRES_IMPORT_CONFIRM`
 - `POSTGRES_IMPORT_MODE`

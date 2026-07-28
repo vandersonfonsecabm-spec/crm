@@ -32,13 +32,20 @@ function assertProviderMatchesDatabaseUrl(provider, databaseUrl) {
   return engine;
 }
 
+function databaseUrlForProvider(env = process.env, provider = databaseProviderFromEnv(env)) {
+  if (provider === "postgresql") {
+    return String(env.POSTGRES_DATABASE_URL || env.DATABASE_URL || "").trim();
+  }
+  return String(env.DATABASE_URL || "").trim();
+}
+
 function runtimePrismaConfig(options = {}) {
   const env = options.env || process.env;
   const provider = options.provider || databaseProviderFromEnv(env);
   const backendDirectory = options.backendDirectory || backendDir;
   const sqliteSchema = options.sqliteSchemaPath || path.join(backendDirectory, "prisma", "schema.prisma");
   const command = options.command || "generate";
-  const rawDatabaseUrl = String(env.DATABASE_URL || "").trim();
+  const rawDatabaseUrl = databaseUrlForProvider(env, provider);
 
   if (provider === "sqlite") {
     const databaseUrl = rawDatabaseUrl || SQLITE_FALLBACK_URL;
@@ -106,6 +113,7 @@ module.exports = {
   POSTGRES_PLACEHOLDER_URL,
   SQLITE_FALLBACK_URL,
   assertProviderMatchesDatabaseUrl,
+  databaseUrlForProvider,
   databaseEngineFromUrl,
   databaseProviderFromEnv,
   runPrismaForProvider,

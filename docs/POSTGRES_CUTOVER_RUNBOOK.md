@@ -16,6 +16,8 @@ continuar desligado durante o cutover e so pode ser ativado em etapa posterior.
 - Backup testado do SQLite do volume da API.
 - PostgreSQL gerenciado criado, vazio e acessivel pela Railway.
 - `POSTGRES_TARGET_URL` disponivel apenas como segredo operacional.
+- `POSTGRES_DATABASE_URL` planejada para a API no cutover, sem substituir a
+  `DATABASE_URL` SQLite enquanto o rollback ainda for necessario.
 - Build validado com `CRM_DATABASE_PROVIDER=postgresql npm --prefix backend run prisma:generate:runtime`.
 - Migration baseline validada com `npm --prefix backend run prisma:postgres:migration-sql`.
 - Importador validado em banco de ensaio.
@@ -36,11 +38,13 @@ continuar desligado durante o cutover e so pode ser ativado em etapa posterior.
    `POSTGRES_IMPORT_MODE=apply CRM_POSTGRES_IMPORT_CONFIRM=copy-sqlite-to-postgres npm --prefix backend run db:import:sqlite-to-postgres`.
 7. Validar contagens:
    `POSTGRES_IMPORT_MODE=validate npm --prefix backend run db:import:sqlite-to-postgres`.
-8. Trocar `DATABASE_URL` da API para PostgreSQL somente depois da validacao e
-   configurar `CRM_DATABASE_PROVIDER=postgresql`.
+8. Configurar `POSTGRES_DATABASE_URL` na API com o PostgreSQL validado, manter
+   `DATABASE_URL` apontando para o SQLite de rollback e configurar
+   `CRM_DATABASE_PROVIDER=postgresql`.
 9. Confirmar que o build versionado usa `npm run prisma:generate:runtime`.
 10. Deploy da API com worker desligado.
-11. Smoke test: `/health`, login, tenants, funil, clientes, agenda e automacoes.
+11. Smoke autenticado somente leitura: `/health`, login, `/auth/me`,
+   `/clientes`, detalhe de cliente, notas e Cliente 360 quando houver cliente.
 12. Configurar o worker dedicado com a mesma `DATABASE_URL`, ainda desligado.
 13. Somente em tarefa posterior, ativar worker e piloto JavaGro.
 
@@ -86,13 +90,57 @@ O script nao imprime URL, senha, token, cookie nem payload sensivel.
 
 ### 4. Cutover da API
 
-- Trocar `DATABASE_URL` da API para PostgreSQL apenas apos importacao validada.
-- Configurar `CRM_DATABASE_PROVIDER=postgresql`; se essa variavel divergir da
-  URL, o startup deve falhar antes de iniciar a API.
+- Nao sobrescrever a `DATABASE_URL` SQLite durante a primeira troca. Ela e o
+  segredo operacional de rollback e deve continuar preservada na configuracao
+  do servico `api`.
+- Configurar o PostgreSQL validado em `POSTGRES_DATABASE_URL` e configurar
+  `CRM_DATABASE_PROVIDER=postgresql`. O startup injeta a URL PostgreSQL como
+  `DATABASE_URL` somente no processo filho do runtime Prisma/API.
+- Se `CRM_DATABASE_PROVIDER=postgresql` nao encontrar `POSTGRES_DATABASE_URL`
+  nem uma `DATABASE_URL` PostgreSQL, o startup falha antes de iniciar a API.
 - Confirmar build provider-aware:
   `npm --prefix backend run prisma:generate:runtime`.
 - Deploy da API com `AUTOMATION_WORKER_ENABLED` ausente ou `false`.
 - Confirmar `/health` 200 e ausencia de erro Prisma.
+
+### 4.1 Rollback sem exposicao de segredo
+
+O rollback preferencial nao regrava o segredo SQLite:
+
+1. manter `DATABASE_URL` com o valor SQLite anterior durante toda a janela;
+2. aplicar PostgreSQL apenas em `POSTGRES_DATABASE_URL`;
+3. em falha, configurar `CRM_DATABASE_PROVIDER=sqlite`;
+4. remover `POSTGRES_DATABASE_URL` quando for seguro;
+5. reiniciar/deployar minimamente a API e validar `/health` e leituras.
+
+O helper local `npm --prefix backend run cutover:postgres:dry-run` simula esse
+modelo sem chamar Railway real; os testes usam Railway mockado. Em operacao real, qualquer leitura de
+variaveis via Railway CLI deve acontecer somente dentro de processo controlado:
+`railway variable list --json` inclui valores crus e nao deve ter sua saida
+copiada para logs, relatorios ou terminal compartilhado. Para aplicar segredos,
+usar `railway variable set KEY --stdin`, nunca `KEY=valor` na linha de comando,
+`setx`, `.env` ou arquivo temporario.
+
+Se o procedimento em uso exigir sobrescrever `DATABASE_URL` e a unica copia do
+valor SQLite antigo estiver apenas na memoria de uma sessao que pode ser
+perdida, abortar o cutover. Esse desenho nao atende rollback seguro.
+
+### 4.2 Smoke autenticado somente leitura
+
+O smoke operacional usa credenciais temporarias fornecidas no momento da janela,
+somente em memoria:
+
+- `CRM_SMOKE_API_URL`;
+- `CRM_SMOKE_EMAIL`;
+- `CRM_SMOKE_PASSWORD`;
+- `CRM_SMOKE_EMPRESA_SLUG`, apenas quando o e-mail existir em mais de um tenant.
+
+Executar `npm --prefix backend run smoke:postgres:readonly` depois da API subir.
+O script faz `POST /auth/login` apenas para obter a sessao e, depois, somente
+`GET /auth/me`, `GET /clientes?page=1&limit=1`, `GET /clientes/:id`,
+`GET /clientes/:id/notas` e `GET /clientes/:id/360` quando existir cliente.
+Ele nao imprime token, cookie, senha ou payload sensivel e nao chama rotas de
+automacao, WhatsApp, e-mail, webhook ou escrita comercial.
 
 ### 5. Worker dedicado
 
@@ -113,11 +161,12 @@ O script nao imprime URL, senha, token, cookie nem payload sensivel.
 
 ## Rollback
 
-- Se a API falhar antes de liberar escrita, restaurar `DATABASE_URL` SQLite e o
-  deployment anterior da API.
-- Se a falha ocorrer depois da troca, congelar escrita, preservar o PostgreSQL
-  para analise, restaurar o deployment SQLite e apontar novamente para o volume
-  SQLite intacto.
+- Se a API falhar antes de liberar escrita, restaurar `CRM_DATABASE_PROVIDER`
+  para `sqlite`, manter `DATABASE_URL` SQLite e o deployment anterior da API.
+- Se a falha ocorrer depois da troca provider-aware, congelar escrita,
+  preservar o PostgreSQL para analise, voltar `CRM_DATABASE_PROVIDER=sqlite`,
+  remover `POSTGRES_DATABASE_URL` quando seguro, manter `DATABASE_URL` SQLite
+  intacta e reiniciar/deployar minimamente a API.
 - Nao usar `git reset`, force push, seed, `db push` ou limpeza manual de dados.
 - Reabrir escrita somente apos smoke test do banco restaurado.
 
@@ -129,6 +178,8 @@ O script nao imprime URL, senha, token, cookie nem payload sensivel.
 - Regra ativa fora da JavaGro.
 - PostgreSQL com dados antes da baseline sem autorizacao.
 - Segredo exposto em log.
+- Necessidade de sobrescrever `DATABASE_URL` sem copia de rollback comprovada.
+- Falha do smoke autenticado somente leitura.
 - Qualquer chamada externa inesperada.
 
 ## Estado atual
