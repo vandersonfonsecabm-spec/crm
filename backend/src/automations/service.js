@@ -470,69 +470,147 @@ function createAutomationService({ prisma, env = process.env }) {
     maxAttempts = MAX_ATTEMPTS,
     retryDelayMs = DEFAULT_RETRY_DELAY_MS,
     supportedActions = DEFAULT_WORKER_ACTIONS,
+    onEvent = null,
   } = {}) {
     const config = workerConfig({ limit, leaseMs, executionTimeoutMs, maxAttempts, retryDelayMs, supportedActions });
     const results = [];
     for (let index = 0; index < config.limit; index += 1) {
-      const job = await claimDueJob({ now, leaseOwner, config });
+      const job = await claimDueJob({ now, leaseOwner, config, onEvent });
       if (!job) break;
-      results.push(await processJob(job, { now, leaseOwner, config }));
+      results.push(await processJob(job, { now, leaseOwner, config, onEvent }));
     }
     return { processed: results.length, results };
   }
 
-  async function claimDueJob({ now, leaseOwner, config }) {
+  async function claimDueJob({ now, leaseOwner, config, onEvent }) {
     const candidates = await prisma.automacaoAcaoJob.findMany({
       where: dueJobWhere(now, config.maxAttempts),
       orderBy: [{ nextAttemptAt: "asc" }, { id: "asc" }],
       take: config.limit,
-      select: { id: true },
+      select: {
+        id: true,
+        empresaId: true,
+        execucaoId: true,
+        indice: true,
+        tipo: true,
+        status: true,
+        tentativas: true,
+        leaseExpiresAt: true,
+        execucao: { select: { regraId: true, regra: { select: { gatilho: true } } } },
+      },
     });
     for (const candidate of candidates) {
+      notifyWorkerEvent(onEvent, "job_found", jobLogFields(candidate, {
+        attempt: candidate.tentativas + 1,
+        maxAttempts: config.maxAttempts,
+        status: candidate.status,
+      }));
       const leaseUntil = new Date(now.getTime() + config.leaseMs);
+      const claimStartedAt = Date.now();
       const claimed = await prisma.automacaoAcaoJob.updateMany({
         where: { id: candidate.id, ...dueJobWhere(now, config.maxAttempts) },
         data: { status: "PROCESSANDO", leaseOwner, leaseExpiresAt: leaseUntil, tentativas: { increment: 1 } },
       });
       if (claimed.count === 1) {
-        return prisma.automacaoAcaoJob.findUnique({
+        const job = await prisma.automacaoAcaoJob.findUnique({
           where: { id: candidate.id },
           include: { execucao: { include: { regra: true } } },
         });
+        if (!job) return null;
+        const fields = jobLogFields(job, {
+          attempt: job.tentativas,
+          maxAttempts: config.maxAttempts,
+          durationMs: elapsedMs(claimStartedAt),
+          leaseUntil,
+          status: job.status,
+        });
+        if (candidate.status === "PROCESSANDO" && candidate.leaseExpiresAt && candidate.leaseExpiresAt <= now) {
+          notifyWorkerEvent(onEvent, "job_lease_recovered", fields);
+        }
+        notifyWorkerEvent(onEvent, "job_claimed", fields);
+        return job;
       }
     }
     return null;
   }
 
-  async function processJob(job, { now, leaseOwner, config }) {
+  async function processJob(job, { now, leaseOwner, config, onEvent }) {
     const attempt = job.tentativas;
     const snapshot = safeJson(job.execucao.regraSnapshotJson, null);
+    const baseFields = jobLogFields(job, { attempt, maxAttempts: config.maxAttempts });
+    const jobStartedAt = Date.now();
     if (snapshot?.janela && !isWithinWindow(now, snapshot.timezone, snapshot.janela)) {
-      await prisma.automacaoAcaoJob.updateMany({
+      const retryAt = new Date(now.getTime() + 15 * 60000);
+      const deferred = await prisma.automacaoAcaoJob.updateMany({
         where: { id: job.id, leaseOwner, status: "PROCESSANDO" },
-        data: { status: "PENDENTE", nextAttemptAt: new Date(now.getTime() + 15 * 60000), leaseOwner: null, leaseExpiresAt: null },
+        data: { status: "PENDENTE", nextAttemptAt: retryAt, leaseOwner: null, leaseExpiresAt: null },
       });
+      if (deferred.count === 1) {
+        notifyWorkerEvent(onEvent, "job_retry_scheduled", {
+          ...baseFields,
+          durationMs: elapsedMs(jobStartedAt),
+          retryAt,
+          status: "PENDENTE",
+        });
+      }
       return { id: job.id, status: "AGUARDANDO_JANELA" };
     }
+    let actionStartedAt = null;
     try {
-      await prisma.automacaoExecucao.updateMany({
+      const executionStarted = await prisma.automacaoExecucao.updateMany({
         where: { id: job.execucaoId, status: { in: ["PENDENTE", "PROCESSANDO", "FALHOU"] } },
         data: { status: "PROCESSANDO", iniciadaEm: job.execucao.iniciadaEm || now, tentativas: { increment: 1 } },
       });
-      await withTimeout(executeAction(job, { supportedActions: config.supportedActions }), config.executionTimeoutMs);
-      await prisma.automacaoAcaoJob.updateMany({
+      if (executionStarted.count === 1) {
+        notifyWorkerEvent(onEvent, "execution_started", {
+          ...baseFields,
+          durationMs: elapsedMs(jobStartedAt),
+          status: "PROCESSANDO",
+        });
+      }
+      actionStartedAt = Date.now();
+      notifyWorkerEvent(onEvent, "action_started", {
+        ...baseFields,
+        durationMs: 0,
+        status: "PROCESSANDO",
+      });
+      const actionResult = await withTimeout(executeAction(job, { supportedActions: config.supportedActions }), config.executionTimeoutMs);
+      const eventId = baseFields.actionType === "CREATE_INTERNAL_EVENT" ? actionResult?.id : undefined;
+      notifyWorkerEvent(onEvent, "action_succeeded", {
+        ...baseFields,
+        eventId,
+        durationMs: elapsedMs(actionStartedAt),
+        status: "SUCCEEDED",
+      });
+      const succeeded = await prisma.automacaoAcaoJob.updateMany({
         where: { id: job.id, leaseOwner, status: "PROCESSANDO" },
         data: { status: "CONCLUIDO", leaseOwner: null, leaseExpiresAt: null, erroCodigo: null, erroResumo: null },
       });
       await refreshExecutionStatus(job.execucaoId);
+      if (succeeded.count === 1) {
+        notifyWorkerEvent(onEvent, "job_succeeded", {
+          ...baseFields,
+          eventId,
+          durationMs: elapsedMs(jobStartedAt),
+          status: "CONCLUIDO",
+        });
+      }
       return { id: job.id, status: "CONCLUIDO" };
     } catch (error) {
       const final = error.permanent === true || attempt >= config.maxAttempts;
-      await prisma.automacaoAcaoJob.updateMany({
+      if (actionStartedAt !== null) {
+        notifyWorkerEvent(onEvent, "action_failed", {
+          ...baseFields,
+          durationMs: elapsedMs(actionStartedAt),
+          status: "FAILED",
+        }, error);
+      }
+      const retryAt = final ? null : new Date(now.getTime() + config.retryDelayMs);
+      const failed = await prisma.automacaoAcaoJob.updateMany({
         where: { id: job.id, leaseOwner, status: "PROCESSANDO" },
         data: {
           status: final ? "FALHA_DEFINITIVA" : "FALHOU",
-          nextAttemptAt: final ? null : new Date(now.getTime() + config.retryDelayMs),
+          nextAttemptAt: retryAt,
           leaseOwner: null,
           leaseExpiresAt: null,
           erroCodigo: String(error.codigo || error.code || "ACTION_FAILED").slice(0, 80),
@@ -540,6 +618,22 @@ function createAutomationService({ prisma, env = process.env }) {
         },
       });
       await refreshExecutionStatus(job.execucaoId);
+      if (failed.count === 1) {
+        const failureFields = {
+          ...baseFields,
+          durationMs: elapsedMs(jobStartedAt),
+          status: final ? "FALHA_DEFINITIVA" : "FALHOU",
+        };
+        notifyWorkerEvent(onEvent, "job_failed", failureFields, error);
+        if (final) {
+          notifyWorkerEvent(onEvent, "job_attempts_exhausted", failureFields, error);
+        } else {
+          notifyWorkerEvent(onEvent, "job_retry_scheduled", {
+            ...failureFields,
+            retryAt,
+          });
+        }
+      }
       return { id: job.id, status: final ? "FALHA_DEFINITIVA" : "FALHOU" };
     }
   }
@@ -928,6 +1022,29 @@ function eventData(job, entity, tipo, resumo, idempotencyKey, extra = {}) {
   };
 }
 
+function jobLogFields(job, extra = {}) {
+  const snapshot = safeJson(job.execucao?.regraSnapshotJson, null);
+  const action = snapshot?.acoes?.[job.indice];
+  return {
+    tenantId: job.empresaId,
+    ruleId: job.execucao?.regraId,
+    jobId: job.id,
+    executionId: job.execucaoId,
+    actionType: action?.tipo || job.tipo,
+    triggerType: job.execucao?.regra?.gatilho,
+    ...extra,
+  };
+}
+
+function notifyWorkerEvent(onEvent, event, fields, error) {
+  if (typeof onEvent !== "function") return;
+  try {
+    onEvent(event, fields, error);
+  } catch {
+    // Observability must not alter job processing.
+  }
+}
+
 function syntheticEntityId(sourceId) {
   const hash = crypto.createHash("sha256").update(String(sourceId)).digest("hex");
   return (parseInt(hash.slice(0, 8), 16) % 2147480000) + 1;
@@ -972,6 +1089,10 @@ function workerConfig({ limit, leaseMs, executionTimeoutMs, maxAttempts, retryDe
 function boundedInteger(raw, fallback, min, max) {
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
+}
+
+function elapsedMs(startedAt) {
+  return Math.max(0, Date.now() - startedAt);
 }
 
 function dueJobWhere(now, maxAttempts) {

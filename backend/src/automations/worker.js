@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { maintenanceReadOnlyEnabled } = require("../database/maintenance-read-only");
+const { createAutomationWorkerLogger } = require("./worker-observability");
 
 const WORKER_DEFAULTS = Object.freeze({
   batchSize: 5,
@@ -49,8 +50,13 @@ function startAutomationWorker({
   setTimeoutImpl = setTimeout,
   clearTimeoutImpl = clearTimeout,
 } = {}) {
+  const eventLogger = createAutomationWorkerLogger({
+    logger,
+    workerInstanceId: workerId,
+    provider: automationProvider(env),
+  });
   if (!service || !shouldStartAutomationWorker(env)) {
-    logInfo(logger, "worker_disabled", { workerId });
+    eventLogger.info("worker_disabled", { status: "disabled" });
     return { started: false, async stop() {} };
   }
 
@@ -60,13 +66,19 @@ function startAutomationWorker({
   let timer = null;
   let activeCycle = Promise.resolve();
 
-  logInfo(logger, "worker_started", { workerId, status: "started" });
+  eventLogger.info("worker_started", {
+    status: "started",
+    pollIntervalMs: config.pollIntervalMs,
+    batchSize: config.batchSize,
+    leaseMs: config.leaseMs,
+    executionTimeoutMs: config.executionTimeoutMs,
+    maxAttempts: config.maxAttempts,
+  });
 
   async function cycle() {
     if (running || stopping) return;
     running = true;
     const startedAt = Date.now();
-    logInfo(logger, "polling_started", { workerId });
     try {
       await service.processDueJobs({
         now: new Date(),
@@ -76,12 +88,12 @@ function startAutomationWorker({
         executionTimeoutMs: config.executionTimeoutMs,
         maxAttempts: config.maxAttempts,
         supportedActions: ["CREATE_INTERNAL_EVENT"],
+        onEvent: eventLogger.event,
       });
     } catch (error) {
-      logError(logger, "job_failed", error, { workerId });
+      eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt) });
     } finally {
       running = false;
-      logInfo(logger, "polling_finished", { workerId, durationMs: Date.now() - startedAt });
       if (!stopping) timer = setTimeoutImpl(() => {
         activeCycle = cycle();
       }, config.pollIntervalMs);
@@ -99,11 +111,11 @@ function startAutomationWorker({
     async stop() {
       if (stopping) return activeCycle;
       stopping = true;
-      logInfo(logger, "worker_stopping", { workerId });
+      eventLogger.info("worker_stopping", { status: "stopping" });
       if (timer) clearTimeoutImpl(timer);
       timer = null;
       await activeCycle;
-      logInfo(logger, "worker_stopped", { workerId });
+      eventLogger.info("worker_stopped", { status: "stopped" });
     },
   };
 }
@@ -143,24 +155,14 @@ function boundedInteger(raw, fallback, min, max) {
   return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
 }
 
-function logInfo(logger, event, fields = {}) {
-  logger.log(JSON.stringify({ event, ...sanitizeLogFields(fields) }));
+function automationProvider(env = process.env) {
+  const explicit = String(env.CRM_TEST_DATABASE_PROVIDER || env.CRM_DATABASE_PROVIDER || "").trim().toLowerCase();
+  if (explicit === "postgres" || explicit === "postgresql") return "postgresql";
+  return "sqlite";
 }
 
-function logError(logger, event, error, fields = {}) {
-  logger.error(JSON.stringify({
-    event,
-    ...sanitizeLogFields(fields),
-    errorCode: String(error?.codigo || error?.code || "AUTOMATION_WORKER_ERROR").slice(0, 80),
-  }));
-}
-
-function sanitizeLogFields(fields) {
-  const allowed = {};
-  for (const key of ["workerId", "tenantId", "ruleId", "jobId", "executionId", "attempt", "durationMs", "status", "errorCode"]) {
-    if (fields[key] !== undefined && fields[key] !== null) allowed[key] = fields[key];
-  }
-  return allowed;
+function elapsedMs(startedAt) {
+  return Math.max(0, Date.now() - startedAt);
 }
 
 if (require.main === module) {
@@ -169,13 +171,18 @@ if (require.main === module) {
       process.exitCode = code;
     })
     .catch((error) => {
-      console.error(JSON.stringify({ event: "worker_failed", errorCode: String(error?.code || "WORKER_START_FAILED").slice(0, 80) }));
+      createAutomationWorkerLogger({
+        logger: console,
+        workerInstanceId: `automation-worker-${process.pid}`,
+        provider: automationProvider(process.env),
+      }).error("worker_failed", error);
       process.exitCode = 1;
     });
 }
 
 module.exports = {
   WORKER_DEFAULTS,
+  automationProvider,
   readAutomationWorkerConfig,
   runAutomationWorkerProcess,
   shouldStartAutomationWorker,

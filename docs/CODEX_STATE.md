@@ -696,11 +696,23 @@ Data da verificacao: 26/07/2026.
   `[empresaId, idempotencyKey]`; reprocessamento nao duplica evento interno.
   Jobs concluidos nao voltam a pendente; jobs falhos podem ser reprocessados de
   forma controlada pelo endpoint existente, sem tocar em tenant alheio.
-- Logs do worker sao estruturados e sanitizados para eventos como
-  `worker_disabled`, `worker_started`, `polling_started`, `job_failed`,
-  `worker_stopping` e `worker_stopped`, sem senha, token, cookie, Authorization,
-  payload comercial completo, e-mail completo, telefone, documento ou variavel
-  secreta.
+- Logs do worker usam uma linha JSON por transicao confirmada. O ciclo cobre
+  `job_found`, `job_claimed`, `execution_started`, `action_started`,
+  `action_succeeded`, `action_failed`, `job_succeeded`, `job_failed`,
+  `job_retry_scheduled`, `job_attempts_exhausted` e
+  `job_lease_recovered`, alem de `worker_started`, `worker_poll_error`,
+  `worker_stopping` e `worker_stopped`. Polling vazio nao gera ruido em nivel
+  normal.
+- Os campos ficam restritos a timestamp, servico, provider, instancia do worker,
+  IDs tecnicos, tipo da acao/gatilho, tentativa, status, duracao, retry e lease.
+  Erros preservam nome/codigo tecnico, mas a mensagem e limitada e sanitizada
+  contra URL/string de conexao, Bearer, JWT, cookie, e-mail, telefone,
+  CPF/CNPJ, senha, token, secret e API key. Payload, headers, stack, objeto
+  Prisma e dump de ambiente nunca sao serializados.
+- Eventos de sucesso, retry e esgotamento so aparecem depois da respectiva
+  transicao persistida; lease recuperado so aparece depois do claim real.
+  Falha do polling usa `worker_poll_error`, sem atribuir falsamente a falha a
+  um job nao reivindicado.
 - Shutdown por `SIGTERM`/`SIGINT` para de agendar novo polling, aguarda o ciclo
   em andamento e desconecta o Prisma. A infraestrutura SQLite segue limitada a
   uma replica; escala horizontal exige banco compartilhado e coordenacao

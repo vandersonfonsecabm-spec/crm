@@ -154,6 +154,36 @@ lease recuperavel, idempotencia por `actionKey`/`idempotencyKey`, logs
 estruturados sanitizados e shutdown por `SIGTERM`/`SIGINT`. Acoes comerciais ou
 externas nao suportadas falham sem efeito e sem retry infinito.
 
+### Observabilidade do worker de automacoes
+
+Cada linha do worker e JSON independente com `event`, `timestamp`, `service`,
+`workerInstanceId` e `provider`. Quando aplicavel, inclui somente IDs tecnicos
+de tenant, regra, job, execucao e evento, alem de `actionType`, `triggerType`,
+`attempt`, `maxAttempts`, `durationMs`, `status`, `retryAt` e `leaseUntil`.
+`worker_started` registra tambem o intervalo de polling e os limites operacionais
+nao sensiveis.
+
+O ciclo de sucesso emite `job_found`, `job_claimed`, `execution_started`,
+`action_started`, `action_succeeded` e `job_succeeded`, nessa ordem. Falha de
+acao emite `action_failed` e `job_failed`; quando houver nova tentativa, emite
+`job_retry_scheduled` somente depois de persistir `nextAttemptAt`. Sem nova
+tentativa, emite `job_attempts_exhausted`. A recuperacao real de lease expirado
+emite `job_lease_recovered` antes do novo `job_claimed`.
+
+O processo emite `worker_started`, `worker_stopping` e `worker_stopped`. Uma
+falha do ciclo de polling, antes ou fora de um claim confirmado, usa
+`worker_poll_error`; ela nao e registrada como falha de job. Polling vazio nao
+emite evento de job nem linha periodica em nivel normal.
+
+Mensagens de erro sao limitadas e removem URLs, strings de conexao, Bearer,
+JWT, cookies, e-mail, telefone, CPF/CNPJ e marcadores comuns de senha, token,
+secret ou API key. Payloads, headers, stacks, objetos Prisma e dumps de ambiente
+nao sao serializados. Exemplo sanitizado:
+
+```json
+{"event":"job_retry_scheduled","timestamp":"2030-01-01T00:00:00.000Z","service":"automation-worker","workerInstanceId":"worker-example","provider":"postgresql","tenantId":10,"ruleId":20,"jobId":30,"executionId":40,"actionType":"CREATE_INTERNAL_EVENT","triggerType":"LEAD_CREATED","attempt":1,"maxAttempts":3,"durationMs":12,"status":"FALHOU","retryAt":"2030-01-01T00:01:00.000Z"}
+```
+
 H8.2 separa produtor e worker: o produtor cria somente execucoes e
 `AutomacaoAcaoJob` idempotentes a partir de evento sintetico protegido; o worker
 dedicado reivindica e processa os jobs. `CREATE_INTERNAL_EVENT` permanece a
