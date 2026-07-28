@@ -75,7 +75,9 @@ REGRA PERMANENTE — ANÁLISE CRÍTICA, REUSO DE EVIDÊNCIAS
 E EXECUÇÃO NÃO REPETITIVA
 ============================================================
 
-Esta regra deve ser aplicada antes de qualquer tarefa.
+Esta regra deve ser aplicada antes de qualquer tarefa como criterio de decisao.
+Tarefas simples ou estritamente documentais nao exigem auditoria adicional alem
+das verificacoes proporcionais ao risco e ao escopo.
 
 Seu objetivo é impedir:
 
@@ -305,6 +307,9 @@ Exemplos:
 Essas verificações não são desperdício.
 
 São barreiras de segurança ligadas a uma nova operação.
+
+Preflight explicitamente exigido pela tarefa ou por uma operação de risco nunca
+deve ser tratado como redundante.
 
 ============================================================
 8. CORREÇÃO DE ERROS NO COMANDO
@@ -617,6 +622,11 @@ Se uma etapa depender desses dados:
 - usar mecanismo seguro já existente;
 - registrar a dependência;
 - interromper quando não houver meio autorizado.
+
+Se o usuário fornecer explicitamente uma credencial para um fluxo autorizado,
+usar somente no formulário, endpoint ou mecanismo oficial indicado, sem
+persistir, ecoar, documentar, colocar em URL, fixture, log, variável ou comando
+Git.
 
 ============================================================
 20. RELATÓRIO FINAL
