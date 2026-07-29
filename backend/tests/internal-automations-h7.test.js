@@ -240,6 +240,78 @@ test("H8.3 ASSIGN_OWNER reverte atribuicao se o historico falhar", async () => {
   assert.equal(await prisma.historicoAtribuicao.count({ where: { empresaId: tenant.empresa.id } }), 0);
 });
 
+test("H8.3 projecao standalone e CREATE_FOLLOW_UP usam o helper sem liberar a acao", async () => {
+  const tenant = await seedTenant("h8-3-follow-up-projection");
+  const context = adminContext(tenant);
+  const lead = await seedLead(tenant);
+  const client = await prisma.cliente.findUniqueOrThrow({ where: { id: lead.clienteId } });
+  const projectionRule = await createLegacyRule(context, "Projecao legada", {
+    tipo: "UPDATE_NEXT_FOLLOW_UP_PROJECTION",
+  }, { active: true });
+  await prisma.acompanhamento.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      clienteId: client.id,
+      leadId: lead.id,
+      titulo: "Fonte canonica",
+      dataHora: new Date("2030-08-05T12:00:00.000Z"),
+      status: "PENDENTE",
+    },
+  });
+  await seedActionJob({
+    tenant,
+    rule: projectionRule,
+    entityType: "LEAD",
+    entity: lead,
+    marker: "projection-standalone",
+  });
+  await service.processDueJobs({
+    now: new Date(),
+    limit: 1,
+    leaseOwner: "projection-worker",
+    supportedActions: ["UPDATE_NEXT_FOLLOW_UP_PROJECTION"],
+  });
+  assert.equal(
+    (await prisma.cliente.findUniqueOrThrow({ where: { id: client.id } })).proximoFollowUp,
+    "2030-08-05T12:00:00.000Z",
+  );
+
+  const secondLead = await seedLead(tenant);
+  const createRule = await createLegacyRule(context, "Follow-up legado", {
+    tipo: "CREATE_FOLLOW_UP",
+    delayMinutos: 30,
+    titulo: "Acompanhamento criado pela automacao",
+    descricao: "Acompanhamento interno.",
+    prioridade: "MEDIA",
+    tipoAcompanhamento: "RETORNO",
+  }, { active: true });
+  await seedActionJob({
+    tenant,
+    rule: createRule,
+    entityType: "LEAD",
+    entity: secondLead,
+    marker: "projection-create-follow-up",
+  });
+  const creation = await service.processDueJobs({
+    now: new Date(),
+    limit: 1,
+    leaseOwner: "follow-up-worker",
+    supportedActions: ["CREATE_FOLLOW_UP"],
+  });
+  assert.equal(creation.processed, 1, JSON.stringify(creation));
+  assert.equal(creation.results[0].status, "CONCLUIDO", JSON.stringify(creation));
+  const createdFollowUp = await prisma.acompanhamento.findFirstOrThrow({
+    where: { empresaId: tenant.empresa.id, leadId: secondLead.id },
+    orderBy: { id: "desc" },
+  });
+  assert.equal(
+    (await prisma.cliente.findUniqueOrThrow({ where: { id: secondLead.clienteId } })).proximoFollowUp,
+    createdFollowUp.dataHora.toISOString(),
+  );
+  assert.equal(WORKER_ACTION_TYPES.includes("UPDATE_NEXT_FOLLOW_UP_PROJECTION"), false);
+  assert.equal(PILOT_ACTION_TYPES.includes("UPDATE_NEXT_FOLLOW_UP_PROJECTION"), false);
+});
+
 test("H7 varre gatilhos temporais e o worker permanece desligado por padrao em teste", async () => {
   const tenant = await seedTenant("h7-temporal");
   const context = adminContext(tenant);

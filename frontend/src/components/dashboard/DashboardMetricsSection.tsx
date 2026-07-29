@@ -13,6 +13,7 @@ import {
 import DashboardMetricStrip from "./DashboardMetricStrip";
 import type { ApiDashboardSummary } from "../../services/crmApi";
 import type { ActivePage, Client } from "../../types/dashboard";
+import { classifyNextFollowUp } from "../../utils/followUpProjection";
 
 type DashboardMetricsSectionProps = {
   activePage: ActivePage;
@@ -65,7 +66,7 @@ export default function DashboardMetricsSection({
   if (activePage === "agenda") {
     return (
       <DashboardMetricStrip metrics={[
-        { label: "Acompanhamentos hoje", value: String(clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length), context: "Agenda imediata", icon: <Bell size={15} />, tone: "info" },
+        { label: "Acompanhamentos hoje", value: String(clients.filter((client) => classifyNextFollowUp(client.nextFollowUp) === "TODAY").length), context: "Agenda imediata", icon: <Bell size={15} />, tone: "info" },
         { label: "Sem contato", value: String(clients.filter((client) => client.lastContactDays >= 7).length), context: "Retomar relação", icon: <AlertTriangle size={15} />, tone: "danger" },
         { label: "Propostas", value: String(clients.filter((client) => client.status === "Proposta").length), context: "Janelas abertas", icon: <Target size={15} />, tone: "warning" },
         { label: "Notas recentes", value: String(clients.reduce((sum, client) => sum + client.notes.length, 0)), context: "Histórico comercial", icon: <StickyNote size={15} /> },

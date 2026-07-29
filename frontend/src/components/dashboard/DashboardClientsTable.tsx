@@ -6,6 +6,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import type { Client, Status } from "../../types/dashboard";
+import { formatNextFollowUp } from "../../utils/followUpProjection";
 import { EmptyState, IconButton, Pagination, SectionHeader, Surface } from "../ui";
 
 type DashboardClientsTableProps = {
@@ -208,7 +209,7 @@ function ClientTableRow({
       </td>
 
       <td className="px-3 py-3 align-middle">
-        <p className="truncate text-[11px] font-medium text-[var(--text-primary)]" title={client.nextFollowUp}>{client.nextFollowUp}</p>
+        <p className="truncate text-[11px] font-medium text-[var(--text-primary)]" title={formatNextFollowUp(client.nextFollowUp)}>{formatNextFollowUp(client.nextFollowUp)}</p>
         <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{leadOwner(client)} · {idleLabel(client)}</p>
       </td>
 

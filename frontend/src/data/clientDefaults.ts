@@ -17,7 +17,7 @@ export const emptyClient: Client = {
   favorite: false,
   hot: false,
   lastContactDays: 0,
-  nextFollowUp: "Hoje",
+  nextFollowUp: "Sem acompanhamento",
   tags: [],
   notes: [],
 };

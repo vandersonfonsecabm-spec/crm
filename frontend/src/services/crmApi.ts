@@ -2452,7 +2452,7 @@ function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
     favorite: fallback?.favorite ?? Boolean(cliente.favorito),
     hot: fallback?.hot ?? (Boolean(cliente.quente) || value >= 12000 || status === "Proposta"),
     lastContactDays: fallback?.lastContactDays ?? cliente.ultimoContato ?? 0,
-    nextFollowUp: fallback?.nextFollowUp ?? cliente.proximoFollowUp ?? "Hoje",
+    nextFollowUp: cliente.proximoFollowUp ?? fallback?.nextFollowUp ?? "Sem acompanhamento",
     tags: fallback?.tags?.length ? fallback.tags : parseTags(cliente.tags),
     notes: fallback?.notes ?? buildNotes(cliente),
     revision: cliente.revisao ?? fallback?.revision,
@@ -2476,7 +2476,6 @@ function clientToPayload(client: Client): ClientePayload {
     favorito: client.favorite,
     quente: client.hot,
     ultimoContato: client.lastContactDays,
-    proximoFollowUp: client.nextFollowUp,
     tags: client.tags,
   };
 }

@@ -1,5 +1,6 @@
 import { ArrowRight, RefreshCw } from "lucide-react";
 import type { Client } from "../../types/dashboard";
+import { formatNextFollowUp } from "../../utils/followUpProjection";
 import { Button, Surface, Toolbar } from "../ui";
 
 type DashboardContextToolbarProps = {
@@ -31,7 +32,7 @@ export default function DashboardContextToolbar({
             <span className="h-5 w-px shrink-0 bg-[var(--border-default)]" aria-hidden="true" />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[12px] font-semibold text-[var(--text-primary)]">{priorityClient.name}</span>
-              <span className="block truncate text-[10px] text-[var(--text-muted)]">{priorityClient.status} · {money(priorityClient.value)} · {priorityClient.nextFollowUp}</span>
+              <span className="block truncate text-[10px] text-[var(--text-muted)]">{priorityClient.status} · {money(priorityClient.value)} · {formatNextFollowUp(priorityClient.nextFollowUp)}</span>
             </span>
             <ArrowRight className="shrink-0 text-[var(--icon-muted)] group-hover:text-[var(--primary)]" size={13} />
           </button>

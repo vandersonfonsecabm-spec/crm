@@ -1,4 +1,8 @@
 const { domainError, isManager, notFound, requireResponsibleOrManager } = require("./policy");
+const {
+  reconcileClientProjections,
+  withProjectionRetry,
+} = require("../follow-up-projection");
 
 const PRIORITIES = ["BAIXA", "MEDIA", "ALTA", "CRITICA"];
 const ACTIVE_BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA"];
@@ -12,7 +16,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
 
   async function saveCommercialQualification(context, conversationId, input) {
     const qualification = parseQualification(input);
-    await prisma.$transaction(async (tx) => {
+    await withProjectionRetry(prisma, async (tx) => {
       const conversation = await loadConversation(tx, context, conversationId);
       requireCommercialWrite(context, conversation);
       const { cliente, lead } = requireCommercialEntities(conversation);
@@ -44,9 +48,6 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
         data: {
           interesse: qualification.interesse,
           ...(qualification.valorEstimado === null ? {} : { valor: qualification.valorEstimado }),
-          proximoFollowUp: qualification.dataRetorno
-            ? qualification.dataRetorno.toISOString().slice(0, 10)
-            : qualification.proximaAcao,
           revisao: { increment: 1 },
         },
       });
@@ -65,6 +66,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
           responsavel: author.nome,
         },
       });
+      await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds: [cliente.id] });
       await createCommercialHistory(tx, context, conversation, {
         acao: "QUALIFICAR",
         ...qualification,

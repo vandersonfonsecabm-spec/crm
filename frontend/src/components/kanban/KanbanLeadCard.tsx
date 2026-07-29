@@ -1,6 +1,7 @@
 import { GripVertical, MessageSquareText, Timer } from "lucide-react";
 import { useState } from "react";
 import type { Client, Status } from "../../types/dashboard";
+import { formatNextFollowUp } from "../../utils/followUpProjection";
 
 type KanbanLeadCardProps = {
   client: Client;
@@ -110,7 +111,7 @@ export default function KanbanLeadCard({
       <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-t border-[var(--border-default)] pt-2 text-[11px]">
         <div className="min-w-0">
           <p className="text-[var(--text-muted)]">Próxima ação</p>
-          <p className="mt-0.5 truncate font-medium text-[var(--text-primary)]">{client.nextFollowUp}</p>
+          <p className="mt-0.5 truncate font-medium text-[var(--text-primary)]">{formatNextFollowUp(client.nextFollowUp)}</p>
         </div>
         <div className="text-right">
           <p className="inline-flex items-center gap-1 text-[var(--text-muted)]"><Timer size={11} /> SLA</p>

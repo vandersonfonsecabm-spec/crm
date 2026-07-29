@@ -1,6 +1,11 @@
 const { domainError, isManager, notFound } = require("../leads-communication/policy");
+const {
+  ACTIVE_FOLLOW_UP_STATUSES,
+  reconcileClientProjections,
+  withProjectionRetry,
+} = require("../follow-up-projection");
 
-const ACTIVE_STATUSES = ["PENDENTE", "EM_ANDAMENTO"];
+const ACTIVE_STATUSES = ACTIVE_FOLLOW_UP_STATUSES;
 const STATUSES = new Set([...ACTIVE_STATUSES, "CONCLUIDO", "CANCELADO"]);
 const PRIORITIES = new Set(["BAIXA", "MEDIA", "ALTA", "URGENTE", "CRITICA"]);
 const TYPES = new Set(["TAREFA", "RETORNO", "REUNIAO", "LIGACAO", "VISITA", "OUTRO", "WHATSAPP", "EMAIL"]);
@@ -109,9 +114,10 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
       status: "PENDENTE",
     };
     const observacao = optionalText(body.observacao, "observacao", 500);
-    const created = await prisma.$transaction(async (tx) => {
+    const created = await withProjectionRetry(prisma, async (tx) => {
       const item = await tx.acompanhamento.create({ data });
       await writeHistory(tx, context, item.id, "CRIAR", { statusNovo: "PENDENTE", responsavelNovoId: responsavel.id, dataHoraNova: data.dataHora, observacao });
+      await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds: [item.clienteId] });
       return item;
     });
     return get(context, created.id);
@@ -147,7 +153,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
       revisao: { increment: 1 },
     };
     const observacao = optionalText(body.observacao, "observacao", 500);
-    await prisma.$transaction(async (tx) => {
+    await withProjectionRetry(prisma, async (tx) => {
       const result = await tx.acompanhamento.updateMany({ where: { id: current.id, empresaId: context.empresaId, revisao: revision }, data });
       if (result.count !== 1) conflict();
       const events = [];
@@ -155,6 +161,11 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
       if (current.dataHora.getTime() !== nextDate.getTime()) events.push(["REAGENDAR", { dataHoraAnterior: current.dataHora, dataHoraNova: nextDate, observacao }]);
       if (events.length === 0 || changedBusinessFields(body)) events.push(["EDITAR", { statusAnterior: current.status, statusNovo: current.status, observacao }]);
       for (const [action, details] of events) await writeHistory(tx, context, current.id, action, details);
+      await reconcileClientProjections({
+        tx,
+        empresaId: context.empresaId,
+        clienteIds: [current.clienteId, links.clienteId],
+      });
     });
     return get(context, current.id);
   }
@@ -193,10 +204,11 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
       ...(nextStatus === "PENDENTE" ? { concluidoEm: null, concluidoPorId: null, canceladoEm: null, canceladoPorId: null } : {}),
     };
     const observacao = optionalText(body.observacao, "observacao", 500);
-    await prisma.$transaction(async (tx) => {
+    await withProjectionRetry(prisma, async (tx) => {
       const result = await tx.acompanhamento.updateMany({ where: { id: current.id, empresaId: context.empresaId, revisao: revision, status: current.status }, data });
       if (result.count !== 1) conflict();
       await writeHistory(tx, context, current.id, action, { statusAnterior: current.status, statusNovo: nextStatus, observacao });
+      await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds: [current.clienteId] });
     });
     return get(context, current.id);
   }

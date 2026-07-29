@@ -3,8 +3,11 @@ const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/
 const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES, unavailableActionTypes } = require("./actions");
 const { createWorkerEventEnvelope, sanitizeError } = require("./worker-observability");
 const { presentRule, safeJson, snapshotRule, validatePilotEventPayload, validateRulePayload } = require("./validation");
+const {
+  assertProjectionReconciled,
+  reconcileNextFollowUpProjection,
+} = require("../follow-up-projection");
 
-const ACTIVE_FOLLOW_UP_STATUSES = ["PENDENTE", "EM_ANDAMENTO"];
 const TERMINAL_JOB_STATUSES = ["CONCLUIDO", "CANCELADO", "FALHA_DEFINITIVA"];
 const MAX_ATTEMPTS = 3;
 const DEFAULT_RETRY_DELAY_MS = 60000;
@@ -717,7 +720,10 @@ function createAutomationService({ prisma, env = process.env }) {
 
   async function createFollowUp(tx, job, entity, action) {
     const existing = await tx.automacaoEventoInterno.findUnique({ where: { empresaId_idempotencyKey: { empresaId: job.empresaId, idempotencyKey: `followup:${job.actionKey}` } } });
-    if (existing?.acompanhamentoId) return existing;
+    if (existing?.acompanhamentoId) {
+      await updateNextFollowUpProjection(tx, entity);
+      return existing;
+    }
     const dataHora = new Date(Date.now() + action.delayMinutos * 60000);
     const responsavelId = entity.responsavelId || null;
     if (responsavelId) await validateResponsible(tx, job.empresaId, responsavelId);
@@ -752,12 +758,11 @@ function createAutomationService({ prisma, env = process.env }) {
   }
 
   async function updateNextFollowUpProjection(tx, entity) {
-    const next = await tx.acompanhamento.findFirst({
-      where: { empresaId: entity.empresaId, clienteId: entity.clienteId, status: { in: ACTIVE_FOLLOW_UP_STATUSES } },
-      orderBy: [{ dataHora: "asc" }, { id: "asc" }],
-      select: { dataHora: true },
-    });
-    await tx.cliente.update({ where: { id: entity.clienteId }, data: { proximoFollowUp: next ? next.dataHora.toISOString() : "Hoje", revisao: { increment: 1 } } });
+    return assertProjectionReconciled(await reconcileNextFollowUpProjection({
+      tx,
+      empresaId: entity.empresaId,
+      clienteId: entity.clienteId,
+    }));
   }
 
   async function simulate(context, input) {

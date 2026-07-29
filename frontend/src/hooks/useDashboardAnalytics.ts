@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { ApiDashboardSummary } from "../services/crmApi";
 import { getLeadScore, getPriority, getRisk } from "../utils/dashboardHelpers";
+import { classifyNextFollowUp } from "../utils/followUpProjection";
 import type { Client, SortBy, Status } from "../types/dashboard";
 
 type UseDashboardAnalyticsParams = {
@@ -52,7 +53,7 @@ export default function useDashboardAnalytics({
       kanbanClients.reduce((sum, client) => sum + getLeadScore(client), 0) / Math.max(1, kanbanClients.length)
     );
     const highRiskCount = kanbanClients.filter((client) => getRisk(client) === "Alto").length;
-    const todayFollowUps = kanbanClients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length;
+    const todayFollowUps = kanbanClients.filter((client) => classifyNextFollowUp(client.nextFollowUp) === "TODAY").length;
     const activePipeline = kanbanClients.filter((client) => client.status !== "Fechado" && client.status !== "Perdido").length;
     const conversionRate = Math.round((wonValue / Math.max(1, totalValue)) * 100);
 
@@ -86,7 +87,7 @@ export default function useDashboardAnalytics({
       .reduce((sum, client) => sum + client.value, 0);
     const hotCount = clients.filter((client) => client.hot || getPriority(client) === "Alta").length;
     const averageScore = Math.round(clients.reduce((sum, client) => sum + getLeadScore(client), 0) / Math.max(1, clients.length));
-    const todayFollowUps = clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length;
+    const todayFollowUps = clients.filter((client) => classifyNextFollowUp(client.nextFollowUp) === "TODAY").length;
 
     return { totalValue, wonValue, forecastValue, hotCount, averageScore, todayFollowUps };
   }, [clients, summary]);
@@ -121,14 +122,9 @@ export default function useDashboardAnalytics({
   }, [clients, summary]);
 
   const followUpAgenda = useMemo(() => {
-    const today = clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje");
-    const tomorrow = clients.filter((client) => client.nextFollowUp.toLowerCase() === "amanhã");
-    const later = clients.filter(
-      (client) =>
-        client.nextFollowUp.toLowerCase() !== "hoje" &&
-        client.nextFollowUp.toLowerCase() !== "amanhã" &&
-        client.nextFollowUp.toLowerCase() !== "concluído"
-    );
+    const today = clients.filter((client) => ["TODAY", "OVERDUE"].includes(classifyNextFollowUp(client.nextFollowUp)));
+    const tomorrow = clients.filter((client) => classifyNextFollowUp(client.nextFollowUp) === "TOMORROW");
+    const later = clients.filter((client) => ["FUTURE", "LEGACY"].includes(classifyNextFollowUp(client.nextFollowUp)));
 
     return [
       { label: "Hoje", hint: "Ação imediata", clients: today },

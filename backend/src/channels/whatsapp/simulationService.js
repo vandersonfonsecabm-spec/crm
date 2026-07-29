@@ -1,4 +1,5 @@
 const { createCommercialCatalogService } = require("../../integrations/commercialCatalogService");
+const { NO_FOLLOW_UP_PROJECTION } = require("../../follow-up-projection");
 const { TEST_CHANNEL_KEY, TEST_CHANNEL_NAME } = require("../channelService");
 const { parseSimulationPayload } = require("./messageParser");
 const { detectIntent } = require("./intentService");
@@ -228,7 +229,7 @@ async function createOrFindClient({ tx, empresaId, payload, intent, product }) {
       origem: "WhatsApp Simulado",
       quente: commercial,
       ultimoContato: 0,
-      proximoFollowUp: "Hoje",
+      proximoFollowUp: NO_FOLLOW_UP_PROJECTION,
       tags: JSON.stringify(["whatsapp-simulado"]),
     },
   });

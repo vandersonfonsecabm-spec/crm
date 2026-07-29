@@ -83,7 +83,7 @@ test("H2 qualifica, cria ou vincula Negocio com tenant, permissao e concorrencia
   assert.equal(leadAfterQualification.interesse, "Pulverizador de barras");
   assert.equal(clientAfterQualification.interesse, "Pulverizador de barras");
   assert.equal(clientAfterQualification.valor, 45000);
-  assert.equal(clientAfterQualification.proximoFollowUp, "2026-08-05");
+  assert.equal(clientAfterQualification.proximoFollowUp, "2026-08-05T12:00:00.000Z");
   const qualificationHistory = await prisma.historicoQualificacaoConversa.findFirst({ where: { conversaCanalId: primary.conversation.id, acao: "QUALIFICAR" } });
   assert.equal(qualificationHistory.observacao, "Produtor pediu simulacao");
 

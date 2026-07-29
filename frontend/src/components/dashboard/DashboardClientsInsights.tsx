@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowUpRight, Flame, Gauge, Target, Users } from "lucide
 import type { ReactNode } from "react";
 import type { ApiDashboardSummary } from "../../services/crmApi";
 import type { Client, Status } from "../../types/dashboard";
+import { classifyNextFollowUp } from "../../utils/followUpProjection";
 import { Badge, SectionHeader, Surface } from "../ui";
 
 type DashboardClientsInsightsProps = {
@@ -31,7 +32,7 @@ export default function DashboardClientsInsights({
   const totalPotential = summary?.analytics.totalValue ?? baseClients.reduce((sum, client) => sum + client.value, 0);
   const hotClients = summary?.analytics.hotCount ?? baseClients.filter((client) => client.hot || getLeadScore(client) >= 80).length;
   const riskClients = summary?.analytics.highRiskCount ?? baseClients.filter((client) => getRisk(client) === "Alto").length;
-  const todayFollowUps = summary?.analytics.todayFollowUps ?? baseClients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length;
+  const todayFollowUps = summary?.analytics.todayFollowUps ?? baseClients.filter((client) => classifyNextFollowUp(client.nextFollowUp) === "TODAY").length;
   const topOpportunity = [...baseClients].sort((a, b) => b.value - a.value)[0] || null;
   const bestScore = [...baseClients].sort((a, b) => getLeadScore(b) - getLeadScore(a))[0] || null;
   const totalClients = summary?.indicadores.clientes ?? clients.length;

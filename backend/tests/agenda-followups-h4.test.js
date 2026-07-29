@@ -88,6 +88,10 @@ test("H4 opera agenda por tenant, permissao, historico e concorrencia", async ()
   assert.equal(linked.body.negocioId, fixtureA.business.id);
   assert.equal(linked.body.propostaComercialId, fixtureA.proposal.id);
   assert.equal(linked.body.conversaCanalId, fixtureA.conversation.id);
+  assert.equal(
+    (await prisma.cliente.findUniqueOrThrow({ where: { id: fixtureA.client.id } })).proximoFollowUp,
+    new Date(linked.body.dataHora).toISOString(),
+  );
   assert.equal((await request("GET", `/acompanhamentos/${linked.body.id}`, undefined, adminB.token)).status, 404);
   assert.equal((await request("GET", `/acompanhamentos/${linked.body.id}`, undefined, sellerOther.token)).status, 404);
 
@@ -113,6 +117,7 @@ test("H4 opera agenda por tenant, permissao, historico e concorrencia", async ()
   assert.equal(completed.status, 200);
   assert.equal(completed.body.status, "CONCLUIDO");
   assert.equal(completed.body.concluidoPorId, sellerA.usuarioId);
+  assert.equal((await prisma.cliente.findUniqueOrThrow({ where: { id: fixtureA.client.id } })).proximoFollowUp, "Sem acompanhamento");
   const repeatedCompletion = await request("POST", `/acompanhamentos/${current.id}/concluir`, { revisao: started.body.revisao }, sellerA.token);
   assert.equal(repeatedCompletion.status, 200);
   assert.equal(repeatedCompletion.body.revisao, completed.body.revisao);
@@ -120,12 +125,62 @@ test("H4 opera agenda por tenant, permissao, historico e concorrencia", async ()
   const reopened = await request("POST", `/acompanhamentos/${current.id}/reabrir`, { revisao: completed.body.revisao }, managerA.token);
   assert.equal(reopened.status, 200);
   assert.equal(reopened.body.status, "PENDENTE");
+  assert.equal(
+    (await prisma.cliente.findUniqueOrThrow({ where: { id: fixtureA.client.id } })).proximoFollowUp,
+    new Date(reopened.body.dataHora).toISOString(),
+  );
   const cancelled = await request("POST", `/acompanhamentos/${current.id}/cancelar`, { revisao: reopened.body.revisao, observacao: "Sem retorno agora" }, sellerA.token);
   assert.equal(cancelled.status, 200);
   assert.equal(cancelled.body.status, "CANCELADO");
+  assert.equal((await prisma.cliente.findUniqueOrThrow({ where: { id: fixtureA.client.id } })).proximoFollowUp, "Sem acompanhamento");
   assert.equal((await request("POST", `/acompanhamentos/${current.id}/concluir`, { revisao: cancelled.body.revisao }, sellerA.token)).status, 422);
   const reopenedAgain = await request("POST", `/acompanhamentos/${current.id}/reabrir`, { revisao: cancelled.body.revisao }, managerA.token);
   assert.equal(reopenedAgain.status, 200);
+  const standalone = await request("POST", "/clientes", {
+    nome: "Cliente Projecao Manual",
+    proximoFollowUp: "valor externo ignorado",
+  }, adminA.token);
+  assert.equal(standalone.status, 200);
+  assert.equal(standalone.body.proximoFollowUp, "Sem acompanhamento");
+  const sameProjection = await request("PATCH", `/clientes/${standalone.body.id}`, {
+    proximoFollowUp: "Sem acompanhamento",
+    revisao: standalone.body.revisao,
+  }, adminA.token);
+  assert.equal(sameProjection.status, 200);
+  assert.equal(sameProjection.body.revisao, standalone.body.revisao);
+  const rejectedProjection = await request("PATCH", `/clientes/${standalone.body.id}`, {
+    proximoFollowUp: "Amanha",
+  }, adminA.token);
+  assert.equal(rejectedProjection.status, 409);
+  assert.equal(rejectedProjection.body.codigo, "NEXT_FOLLOW_UP_DERIVED");
+  const dashboardFollowUp = await prisma.acompanhamento.create({
+    data: {
+      empresaId: adminA.empresaId,
+      clienteId: standalone.body.id,
+      titulo: "Dashboard hoje",
+      dataHora: new Date(),
+      status: "PENDENTE",
+    },
+  });
+  const dashboard = await request("GET", "/dashboard", undefined, adminA.token);
+  assert.equal(dashboard.status, 200);
+  assert.ok(dashboard.body.analytics.todayFollowUps >= 1);
+
+  const moved = await request("POST", "/acompanhamentos", {
+    titulo: "Mover entre clientes",
+    dataHora: futureDate(),
+    clienteId: fixtureA.client.id,
+  }, adminA.token);
+  assert.equal(moved.status, 201);
+  const movedToOtherClient = await request("PATCH", `/acompanhamentos/${moved.body.id}`, {
+    clienteId: standalone.body.id,
+    revisao: moved.body.revisao,
+  }, adminA.token);
+  assert.equal(movedToOtherClient.status, 200, JSON.stringify(movedToOtherClient.body));
+  assert.equal(
+    (await prisma.cliente.findUniqueOrThrow({ where: { id: standalone.body.id } })).proximoFollowUp,
+    dashboardFollowUp.dataHora.toISOString(),
+  );
   const transferred = await request("PATCH", `/acompanhamentos/${current.id}`, { responsavelId: managerA.usuarioId, revisao: reopenedAgain.body.revisao, observacao: "Transferencia para gerente" }, managerA.token);
   assert.equal(transferred.status, 200);
   assert.equal(transferred.body.responsavelId, managerA.usuarioId);
@@ -158,7 +213,10 @@ async function commercialFixture(account, responsavelId, suffix) {
 
 async function commercialInvariants(fixture) {
   return {
-    client: await prisma.cliente.findUnique({ where: { id: fixture.client.id } }),
+    client: await prisma.cliente.findUnique({
+      where: { id: fixture.client.id },
+      select: { id: true, empresaId: true, nome: true, interesse: true, status: true, valor: true, origem: true },
+    }),
     lead: await prisma.lead.findUnique({ where: { id: fixture.lead.id } }),
     business: await prisma.negocio.findUnique({ where: { id: fixture.business.id } }),
     proposal: await prisma.propostaComercial.findUnique({ where: { id: fixture.proposal.id } }),

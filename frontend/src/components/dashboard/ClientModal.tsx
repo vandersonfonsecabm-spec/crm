@@ -3,6 +3,7 @@ import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Client, Status } from "../../types/dashboard";
 import { ApiHttpError } from "../../services/crmApi";
+import { formatNextFollowUp } from "../../utils/followUpProjection";
 
 const statusList: Status[] = ["Novo", "Contato", "Proposta", "Fechado", "Perdido"];
 
@@ -34,7 +35,7 @@ function normalizeClient(client: Client): Client {
     phone: client.phone.trim(),
     email: client.email.trim(),
     source: normalizeFormText(client.source),
-    nextFollowUp: normalizeFormText(client.nextFollowUp),
+    nextFollowUp: client.nextFollowUp,
   };
 }
 
@@ -447,11 +448,10 @@ export default function ClientModal({
             <label htmlFor="client-next-follow-up" className={fieldLabelClass}>Próximo contato</label>
             <input
               id="client-next-follow-up"
-              value={client.nextFollowUp}
-              onChange={(event) => updateField("nextFollowUp", event.target.value)}
-              placeholder="Ex: Hoje, Amanhã, 30 dias"
-              disabled={isBusy}
-              className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
+              value={formatNextFollowUp(client.nextFollowUp)}
+              readOnly
+              aria-readonly="true"
+              className={`${fieldBaseClass} cursor-default select-text text-slate-400`}
             />
           </div>
 

@@ -23,6 +23,10 @@ const { mountAutomationRoutes } = require("./automations/routes");
 const { mountPlatformRoutes } = require("./platform/routes");
 const { isValidCpfCnpj } = require("./customer-360/service");
 const { createAgendaService } = require("./agenda/service");
+const {
+  ACTIVE_FOLLOW_UP_STATUSES,
+  NO_FOLLOW_UP_PROJECTION,
+} = require("./follow-up-projection");
 const { authContext } = require("./leads-communication/policy");
 const { mountSiteLeadAdminRoutes, mountSiteLeadPublicRoutes, siteLeadBodyLimit } = require("./site-leads/routes");
 const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
@@ -93,6 +97,7 @@ app.use(
 app.get("/dashboard", ...commercialAuth, async (req, res) => {
   try {
     const empresaId = req.commercialEmpresaId;
+    const { start: todayStart, end: todayEnd } = dashboardDayRange(new Date());
     const [
       carteira,
       porStatus,
@@ -120,7 +125,15 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
       prisma.cliente.count({ where: { empresaId, quente: true } }),
       prisma.cliente.count({ where: { empresaId, OR: [{ status: "Perdido" }, { ultimoContato: { gte: 10 } }] } }),
       prisma.cliente.count({ where: { empresaId, ultimoContato: { gte: 7 } } }),
-      prisma.cliente.count({ where: { empresaId, proximoFollowUp: { equals: "Hoje" } } }),
+      prisma.acompanhamento.groupBy({
+        by: ["clienteId"],
+        where: {
+          empresaId,
+          clienteId: { not: null },
+          status: { in: ACTIVE_FOLLOW_UP_STATUSES },
+          dataHora: { gte: todayStart, lt: todayEnd },
+        },
+      }),
       prisma.cliente.count({ where: { empresaId, status: "Proposta", quente: true } }),
       prisma.cliente.findMany({
         where: { empresaId, status: "Proposta" },
@@ -162,7 +175,7 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         forecastValue: statusValue("Proposta") + statusValue("Novo"),
         hotCount: quentes,
         averageScore: Math.round(Number(scoreRows[0]?.averageScore || 0)),
-        todayFollowUps: followUpsHoje,
+        todayFollowUps: followUpsHoje.length,
         highRiskCount: altoRisco,
         silentCount: semContato,
         hotProposalCount: propostasQuentes,
@@ -253,7 +266,7 @@ app.post("/clientes", ...commercialAuth, async (req, res) => {
     const validationErrors = clienteValidationErrors(req.body);
     if (Object.keys(validationErrors).length > 0) return clienteValidationError(res, validationErrors);
     const empresaId = req.commercialEmpresaId;
-    const data = { ...clientePayload(req.body), empresaId };
+    const data = { ...clientePayload(req.body), empresaId, proximoFollowUp: NO_FOLLOW_UP_PROJECTION };
 
     const cliente = await prisma.cliente.create({
       data,
@@ -288,11 +301,30 @@ async function updateCliente(req, res) {
     const empresaId = req.commercialEmpresaId;
     const clienteId = parsePositiveId(id);
     if (!clienteId) return res.status(400).json({ erro: "ID invalido." });
-    const existing = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true, revisao: true } });
+    const existing = await prisma.cliente.findFirst({
+      where: { id: clienteId, empresaId },
+      select: { id: true, proximoFollowUp: true, revisao: true },
+    });
     if (!existing) return res.status(404).json({ erro: "Cliente nao encontrado." });
+    if (
+      Object.prototype.hasOwnProperty.call(req.body || {}, "proximoFollowUp")
+      && String(req.body.proximoFollowUp ?? "").trim() !== existing.proximoFollowUp
+    ) {
+      return res.status(409).json({
+        erro: "O proximo acompanhamento e calculado pela agenda.",
+        codigo: "NEXT_FOLLOW_UP_DERIVED",
+      });
+    }
     const validationErrors = clienteValidationErrors(req.body, { partial: true });
     if (Object.keys(validationErrors).length > 0) return clienteValidationError(res, validationErrors);
     const data = clientePayload(req.body, { partial: true });
+    if (Object.keys(data).length === 0) {
+      const unchanged = await prisma.cliente.findFirst({
+        where: { id: clienteId, empresaId },
+        include: { notas: { where: { empresaId }, orderBy: { createdAt: "desc" } } },
+      });
+      return res.json(unchanged);
+    }
     const hasRevision = Object.prototype.hasOwnProperty.call(req.body || {}, "revisao");
     if (hasRevision) {
       const revisao = Number(req.body.revisao);
@@ -2031,9 +2063,16 @@ function clientePayload(body, { partial = false } = {}) {
   if (!partial || has("favorito")) data.favorito = has("favorito") ? body.favorito : false;
   if (!partial || has("quente")) data.quente = has("quente") ? body.quente : false;
   if (!partial || has("ultimoContato")) data.ultimoContato = Number.isFinite(Number(body.ultimoContato)) ? Number(body.ultimoContato) : 0;
-  if (!partial || has("proximoFollowUp")) data.proximoFollowUp = String(body.proximoFollowUp || "Hoje").trim();
   if (!partial || has("tags")) data.tags = JSON.stringify(tags);
   return data;
+}
+
+function dashboardDayRange(value) {
+  const start = new Date(value);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
 }
 
 function clienteValidationErrors(body, { partial = false } = {}) {

@@ -34,6 +34,7 @@ function main(options = {}) {
     for (const file of [
       "tests/postgres-migration-prep.test.js",
       "tests/internal-automations-h7.test.js",
+      "tests/next-follow-up-projection.test.js",
     ]) {
       runCommand("node", ["--test", file], env);
     }

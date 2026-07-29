@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRight, ArrowUpRight, Plus, RefreshCw, Target } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Analytics, Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
+import { formatNextFollowUp } from "../../utils/followUpProjection";
 import { Badge, EmptyState, SectionHeader, Surface } from "../ui";
 
 type DashboardControlCenterProps = {
@@ -62,7 +63,7 @@ export default function DashboardControlCenter({ clients, analytics, backendCapt
                 const score = getLeadScore(client);
                 return (
                   <button
-                    aria-label={`Abrir ${client.name}, próxima ação ${client.nextFollowUp}`}
+                    aria-label={`Abrir ${client.name}, próxima ação ${formatNextFollowUp(client.nextFollowUp)}`}
                     className="grid w-full min-w-0 gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] md:grid-cols-[32px_minmax(0,1fr)_132px_112px_16px] md:items-center"
                     key={client.id}
                     onClick={() => setSelectedId(client.id)}
@@ -78,7 +79,7 @@ export default function DashboardControlCenter({ clients, analytics, backendCapt
                     </div>
                     <div className="min-w-0">
                       <p className="text-[11px] text-[var(--text-muted)]">Próxima ação</p>
-                      <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--text-secondary)]">{client.nextFollowUp}</p>
+                      <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--text-secondary)]">{formatNextFollowUp(client.nextFollowUp)}</p>
                     </div>
                     <div className="text-right tabular-nums">
                       <p className="text-[11px] font-semibold text-[var(--text-primary)]">{money(client.value)}</p>

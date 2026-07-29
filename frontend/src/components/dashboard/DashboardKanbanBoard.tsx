@@ -4,6 +4,7 @@ import DashboardKanbanCommandBar from "./DashboardKanbanCommandBar";
 import DashboardKanbanSummary from "./DashboardKanbanSummary";
 import KanbanLeadCard from "../kanban/KanbanLeadCard";
 import type { ActivePage, Client, KanbanOwner, Status } from "../../types/dashboard";
+import { classifyNextFollowUp } from "../../utils/followUpProjection";
 import { Surface } from "../ui";
 
 type KanbanEnterpriseStats = {
@@ -164,7 +165,7 @@ export default function DashboardKanbanBoard({
               stageClients.reduce((sum, client) => sum + getLeadScore(client), 0) / Math.max(1, stageClients.length)
             );
             const stageRiskCount = stageClients.filter((client) => getRisk(client) === "Alto").length;
-            const stageTodayCount = stageClients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length;
+            const stageTodayCount = stageClients.filter((client) => classifyNextFollowUp(client.nextFollowUp) === "TODAY").length;
             const isDropTarget = dragOverStatus === status;
 
             return (

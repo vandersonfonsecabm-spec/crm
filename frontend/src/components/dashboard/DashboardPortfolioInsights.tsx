@@ -2,6 +2,7 @@ import { AlertTriangle, ArrowRight, Clock3, Flame, Target, Users } from "lucide-
 import type { ReactNode } from "react";
 import type { ApiDashboardSummary } from "../../services/crmApi";
 import type { Client, SmartFilterType, Status } from "../../types/dashboard";
+import { classifyNextFollowUp, formatNextFollowUp } from "../../utils/followUpProjection";
 import { Badge, Button, EmptyState, SectionHeader, Surface } from "../ui";
 
 type DashboardPortfolioInsightsProps = {
@@ -43,7 +44,7 @@ export default function DashboardPortfolioInsights({
   const totalClients = summary?.indicadores.clientes ?? clients.length;
   const suggestedAction = highRiskCount > 0
     ? "Reativar clientes em risco antes de criar novas oportunidades."
-    : (summary?.analytics.todayFollowUps ?? clients.filter((client) => client.nextFollowUp.toLowerCase() === "hoje").length) > 0
+    : (summary?.analytics.todayFollowUps ?? clients.filter((client) => classifyNextFollowUp(client.nextFollowUp) === "TODAY").length) > 0
       ? "Priorizar acompanhamentos de hoje e propostas abertas."
       : "Revisar oportunidades quentes e manter cadência comercial.";
 
@@ -62,7 +63,7 @@ export default function DashboardPortfolioInsights({
             <div className="divide-y divide-[var(--border-default)]">
               {attentionClients.map((client) => (
                 <button
-                  aria-label={`Abrir ${client.name}, próxima ação ${client.nextFollowUp}`}
+                  aria-label={`Abrir ${client.name}, próxima ação ${formatNextFollowUp(client.nextFollowUp)}`}
                   className="grid w-full min-w-0 gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] md:grid-cols-[minmax(0,1fr)_132px_124px] md:items-center"
                   key={client.id}
                   onClick={() => onOpenClient(client.id)}
@@ -78,7 +79,7 @@ export default function DashboardPortfolioInsights({
 
                   <div className="min-w-0">
                     <p className="text-[11px] text-[var(--text-muted)]">Próxima ação</p>
-                    <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--text-secondary)]">{client.nextFollowUp}</p>
+                    <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--text-secondary)]">{formatNextFollowUp(client.nextFollowUp)}</p>
                   </div>
 
                   <div className="flex items-center justify-between gap-3 md:justify-end">

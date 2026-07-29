@@ -2,6 +2,7 @@ import { CalendarClock, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchAcompanhamentoResumo, type ApiAcompanhamentoResumo } from "../../services/crmApi";
 import type { Client, Status } from "../../types/dashboard";
+import { classifyNextFollowUp } from "../../utils/followUpProjection";
 import { Badge, EmptyState, SectionHeader, Surface } from "../ui";
 
 type FollowUpGroup = { label: string; hint: string; clients: Client[] };
@@ -34,8 +35,8 @@ export default function DashboardFollowUpCalendar({ todayFollowUps, followUpAgen
   const allClients = followUpAgenda.flatMap((group) => group.clients.map((client) => ({ ...client, agendaLabel: group.label, agendaHint: group.hint })));
   const criticalClients = allClients
     .sort((a, b) => {
-      if (a.nextFollowUp.toLowerCase() === "hoje" && b.nextFollowUp.toLowerCase() !== "hoje") return -1;
-      if (a.nextFollowUp.toLowerCase() !== "hoje" && b.nextFollowUp.toLowerCase() === "hoje") return 1;
+      if (["TODAY", "OVERDUE"].includes(classifyNextFollowUp(a.nextFollowUp)) && !["TODAY", "OVERDUE"].includes(classifyNextFollowUp(b.nextFollowUp))) return -1;
+      if (!["TODAY", "OVERDUE"].includes(classifyNextFollowUp(a.nextFollowUp)) && ["TODAY", "OVERDUE"].includes(classifyNextFollowUp(b.nextFollowUp))) return 1;
       if (a.lastContactDays !== b.lastContactDays) return b.lastContactDays - a.lastContactDays;
       return b.value - a.value;
     })
