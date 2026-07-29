@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const { Prisma } = require("@prisma/client");
 const { createPrismaClient } = require("./database/prisma-client");
+const { dashboardScoreQuery } = require("./dashboard-score");
 const {
   createMaintenanceReadOnlyMiddleware,
   isMaintenanceReadOnlyError,
@@ -137,22 +138,7 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: 5,
       }),
-      prisma.$queryRaw(markMaintenanceReadOnlyQuery(Prisma.sql`
-        SELECT AVG(
-          MIN(100, MAX(0,
-            45
-            + CASE WHEN quente = 1 THEN 20 ELSE 0 END
-            + CASE WHEN favorito = 1 THEN 10 ELSE 0 END
-            + CASE WHEN valor >= 12000 THEN 15 ELSE 0 END
-            + CASE WHEN status = 'Proposta' THEN 10 ELSE 0 END
-            + CASE WHEN status = 'Fechado' THEN 20 ELSE 0 END
-            - CASE WHEN status = 'Perdido' THEN 25 ELSE 0 END
-            - CASE WHEN ultimoContato >= 7 THEN 10 ELSE 0 END
-          ))
-        ) AS averageScore
-        FROM Cliente
-        WHERE empresaId = ${empresaId}
-      `)),
+      prisma.$queryRaw(markMaintenanceReadOnlyQuery(dashboardScoreQuery(empresaId))),
     ]);
     const statusMap = new Map(porStatus.map((item) => [item.status, item]));
     const statusCount = (status) => statusMap.get(status)?._count?._all || 0;

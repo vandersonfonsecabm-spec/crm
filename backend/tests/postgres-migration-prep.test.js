@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 
 const { createPrismaClient, validateTestPostgresUrl } = require("../src/database/prisma-client");
+const { dashboardScoreQuery } = require("../src/dashboard-score");
 const { postgresUrlFromEnv } = require("../scripts/check-postgres-connection.cjs");
 const { resolveSqliteDatabasePath } = require("../scripts/start-production.cjs");
 const { convertValue, orderedTables, sanitizeError } = require("../scripts/migrate-sqlite-to-postgres.cjs");
@@ -261,4 +262,43 @@ test("importador converte booleanos e timestamps para PostgreSQL", () => {
 test("logs de migracao sanitizam URLs e termos sensiveis", () => {
   assert.doesNotMatch(sanitize("postgresql://user:password@host:5432/db"), /password/);
   assert.doesNotMatch(sanitizeError(new Error("token postgresql://user:password@host/db")), /password|token/);
+});
+
+test("score do dashboard usa SQL equivalente em SQLite e PostgreSQL", async () => {
+  const prisma = createPrismaClient();
+  const suffix = `${process.pid}-${Date.now()}`;
+  let empresa = null;
+  try {
+    empresa = await prisma.empresa.create({
+      data: { nome: `Dashboard score ${suffix}`, slug: `dashboard-score-${suffix}` },
+    });
+    await prisma.cliente.createMany({
+      data: [
+        { empresaId: empresa.id, nome: "Base" },
+        {
+          empresaId: empresa.id,
+          nome: "Quente",
+          quente: true,
+          favorito: true,
+          valor: 12000,
+          status: "Proposta",
+        },
+        {
+          empresaId: empresa.id,
+          nome: "Perdido",
+          status: "Perdido",
+          ultimoContato: 7,
+        },
+      ],
+    });
+
+    const rows = await prisma.$queryRaw(dashboardScoreQuery(empresa.id));
+    assert.equal(Math.round(Number(rows[0]?.averageScore)), 52);
+  } finally {
+    if (empresa) {
+      await prisma.cliente.deleteMany({ where: { empresaId: empresa.id } });
+      await prisma.empresa.delete({ where: { id: empresa.id } });
+    }
+    await prisma.$disconnect();
+  }
 });
