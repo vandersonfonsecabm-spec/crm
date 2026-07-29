@@ -10,6 +10,7 @@ const {
 } = require("../follow-up-projection");
 
 const TERMINAL_JOB_STATUSES = ["CONCLUIDO", "CANCELADO", "FALHA_DEFINITIVA"];
+const TERMINAL_EXECUTION_STATUSES = ["CONCLUIDA", "FALHA_DEFINITIVA", "CANCELADA", "SIMULADA"];
 const MAX_ATTEMPTS = 3;
 const DEFAULT_RETRY_DELAY_MS = 60000;
 const DEFAULT_LEASE_MS = 60000;
@@ -106,11 +107,53 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     const row = await prisma.$transaction(async (tx) => {
       const rule = await tx.automacaoRegra.findFirst({ where: { id: parsed, empresaId: context.empresaId } });
       if (!rule) throw notFound("Regra nao encontrada.");
-      await tx.automacaoAcaoJob.updateMany({
-        where: { empresaId: context.empresaId, execucao: { regraId: rule.id }, status: "PENDENTE" },
-        data: { status: "CANCELADO", erroCodigo: "RULE_DISABLED", erroResumo: "Regra desativada antes da execucao." },
+      const candidates = await tx.automacaoAcaoJob.findMany({
+        where: {
+          empresaId: context.empresaId,
+          execucao: { regraId: rule.id },
+          status: { in: ["PENDENTE", "CANCELADO"] },
+        },
+        select: { id: true, execucaoId: true, status: true },
       });
-      return tx.automacaoRegra.update({ where: { id: rule.id }, data: { ativa: false, updatedById: context.usuarioId, versao: { increment: 1 } } });
+      const pendingIds = candidates.filter((job) => job.status === "PENDENTE").map((job) => job.id);
+      if (pendingIds.length) {
+        const canceled = await tx.automacaoAcaoJob.updateMany({
+          where: {
+            id: { in: pendingIds },
+            empresaId: context.empresaId,
+            status: "PENDENTE",
+          },
+          data: { status: "CANCELADO", erroCodigo: "RULE_DISABLED", erroResumo: "Regra desativada antes da execucao." },
+        });
+        if (canceled.count !== pendingIds.length) {
+          const current = await tx.automacaoAcaoJob.findMany({
+            where: { id: { in: pendingIds }, empresaId: context.empresaId },
+            select: { status: true },
+          });
+          if (current.length !== pendingIds.length || current.some((job) => job.status !== "CANCELADO")) {
+            throw domainError(409, "JOB_CANCELLATION_CONFLICT", "Uma acao mudou durante o cancelamento.");
+          }
+        }
+      }
+      for (const execucaoId of [...new Set(candidates.map((job) => job.execucaoId))].sort((left, right) => left - right)) {
+        await refreshExecutionStatus(tx, context.empresaId, execucaoId);
+      }
+      if (rule.ativa) {
+        const deactivated = await tx.automacaoRegra.updateMany({
+          where: { id: rule.id, empresaId: context.empresaId, ativa: true },
+          data: { ativa: false, updatedById: context.usuarioId, versao: { increment: 1 } },
+        });
+        if (deactivated.count !== 1) {
+          const current = await tx.automacaoRegra.findFirst({
+            where: { id: rule.id, empresaId: context.empresaId },
+            select: { ativa: true },
+          });
+          if (!current || current.ativa) {
+            throw domainError(409, "RULE_DEACTIVATION_CONFLICT", "A regra mudou durante a desativacao.");
+          }
+        }
+      }
+      return tx.automacaoRegra.findFirstOrThrow({ where: { id: rule.id, empresaId: context.empresaId } });
     });
     return presentRule(row);
   }
@@ -616,7 +659,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         where: { id: job.id, leaseOwner, status: "PROCESSANDO" },
         data: { status: "CONCLUIDO", leaseOwner: null, leaseExpiresAt: null, erroCodigo: null, erroResumo: null },
       });
-      await refreshExecutionStatus(job.execucaoId);
+      await refreshExecutionStatus(prisma, job.empresaId, job.execucaoId);
       if (succeeded.count === 1) {
         notifyWorkerEvent(onEvent, "job_succeeded", {
           ...baseFields,
@@ -654,7 +697,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
           erroResumo: safeError.errorMessage,
         },
       });
-      await refreshExecutionStatus(job.execucaoId);
+      await refreshExecutionStatus(prisma, job.empresaId, job.execucaoId);
       if (failed.count === 1) {
         const failureFields = {
           ...baseFields,
@@ -902,15 +945,41 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     return rule;
   }
 
-  async function refreshExecutionStatus(execucaoId) {
-    const jobs = await prisma.automacaoAcaoJob.findMany({ where: { execucaoId } });
-    const status = jobs.every((job) => job.status === "CONCLUIDO") ? "CONCLUIDA"
-      : jobs.some((job) => job.status === "FALHA_DEFINITIVA") ? "FALHA_DEFINITIVA"
-        : jobs.some((job) => job.status === "FALHOU") ? "FALHOU" : "PROCESSANDO";
-    await prisma.automacaoExecucao.update({
-      where: { id: execucaoId },
+  async function refreshExecutionStatus(client, empresaId, execucaoId) {
+    const execution = await client.automacaoExecucao.findFirst({
+      where: { id: execucaoId, empresaId },
+      select: { id: true, status: true },
+    });
+    if (!execution) throw notFound("Execucao de automacao nao encontrada.");
+    if (TERMINAL_EXECUTION_STATUSES.includes(execution.status)) return execution.status;
+
+    const jobs = await client.automacaoAcaoJob.findMany({
+      where: { execucaoId, empresaId },
+      select: { status: true },
+    });
+    if (!jobs.length) throw domainError(409, "EXECUTION_RECONCILIATION_CONFLICT", "Execucao sem acoes para reconciliar.");
+    const status = jobs.some((job) => job.status === "FALHA_DEFINITIVA") ? "FALHA_DEFINITIVA"
+      : jobs.some((job) => job.status === "FALHOU") ? "FALHOU"
+        : jobs.every((job) => job.status === "CONCLUIDO") ? "CONCLUIDA"
+          : jobs.every((job) => TERMINAL_JOB_STATUSES.includes(job.status))
+            && jobs.some((job) => job.status === "CANCELADO") ? "CANCELADA"
+            : jobs.some((job) => job.status === "PROCESSANDO") ? "PROCESSANDO" : "PENDENTE";
+    if (status === execution.status) return status;
+
+    const updated = await client.automacaoExecucao.updateMany({
+      where: { id: execucaoId, empresaId, status: execution.status },
       data: { status, concluidaEm: status === "CONCLUIDA" ? new Date() : null },
     });
+    if (updated.count === 1) return status;
+
+    const current = await client.automacaoExecucao.findFirst({
+      where: { id: execucaoId, empresaId },
+      select: { status: true },
+    });
+    if (current && (current.status === status || TERMINAL_EXECUTION_STATUSES.includes(current.status))) {
+      return current.status;
+    }
+    throw domainError(409, "EXECUTION_RECONCILIATION_CONFLICT", "A execucao mudou durante a reconciliacao.");
   }
 
   return { activateRule, createRule, deactivateRule, enqueueLeadCreated, getRule, listExecutions, listFailures, listRules, options, processDueJobs, produceAutomationEvent, producePilotEvent, retryJob, scanTemporalTriggers, simulate, summary, updateRule };

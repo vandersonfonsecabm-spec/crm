@@ -67,6 +67,186 @@ test("H7 respeita feature gate, ativacao sem retroatividade e simulacao sem efei
   assert.equal(await prisma.automacaoExecucao.count(), beforeExecutions);
 });
 
+test("H8.3 cancelamento reconcilia execucao e preserva estados terminais", async () => {
+  const tenant = await seedTenant("h8-cancel-reconcile");
+  const context = adminContext(tenant);
+  const rule = await internalEventRule(context, "Cancelar antes do claim");
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  const firstJob = await seedActionJob({
+    tenant,
+    rule: await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: rule.id } }),
+    entityType: "LEAD",
+    entity: lead,
+    marker: "cancel-single",
+  });
+
+  await service.deactivateRule(context, rule.id);
+
+  assert.equal(
+    (await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: firstJob.id } })).status,
+    "CANCELADO",
+  );
+  assert.equal(
+    (await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: firstJob.execucaoId } })).status,
+    "CANCELADA",
+  );
+
+  const multiRule = await internalEventRule(context, "Cancelar execucao com varios jobs");
+  await service.activateRule(context, multiRule.id);
+  const multiJob = await seedActionJob({
+    tenant,
+    rule: await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: multiRule.id } }),
+    entityType: "LEAD",
+    entity: lead,
+    marker: "cancel-multiple",
+  });
+  const completedJob = await prisma.automacaoAcaoJob.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      execucaoId: multiJob.execucaoId,
+      indice: 1,
+      tipo: "CREATE_INTERNAL_EVENT",
+      actionKey: hashKey(`${tenant.empresa.id}:${multiRule.id}:cancel-multiple:1`),
+      status: "CONCLUIDO",
+      nextAttemptAt: new Date(),
+    },
+  });
+
+  await service.deactivateRule(context, multiRule.id);
+
+  assert.equal(
+    (await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: multiJob.id } })).status,
+    "CANCELADO",
+  );
+  assert.equal(
+    (await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: completedJob.id } })).status,
+    "CONCLUIDO",
+  );
+  assert.equal(
+    (await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: multiJob.execucaoId } })).status,
+    "CANCELADA",
+  );
+});
+
+test("H8.3 cancelamento repetido e concorrente e idempotente", async () => {
+  const tenant = await seedTenant("h8-cancel-idempotent");
+  const context = adminContext(tenant);
+  const rule = await internalEventRule(context, "Cancelar idempotente");
+  await service.activateRule(context, rule.id);
+  const activeRule = await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: rule.id } });
+  const lead = await seedLead(tenant);
+  const job = await seedActionJob({
+    tenant,
+    rule: activeRule,
+    entityType: "LEAD",
+    entity: lead,
+    marker: "cancel-idempotent",
+  });
+
+  await service.deactivateRule(context, rule.id);
+  const afterFirst = await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: rule.id } });
+  await service.deactivateRule(context, rule.id);
+  const afterSecond = await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: rule.id } });
+  assert.equal(afterSecond.versao, afterFirst.versao);
+  assert.equal(
+    (await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: job.execucaoId } })).status,
+    "CANCELADA",
+  );
+
+  const concurrentRule = await internalEventRule(context, "Cancelar concorrente");
+  await service.activateRule(context, concurrentRule.id);
+  const concurrentJob = await seedActionJob({
+    tenant,
+    rule: await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: concurrentRule.id } }),
+    entityType: "LEAD",
+    entity: lead,
+    marker: "cancel-concurrent",
+  });
+  const concurrentResults = await Promise.allSettled([
+    service.deactivateRule(context, concurrentRule.id),
+    service.deactivateRule(context, concurrentRule.id),
+  ]);
+
+  assert.equal(concurrentResults.every((result) => result.status === "fulfilled"), true);
+  assert.equal(
+    (await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: concurrentJob.id } })).status,
+    "CANCELADO",
+  );
+  assert.equal(
+    (await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: concurrentJob.execucaoId } })).status,
+    "CANCELADA",
+  );
+});
+
+test("H8.3 cancelamento aborta se o job mudar antes do update protegido", async () => {
+  const tenant = await seedTenant("h8-cancel-conflict");
+  const context = adminContext(tenant);
+  const rule = await internalEventRule(context, "Cancelar com conflito");
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  const job = await seedActionJob({
+    tenant,
+    rule: await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: rule.id } }),
+    entityType: "LEAD",
+    entity: lead,
+    marker: "cancel-conflict",
+  });
+  const conflictingService = createAutomationService({
+    prisma: prismaWithCancellationInterference(job.id),
+    env,
+  });
+
+  await assert.rejects(
+    conflictingService.deactivateRule(context, rule.id),
+    (error) => error?.codigo === "JOB_CANCELLATION_CONFLICT",
+  );
+
+  assert.equal(
+    (await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: job.id } })).status,
+    "PENDENTE",
+  );
+  assert.equal(
+    (await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: job.execucaoId } })).status,
+    "PENDENTE",
+  );
+  assert.equal((await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: rule.id } })).ativa, true);
+});
+
+test("H8.3 cancelamento nao altera job ou execucao ja concluidos", async () => {
+  const tenant = await seedTenant("h8-cancel-terminal");
+  const context = adminContext(tenant);
+  const rule = await internalEventRule(context, "Preservar conclusao");
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  const job = await seedActionJob({
+    tenant,
+    rule: await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: rule.id } }),
+    entityType: "LEAD",
+    entity: lead,
+    marker: "cancel-terminal",
+  });
+  await prisma.automacaoAcaoJob.update({
+    where: { id: job.id },
+    data: { status: "CONCLUIDO" },
+  });
+  await prisma.automacaoExecucao.update({
+    where: { id: job.execucaoId },
+    data: { status: "CONCLUIDA", concluidaEm: new Date() },
+  });
+
+  await service.deactivateRule(context, rule.id);
+
+  assert.equal(
+    (await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: job.id } })).status,
+    "CONCLUIDO",
+  );
+  assert.equal(
+    (await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: job.execucaoId } })).status,
+    "CONCLUIDA",
+  );
+});
+
 test("H8.1 processa CREATE_INTERNAL_EVENT com idempotencia e reprocessamento controlado", async () => {
   const tenant = await seedTenant("h7-idempotency");
   const context = adminContext(tenant);
@@ -1011,6 +1191,50 @@ function prismaWithWindowDeferralInterference(interfere) {
   return new Proxy(prisma, {
     get(target, property) {
       if (property === "automacaoAcaoJob") return wrappedJobDelegate;
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function prismaWithCancellationInterference(jobId) {
+  return new Proxy(prisma, {
+    get(target, property) {
+      if (property === "$transaction") {
+        return async (callback, options) => target.$transaction(async (tx) => {
+          let interfered = false;
+          const wrappedJobs = new Proxy(tx.automacaoAcaoJob, {
+            get(jobTarget, jobProperty) {
+              if (jobProperty === "updateMany") {
+                return async (args) => {
+                  if (!interfered && args?.data?.status === "CANCELADO") {
+                    interfered = true;
+                    await tx.automacaoAcaoJob.update({
+                      where: { id: jobId },
+                      data: {
+                        status: "PROCESSANDO",
+                        leaseOwner: "concurrent-worker",
+                        leaseExpiresAt: new Date(Date.now() + 60000),
+                      },
+                    });
+                  }
+                  return jobTarget.updateMany(args);
+                };
+              }
+              const value = Reflect.get(jobTarget, jobProperty);
+              return typeof value === "function" ? value.bind(jobTarget) : value;
+            },
+          });
+          const wrappedTx = new Proxy(tx, {
+            get(txTarget, txProperty) {
+              if (txProperty === "automacaoAcaoJob") return wrappedJobs;
+              const value = Reflect.get(txTarget, txProperty);
+              return typeof value === "function" ? value.bind(txTarget) : value;
+            },
+          });
+          return callback(wrappedTx);
+        }, options);
+      }
       const value = Reflect.get(target, property);
       return typeof value === "function" ? value.bind(target) : value;
     },
