@@ -104,7 +104,10 @@ test("H8.1 processa CREATE_INTERNAL_EVENT com idempotencia e reprocessamento con
 test("H8.3 usa allowlists canonicas e bloqueia acoes indisponiveis", async () => {
   const tenant = await seedTenant("h8-3-actions");
   const context = adminContext(tenant);
-  assert.deepEqual([...WORKER_ACTION_TYPES], ["ASSIGN_OWNER", "CREATE_INTERNAL_EVENT"]);
+  assert.deepEqual(
+    [...WORKER_ACTION_TYPES],
+    ["ASSIGN_OWNER", "CREATE_INTERNAL_EVENT", "UPDATE_NEXT_FOLLOW_UP_PROJECTION"],
+  );
   assert.deepEqual([...PILOT_ACTION_TYPES], ["CREATE_INTERNAL_EVENT"]);
   assert.deepEqual((await service.options(context)).actions, [...WORKER_ACTION_TYPES]);
 
@@ -134,6 +137,21 @@ test("H8.3 usa allowlists canonicas e bloqueia acoes indisponiveis", async () =>
   const pilot = await service.produceAutomationEvent(pilotEvent(tenant.empresa.id, "assign-owner-pilot-rejected"));
   assert.equal(pilot.createdExecutions, 0);
   assert.equal(pilot.createdJobs, 0);
+
+  const projectionRule = await service.createRule(context, {
+    nome: "Projecao liberada",
+    prioridade: 6,
+    gatilho: "LEAD_CREATED",
+    timezone: "America/Sao_Paulo",
+    condicoes: [],
+    acoes: [{ tipo: "UPDATE_NEXT_FOLLOW_UP_PROJECTION" }],
+  });
+  await service.activateRule(context, projectionRule.id);
+  const projectionPilot = await service.produceAutomationEvent(
+    pilotEvent(tenant.empresa.id, "projection-pilot-rejected"),
+  );
+  assert.equal(projectionPilot.createdExecutions, 0);
+  assert.equal(projectionPilot.createdJobs, 0);
 });
 
 test("H8.3 ASSIGN_OWNER atribui Lead uma vez e preserva idempotencia no retry", async () => {
@@ -240,7 +258,7 @@ test("H8.3 ASSIGN_OWNER reverte atribuicao se o historico falhar", async () => {
   assert.equal(await prisma.historicoAtribuicao.count({ where: { empresaId: tenant.empresa.id } }), 0);
 });
 
-test("H8.3 projecao standalone e CREATE_FOLLOW_UP usam o helper sem liberar a acao", async () => {
+test("H8.3 projecao standalone e CREATE_FOLLOW_UP usam o helper compartilhado", async () => {
   const tenant = await seedTenant("h8-3-follow-up-projection");
   const context = adminContext(tenant);
   const lead = await seedLead(tenant);
@@ -308,7 +326,7 @@ test("H8.3 projecao standalone e CREATE_FOLLOW_UP usam o helper sem liberar a ac
     (await prisma.cliente.findUniqueOrThrow({ where: { id: secondLead.clienteId } })).proximoFollowUp,
     createdFollowUp.dataHora.toISOString(),
   );
-  assert.equal(WORKER_ACTION_TYPES.includes("UPDATE_NEXT_FOLLOW_UP_PROJECTION"), false);
+  assert.equal(WORKER_ACTION_TYPES.includes("UPDATE_NEXT_FOLLOW_UP_PROJECTION"), true);
   assert.equal(PILOT_ACTION_TYPES.includes("UPDATE_NEXT_FOLLOW_UP_PROJECTION"), false);
 });
 

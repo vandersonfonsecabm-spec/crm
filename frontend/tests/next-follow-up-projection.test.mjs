@@ -32,10 +32,10 @@ test("cliente usa projecao do backend, nao envia edicao e modal e somente leitur
   assert.doesNotMatch(modal, /updateField\("nextFollowUp"/);
 });
 
-test("allowlists nao liberam a acao de projecao", async () => {
+test("allowlists liberam a projecao apenas no worker real", async () => {
   const actions = await readFile(path.join(frontendDir, "../backend/src/automations/actions.js"), "utf8");
   const worker = actions.slice(actions.indexOf("WORKER_ACTION_TYPES"), actions.indexOf("PILOT_ACTION_TYPES"));
   const pilot = actions.slice(actions.indexOf("PILOT_ACTION_TYPES"), actions.indexOf("function"));
-  assert.doesNotMatch(worker, /UPDATE_NEXT_FOLLOW_UP_PROJECTION/);
+  assert.match(worker, /UPDATE_NEXT_FOLLOW_UP_PROJECTION/);
   assert.doesNotMatch(pilot, /UPDATE_NEXT_FOLLOW_UP_PROJECTION/);
 });

@@ -9,6 +9,7 @@ const ACTION_TYPES = Object.freeze([
 const WORKER_ACTION_TYPES = Object.freeze([
   "ASSIGN_OWNER",
   "CREATE_INTERNAL_EVENT",
+  "UPDATE_NEXT_FOLLOW_UP_PROJECTION",
 ]);
 
 const PILOT_ACTION_TYPES = Object.freeze([
