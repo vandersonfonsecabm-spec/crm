@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
 const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES, unavailableActionTypes } = require("./actions");
 const { createWorkerEventEnvelope, sanitizeError } = require("./worker-observability");
+const { withPostgresEnqueueDiagnostics } = require("./postgres-enqueue-diagnostics");
 const { presentRule, safeJson, snapshotRule, validatePilotEventPayload, validateRulePayload } = require("./validation");
 const {
   assertProjectionReconciled,
@@ -15,7 +16,7 @@ const DEFAULT_LEASE_MS = 60000;
 const DEFAULT_EXECUTION_TIMEOUT_MS = 30000;
 const RETRYABLE_JOB_STATUSES = Object.freeze(["PENDENTE", "FALHOU"]);
 
-function createAutomationService({ prisma, env = process.env }) {
+function createAutomationService({ prisma, env = process.env, logger = console }) {
   const isPostgresRuntime = () => {
     const mergedEnv = { ...process.env, ...env };
     if (String(mergedEnv.CRM_TEST_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql") return true;
@@ -308,6 +309,7 @@ function createAutomationService({ prisma, env = process.env }) {
           execucaoId: exec.id,
           indice: index,
           tipo: action.tipo,
+          entityType: occurrence.entityType,
           actionKey: hashKey(`${occurrence.empresaId}:${rule.id}:${key}:${index}:${action.tipo}`),
           now,
         })
@@ -369,7 +371,16 @@ function createAutomationService({ prisma, env = process.env }) {
   }
 
   async function insertExecutionPostgres(client, { rule, occurrence, key, snapshot, idempotencyKey, now }) {
-    return client.$executeRaw`
+    return withPostgresEnqueueDiagnostics({
+      operation: "INSERT_AUTOMATION_EXECUTION",
+      context: {
+        actionType: snapshot.acoes.length === 1 ? snapshot.acoes[0]?.tipo : undefined,
+        entityType: occurrence.entityType,
+        tenantId: occurrence.empresaId,
+        occurrenceKey: key,
+      },
+      logger,
+    }, () => client.$executeRaw`
       INSERT INTO "AutomacaoExecucao" (
         "empresaId",
         "regraId",
@@ -405,7 +416,7 @@ function createAutomationService({ prisma, env = process.env }) {
         ${now}
       )
       ON CONFLICT("empresaId", "regraId", "occurrenceKey") DO NOTHING
-    `;
+    `);
   }
 
   async function insertJobSqlite(client, { empresaId, execucaoId, indice, tipo, actionKey, now }) {
@@ -438,8 +449,17 @@ function createAutomationService({ prisma, env = process.env }) {
     `;
   }
 
-  async function insertJobPostgres(client, { empresaId, execucaoId, indice, tipo, actionKey, now }) {
-    return client.$executeRaw`
+  async function insertJobPostgres(client, { empresaId, execucaoId, indice, tipo, entityType, actionKey, now }) {
+    return withPostgresEnqueueDiagnostics({
+      operation: "INSERT_AUTOMATION_JOB",
+      context: {
+        actionType: tipo,
+        entityType,
+        tenantId: empresaId,
+        actionKey,
+      },
+      logger,
+    }, () => client.$executeRaw`
       INSERT INTO "AutomacaoAcaoJob" (
         "empresaId",
         "execucaoId",
@@ -465,7 +485,7 @@ function createAutomationService({ prisma, env = process.env }) {
         ${now}
       )
       ON CONFLICT("empresaId", "actionKey") DO NOTHING
-    `;
+    `);
   }
 
   async function processDueJobs({
