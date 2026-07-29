@@ -934,3 +934,30 @@ integracoes autorizadas.
   `DATABASE_URL`, smoke tests e rollback.
 - Producao, Railway, Vercel, worker, piloto JavaGro, tenant principal e
   WhatsApp nao foram alterados nesta preparacao.
+
+## H8 encerrada
+
+- Em 29/07/2026, a H8 foi encerrada com a API de producao operando em
+  PostgreSQL e o dashboard autenticado validado no commit
+  `68c7d1c6b3e298e5c087ed2e9b0a58d430faf30a`.
+- O worker dedicado permanece ativo com uma replica, sem dominio publico e
+  ocioso. O processo da API continua sem worker interno. Os logs estruturados
+  allowlisted, a idempotencia concorrente e a recuperacao de lease permanecem
+  ativas sem expor payload, PII ou segredos.
+- O adiamento por janela foi corrigido e validado: esperar o horario permitido
+  nao consome tentativa real, libera o lease e preserva a elegibilidade do job.
+- A consulta de score do dashboard usa SQL portavel entre SQLite e PostgreSQL,
+  preserva o filtro por tenant e nao voltou a produzir `P2010`. O smoke
+  autenticado somente leitura confirmou `/auth/me`, `/dashboard` e a listagem
+  comercial em tres chamadas separadas durante mais de cinco minutos.
+- JavaGro mantem a capability `AUTOMATIONS` ativa, com regra piloto desativada
+  e gate piloto desligado. CRM Agro SaaS continua sem essa capability e sem
+  regra ativa.
+- Filas em producao terminaram com `pending=0`, `processing=0` e `failed=0`,
+  sem lease vencido e sem job elegivel preso. O smoke nao alterou jobs,
+  execucoes ou eventos e nao disparou integracao externa.
+- O SQLite anterior, os backups e os PostgreSQLs preservados continuam
+  disponiveis conforme o runbook. Maintenance permanece desligado.
+- H8.3 ainda nao foi iniciada. O proximo passo recomendado e planejar seu
+  escopo, gates de rollout e rollback antes de habilitar qualquer automacao
+  real adicional.
