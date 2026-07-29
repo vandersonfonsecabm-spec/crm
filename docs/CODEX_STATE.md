@@ -958,6 +958,33 @@ integracoes autorizadas.
   execucoes ou eventos e nao disparou integracao externa.
 - O SQLite anterior, os backups e os PostgreSQLs preservados continuam
   disponiveis conforme o runbook. Maintenance permanece desligado.
-- H8.3 ainda nao foi iniciada. O proximo passo recomendado e planejar seu
-  escopo, gates de rollout e rollback antes de habilitar qualquer automacao
-  real adicional.
+- Nesse checkpoint, H8.3 ainda nao havia sido iniciada; seu escopo, gates de
+  rollout e rollback deveriam ser definidos antes de habilitar uma nova acao
+  real.
+
+## H8.3 - ASSIGN_OWNER
+
+- Em 29/07/2026, a H8.3 foi iniciada com a publicacao do commit funcional
+  `a3d5ab483ca5cf2bbdc0fc0d124d78f2ba8f3233`.
+- A fonte canonica de acoes liberadas mantem `CREATE_INTERNAL_EVENT` e
+  `ASSIGN_OWNER` disponiveis para o worker real. O piloto sintetico continua
+  restrito exclusivamente a `CREATE_INTERNAL_EVENT`.
+- O piloto controlado da JavaGro validou `ASSIGN_OWNER` em um lead tecnico sem
+  responsavel: um job e uma execucao concluiram na primeira tentativa, o
+  responsavel do mesmo tenant foi atribuido e exatamente um
+  `HistoricoAtribuicao` automatico foi criado.
+- A protecao contra sobrescrita tambem foi validada com uma entidade tecnica
+  ja atribuida: o responsavel foi preservado e nenhum historico adicional foi
+  criado.
+- Os dois jobs terminaram `CONCLUIDO`, sem retry, duplicacao, lease preso,
+  evento interno inesperado ou integracao externa. A observacao posterior de
+  dez minutos nao mostrou loop nem novo processamento.
+- A regra JavaGro ficou desativada, sua condicao original foi restaurada e o
+  gate do piloto sintetico permaneceu desligado. As filas terminaram sem jobs
+  pendentes, processando ou falhos; o worker dedicado permaneceu saudavel e
+  ocioso.
+- CRM Agro SaaS permaneceu sem a capability `AUTOMATIONS`, sem regra, job ou
+  execucao de automacao.
+- Proximo passo recomendado: auditar os registros tecnicos preservados do
+  piloto e planejar a proxima acao interna de baixo risco, mantendo rollout
+  isolado por tenant e rollback operacional explicito.
