@@ -988,3 +988,32 @@ integracoes autorizadas.
 - Proximo passo recomendado: auditar os registros tecnicos preservados do
   piloto e planejar a proxima acao interna de baixo risco, mantendo rollout
   isolado por tenant e rollback operacional explicito.
+
+## H8.3 - UPDATE_NEXT_FOLLOW_UP_PROJECTION
+
+- Em 29/07/2026, a projecao de proximo acompanhamento foi consolidada com
+  `Acompanhamento` como fonte canonica e a acao
+  `UPDATE_NEXT_FOLLOW_UP_PROJECTION` foi liberada somente para o worker real.
+  O piloto sintetico continua restrito a `CREATE_INTERNAL_EVENT`.
+- O fluxo oficial de desativacao passou a reconciliar jobs cancelados e suas
+  execucoes na mesma transacao. A reconciliacao e protegida por tenant e
+  estado, preserva execucoes terminais e e idempotente diante de repeticao ou
+  concorrencia.
+- O registro tecnico anterior, composto por um job `CANCELADO` e uma execucao
+  `PENDENTE`, foi reconciliado pelo proprio servico de dominio. O job
+  permaneceu `CANCELADO`, a execucao terminou `CANCELADA` e uma segunda
+  chamada foi um no-op.
+- O piloto final da JavaGro processou exatamente um job e uma execucao na
+  primeira tentativa. A projecao passou a apontar para o menor acompanhamento
+  ativo, em ISO, e a revisao do cliente tecnico foi incrementada uma unica
+  vez.
+- A observacao posterior de cinco minutos confirmou a sequencia
+  `job_claimed`, `execution_started`, `action_started`, `action_succeeded` e
+  `job_succeeded`, sem `P2010`, retry, duplicacao, loop, lease preso ou
+  integracao externa.
+- A regra JavaGro terminou desativada, o gate do piloto sintetico permaneceu
+  desligado e as filas terminaram sem jobs pendentes, processando ou falhos.
+  CRM Agro SaaS permaneceu sem capability ou regra ativa de automacoes.
+- Nao houve migration, alteracao de schema ou backfill global. O proximo passo
+  recomendado e definir o contrato e os gates da proxima acao interna da
+  H8.3 antes de qualquer nova liberacao.
