@@ -12,6 +12,7 @@ const SAFE_ERROR_MESSAGES = new Map([
   ["AUTOMATION_CLIENT_NOT_FOUND", "Automation client was not found."],
   ["FEATURE_DISABLED", "Automation feature is disabled."],
   ["NO_ELIGIBLE_USER", "Automation action has no eligible user."],
+  ["ROUND_ROBIN_STATE_CONFLICT", "Round-robin state changed concurrently."],
   ["RULE_DISABLED", "Automation rule is disabled."],
 ]);
 const SAFE_ERROR_CODES = new Set([
@@ -31,6 +32,7 @@ const SAFE_ERROR_CODES = new Set([
   "NO_ELIGIBLE_USER",
   "NOT_FOUND",
   "PILOT_EVENT_DUPLICATE",
+  "ROUND_ROBIN_STATE_CONFLICT",
   "RULE_DISABLED",
   "USER_NOT_FOUND",
   "VALIDATION_ERROR",
@@ -47,6 +49,7 @@ const DOMAIN_ERROR_CODES = new Set([
   "NO_ELIGIBLE_USER",
   "NOT_FOUND",
   "PILOT_EVENT_DUPLICATE",
+  "ROUND_ROBIN_STATE_CONFLICT",
   "RULE_DISABLED",
   "USER_NOT_FOUND",
   "VALIDATION_ERROR",

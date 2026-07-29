@@ -15,6 +15,8 @@ const MAX_ATTEMPTS = 3;
 const DEFAULT_RETRY_DELAY_MS = 60000;
 const DEFAULT_LEASE_MS = 60000;
 const DEFAULT_EXECUTION_TIMEOUT_MS = 30000;
+const ROUND_ROBIN_TRANSACTION_ATTEMPTS = 5;
+const ROUND_ROBIN_TRANSACTION_BACKOFF_MS = 5;
 const RETRYABLE_JOB_STATUSES = Object.freeze(["PENDENTE", "FALHOU"]);
 
 function createAutomationService({ prisma, env = process.env, logger = console }) {
@@ -736,16 +738,25 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     if (!(await isFeatureEnabledForTenant({ prisma, empresaId: job.empresaId, featureKey: FEATURE_KEYS.AUTOMATIONS, env }))) {
       throw domainError(404, "FEATURE_DISABLED", "Recurso nao encontrado.", { permanent: true });
     }
-    return prisma.$transaction(async (tx) => {
-      const entity = await loadExecutionEntity(tx, job);
-      if (!entity) throw notFound("Entidade da automacao nao encontrada.", { permanent: true });
-      if (action.tipo === "ASSIGN_OWNER") return assignOwner(tx, job, entity, action.usuarioId);
-      if (action.tipo === "ASSIGN_ROUND_ROBIN") return assignRoundRobin(tx, job, entity, action.usuarioIds);
-      if (action.tipo === "CREATE_FOLLOW_UP") return createFollowUp(tx, job, entity, action);
-      if (action.tipo === "CREATE_INTERNAL_EVENT") return createInternalEvent(tx, job, entity, action);
-      if (action.tipo === "UPDATE_NEXT_FOLLOW_UP_PROJECTION") return updateNextFollowUpProjection(tx, entity);
-      throw domainError(409, "ACTION_NOT_SUPPORTED", "Acao nao suportada pelo worker.", { permanent: true });
-    });
+    const transactionAttempts = action.tipo === "ASSIGN_ROUND_ROBIN" ? ROUND_ROBIN_TRANSACTION_ATTEMPTS : 1;
+    for (let transactionAttempt = 1; transactionAttempt <= transactionAttempts; transactionAttempt += 1) {
+      try {
+        return await prisma.$transaction(async (tx) => {
+          const entity = await loadExecutionEntity(tx, job);
+          if (!entity) throw notFound("Entidade da automacao nao encontrada.", { permanent: true });
+          if (action.tipo === "ASSIGN_OWNER") return assignOwner(tx, job, entity, action.usuarioId);
+          if (action.tipo === "ASSIGN_ROUND_ROBIN") return assignRoundRobin(tx, job, entity, action.usuarioIds);
+          if (action.tipo === "CREATE_FOLLOW_UP") return createFollowUp(tx, job, entity, action);
+          if (action.tipo === "CREATE_INTERNAL_EVENT") return createInternalEvent(tx, job, entity, action);
+          if (action.tipo === "UPDATE_NEXT_FOLLOW_UP_PROJECTION") return updateNextFollowUpProjection(tx, entity);
+          throw domainError(409, "ACTION_NOT_SUPPORTED", "Acao nao suportada pelo worker.", { permanent: true });
+        });
+      } catch (error) {
+        if (transactionAttempt >= transactionAttempts || !isRoundRobinTransactionConflict(action.tipo, error)) throw error;
+        await wait(ROUND_ROBIN_TRANSACTION_BACKOFF_MS * transactionAttempt);
+      }
+    }
+    throw domainError(409, "ROUND_ROBIN_STATE_CONFLICT", "Conflito ao atualizar o estado do round-robin.");
   }
 
   async function assignOwner(tx, job, entity, usuarioId) {
@@ -761,12 +772,15 @@ function createAutomationService({ prisma, env = process.env, logger = console }
 
   async function assignRoundRobin(tx, job, entity, usuarioIds) {
     if (entity.responsavelId !== null) return entity;
-    const eligible = [];
-    for (const id of usuarioIds) {
-      const user = await tx.usuario.findFirst({ where: { id, empresaId: job.empresaId, ativo: true }, select: { id: true } });
-      if (user) eligible.push(user.id);
+    const configuredIds = normalizeRoundRobinUserIds(usuarioIds);
+    const eligible = (await tx.usuario.findMany({
+      where: { id: { in: configuredIds }, empresaId: job.empresaId, ativo: true },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    })).map((user) => user.id);
+    if (!eligible.length) {
+      throw domainError(409, "NO_ELIGIBLE_USER", "Nenhum usuario elegivel.", { permanent: true });
     }
-    if (!eligible.length) throw domainError(409, "NO_ELIGIBLE_USER", "Nenhum usuario elegivel.");
     const state = await tx.automacaoRoundRobinEstado.upsert({
       where: { empresaId_regraId: { empresaId: job.empresaId, regraId: job.execucao.regraId } },
       create: { empresaId: job.empresaId, regraId: job.execucao.regraId, updatedAt: new Date() },
@@ -775,8 +789,18 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     const currentIndex = eligible.indexOf(state.ultimoResponsavelId);
     const nextUser = eligible[(currentIndex + 1) % eligible.length];
     const assigned = await assignOwner(tx, job, entity, nextUser);
-    if (assigned.responsavelId === nextUser) {
-      await tx.automacaoRoundRobinEstado.updateMany({ where: { id: state.id, revisao: state.revisao }, data: { ultimoResponsavelId: nextUser, revisao: { increment: 1 } } });
+    if (assigned.responsavelId !== nextUser) return assigned;
+    const cursor = await tx.automacaoRoundRobinEstado.updateMany({
+      where: {
+        id: state.id,
+        empresaId: job.empresaId,
+        regraId: job.execucao.regraId,
+        revisao: state.revisao,
+      },
+      data: { ultimoResponsavelId: nextUser, revisao: { increment: 1 } },
+    });
+    if (cursor.count !== 1) {
+      throw domainError(409, "ROUND_ROBIN_STATE_CONFLICT", "Conflito ao atualizar o estado do round-robin.");
     }
     return assigned;
   }
@@ -1219,6 +1243,24 @@ function requireAvailableActions(actions) {
   if (unavailable.length) {
     throw domainError(409, "AUTOMATION_ACTION_UNAVAILABLE", "A regra possui acao ainda nao liberada para execucao.");
   }
+}
+
+function normalizeRoundRobinUserIds(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0))]
+    .sort((left, right) => left - right);
+}
+
+function isRoundRobinTransactionConflict(actionType, error) {
+  if (actionType !== "ASSIGN_ROUND_ROBIN") return false;
+  if (error?.codigo === "ROUND_ROBIN_STATE_CONFLICT") return true;
+  return ["P1008", "P2002", "P2028", "P2034"].includes(error?.code);
+}
+
+function wait(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function workerConfig({ limit, leaseMs, executionTimeoutMs, maxAttempts, retryDelayMs, supportedActions }) {
