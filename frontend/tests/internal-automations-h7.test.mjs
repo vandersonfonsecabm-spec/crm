@@ -30,6 +30,9 @@ test("H7 entrega workspace de automacoes com dados reais e sem promessa externa"
   assert.match(panel, /LEAD_WITHOUT_FOLLOW_UP/);
   assert.match(panel, /DEAL_STALLED/);
   assert.match(panel, /setSimulation\(await simulateAutomationRule/);
+  assert.match(panel, /availableActions = options\?\.actions \?\? \[\]/);
+  assert.match(panel, /availableActions\.map\(\(value\)/);
+  assert.doesNotMatch(panel, /Object\.entries\(actionLabels\)\.map/);
   assert.doesNotMatch(panel, /graph\.facebook|api\.whatsapp|facebook\.com|oauth|webhook externo|enviar mensagem externa/i);
   assert.doesNotMatch(panel, /JSON\.stringify\(.*condicoes|<pre|textarea.*JSON/i);
 });

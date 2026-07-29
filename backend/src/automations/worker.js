@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { maintenanceReadOnlyEnabled } = require("../database/maintenance-read-only");
+const { WORKER_ACTION_TYPES } = require("./actions");
 const { createAutomationWorkerLogger } = require("./worker-observability");
 
 const WORKER_DEFAULTS = Object.freeze({
@@ -87,7 +88,7 @@ function startAutomationWorker({
         leaseMs: config.leaseMs,
         executionTimeoutMs: config.executionTimeoutMs,
         maxAttempts: config.maxAttempts,
-        supportedActions: ["CREATE_INTERNAL_EVENT"],
+        supportedActions: WORKER_ACTION_TYPES,
         onEvent: eventLogger.event,
       });
     } catch (error) {

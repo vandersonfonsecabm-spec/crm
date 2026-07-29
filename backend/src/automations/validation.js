@@ -1,5 +1,6 @@
+const { ACTION_TYPES } = require("./actions");
+
 const TRIGGERS = Object.freeze(["LEAD_CREATED", "LEAD_WITHOUT_FOLLOW_UP", "DEAL_STALLED"]);
-const ACTIONS = Object.freeze(["ASSIGN_OWNER", "ASSIGN_ROUND_ROBIN", "CREATE_FOLLOW_UP", "CREATE_INTERNAL_EVENT", "UPDATE_NEXT_FOLLOW_UP_PROJECTION"]);
 const CONDITION_FIELDS = Object.freeze([
   "etapa",
   "origem",
@@ -83,7 +84,7 @@ function validateActions(value) {
   return list.map((item, index) => {
     const action = object(item, `acoes[${index}]`);
     rejectUnknown(action, ["tipo", "usuarioId", "usuarioIds", "titulo", "descricao", "delayMinutos", "prioridade", "tipoAcompanhamento", "eventoTipo", "resumo"]);
-    const tipo = enumValue(action.tipo, "tipo", ACTIONS);
+    const tipo = enumValue(action.tipo, "tipo", ACTION_TYPES);
     if (tipo === "ASSIGN_OWNER") return { tipo, usuarioId: integer(action.usuarioId, "usuarioId", { min: 1 }) };
     if (tipo === "ASSIGN_ROUND_ROBIN") {
       const usuarioIds = array(action.usuarioIds, "usuarioIds", 20).map((id) => integer(id, "usuarioIds", { min: 1 }));
@@ -258,7 +259,7 @@ function invalid(message, codigo) {
 }
 
 module.exports = {
-  ACTIONS,
+  ACTIONS: ACTION_TYPES,
   TRIGGERS,
   presentRule,
   safeJson,

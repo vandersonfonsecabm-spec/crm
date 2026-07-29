@@ -59,7 +59,7 @@ const emptyForm: FormState = {
   semResponsavel: false,
   etapa: "NOVO",
   tempoMinutos: "60",
-  acao: "CREATE_FOLLOW_UP",
+  acao: "ASSIGN_OWNER",
   usuarioId: "",
   usuarioIds: [],
   followUpTitulo: "Retornar contato",
@@ -111,6 +111,7 @@ export default function DashboardAutomationsPanel() {
   const hasFailedJobs = executions.some((execution) => execution.jobs.some((job) => job.status === "FALHOU" || job.status === "FALHA_DEFINITIVA"));
   const orderedRules = useMemo(() => [...rules].sort((first, second) => first.prioridade - second.prioridade || first.id - second.id), [rules]);
   const availableUsers = options?.users ?? [];
+  const availableActions = options?.actions ?? [];
   const simulationConditions = simulation?.condicoes ?? [];
   const simulationActions = simulation?.acoesPrevistas ?? [];
   const simulationIncompatibilities = simulation?.incompatibilidades ?? [];
@@ -131,6 +132,9 @@ export default function DashboardAutomationsPanel() {
       ]);
       setSummary(summaryData);
       setOptions(optionsData);
+      setForm((current) => optionsData.actions.includes(current.acao) || optionsData.actions.length === 0
+        ? current
+        : { ...current, acao: optionsData.actions[0] });
       setRules(rulesData.data);
       setExecutions(executionData.data);
     } catch (requestError) {
@@ -148,7 +152,7 @@ export default function DashboardAutomationsPanel() {
       const payload = buildPayload(form);
       const saved = form.id ? await updateAutomationRule(form.id, payload) : await createAutomationRule(payload);
       setMessage(form.id ? "Regra atualizada." : "Regra criada em modo inativo.");
-      setForm(ruleToForm(saved));
+      setForm(ruleToForm(saved, availableActions));
       await load();
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -242,7 +246,7 @@ export default function DashboardAutomationsPanel() {
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">
         <Surface className="min-w-0 overflow-hidden">
           <SectionHeader
-            actions={<Button leftIcon={<Plus size={14} />} onClick={() => { setForm(emptyForm); setSimulation(null); }} size="sm" variant="secondary">Nova regra</Button>}
+            actions={<Button leftIcon={<Plus size={14} />} onClick={() => { setForm(emptyFormForActions(availableActions)); setSimulation(null); }} size="sm" variant="secondary">Nova regra</Button>}
             description="Menor prioridade executa primeiro. Occurrences antigas nao sao reprocessadas ao ativar."
             icon={<Settings2 size={15} />}
             title="Regras"
@@ -255,7 +259,7 @@ export default function DashboardAutomationsPanel() {
                 <article className="grid gap-3 px-4 py-3 lg:grid-cols-[minmax(0,1fr)_auto]" key={rule.id}>
                   <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <button className="truncate text-left text-sm font-semibold text-[var(--text-primary)] hover:text-[var(--primary)]" onClick={() => { setForm(ruleToForm(rule)); setSimulation(null); }} type="button">
+                      <button className="truncate text-left text-sm font-semibold text-[var(--text-primary)] hover:text-[var(--primary)]" onClick={() => { setForm(ruleToForm(rule, availableActions)); setSimulation(null); }} type="button">
                         {rule.nome}
                       </button>
                       <StatusBadge label={rule.ativa ? "Ativa" : "Inativa"} status={rule.ativa ? "ativo" : "inativo"} />
@@ -270,7 +274,7 @@ export default function DashboardAutomationsPanel() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button onClick={() => { setForm(ruleToForm(rule)); setSimulation(null); }} size="sm" variant="ghost">Editar</Button>
+                    <Button onClick={() => { setForm(ruleToForm(rule, availableActions)); setSimulation(null); }} size="sm" variant="ghost">Editar</Button>
                     <Button leftIcon={rule.ativa ? <PauseCircle size={14} /> : <PlayCircle size={14} />} onClick={() => void toggleRule(rule)} size="sm" variant={rule.ativa ? "subtle" : "primary"}>
                       {rule.ativa ? "Desativar" : "Ativar"}
                     </Button>
@@ -322,7 +326,7 @@ export default function DashboardAutomationsPanel() {
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Acao</p>
               <div className="mt-2 grid gap-2">
                 <Select label="Tipo de acao" onChange={(event) => setForm({ ...form, acao: event.target.value as AutomationActionType })} value={form.acao}>
-                  {Object.entries(actionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  {availableActions.map((value) => <option key={value} value={value}>{actionLabels[value]}</option>)}
                 </Select>
                 {form.acao === "ASSIGN_OWNER" && (
                   <Select label="Responsavel" onChange={(event) => setForm({ ...form, usuarioId: event.target.value })} value={form.usuarioId}>
@@ -365,7 +369,7 @@ export default function DashboardAutomationsPanel() {
             </div>
 
             <div className="flex flex-wrap justify-end gap-2">
-              <Button onClick={() => { setForm(emptyForm); setSimulation(null); }} size="sm" variant="ghost">Limpar</Button>
+              <Button onClick={() => { setForm(emptyFormForActions(availableActions)); setSimulation(null); }} size="sm" variant="ghost">Limpar</Button>
               <Button loading={saving} onClick={() => void submitRule()} size="sm" variant="primary">{form.id ? "Salvar regra" : "Criar inativa"}</Button>
             </div>
           </div>
@@ -496,8 +500,8 @@ function buildAction(form: FormState): AutomationAction {
   return { tipo: form.acao };
 }
 
-function ruleToForm(rule: AutomationRule): FormState {
-  const firstAction = rule.acoes[0];
+function ruleToForm(rule: AutomationRule, availableActions: AutomationActionType[]): FormState {
+  const firstAction = rule.acoes.find((action) => availableActions.includes(action.tipo));
   const timeCondition = rule.condicoes.find((condition) => condition.campo === "tempoSemAcompanhamentoMinutos" || condition.campo === "tempoParadoMinutos");
   return {
     ...emptyForm,
@@ -511,7 +515,7 @@ function ruleToForm(rule: AutomationRule): FormState {
     semResponsavel: rule.condicoes.some((condition) => condition.campo === "semResponsavel" && condition.valor === true),
     etapa: String(rule.condicoes.find((condition) => condition.campo === "etapa")?.valor || "NOVO"),
     tempoMinutos: String(timeCondition?.valor || "60"),
-    acao: firstAction?.tipo || "CREATE_FOLLOW_UP",
+    acao: firstAction?.tipo || availableActions[0] || emptyForm.acao,
     usuarioId: String(firstAction?.usuarioId || ""),
     usuarioIds: firstAction?.usuarioIds || [],
     followUpTitulo: firstAction?.titulo || emptyForm.followUpTitulo,
@@ -520,6 +524,13 @@ function ruleToForm(rule: AutomationRule): FormState {
     followUpPrioridade: firstAction?.prioridade || "MEDIA",
     internalEventType: firstAction?.eventoTipo || emptyForm.internalEventType,
     internalEventSummary: firstAction?.resumo || emptyForm.internalEventSummary,
+  };
+}
+
+function emptyFormForActions(availableActions: AutomationActionType[]): FormState {
+  return {
+    ...emptyForm,
+    acao: availableActions[0] || emptyForm.acao,
   };
 }
 

@@ -394,7 +394,7 @@ test("falha transitoria registra retry e depois tentativas esgotadas", async () 
     gatilho: "LEAD_CREATED",
     timezone: "America/Sao_Paulo",
     condicoes: [],
-    acoes: [{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [2147483000] }],
+    acoes: [{ tipo: "ASSIGN_OWNER", usuarioId: 2147483000 }],
   });
   await service.activateRule(context, rule.id);
   const lead = await seedLead(tenant);
@@ -413,7 +413,7 @@ test("falha transitoria registra retry e depois tentativas esgotadas", async () 
     leaseOwner: "worker-retry",
     maxAttempts: 2,
     retryDelayMs: 1000,
-    supportedActions: ["ASSIGN_ROUND_ROBIN"],
+    supportedActions: ["ASSIGN_OWNER"],
     onEvent: capture.observer.event,
   });
 
@@ -456,7 +456,7 @@ test("falha transitoria registra retry e depois tentativas esgotadas", async () 
     leaseOwner: "worker-retry",
     maxAttempts: 2,
     retryDelayMs: 1000,
-    supportedActions: ["ASSIGN_ROUND_ROBIN"],
+    supportedActions: ["ASSIGN_OWNER"],
     onEvent: capture.observer.event,
   });
 
@@ -489,15 +489,7 @@ test("falha transitoria registra retry e depois tentativas esgotadas", async () 
 test("erro permanente precoce encerra sem declarar tentativas esgotadas", async () => {
   const tenant = await seedTenant("worker-logs-permanent");
   const context = adminContext(tenant);
-  const rule = await service.createRule(context, {
-    nome: "Falha permanente observavel",
-    prioridade: 20,
-    gatilho: "LEAD_CREATED",
-    timezone: "America/Sao_Paulo",
-    condicoes: [],
-    acoes: [{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [2147483000] }],
-  });
-  await service.activateRule(context, rule.id);
+  const rule = await legacyUnsupportedRule(context, "Falha permanente observavel");
   const lead = await seedLead(tenant);
   await service.enqueueLeadCreated({
     tx: prisma,
@@ -691,6 +683,24 @@ async function internalEventRule(context, nome) {
     timezone: "America/Sao_Paulo",
     condicoes: [],
     acoes: [{ tipo: "CREATE_INTERNAL_EVENT", eventoTipo: "LEAD_CREATED_TEST", resumo: "Evento tecnico." }],
+  });
+}
+
+async function legacyUnsupportedRule(context, nome) {
+  return prisma.automacaoRegra.create({
+    data: {
+      empresaId: context.empresaId,
+      nome,
+      ativa: true,
+      prioridade: 20,
+      gatilho: "LEAD_CREATED",
+      condicoesJson: "[]",
+      acoesJson: JSON.stringify([{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [2147483000] }]),
+      timezone: "America/Sao_Paulo",
+      activatedAt: new Date(Date.now() - 1000),
+      createdById: context.usuarioId,
+      updatedById: context.usuarioId,
+    },
   });
 }
 

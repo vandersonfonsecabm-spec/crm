@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
+const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES, unavailableActionTypes } = require("./actions");
 const { createWorkerEventEnvelope, sanitizeError } = require("./worker-observability");
 const { presentRule, safeJson, snapshotRule, validatePilotEventPayload, validateRulePayload } = require("./validation");
 
@@ -9,7 +10,6 @@ const MAX_ATTEMPTS = 3;
 const DEFAULT_RETRY_DELAY_MS = 60000;
 const DEFAULT_LEASE_MS = 60000;
 const DEFAULT_EXECUTION_TIMEOUT_MS = 30000;
-const DEFAULT_WORKER_ACTIONS = Object.freeze(["CREATE_INTERNAL_EVENT"]);
 const RETRYABLE_JOB_STATUSES = Object.freeze(["PENDENTE", "FALHOU"]);
 
 function createAutomationService({ prisma, env = process.env }) {
@@ -46,6 +46,7 @@ function createAutomationService({ prisma, env = process.env }) {
     requireAutomationAdmin(context);
     await requireTenantFeature(context);
     const data = validateRulePayload(input);
+    requireAvailableActions(data.acoes);
     const row = await prisma.automacaoRegra.create({
       data: {
         empresaId: context.empresaId,
@@ -70,6 +71,7 @@ function createAutomationService({ prisma, env = process.env }) {
     const rule = await findRule(context, id);
     const data = validateRulePayload(input, { partial: true });
     if (!Object.keys(data).length) throw domainError(422, "VALIDATION_ERROR", "Informe ao menos um campo para atualizar.");
+    if (Object.hasOwn(data, "acoes")) requireAvailableActions(data.acoes);
     const update = { updatedById: context.usuarioId, versao: { increment: 1 } };
     for (const field of ["nome", "descricao", "prioridade", "gatilho", "timezone"]) if (Object.hasOwn(data, field)) update[field] = data[field];
     if (Object.hasOwn(data, "condicoes")) update.condicoesJson = JSON.stringify(data.condicoes);
@@ -84,6 +86,7 @@ function createAutomationService({ prisma, env = process.env }) {
     await requireTenantFeature(context);
     const rule = await findRule(context, id);
     if (rule.ativa) return presentRule(rule);
+    requireAvailableActions(safeJson(rule.acoesJson, null));
     const row = await prisma.automacaoRegra.update({
       where: { id: rule.id },
       data: { ativa: true, activatedAt: new Date(), updatedById: context.usuarioId, versao: { increment: 1 } },
@@ -148,7 +151,7 @@ function createAutomationService({ prisma, env = process.env }) {
       sourceType: data.sourceType,
       sourceId: data.sourceId,
       entity,
-      supportedActionTypes: DEFAULT_WORKER_ACTIONS,
+      supportedActionTypes: PILOT_ACTION_TYPES,
       resumoJson: {
         sourceType: data.sourceType,
         sourceId: data.sourceId,
@@ -470,7 +473,7 @@ function createAutomationService({ prisma, env = process.env }) {
     executionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS,
     maxAttempts = MAX_ATTEMPTS,
     retryDelayMs = DEFAULT_RETRY_DELAY_MS,
-    supportedActions = DEFAULT_WORKER_ACTIONS,
+    supportedActions = WORKER_ACTION_TYPES,
     onEvent = null,
   } = {}) {
     const config = workerConfig({ limit, leaseMs, executionTimeoutMs, maxAttempts, retryDelayMs, supportedActions });
@@ -658,7 +661,7 @@ function createAutomationService({ prisma, env = process.env }) {
     }
   }
 
-  async function executeAction(job, { supportedActions = DEFAULT_WORKER_ACTIONS } = {}) {
+  async function executeAction(job, { supportedActions = WORKER_ACTION_TYPES } = {}) {
     const snapshot = safeJson(job.execucao.regraSnapshotJson, null);
     const action = snapshot?.acoes?.[job.indice];
     if (!action) throw domainError(422, "ACTION_CONFIG_MISSING", "Acao inexistente.", { permanent: true });
@@ -847,7 +850,7 @@ function createAutomationService({ prisma, env = process.env }) {
     return {
       triggers: ["LEAD_CREATED", "LEAD_WITHOUT_FOLLOW_UP", "DEAL_STALLED"],
       conditions: ["origem", "responsavelId", "semResponsavel", "tempoSemAcompanhamentoMinutos", "tempoParadoMinutos", "diaSemana", "janela", "timezone", "etapa"],
-      actions: ["ASSIGN_OWNER", "ASSIGN_ROUND_ROBIN", "CREATE_FOLLOW_UP", "CREATE_INTERNAL_EVENT", "UPDATE_NEXT_FOLLOW_UP_PROJECTION"],
+      actions: WORKER_ACTION_TYPES,
       users,
       unavailableConditions: ["regiao", "produto"],
       priorityConvention: "Menor numero = maior prioridade.",
@@ -1095,6 +1098,13 @@ function domainError(status, codigo, message, options = {}) {
   return error;
 }
 
+function requireAvailableActions(actions) {
+  const unavailable = unavailableActionTypes(actions);
+  if (unavailable.length) {
+    throw domainError(409, "AUTOMATION_ACTION_UNAVAILABLE", "A regra possui acao ainda nao liberada para execucao.");
+  }
+}
+
 function workerConfig({ limit, leaseMs, executionTimeoutMs, maxAttempts, retryDelayMs, supportedActions }) {
   return {
     limit: boundedInteger(limit, 5, 1, 50),
@@ -1102,7 +1112,7 @@ function workerConfig({ limit, leaseMs, executionTimeoutMs, maxAttempts, retryDe
     executionTimeoutMs: boundedInteger(executionTimeoutMs, DEFAULT_EXECUTION_TIMEOUT_MS, 1000, 2 * 60 * 1000),
     maxAttempts: boundedInteger(maxAttempts, MAX_ATTEMPTS, 1, 10),
     retryDelayMs: boundedInteger(retryDelayMs, DEFAULT_RETRY_DELAY_MS, 1000, 60 * 60 * 1000),
-    supportedActions: Array.isArray(supportedActions) && supportedActions.length ? supportedActions : DEFAULT_WORKER_ACTIONS,
+    supportedActions: Array.isArray(supportedActions) && supportedActions.length ? supportedActions : WORKER_ACTION_TYPES,
   };
 }
 

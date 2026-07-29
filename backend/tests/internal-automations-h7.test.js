@@ -1,7 +1,8 @@
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
-const { afterEach, before, test } = require("node:test");
+const { after, afterEach, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
+const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES } = require("../src/automations/actions");
 const { createAutomationService } = require("../src/automations/service");
 const { readAutomationWorkerConfig, shouldStartAutomationWorker, startAutomationWorker } = require("../src/automations/worker");
 
@@ -14,22 +15,25 @@ let sequence = 0;
 
 before(cleanDatabase);
 afterEach(cleanDatabase);
+after(() => prisma.$disconnect());
 
 async function cleanDatabase() {
-  await prisma.automacaoEventoInterno.deleteMany();
-  await prisma.automacaoAcaoJob.deleteMany();
-  await prisma.automacaoExecucao.deleteMany();
-  await prisma.automacaoRoundRobinEstado.deleteMany();
-  await prisma.automacaoRegra.deleteMany();
-  await prisma.historicoAcompanhamento.deleteMany();
-  await prisma.acompanhamento.deleteMany();
-  await prisma.historicoAtribuicao.deleteMany();
-  await prisma.negocio.deleteMany();
-  await prisma.lead.deleteMany();
-  await prisma.cliente.deleteMany();
-  await prisma.empresaFuncionalidade.deleteMany();
-  await prisma.usuario.deleteMany();
-  await prisma.empresa.deleteMany();
+  await prisma.$transaction([
+    prisma.automacaoEventoInterno.deleteMany(),
+    prisma.automacaoAcaoJob.deleteMany(),
+    prisma.automacaoExecucao.deleteMany(),
+    prisma.automacaoRoundRobinEstado.deleteMany(),
+    prisma.automacaoRegra.deleteMany(),
+    prisma.historicoAcompanhamento.deleteMany(),
+    prisma.acompanhamento.deleteMany(),
+    prisma.historicoAtribuicao.deleteMany(),
+    prisma.negocio.deleteMany(),
+    prisma.lead.deleteMany(),
+    prisma.cliente.deleteMany(),
+    prisma.empresaFuncionalidade.deleteMany(),
+    prisma.usuario.deleteMany(),
+    prisma.empresa.deleteMany(),
+  ]);
 }
 
 test("H7 respeita feature gate, ativacao sem retroatividade e simulacao sem efeitos", async () => {
@@ -97,31 +101,143 @@ test("H8.1 processa CREATE_INTERNAL_EVENT com idempotencia e reprocessamento con
   assert.equal(retried.erroCodigo, null);
 });
 
-test("H8.1 nao executa acoes comerciais nao suportadas pelo worker", async () => {
-  const tenant = await seedTenant("h7-round-robin");
-  const sellerA = await seedUser(tenant.empresa.id, "Vendedor A", "VENDEDOR");
-  const sellerB = await seedUser(tenant.empresa.id, "Vendedor B", "VENDEDOR");
+test("H8.3 usa allowlists canonicas e bloqueia acoes indisponiveis", async () => {
+  const tenant = await seedTenant("h8-3-actions");
   const context = adminContext(tenant);
-  const rule = await service.createRule(context, {
-    nome: "Distribuir Leads",
-    prioridade: 5,
-    gatilho: "LEAD_CREATED",
-    timezone: "America/Sao_Paulo",
-    condicoes: [],
-    acoes: [{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [sellerA.id, sellerB.id] }],
+  assert.deepEqual([...WORKER_ACTION_TYPES], ["ASSIGN_OWNER", "CREATE_INTERNAL_EVENT"]);
+  assert.deepEqual([...PILOT_ACTION_TYPES], ["CREATE_INTERNAL_EVENT"]);
+  assert.deepEqual((await service.options(context)).actions, [...WORKER_ACTION_TYPES]);
+
+  await assert.rejects(
+    service.createRule(context, {
+      nome: "Round-robin indisponivel",
+      prioridade: 5,
+      gatilho: "LEAD_CREATED",
+      timezone: "America/Sao_Paulo",
+      condicoes: [],
+      acoes: [{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [tenant.admin.id] }],
+    }),
+    (error) => error?.codigo === "AUTOMATION_ACTION_UNAVAILABLE",
+  );
+
+  const legacyRule = await createLegacyRule(context, "Round-robin legado", {
+    tipo: "ASSIGN_ROUND_ROBIN",
+    usuarioIds: [tenant.admin.id],
   });
+  await assert.rejects(
+    service.activateRule(context, legacyRule.id),
+    (error) => error?.codigo === "AUTOMATION_ACTION_UNAVAILABLE",
+  );
+
+  const ownerRule = await assignOwnerRule(context, tenant.admin.id, "Atribuicao real");
+  await service.activateRule(context, ownerRule.id);
+  const pilot = await service.produceAutomationEvent(pilotEvent(tenant.empresa.id, "assign-owner-pilot-rejected"));
+  assert.equal(pilot.createdExecutions, 0);
+  assert.equal(pilot.createdJobs, 0);
+});
+
+test("H8.3 ASSIGN_OWNER atribui Lead uma vez e preserva idempotencia no retry", async () => {
+  const tenant = await seedTenant("h8-3-lead");
+  const context = adminContext(tenant);
+  const owner = await seedUser(tenant.empresa.id, "Owner Lead", "VENDEDOR");
+  const previousOwner = await seedUser(tenant.empresa.id, "Owner Existente", "VENDEDOR");
+  const rule = await assignOwnerRule(context, owner.id, "Atribuir Lead");
   await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
 
-  const firstLead = await seedLead(tenant);
-  const secondLead = await seedLead(tenant);
-  await service.enqueueLeadCreated({ tx: prisma, empresaId: tenant.empresa.id, leadId: firstLead.id, originalEventId: "rr-1", occurredAt: firstLead.createdAt });
-  await service.enqueueLeadCreated({ tx: prisma, empresaId: tenant.empresa.id, leadId: secondLead.id, originalEventId: "rr-2", occurredAt: secondLead.createdAt });
-  await service.processDueJobs({ now: new Date(), limit: 10, leaseOwner: "rr-worker" });
+  await service.enqueueLeadCreated({ tx: prisma, empresaId: tenant.empresa.id, leadId: lead.id, originalEventId: "assign-lead-1", occurredAt: lead.createdAt });
+  await service.enqueueLeadCreated({ tx: prisma, empresaId: tenant.empresa.id, leadId: lead.id, originalEventId: "assign-lead-1", occurredAt: lead.createdAt });
+  const now = new Date(Date.now() + 1000);
+  const [left, right] = await Promise.all([
+    service.processDueJobs({ now, limit: 1, leaseOwner: "assign-lead-a" }),
+    service.processDueJobs({ now, limit: 1, leaseOwner: "assign-lead-b" }),
+  ]);
 
-  assert.equal((await prisma.lead.findUnique({ where: { id: firstLead.id } })).responsavelId, null);
-  assert.equal((await prisma.lead.findUnique({ where: { id: secondLead.id } })).responsavelId, null);
-  assert.equal(await prisma.historicoAtribuicao.count({ where: { empresaId: tenant.empresa.id, origem: "AUTOMATICA" } }), 0);
-  assert.equal(await prisma.automacaoAcaoJob.count({ where: { empresaId: tenant.empresa.id, status: "FALHA_DEFINITIVA", erroCodigo: "ACTION_NOT_SUPPORTED" } }), 2);
+  assert.equal(left.processed + right.processed, 1);
+  assert.equal((await prisma.lead.findUnique({ where: { id: lead.id } })).responsavelId, owner.id);
+  assert.equal(await prisma.automacaoAcaoJob.count({ where: { empresaId: tenant.empresa.id } }), 1);
+  assert.equal(await prisma.historicoAtribuicao.count({ where: { empresaId: tenant.empresa.id, leadId: lead.id, responsavelNovoId: owner.id } }), 1);
+
+  const job = await prisma.automacaoAcaoJob.findFirstOrThrow({ where: { empresaId: tenant.empresa.id } });
+  await prisma.automacaoAcaoJob.update({ where: { id: job.id }, data: { status: "FALHA_DEFINITIVA" } });
+  await service.retryJob(context, job.id);
+  await service.processDueJobs({ now: new Date(now.getTime() + 1000), limit: 1, leaseOwner: "assign-lead-retry" });
+  assert.equal(await prisma.historicoAtribuicao.count({ where: { empresaId: tenant.empresa.id, leadId: lead.id } }), 1);
+
+  const assignedLead = await seedLead(tenant, { responsavelId: previousOwner.id });
+  await service.enqueueLeadCreated({ tx: prisma, empresaId: tenant.empresa.id, leadId: assignedLead.id, originalEventId: "assign-lead-existing", occurredAt: assignedLead.createdAt });
+  await service.processDueJobs({ now: new Date(Date.now() + 2000), limit: 1, leaseOwner: "assign-lead-existing" });
+  assert.equal((await prisma.lead.findUnique({ where: { id: assignedLead.id } })).responsavelId, previousOwner.id);
+  assert.equal(await prisma.historicoAtribuicao.count({ where: { empresaId: tenant.empresa.id, leadId: assignedLead.id } }), 0);
+});
+
+test("H8.3 ASSIGN_OWNER atribui Negocio e registra um historico", async () => {
+  const tenant = await seedTenant("h8-3-business");
+  const context = adminContext(tenant);
+  const owner = await seedUser(tenant.empresa.id, "Owner Negocio", "VENDEDOR");
+  const rule = await assignOwnerRule(context, owner.id, "Atribuir Negocio", "DEAL_STALLED");
+  await service.activateRule(context, rule.id);
+  const negocio = await seedNegocio(tenant);
+  await seedActionJob({ tenant, rule, entityType: "NEGOCIO", entity: negocio, marker: "assign-business-1" });
+
+  await service.processDueJobs({ now: new Date(Date.now() + 1000), limit: 1, leaseOwner: "assign-business" });
+
+  assert.equal((await prisma.negocio.findUnique({ where: { id: negocio.id } })).responsavelId, owner.id);
+  assert.equal(await prisma.historicoAtribuicao.count({
+    where: { empresaId: tenant.empresa.id, negocioId: negocio.id, responsavelNovoId: owner.id },
+  }), 1);
+});
+
+test("H8.3 ASSIGN_OWNER rejeita usuario inativo, inexistente e de outro tenant", async () => {
+  const otherTenant = await seedTenant("h8-3-invalid-owner-other");
+  const cases = [
+    { label: "inactive", setup: async (tenant) => {
+      const user = await seedUser(tenant.empresa.id, "Owner Inativo", "VENDEDOR");
+      await prisma.usuario.update({ where: { id: user.id }, data: { ativo: false } });
+      return user.id;
+    } },
+    { label: "missing", setup: async () => 2147483000 },
+    { label: "cross-tenant", setup: async () => otherTenant.admin.id },
+  ];
+
+  for (const item of cases) {
+    const tenant = await seedTenant(`h8-3-invalid-owner-${item.label}`);
+    const context = adminContext(tenant);
+    const ownerId = await item.setup(tenant);
+    const rule = await assignOwnerRule(context, ownerId, `Owner invalido ${item.label}`);
+    await service.activateRule(context, rule.id);
+    const lead = await seedLead(tenant);
+    await service.enqueueLeadCreated({
+      tx: prisma,
+      empresaId: tenant.empresa.id,
+      leadId: lead.id,
+      originalEventId: `assign-invalid-${item.label}`,
+      occurredAt: lead.createdAt,
+    });
+    await service.processDueJobs({ now: new Date(Date.now() + 1000), limit: 1, leaseOwner: `assign-invalid-${item.label}` });
+    const job = await prisma.automacaoAcaoJob.findFirstOrThrow({ where: { empresaId: tenant.empresa.id } });
+    assert.equal(job.status, "FALHOU");
+    assert.equal(job.erroCodigo, "USER_NOT_FOUND");
+    assert.equal((await prisma.lead.findUnique({ where: { id: lead.id } })).responsavelId, null);
+    assert.equal(await prisma.historicoAtribuicao.count({ where: { empresaId: tenant.empresa.id } }), 0);
+  }
+});
+
+test("H8.3 ASSIGN_OWNER reverte atribuicao se o historico falhar", async () => {
+  const tenant = await seedTenant("h8-3-rollback");
+  const context = adminContext(tenant);
+  const owner = await seedUser(tenant.empresa.id, "Owner Rollback", "VENDEDOR");
+  const rule = await assignOwnerRule(context, owner.id, "Atribuicao com rollback");
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  await service.enqueueLeadCreated({ tx: prisma, empresaId: tenant.empresa.id, leadId: lead.id, originalEventId: "assign-rollback", occurredAt: lead.createdAt });
+  const failingService = createAutomationService({ prisma: prismaWithHistoryFailure(), env });
+
+  const result = await failingService.processDueJobs({ now: new Date(Date.now() + 1000), limit: 1, leaseOwner: "assign-rollback" });
+
+  assert.equal(result.results[0].status, "FALHOU");
+  assert.equal((await prisma.lead.findUnique({ where: { id: lead.id } })).responsavelId, null);
+  assert.equal(await prisma.historicoAtribuicao.count({ where: { empresaId: tenant.empresa.id } }), 0);
 });
 
 test("H7 varre gatilhos temporais e o worker permanece desligado por padrao em teste", async () => {
@@ -293,7 +409,7 @@ test("H8.1 janela cruzando meia-noite preserva falhas reais em outro timezone", 
     timezone: "America/Sao_Paulo",
     janela: { inicio: "23:00", fim: "02:00" },
     condicoes: [],
-    acoes: [{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [2147483000] }],
+    acoes: [{ tipo: "ASSIGN_OWNER", usuarioId: 2147483000 }],
   });
   await service.activateRule(context, rule.id);
   const lead = await seedLead(tenant);
@@ -318,7 +434,7 @@ test("H8.1 janela cruzando meia-noite preserva falhas reais em outro timezone", 
       leaseOwner: "window-midnight-worker",
       maxAttempts: 5,
       retryDelayMs: 1000,
-      supportedActions: ["ASSIGN_ROUND_ROBIN"],
+      supportedActions: ["ASSIGN_OWNER"],
     });
     assert.equal(failed.results[0].status, "FALHOU");
   }
@@ -340,7 +456,7 @@ test("H8.1 janela cruzando meia-noite preserva falhas reais em outro timezone", 
       leaseOwner: "window-midnight-worker",
       maxAttempts: 5,
       retryDelayMs: 1000,
-      supportedActions: ["ASSIGN_ROUND_ROBIN"],
+      supportedActions: ["ASSIGN_OWNER"],
     });
     assert.equal(result.results[0].status, "AGUARDANDO_JANELA");
     assert.equal((await prisma.automacaoAcaoJob.findUnique({ where: { id: job.id } })).tentativas, 2);
@@ -352,7 +468,7 @@ test("H8.1 janela cruzando meia-noite preserva falhas reais em outro timezone", 
     leaseOwner: "window-midnight-worker",
     maxAttempts: 5,
     retryDelayMs: 1000,
-    supportedActions: ["ASSIGN_ROUND_ROBIN"],
+    supportedActions: ["ASSIGN_OWNER"],
   });
   assert.equal(insideWindow.results[0].status, "FALHOU");
   assert.equal((await prisma.automacaoAcaoJob.findUnique({ where: { id: job.id } })).tentativas, 3);
@@ -669,6 +785,102 @@ async function seedLead(tenant, overrides = {}) {
   });
 }
 
+async function seedNegocio(tenant, overrides = {}) {
+  const cliente = await prisma.cliente.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      nome: `Cliente Negocio H8.3 ${++sequence}`,
+      telefone: "",
+      email: "",
+      empresa: "QA H8.3",
+      interesse: "Automacao",
+      origem: "QA H8.3",
+    },
+  });
+  return prisma.negocio.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      clienteId: cliente.id,
+      etapa: "NOVO",
+      titulo: "Negocio H8.3",
+      ...overrides,
+    },
+  });
+}
+
+async function assignOwnerRule(context, usuarioId, nome, gatilho = "LEAD_CREATED") {
+  return service.createRule(context, {
+    nome,
+    prioridade: 20,
+    gatilho,
+    timezone: "America/Sao_Paulo",
+    condicoes: gatilho === "DEAL_STALLED"
+      ? [{ campo: "tempoParadoMinutos", operador: "GTE", valor: 1 }]
+      : [],
+    acoes: [{ tipo: "ASSIGN_OWNER", usuarioId }],
+  });
+}
+
+async function createLegacyRule(context, nome, action, { active = false } = {}) {
+  return prisma.automacaoRegra.create({
+    data: {
+      empresaId: context.empresaId,
+      nome,
+      ativa: active,
+      prioridade: 20,
+      gatilho: "LEAD_CREATED",
+      condicoesJson: "[]",
+      acoesJson: JSON.stringify([action]),
+      timezone: "America/Sao_Paulo",
+      activatedAt: active ? new Date(Date.now() - 1000) : null,
+      createdById: context.usuarioId,
+      updatedById: context.usuarioId,
+    },
+  });
+}
+
+async function seedActionJob({ tenant, rule, entityType, entity, marker }) {
+  const conditions = rule.condicoes || JSON.parse(rule.condicoesJson);
+  const actions = rule.acoes || JSON.parse(rule.acoesJson);
+  const snapshot = {
+    id: rule.id,
+    nome: rule.nome,
+    gatilho: rule.gatilho,
+    prioridade: rule.prioridade,
+    timezone: rule.timezone,
+    condicoes: conditions,
+    acoes: actions,
+    janela: null,
+    versao: rule.versao,
+  };
+  const execution = await prisma.automacaoExecucao.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      regraId: rule.id,
+      regraVersao: rule.versao,
+      regraSnapshotJson: JSON.stringify(snapshot),
+      entidadeTipo: entityType,
+      entidadeId: entity.id,
+      leadId: entityType === "LEAD" ? entity.id : null,
+      negocioId: entityType === "NEGOCIO" ? entity.id : null,
+      occurrenceKey: marker,
+      idempotencyKey: hashKey(`${tenant.empresa.id}:${rule.id}:${marker}`),
+      status: "PENDENTE",
+    },
+  });
+  return prisma.automacaoAcaoJob.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      execucaoId: execution.id,
+      indice: 0,
+      tipo: snapshot.acoes[0].tipo,
+      actionKey: hashKey(`${tenant.empresa.id}:${rule.id}:${marker}:0:${snapshot.acoes[0].tipo}`),
+      status: "PENDENTE",
+      nextAttemptAt: new Date(),
+    },
+  });
+}
+
 async function internalEventRule(context, nome) {
   return service.createRule(context, {
     nome,
@@ -709,6 +921,36 @@ function prismaWithWindowDeferralInterference(interfere) {
   return new Proxy(prisma, {
     get(target, property) {
       if (property === "automacaoAcaoJob") return wrappedJobDelegate;
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function prismaWithHistoryFailure() {
+  return new Proxy(prisma, {
+    get(target, property) {
+      if (property === "$transaction") {
+        return async (callback, options) => target.$transaction(async (tx) => {
+          const wrappedHistory = new Proxy(tx.historicoAtribuicao, {
+            get(historyTarget, historyProperty) {
+              if (historyProperty === "create") return async () => {
+                throw new Error("Falha intermediaria controlada.");
+              };
+              const value = Reflect.get(historyTarget, historyProperty);
+              return typeof value === "function" ? value.bind(historyTarget) : value;
+            },
+          });
+          const wrappedTx = new Proxy(tx, {
+            get(txTarget, txProperty) {
+              if (txProperty === "historicoAtribuicao") return wrappedHistory;
+              const value = Reflect.get(txTarget, txProperty);
+              return typeof value === "function" ? value.bind(txTarget) : value;
+            },
+          });
+          return callback(wrappedTx);
+        }, options);
+      }
       const value = Reflect.get(target, property);
       return typeof value === "function" ? value.bind(target) : value;
     },
