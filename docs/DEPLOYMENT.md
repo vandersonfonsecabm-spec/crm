@@ -159,30 +159,51 @@ externas nao suportadas falham sem efeito e sem retry infinito.
 Cada linha do worker e JSON independente com `event`, `timestamp`, `service`,
 `workerInstanceId` e `provider`. Quando aplicavel, inclui somente IDs tecnicos
 de tenant, regra, job, execucao e evento, alem de `actionType`, `triggerType`,
-`attempt`, `maxAttempts`, `durationMs`, `status`, `retryAt` e `leaseUntil`.
-`worker_started` registra tambem o intervalo de polling e os limites operacionais
-nao sensiveis.
+`attempt`, `maxAttempts`, `durationMs`, `status`, `retryAt`, `leaseUntil`,
+`final`, `willRetry`, `permanent`, `retryable`, `failureReason`, `errorClass`,
+`errorCode`, `errorName` e mensagem generica. `worker_started` registra tambem
+o intervalo de polling.
 
-O ciclo de sucesso emite `job_found`, `job_claimed`, `execution_started`,
-`action_started`, `action_succeeded` e `job_succeeded`, nessa ordem. Falha de
-acao emite `action_failed` e `job_failed`; quando houver nova tentativa, emite
-`job_retry_scheduled` somente depois de persistir `nextAttemptAt`. Sem nova
-tentativa, emite `job_attempts_exhausted`. A recuperacao real de lease expirado
-emite `job_lease_recovered` antes do novo `job_claimed`.
+O ciclo de sucesso emite `job_claimed`, `execution_started`, `action_started`,
+`action_succeeded` e `job_succeeded`, nessa ordem. `job_found` nao e emitido:
+antes do claim atomico ele poderia duplicar em corrida e nao acrescentava uma
+transicao confirmada. `action_failed` informa somente que a acao lancou erro,
+sem antecipar decisao de retry ou encerramento. Uma falha recuperavel emite
+depois da persistencia `job_attempt_failed` e `job_retry_scheduled`. Em erro
+permanente, `job_permanent_failure` precede o `job_failed` definitivo. Na
+ultima tentativa, `job_attempt_failed` precede `job_attempts_exhausted` e
+`job_failed`. `job_attempts_exhausted` aparece somente quando
+`attempt >= maxAttempts`; os eventos de decisao informam `final`, `willRetry`
+e `failureReason`. `retryable` descreve a natureza tecnica do erro, enquanto
+`willRetry` e a decisao operacional autoritativa para aquela tentativa. A
+recuperacao real de lease expirado emite
+`job_lease_recovered` antes do novo `job_claimed`.
 
 O processo emite `worker_started`, `worker_stopping` e `worker_stopped`. Uma
 falha do ciclo de polling, antes ou fora de um claim confirmado, usa
 `worker_poll_error`; ela nao e registrada como falha de job. Polling vazio nao
 emite evento de job nem linha periodica em nivel normal.
 
-Mensagens de erro sao limitadas e removem URLs, strings de conexao, Bearer,
-JWT, cookies, e-mail, telefone, CPF/CNPJ e marcadores comuns de senha, token,
-secret ou API key. Payloads, headers, stacks, objetos Prisma e dumps de ambiente
-nao sao serializados. Exemplo sanitizado:
+Mensagens inesperadas nao sao copiadas para o log: o worker publica mensagem
+generica por classe/codigo tecnico. O callback recebe um unico envelope
+allowlisted; `Error` bruto, campos desconhecidos e objetos aninhados sao
+descartados. Identificadores de erro aceitam somente valores tecnicos
+reconhecidos e usam fallback seguro. A sanitizacao defensiva tambem cobre
+Authorization Basic/Bearer, JWT, Cookie e Set-Cookie completos, URLs, strings
+de conexao, e-mail, telefone, CPF/CNPJ, senha, token, secret, API key e
+estruturas Prisma com `meta`, `target`, `data`, `args` ou `input`. Mensagens
+ficam limitadas a 240 caracteres. Payloads, headers, stacks, objetos Prisma e
+dumps de ambiente nao sao serializados. Exemplo sanitizado:
 
 ```json
-{"event":"job_retry_scheduled","timestamp":"2030-01-01T00:00:00.000Z","service":"automation-worker","workerInstanceId":"worker-example","provider":"postgresql","tenantId":10,"ruleId":20,"jobId":30,"executionId":40,"actionType":"CREATE_INTERNAL_EVENT","triggerType":"LEAD_CREATED","attempt":1,"maxAttempts":3,"durationMs":12,"status":"FALHOU","retryAt":"2030-01-01T00:01:00.000Z"}
+{"event":"job_retry_scheduled","timestamp":"2030-01-01T00:00:00.000Z","service":"automation-worker","workerInstanceId":"worker-example","provider":"postgresql","tenantId":10,"ruleId":20,"jobId":30,"executionId":40,"actionType":"CREATE_INTERNAL_EVENT","triggerType":"LEAD_CREATED","attempt":1,"maxAttempts":3,"durationMs":12,"status":"FALHOU","retryAt":"2030-01-01T00:01:00.000Z","final":false,"willRetry":true,"failureReason":"RETRYABLE_ERROR"}
 ```
+
+Limitacao preexistente, fora desta mudanca de observabilidade: o adiamento por
+janela ocorre depois do claim incrementar `tentativas`. No limite configurado,
+isso pode consumir a ultima tentativa sem executar a acao. O fluxo deve ser
+corrigido e validado em tarefa funcional separada; este patch nao altera essa
+logica.
 
 H8.2 separa produtor e worker: o produtor cria somente execucoes e
 `AutomacaoAcaoJob` idempotentes a partir de evento sintetico protegido; o worker

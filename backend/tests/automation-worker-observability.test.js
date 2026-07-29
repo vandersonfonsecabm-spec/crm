@@ -3,13 +3,42 @@ const { after, afterEach, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const { createAutomationService } = require("../src/automations/service");
 const { automationProvider, startAutomationWorker } = require("../src/automations/worker");
-const { createAutomationWorkerLogger } = require("../src/automations/worker-observability");
+const {
+  MAX_ERROR_MESSAGE_LENGTH,
+  createAutomationWorkerLogger,
+  sanitizeErrorMessage,
+} = require("../src/automations/worker-observability");
 
 process.env.NODE_ENV = "test";
 
 const prisma = new PrismaClient();
 const env = { AUTOMATIONS_ENABLED: "true", NODE_ENV: "test" };
 const service = createAutomationService({ prisma, env });
+const CALLBACK_FIELDS = new Set([
+  "event",
+  "tenantId",
+  "ruleId",
+  "jobId",
+  "executionId",
+  "eventId",
+  "actionType",
+  "triggerType",
+  "attempt",
+  "maxAttempts",
+  "status",
+  "durationMs",
+  "retryAt",
+  "leaseUntil",
+  "final",
+  "willRetry",
+  "permanent",
+  "retryable",
+  "failureReason",
+  "errorClass",
+  "errorCode",
+  "errorName",
+  "errorMessage",
+]);
 let sequence = 0;
 
 before(cleanDatabase);
@@ -59,8 +88,11 @@ test("worker registra startup uma vez e polling vazio sem ruido de job", async (
   assert.equal(startup[0].service, "automation-worker");
   assert.equal(startup[0].provider, "sqlite");
   assert.equal(startup[0].pollIntervalMs, 1000);
+  assert.equal(startup[0].status, "started");
   assert.match(startup[0].timestamp, /^\d{4}-\d{2}-\d{2}T/);
-  assert.equal(entries.filter((entry) => entry.event === "worker_stopped").length, 1);
+  const stopped = entries.filter((entry) => entry.event === "worker_stopped");
+  assert.equal(stopped.length, 1);
+  assert.equal(stopped[0].status, "stopped");
   assert.equal(entries.some((entry) => entry.event.startsWith("job_")), false);
   assert.equal(entries.some((entry) => entry.event.startsWith("polling_")), false);
   assert.doesNotMatch(capture.text(), /sensitive|test\.db/i);
@@ -112,11 +144,161 @@ test("worker_poll_error preserva diagnostico tecnico sem vazar dados sensiveis",
 
   const pollErrors = capture.entries().filter((entry) => entry.event === "worker_poll_error");
   assert.equal(pollErrors.length, 1);
-  assert.equal(pollErrors[0].errorCode, "POLL_TEST_FAILURE");
+  assert.equal(pollErrors[0].errorCode, "UNKNOWN_ERROR");
   assert.equal(pollErrors[0].errorName, "Error");
   assert.ok(pollErrors[0].durationMs >= 0);
   assert.ok(pollErrors[0].errorMessage.length <= 240);
   assert.doesNotMatch(capture.text(), /db_password|token-value-123|session-secret|customer@example\.test|99999-8888|top-secret|eyJhbGci|private\.example/i);
+});
+
+test("sanitizacao cobre headers compostos, credenciais, PII e payload Prisma", () => {
+  const cases = [
+    ["Cookie: session=abc; refresh=def; tracking=ghi", ["session=abc", "refresh=def", "tracking=ghi"]],
+    ["Set-Cookie: session=abc; Path=/; HttpOnly; Secure; SameSite=Lax", ["session=abc", "Path=/", "SameSite=Lax"]],
+    ["Authorization: Basic dXNlcjpwYXNz", ["dXNlcjpwYXNz"]],
+    ["Authorization: Bearer bearer-value-123", ["bearer-value-123"]],
+    ["JWT eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signaturevalue", ["eyJhbGci"]],
+    ["URL https://private.example/path?token=url-secret", ["private.example", "url-secret"]],
+    ["DB postgresql://db_user:db_password@private.example:5432/crm", ["db_user", "db_password", "private.example"]],
+    ["PII customer@example.test +55 (11) 99999-8888 123.456.789-00 12.345.678/0001-90", [
+      "customer@example.test",
+      "99999-8888",
+      "123.456.789-00",
+      "12.345.678/0001-90",
+    ]],
+    ["password=pass-secret secret=secret-value token=token-value apiKey=api-key-value", [
+      "pass-secret",
+      "secret-value",
+      "token-value",
+      "api-key-value",
+    ]],
+    ['PrismaClientKnownRequestError meta={"target":["email"],"data":{"name":"Pessoa Privada","email":"person@example.test"}} args={"url":"postgresql://u:p@db.internal/crm"}', [
+      "target",
+      "Pessoa Privada",
+      "person@example.test",
+      "db.internal",
+    ]],
+  ];
+
+  for (const [message, forbidden] of cases) {
+    const sanitized = sanitizeErrorMessage(message);
+    assert.ok(sanitized.length <= MAX_ERROR_MESSAGE_LENGTH);
+    for (const value of forbidden) assert.equal(sanitized.includes(value), false, `${value} permaneceu em ${sanitized}`);
+  }
+  assert.equal(sanitizeErrorMessage("x".repeat(MAX_ERROR_MESSAGE_LENGTH + 100)).length, MAX_ERROR_MESSAGE_LENGTH);
+});
+
+test("logger reduz erro Prisma arbitrario a diagnostico tecnico seguro", () => {
+  const capture = logCapture();
+  const error = new Error('PrismaClientKnownRequestError meta={"target":["email"],"data":{"name":"Pessoa Privada"}} postgresql://u:p@db.internal/crm');
+  error.name = "PrismaClientKnownRequestError";
+  error.code = "P2002";
+  error.meta = { target: ["email"], data: { name: "Pessoa Privada" } };
+
+  capture.observer.error("worker_poll_error", error, { durationMs: 1 });
+
+  const entry = capture.entries()[0];
+  assert.equal(entry.errorCode, "P2002");
+  assert.equal(entry.errorName, "PrismaClientKnownRequestError");
+  assert.equal(entry.errorClass, "PRISMA");
+  assert.equal(entry.errorMessage, "Database operation failed.");
+  assert.doesNotMatch(capture.text(), /Pessoa Privada|"target"|"meta"|"data"|db\.internal|postgresql:/i);
+});
+
+test("logger fecha o envelope contra campos e identificadores arbitrarios", () => {
+  const capture = logCapture();
+  const rawError = new Error("raw-error-secret");
+  rawError.code = "RAW_SECRET";
+  assert.equal(capture.observer.event(rawError), false);
+  assert.equal(capture.entries().length, 0);
+
+  capture.observer.info("worker_poll_error", {
+    durationMs: 1,
+    errorCode: `customer@example.test Bearer injected-token https://private.example ${"x".repeat(200)}`,
+    errorName: '{"password":"name-secret"}',
+    errorClass: "postgresql://user:password@private.example/crm",
+    failureReason: "token=failure-secret",
+    errorMessage: "callback-message customer@example.test secret=message-secret",
+    stack: "stack secret=stack-secret",
+    cause: new Error("cause-secret"),
+    request: { headers: { authorization: "Basic dXNlcjpwYXNz" } },
+    response: { headers: { "set-cookie": "session=response-secret" } },
+    headers: { cookie: "session=header-secret" },
+    config: { password: "config-secret" },
+    env: { JWT_SECRET: "env-secret" },
+    meta: { target: ["email"] },
+    target: ["email"],
+    args: { data: { email: "args@example.test" } },
+    data: { email: "data@example.test" },
+    payload: { email: "payload@example.test" },
+    unknownField: "unknown-secret",
+  });
+
+  const entry = capture.entries()[0];
+  assert.equal(entry.errorCode, "UNKNOWN_ERROR");
+  assert.equal(entry.errorName, "Error");
+  assert.equal(entry.errorClass, "UNEXPECTED");
+  assert.equal(entry.failureReason, "UNKNOWN_ERROR");
+  assert.equal(entry.errorMessage, "Automation worker operation failed.");
+  for (const field of [
+    "stack",
+    "cause",
+    "request",
+    "response",
+    "headers",
+    "config",
+    "env",
+    "meta",
+    "target",
+    "args",
+    "data",
+    "payload",
+    "unknownField",
+  ]) {
+    assert.equal(Object.hasOwn(entry, field), false, `${field} atravessou o envelope`);
+  }
+  assert.doesNotMatch(
+    capture.text(),
+    /customer@example|injected-token|private\.example|name-secret|failure-secret|message-secret|stack-secret|cause-secret|dXNlcjpwYXNz|response-secret|header-secret|config-secret|env-secret|args@example|data@example|payload@example|unknown-secret/i,
+  );
+});
+
+test("logger restringe identificadores operacionais a dominios conhecidos", () => {
+  const capture = logCapture({
+    workerInstanceId: "worker@example.test",
+    provider: "postgresql://user:password@private.example/crm",
+  });
+  capture.observer.info("Bearer event-secret", {
+    actionType: "action-secret@example.test",
+    triggerType: "token=trigger-secret",
+    status: "https://private.example/status",
+  });
+
+  assert.deepEqual(capture.entries()[0], {
+    event: "worker_event",
+    timestamp: capture.entries()[0].timestamp,
+    service: "automation-worker",
+    workerInstanceId: "worker-unknown",
+    provider: "unknown",
+    actionType: "UNKNOWN_ACTION",
+    triggerType: "UNKNOWN_TRIGGER",
+    status: "UNKNOWN_STATUS",
+  });
+  assert.doesNotMatch(capture.text(), /worker@example|private\.example|password|event-secret|action-secret|trigger-secret/i);
+});
+
+test("logger preserva evento disabled e estados legitimos do ciclo de vida", () => {
+  const capture = logCapture();
+  capture.observer.info("worker_disabled", { status: "disabled" });
+  capture.observer.info("worker_stopping", { status: "stopping" });
+
+  assert.deepEqual(
+    capture.entries().map(({ event, status }) => ({ event, status })),
+    [
+      { event: "worker_disabled", status: "disabled" },
+      { event: "worker_stopping", status: "stopping" },
+    ],
+  );
 });
 
 test("sucesso registra ciclo transacional uma vez e sem payload sensivel", async () => {
@@ -147,7 +329,7 @@ test("sucesso registra ciclo transacional uma vez e sem payload sensivel", async
   assert.equal(result.processed, 1);
   assert.deepEqual(
     capture.entries().map((entry) => entry.event),
-    ["job_found", "job_claimed", "execution_started", "action_started", "action_succeeded", "job_succeeded"],
+    ["job_claimed", "execution_started", "action_started", "action_succeeded", "job_succeeded"],
   );
   for (const event of ["job_claimed", "execution_started", "action_started", "action_succeeded", "job_succeeded"]) {
     assert.equal(capture.entries().filter((entry) => entry.event === event).length, 1);
@@ -197,6 +379,7 @@ test("claim concorrente registra somente o claim realmente confirmado", async ()
   ]);
 
   assert.equal(results[0].processed + results[1].processed, 1);
+  assert.equal(capture.entries().filter((entry) => entry.event === "job_found").length, 0);
   assert.equal(capture.entries().filter((entry) => entry.event === "job_claimed").length, 1);
   assert.equal(capture.entries().filter((entry) => entry.event === "job_succeeded").length, 1);
   assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: tenant.empresa.id } }), 1);
@@ -236,15 +419,33 @@ test("falha transitoria registra retry e depois tentativas esgotadas", async () 
 
   const firstEvents = capture.entries().map((entry) => entry.event);
   assert.deepEqual(firstEvents, [
-    "job_found",
     "job_claimed",
     "execution_started",
     "action_started",
     "action_failed",
-    "job_failed",
+    "job_attempt_failed",
     "job_retry_scheduled",
   ]);
   assert.equal(firstEvents.includes("job_succeeded"), false);
+  assert.equal(firstEvents.includes("job_failed"), false);
+  const attemptFailed = capture.entries().find((entry) => entry.event === "job_attempt_failed");
+  assert.equal(attemptFailed.final, false);
+  assert.equal(attemptFailed.willRetry, true);
+  assert.equal(attemptFailed.retryable, true);
+  assert.equal(attemptFailed.failureReason, "RETRYABLE_ERROR");
+  assert.equal(attemptFailed.attempt, 1);
+  assert.equal(attemptFailed.maxAttempts, 2);
+  assert.match(attemptFailed.retryAt, /^\d{4}-\d{2}-\d{2}T/);
+  const actionFailed = capture.entries().find((entry) => entry.event === "action_failed");
+  assert.equal(Object.hasOwn(actionFailed, "final"), false);
+  assert.equal(Object.hasOwn(actionFailed, "willRetry"), false);
+  assert.equal(Object.hasOwn(actionFailed, "permanent"), false);
+  assert.equal(Object.hasOwn(actionFailed, "retryAt"), false);
+  assert.equal(Object.hasOwn(actionFailed, "failureReason"), false);
+  const retryScheduled = capture.entries().find((entry) => entry.event === "job_retry_scheduled");
+  assert.equal(retryScheduled.final, false);
+  assert.equal(retryScheduled.willRetry, true);
+  assert.equal(retryScheduled.failureReason, "RETRYABLE_ERROR");
   let job = await prisma.automacaoAcaoJob.findFirstOrThrow({ where: { empresaId: tenant.empresa.id } });
   assert.equal(job.status, "FALHOU");
   assert.ok(job.nextAttemptAt > firstNow);
@@ -261,14 +462,21 @@ test("falha transitoria registra retry e depois tentativas esgotadas", async () 
 
   const finalEvents = capture.entries().slice(beforeFinalAttempt).map((entry) => entry.event);
   assert.deepEqual(finalEvents, [
-    "job_found",
     "job_claimed",
     "execution_started",
     "action_started",
     "action_failed",
-    "job_failed",
+    "job_attempt_failed",
     "job_attempts_exhausted",
+    "job_failed",
   ]);
+  const jobFailed = capture.entries().find((entry) => entry.event === "job_failed");
+  assert.equal(jobFailed.final, true);
+  assert.equal(jobFailed.willRetry, false);
+  assert.equal(jobFailed.retryable, true);
+  assert.equal(jobFailed.failureReason, "ATTEMPTS_EXHAUSTED");
+  assert.equal(jobFailed.attempt, 2);
+  assert.equal(jobFailed.maxAttempts, 2);
   assert.equal(capture.entries().filter((entry) => entry.event === "job_retry_scheduled").length, 1);
   assert.equal(capture.entries().filter((entry) => entry.event === "job_attempts_exhausted").length, 1);
   assert.equal(capture.entries().filter((entry) => entry.event === "job_succeeded").length, 0);
@@ -276,6 +484,73 @@ test("falha transitoria registra retry e depois tentativas esgotadas", async () 
   assert.equal(job.status, "FALHA_DEFINITIVA");
   assert.equal(job.nextAttemptAt, null);
   assert.equal(await prisma.historicoAtribuicao.count({ where: { empresaId: tenant.empresa.id } }), 0);
+});
+
+test("erro permanente precoce encerra sem declarar tentativas esgotadas", async () => {
+  const tenant = await seedTenant("worker-logs-permanent");
+  const context = adminContext(tenant);
+  const rule = await service.createRule(context, {
+    nome: "Falha permanente observavel",
+    prioridade: 20,
+    gatilho: "LEAD_CREATED",
+    timezone: "America/Sao_Paulo",
+    condicoes: [],
+    acoes: [{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [2147483000] }],
+  });
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  await service.enqueueLeadCreated({
+    tx: prisma,
+    empresaId: tenant.empresa.id,
+    leadId: lead.id,
+    originalEventId: "worker-permanent",
+    occurredAt: lead.createdAt,
+  });
+  const capture = logCapture({ workerInstanceId: "worker-permanent" });
+  const callbackArguments = [];
+  const onEvent = (...args) => {
+    callbackArguments.push(args);
+    return capture.observer.event(...args);
+  };
+
+  await service.processDueJobs({
+    now: new Date(Date.now() + 1000),
+    leaseOwner: "worker-permanent",
+    maxAttempts: 3,
+    onEvent,
+  });
+
+  assert.deepEqual(capture.entries().map((entry) => entry.event), [
+    "job_claimed",
+    "execution_started",
+    "action_started",
+    "action_failed",
+    "job_permanent_failure",
+    "job_failed",
+  ]);
+  assert.ok(callbackArguments.length > 0);
+  for (const args of callbackArguments) {
+    assert.equal(args.length, 1);
+    assert.equal(args[0] instanceof Error, false);
+    assert.equal(Object.values(args[0]).some((value) => value instanceof Error), false);
+    for (const [key, value] of Object.entries(args[0])) {
+      assert.equal(CALLBACK_FIELDS.has(key), true, `${key} nao pertence ao envelope`);
+      assert.equal(value !== null && typeof value === "object", false, `${key} manteve objeto aninhado`);
+    }
+  }
+  const jobFailed = capture.entries().find((entry) => entry.event === "job_failed");
+  assert.equal(jobFailed.final, true);
+  assert.equal(jobFailed.willRetry, false);
+  assert.equal(jobFailed.retryable, false);
+  assert.equal(jobFailed.failureReason, "PERMANENT_ERROR");
+  assert.equal(jobFailed.attempt, 1);
+  assert.equal(jobFailed.maxAttempts, 3);
+  assert.equal(capture.entries().some((entry) => entry.event === "job_attempts_exhausted"), false);
+  assert.equal(capture.entries().some((entry) => entry.event === "job_retry_scheduled"), false);
+  const job = await prisma.automacaoAcaoJob.findFirstOrThrow({ where: { empresaId: tenant.empresa.id } });
+  assert.equal(job.status, "FALHA_DEFINITIVA");
+  assert.equal(job.tentativas, 1);
+  assert.equal(job.nextAttemptAt, null);
 });
 
 test("lease recuperado e registrado somente depois da expiracao real", async () => {

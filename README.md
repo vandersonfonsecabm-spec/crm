@@ -115,7 +115,12 @@ Nenhuma automacao envia WhatsApp, e-mail, SMS, push, webhook ou mensagem externa
 O worker emite uma linha JSON sanitizada por transicao confirmada do job, com
 IDs tecnicos, tipo da acao, tentativa, status e duracao. Polling vazio nao gera
 log de job, e payloads, dados pessoais, tokens, cookies e URLs de banco nunca
-fazem parte do contrato de observabilidade.
+fazem parte do contrato de observabilidade. Callbacks recebem somente um
+envelope allowlisted, sem `Error`, stack ou objetos aninhados. `action_failed`
+registra apenas que a acao lancou erro; a decisao persistida aparece em
+`job_attempt_failed`, `job_retry_scheduled`, `job_permanent_failure`,
+`job_attempts_exhausted` e no `job_failed` definitivo, com campos `final`,
+`willRetry` e `failureReason`.
 A H8.2 adiciona um produtor interno controlado para evento sintetico
 `LEAD_CREATED` do piloto, protegido por `AUTOMATION_PILOT_TRIGGER_ENABLED` e
 sem criar Lead, Cliente, Negocio ou Acompanhamento. O endpoint temporario apenas

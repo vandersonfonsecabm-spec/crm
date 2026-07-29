@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
+const { createWorkerEventEnvelope, sanitizeError } = require("./worker-observability");
 const { presentRule, safeJson, snapshotRule, validatePilotEventPayload, validateRulePayload } = require("./validation");
 
 const ACTIVE_FOLLOW_UP_STATUSES = ["PENDENTE", "EM_ANDAMENTO"];
@@ -500,11 +501,6 @@ function createAutomationService({ prisma, env = process.env }) {
       },
     });
     for (const candidate of candidates) {
-      notifyWorkerEvent(onEvent, "job_found", jobLogFields(candidate, {
-        attempt: candidate.tentativas + 1,
-        maxAttempts: config.maxAttempts,
-        status: candidate.status,
-      }));
       const leaseUntil = new Date(now.getTime() + config.leaseMs);
       const claimStartedAt = Date.now();
       const claimed = await prisma.automacaoAcaoJob.updateMany({
@@ -597,7 +593,15 @@ function createAutomationService({ prisma, env = process.env }) {
       }
       return { id: job.id, status: "CONCLUIDO" };
     } catch (error) {
-      const final = error.permanent === true || attempt >= config.maxAttempts;
+      const safeError = sanitizeError(error);
+      const permanent = error.permanent === true;
+      const attemptsExhausted = attempt >= config.maxAttempts;
+      const final = permanent || attemptsExhausted;
+      const willRetry = !final;
+      const failureReason = permanent
+        ? "PERMANENT_ERROR"
+        : attemptsExhausted ? "ATTEMPTS_EXHAUSTED" : "RETRYABLE_ERROR";
+      const retryAt = willRetry ? new Date(now.getTime() + config.retryDelayMs) : null;
       if (actionStartedAt !== null) {
         notifyWorkerEvent(onEvent, "action_failed", {
           ...baseFields,
@@ -605,7 +609,6 @@ function createAutomationService({ prisma, env = process.env }) {
           status: "FAILED",
         }, error);
       }
-      const retryAt = final ? null : new Date(now.getTime() + config.retryDelayMs);
       const failed = await prisma.automacaoAcaoJob.updateMany({
         where: { id: job.id, leaseOwner, status: "PROCESSANDO" },
         data: {
@@ -613,8 +616,8 @@ function createAutomationService({ prisma, env = process.env }) {
           nextAttemptAt: retryAt,
           leaseOwner: null,
           leaseExpiresAt: null,
-          erroCodigo: String(error.codigo || error.code || "ACTION_FAILED").slice(0, 80),
-          erroResumo: "Acao de automacao nao concluida.",
+          erroCodigo: safeError.errorCode,
+          erroResumo: safeError.errorMessage,
         },
       });
       await refreshExecutionStatus(job.execucaoId);
@@ -623,15 +626,24 @@ function createAutomationService({ prisma, env = process.env }) {
           ...baseFields,
           durationMs: elapsedMs(jobStartedAt),
           status: final ? "FALHA_DEFINITIVA" : "FALHOU",
+          final,
+          permanent,
+          retryable: !permanent,
+          willRetry,
+          failureReason,
+          retryAt,
         };
-        notifyWorkerEvent(onEvent, "job_failed", failureFields, error);
         if (final) {
-          notifyWorkerEvent(onEvent, "job_attempts_exhausted", failureFields, error);
+          if (permanent) {
+            notifyWorkerEvent(onEvent, "job_permanent_failure", failureFields, error);
+          } else {
+            notifyWorkerEvent(onEvent, "job_attempt_failed", failureFields, error);
+            notifyWorkerEvent(onEvent, "job_attempts_exhausted", failureFields, error);
+          }
+          notifyWorkerEvent(onEvent, "job_failed", failureFields, error);
         } else {
-          notifyWorkerEvent(onEvent, "job_retry_scheduled", {
-            ...failureFields,
-            retryAt,
-          });
+          notifyWorkerEvent(onEvent, "job_attempt_failed", failureFields, error);
+          notifyWorkerEvent(onEvent, "job_retry_scheduled", failureFields);
         }
       }
       return { id: job.id, status: final ? "FALHA_DEFINITIVA" : "FALHOU" };
@@ -1039,7 +1051,7 @@ function jobLogFields(job, extra = {}) {
 function notifyWorkerEvent(onEvent, event, fields, error) {
   if (typeof onEvent !== "function") return;
   try {
-    onEvent(event, fields, error);
+    onEvent(createWorkerEventEnvelope(event, fields, error));
   } catch {
     // Observability must not alter job processing.
   }

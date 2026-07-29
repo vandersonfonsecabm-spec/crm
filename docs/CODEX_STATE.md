@@ -697,22 +697,40 @@ Data da verificacao: 26/07/2026.
   Jobs concluidos nao voltam a pendente; jobs falhos podem ser reprocessados de
   forma controlada pelo endpoint existente, sem tocar em tenant alheio.
 - Logs do worker usam uma linha JSON por transicao confirmada. O ciclo cobre
-  `job_found`, `job_claimed`, `execution_started`, `action_started`,
-  `action_succeeded`, `action_failed`, `job_succeeded`, `job_failed`,
-  `job_retry_scheduled`, `job_attempts_exhausted` e
+  `job_claimed`, `execution_started`, `action_started`,
+  `action_succeeded`, `action_failed`, `job_succeeded`,
+  `job_attempt_failed`, `job_retry_scheduled`, `job_failed`,
+  `job_permanent_failure`, `job_attempts_exhausted` e
   `job_lease_recovered`, alem de `worker_started`, `worker_poll_error`,
   `worker_stopping` e `worker_stopped`. Polling vazio nao gera ruido em nivel
   normal.
-- Os campos ficam restritos a timestamp, servico, provider, instancia do worker,
-  IDs tecnicos, tipo da acao/gatilho, tentativa, status, duracao, retry e lease.
-  Erros preservam nome/codigo tecnico, mas a mensagem e limitada e sanitizada
-  contra URL/string de conexao, Bearer, JWT, cookie, e-mail, telefone,
-  CPF/CNPJ, senha, token, secret e API key. Payload, headers, stack, objeto
-  Prisma e dump de ambiente nunca sao serializados.
-- Eventos de sucesso, retry e esgotamento so aparecem depois da respectiva
-  transicao persistida; lease recuperado so aparece depois do claim real.
+- O callback recebe um unico envelope allowlisted; `Error` bruto, stack, campos
+  desconhecidos e objetos aninhados nao atravessam a fronteira. Os campos ficam
+  restritos a timestamp, servico, provider, instancia do worker,
+  IDs tecnicos, tipo da acao/gatilho, tentativa, status, duracao, retry, lease,
+  `final`, `willRetry`, `permanent` e `failureReason`. Erros inesperados usam
+  mensagem generica por classe/codigo tecnico; a defesa adicional cobre
+  Authorization Basic/Bearer, JWT, Cookie/Set-Cookie completos, URL/string de
+  conexao, e-mail, telefone, CPF/CNPJ, senha, token, secret, API key e payload
+  Prisma. Payload, headers, stack, objeto Prisma e dump de ambiente nunca sao
+  serializados.
+- `action_failed` registra somente a excecao da acao, sem antecipar decisao.
+  `job_attempt_failed` registra a tentativa apos a persistencia, inclusive a
+  ultima tentativa antes de `job_attempts_exhausted`; `job_failed` e exclusivo
+  de encerramento definitivo. `job_permanent_failure` separa erro permanente
+  precoce de `job_attempts_exhausted`, emitido apenas quando
+  `attempt >= maxAttempts`. Eventos de sucesso, retry e encerramento aparecem
+  depois da respectiva transicao persistida; lease recuperado so aparece depois
+  do claim real. `job_found` foi removido porque, antes do claim atomico, podia
+  duplicar em corrida sem representar transicao confirmada.
+  `retryable` descreve a natureza tecnica do erro; `willRetry` registra a
+  decisao operacional autoritativa para a tentativa atual.
   Falha do polling usa `worker_poll_error`, sem atribuir falsamente a falha a
   um job nao reivindicado.
+- Risco funcional preexistente e mantido fora deste patch: o adiamento por
+  janela acontece depois que o claim incrementa `tentativas`, podendo consumir
+  a ultima tentativa sem executar a acao. A correcao exige tarefa funcional
+  separada; a logica de janela nao foi alterada aqui.
 - Shutdown por `SIGTERM`/`SIGINT` para de agendar novo polling, aguarda o ciclo
   em andamento e desconecta o Prisma. A infraestrutura SQLite segue limitada a
   uma replica; escala horizontal exige banco compartilhado e coordenacao
