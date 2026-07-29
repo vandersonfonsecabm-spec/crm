@@ -538,16 +538,24 @@ function createAutomationService({ prisma, env = process.env }) {
     if (snapshot?.janela && !isWithinWindow(now, snapshot.timezone, snapshot.janela)) {
       const retryAt = new Date(now.getTime() + 15 * 60000);
       const deferred = await prisma.automacaoAcaoJob.updateMany({
-        where: { id: job.id, leaseOwner, status: "PROCESSANDO" },
-        data: { status: "PENDENTE", nextAttemptAt: retryAt, leaseOwner: null, leaseExpiresAt: null },
-      });
-      if (deferred.count === 1) {
-        notifyWorkerEvent(onEvent, "job_retry_scheduled", {
-          ...baseFields,
-          durationMs: elapsedMs(jobStartedAt),
-          retryAt,
+        where: {
+          id: job.id,
+          empresaId: job.empresaId,
+          leaseOwner,
+          leaseExpiresAt: { gt: now },
+          status: "PROCESSANDO",
+          tentativas: { gt: 0 },
+        },
+        data: {
           status: "PENDENTE",
-        });
+          tentativas: { decrement: 1 },
+          nextAttemptAt: retryAt,
+          leaseOwner: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (deferred.count !== 1) {
+        throw domainError(409, "JOB_WINDOW_DEFERRAL_CONFLICT", "Nao foi possivel adiar o job com o lease atual.");
       }
       return { id: job.id, status: "AGUARDANDO_JANELA" };
     }

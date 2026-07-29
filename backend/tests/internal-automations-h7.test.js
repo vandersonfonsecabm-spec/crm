@@ -218,6 +218,288 @@ test("H8.1 lease valido nao e roubado e lease expirado e recuperado", async () =
   assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: tenant.empresa.id, leadId: lead.id } }), 1);
 });
 
+test("H8.1 adiamentos por janela acima de maxAttempts preservam elegibilidade", async () => {
+  const tenant = await seedTenant("h8-window-attempts");
+  const context = adminContext(tenant);
+  const rule = await windowedInternalEventRule(context, "Janela sem consumo de tentativa", {
+    inicio: "13:00",
+    fim: "14:00",
+  });
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  await service.enqueueLeadCreated({
+    tx: prisma,
+    empresaId: tenant.empresa.id,
+    leadId: lead.id,
+    originalEventId: "window-attempts-1",
+    occurredAt: lead.createdAt,
+  });
+  const observedEvents = [];
+
+  for (const now of [
+    new Date("2030-07-30T12:00:00.000Z"),
+    new Date("2030-07-30T12:16:00.000Z"),
+    new Date("2030-07-30T12:32:00.000Z"),
+  ]) {
+    const result = await service.processDueJobs({
+      now,
+      limit: 1,
+      leaseOwner: "window-worker",
+      maxAttempts: 2,
+      onEvent: (event) => observedEvents.push(event),
+    });
+    assert.equal(result.processed, 1);
+    assert.equal(result.results[0].status, "AGUARDANDO_JANELA");
+    const deferred = await prisma.automacaoAcaoJob.findFirstOrThrow({
+      where: { empresaId: tenant.empresa.id },
+    });
+    assert.equal(deferred.status, "PENDENTE");
+    assert.equal(deferred.tentativas, 0);
+    assert.equal(deferred.leaseOwner, null);
+    assert.equal(deferred.leaseExpiresAt, null);
+  }
+
+  assert.equal(observedEvents.filter((event) => event.event === "job_retry_scheduled").length, 0);
+  const insideWindow = await service.processDueJobs({
+    now: new Date("2030-07-30T13:00:00.000Z"),
+    limit: 1,
+    leaseOwner: "window-worker",
+    maxAttempts: 2,
+  });
+  assert.equal(insideWindow.processed, 1);
+  assert.equal(insideWindow.results[0].status, "CONCLUIDO");
+  const completed = await prisma.automacaoAcaoJob.findFirstOrThrow({
+    where: { empresaId: tenant.empresa.id },
+  });
+  assert.equal(completed.tentativas, 1);
+  assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: tenant.empresa.id } }), 1);
+  const repeated = await service.processDueJobs({
+    now: new Date("2030-07-30T13:01:00.000Z"),
+    limit: 1,
+    leaseOwner: "window-worker",
+    maxAttempts: 2,
+  });
+  assert.equal(repeated.processed, 0);
+  assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: tenant.empresa.id } }), 1);
+});
+
+test("H8.1 janela cruzando meia-noite preserva falhas reais em outro timezone", async () => {
+  const tenant = await seedTenant("h8-window-midnight");
+  const context = adminContext(tenant);
+  const rule = await service.createRule(context, {
+    nome: "Janela noturna",
+    prioridade: 20,
+    gatilho: "LEAD_CREATED",
+    timezone: "America/Sao_Paulo",
+    janela: { inicio: "23:00", fim: "02:00" },
+    condicoes: [],
+    acoes: [{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [2147483000] }],
+  });
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  await service.enqueueLeadCreated({
+    tx: prisma,
+    empresaId: tenant.empresa.id,
+    leadId: lead.id,
+    originalEventId: "window-midnight-1",
+    occurredAt: lead.createdAt,
+  });
+  let job = await prisma.automacaoAcaoJob.findFirstOrThrow({
+    where: { empresaId: tenant.empresa.id },
+  });
+
+  for (const now of [
+    new Date("2030-07-30T04:30:00.000Z"),
+    new Date("2030-07-30T04:30:02.000Z"),
+  ]) {
+    const failed = await service.processDueJobs({
+      now,
+      limit: 1,
+      leaseOwner: "window-midnight-worker",
+      maxAttempts: 5,
+      retryDelayMs: 1000,
+      supportedActions: ["ASSIGN_ROUND_ROBIN"],
+    });
+    assert.equal(failed.results[0].status, "FALHOU");
+  }
+  job = await prisma.automacaoAcaoJob.findUnique({ where: { id: job.id } });
+  assert.equal(job.tentativas, 2);
+  const executionBeforeDeferrals = await prisma.automacaoExecucao.findUnique({
+    where: { id: job.execucaoId },
+  });
+  assert.equal(executionBeforeDeferrals.tentativas, 2);
+
+  for (const now of [
+    new Date("2030-07-30T18:00:00.000Z"),
+    new Date("2030-07-30T18:16:00.000Z"),
+    new Date("2030-07-30T18:32:00.000Z"),
+  ]) {
+    const result = await service.processDueJobs({
+      now,
+      limit: 1,
+      leaseOwner: "window-midnight-worker",
+      maxAttempts: 5,
+      retryDelayMs: 1000,
+      supportedActions: ["ASSIGN_ROUND_ROBIN"],
+    });
+    assert.equal(result.results[0].status, "AGUARDANDO_JANELA");
+    assert.equal((await prisma.automacaoAcaoJob.findUnique({ where: { id: job.id } })).tentativas, 2);
+  }
+
+  const insideWindow = await service.processDueJobs({
+    now: new Date("2030-07-31T04:30:00.000Z"),
+    limit: 1,
+    leaseOwner: "window-midnight-worker",
+    maxAttempts: 5,
+    retryDelayMs: 1000,
+    supportedActions: ["ASSIGN_ROUND_ROBIN"],
+  });
+  assert.equal(insideWindow.results[0].status, "FALHOU");
+  assert.equal((await prisma.automacaoAcaoJob.findUnique({ where: { id: job.id } })).tentativas, 3);
+  const executionAfterDeferrals = await prisma.automacaoExecucao.findUnique({
+    where: { id: job.execucaoId },
+  });
+  assert.equal(executionAfterDeferrals.tentativas, 3);
+  assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: tenant.empresa.id } }), 0);
+});
+
+test("H8.1 adiamento concorrente restitui uma vez e chamada repetida nao altera tentativas", async () => {
+  const tenant = await seedTenant("h8-window-concurrency");
+  const context = adminContext(tenant);
+  const rule = await windowedInternalEventRule(context, "Janela concorrente", {
+    inicio: "09:00",
+    fim: "10:00",
+  });
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  await service.enqueueLeadCreated({
+    tx: prisma,
+    empresaId: tenant.empresa.id,
+    leadId: lead.id,
+    originalEventId: "window-concurrency-1",
+    occurredAt: lead.createdAt,
+  });
+  const now = new Date("2030-07-30T12:00:00.000Z");
+
+  const [left, right] = await Promise.all([
+    service.processDueJobs({ now, limit: 1, leaseOwner: "window-worker-a", maxAttempts: 2 }),
+    service.processDueJobs({ now, limit: 1, leaseOwner: "window-worker-b", maxAttempts: 2 }),
+  ]);
+
+  assert.equal(left.processed + right.processed, 1);
+  const deferred = await prisma.automacaoAcaoJob.findFirstOrThrow({
+    where: { empresaId: tenant.empresa.id },
+  });
+  assert.equal(deferred.status, "PENDENTE");
+  assert.equal(deferred.tentativas, 0);
+  const repeated = await service.processDueJobs({
+    now,
+    limit: 1,
+    leaseOwner: "window-worker-a",
+    maxAttempts: 2,
+  });
+  assert.equal(repeated.processed, 0);
+  assert.equal((await prisma.automacaoAcaoJob.findUnique({ where: { id: deferred.id } })).tentativas, 0);
+});
+
+test("H8.1 adiamento nao interfere em job de outro tenant", async () => {
+  const tenantA = await seedTenant("h8-window-tenant-a");
+  const tenantB = await seedTenant("h8-window-tenant-b");
+  const ruleA = await windowedInternalEventRule(adminContext(tenantA), "Janela tenant A", {
+    inicio: "09:00",
+    fim: "10:00",
+  });
+  const ruleB = await windowedInternalEventRule(adminContext(tenantB), "Janela tenant B", {
+    inicio: "09:00",
+    fim: "10:00",
+  });
+  await service.activateRule(adminContext(tenantA), ruleA.id);
+  await service.activateRule(adminContext(tenantB), ruleB.id);
+  const leadA = await seedLead(tenantA);
+  const leadB = await seedLead(tenantB);
+  await service.enqueueLeadCreated({
+    tx: prisma,
+    empresaId: tenantA.empresa.id,
+    leadId: leadA.id,
+    originalEventId: "window-tenant-a",
+    occurredAt: leadA.createdAt,
+  });
+  await service.enqueueLeadCreated({
+    tx: prisma,
+    empresaId: tenantB.empresa.id,
+    leadId: leadB.id,
+    originalEventId: "window-tenant-b",
+    occurredAt: leadB.createdAt,
+  });
+  const jobB = await prisma.automacaoAcaoJob.findFirstOrThrow({
+    where: { empresaId: tenantB.empresa.id },
+  });
+  await prisma.automacaoAcaoJob.update({
+    where: { id: jobB.id },
+    data: { tentativas: 2 },
+  });
+
+  const result = await service.processDueJobs({
+    now: new Date("2030-07-30T12:00:00.000Z"),
+    limit: 1,
+    leaseOwner: "window-tenant-worker",
+    maxAttempts: 5,
+  });
+
+  assert.equal(result.processed, 1);
+  assert.equal((await prisma.automacaoAcaoJob.findFirstOrThrow({ where: { empresaId: tenantA.empresa.id } })).tentativas, 0);
+  const untouchedB = await prisma.automacaoAcaoJob.findUnique({ where: { id: jobB.id } });
+  assert.equal(untouchedB.status, "PENDENTE");
+  assert.equal(untouchedB.tentativas, 2);
+  assert.equal(untouchedB.leaseOwner, null);
+});
+
+test("H8.1 lease alheio ou expirado nao restitui tentativa no adiamento", async () => {
+  for (const interference of ["wrong-owner", "expired"]) {
+    const tenant = await seedTenant(`h8-window-${interference}`);
+    const context = adminContext(tenant);
+    const rule = await windowedInternalEventRule(context, `Janela ${interference}`, {
+      inicio: "09:00",
+      fim: "10:00",
+    });
+    await service.activateRule(context, rule.id);
+    const lead = await seedLead(tenant);
+    await service.enqueueLeadCreated({
+      tx: prisma,
+      empresaId: tenant.empresa.id,
+      leadId: lead.id,
+      originalEventId: `window-${interference}`,
+      occurredAt: lead.createdAt,
+    });
+    const now = new Date("2030-07-30T12:00:00.000Z");
+    const interferedPrisma = prismaWithWindowDeferralInterference(async (args) => {
+      await prisma.automacaoAcaoJob.update({
+        where: { id: args.where.id },
+        data: interference === "wrong-owner"
+          ? { leaseOwner: "other-worker" }
+          : { leaseExpiresAt: new Date(now.getTime() - 1) },
+      });
+    });
+    const interferedService = createAutomationService({ prisma: interferedPrisma, env });
+
+    await assert.rejects(
+      interferedService.processDueJobs({
+        now,
+        limit: 1,
+        leaseOwner: "window-owner-worker",
+        maxAttempts: 3,
+      }),
+      (error) => error?.codigo === "JOB_WINDOW_DEFERRAL_CONFLICT",
+    );
+    const unchanged = await prisma.automacaoAcaoJob.findFirstOrThrow({
+      where: { empresaId: tenant.empresa.id },
+    });
+    assert.equal(unchanged.status, "PROCESSANDO");
+    assert.equal(unchanged.tentativas, 1);
+    await cleanDatabase();
+  }
+});
+
 test("H8.1 shutdown aguarda ciclo ativo e nao agenda novo polling", async () => {
   const scheduled = [];
   let releaseCycle;
@@ -395,6 +677,41 @@ async function internalEventRule(context, nome) {
     timezone: "America/Sao_Paulo",
     condicoes: [],
     acoes: [{ tipo: "CREATE_INTERNAL_EVENT", eventoTipo: "LEAD_CREATED_TEST", resumo: "Evento tecnico." }],
+  });
+}
+
+async function windowedInternalEventRule(context, nome, janela, timezone = "UTC") {
+  return service.createRule(context, {
+    nome,
+    prioridade: 20,
+    gatilho: "LEAD_CREATED",
+    timezone,
+    janela,
+    condicoes: [],
+    acoes: [{ tipo: "CREATE_INTERNAL_EVENT", eventoTipo: "LEAD_CREATED_TEST", resumo: "Evento tecnico." }],
+  });
+}
+
+function prismaWithWindowDeferralInterference(interfere) {
+  const jobDelegate = prisma.automacaoAcaoJob;
+  const wrappedJobDelegate = new Proxy(jobDelegate, {
+    get(target, property) {
+      const value = Reflect.get(target, property);
+      if (property === "updateMany") {
+        return async (args) => {
+          if (args?.data?.tentativas?.decrement === 1) await interfere(args);
+          return value.call(target, args);
+        };
+      }
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return new Proxy(prisma, {
+    get(target, property) {
+      if (property === "automacaoAcaoJob") return wrappedJobDelegate;
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
   });
 }
 
