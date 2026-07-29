@@ -787,14 +787,14 @@ function createAutomationService({ prisma, env = process.env, logger = console }
       await updateNextFollowUpProjection(tx, entity);
       return existing;
     }
+    const clienteId = await validateFollowUpClient(tx, job.empresaId, entity.clienteId);
     const dataHora = new Date(Date.now() + action.delayMinutos * 60000);
     const responsavelId = entity.responsavelId || null;
-    if (responsavelId) await validateResponsible(tx, job.empresaId, responsavelId);
-    const autorId = responsavelId || (await firstAdminId(tx, job.empresaId));
+    const autorId = await resolveFollowUpAuthor(tx, job.empresaId, responsavelId);
     const acompanhamento = await tx.acompanhamento.create({
       data: {
         empresaId: job.empresaId,
-        clienteId: entity.clienteId,
+        clienteId,
         leadId: job.execucao.entidadeTipo === "LEAD" ? entity.id : entity.leadId,
         negocioId: job.execucao.entidadeTipo === "NEGOCIO" ? entity.id : null,
         responsavelId,
@@ -1105,9 +1105,31 @@ async function validateResponsible(tx, empresaId, usuarioId) {
   if (!user) throw domainError(404, "USER_NOT_FOUND", "Usuario nao encontrado.");
 }
 
-async function firstAdminId(tx, empresaId) {
-  const user = await tx.usuario.findFirst({ where: { empresaId, ativo: true, papel: "ADMIN" }, orderBy: { id: "asc" }, select: { id: true } });
-  if (!user) throw domainError(409, "AUTOMATION_AUTHOR_UNAVAILABLE", "Nenhum administrador ativo.");
+async function validateFollowUpClient(tx, empresaId, clienteId) {
+  if (!Number.isInteger(clienteId) || clienteId < 1) {
+    throw domainError(404, "AUTOMATION_CLIENT_NOT_FOUND", "Cliente da automacao nao encontrado.", { permanent: true });
+  }
+  const client = await tx.cliente.findFirst({
+    where: { id: clienteId, empresaId },
+    select: { id: true },
+  });
+  if (!client) {
+    throw domainError(404, "AUTOMATION_CLIENT_NOT_FOUND", "Cliente da automacao nao encontrado.", { permanent: true });
+  }
+  return client.id;
+}
+
+async function resolveFollowUpAuthor(tx, empresaId, responsavelId) {
+  const user = await tx.usuario.findFirst({
+    where: responsavelId
+      ? { id: responsavelId, empresaId, ativo: true }
+      : { empresaId, ativo: true, papel: "ADMIN" },
+    orderBy: responsavelId ? undefined : { id: "asc" },
+    select: { id: true },
+  });
+  if (!user) {
+    throw domainError(409, "AUTOMATION_AUTHOR_UNAVAILABLE", "Autor da automacao indisponivel.", { permanent: true });
+  }
   return user.id;
 }
 

@@ -286,7 +286,7 @@ test("H8.3 usa allowlists canonicas e bloqueia acoes indisponiveis", async () =>
   const context = adminContext(tenant);
   assert.deepEqual(
     [...WORKER_ACTION_TYPES],
-    ["ASSIGN_OWNER", "CREATE_INTERNAL_EVENT", "UPDATE_NEXT_FOLLOW_UP_PROJECTION"],
+    ["ASSIGN_OWNER", "CREATE_FOLLOW_UP", "CREATE_INTERNAL_EVENT", "UPDATE_NEXT_FOLLOW_UP_PROJECTION"],
   );
   assert.deepEqual([...PILOT_ACTION_TYPES], ["CREATE_INTERNAL_EVENT"]);
   assert.deepEqual((await service.options(context)).actions, [...WORKER_ACTION_TYPES]);
@@ -332,6 +332,28 @@ test("H8.3 usa allowlists canonicas e bloqueia acoes indisponiveis", async () =>
   );
   assert.equal(projectionPilot.createdExecutions, 0);
   assert.equal(projectionPilot.createdJobs, 0);
+
+  const followUpRule = await createFollowUpRule(context, "Follow-up liberado");
+  await service.activateRule(context, followUpRule.id);
+  const followUpPilot = await service.produceAutomationEvent(
+    pilotEvent(tenant.empresa.id, "follow-up-pilot-rejected"),
+  );
+  assert.equal(followUpPilot.createdExecutions, 0);
+  assert.equal(followUpPilot.createdJobs, 0);
+
+  for (const externalType of ["WHATSAPP", "EMAIL"]) {
+    await assert.rejects(
+      service.createRule(context, {
+        nome: `Follow-up externo ${externalType}`,
+        prioridade: 7,
+        gatilho: "LEAD_CREATED",
+        timezone: "America/Sao_Paulo",
+        condicoes: [],
+        acoes: [{ ...followUpAction(), tipoAcompanhamento: externalType }],
+      }),
+      (error) => error?.codigo === "VALIDATION_ERROR",
+    );
+  }
 });
 
 test("H8.3 ASSIGN_OWNER atribui Lead uma vez e preserva idempotencia no retry", async () => {
@@ -508,6 +530,250 @@ test("H8.3 projecao standalone e CREATE_FOLLOW_UP usam o helper compartilhado", 
   );
   assert.equal(WORKER_ACTION_TYPES.includes("UPDATE_NEXT_FOLLOW_UP_PROJECTION"), true);
   assert.equal(PILOT_ACTION_TYPES.includes("UPDATE_NEXT_FOLLOW_UP_PROJECTION"), false);
+});
+
+test("H8.3 CREATE_FOLLOW_UP cria uma vez para Lead e Negocio e reconcilia a projecao", async () => {
+  const tenant = await seedTenant("h8-3-create-follow-up");
+  const context = adminContext(tenant);
+  const owner = await seedUser(tenant.empresa.id, "Autor Follow-up", "VENDEDOR");
+  const leadRule = await createFollowUpRule(context, "Follow-up Lead");
+  await service.activateRule(context, leadRule.id);
+  const lead = await seedLead(tenant, { responsavelId: owner.id });
+  await service.enqueueLeadCreated({
+    tx: prisma,
+    empresaId: tenant.empresa.id,
+    leadId: lead.id,
+    originalEventId: "create-follow-up-lead",
+    occurredAt: lead.createdAt,
+  });
+
+  const now = new Date(Date.now() + 1000);
+  const [left, right] = await Promise.all([
+    service.processDueJobs({ now, limit: 1, leaseOwner: "follow-up-lead-a" }),
+    service.processDueJobs({ now, limit: 1, leaseOwner: "follow-up-lead-b" }),
+  ]);
+  assert.equal(left.processed + right.processed, 1);
+
+  const leadFollowUp = await prisma.acompanhamento.findFirstOrThrow({
+    where: { empresaId: tenant.empresa.id, leadId: lead.id },
+  });
+  assert.equal(leadFollowUp.clienteId, lead.clienteId);
+  assert.equal(leadFollowUp.responsavelId, owner.id);
+  assert.equal(leadFollowUp.autorId, owner.id);
+  assert.equal(leadFollowUp.tipo, "RETORNO");
+  assert.equal(await prisma.historicoAcompanhamento.count({
+    where: { empresaId: tenant.empresa.id, acompanhamentoId: leadFollowUp.id },
+  }), 1);
+  assert.equal(await prisma.automacaoEventoInterno.count({
+    where: { empresaId: tenant.empresa.id, acompanhamentoId: leadFollowUp.id },
+  }), 1);
+  assert.equal(
+    (await prisma.cliente.findUniqueOrThrow({ where: { id: lead.clienteId } })).proximoFollowUp,
+    leadFollowUp.dataHora.toISOString(),
+  );
+
+  const leadJob = await prisma.automacaoAcaoJob.findFirstOrThrow({
+    where: { empresaId: tenant.empresa.id, execucao: { leadId: lead.id } },
+  });
+  await prisma.automacaoAcaoJob.update({
+    where: { id: leadJob.id },
+    data: { status: "FALHA_DEFINITIVA" },
+  });
+  await service.retryJob(context, leadJob.id);
+  await service.processDueJobs({
+    now: new Date(Date.now() + 1000),
+    limit: 1,
+    leaseOwner: "follow-up-lead-retry",
+  });
+  assert.equal(await prisma.acompanhamento.count({
+    where: { empresaId: tenant.empresa.id, leadId: lead.id },
+  }), 1);
+  assert.equal(await prisma.historicoAcompanhamento.count({
+    where: { empresaId: tenant.empresa.id, acompanhamentoId: leadFollowUp.id },
+  }), 1);
+
+  const negocio = await seedNegocio(tenant);
+  const negocioRule = await createLegacyRule(context, "Follow-up Negocio", followUpAction(), { active: true });
+  const negocioJob = await seedActionJob({
+    tenant,
+    rule: negocioRule,
+    entityType: "NEGOCIO",
+    entity: negocio,
+    marker: "create-follow-up-negocio",
+  });
+  const negocioCreation = await service.processDueJobs({
+    now: new Date(Date.now() + 3000),
+    limit: 1,
+    leaseOwner: "follow-up-negocio",
+  });
+  assert.equal(negocioCreation.processed, 1, JSON.stringify(negocioCreation));
+  assert.equal(negocioCreation.results[0].status, "CONCLUIDO", JSON.stringify(negocioCreation));
+  assert.equal(
+    (await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: negocioJob.id } })).status,
+    "CONCLUIDO",
+    JSON.stringify(negocioCreation),
+  );
+
+  const negocioFollowUp = await prisma.acompanhamento.findFirstOrThrow({
+    where: { empresaId: tenant.empresa.id, negocioId: negocio.id },
+  });
+  assert.equal(negocioFollowUp.clienteId, negocio.clienteId);
+  assert.equal(negocioFollowUp.autorId, tenant.admin.id);
+  assert.equal(await prisma.historicoAcompanhamento.count({
+    where: { empresaId: tenant.empresa.id, acompanhamentoId: negocioFollowUp.id },
+  }), 1);
+});
+
+test("H8.3 CREATE_FOLLOW_UP rejeita cliente e autor invalidos como erro permanente", async () => {
+  const otherTenant = await seedTenant("h8-3-follow-up-other");
+  const otherLead = await seedLead(otherTenant);
+  const cases = [
+    {
+      label: "cliente-ausente",
+      mutate: (entity) => ({ ...entity, clienteId: null }),
+      expectedCode: "AUTOMATION_CLIENT_NOT_FOUND",
+    },
+    {
+      label: "autor-inexistente",
+      mutate: (entity) => ({ ...entity, responsavelId: 2147483000 }),
+      expectedCode: "AUTOMATION_AUTHOR_UNAVAILABLE",
+    },
+  ];
+
+  for (const item of cases) {
+    const tenant = await seedTenant(`h8-3-follow-up-${item.label}`);
+    const context = adminContext(tenant);
+    const rule = await createLegacyRule(context, `Follow-up ${item.label}`, followUpAction(), { active: true });
+    const lead = await seedLead(tenant);
+    await seedActionJob({
+      tenant,
+      rule,
+      entityType: "LEAD",
+      entity: lead,
+      marker: `follow-up-${item.label}`,
+    });
+    const invalidService = createAutomationService({
+      prisma: prismaWithEntityMutation(item.mutate),
+      env,
+    });
+    await invalidService.processDueJobs({
+      now: new Date(Date.now() + 1000),
+      limit: 1,
+      leaseOwner: `follow-up-${item.label}`,
+      supportedActions: ["CREATE_FOLLOW_UP"],
+    });
+    const job = await prisma.automacaoAcaoJob.findFirstOrThrow({
+      where: { empresaId: tenant.empresa.id },
+    });
+    assert.equal(job.status, "FALHA_DEFINITIVA");
+    assert.equal(job.erroCodigo, item.expectedCode);
+    assert.equal(await prisma.acompanhamento.count({ where: { empresaId: tenant.empresa.id } }), 0);
+  }
+
+  const crossTenant = await seedTenant("h8-3-follow-up-cross-client");
+  const context = adminContext(crossTenant);
+  const rule = await createLegacyRule(context, "Follow-up cliente externo", followUpAction(), { active: true });
+  const lead = await seedLead(crossTenant);
+  const otherClient = await prisma.cliente.findUniqueOrThrow({ where: { id: otherLead.clienteId } });
+  await prisma.lead.update({ where: { id: lead.id }, data: { clienteId: otherClient.id } });
+  await seedActionJob({
+    tenant: crossTenant,
+    rule,
+    entityType: "LEAD",
+    entity: { ...lead, clienteId: otherClient.id },
+    marker: "follow-up-cross-client",
+  });
+  await service.processDueJobs({
+    now: new Date(Date.now() + 2000),
+    limit: 1,
+    leaseOwner: "follow-up-cross-client",
+    supportedActions: ["CREATE_FOLLOW_UP"],
+  });
+  const crossTenantJob = await prisma.automacaoAcaoJob.findFirstOrThrow({
+    where: { empresaId: crossTenant.empresa.id },
+  });
+  assert.equal(crossTenantJob.status, "FALHA_DEFINITIVA");
+  assert.equal(crossTenantJob.erroCodigo, "AUTOMATION_CLIENT_NOT_FOUND");
+  assert.equal(await prisma.acompanhamento.count({ where: { empresaId: crossTenant.empresa.id } }), 0);
+});
+
+test("H8.3 CREATE_FOLLOW_UP rejeita autor inativo ou de outro tenant e reverte falha intermediaria", async () => {
+  const otherTenant = await seedTenant("h8-3-follow-up-author-other");
+  const cases = [
+    {
+      label: "inativo",
+      setup: async (tenant) => {
+        const user = await seedUser(tenant.empresa.id, "Autor Inativo", "VENDEDOR");
+        await prisma.usuario.update({ where: { id: user.id }, data: { ativo: false } });
+        return user.id;
+      },
+    },
+    {
+      label: "outro-tenant",
+      setup: async () => otherTenant.admin.id,
+    },
+  ];
+
+  for (const item of cases) {
+    const tenant = await seedTenant(`h8-3-follow-up-author-${item.label}`);
+    const context = adminContext(tenant);
+    const rule = await createLegacyRule(context, `Follow-up autor ${item.label}`, followUpAction(), { active: true });
+    const responsavelId = await item.setup(tenant);
+    const lead = await seedLead(tenant, { responsavelId });
+    await seedActionJob({
+      tenant,
+      rule,
+      entityType: "LEAD",
+      entity: lead,
+      marker: `follow-up-author-${item.label}`,
+    });
+    await service.processDueJobs({
+      now: new Date(Date.now() + 1000),
+      limit: 1,
+      leaseOwner: `follow-up-author-${item.label}`,
+      supportedActions: ["CREATE_FOLLOW_UP"],
+    });
+    const job = await prisma.automacaoAcaoJob.findFirstOrThrow({
+      where: { empresaId: tenant.empresa.id },
+    });
+    assert.equal(job.status, "FALHA_DEFINITIVA");
+    assert.equal(job.erroCodigo, "AUTOMATION_AUTHOR_UNAVAILABLE");
+    assert.equal(await prisma.acompanhamento.count({ where: { empresaId: tenant.empresa.id } }), 0);
+  }
+
+  const rollbackTenant = await seedTenant("h8-3-follow-up-rollback");
+  const rollbackContext = adminContext(rollbackTenant);
+  const rollbackRule = await createLegacyRule(
+    rollbackContext,
+    "Follow-up rollback",
+    followUpAction(),
+    { active: true },
+  );
+  const rollbackLead = await seedLead(rollbackTenant);
+  await seedActionJob({
+    tenant: rollbackTenant,
+    rule: rollbackRule,
+    entityType: "LEAD",
+    entity: rollbackLead,
+    marker: "follow-up-rollback",
+  });
+  const beforeClient = await prisma.cliente.findUniqueOrThrow({ where: { id: rollbackLead.clienteId } });
+  const failingService = createAutomationService({
+    prisma: prismaWithFollowUpHistoryFailure(),
+    env,
+  });
+  await failingService.processDueJobs({
+    now: new Date(Date.now() + 2000),
+    limit: 1,
+    leaseOwner: "follow-up-rollback",
+    supportedActions: ["CREATE_FOLLOW_UP"],
+  });
+  assert.equal(await prisma.acompanhamento.count({ where: { empresaId: rollbackTenant.empresa.id } }), 0);
+  assert.equal(await prisma.historicoAcompanhamento.count({ where: { empresaId: rollbackTenant.empresa.id } }), 0);
+  assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: rollbackTenant.empresa.id } }), 0);
+  const afterClient = await prisma.cliente.findUniqueOrThrow({ where: { id: rollbackLead.clienteId } });
+  assert.equal(afterClient.proximoFollowUp, beforeClient.proximoFollowUp);
+  assert.equal(afterClient.revisao, beforeClient.revisao);
 });
 
 test("H7 varre gatilhos temporais e o worker permanece desligado por padrao em teste", async () => {
@@ -1091,6 +1357,28 @@ async function assignOwnerRule(context, usuarioId, nome, gatilho = "LEAD_CREATED
   });
 }
 
+async function createFollowUpRule(context, nome) {
+  return service.createRule(context, {
+    nome,
+    prioridade: 20,
+    gatilho: "LEAD_CREATED",
+    timezone: "America/Sao_Paulo",
+    condicoes: [],
+    acoes: [followUpAction()],
+  });
+}
+
+function followUpAction() {
+  return {
+    tipo: "CREATE_FOLLOW_UP",
+    delayMinutos: 30,
+    titulo: "Acompanhamento interno",
+    descricao: "Criado por automacao tecnica.",
+    prioridade: "MEDIA",
+    tipoAcompanhamento: "RETORNO",
+  };
+}
+
 async function createLegacyRule(context, nome, action, { active = false } = {}) {
   return prisma.automacaoRegra.create({
     data: {
@@ -1258,6 +1546,69 @@ function prismaWithHistoryFailure() {
           const wrappedTx = new Proxy(tx, {
             get(txTarget, txProperty) {
               if (txProperty === "historicoAtribuicao") return wrappedHistory;
+              const value = Reflect.get(txTarget, txProperty);
+              return typeof value === "function" ? value.bind(txTarget) : value;
+            },
+          });
+          return callback(wrappedTx);
+        }, options);
+      }
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function prismaWithEntityMutation(mutate) {
+  return new Proxy(prisma, {
+    get(target, property) {
+      if (property === "$transaction") {
+        return async (callback, options) => target.$transaction(async (tx) => {
+          const wrappedLead = new Proxy(tx.lead, {
+            get(leadTarget, leadProperty) {
+              if (leadProperty === "findFirst") {
+                return async (args) => {
+                  const entity = await leadTarget.findFirst(args);
+                  return entity ? mutate(entity) : entity;
+                };
+              }
+              const value = Reflect.get(leadTarget, leadProperty);
+              return typeof value === "function" ? value.bind(leadTarget) : value;
+            },
+          });
+          const wrappedTx = new Proxy(tx, {
+            get(txTarget, txProperty) {
+              if (txProperty === "lead") return wrappedLead;
+              const value = Reflect.get(txTarget, txProperty);
+              return typeof value === "function" ? value.bind(txTarget) : value;
+            },
+          });
+          return callback(wrappedTx);
+        }, options);
+      }
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function prismaWithFollowUpHistoryFailure() {
+  return new Proxy(prisma, {
+    get(target, property) {
+      if (property === "$transaction") {
+        return async (callback, options) => target.$transaction(async (tx) => {
+          const wrappedHistory = new Proxy(tx.historicoAcompanhamento, {
+            get(historyTarget, historyProperty) {
+              if (historyProperty === "create") return async () => {
+                throw new Error("Falha intermediaria controlada.");
+              };
+              const value = Reflect.get(historyTarget, historyProperty);
+              return typeof value === "function" ? value.bind(historyTarget) : value;
+            },
+          });
+          const wrappedTx = new Proxy(tx, {
+            get(txTarget, txProperty) {
+              if (txProperty === "historicoAcompanhamento") return wrappedHistory;
               const value = Reflect.get(txTarget, txProperty);
               return typeof value === "function" ? value.bind(txTarget) : value;
             },
