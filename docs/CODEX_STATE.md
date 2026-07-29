@@ -1017,3 +1017,29 @@ integracoes autorizadas.
 - Nao houve migration, alteracao de schema ou backfill global. O proximo passo
   recomendado e definir o contrato e os gates da proxima acao interna da
   H8.3 antes de qualquer nova liberacao.
+
+## H8.3 - CREATE_FOLLOW_UP
+
+- Em 29/07/2026, `CREATE_FOLLOW_UP` foi liberada somente para o worker real.
+  O piloto sintetico permanece restrito a `CREATE_INTERNAL_EVENT`; nenhuma
+  acao externa foi habilitada.
+- O handler valida cliente e autor ativos no mesmo tenant antes da criacao.
+  Cliente ou autor invalido encerra o job como erro permanente sanitizado, sem
+  criar efeito parcial. Os tipos externos de acompanhamento continuam
+  rejeitados.
+- A criacao do `Acompanhamento`, do `HistoricoAcompanhamento`, do evento
+  tecnico idempotente e a reconciliacao de `Cliente.proximoFollowUp` ocorrem
+  na mesma transacao. A chave da acao impede duplicacao em retry ou
+  concorrencia.
+- O piloto controlado da JavaGro executou exatamente um job e uma execucao na
+  primeira tentativa. Foram persistidos exatamente um acompanhamento interno,
+  um historico e um evento tecnico; a projecao foi atualizada e a revisao do
+  cliente tecnico incrementou uma unica vez.
+- A regra JavaGro terminou desativada, o gate do piloto sintetico permaneceu
+  desligado e as filas terminaram sem jobs pendentes, processando ou falhos.
+  CRM Agro SaaS permaneceu sem capability ou regra ativa de automacoes.
+- A observacao posterior de cinco minutos confirmou o ciclo completo sem
+  `P2010`, retry, duplicacao, loop, lease preso, erro recorrente ou integracao
+  externa. Nao houve migration nem backfill.
+- Proximo passo recomendado: definir e auditar o contrato de concorrencia de
+  `ASSIGN_ROUND_ROBIN` antes de considerar sua liberacao.
