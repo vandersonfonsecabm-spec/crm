@@ -1043,3 +1043,33 @@ integracoes autorizadas.
   externa. Nao houve migration nem backfill.
 - Proximo passo recomendado: definir e auditar o contrato de concorrencia de
   `ASSIGN_ROUND_ROBIN` antes de considerar sua liberacao.
+
+## H8.3 - ASSIGN_ROUND_ROBIN e encerramento
+
+- Em 30/07/2026, `ASSIGN_ROUND_ROBIN` foi validada no worker real com um
+  piloto controlado da JavaGro. O piloto sintetico permaneceu restrito a
+  `CREATE_INTERNAL_EVENT`.
+- A primeira verificacao operacional interpretou incorretamente o retorno de
+  `enqueueLeadCreated`: o contrato real e `queued.created`, e nao
+  `createdExecutions`. O verificador temporario foi corrigido para exigir
+  `queued.created === 1`; nenhum codigo funcional ou contrato do dominio foi
+  alterado.
+- O job e a execucao cancelados pela verificacao anterior permanecem como
+  evidencia terminal: tentativa zero, sem historico, cursor ou efeito. Eles
+  nao foram apagados nem reprocessados.
+- O piloto final criou exatamente uma execucao e um job, ambos concluidos na
+  primeira tentativa. O lead tecnico recebeu o unico usuario elegivel, foi
+  criado exatamente um `HistoricoAtribuicao` automatico e o cursor da regra
+  avancou uma unica vez.
+- A observacao posterior de cinco minutos confirmou exatamente uma sequencia
+  `job_claimed`, `execution_started`, `action_started`, `action_succeeded` e
+  `job_succeeded`, sem `P2010`, retry, duplicacao, conflito CAS em loop, lease
+  preso, erro recorrente ou integracao externa.
+- A regra JavaGro terminou desativada, o gate do piloto sintetico permaneceu
+  desligado e as filas terminaram sem jobs pendentes, processando ou falhos.
+  CRM Agro SaaS permaneceu sem capability ou regra ativa de automacoes.
+- As cinco acoes internas liberadas sao `CREATE_INTERNAL_EVENT`,
+  `ASSIGN_OWNER`, `UPDATE_NEXT_FOLLOW_UP_PROJECTION`, `CREATE_FOLLOW_UP` e
+  `ASSIGN_ROUND_ROBIN`. A H8.3 esta encerrada sem migration ou backfill.
+- Proximo passo recomendado: planejar as integracoes omnichannel em uma tarefa
+  separada, com contrato, gates, rollout e rollback proprios.
