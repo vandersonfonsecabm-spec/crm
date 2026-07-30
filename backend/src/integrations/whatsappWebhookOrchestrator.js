@@ -26,6 +26,7 @@ function createWhatsAppWebhookOrchestrator({
   prisma,
   intake = createWhatsAppWebhookIntake({ prisma }),
   processEvent = processWhatsAppWebhookEvent,
+  clock = () => new Date(),
 } = {}) {
   if (!prisma || typeof intake !== "function" || typeof processEvent !== "function") {
     throw new Error("Dependencias invalidas para a orquestracao WhatsApp.");
@@ -39,12 +40,40 @@ function createWhatsAppWebhookOrchestrator({
       try {
         await processEvent({ prisma, eventoWebhookId: event.eventoWebhookId });
       } catch (error) {
+        await recordProcessingFailure(prisma, event.eventoWebhookId, error, clock).catch(() => {});
         throw mapProcessingError(error);
       }
     }
 
     return { accepted: true };
   };
+}
+
+async function recordProcessingFailure(prisma, eventoWebhookId, error, clock) {
+  const event = await prisma.eventoWebhook.findUnique({
+    where: { id: eventoWebhookId },
+    select: { id: true, empresaId: true, canalIntegracaoId: true, provedor: true },
+  });
+  if (!event || event.provedor !== "WHATSAPP") return;
+  const occurredAt = clock();
+  if (!(occurredAt instanceof Date) || Number.isNaN(occurredAt.getTime())) return;
+  await prisma.canalIntegracao.updateMany({
+    where: {
+      id: event.canalIntegracaoId,
+      empresaId: event.empresaId,
+      tipo: "WHATSAPP_META",
+    },
+    data: {
+      lastFailureAt: occurredAt,
+      lastFailureCode: safeFailureCode(error?.code),
+    },
+  });
+}
+
+function safeFailureCode(value) {
+  return typeof value === "string" && /^[A-Z0-9_]{1,80}$/.test(value)
+    ? value
+    : "WHATSAPP_EVENT_PROCESSING_UNAVAILABLE";
 }
 
 function readAcceptedEvents(result) {
@@ -78,4 +107,5 @@ function orchestrationError(status, code) {
 
 module.exports = {
   createWhatsAppWebhookOrchestrator,
+  recordProcessingFailure,
 };

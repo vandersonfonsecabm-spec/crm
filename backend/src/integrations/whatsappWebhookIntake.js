@@ -3,18 +3,27 @@ const { isFeatureEnabledForTenant, FEATURE_KEYS } = require("../tenant-features/
 
 const PROVIDER = "WHATSAPP";
 const EVENT_TYPE = "WHATSAPP_MESSAGE_RECEIVED";
+const EVENT_TYPES = Object.freeze({
+  TEXT: EVENT_TYPE,
+  STATUS: "WHATSAPP_MESSAGE_STATUS",
+  MEDIA_UNSUPPORTED: "WHATSAPP_MESSAGE_MEDIA_UNSUPPORTED",
+  IGNORED: "WHATSAPP_MESSAGE_IGNORED",
+});
+const MEDIA_MESSAGE_TYPES = new Set(["audio", "document", "image", "sticker", "video"]);
 const PAYLOAD_SCHEMA_VERSION = 1;
 const MAX_WABA_ID_LENGTH = 128;
 const MAX_PHONE_NUMBER_ID_LENGTH = 128;
 const MAX_MESSAGE_ID_LENGTH = 512;
 const MAX_SENDER_ID_LENGTH = 64;
 const MAX_TIMESTAMP_LENGTH = 20;
+const MAX_EVENT_KIND_LENGTH = 64;
 
-function createWhatsAppWebhookIntake({ prisma }) {
+function createWhatsAppWebhookIntake({ prisma, clock = () => new Date() }) {
   if (!prisma) throw new Error("Prisma e obrigatorio para o intake WhatsApp.");
+  if (typeof clock !== "function") throw new Error("Relogio invalido para o intake WhatsApp.");
 
   return async function processWhatsAppWebhook(payload, { env = process.env } = {}) {
-    const parsedItems = parseAtomicMessages(payload);
+    const parsedItems = parseAtomicEvents(payload);
     const items = deduplicateBatch(parsedItems);
     const identity = requireSingleIntegrationIdentity(items);
     const integration = await mapIntegration(prisma, identity);
@@ -36,12 +45,16 @@ function createWhatsAppWebhookIntake({ prisma }) {
     }
 
     const records = items.map((item) => eventRecord(item, integration));
-    const events = await persistBatch(prisma, records, true);
+    const receivedAt = clock();
+    if (!(receivedAt instanceof Date) || Number.isNaN(receivedAt.getTime())) {
+      throw intakeError(503, "WEBHOOK_STORAGE_UNAVAILABLE");
+    }
+    const events = await persistBatch(prisma, records, integration, receivedAt, true);
     return { accepted: true, events };
   };
 }
 
-function parseAtomicMessages(payload) {
+function parseAtomicEvents(payload) {
   if (!isObject(payload) || payload.object !== "whatsapp_business_account" || !Array.isArray(payload.entry)) {
     throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
   }
@@ -63,15 +76,23 @@ function parseAtomicMessages(payload) {
 
       const phoneNumberId = requiredIdentifier(change.value.metadata.phone_number_id, MAX_PHONE_NUMBER_ID_LENGTH);
       if (!phoneNumberId) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
-      if (!Array.isArray(change.value.messages)) {
-        if (Array.isArray(change.value.statuses)) throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
-        throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
+      const hasMessages = Array.isArray(change.value.messages);
+      const hasStatuses = Array.isArray(change.value.statuses);
+      if (!hasMessages && !hasStatuses) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
+      if (hasMessages && hasStatuses) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
+      if (hasMessages && change.value.messages.length === 0) {
+        throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
       }
-      if (change.value.messages.length === 0) throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
+      if (hasStatuses && change.value.statuses.length === 0) {
+        throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
+      }
 
       const contacts = readContacts(change.value.contacts);
-      for (const message of change.value.messages) {
-        items.push(parseMessage({ message, contacts, wabaId, phoneNumberId, field: change.field }));
+      for (const message of change.value.messages || []) {
+        items.push(parseMessageEvent({ message, contacts, wabaId, phoneNumberId, field: change.field }));
+      }
+      for (const status of change.value.statuses || []) {
+        items.push(parseStatusEvent({ status, wabaId, phoneNumberId, field: change.field }));
       }
     }
   }
@@ -81,14 +102,15 @@ function parseAtomicMessages(payload) {
   return items;
 }
 
-function parseMessage({ message, contacts, wabaId, phoneNumberId, field }) {
+function parseMessageEvent({ message, contacts, wabaId, phoneNumberId, field }) {
   if (!isObject(message)) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
   const externalEventId = requiredIdentifier(message.id, MAX_MESSAGE_ID_LENGTH);
   const senderId = requiredIdentifier(message.from, MAX_SENDER_ID_LENGTH);
   const timestamp = requiredTimestamp(message.timestamp);
   if (!externalEventId || !senderId || !timestamp) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
-  if (message.type !== "text") throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
-  if (!isObject(message.text) || typeof message.text.body !== "string") {
+  const messageType = requiredIdentifier(message.type, MAX_EVENT_KIND_LENGTH);
+  if (!messageType) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
+  if (messageType === "text" && (!isObject(message.text) || typeof message.text.body !== "string")) {
     throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
   }
 
@@ -104,7 +126,47 @@ function parseMessage({ message, contacts, wabaId, phoneNumberId, field }) {
   };
   const payloadJson = canonicalStringify(atomicPayload);
   const payloadHash = crypto.createHash("sha256").update(payloadJson, "utf8").digest("hex");
-  return { externalEventId, wabaId, phoneNumberId, payloadJson, payloadHash };
+  return {
+    eventType: messageType === "text"
+      ? EVENT_TYPES.TEXT
+      : MEDIA_MESSAGE_TYPES.has(messageType)
+        ? EVENT_TYPES.MEDIA_UNSUPPORTED
+        : EVENT_TYPES.IGNORED,
+    externalEventId,
+    wabaId,
+    phoneNumberId,
+    payloadJson,
+    payloadHash,
+  };
+}
+
+function parseStatusEvent({ status, wabaId, phoneNumberId, field }) {
+  if (!isObject(status)) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
+  const messageId = requiredIdentifier(status.id, MAX_MESSAGE_ID_LENGTH);
+  const statusType = requiredIdentifier(status.status, MAX_EVENT_KIND_LENGTH);
+  const timestamp = requiredTimestamp(status.timestamp);
+  const recipientId = requiredIdentifier(status.recipient_id, MAX_SENDER_ID_LENGTH);
+  if (!messageId || !statusType || !timestamp || !recipientId) {
+    throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
+  }
+  const atomicPayload = {
+    schemaVersion: PAYLOAD_SCHEMA_VERSION,
+    provider: PROVIDER,
+    wabaId,
+    phoneNumberId,
+    field,
+    status,
+  };
+  const payloadJson = canonicalStringify(atomicPayload);
+  const payloadHash = crypto.createHash("sha256").update(payloadJson, "utf8").digest("hex");
+  return {
+    eventType: EVENT_TYPES.STATUS,
+    externalEventId: statusEventId(payloadJson),
+    wabaId,
+    phoneNumberId,
+    payloadJson,
+    payloadHash,
+  };
 }
 
 function readContacts(value) {
@@ -175,7 +237,7 @@ function eventRecord(item, integration) {
     canalIntegracaoId: integration.id,
     provedor: PROVIDER,
     externalEventId: item.externalEventId,
-    tipoEvento: EVENT_TYPE,
+    tipoEvento: item.eventType,
     payloadHash: item.payloadHash,
     payloadJson: item.payloadJson,
     statusProcessamento: "RECEBIDO",
@@ -183,7 +245,7 @@ function eventRecord(item, integration) {
   };
 }
 
-async function persistBatch(prisma, records, allowUniqueRetry) {
+async function persistBatch(prisma, records, integration, receivedAt, allowUniqueRetry) {
   try {
     return await prisma.$transaction(async (tx) => {
       const existing = await findExisting(tx, records);
@@ -202,11 +264,24 @@ async function persistBatch(prisma, records, allowUniqueRetry) {
         });
         accepted.push({ eventoWebhookId: created.id, created: true });
       }
+      await tx.canalIntegracao.updateMany({
+        where: {
+          id: integration.id,
+          empresaId: integration.empresaId,
+          OR: [
+            { lastWebhookAt: null },
+            { lastWebhookAt: { lt: receivedAt } },
+          ],
+        },
+        data: { lastWebhookAt: receivedAt },
+      });
       return accepted;
     });
   } catch (error) {
     if (isIntakeError(error)) throw error;
-    if (isUniqueConflict(error) && allowUniqueRetry) return persistBatch(prisma, records, false);
+    if (isUniqueConflict(error) && allowUniqueRetry) {
+      return persistBatch(prisma, records, integration, receivedAt, false);
+    }
     if (isUniqueConflict(error)) {
       const existing = await findExisting(prisma, records).catch(() => null);
       if (existing) {
@@ -236,6 +311,7 @@ async function findExisting(client, records) {
       canalIntegracaoId: true,
       provedor: true,
       externalEventId: true,
+      tipoEvento: true,
       payloadHash: true,
       payloadJson: true,
     },
@@ -259,6 +335,7 @@ function samePersistedEvent(event, expected) {
     && event.canalIntegracaoId === expected.canalIntegracaoId
     && event.provedor === expected.provedor
     && event.externalEventId === expected.externalEventId
+    && event.tipoEvento === expected.tipoEvento
     && event.payloadHash === expected.payloadHash
     && event.payloadJson === expected.payloadJson;
 }
@@ -267,6 +344,7 @@ function sameAtomicItem(left, right) {
   return left.externalEventId === right.externalEventId
     && left.wabaId === right.wabaId
     && left.phoneNumberId === right.phoneNumberId
+    && left.eventType === right.eventType
     && left.payloadHash === right.payloadHash
     && left.payloadJson === right.payloadJson;
 }
@@ -288,6 +366,10 @@ function requiredIdentifier(value, maxLength) {
 
 function requiredTimestamp(value) {
   return typeof value === "string" && /^[0-9]{1,20}$/.test(value) ? value : null;
+}
+
+function statusEventId(payloadJson) {
+  return `status:${crypto.createHash("sha256").update(payloadJson, "utf8").digest("hex")}`;
 }
 
 function isObject(value) {
@@ -312,9 +394,13 @@ function isUniqueConflict(error) {
 
 module.exports = {
   EVENT_TYPE,
+  EVENT_TYPES,
+  MEDIA_MESSAGE_TYPES,
   PROVIDER,
   canonicalStringify,
   createWhatsAppWebhookIntake,
   deduplicateBatch,
-  parseAtomicMessages,
+  parseAtomicEvents,
+  parseAtomicMessages: parseAtomicEvents,
+  statusEventId,
 };

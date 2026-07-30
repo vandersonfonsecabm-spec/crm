@@ -4,8 +4,11 @@ const { createAutomationService } = require("../automations/service");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
 const {
   EVENT_TYPE,
+  EVENT_TYPES,
+  MEDIA_MESSAGE_TYPES,
   PROVIDER,
   canonicalStringify,
+  statusEventId,
 } = require("./whatsappWebhookIntake");
 
 const PAYLOAD_SCHEMA_VERSION = 1;
@@ -50,7 +53,8 @@ async function processTransaction(tx, eventoWebhookId) {
 
   if (event.statusProcessamento === PROCESSED_STATUS) {
     if (!event.processadoEm) throw processingError("WHATSAPP_EVENT_STATE_INVALID");
-    await verifyProcessedChain(tx, event, atomic);
+    if (atomic.kind === EVENT_TYPES.TEXT) await verifyProcessedChain(tx, event, atomic);
+    else await verifyTerminalEvent(tx, event);
     return result(true);
   }
   if (event.statusProcessamento !== PROCESSABLE_STATUS || event.processadoEm !== null) {
@@ -76,22 +80,24 @@ async function processTransaction(tx, eventoWebhookId) {
     throw processingError("WHATSAPP_EVENT_CONCURRENCY_CONFLICT");
   }
 
-  const contact = await resolveContact(tx, event, atomic);
-  const client = await resolveClient(tx, event, contact, atomic);
-  const linkedContact = await linkContactToClient(tx, event, contact, client);
-  const activeConversation = await findSingleActiveConversation(tx, event, linkedContact);
-  const lead = await resolveLead(tx, event, client, activeConversation);
-  const conversation = await resolveConversation(
-    tx,
-    event,
-    linkedContact,
-    client,
-    lead,
-    activeConversation,
-    atomic.messageTime,
-  );
-  const message = await resolveMessage(tx, event, linkedContact, conversation, atomic);
-  await updateConversationActivity(tx, conversation, message, atomic.messageTime);
+  if (atomic.kind === EVENT_TYPES.TEXT) {
+    const contact = await resolveContact(tx, event, atomic);
+    const client = await resolveClient(tx, event, contact, atomic);
+    const linkedContact = await linkContactToClient(tx, event, contact, client);
+    const activeConversation = await findSingleActiveConversation(tx, event, linkedContact);
+    const lead = await resolveLead(tx, event, client, activeConversation);
+    const conversation = await resolveConversation(
+      tx,
+      event,
+      linkedContact,
+      client,
+      lead,
+      activeConversation,
+      atomic.messageTime,
+    );
+    const message = await resolveMessage(tx, event, linkedContact, conversation, atomic);
+    await updateConversationActivity(tx, conversation, message, atomic.messageTime);
+  }
 
   const completedAt = new Date();
   const completed = await tx.eventoWebhook.updateMany({
@@ -111,6 +117,9 @@ async function processTransaction(tx, eventoWebhookId) {
     },
   });
   if (completed.count !== 1) throw processingError("WHATSAPP_EVENT_STATE_INVALID");
+  if (atomic.kind === EVENT_TYPES.TEXT) {
+    await markChannelConnected(tx, event, completedAt);
+  }
   return result(false);
 }
 
@@ -130,6 +139,8 @@ async function loadEvent(client, eventoWebhookId) {
             ativo: true,
             wabaId: true,
             phoneNumberId: true,
+            connectedAt: true,
+            verifiedAt: true,
           },
         },
       },
@@ -142,7 +153,7 @@ async function loadEvent(client, eventoWebhookId) {
 }
 
 function validateEventOwnership(event) {
-  if (event.provedor !== PROVIDER || event.tipoEvento !== EVENT_TYPE) {
+  if (event.provedor !== PROVIDER || !Object.values(EVENT_TYPES).includes(event.tipoEvento)) {
     throw processingError("WHATSAPP_EVENT_UNSUPPORTED");
   }
   if (!event.empresa?.ativo
@@ -194,15 +205,39 @@ function validateAtomicPayload(event) {
     || payload.provider !== PROVIDER
     || payload.field !== "messages"
     || payload.wabaId !== event.canalIntegracao.wabaId
-    || payload.phoneNumberId !== event.canalIntegracao.phoneNumberId
-    || !isObject(payload.message)
+    || payload.phoneNumberId !== event.canalIntegracao.phoneNumberId) {
+    throw processingError("WHATSAPP_EVENT_PAYLOAD_INVALID");
+  }
+
+  if (event.tipoEvento === EVENT_TYPES.STATUS) return validateStatusPayload(event, payload);
+  if (!isObject(payload.message)
     || payload.message.id !== event.externalEventId
+    || typeof payload.message.type !== "string"
+    || !payload.message.type) {
+    throw processingError("WHATSAPP_EVENT_PAYLOAD_INVALID");
+  }
+  if (event.tipoEvento === EVENT_TYPES.MEDIA_UNSUPPORTED) {
+    if (!MEDIA_MESSAGE_TYPES.has(payload.message.type)) {
+      throw processingError("WHATSAPP_EVENT_PAYLOAD_INVALID");
+    }
+    requiredSenderId(payload.message.from);
+    parseExternalTimestamp(payload.message.timestamp);
+    return { kind: EVENT_TYPES.MEDIA_UNSUPPORTED, payload };
+  }
+  if (event.tipoEvento === EVENT_TYPES.IGNORED) {
+    if (payload.message.type === "text" || MEDIA_MESSAGE_TYPES.has(payload.message.type)) {
+      throw processingError("WHATSAPP_EVENT_PAYLOAD_INVALID");
+    }
+    requiredSenderId(payload.message.from);
+    parseExternalTimestamp(payload.message.timestamp);
+    return { kind: EVENT_TYPES.IGNORED, payload };
+  }
+  if (event.tipoEvento !== EVENT_TYPE
     || payload.message.type !== "text"
     || !isObject(payload.message.text)
     || typeof payload.message.text.body !== "string") {
     throw processingError("WHATSAPP_EVENT_PAYLOAD_INVALID");
   }
-
   const senderId = requiredSenderId(payload.message.from);
   if (payload.contact !== null && payload.contact !== undefined) {
     if (!isObject(payload.contact) || payload.contact.wa_id !== senderId) {
@@ -212,6 +247,7 @@ function validateAtomicPayload(event) {
   const normalizedPhone = normalizeWhatsAppPhone(senderId);
   const messageTime = parseExternalTimestamp(payload.message.timestamp);
   return {
+    kind: EVENT_TYPES.TEXT,
     contactName: readContactName(payload.contact),
     externalContactId: normalizedPhone,
     message: payload.message,
@@ -220,6 +256,57 @@ function validateAtomicPayload(event) {
     payload,
     senderId,
   };
+}
+
+function validateStatusPayload(event, payload) {
+  if (!isObject(payload.status)
+    || statusEventId(event.payloadJson) !== event.externalEventId
+    || !requiredOpaqueValue(payload.status.id, 512)
+    || !requiredOpaqueValue(payload.status.status, 64)
+    || !requiredOpaqueValue(payload.status.recipient_id, 64)) {
+    throw processingError("WHATSAPP_EVENT_PAYLOAD_INVALID");
+  }
+  parseExternalTimestamp(payload.status.timestamp);
+  return { kind: EVENT_TYPES.STATUS, payload };
+}
+
+function requiredOpaqueValue(value, maxLength) {
+  return typeof value === "string"
+    && value.length > 0
+    && value.length <= maxLength
+    && !/[\u0000-\u0020\u007f]/.test(value);
+}
+
+async function markChannelConnected(tx, event, completedAt) {
+  await tx.canalIntegracao.updateMany({
+    where: {
+      id: event.canalIntegracaoId,
+      empresaId: event.empresaId,
+      verifiedAt: null,
+    },
+    data: { verifiedAt: completedAt },
+  });
+  await tx.canalIntegracao.updateMany({
+    where: {
+      id: event.canalIntegracaoId,
+      empresaId: event.empresaId,
+      connectedAt: null,
+    },
+    data: { connectedAt: completedAt },
+  });
+}
+
+async function verifyTerminalEvent(tx, event) {
+  const message = await tx.mensagemCanal.findUnique({
+    where: {
+      canalIntegracaoId_externalId: {
+        canalIntegracaoId: event.canalIntegracaoId,
+        externalId: event.externalEventId,
+      },
+    },
+    select: { id: true },
+  });
+  if (message) throw processingError("WHATSAPP_PROCESSED_EVENT_INCONSISTENT");
 }
 
 async function resolveContact(tx, event, atomic) {

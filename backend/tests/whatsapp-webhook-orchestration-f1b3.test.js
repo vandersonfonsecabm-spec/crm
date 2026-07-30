@@ -312,7 +312,8 @@ test("gates, assinatura, tipo e conflito preservam respostas sanitizadas", async
     type: "image",
     image: { id: "media-ficticia" },
   }]);
-  assert.equal((await rawRequest(media)).status, 422);
+  assert.equal((await rawRequest(media)).status, 200);
+  assert.equal(await prisma.mensagemCanal.count({ where: { externalId: "wamid.f1b3.media" } }), 0);
 
   assert.equal((await rawRequest(bodyFor("wamid.f1b3.idempotency", "Original"))).status, 200);
   assert.equal((await rawRequest(bodyFor("wamid.f1b3.idempotency", "Divergente"))).status, 409);

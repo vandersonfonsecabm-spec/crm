@@ -87,6 +87,9 @@ test("F1C-2B protege rotas, configuracao, allowlist e canais nao canonicos", asy
   assert.equal(response.status, 200);
   assert.equal(response.body.state, "NOT_CONFIGURED");
   assert.equal(response.body.publicId, null);
+  assert.equal(response.body.callbackPath, "/webhooks/whatsapp");
+  assert.equal(response.body.readiness.callbackAvailable, true);
+  assert.equal(response.body.nextHumanRequirement, "PROVISION_META_IDENTITY");
 
   response = await action("activate", target.empresaId, lifecycleBody(new Date()), operator.token);
   assert.equal(response.status, 404);
@@ -195,6 +198,7 @@ test("F1C-2B ativa, pausa e reativa com CAS, capabilities e auditoria atomicos",
   assert.equal(response.status, 200);
   assert.equal(response.body.changed, true);
   assert.equal(response.body.state, "WAITING_META_AUTH");
+  assert.equal(response.body.nextHumanRequirement, "SEND_FIRST_INBOUND_TEXT");
   assert.deepEqual(response.body.capabilities, { integration: true, inbound: true });
   channel = await prisma.canalIntegracao.findUnique({ where: { id: channel.id } });
   assert.equal(channel.ativo, true);
@@ -294,10 +298,12 @@ test("F1C-2B deriva CONNECTED, PAUSED, ERROR e UNAVAILABLE sem preencher timesta
   let response = await status(target.empresaId, operator.token);
   assert.equal(response.body.state, "CONNECTED");
   assert.equal(response.body.ready, true);
+  assert.equal(response.body.nextHumanRequirement, null);
 
   response = await action("pause", target.empresaId, lifecycleBody(channel.updatedAt), operator.token);
   assert.equal(response.status, 200);
   assert.equal(response.body.state, "PAUSED");
+  assert.equal(response.body.nextHumanRequirement, "REACTIVATE_CHANNEL");
   channel = await prisma.canalIntegracao.findUnique({ where: { id: channel.id } });
   assert.deepEqual(operationalTimestamps(channel), {
     connectedAt: connectedAt.toISOString(),

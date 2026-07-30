@@ -264,7 +264,10 @@ function presentStatus(context) {
       capabilityIntegration: context.capabilities.integration,
       capabilityInbound: context.capabilities.inbound,
       channelActive: channel?.ativo === true && channel?.status === "ATIVO",
+      callbackAvailable: true,
     },
+    callbackPath: "/webhooks/whatsapp",
+    nextHumanRequirement: nextHumanRequirement(state),
     ready: state === WHATSAPP_OPERATIONAL_STATUS.CONNECTED,
   };
 }
@@ -290,9 +293,22 @@ function unavailableStatus() {
       capabilityIntegration: false,
       capabilityInbound: false,
       channelActive: false,
+      callbackAvailable: true,
     },
+    callbackPath: "/webhooks/whatsapp",
+    nextHumanRequirement: "RETRY_STATUS",
     ready: false,
   };
+}
+
+function nextHumanRequirement(state) {
+  if (state === WHATSAPP_OPERATIONAL_STATUS.NOT_CONFIGURED) return "PROVISION_META_IDENTITY";
+  if (state === WHATSAPP_OPERATIONAL_STATUS.CONFIGURED_INACTIVE) return "CONFIGURE_META_CALLBACK";
+  if (state === WHATSAPP_OPERATIONAL_STATUS.WAITING_META_AUTH) return "SEND_FIRST_INBOUND_TEXT";
+  if (state === WHATSAPP_OPERATIONAL_STATUS.PAUSED) return "REACTIVATE_CHANNEL";
+  if (state === WHATSAPP_OPERATIONAL_STATUS.ERROR) return "REVIEW_CONFIGURATION";
+  if (state === WHATSAPP_OPERATIONAL_STATUS.UNAVAILABLE) return "RETRY_STATUS";
+  return null;
 }
 
 function validateLifecyclePayload(body) {

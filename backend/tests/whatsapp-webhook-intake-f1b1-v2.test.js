@@ -128,13 +128,16 @@ test("parser decompoe mensagens, entries e associa somente o contato correto", (
   assert.equal(items[2].wabaId, wabaId);
 });
 
-test("parser rejeita status, midia, estruturas invalidas e identidades conflitantes", () => {
+test("parser classifica midia e rejeita status malformado, estruturas invalidas e identidades conflitantes", () => {
   const statusOnly = validPayload();
   delete statusOnly.entry[0].changes[0].value.messages;
   statusOnly.entry[0].changes[0].value.statuses = [{ id: "status" }];
-  assertIntakeError(() => parseAtomicMessages(statusOnly), 422);
+  assertIntakeError(() => parseAtomicMessages(statusOnly), 400);
 
-  assertIntakeError(() => parseAtomicMessages(validPayload({ messages: [{ ...message("wamid.media"), type: "image", image: { id: "x" } }] })), 422);
+  const media = parseAtomicMessages(validPayload({
+    messages: [{ ...message("wamid.media"), type: "image", image: { id: "x" } }],
+  }));
+  assert.equal(media[0].eventType, "WHATSAPP_MESSAGE_MEDIA_UNSUPPORTED");
   assertIntakeError(() => parseAtomicMessages(validPayload({ messages: [{ ...message("wamid.no-id"), id: undefined }] })), 400);
   assertIntakeError(() => parseAtomicMessages({ ...validPayload(), entry: [{ changes: [] }] }), 400);
   assertIntakeError(() => parseAtomicMessages(validPayload({ phoneId: "" })), 400);
@@ -317,7 +320,7 @@ test("falha no segundo insert faz rollback e retorna 503 sanitizado", async () =
   }
 });
 
-test("lote misto nao persiste e respostas ou logs nao vazam dados sensiveis", async () => {
+test("lote misto persiste atomicamente e respostas ou logs nao vazam dados sensiveis", async () => {
   const mixed = bodyForMessages([
     message("wamid.mixed.text"),
     { ...message("wamid.mixed.image"), type: "image", image: { id: "media-secret" } },
@@ -327,8 +330,11 @@ test("lote misto nao persiste e respostas ou logs nao vazam dados sensiveis", as
   for (const method of Object.keys(originalConsole)) console[method] = (...args) => captured.push(args.join(" "));
   try {
     const response = await rawRequest(mixed);
-    assert.equal(response.status, 422);
-    assert.equal(await whatsappEventCount(), 0);
+    assert.equal(response.status, 200);
+    assert.equal(await whatsappEventCount(), 2);
+    assert.equal(await prisma.eventoWebhook.count({
+      where: { tipoEvento: "WHATSAPP_MESSAGE_MEDIA_UNSUPPORTED" },
+    }), 1);
     const output = `${response.text}\n${captured.join("\n")}`;
     for (const forbidden of [appSecret, "wamid.mixed", "media-secret", wabaId, phoneNumberId, "5511999999999"]) {
       assert.equal(output.includes(forbidden), false);
