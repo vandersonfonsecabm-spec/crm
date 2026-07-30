@@ -1,4 +1,7 @@
 const { normalizePhone } = require("./phoneNormalizer");
+const {
+  REAL_WHATSAPP_INBOUND_KEY,
+} = require("../platform/whatsappInboundProvisioning");
 
 const TEST_CHANNEL_KEY = "whatsapp-meta-test";
 const TEST_CHANNEL_NAME = "WhatsApp - Modo de Teste";
@@ -64,6 +67,7 @@ function createChannelService({ prisma }) {
   async function updateChannel({ empresaId, id, body }) {
     const data = validateChannelPatch(body);
     const channel = await getChannel({ empresaId, id });
+    assertChannelCanUseTenantPatch(channel);
     const nextData = {};
     if (Object.hasOwn(data, "nome")) nextData.nome = data.nome;
     if (Object.hasOwn(data, "ativo")) {
@@ -178,6 +182,19 @@ function createChannelService({ prisma }) {
     closeConversation,
     registerSimulatedMessage,
   };
+}
+
+function assertChannelCanUseTenantPatch(channel) {
+  if (
+    channel.tipo === "WHATSAPP_META"
+    && channel.modoTeste === false
+    && channel.chaveInterna === REAL_WHATSAPP_INBOUND_KEY
+  ) {
+    const error = new Error("Canal gerenciado pela plataforma.");
+    error.status = 403;
+    error.codigo = "CHANNEL_PLATFORM_MANAGED";
+    throw error;
+  }
 }
 
 function validateChannelPatch(body = {}) {

@@ -193,11 +193,37 @@ test("F1C-1 provisiona um unico canal WhatsApp inbound real com contrato fechado
   assert.equal(channel.lastWebhookAt, null);
   assert.equal(channel.lastFailureAt, null);
   assert.equal(channel.lastFailureCode, null);
+
+  const tenantAdminPatch = await request(
+    "PATCH",
+    `/canais/${channel.id}`,
+    { nome: "Tentativa de bypass", ativo: true },
+    target.token,
+  );
+  assert.equal(tenantAdminPatch.status, 403);
+  assert.equal(tenantAdminPatch.body.codigo, "CHANNEL_PLATFORM_MANAGED");
+  const channelAfterTenantPatch = await prisma.canalIntegracao.findUnique({
+    where: { id: channel.id },
+  });
+  assert.equal(channelAfterTenantPatch.nome, channel.nome);
+  assert.equal(channelAfterTenantPatch.ativo, false);
+  assert.equal(channelAfterTenantPatch.status, "INATIVO");
+  assert.equal(channelAfterTenantPatch.updatedAt.toISOString(), channel.updatedAt.toISOString());
+
   assert.equal(await prisma.canalIntegracao.count({ where: { empresaId: target.empresaId } }), 2);
   assert.deepEqual(
     await prisma.canalIntegracao.findUnique({ where: { id: testChannel.id } }),
     testChannel,
   );
+  const testChannelPatch = await request(
+    "PATCH",
+    `/canais/${testChannel.id}`,
+    { nome: "Canal de teste atualizado" },
+    target.token,
+  );
+  assert.equal(testChannelPatch.status, 200);
+  assert.equal(testChannelPatch.body.nome, "Canal de teste atualizado");
+  assert.equal(testChannelPatch.body.modoTeste, true);
   assert.deepEqual(await effectCounts(target.empresaId), countsBefore);
   assert.equal(await prisma.empresaFuncionalidade.count({ where: { empresaId: target.empresaId } }), 0);
 
