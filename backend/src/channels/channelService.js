@@ -183,7 +183,7 @@ function createChannelService({ prisma }) {
 
 function assertChannelCanUseTenantPatch(channel) {
   if (
-    channel.tipo === "WHATSAPP_META"
+    ["WHATSAPP_META", "INSTAGRAM_META"].includes(channel.tipo)
     && channel.modoTeste === false
   ) {
     const error = new Error("Canal gerenciado pela plataforma.");

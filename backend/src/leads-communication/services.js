@@ -596,8 +596,8 @@ function createLeadsCommunicationServices({ prisma }) {
         if (conversation.status === "ENCERRADA") {
           throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao aceita novas mensagens nesta release.");
         }
-        if (direcao === "SAIDA" && conversation.canalIntegracao.tipo === "SITE_FORM") {
-          throw domainError(409, "CHANNEL_DIRECT_REPLY_UNAVAILABLE", "Formulario do Site nao possui resposta direta.");
+        if (direcao === "SAIDA" && !channelSupportsDirectReply(conversation.canalIntegracao.tipo)) {
+          throw domainError(409, "CHANNEL_DIRECT_REPLY_UNAVAILABLE", "Canal nao possui resposta direta nesta release.");
         }
         if (direcao === "SAIDA") assertReplyLeaseAvailable(conversation, context);
         const existing = await tx.mensagemCanal.findUnique({
@@ -1076,7 +1076,7 @@ function presentConversation(conversation) {
       ? { id: conversation.responsavel.id, nome: conversation.responsavel.nome }
       : null,
     reservaResposta: replyLeaseView({ ...conversation, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte }),
-    podeResponderDiretamente: conversation.canalIntegracao?.tipo !== "SITE_FORM",
+    podeResponderDiretamente: channelSupportsDirectReply(conversation.canalIntegracao?.tipo),
     tipoCanal: conversation.canalIntegracao?.tipo || null,
     ultimaMensagem: mensagens?.[0] ? presentMessage(mensagens[0]) : null,
     naoLidas: _count?.mensagens || 0,
@@ -1090,6 +1090,10 @@ function presentMessage(message) {
     ...data,
     autor: autorUsuario ? { id: autorUsuario.id, nome: autorUsuario.nome } : null,
   };
+}
+
+function channelSupportsDirectReply(channelType) {
+  return !["SITE_FORM", "INSTAGRAM_META"].includes(channelType);
 }
 
 function getReplyLeaseSeconds(env = process.env) {
