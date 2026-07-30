@@ -1,6 +1,9 @@
 const bcrypt = require("bcryptjs");
 const { validateCompanyRegistration } = require("../auth");
 const { FEATURE_KEYS, setTenantFeature } = require("../tenant-features/service");
+const {
+  createWhatsappInboundProvisioningService,
+} = require("./whatsappInboundProvisioning");
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
@@ -9,6 +12,7 @@ const MAX_REASON_LENGTH = 500;
 function mountPlatformRoutes({ app, prisma, authenticate }) {
   const rateLimiter = createPlatformRateLimiter();
   const guarded = [authenticate, requirePlatformOperator, rateLimiter];
+  const whatsappInboundProvisioning = createWhatsappInboundProvisioningService({ prisma });
 
   app.get("/platform/tenants", ...guarded, route(async (req, res) => {
     const page = positiveInteger(req.query.page, 1);
@@ -128,6 +132,26 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
     });
     if (!tenant) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
     res.json(presentTenant(tenant));
+  }));
+
+  app.put("/platform/tenants/:tenantId/integrations/whatsapp/inbound", ...guarded, route(async (req, res) => {
+    const tenantId = parseId(req.params.tenantId);
+    if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
+
+    try {
+      const result = await whatsappInboundProvisioning.provision({
+        tenantId,
+        actorUserId: req.auth.usuarioId,
+        body: req.body,
+        correlationId: req.get("x-correlation-id"),
+      });
+      return res.status(result.created ? 201 : 200).json(result.body);
+    } catch (error) {
+      if (Number.isInteger(error?.status) && /^WHATSAPP_|^PLATFORM_/.test(String(error?.code || ""))) {
+        return platformError(res, error.status, error.message, error.code);
+      }
+      throw error;
+    }
   }));
 
   app.patch("/platform/tenants/:tenantId/capabilities/automations", ...guarded, route(async (req, res) => {
