@@ -286,31 +286,25 @@ test("H8.3 usa allowlists canonicas e bloqueia acoes indisponiveis", async () =>
   const context = adminContext(tenant);
   assert.deepEqual(
     [...WORKER_ACTION_TYPES],
-    ["ASSIGN_OWNER", "CREATE_FOLLOW_UP", "CREATE_INTERNAL_EVENT", "UPDATE_NEXT_FOLLOW_UP_PROJECTION"],
+    ["ASSIGN_OWNER", "ASSIGN_ROUND_ROBIN", "CREATE_FOLLOW_UP", "CREATE_INTERNAL_EVENT", "UPDATE_NEXT_FOLLOW_UP_PROJECTION"],
   );
   assert.deepEqual([...PILOT_ACTION_TYPES], ["CREATE_INTERNAL_EVENT"]);
   assert.deepEqual((await service.options(context)).actions, [...WORKER_ACTION_TYPES]);
 
-  await assert.rejects(
-    service.createRule(context, {
-      nome: "Round-robin indisponivel",
-      prioridade: 5,
-      gatilho: "LEAD_CREATED",
-      timezone: "America/Sao_Paulo",
-      condicoes: [],
-      acoes: [{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [tenant.admin.id] }],
-    }),
-    (error) => error?.codigo === "AUTOMATION_ACTION_UNAVAILABLE",
-  );
-
-  const legacyRule = await createLegacyRule(context, "Round-robin legado", {
-    tipo: "ASSIGN_ROUND_ROBIN",
-    usuarioIds: [tenant.admin.id],
+  const roundRobinRule = await service.createRule(context, {
+    nome: "Round-robin liberado",
+    prioridade: 5,
+    gatilho: "LEAD_CREATED",
+    timezone: "America/Sao_Paulo",
+    condicoes: [],
+    acoes: [{ tipo: "ASSIGN_ROUND_ROBIN", usuarioIds: [tenant.admin.id] }],
   });
-  await assert.rejects(
-    service.activateRule(context, legacyRule.id),
-    (error) => error?.codigo === "AUTOMATION_ACTION_UNAVAILABLE",
+  await service.activateRule(context, roundRobinRule.id);
+  const roundRobinPilot = await service.produceAutomationEvent(
+    pilotEvent(tenant.empresa.id, "round-robin-pilot-rejected"),
   );
+  assert.equal(roundRobinPilot.createdExecutions, 0);
+  assert.equal(roundRobinPilot.createdJobs, 0);
 
   const ownerRule = await assignOwnerRule(context, tenant.admin.id, "Atribuicao real");
   await service.activateRule(context, ownerRule.id);

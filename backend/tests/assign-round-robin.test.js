@@ -2,21 +2,25 @@ const assert = require("node:assert/strict");
 const { after, afterEach, before, test } = require("node:test");
 const crypto = require("node:crypto");
 const { PrismaClient } = require("@prisma/client");
-const { WORKER_ACTION_TYPES } = require("../src/automations/actions");
+const {
+  PILOT_ACTION_TYPES,
+  WORKER_ACTION_TYPES,
+  unavailableActionTypes,
+} = require("../src/automations/actions");
 const { createAutomationService } = require("../src/automations/service");
 
 process.env.NODE_ENV = "test";
 
 const prisma = new PrismaClient();
 const env = { AUTOMATIONS_ENABLED: "true", NODE_ENV: "test" };
-const roundRobinActions = [...WORKER_ACTION_TYPES, "ASSIGN_ROUND_ROBIN"];
+const roundRobinActions = [...WORKER_ACTION_TYPES];
 let sequence = 0;
 
 before(cleanDatabase);
 afterEach(cleanDatabase);
 after(() => prisma.$disconnect());
 
-test("round-robin permanece indisponivel e normaliza a ordem configurada", async () => {
+test("round-robin fica disponivel no worker, restrito no piloto e normaliza a ordem configurada", async () => {
   const tenant = await seedTenant("round-robin-order");
   const users = await Promise.all([
     seedUser(tenant.empresa.id, "Usuario 3"),
@@ -25,11 +29,17 @@ test("round-robin permanece indisponivel e normaliza a ordem configurada", async
   ]);
   const service = createAutomationService({ prisma, env });
 
-  assert.equal(WORKER_ACTION_TYPES.includes("ASSIGN_ROUND_ROBIN"), false);
-  await assert.rejects(
-    service.createRule(adminContext(tenant), rulePayload([users[2].id, users[0].id, users[1].id])),
-    (error) => error?.codigo === "AUTOMATION_ACTION_UNAVAILABLE",
+  assert.equal(WORKER_ACTION_TYPES.includes("ASSIGN_ROUND_ROBIN"), true);
+  assert.deepEqual(
+    unavailableActionTypes([{ tipo: "ASSIGN_ROUND_ROBIN" }], PILOT_ACTION_TYPES),
+    ["ASSIGN_ROUND_ROBIN"],
   );
+  const createdRule = await service.createRule(
+    adminContext(tenant),
+    rulePayload([users[2].id, users[0].id, users[1].id]),
+  );
+  const activatedRule = await service.activateRule(adminContext(tenant), createdRule.id);
+  assert.equal(activatedRule.ativa, true);
 
   const rule = await seedRule(tenant, [users[2].id, users[0].id, users[1].id, users[0].id]);
   const lead = await seedLead(tenant);
