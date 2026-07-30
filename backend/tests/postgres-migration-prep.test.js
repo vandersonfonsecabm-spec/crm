@@ -1,6 +1,10 @@
 process.env.NODE_ENV = "test";
 
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const { test } = require("node:test");
 
 const { createPrismaClient, validateTestPostgresUrl } = require("../src/database/prisma-client");
@@ -9,6 +13,7 @@ const { postgresUrlFromEnv } = require("../scripts/check-postgres-connection.cjs
 const { resolveSqliteDatabasePath } = require("../scripts/start-production.cjs");
 const { convertValue, orderedTables, sanitizeError } = require("../scripts/migrate-sqlite-to-postgres.cjs");
 const {
+  latestMigrationSqlPath,
   postgresSchemaText,
   postgresSchemaWithClientOutput,
   preparePostgresWorkspace,
@@ -46,8 +51,6 @@ test("preparacao PostgreSQL direciona client temporario para output explicito", 
 });
 
 test("workspace PostgreSQL padrao permanece sob o package root do backend", () => {
-  const fs = require("node:fs");
-  const path = require("node:path");
   const backendDirectory = path.resolve(__dirname, "..");
   const workspace = preparePostgresWorkspace({
     migrationSql: "-- baseline test\n",
@@ -68,6 +71,48 @@ test("workspace PostgreSQL padrao permanece sob o package root do backend", () =
     packageRoot = path.dirname(packageRoot);
   }
   assert.equal(packageRoot, backendDirectory);
+});
+
+test("workspace PostgreSQL preserva baseline congelada e inclui migrations incrementais", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-pg-versioned-migrations-"));
+  try {
+    const workspace = preparePostgresWorkspace({ root });
+    const migrationNames = fs.readdirSync(workspace.migrationsDir, { withFileTypes: true })
+      .filter((item) => item.isDirectory())
+      .map((item) => item.name)
+      .sort();
+    assert.deepEqual(migrationNames, [
+      "20260728090000_postgres_baseline",
+      "20260730160000_add_instagram_direct_schema_foundation",
+    ]);
+    assert.equal(
+      latestMigrationSqlPath(workspace.migrationsDir),
+      path.join(
+        workspace.migrationsDir,
+        "20260730160000_add_instagram_direct_schema_foundation",
+        "migration.sql",
+      ),
+    );
+    const baseline = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260728090000_postgres_baseline",
+      "migration.sql",
+    ));
+    assert.equal(
+      crypto.createHash("sha256").update(baseline).digest("hex"),
+      "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
+    );
+    const incremental = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260730160000_add_instagram_direct_schema_foundation",
+      "migration.sql",
+    ), "utf8");
+    assert.match(incremental, /INSTAGRAM_META/);
+    assert.match(incremental, /instagramBusinessAccountId/);
+    assert.doesNotMatch(incremental, /\b(?:DROP|DELETE|UPDATE|TRUNCATE)\b/i);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("runner PostgreSQL restaura Prisma Client SQLite apos sucesso", () => {
