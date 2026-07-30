@@ -326,6 +326,346 @@ test("F1C-1 provisiona um unico canal WhatsApp inbound real com contrato fechado
   assert.deepEqual(await effectCounts(target.empresaId), beforeChallenge);
 });
 
+test("F1C-1 nao mascara P2002 de unique inesperada", async () => {
+  const {
+    classifyCanalUniqueConflictTarget,
+    createWhatsappInboundProvisioningService,
+  } = require("../src/platform/whatsappInboundProvisioning");
+  assert.equal(classifyCanalUniqueConflictTarget({
+    code: "P2002",
+    meta: { target: ["empresaId", "chaveInterna"] },
+  }), "TENANT_KEY");
+  assert.equal(classifyCanalUniqueConflictTarget({
+    code: "P2002",
+    meta: {
+      target: "CanalIntegracao_tipo_providerEnvironment_metaAppId_phoneNumberId_key",
+    },
+  }), "GLOBAL_IDENTITY");
+  assert.equal(classifyCanalUniqueConflictTarget({
+    code: "P2002",
+    meta: {
+      target: {
+        constraint: {
+          fields: ["tipo", "providerEnvironment", "metaAppId", "phoneNumberId"],
+        },
+      },
+    },
+  }), "GLOBAL_IDENTITY");
+  assert.equal(classifyCanalUniqueConflictTarget({
+    code: "P2002",
+    meta: { target: ["publicId"] },
+  }), "UNKNOWN");
+  const unexpected = Object.assign(new Error("synthetic publicId collision"), {
+    code: "P2002",
+    meta: { target: ["publicId"] },
+  });
+  const fakePrisma = {
+    empresa: { findUnique: async () => ({ id: 901 }) },
+    canalIntegracao: {
+      findMany: async () => [],
+      create: async () => { throw unexpected; },
+      findUnique: async () => null,
+    },
+  };
+  await assert.rejects(
+    createWhatsappInboundProvisioningService({
+      prisma: fakePrisma,
+      logger: { info() {} },
+    }).provision({
+      tenantId: 901,
+      actorUserId: 902,
+      body: {
+        name: "Canal tecnico",
+        wabaId: "WABA_PUBLIC_ID_COLLISION",
+        phoneNumberId: "PHONE_PUBLIC_ID_COLLISION",
+        reason: "Teste controlado de unique inesperada",
+      },
+    }),
+    (error) => error === unexpected,
+  );
+
+  const collisionOwner = await register(
+    "Tenant PublicId Origem F1C1",
+    "Admin PublicId Origem",
+    uniqueEmail("public-id-owner"),
+  );
+  const collisionTarget = await register(
+    "Tenant PublicId Alvo F1C1",
+    "Admin PublicId Alvo",
+    uniqueEmail("public-id-target"),
+  );
+  const repeatedPublicId = `public-id-collision-${suffix}`;
+  await prisma.canalIntegracao.create({
+    data: {
+      empresaId: collisionOwner.empresaId,
+      tipo: "WHATSAPP_META",
+      nome: "Fixture de colisao publicId",
+      chaveInterna: "whatsapp-meta-test-public-id",
+      publicId: repeatedPublicId,
+      status: "MODO_TESTE",
+      modoTeste: true,
+      ativo: true,
+    },
+  });
+  await assert.rejects(
+    createWhatsappInboundProvisioningService({
+      prisma,
+      logger: { info() {} },
+      randomUUID: () => repeatedPublicId,
+    }).provision({
+      tenantId: collisionTarget.empresaId,
+      actorUserId: collisionTarget.usuarioId,
+      body: {
+        name: "Canal com colisao real",
+        wabaId: `WABA_PUBLIC_REAL_${suffix}`,
+        phoneNumberId: `PHONE_PUBLIC_REAL_${suffix}`,
+        reason: "Teste real de unique publicId",
+      },
+    }),
+    (error) => {
+      assert.equal(error?.code, "P2002");
+      assertKnownConstraintTarget(error, ["publicId"]);
+      return true;
+    },
+  );
+  assert.equal(await prisma.canalIntegracao.count({
+    where: {
+      empresaId: collisionTarget.empresaId,
+      modoTeste: false,
+      tipo: "WHATSAPP_META",
+    },
+  }), 0);
+});
+
+test("F1C-1 sanitiza reason nao confiavel sem perder contexto operacional", async () => {
+  const {
+    createWhatsappInboundProvisioningService,
+  } = require("../src/platform/whatsappInboundProvisioning");
+  const channel = fakeChannel({
+    empresaId: 911,
+    wabaId: "WABA_COMPLETE_IDENTIFIER_911",
+    phoneNumberId: "PHONE_COMPLETE_IDENTIFIER_911",
+  });
+  const lines = [];
+  const service = createWhatsappInboundProvisioningService({
+    prisma: {
+      empresa: { findUnique: async () => ({ id: 911 }) },
+      canalIntegracao: {
+        findMany: async () => [],
+        create: async () => channel,
+      },
+    },
+    logger: { info: (line) => lines.push(String(line)) },
+  });
+  const result = await service.provision({
+    tenantId: 911,
+    actorUserId: 912,
+    correlationId: "reason-redaction",
+    body: {
+      name: channel.nome,
+      wabaId: channel.wabaId,
+      phoneNumberId: channel.phoneNumberId,
+      reason: [
+        "troca solicitada",
+        "accessTokenRef=env:WHATSAPP_ACCESS_TOKEN_X",
+        "token: bearer-value",
+        "payload={\"lead\":\"sensitive\"}",
+        `wabaId=${channel.wabaId}`,
+        `phoneNumberId: ${channel.phoneNumberId}`,
+        "telefone=+55 11 99999-0000",
+        "linha nova",
+        "\u0001controle",
+      ].join("\n"),
+    },
+  });
+  assert.equal(result.created, true);
+  assert.equal(lines.length, 1);
+  const logged = lines[0];
+  for (const sensitive of [
+    "env:WHATSAPP_ACCESS_TOKEN_X",
+    "bearer-value",
+    "{\"lead\":\"sensitive\"}",
+    channel.wabaId,
+    channel.phoneNumberId,
+    "+55 11 99999-0000",
+    "\u0001",
+    "\n",
+  ]) {
+    assert.equal(logged.includes(sensitive), false, sensitive);
+  }
+  assert.match(logged, /troca solicitada/);
+  assert.match(logged, /accessTokenRef=\[REDACTED\]/);
+  assert.match(logged, /phoneNumberId=\[REDACTED\]/);
+
+  await assert.rejects(
+    service.provision({
+      tenantId: 911,
+      actorUserId: 912,
+      body: {
+        name: "Canal tecnico",
+        wabaId: "WABA_LONG_REASON",
+        phoneNumberId: "PHONE_LONG_REASON",
+        reason: "x".repeat(501),
+      },
+    }),
+    (error) => error.code === "WHATSAPP_PROVISIONING_INVALID" && error.status === 422,
+  );
+});
+
+test("F1C-1 preserva persistencia quando logger falha depois do commit", async () => {
+  const {
+    createWhatsappInboundProvisioningService,
+  } = require("../src/platform/whatsappInboundProvisioning");
+  const tenant = await register("Tenant Logger F1C1", "Admin Logger", uniqueEmail("logger"));
+  const body = {
+    name: "Canal com logger indisponivel",
+    wabaId: `WABA_LOGGER_${suffix}`,
+    phoneNumberId: `PHONE_LOGGER_${suffix}`,
+    reason: "Provisionamento com falha controlada do logger",
+  };
+  const service = createWhatsappInboundProvisioningService({
+    prisma,
+    logger: { info() { throw new Error("synthetic logger failure"); } },
+  });
+  const created = await service.provision({
+    tenantId: tenant.empresaId,
+    actorUserId: tenant.usuarioId,
+    body,
+  });
+  assert.equal(created.created, true);
+  assert.equal(created.body.changed, true);
+  assert.equal(JSON.stringify(created).includes("synthetic logger failure"), false);
+  assert.equal(await prisma.canalIntegracao.count({
+    where: {
+      empresaId: tenant.empresaId,
+      chaveInterna: "whatsapp-meta-inbound-real",
+    },
+  }), 1);
+
+  const replay = await service.provision({
+    tenantId: tenant.empresaId,
+    actorUserId: tenant.usuarioId,
+    body,
+  });
+  assert.equal(replay.created, false);
+  assert.equal(replay.body.changed, false);
+  assert.equal(await prisma.canalIntegracao.count({
+    where: {
+      empresaId: tenant.empresaId,
+      chaveInterna: "whatsapp-meta-inbound-real",
+    },
+  }), 1);
+});
+
+test("F1C-1 classifica corridas reais de chave e identidade", async () => {
+  const sameTenant = await register("Tenant Corrida F1C1", "Admin Corrida", uniqueEmail("race-same"));
+  const sameBody = {
+    name: "Canal concorrente no tenant",
+    wabaId: `WABA_SAME_${suffix}`,
+    phoneNumberId: `PHONE_SAME_${suffix}`,
+    reason: "Corrida real na chave do tenant",
+  };
+  const sameRace = await runRealProvisioningRace([
+    { tenantId: sameTenant.empresaId, actorUserId: sameTenant.usuarioId, body: sameBody },
+    { tenantId: sameTenant.empresaId, actorUserId: sameTenant.usuarioId, body: sameBody },
+  ]);
+  assert.deepEqual(
+    sameRace.results.map((result) => ({ status: result.status, created: result.value?.created })).sort(sortRaceResults),
+    [
+      { status: "fulfilled", created: false },
+      { status: "fulfilled", created: true },
+    ],
+  );
+  assert.equal(sameRace.uniqueErrors.length, 1);
+  assertKnownConstraintTargetOneOf(sameRace.uniqueErrors[0], [
+    ["empresaId", "chaveInterna"],
+    ["tipo", "providerEnvironment", "metaAppId", "phoneNumberId"],
+  ]);
+  assert.equal(await prisma.canalIntegracao.count({
+    where: {
+      empresaId: sameTenant.empresaId,
+      chaveInterna: "whatsapp-meta-inbound-real",
+    },
+  }), 1);
+
+  const tenantKeyRaceTenant = await register(
+    "Tenant Chave F1C1",
+    "Admin Chave",
+    uniqueEmail("race-key"),
+  );
+  const tenantKeyRace = await runRealProvisioningRace([
+    {
+      tenantId: tenantKeyRaceTenant.empresaId,
+      actorUserId: tenantKeyRaceTenant.usuarioId,
+      body: {
+        name: "Canal concorrente A",
+        wabaId: `WABA_KEY_A_${suffix}`,
+        phoneNumberId: `PHONE_KEY_A_${suffix}`,
+        reason: "Corrida real na chave do tenant A",
+      },
+    },
+    {
+      tenantId: tenantKeyRaceTenant.empresaId,
+      actorUserId: tenantKeyRaceTenant.usuarioId,
+      body: {
+        name: "Canal concorrente B",
+        wabaId: `WABA_KEY_B_${suffix}`,
+        phoneNumberId: `PHONE_KEY_B_${suffix}`,
+        reason: "Corrida real na chave do tenant B",
+      },
+    },
+  ]);
+  assert.equal(tenantKeyRace.results.filter((result) => result.status === "fulfilled").length, 1);
+  const tenantKeyRejected = tenantKeyRace.results.find((result) => result.status === "rejected");
+  assert.ok(tenantKeyRejected);
+  assert.equal(tenantKeyRejected.reason.status, 409);
+  assert.ok([
+    "WHATSAPP_IDENTITY_IMMUTABLE",
+    "WHATSAPP_CHANNEL_CONFLICT",
+  ].includes(tenantKeyRejected.reason.code));
+  assert.equal(tenantKeyRace.uniqueErrors.length, 1);
+  assertKnownConstraintTarget(tenantKeyRace.uniqueErrors[0], ["empresaId", "chaveInterna"]);
+  assert.equal(await prisma.canalIntegracao.count({
+    where: {
+      empresaId: tenantKeyRaceTenant.empresaId,
+      chaveInterna: "whatsapp-meta-inbound-real",
+    },
+  }), 1);
+
+  const tenantA = await register("Tenant Corrida A F1C1", "Admin Corrida A", uniqueEmail("race-a"));
+  const tenantB = await register("Tenant Corrida B F1C1", "Admin Corrida B", uniqueEmail("race-b"));
+  const sharedBody = {
+    name: "Identidade concorrente entre tenants",
+    wabaId: `WABA_CROSS_${suffix}`,
+    phoneNumberId: `PHONE_CROSS_${suffix}`,
+    reason: "Corrida real de identidade global",
+  };
+  const crossRace = await runRealProvisioningRace([
+    { tenantId: tenantA.empresaId, actorUserId: tenantA.usuarioId, body: sharedBody },
+    { tenantId: tenantB.empresaId, actorUserId: tenantB.usuarioId, body: sharedBody },
+  ]);
+  assert.equal(crossRace.results.filter((result) => result.status === "fulfilled").length, 1);
+  const rejected = crossRace.results.find((result) => result.status === "rejected");
+  assert.ok(rejected);
+  assert.equal(rejected.reason.code, "WHATSAPP_IDENTITY_CONFLICT");
+  assert.equal(rejected.reason.status, 409);
+  assert.equal(crossRace.uniqueErrors.length, 1);
+  assertKnownConstraintTarget(crossRace.uniqueErrors[0], [
+    "tipo",
+    "providerEnvironment",
+    "metaAppId",
+    "phoneNumberId",
+  ]);
+  assert.equal(await prisma.canalIntegracao.count({
+    where: {
+      tipo: "WHATSAPP_META",
+      providerEnvironment: process.env.WHATSAPP_PROVIDER_ENVIRONMENT,
+      metaAppId: process.env.WHATSAPP_META_APP_ID,
+      phoneNumberId: sharedBody.phoneNumberId,
+    },
+  }), 1);
+});
+
 async function assertConstraintRaceHandling(tenantId, actorUserId) {
   const {
     createWhatsappInboundProvisioningService,
@@ -354,12 +694,15 @@ async function assertConstraintRaceHandling(tenantId, actorUserId) {
     verifiedDisplayName: null,
     updatedAt: new Date(),
   };
-  const uniqueConflict = Object.assign(new Error("unique"), { code: "P2002" });
+  const tenantKeyConflict = Object.assign(new Error("unique"), {
+    code: "P2002",
+    meta: { target: ["empresaId", "chaveInterna"] },
+  });
   const sameTenantPrisma = {
     empresa: { findUnique: async () => ({ id: tenantId }) },
     canalIntegracao: {
       findMany: async () => [],
-      create: async () => { throw uniqueConflict; },
+      create: async () => { throw tenantKeyConflict; },
       findUnique: async () => canonical,
     },
   };
@@ -371,6 +714,12 @@ async function assertConstraintRaceHandling(tenantId, actorUserId) {
   assert.equal(sameTenant.body.changed, false);
 
   let identityReads = 0;
+  const identityConflict = Object.assign(new Error("unique"), {
+    code: "P2002",
+    meta: {
+      target: "CanalIntegracao_tipo_providerEnvironment_metaAppId_phoneNumberId_key",
+    },
+  });
   const crossTenantPrisma = {
     empresa: { findUnique: async () => ({ id: tenantId }) },
     canalIntegracao: {
@@ -379,7 +728,7 @@ async function assertConstraintRaceHandling(tenantId, actorUserId) {
         identityReads += 1;
         return identityReads === 1 ? [] : [{ ...canonical, id: 777, empresaId: tenantId + 1 }];
       },
-      create: async () => { throw uniqueConflict; },
+      create: async () => { throw identityConflict; },
       findUnique: async () => null,
     },
   };
@@ -390,6 +739,104 @@ async function assertConstraintRaceHandling(tenantId, actorUserId) {
     }).provision({ tenantId, actorUserId, body }),
     (error) => error.code === "WHATSAPP_IDENTITY_CONFLICT" && error.status === 409,
   );
+}
+
+async function runRealProvisioningRace(calls) {
+  const {
+    createWhatsappInboundProvisioningService,
+  } = require("../src/platform/whatsappInboundProvisioning");
+  const { PrismaClient } = require("@prisma/client");
+  const barrier = createBarrier(calls.length);
+  const uniqueErrors = [];
+  const clients = calls.map(() => new PrismaClient());
+  try {
+    await Promise.all(clients.map((client) => client.$connect()));
+    const services = clients.map((client) => createWhatsappInboundProvisioningService({
+      prisma: prismaWithCreateBarrier(client, barrier, uniqueErrors),
+      logger: { info() {} },
+    }));
+    const results = await Promise.allSettled(calls.map((call, index) => services[index].provision(call)));
+    return { results, uniqueErrors };
+  } finally {
+    await Promise.all(clients.map((client) => client.$disconnect()));
+  }
+}
+
+function prismaWithCreateBarrier(basePrisma, barrier, uniqueErrors) {
+  return {
+    empresa: {
+      findUnique: (query) => basePrisma.empresa.findUnique(query),
+    },
+    canalIntegracao: {
+      findMany: (query) => basePrisma.canalIntegracao.findMany(query),
+      findUnique: (query) => basePrisma.canalIntegracao.findUnique(query),
+      findFirst: (query) => basePrisma.canalIntegracao.findFirst(query),
+      updateMany: (query) => basePrisma.canalIntegracao.updateMany(query),
+      create: async (query) => {
+        await barrier();
+        try {
+          return await basePrisma.canalIntegracao.create(query);
+        } catch (error) {
+          if (error?.code === "P2002") uniqueErrors.push(error);
+          throw error;
+        }
+      },
+    },
+  };
+}
+
+function createBarrier(expected) {
+  let arrived = 0;
+  let release;
+  const ready = new Promise((resolve) => {
+    release = resolve;
+  });
+  return async () => {
+    arrived += 1;
+    if (arrived === expected) release();
+    await ready;
+  };
+}
+
+function assertKnownConstraintTarget(error, expectedFields) {
+  assert.equal(error?.code, "P2002");
+  const target = JSON.stringify(error?.meta?.target || "");
+  for (const field of expectedFields) {
+    assert.match(target, new RegExp(field, "i"));
+  }
+}
+
+function assertKnownConstraintTargetOneOf(error, expectedTargets) {
+  assert.equal(error?.code, "P2002");
+  const target = JSON.stringify(error?.meta?.target || "");
+  assert.equal(expectedTargets.some((fields) => (
+    fields.every((field) => new RegExp(field, "i").test(target))
+  )), true, target);
+}
+
+function sortRaceResults(left, right) {
+  return Number(left.created) - Number(right.created);
+}
+
+function fakeChannel({ empresaId, wabaId, phoneNumberId }) {
+  return {
+    id: 1,
+    empresaId,
+    tipo: "WHATSAPP_META",
+    nome: "Canal tecnico",
+    chaveInterna: "whatsapp-meta-inbound-real",
+    publicId: "fake-public-channel-id",
+    status: "INATIVO",
+    modoTeste: false,
+    ativo: false,
+    providerEnvironment: process.env.WHATSAPP_PROVIDER_ENVIRONMENT,
+    metaAppId: process.env.WHATSAPP_META_APP_ID,
+    wabaId,
+    phoneNumberId,
+    displayPhoneMasked: null,
+    verifiedDisplayName: null,
+    updatedAt: new Date(),
+  };
 }
 
 function validCreation() {

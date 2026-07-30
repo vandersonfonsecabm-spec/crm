@@ -13,6 +13,32 @@ const MAX_ID_LENGTH = 128;
 const SAFE_ID_PATTERN = /^[A-Za-z0-9._:-]+$/;
 const PROVIDER_ENVIRONMENT_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/;
 const MASKED_PHONE_PATTERN = /^[+()0-9*Xx .-]+$/;
+const UNIQUE_CONFLICT_KIND = Object.freeze({
+  TENANT_KEY: "TENANT_KEY",
+  GLOBAL_IDENTITY: "GLOBAL_IDENTITY",
+  UNKNOWN: "UNKNOWN",
+});
+const TENANT_KEY_FIELDS = ["empresaId", "chaveInterna"];
+const GLOBAL_IDENTITY_FIELDS = [
+  "tipo",
+  "providerEnvironment",
+  "metaAppId",
+  "phoneNumberId",
+];
+const SENSITIVE_REASON_KEYS = [
+  "accessTokenRef",
+  "accessToken",
+  "appSecret",
+  "verifyToken",
+  "authorization",
+  "cookie",
+  "payload",
+  "phoneNumberId",
+  "wabaId",
+  "telefone",
+  "phone",
+  "token",
+];
 const ALLOWED_INPUT_FIELDS = new Set([
   "name",
   "wabaId",
@@ -96,13 +122,15 @@ function createWhatsappInboundProvisioningService({
       });
     } catch (error) {
       if (error?.code !== "P2002") throw error;
+      const conflictKind = classifyCanalUniqueConflictTarget(error);
+      if (conflictKind === UNIQUE_CONFLICT_KIND.UNKNOWN) throw error;
       return resolveCreateRace({
         tenantId,
-        actorUserId,
         input,
         creation,
         globalConfig,
-        correlationId,
+        conflictKind,
+        originalError: error,
       });
     }
 
@@ -190,11 +218,11 @@ function createWhatsappInboundProvisioningService({
 
   async function resolveCreateRace({
     tenantId,
-    actorUserId,
     input,
     creation,
     globalConfig,
-    correlationId,
+    conflictKind,
+    originalError,
   }) {
     const channel = await prisma.canalIntegracao.findUnique({
       where: {
@@ -218,23 +246,14 @@ function createWhatsappInboundProvisioningService({
       throw provisioningError(409, "WHATSAPP_CHANNEL_CONFLICT", "Canal criado concorrentemente com dados diferentes.");
     }
 
+    if (conflictKind === UNIQUE_CONFLICT_KIND.TENANT_KEY) throw originalError;
     await assertIdentityAvailable({
       tenantId,
       wabaId: creation.wabaId,
       phoneNumberId: creation.phoneNumberId,
       globalConfig,
     });
-    emitAudit(logger, {
-      action: "CONFLICT",
-      actorUserId,
-      tenantId,
-      channel: null,
-      changedFields: [],
-      reason: input.reason,
-      correlationId,
-      clock,
-    });
-    throw provisioningError(409, "WHATSAPP_CHANNEL_CONFLICT", "Conflito ao criar canal WhatsApp.");
+    throw originalError;
   }
 
   async function assertIdentityAvailable({
@@ -314,7 +333,7 @@ function validateProvisioningPayload(body) {
     );
   }
   if (Object.hasOwn(body, "reason")) {
-    input.reason = normalizeOptionalText(body.reason, "reason", MAX_REASON_LENGTH) || "";
+    input.reason = normalizeReason(body.reason);
   }
   if (Object.hasOwn(body, "expectedUpdatedAt")) {
     input.expectedUpdatedAt = normalizeExpectedUpdatedAt(body.expectedUpdatedAt);
@@ -439,7 +458,10 @@ function emitAudit(logger, {
     ].includes(field)),
     previousState: WHATSAPP_OPERATIONAL_STATUS.NOT_CONFIGURED,
     newState: WHATSAPP_OPERATIONAL_STATUS.NOT_CONFIGURED,
-    reason: sanitizeAuditReason(reason),
+    reason: sanitizeAuditReason(reason, [
+      channel?.wabaId,
+      channel?.phoneNumberId,
+    ]),
   };
   try {
     output.call(logger, JSON.stringify(entry));
@@ -514,25 +536,102 @@ function normalizeExpectedUpdatedAt(value) {
   return parsed;
 }
 
+function normalizeReason(value) {
+  if (value === null) return "";
+  if (typeof value !== "string" || value.length > MAX_REASON_LENGTH) {
+    throw provisioningError(422, "WHATSAPP_PROVISIONING_INVALID", "reason invalido.");
+  }
+  return value
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function requireReason(reason) {
   if (!reason) {
     throw provisioningError(422, "WHATSAPP_REASON_REQUIRED", "reason e obrigatorio para criar ou alterar o canal.");
   }
 }
 
-function sanitizeAuditReason(value) {
-  return String(value || "Operacao de provisionamento.")
+function sanitizeAuditReason(value, sensitiveValues = []) {
+  let sanitized = String(value || "Operacao de provisionamento.")
+    .replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ");
+  for (const sensitiveValue of sensitiveValues) {
+    const normalized = String(sensitiveValue || "").trim();
+    if (normalized.length < 6) continue;
+    sanitized = sanitized.replace(
+      new RegExp(escapeRegExp(normalized), "g"),
+      "[REDACTED_ID]",
+    );
+  }
+  sanitized = redactSensitiveReasonPairs(sanitized)
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
     .replace(/(?:\+\d{1,3}[\s().-]*)?(?:\(?\d{2,3}\)?[\s.-]*)?\d{4,5}[\s.-]?\d{4}\b/g, "[REDACTED_PHONE]")
     .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, "[REDACTED_DOCUMENT]")
     .replace(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, "[REDACTED_DOCUMENT]")
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[REDACTED_ID]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi, "Bearer [REDACTED]")
+    .replace(/\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, "[REDACTED_TOKEN]")
     .replace(/\b(?:https?|postgres(?:ql)?):\/\/[^\s]+/gi, "[REDACTED_URL]")
-    .replace(/\b(token|secret|password|senha|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
+    .replace(/\b(secret|password|senha|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
     .replace(/[\r\n\t]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 240);
+  return sanitized;
+}
+
+function redactSensitiveReasonPairs(value) {
+  const keys = SENSITIVE_REASON_KEYS.map(escapeRegExp).join("|");
+  const pattern = new RegExp(
+    `\\b(${keys})\\b\\s*[:=]\\s*.*?(?=\\s+\\b(?:${keys})\\b\\s*[:=]|$)`,
+    "gi",
+  );
+  return value.replace(pattern, (_match, key) => `${key}=[REDACTED]`);
+}
+
+function classifyCanalUniqueConflictTarget(error) {
+  if (error?.code !== "P2002") return UNIQUE_CONFLICT_KIND.UNKNOWN;
+  const targetParts = collectUniqueTargetParts(error?.meta?.target);
+  if (hasUniqueTargetFields(targetParts, TENANT_KEY_FIELDS)) {
+    return UNIQUE_CONFLICT_KIND.TENANT_KEY;
+  }
+  if (hasUniqueTargetFields(targetParts, GLOBAL_IDENTITY_FIELDS)) {
+    return UNIQUE_CONFLICT_KIND.GLOBAL_IDENTITY;
+  }
+  return UNIQUE_CONFLICT_KIND.UNKNOWN;
+}
+
+function collectUniqueTargetParts(target, output = []) {
+  if (typeof target === "string") {
+    output.push(target);
+    return output;
+  }
+  if (Array.isArray(target)) {
+    for (const part of target) collectUniqueTargetParts(part, output);
+    return output;
+  }
+  if (target && typeof target === "object") {
+    for (const key of ["fields", "columns", "constraint", "index", "name"]) {
+      if (Object.hasOwn(target, key)) collectUniqueTargetParts(target[key], output);
+    }
+  }
+  return output;
+}
+
+function hasUniqueTargetFields(targetParts, fields) {
+  const normalized = targetParts
+    .join(" ")
+    .replace(/[^A-Za-z0-9]+/g, " ")
+    .toLowerCase();
+  return fields.every((field) => (
+    new RegExp(`(?:^|\\s)${field.toLowerCase()}(?:\\s|$)`).test(normalized)
+  ));
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function stableHash(value) {
@@ -561,6 +660,7 @@ function provisioningError(status, code, message) {
 
 module.exports = {
   REAL_WHATSAPP_INBOUND_KEY,
+  classifyCanalUniqueConflictTarget,
   createWhatsappInboundProvisioningService,
   readGlobalWhatsappConfiguration,
   validateProvisioningPayload,
