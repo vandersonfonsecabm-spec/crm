@@ -5,6 +5,9 @@ const {
   createWhatsappInboundProvisioningService,
 } = require("./whatsappInboundProvisioning");
 const {
+  createInstagramInboundProvisioningService,
+} = require("./instagramInboundProvisioning");
+const {
   createWhatsappInboundLifecycleService,
 } = require("../integrations/whatsappInboundLifecycle");
 
@@ -17,6 +20,7 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
   const guarded = [authenticate, requirePlatformOperator, rateLimiter];
   const whatsappInboundProvisioning = createWhatsappInboundProvisioningService({ prisma });
   const whatsappInboundLifecycle = createWhatsappInboundLifecycleService({ prisma });
+  const instagramInboundProvisioning = createInstagramInboundProvisioningService({ prisma });
 
   app.get("/platform/tenants", ...guarded, route(async (req, res) => {
     const page = positiveInteger(req.query.page, 1);
@@ -152,6 +156,40 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
       return res.status(result.created ? 201 : 200).json(result.body);
     } catch (error) {
       if (Number.isInteger(error?.status) && /^WHATSAPP_|^PLATFORM_/.test(String(error?.code || ""))) {
+        return platformError(res, error.status, error.message, error.code);
+      }
+      throw error;
+    }
+  }));
+
+  app.put("/platform/tenants/:tenantId/integrations/instagram/inbound", ...guarded, route(async (req, res) => {
+    const tenantId = parseId(req.params.tenantId);
+    if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
+
+    try {
+      const result = await instagramInboundProvisioning.provision({
+        tenantId,
+        actorUserId: req.auth.usuarioId,
+        body: req.body,
+        correlationId: req.get("x-correlation-id"),
+      });
+      return res.status(result.created ? 201 : 200).json(result.body);
+    } catch (error) {
+      if (isInstagramPlatformError(error)) {
+        return platformError(res, error.status, error.message, error.code);
+      }
+      throw error;
+    }
+  }));
+
+  app.get("/platform/tenants/:tenantId/integrations/instagram/inbound/status", ...guarded, route(async (req, res) => {
+    const tenantId = parseId(req.params.tenantId);
+    if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
+
+    try {
+      return res.json(await instagramInboundProvisioning.getStatus({ tenantId }));
+    } catch (error) {
+      if (isInstagramPlatformError(error)) {
         return platformError(res, error.status, error.message, error.code);
       }
       throw error;
@@ -411,6 +449,11 @@ function platformError(res, status, erro, codigo) {
 function isWhatsappPlatformError(error) {
   return Number.isInteger(error?.status)
     && (/^WHATSAPP_|^PLATFORM_/).test(String(error?.code || ""));
+}
+
+function isInstagramPlatformError(error) {
+  return Number.isInteger(error?.status)
+    && (/^INSTAGRAM_|^PLATFORM_/).test(String(error?.code || ""));
 }
 
 module.exports = {
