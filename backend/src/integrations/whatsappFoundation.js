@@ -1,65 +1,30 @@
-const WHATSAPP_OPERATIONAL_STATUS = Object.freeze({
-  NOT_CONFIGURED: "NOT_CONFIGURED",
-  CONFIGURED: "CONFIGURED",
-});
+const {
+  WHATSAPP_OPERATIONAL_STATUS,
+  createWhatsappInboundLifecycleService,
+} = require("./whatsappInboundLifecycle");
 
-function createWhatsAppFoundationService({ prisma }) {
+function createWhatsAppFoundationService({ prisma, env = process.env }) {
+  const lifecycle = createWhatsappInboundLifecycleService({ prisma, env });
+
   async function getOperationalStatus({ empresaId }) {
-    const channel = await prisma.canalIntegracao.findFirst({
-      where: {
-        empresaId,
-        tipo: "WHATSAPP_META",
-        ativo: true,
-        modoTeste: false,
-      },
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-      select: {
-        providerEnvironment: true,
-        metaAppId: true,
-        wabaId: true,
-        phoneNumberId: true,
-        graphApiVersion: true,
-        accessTokenRef: true,
-        credentialStatus: true,
-        connectedAt: true,
-        verifiedAt: true,
-        lastWebhookAt: true,
-        lastFailureAt: true,
-      },
-    });
-
-    if (!isLocallyConfigured(channel)) {
-      return { status: WHATSAPP_OPERATIONAL_STATUS.NOT_CONFIGURED, ready: false };
+    const result = await lifecycle.getStatus({ tenantId: empresaId });
+    if (result.state === WHATSAPP_OPERATIONAL_STATUS.NOT_CONFIGURED) {
+      return { status: result.state, ready: false };
     }
-
     return {
-      status: WHATSAPP_OPERATIONAL_STATUS.CONFIGURED,
-      ready: true,
-      connectedAt: channel.connectedAt,
-      verifiedAt: channel.verifiedAt,
-      lastWebhookAt: channel.lastWebhookAt,
-      lastFailureAt: channel.lastFailureAt,
+      status: result.state,
+      ready: result.ready,
+      connectedAt: result.connectedAt,
+      verifiedAt: result.verifiedAt,
+      lastWebhookAt: result.lastWebhookAt,
+      lastFailureAt: result.lastFailureAt,
     };
   }
 
   return { getOperationalStatus };
 }
 
-function isLocallyConfigured(channel) {
-  return Boolean(
-    channel
-      && channel.providerEnvironment
-      && channel.metaAppId
-      && channel.wabaId
-      && channel.phoneNumberId
-      && channel.graphApiVersion
-      && channel.accessTokenRef
-      && channel.credentialStatus === "ATIVA",
-  );
-}
-
 module.exports = {
   WHATSAPP_OPERATIONAL_STATUS,
   createWhatsAppFoundationService,
-  isLocallyConfigured,
 };

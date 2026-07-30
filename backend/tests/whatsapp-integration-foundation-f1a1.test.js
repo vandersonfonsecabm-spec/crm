@@ -19,6 +19,10 @@ Object.assign(process.env, {
   WHATSAPP_INTEGRATION_ENABLED: "false",
   WHATSAPP_INBOUND_ENABLED: "false",
   WHATSAPP_OUTBOUND_ENABLED: "false",
+  WHATSAPP_META_APP_ID: "meta-app-global-f1c2b",
+  WHATSAPP_PROVIDER_ENVIRONMENT: "F1C2B_TEST",
+  WHATSAPP_APP_SECRET: "test-only-app-secret",
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-only-verify-token",
 });
 
 let api;
@@ -89,25 +93,28 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
   assert.equal((await request("GET", "/integracoes/whatsapp/status", undefined, adminA.token)).status, 404);
 
   process.env.WHATSAPP_INTEGRATION_ENABLED = "true";
+  process.env.WHATSAPP_INBOUND_ENABLED = "true";
   assert.equal((await request("GET", "/integracoes/whatsapp/status", undefined, adminA.token)).status, 404);
   await prisma.empresaFuncionalidade.createMany({
     data: [
       { empresaId: adminA.empresaId, chave: FEATURE_KEYS.WHATSAPP_INTEGRATION, habilitada: true },
       { empresaId: adminB.empresaId, chave: FEATURE_KEYS.WHATSAPP_INTEGRATION, habilitada: true },
+      { empresaId: adminA.empresaId, chave: FEATURE_KEYS.WHATSAPP_INBOUND, habilitada: true },
+      { empresaId: adminB.empresaId, chave: FEATURE_KEYS.WHATSAPP_INBOUND, habilitada: true },
     ],
   });
 
   const channelB = await createConfiguredChannel(adminB.empresaId, "b");
   const injected = await request("GET", `/integracoes/whatsapp/status?empresaId=${adminB.empresaId}`, undefined, adminA.token);
   assert.deepEqual(injected.body, { status: "NOT_CONFIGURED", ready: false });
-  assert.equal((await request("GET", "/integracoes/whatsapp/status", undefined, adminB.token)).body.status, "CONFIGURED");
+  assert.equal((await request("GET", "/integracoes/whatsapp/status", undefined, adminB.token)).body.status, "CONNECTED");
   assert.equal((await request("GET", "/integracoes/whatsapp/status", undefined, gerenteA.token)).status, 403);
   assert.equal((await request("GET", "/integracoes/whatsapp/status", undefined, vendedorA.token)).status, 403);
 
   const channelA = await createConfiguredChannel(adminA.empresaId, "a");
   const configured = await request("GET", "/integracoes/whatsapp/status", undefined, adminA.token);
   assert.equal(configured.status, 200);
-  assert.equal(configured.body.status, "CONFIGURED");
+  assert.equal(configured.body.status, "CONNECTED");
   assert.equal(configured.body.ready, true);
   assert.deepEqual(Object.keys(configured.body).sort(), [
     "connectedAt",
@@ -146,7 +153,7 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
     negociosKanban: false,
     automations: false,
     whatsappIntegration: true,
-    whatsappInbound: false,
+    whatsappInbound: true,
     whatsappOutbound: false,
   });
 });
@@ -155,7 +162,8 @@ test("fundacao nao importa cliente de rede nem cria fluxo de credencial", () => 
   const source = fs.readFileSync(path.join(backendDir, "src", "integrations", "whatsappFoundation.js"), "utf8");
   assert.doesNotMatch(source, /require\(["'](?:node:)?(?:http|https|net|dns)["']\)|\bfetch\s*\(|axios/i);
   assert.doesNotMatch(source, /metaAppSecret|verifyToken|accessToken\s*[:=]/i);
-  assert.match(source, /select:\s*\{/);
+  assert.doesNotMatch(source, /accessTokenRef|credentialStatus|graphApiVersion/);
+  assert.match(source, /createWhatsappInboundLifecycleService/);
 });
 
 async function createConfiguredChannel(empresaId, suffix) {
@@ -165,12 +173,12 @@ async function createConfiguredChannel(empresaId, suffix) {
       empresaId,
       tipo: "WHATSAPP_META",
       nome: `WhatsApp F1A1 ${suffix.toUpperCase()}`,
-      chaveInterna: `whatsapp-f1a1-${suffix}`,
+      chaveInterna: "whatsapp-meta-inbound-real",
       status: "ATIVO",
       modoTeste: false,
       ativo: true,
-      providerEnvironment: `PILOT_${suffix.toUpperCase()}`,
-      metaAppId: `meta-app-${suffix}`,
+      providerEnvironment: process.env.WHATSAPP_PROVIDER_ENVIRONMENT,
+      metaAppId: process.env.WHATSAPP_META_APP_ID,
       metaBusinessId: `meta-business-${suffix}`,
       wabaId: `waba-${suffix}`,
       phoneNumberId: `phone-${suffix}`,

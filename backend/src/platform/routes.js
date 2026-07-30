@@ -4,6 +4,9 @@ const { FEATURE_KEYS, setTenantFeature } = require("../tenant-features/service")
 const {
   createWhatsappInboundProvisioningService,
 } = require("./whatsappInboundProvisioning");
+const {
+  createWhatsappInboundLifecycleService,
+} = require("../integrations/whatsappInboundLifecycle");
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
@@ -13,6 +16,7 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
   const rateLimiter = createPlatformRateLimiter();
   const guarded = [authenticate, requirePlatformOperator, rateLimiter];
   const whatsappInboundProvisioning = createWhatsappInboundProvisioningService({ prisma });
+  const whatsappInboundLifecycle = createWhatsappInboundLifecycleService({ prisma });
 
   app.get("/platform/tenants", ...guarded, route(async (req, res) => {
     const page = positiveInteger(req.query.page, 1);
@@ -153,6 +157,45 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
       throw error;
     }
   }));
+
+  app.get("/platform/tenants/:tenantId/integrations/whatsapp/inbound/status", ...guarded, route(async (req, res) => {
+    const tenantId = parseId(req.params.tenantId);
+    if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
+
+    try {
+      return res.json(await whatsappInboundLifecycle.getStatus({ tenantId }));
+    } catch (error) {
+      if (isWhatsappPlatformError(error)) {
+        return platformError(res, error.status, error.message, error.code);
+      }
+      throw error;
+    }
+  }));
+
+  for (const [path, action] of [
+    ["activate", "activate"],
+    ["pause", "pause"],
+    ["reactivate", "reactivate"],
+  ]) {
+    app.post(`/platform/tenants/:tenantId/integrations/whatsapp/inbound/${path}`, ...guarded, route(async (req, res) => {
+      const tenantId = parseId(req.params.tenantId);
+      if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
+
+      try {
+        return res.json(await whatsappInboundLifecycle[action]({
+          tenantId,
+          actorUserId: req.auth.usuarioId,
+          body: req.body,
+          correlationId: req.get("x-correlation-id"),
+        }));
+      } catch (error) {
+        if (isWhatsappPlatformError(error)) {
+          return platformError(res, error.status, error.message, error.code);
+        }
+        throw error;
+      }
+    }));
+  }
 
   app.patch("/platform/tenants/:tenantId/capabilities/automations", ...guarded, route(async (req, res) => {
     const tenantId = parseId(req.params.tenantId);
@@ -363,6 +406,11 @@ function route(handler) {
 
 function platformError(res, status, erro, codigo) {
   return res.status(status).json({ erro, codigo });
+}
+
+function isWhatsappPlatformError(error) {
+  return Number.isInteger(error?.status)
+    && (/^WHATSAPP_|^PLATFORM_/).test(String(error?.code || ""));
 }
 
 module.exports = {

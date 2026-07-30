@@ -1,7 +1,7 @@
 const crypto = require("node:crypto");
 const {
   WHATSAPP_OPERATIONAL_STATUS,
-} = require("../integrations/whatsappFoundation");
+} = require("../integrations/whatsappInboundLifecycle");
 
 const REAL_WHATSAPP_INBOUND_KEY = "whatsapp-meta-inbound-real";
 const WHATSAPP_CHANNEL_TYPE = "WHATSAPP_META";
