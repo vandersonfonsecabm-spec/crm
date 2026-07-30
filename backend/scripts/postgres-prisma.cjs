@@ -5,6 +5,11 @@ const { spawnSync } = require("node:child_process");
 
 const backendDir = path.resolve(__dirname, "..");
 const sqliteSchemaPath = path.join(backendDir, "prisma", "schema.prisma");
+const versionedPostgresMigrationsDir = path.join(
+  backendDir,
+  "prisma-postgres",
+  "migrations",
+);
 const workspaceRoot = path.join(
   backendDir,
   "node_modules",
@@ -19,13 +24,28 @@ function preparePostgresWorkspace(options = {}) {
   const migrationsDir = path.join(prismaDir, "migrations");
   const migrationDir = path.join(migrationsDir, migrationName);
   const schemaPath = path.join(prismaDir, "schema.prisma");
-  fs.mkdirSync(migrationDir, { recursive: true });
+  fs.mkdirSync(prismaDir, { recursive: true });
   const clientOutput = path.join(backendDir, "node_modules", ".prisma", "client").replace(/\\/g, "/");
   fs.writeFileSync(schemaPath, postgresSchemaWithClientOutput(postgresSchemaText(fs.readFileSync(sqliteSchemaPath, "utf8")), clientOutput));
-  fs.writeFileSync(path.join(migrationsDir, "migration_lock.toml"), 'provider = "postgresql"\n');
-  const sql = options.migrationSql || generatePostgresMigrationSql(schemaPath);
-  fs.writeFileSync(path.join(migrationDir, "migration.sql"), sql);
+  fs.rmSync(migrationsDir, { recursive: true, force: true });
+  if (Object.hasOwn(options, "migrationSql")) {
+    fs.mkdirSync(migrationDir, { recursive: true });
+    fs.writeFileSync(path.join(migrationsDir, "migration_lock.toml"), 'provider = "postgresql"\n');
+    fs.writeFileSync(path.join(migrationDir, "migration.sql"), options.migrationSql);
+  } else {
+    fs.cpSync(versionedPostgresMigrationsDir, migrationsDir, { recursive: true });
+  }
   return { root, prismaDir, migrationsDir, migrationDir, schemaPath, migrationName };
+}
+
+function latestMigrationSqlPath(migrationsDir) {
+  const migrationNames = fs.readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((item) => item.isDirectory())
+    .map((item) => item.name)
+    .sort();
+  const latestMigration = migrationNames.at(-1);
+  if (!latestMigration) throw new Error("Nenhuma migration PostgreSQL versionada foi encontrada.");
+  return path.join(migrationsDir, latestMigration, "migration.sql");
 }
 
 function postgresSchemaText(sqliteSchema) {
@@ -123,7 +143,7 @@ async function main() {
   }
   if (command === "migration-sql") {
     const output = process.argv[3];
-    const sqlPath = path.join(workspace.migrationDir, "migration.sql");
+    const sqlPath = latestMigrationSqlPath(workspace.migrationsDir);
     if (output) {
       const target = path.resolve(output);
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -156,6 +176,7 @@ if (require.main === module) {
 
 module.exports = {
   generatePostgresMigrationSql,
+  latestMigrationSqlPath,
   postgresSchemaWithClientOutput,
   postgresSchemaText,
   preparePostgresWorkspace,

@@ -81,6 +81,9 @@ npm --prefix backend run prisma:validate:postgres
 npm --prefix backend run prisma:postgres:migration-sql
 ```
 
+O comando `migration-sql` aponta para a migration PostgreSQL versionada mais
+recente.
+
 Para um banco PostgreSQL vazio de teste:
 
 ```bash

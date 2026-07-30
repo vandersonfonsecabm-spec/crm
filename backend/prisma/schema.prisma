@@ -536,6 +536,8 @@ model CanalIntegracao {
   phoneNumberId       String?
   displayPhoneMasked  String?
   verifiedDisplayName String?
+  instagramBusinessAccountId String?                   @unique
+  instagramUsernameMasked    String?
   qualityRating       String?
   graphApiVersion     String?
   onboardingMethod    MetodoOnboardingWhatsApp?
@@ -1124,6 +1126,8 @@ enum ChaveFuncionalidade {
   WHATSAPP_INTEGRATION
   WHATSAPP_INBOUND
   WHATSAPP_OUTBOUND
+  INSTAGRAM_INTEGRATION
+  INSTAGRAM_INBOUND
 }
 
 enum GatilhoAutomacao {
@@ -1166,6 +1170,7 @@ enum StatusJobAutomacao {
 
 enum TipoCanal {
   WHATSAPP_META
+  INSTAGRAM_META
   SITE_FORM
 }
 

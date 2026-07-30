@@ -69,8 +69,8 @@ preparacao PostgreSQL sem alterar a producao atual:
   PostgreSQL durante uma janela aprovada.
 - `npm --prefix backend run prisma:generate:runtime`: gera o Prisma Client do
   provider selecionado por `CRM_DATABASE_PROVIDER`.
-- `npm --prefix backend run prisma:postgres:migration-sql`: gera a baseline SQL
-  PostgreSQL reproduzivel.
+- `npm --prefix backend run prisma:postgres:migration-sql`: expoe para inspecao
+  a migration PostgreSQL versionada mais recente.
 - `CRM_POSTGRES_MIGRATE_CONFIRM=apply-empty-postgres npm --prefix backend run db:migrate:postgres:empty`:
   aplica a baseline em um PostgreSQL vazio explicitamente informado.
 - `npm --prefix backend run db:import:sqlite-to-postgres`: ensaia ou executa a
