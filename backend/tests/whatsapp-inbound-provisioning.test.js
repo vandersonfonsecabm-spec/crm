@@ -315,7 +315,7 @@ test("F1C-1 provisiona um unico canal WhatsApp inbound real com contrato fechado
   assert.equal(differentWabaConflict.body.codigo, "WHATSAPP_IDENTITY_CONFLICT");
 
   const legacyTenant = await register("Legado Tenant F1C1", "Admin Legado", uniqueEmail("legacy"));
-  await prisma.canalIntegracao.create({
+  const legacyChannel = await prisma.canalIntegracao.create({
     data: {
       empresaId: legacyTenant.empresaId,
       tipo: "WHATSAPP_META",
@@ -337,6 +337,18 @@ test("F1C-1 provisiona um unico canal WhatsApp inbound real com contrato fechado
   }, operator.token);
   assert.equal(legacyBlocked.status, 409);
   assert.equal(legacyBlocked.body.codigo, "WHATSAPP_LEGACY_CHANNEL_CONFLICT");
+  const legacyTenantPatch = await request(
+    "PATCH",
+    `/canais/${legacyChannel.id}`,
+    { nome: "Tentativa de bypass legado", ativo: true },
+    legacyTenant.token,
+  );
+  assert.equal(legacyTenantPatch.status, 403);
+  assert.equal(legacyTenantPatch.body.codigo, "CHANNEL_PLATFORM_MANAGED");
+  assert.deepEqual(
+    await prisma.canalIntegracao.findUnique({ where: { id: legacyChannel.id } }),
+    legacyChannel,
+  );
 
   await withTimeout(
     assertConstraintRaceHandling(target.empresaId, operator.usuarioId),

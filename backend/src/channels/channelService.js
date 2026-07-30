@@ -1,7 +1,4 @@
 const { normalizePhone } = require("./phoneNormalizer");
-const {
-  REAL_WHATSAPP_INBOUND_KEY,
-} = require("../platform/whatsappInboundProvisioning");
 
 const TEST_CHANNEL_KEY = "whatsapp-meta-test";
 const TEST_CHANNEL_NAME = "WhatsApp - Modo de Teste";
@@ -188,7 +185,6 @@ function assertChannelCanUseTenantPatch(channel) {
   if (
     channel.tipo === "WHATSAPP_META"
     && channel.modoTeste === false
-    && channel.chaveInterna === REAL_WHATSAPP_INBOUND_KEY
   ) {
     const error = new Error("Canal gerenciado pela plataforma.");
     error.status = 403;
