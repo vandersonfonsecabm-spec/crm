@@ -1073,3 +1073,29 @@ integracoes autorizadas.
   `ASSIGN_ROUND_ROBIN`. A H8.3 esta encerrada sem migration ou backfill.
 - Proximo passo recomendado: planejar as integracoes omnichannel em uma tarefa
   separada, com contrato, gates, rollout e rollback proprios.
+
+## Instagram Direct - fundacao estrutural
+
+- Em 30/07/2026, a fundacao estrutural do Instagram Direct foi publicada no
+  commit `b85cad72f03da62e53e303570782ff3258773fca`.
+- `CanalIntegracao` recebeu o tipo `INSTAGRAM_META`, identidade dedicada
+  `instagramBusinessAccountId` e metadata mascarada, sem reutilizar `wabaId`,
+  `phoneNumberId` ou configuracao do WhatsApp.
+- As capabilities aditivas sao `INSTAGRAM_INTEGRATION` e
+  `INSTAGRAM_INBOUND`. Nenhuma delas foi criada ou ativada em producao.
+- A identidade Instagram e globalmente unica; o futuro canal real usara a
+  chave canonica `instagram-meta-inbound-real`, protegida pela unique de
+  tenant e chave. Writers genericos bloqueiam canais Instagram reais e
+  respostas simuladas de saida.
+- As migrations SQLite e PostgreSQL sao aditivas. A baseline PostgreSQL
+  congelada foi comparada por leitura com o checksum registrado em producao,
+  e somente a migration incremental do Instagram foi aplicada.
+- SQLite e PostgreSQL descartavel validaram coexistencia com WhatsApp,
+  `SITE_FORM`, canal de teste, isolamento multi-tenant, upgrade com dados
+  existentes e preservacao das capabilities publicadas.
+- A API e o worker terminaram saudaveis em PostgreSQL, com `/health = 200`.
+  Producao permaneceu com zero canal e zero capability Instagram, sem Meta,
+  segredo, outbound ou alteracao em tenant.
+- Proximo passo recomendado: implementar o provisionamento platform-only do
+  canal Instagram inativo, preservando a chave canonica, CAS, auditoria e
+  bloqueio fail-closed de legado divergente.
