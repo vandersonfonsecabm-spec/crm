@@ -477,7 +477,7 @@ function optionalDate(value, field) {
 function followUpType(channelType) {
   if (channelType === "WHATSAPP_META") return "WHATSAPP";
   if (channelType === "EMAIL") return "EMAIL";
-  return "LIGACAO";
+  return "OUTRO";
 }
 
 function commercialInvalid(message) {
