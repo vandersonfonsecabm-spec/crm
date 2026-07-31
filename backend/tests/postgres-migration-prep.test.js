@@ -84,12 +84,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.deepEqual(migrationNames, [
       "20260728090000_postgres_baseline",
       "20260730160000_add_instagram_direct_schema_foundation",
+      "20260731120000_add_messenger_direct_schema_foundation",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
         workspace.migrationsDir,
-        "20260730160000_add_instagram_direct_schema_foundation",
+        "20260731120000_add_messenger_direct_schema_foundation",
         "migration.sql",
       ),
     );
@@ -110,6 +111,14 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(incremental, /INSTAGRAM_META/);
     assert.match(incremental, /instagramBusinessAccountId/);
     assert.doesNotMatch(incremental, /\b(?:DROP|DELETE|UPDATE|TRUNCATE)\b/i);
+    const messengerIncremental = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260731120000_add_messenger_direct_schema_foundation",
+      "migration.sql",
+    ), "utf8");
+    assert.match(messengerIncremental, /MESSENGER_META/);
+    assert.match(messengerIncremental, /messengerPageId/);
+    assert.doesNotMatch(messengerIncremental, /\b(?:DROP|DELETE|UPDATE|TRUNCATE)\b/i);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

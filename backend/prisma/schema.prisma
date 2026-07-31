@@ -538,6 +538,8 @@ model CanalIntegracao {
   verifiedDisplayName String?
   instagramBusinessAccountId String?                   @unique
   instagramUsernameMasked    String?
+  messengerPageId            String?                   @unique
+  messengerPageNameMasked    String?
   qualityRating       String?
   graphApiVersion     String?
   onboardingMethod    MetodoOnboardingWhatsApp?
@@ -1128,6 +1130,8 @@ enum ChaveFuncionalidade {
   WHATSAPP_OUTBOUND
   INSTAGRAM_INTEGRATION
   INSTAGRAM_INBOUND
+  MESSENGER_INTEGRATION
+  MESSENGER_INBOUND
 }
 
 enum GatilhoAutomacao {
@@ -1171,6 +1175,7 @@ enum StatusJobAutomacao {
 enum TipoCanal {
   WHATSAPP_META
   INSTAGRAM_META
+  MESSENGER_META
   SITE_FORM
 }
 
