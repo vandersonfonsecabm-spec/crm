@@ -345,6 +345,62 @@ test("mapeamento ausente e falha pos-intake permanecem fechados e recuperaveis",
   assert.equal((await commercialCounts(fixture.tenant.id)).messages, 1);
 });
 
+test("falha concorrente atrasada nao sobrescreve processamento concluido", async () => {
+  const identity = {
+    instagramBusinessAccountId: `test-instagram-failure-race-${suffix}`,
+    senderId: `test-instagram-failure-race-sender-${suffix}`,
+  };
+  const fixture = await seedSyntheticTenant("failure-race", identity);
+  const raceSimulator = simulator.forIdentity(identity);
+  raceSimulator.configureEnvironment(process.env);
+  const payload = raceSimulator.text({ id: `instagram-failure-race-${suffix}` });
+  let releaseFailure;
+  let signalFailureStarted;
+  const failureStarted = new Promise((resolve) => {
+    signalFailureStarted = resolve;
+  });
+  const waitForSuccess = new Promise((resolve) => {
+    releaseFailure = resolve;
+  });
+  const delayedFailure = createInstagramWebhookOrchestrator({
+    prisma,
+    processEvent: async () => {
+      signalFailureStarted();
+      await waitForSuccess;
+      const error = new Error("Falha sintetica atrasada.");
+      error.code = "INSTAGRAM_DELAYED_FAILURE";
+      throw error;
+    },
+  });
+
+  const delayedResult = delayedFailure(payload);
+  await failureStarted;
+  assert.deepEqual(await createInstagramWebhookOrchestrator({ prisma })(payload), { accepted: true });
+  releaseFailure();
+  await assert.rejects(
+    delayedResult,
+    (error) => error.status === 503 && error.code === "WEBHOOK_PROCESSING_UNAVAILABLE",
+  );
+
+  const event = await prisma.eventoWebhook.findFirstOrThrow({
+    where: { empresaId: fixture.tenant.id, externalEventId: `instagram-failure-race-${suffix}` },
+  });
+  const channel = await prisma.canalIntegracao.findUniqueOrThrow({
+    where: { id: fixture.channel.id },
+  });
+  assert.equal(event.statusProcessamento, "PROCESSADO");
+  assert.equal(event.processadoEm instanceof Date, true);
+  assert.equal(channel.lastFailureAt, null);
+  assert.equal(channel.lastFailureCode, null);
+  assert.deepEqual(await commercialCounts(fixture.tenant.id), {
+    contacts: 1,
+    clients: 1,
+    leads: 1,
+    conversations: 1,
+    messages: 1,
+  });
+});
+
 async function seedSyntheticTenant(label, identity) {
   const tenant = await prisma.empresa.create({
     data: { nome: `Tenant Instagram ${label} ${suffix}`, slug: `instagram-${label}-${suffix}` },
