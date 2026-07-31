@@ -1,4 +1,5 @@
 const { normalizePhone } = require("./phoneNormalizer");
+const { assertTestSimulationChannel } = require("./simulationPolicy");
 
 const TEST_CHANNEL_KEY = "whatsapp-meta-test";
 const TEST_CHANNEL_NAME = "WhatsApp - Modo de Teste";
@@ -139,12 +140,7 @@ function createChannelService({ prisma }) {
     if (!["ENTRADA", "SAIDA"].includes(direcao)) throw validationError("Direcao da mensagem invalida.", "CHANNEL_MESSAGE_INVALID_DIRECTION");
     if (!["TEXTO", "DESCONHECIDA"].includes(tipo)) throw validationError("Tipo da mensagem invalido.", "CHANNEL_MESSAGE_INVALID_TYPE");
     const channel = await getChannel({ empresaId, id: canalIntegracaoId });
-    if (channel.tipo === "MESSENGER_META" && channel.modoTeste === false) {
-      const error = new Error("Canal gerenciado pela plataforma.");
-      error.status = 403;
-      error.codigo = "CHANNEL_PLATFORM_MANAGED";
-      throw error;
-    }
+    assertTestSimulationChannel(channel);
     const conversation = await prisma.conversaCanal.findFirst({
       where: { id: conversaCanalId, empresaId, canalIntegracaoId: channel.id },
     });

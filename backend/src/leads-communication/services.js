@@ -4,6 +4,7 @@ const { normalizePhone } = require("../channels/phoneNormalizer");
 const { createAutomationService } = require("../automations/service");
 const { calculateConversationSla, slaFilterWhere } = require("./inboxOperations");
 const { createInboxCommercialQualificationService } = require("./commercialQualification");
+const { assertTestSimulationChannel, isTestSimulationChannel } = require("../channels/simulationPolicy");
 const {
   domainError,
   isManager,
@@ -590,14 +591,12 @@ function createLeadsCommunicationServices({ prisma }) {
       const result = await prisma.$transaction(async (tx) => {
         const conversation = await tx.conversaCanal.findFirst({
           where: { id: conversationId, empresaId: context.empresaId },
-          include: { respostaReservadaPor: { select: { id: true, nome: true } }, canalIntegracao: { select: { tipo: true } } },
+          include: { respostaReservadaPor: { select: { id: true, nome: true } }, canalIntegracao: { select: { tipo: true, modoTeste: true } } },
         });
         if (!conversation) throw notFound("Conversa nao encontrada.");
+        assertTestSimulationChannel(conversation.canalIntegracao);
         if (conversation.status === "ENCERRADA") {
           throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao aceita novas mensagens nesta release.");
-        }
-        if (direcao === "SAIDA" && !channelSupportsDirectReply(conversation.canalIntegracao.tipo)) {
-          throw domainError(409, "CHANNEL_DIRECT_REPLY_UNAVAILABLE", "Canal nao possui resposta direta nesta release.");
         }
         if (direcao === "SAIDA") assertReplyLeaseAvailable(conversation, context);
         const existing = await tx.mensagemCanal.findUnique({
@@ -1076,7 +1075,7 @@ function presentConversation(conversation) {
       ? { id: conversation.responsavel.id, nome: conversation.responsavel.nome }
       : null,
     reservaResposta: replyLeaseView({ ...conversation, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte }),
-    podeResponderDiretamente: channelSupportsDirectReply(conversation.canalIntegracao?.tipo),
+    podeResponderDiretamente: isTestSimulationChannel(conversation.canalIntegracao),
     tipoCanal: conversation.canalIntegracao?.tipo || null,
     ultimaMensagem: mensagens?.[0] ? presentMessage(mensagens[0]) : null,
     naoLidas: _count?.mensagens || 0,
@@ -1090,10 +1089,6 @@ function presentMessage(message) {
     ...data,
     autor: autorUsuario ? { id: autorUsuario.id, nome: autorUsuario.nome } : null,
   };
-}
-
-function channelSupportsDirectReply(channelType) {
-  return channelType === "WHATSAPP_META";
 }
 
 function getReplyLeaseSeconds(env = process.env) {
