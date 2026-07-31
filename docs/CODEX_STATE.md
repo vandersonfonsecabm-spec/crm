@@ -1285,3 +1285,26 @@ integracoes autorizadas.
   comercial de follow-up ainda possui fallback telefonico para canais sem
   telefone. E-mail e Telegram devem ganhar contratos explicitos antes de serem
   adicionados ao mesmo mapeamento da Inbox.
+
+## Seguranca de resposta simulada e follow-up multicanal
+
+- Em 31/07/2026, os dois riscos residuais da Inbox foram auditados e
+  confirmados como bugs locais.
+- Os dois writers de mensagens simuladas agora reutilizam uma politica
+  server-side unica. Somente canal `WHATSAPP_META` com `modoTeste=true`,
+  carregado do banco e tenant-scoped, aceita mensagens simuladas.
+- WhatsApp real, Instagram, Messenger e SITE_FORM falham antes de qualquer
+  escrita com `CHANNEL_SIMULATION_UNAVAILABLE`. O payload nao controla tenant,
+  tipo ou modo de teste.
+- O follow-up de WhatsApp permanece `WHATSAPP`. Instagram, Messenger e
+  SITE_FORM passam a usar `OUTRO`, apresentado como acompanhamento neutro na
+  Agenda e no Cliente 360, sem inventar ligacao ou telefone.
+- External IDs opacos e PSIDs continuam separados do telefone. Telefone real
+  previamente cadastrado e preservado.
+- A matriz focal SQLite cobriu os quatro canais, ambas as direcoes, payload
+  forjado, isolamento por tenant, chamada direta aos services, zero mutacao em
+  rejeicoes e semantica de follow-up. PostgreSQL nao foi repetido porque nao
+  houve mudanca de transacao, concorrencia, unique ou query dependente de
+  engine.
+- Nao houve schema, migration, Meta, Graph API, accessTokenRef ou outbound
+  real.
