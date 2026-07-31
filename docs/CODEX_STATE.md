@@ -1099,3 +1099,26 @@ integracoes autorizadas.
 - Proximo passo recomendado: implementar o provisionamento platform-only do
   canal Instagram inativo, preservando a chave canonica, CAS, auditoria e
   bloqueio fail-closed de legado divergente.
+
+## Instagram Direct - provisionamento platform-only
+
+- Em 31/07/2026, o provisionamento platform-only do Instagram inbound foi
+  publicado nos commits `b705c47f6468c251c0f1a9e37ee8a5c1af88f4ed` e
+  `d91d20380314576a04e764c31f241f21c05d0acd`.
+- A rota `PUT /platform/tenants/:tenantId/integrations/instagram/inbound`
+  cria somente o slot real canonico inativo. Identidade, metadata, CAS,
+  conflito global, legado, auditoria sanitizada e replay idempotente foram
+  validados sem ativar capabilities ou timestamps.
+- A consulta platform-only `GET /status` retorna estado e checklist
+  sanitizados. Em producao, a JavaGro permaneceu `NOT_CONFIGURED`, sem
+  identidade Instagram, canal, capability ou timestamp.
+- SQLite e PostgreSQL 16 descartavel aprovaram os cinco grupos focais,
+  incluindo corridas com dois Prisma Client independentes, unique global,
+  slot por tenant, CAS, rollback e isolamento.
+- A API e o worker terminaram `SUCCESS`, `/health = 200`, e as contagens de
+  canal, capability, evento, mensagem, contato e conversa Instagram
+  permaneceram em zero antes e depois do smoke read-only.
+- WhatsApp e `SITE_FORM` permaneceram inalterados. Nao houve Meta,
+  accessTokenRef, outbound, schema, migration ou alteracao em tenant.
+- Proximo passo recomendado: implementar o lifecycle platform-only do
+  Instagram inbound (`activate`, `pause` e `reactivate`) em tarefa separada.
