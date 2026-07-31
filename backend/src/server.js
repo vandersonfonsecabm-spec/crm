@@ -34,6 +34,8 @@ const { mountWhatsAppWebhookRoutes } = require("./integrations/whatsappWebhook")
 const { createWhatsAppWebhookOrchestrator } = require("./integrations/whatsappWebhookOrchestrator");
 const { mountInstagramWebhookRoutes } = require("./integrations/instagramWebhook");
 const { createInstagramWebhookOrchestrator } = require("./integrations/instagramWebhookOrchestrator");
+const { mountMessengerWebhookRoutes } = require("./integrations/messengerWebhook");
+const { createMessengerWebhookOrchestrator } = require("./integrations/messengerWebhookOrchestrator");
 
 const prisma = createPrismaClient();
 
@@ -53,6 +55,7 @@ app.use(createMaintenanceReadOnlyMiddleware({
 }));
 mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookOrchestrator({ prisma }) });
 mountInstagramWebhookRoutes({ app, processWebhook: createInstagramWebhookOrchestrator({ prisma }) });
+mountMessengerWebhookRoutes({ app, processWebhook: createMessengerWebhookOrchestrator({ prisma }) });
 app.use(siteLeadBodyLimit);
 app.use(express.json());
 mountSiteLeadPublicRoutes({ app, prisma });
