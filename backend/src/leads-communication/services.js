@@ -1093,7 +1093,7 @@ function presentMessage(message) {
 }
 
 function channelSupportsDirectReply(channelType) {
-  return !["SITE_FORM", "INSTAGRAM_META"].includes(channelType);
+  return channelType === "WHATSAPP_META";
 }
 
 function getReplyLeaseSeconds(env = process.env) {

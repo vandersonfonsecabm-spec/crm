@@ -139,6 +139,12 @@ function createChannelService({ prisma }) {
     if (!["ENTRADA", "SAIDA"].includes(direcao)) throw validationError("Direcao da mensagem invalida.", "CHANNEL_MESSAGE_INVALID_DIRECTION");
     if (!["TEXTO", "DESCONHECIDA"].includes(tipo)) throw validationError("Tipo da mensagem invalido.", "CHANNEL_MESSAGE_INVALID_TYPE");
     const channel = await getChannel({ empresaId, id: canalIntegracaoId });
+    if (channel.tipo === "MESSENGER_META" && channel.modoTeste === false) {
+      const error = new Error("Canal gerenciado pela plataforma.");
+      error.status = 403;
+      error.codigo = "CHANNEL_PLATFORM_MANAGED";
+      throw error;
+    }
     const conversation = await prisma.conversaCanal.findFirst({
       where: { id: conversaCanalId, empresaId, canalIntegracaoId: channel.id },
     });
@@ -183,7 +189,7 @@ function createChannelService({ prisma }) {
 
 function assertChannelCanUseTenantPatch(channel) {
   if (
-    ["WHATSAPP_META", "INSTAGRAM_META"].includes(channel.tipo)
+    ["WHATSAPP_META", "INSTAGRAM_META", "MESSENGER_META"].includes(channel.tipo)
     && channel.modoTeste === false
   ) {
     const error = new Error("Canal gerenciado pela plataforma.");
