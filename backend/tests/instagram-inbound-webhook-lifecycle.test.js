@@ -1,12 +1,22 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
+const net = require("node:net");
 const path = require("node:path");
 const { after, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const express = require("express");
 const { createCustomer360Service } = require("../src/customer-360/service");
-const { mountInstagramWebhookRoutes } = require("../src/integrations/instagramWebhook");
-const { createInstagramWebhookIntake } = require("../src/integrations/instagramWebhookIntake");
+const {
+  MAX_WEBHOOK_BODY_BYTES,
+  mountInstagramWebhookRoutes,
+} = require("../src/integrations/instagramWebhook");
+const {
+  MAX_ENTRIES_PER_REQUEST,
+  MAX_EVENTS_PER_ENTRY,
+  MAX_TOTAL_EVENTS_PER_REQUEST,
+  createInstagramWebhookIntake,
+} = require("../src/integrations/instagramWebhookIntake");
 const { createInstagramWebhookOrchestrator } = require("../src/integrations/instagramWebhookOrchestrator");
 const { processInstagramWebhookEvent } = require("../src/integrations/instagramWebhookProcessor");
 const { createInstagramMetaSimulator } = require("./helpers/instagram-meta-simulator");
@@ -93,6 +103,127 @@ test("transporte valida challenge e HMAC e simulador permanece test-only", async
   process.env.NODE_ENV = previousNodeEnv;
   if (previousFlag === undefined) delete process.env.INSTAGRAM_META_SIMULATOR_ENABLED;
   else process.env.INSTAGRAM_META_SIMULATOR_ENABLED = previousFlag;
+});
+
+test("transporte aceita somente Content-Encoding ausente ou identity unico", async () => {
+  const env = {
+    INSTAGRAM_APP_SECRET: crypto.randomBytes(32).toString("hex"),
+    INSTAGRAM_INBOUND_ENABLED: "true",
+    INSTAGRAM_INTEGRATION_ENABLED: "true",
+  };
+  let processorCalls = 0;
+  const transportApp = express();
+  mountInstagramWebhookRoutes({
+    app: transportApp,
+    env,
+    processWebhook: async () => {
+      processorCalls += 1;
+    },
+  });
+  const transportServer = await listen(transportApp);
+  const port = transportServer.address().port;
+  const raw = Buffer.from(JSON.stringify(simulator.text({ id: `encoding-${suffix}` })), "utf8");
+  const signature = crypto.createHmac("sha256", env.INSTAGRAM_APP_SECRET).update(raw).digest("hex");
+
+  try {
+    assert.equal((await sendExactHttpRequest(port, raw, signature)).status, 200);
+    assert.equal((await sendExactHttpRequest(port, raw, signature, [
+      "Content-Encoding: identity",
+    ])).status, 200);
+    assert.equal(processorCalls, 2);
+
+    for (const headers of [
+      ["Content-Encoding: identity", "Content-Encoding: identity"],
+      ["Content-Encoding: identity, gzip"],
+      ["Content-Encoding: gzip"],
+      ["Content-Encoding: deflate"],
+      ["Content-Encoding: br"],
+      ["Content-Encoding: identity", "Content-Encoding: gzip"],
+    ]) {
+      const response = await sendExactHttpRequest(port, raw, signature, headers);
+      assert.equal(response.status, 415);
+      assert.equal(response.body.codigo, "UNSUPPORTED_MEDIA_TYPE");
+    }
+    assert.equal(processorCalls, 2);
+
+    const oversized = Buffer.alloc(MAX_WEBHOOK_BODY_BYTES + 1, 0x20);
+    const oversizedSignature = crypto.createHmac("sha256", env.INSTAGRAM_APP_SECRET)
+      .update(oversized)
+      .digest("hex");
+    const oversizedResponse = await sendExactHttpRequest(port, oversized, oversizedSignature);
+    assert.equal(oversizedResponse.status, 413);
+    assert.equal(oversizedResponse.body.codigo, "WEBHOOK_PAYLOAD_TOO_LARGE");
+    assert.equal(processorCalls, 2);
+
+    env.INSTAGRAM_INTEGRATION_ENABLED = "false";
+    env.INSTAGRAM_INBOUND_ENABLED = "false";
+    assert.equal((await fetch(`http://127.0.0.1:${port}/webhooks/instagram`)).status, 404);
+    assert.equal((await sendExactHttpRequest(port, raw, signature)).status, 404);
+    assert.equal(processorCalls, 2);
+  } finally {
+    if (typeof transportServer.closeAllConnections === "function") {
+      transportServer.closeAllConnections();
+    }
+    await new Promise((resolve) => transportServer.close(resolve));
+  }
+});
+
+test("limites e identidade unica rejeitam o lote inteiro antes de persistir", async () => {
+  const identity = {
+    instagramBusinessAccountId: `test-instagram-batch-${suffix}`,
+    senderId: `test-instagram-batch-sender-${suffix}`,
+  };
+  const otherIdentity = {
+    instagramBusinessAccountId: `test-instagram-batch-other-${suffix}`,
+    senderId: `test-instagram-batch-other-sender-${suffix}`,
+  };
+  const fixture = await seedSyntheticTenant("batch", identity);
+  const otherFixture = await seedSyntheticTenant("batch-other", otherIdentity);
+  const batchSimulator = simulator.forIdentity(identity);
+  batchSimulator.configureEnvironment(process.env);
+
+  const accepted = batchPayload(identity, [MAX_EVENTS_PER_ENTRY, 4, 1], 1784390500000);
+  assert.equal(accepted.entry.length, MAX_ENTRIES_PER_REQUEST);
+  assert.equal(accepted.entry[0].messaging.length, MAX_EVENTS_PER_ENTRY);
+  assert.equal(
+    accepted.entry.reduce((total, entry) => total + entry.messaging.length, 0),
+    MAX_TOTAL_EVENTS_PER_REQUEST,
+  );
+  assert.equal((await batchSimulator.send(accepted)).status, 200);
+  assert.equal(await prisma.eventoWebhook.count({ where: { empresaId: fixture.tenant.id } }), 10);
+  assert.equal((await batchSimulator.send(accepted)).status, 200);
+  assert.equal(await prisma.eventoWebhook.count({ where: { empresaId: fixture.tenant.id } }), 10);
+
+  const before = await batchEvidence(fixture, otherFixture);
+  const excessiveEntries = batchPayload(
+    identity,
+    Array(MAX_ENTRIES_PER_REQUEST + 1).fill(1),
+    1784390600000,
+  );
+  const excessivePerEntry = batchPayload(identity, [MAX_EVENTS_PER_ENTRY + 1], 1784390700000);
+  const excessiveTotal = batchPayload(
+    identity,
+    Array(MAX_ENTRIES_PER_REQUEST).fill(Math.ceil((MAX_TOTAL_EVENTS_PER_REQUEST + 1) / MAX_ENTRIES_PER_REQUEST)),
+    1784390800000,
+  );
+  const mixedIdentities = {
+    object: "instagram",
+    entry: [
+      batchPayload(identity, [1], 1784390900000).entry[0],
+      batchPayload(otherIdentity, [1], 1784391000000).entry[0],
+    ],
+  };
+
+  for (const payload of [excessiveEntries, excessivePerEntry, excessiveTotal]) {
+    const response = await batchSimulator.send(payload);
+    assert.equal(response.status, 413);
+    assert.equal(response.body.codigo, "WEBHOOK_BATCH_LIMIT_EXCEEDED");
+    assert.deepEqual(await batchEvidence(fixture, otherFixture), before);
+  }
+  const mixed = await batchSimulator.send(mixedIdentities);
+  assert.equal(mixed.status, 400);
+  assert.equal(mixed.body.codigo, "WEBHOOK_PAYLOAD_INVALID");
+  assert.deepEqual(await batchEvidence(fixture, otherFixture), before);
 });
 
 test("texto assinado cria cadeia Inbox e Cliente 360 uma vez com isolamento", async () => {
@@ -450,6 +581,90 @@ async function evidenceCounts(empresaId) {
     events: await prisma.eventoWebhook.count({ where: { empresaId } }),
     ...(await commercialCounts(empresaId)),
   };
+}
+
+function batchPayload(identity, eventCounts, timestampBase) {
+  let eventIndex = 0;
+  return {
+    object: "instagram",
+    entry: eventCounts.map((eventCount, entryIndex) => ({
+      id: identity.instagramBusinessAccountId,
+      time: timestampBase + entryIndex,
+      messaging: Array.from({ length: eventCount }, () => {
+        const timestamp = timestampBase + eventIndex;
+        eventIndex += 1;
+        return {
+          sender: { id: identity.senderId },
+          recipient: { id: identity.instagramBusinessAccountId },
+          timestamp,
+          read: { watermark: timestamp },
+        };
+      }),
+    })),
+  };
+}
+
+async function batchEvidence(...fixtures) {
+  const result = [];
+  for (const fixture of fixtures) {
+    const channel = await prisma.canalIntegracao.findUniqueOrThrow({
+      where: { id: fixture.channel.id },
+      select: {
+        connectedAt: true,
+        lastFailureAt: true,
+        lastWebhookAt: true,
+        verifiedAt: true,
+      },
+    });
+    result.push({
+      channel,
+      counts: await evidenceCounts(fixture.tenant.id),
+    });
+  }
+  return result;
+}
+
+function listen(app) {
+  return new Promise((resolve) => {
+    const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+  });
+}
+
+function sendExactHttpRequest(port, raw, signature, extraHeaders = []) {
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host: "127.0.0.1", port });
+    const chunks = [];
+    socket.on("connect", () => {
+      const headers = [
+        "POST /webhooks/instagram HTTP/1.1",
+        `Host: 127.0.0.1:${port}`,
+        "Content-Type: application/json",
+        `Content-Length: ${raw.length}`,
+        `X-Hub-Signature-256: sha256=${signature}`,
+        ...extraHeaders,
+        "Connection: close",
+        "",
+        "",
+      ];
+      socket.write(Buffer.concat([Buffer.from(headers.join("\r\n"), "ascii"), raw]));
+    });
+    socket.on("data", (chunk) => chunks.push(chunk));
+    socket.on("error", reject);
+    socket.on("end", () => {
+      const response = Buffer.concat(chunks).toString("utf8");
+      const separator = response.indexOf("\r\n\r\n");
+      const headerText = separator === -1 ? response : response.slice(0, separator);
+      const bodyText = separator === -1 ? "" : response.slice(separator + 4);
+      const status = Number(/^HTTP\/1\.1 (\d{3})/.exec(headerText)?.[1]);
+      let body = null;
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        body = null;
+      }
+      resolve({ body, status });
+    });
+  });
 }
 
 function databaseUrl(file) {
