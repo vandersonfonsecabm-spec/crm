@@ -1,4 +1,4 @@
-import { Camera, CircleHelp, Globe2, MessageCircle, UsersRound } from "lucide-react";
+import { Camera, CircleHelp, Globe2, Mail, MessageCircle, UsersRound } from "lucide-react";
 import type { ComponentType } from "react";
 import type { CommunicationConversation } from "../../services/crmApi";
 
@@ -7,7 +7,7 @@ type ChannelIcon = ComponentType<{ "aria-hidden"?: boolean; size?: number }>;
 export type ChannelPresentation = {
   icon: ChannelIcon;
   label: string;
-  tone: "site" | "whatsapp" | "instagram" | "messenger" | "unknown";
+  tone: "site" | "whatsapp" | "instagram" | "messenger" | "email" | "unknown";
 };
 
 const CHANNELS: Record<string, ChannelPresentation> = {
@@ -15,6 +15,7 @@ const CHANNELS: Record<string, ChannelPresentation> = {
   WHATSAPP_META: { icon: MessageCircle, label: "WhatsApp", tone: "whatsapp" },
   INSTAGRAM_META: { icon: Camera, label: "Instagram", tone: "instagram" },
   MESSENGER_META: { icon: UsersRound, label: "Messenger", tone: "messenger" },
+  EMAIL: { icon: Mail, label: "E-mail", tone: "email" },
 };
 
 export function getChannelPresentation(type?: string | null): ChannelPresentation {

@@ -62,6 +62,10 @@
   border-left: 3px solid #4d6fa9;
 }
 
+.communication-channel-email {
+  border-left: 3px solid #667a3d;
+}
+
 .communication-channel-unknown {
   border-left: 3px solid #7b827e;
 }

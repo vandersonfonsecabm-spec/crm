@@ -10,7 +10,7 @@ async function source(relativePath) {
   return readFile(path.join(frontendDir, relativePath), "utf8");
 }
 
-test("Inbox identifica os quatro canais sem heurística semântica", async () => {
+test("Inbox identifica os cinco canais sem heurística semântica", async () => {
   const [badge, formatters, inbox] = await Promise.all([
     source("src/components/leads-communication/communicationChannels.ts"),
     source("src/components/leads-communication/communicationFormatters.ts"),
@@ -22,12 +22,14 @@ test("Inbox identifica os quatro canais sem heurística semântica", async () =>
     ["WHATSAPP_META", "WhatsApp"],
     ["INSTAGRAM_META", "Instagram"],
     ["MESSENGER_META", "Messenger"],
+    ["EMAIL", "E-mail"],
   ]) {
     assert.match(badge, new RegExp(`${type}: \\{[^\\n]+label: "${label}"`));
     assert.match(formatters, /getChannelPresentation\(type\)\.label/);
   }
 
   assert.match(inbox, /CommunicationChannelBadge/);
+  assert.match(inbox, /Site, WhatsApp, Instagram, Messenger e E-mail/);
   assert.match(badge, /Canal não reconhecido/);
   assert.doesNotMatch(`${badge}\n${formatters}`, /includes\("insta"\)|includes\("facebook"\)/i);
 });
@@ -59,12 +61,28 @@ test("Inbox bloqueia outbound real e mantém apenas notas internas", async () =>
   assert.match(badge, /tipo === "WHATSAPP_META"/);
   assert.match(badge, /modoTeste === true/);
   assert.match(inbox, /Respostas por este canal ainda não estão habilitadas/);
+  assert.match(inbox, /Respostas por e-mail ainda não estão habilitadas/);
   assert.match(inbox, /Nota interna — visível somente para a equipe/);
   assert.match(inbox, /Registrar simulação/);
   assert.match(inbox, /Simulação registrada por/);
   assert.match(inbox, /Não enviada/);
   assert.doesNotMatch(inbox, />Enviar</);
   assert.doesNotMatch(inbox, /Graph API|accessTokenRef|api\.whatsapp|graph\.facebook/i);
+});
+
+test("Inbox apresenta assunto e anexos de E-mail sem renderizar HTML", async () => {
+  const [inbox, api] = await Promise.all([
+    source("src/components/leads-communication/DashboardInboxPanel.tsx"),
+    source("src/services/crmApi.ts"),
+  ]);
+
+  assert.match(api, /emailSubject: string \| null/);
+  assert.match(api, /emailMetadata\?:/);
+  assert.match(api, /attachmentCount: number/);
+  assert.match(inbox, /email\.subject/);
+  assert.match(inbox, /email\.fromName \? `\$\{email\.fromName\} <\$\{email\.fromAddress\}>` : email\.fromAddress/);
+  assert.match(inbox, /Paperclip/);
+  assert.doesNotMatch(inbox, /dangerouslySetInnerHTML/);
 });
 
 test("Cliente 360 prioriza o nome canônico do canal", async () => {

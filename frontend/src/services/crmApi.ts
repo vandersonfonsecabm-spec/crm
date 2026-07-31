@@ -396,6 +396,12 @@ export type CommunicationMessage = {
   statusEntrega: string | null;
   simulada: boolean;
   lidaEm?: string | null;
+  emailMetadata?: {
+    subject: string | null;
+    fromAddress: string;
+    fromName: string | null;
+    attachmentCount: number;
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -407,6 +413,7 @@ export type CommunicationConversation = {
   leadId: number | null;
   responsavelId: number | null;
   status: ConversationStatus;
+  emailSubject: string | null;
   primeiraMensagemEm: string | null;
   ultimaMensagemEm: string | null;
   primeiraRespostaHumanaEm: string | null;
