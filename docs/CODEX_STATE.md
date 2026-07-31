@@ -1122,3 +1122,30 @@ integracoes autorizadas.
   accessTokenRef, outbound, schema, migration ou alteracao em tenant.
 - Proximo passo recomendado: implementar o lifecycle platform-only do
   Instagram inbound (`activate`, `pause` e `reactivate`) em tarefa separada.
+
+## Instagram Direct - lifecycle platform-only
+
+- Em 31/07/2026, o lifecycle platform-only do Instagram inbound foi publicado
+  no commit `055a1a00c2de9ccd136d85dc1a232c8a76ce329f`.
+- As rotas `POST /activate`, `POST /pause` e `POST /reactivate` exigem operador
+  de plataforma, `reason` e CAS por `expectedUpdatedAt`. Canal, capabilities
+  `INSTAGRAM_INTEGRATION`/`INSTAGRAM_INBOUND` e
+  `AuditoriaFuncionalidade` mudam na mesma transacao.
+- A ativacao local termina em `WAITING_META_AUTH`; a pausa desativa somente o
+  inbound e preserva a capability de integracao, identidade, metadata e
+  timestamps. Replay exato e idempotente, CAS perdedor nao produz auditoria
+  duplicada e as escritas de capability reafirmam tenant, chave e estado
+  esperado.
+- SQLite e PostgreSQL 16 descartavel aprovaram os cinco grupos focais,
+  incluindo RBAC direto dos tres POSTs, CAS, concorrencia real, rollback,
+  auditoria e isolamento multi-tenant. O PostgreSQL temporario terminou sem
+  registros e o Prisma SQLite foi restaurado.
+- A API e o worker terminaram `SUCCESS`, com `/health = 200`. O smoke
+  autenticado somente leitura confirmou a JavaGro em `NOT_CONFIGURED`, com
+  zero canal, capability, auditoria, evento, mensagem, contato ou conversa
+  Instagram antes e depois.
+- Nao houve schema, migration, Meta, Graph API, OAuth, accessTokenRef,
+  outbound, preenchimento de timestamp ou ativacao de tenant em producao.
+- Proximo passo recomendado: implementar o webhook/intake Instagram em fase
+  separada, mantendo a JavaGro sem provisionamento ate existir identidade Meta
+  real.
