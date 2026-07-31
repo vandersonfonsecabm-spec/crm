@@ -35,6 +35,8 @@ function main(options = {}) {
       "tests/postgres-migration-prep.test.js",
       "tests/internal-automations-h7.test.js",
       "tests/next-follow-up-projection.test.js",
+      "tests/email-inbound-lifecycle.test.js",
+      "tests/email-inbound-processing.test.js",
     ]) {
       runCommand("node", ["--test", file], env);
     }
