@@ -40,7 +40,9 @@ test("D1 capta formulario Site com seguranca, tenant e idempotencia", async () =
   const conversation = await prisma.conversaCanal.findFirst({ where: { leadId: lead.id }, include: { canalIntegracao: true, mensagens: true, contatoCanal: { include: { cliente: true } } } });
   assert.equal(conversation.status, "AGUARDANDO_ATENDIMENTO"); assert.equal(conversation.responsavelId, null); assert.equal(conversation.canalIntegracao.tipo, "SITE_FORM"); assert.equal(conversation.mensagens.length, 1); assert.equal(conversation.mensagens[0].direcao, "ENTRADA"); assert.equal(conversation.mensagens[0].autorUsuarioId, null); assert.equal(conversation.mensagens[0].simulada, false);
   assert.equal(conversation.contatoCanal.cliente.cidade, "Campinas"); assert.equal(conversation.contatoCanal.cliente.estado, "SP");
-  assert.equal((await authRequest("POST", `/conversas/${conversation.id}/mensagens/simuladas`, { externalId: "site-reply", texto: "Resposta indevida", direcao: "SAIDA" }, seller.token)).status, 409);
+  const simulatedReply = await authRequest("POST", `/conversas/${conversation.id}/mensagens/simuladas`, { externalId: "site-reply", texto: "Resposta indevida", direcao: "SAIDA" }, seller.token);
+  assert.equal(simulatedReply.status, 409);
+  assert.equal(simulatedReply.body.codigo, "CHANNEL_SIMULATION_UNAVAILABLE");
   const detail = await authRequest("GET", `/conversas/${conversation.id}`, undefined, seller.token);
   assert.equal(detail.body.podeResponderDiretamente, false); assert.equal(detail.body.tipoCanal, "SITE_FORM");
 

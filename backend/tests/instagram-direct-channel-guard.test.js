@@ -128,7 +128,7 @@ test("writer legado bloqueia Instagram real e preserva fixtures e outros canais"
     }),
     (error) => (
       error.status === 409
-      && error.codigo === "CHANNEL_DIRECT_REPLY_UNAVAILABLE"
+      && error.codigo === "CHANNEL_SIMULATION_UNAVAILABLE"
     ),
   );
   assert.equal(await prisma.mensagemCanal.count({

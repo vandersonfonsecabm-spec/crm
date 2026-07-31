@@ -140,7 +140,7 @@ test("writer legado bloqueia Messenger real e preserva fixtures e outros canais"
       direcao: "ENTRADA",
       texto: "Mensagem bloqueada pelo writer interno",
     }),
-    (error) => error.status === 403 && error.codigo === "CHANNEL_PLATFORM_MANAGED",
+    (error) => error.status === 409 && error.codigo === "CHANNEL_SIMULATION_UNAVAILABLE",
   );
   await assert.rejects(
     communication.createSimulatedMessage(context, conversation.id, {
@@ -150,7 +150,7 @@ test("writer legado bloqueia Messenger real e preserva fixtures e outros canais"
     }),
     (error) => (
       error.status === 409
-      && error.codigo === "CHANNEL_DIRECT_REPLY_UNAVAILABLE"
+      && error.codigo === "CHANNEL_SIMULATION_UNAVAILABLE"
     ),
   );
   assert.equal(await prisma.mensagemCanal.count({
