@@ -1208,3 +1208,47 @@ integracoes autorizadas.
 - Riscos residuais nao bloqueantes: lotes validos sao processados atomicamente
   por evento, nao por request inteiro; e os limites conservadores devem ser
   reavaliados somente quando houver envelope Meta real autorizado.
+
+## Facebook Messenger - inbound pronto para configuracao Meta
+
+- Em 31/07/2026, a fundacao completa do Facebook Messenger inbound foi
+  publicada nos commits `356d06e`, `6f738c3`, `2ce438e`, `7907fec` e
+  `a421d6b`.
+- Messenger possui tipo `MESSENGER_META`, capabilities
+  `MESSENGER_INTEGRATION`/`MESSENGER_INBOUND`, identidade de canal dedicada
+  `messengerPageId` e metadata mascarada. O Page ID e globalmente unico; o
+  remetente usa PSID opaco e permanece isolado por canal e tenant.
+- A migration aditiva `20260731120000_add_messenger_direct_schema_foundation`
+  foi validada em SQLite e PostgreSQL 16 descartavel e aplicada uma vez pelo
+  startup oficial. WhatsApp, Instagram e `SITE_FORM` mantiveram seus campos,
+  constraints e comportamento.
+- O provisionamento, status e lifecycle sao platform-only, com allowlist,
+  identidade imutavel, CAS, idempotencia, auditoria e conflito fail-closed de
+  legado. A ativacao local nao chama a Meta e nao preenche timestamps.
+- `GET/POST /webhooks/messenger` usam challenge stateless, corpo bruto, HMAC
+  SHA-256, Content-Type/Content-Encoding estritos e limites de 1 MiB, 3
+  entries, 5 eventos por entry e 10 eventos por request. Payload multi-Page e
+  rejeitado integralmente antes de qualquer escrita.
+- Texto inbound cria a cadeia tenant-scoped de evento, contato, Cliente, Lead,
+  conversa e mensagem, visivel na Inbox e no Cliente 360. Replay e
+  concorrencia preservam uma unica cadeia; echo, attachment e evento
+  desconhecido terminam sem mensagem falsa ou outbound.
+- Os testes focais passaram em SQLite e PostgreSQL, incluindo migrations,
+  provisionamento, lifecycle, guards, HMAC, replay, concorrencia, rollback,
+  isolamento pelo mesmo PSID em tenants distintos e simulador bloqueado em
+  producao. Tres revisores independentes nao encontraram bloqueante de
+  arquitetura, seguranca ou operacao para gates desligados.
+- A API foi publicada no deployment
+  `6870805b-a10f-46fd-bdf3-c7e3e441a226` e o worker no deployment
+  `2f8b18d5-3716-4740-9d7d-99bb32268455`, ambos com `SUCCESS`; `/health`
+  permaneceu HTTP 200.
+- Em producao, os gates Messenger permanecem desligados, a JavaGro esta
+  `NOT_CONFIGURED`, e canais, capabilities, eventos, mensagens, contatos e
+  conversas Messenger permaneceram em zero antes e depois do smoke read-only.
+  Webhook e simulador retornam 404, e status sem autenticacao retorna 401.
+- Nao houve Meta, Graph API, OAuth, Page Access Token funcional,
+  accessTokenRef, outbound, Page ID sintetico ou alteracao em tenant real.
+- Proximo passo: quando houver ativos Meta reais autorizados, medir o prazo do
+  lote maximo, configurar gates/callback/subscriptions, provisionar a Page,
+  ativar um piloto isolado e validar o primeiro Messenger real com rollback por
+  pausa disponivel.
