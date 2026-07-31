@@ -61,8 +61,19 @@ test("Inbox bloqueia outbound real e mantém apenas notas internas", async () =>
   assert.match(inbox, /Respostas por este canal ainda não estão habilitadas/);
   assert.match(inbox, /Nota interna — visível somente para a equipe/);
   assert.match(inbox, /Registrar simulação/);
+  assert.match(inbox, /Simulação registrada por/);
+  assert.match(inbox, /Não enviada/);
   assert.doesNotMatch(inbox, />Enviar</);
   assert.doesNotMatch(inbox, /Graph API|accessTokenRef|api\.whatsapp|graph\.facebook/i);
+});
+
+test("Cliente 360 prioriza o nome canônico do canal", async () => {
+  const timeline = await source("src/components/dashboard/DashboardClientTimeline.tsx");
+
+  assert.match(timeline, /getChannelPresentation/);
+  assert.match(timeline, /timelineChannelLabel/);
+  assert.match(timeline, /`\$\{canonical\} · \$\{channel\.nome\}`/);
+  assert.doesNotMatch(timeline, /event\.canal \? <span>\{event\.canal\.nome\}/);
 });
 
 test("Inbox preserva leitura durante polling e abre detalhes sob demanda", async () => {

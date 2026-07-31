@@ -53,6 +53,13 @@ test("writers simulados aceitam somente WhatsApp test-only e falham sem mutacao"
     site: await createChannel(tenantA.empresaId, "SITE_FORM", "site-real"),
   };
   const testConversation = await createConversation(tenantA, testChannel, "whatsapp-test");
+  const simulatedClient = await prisma.cliente.create({
+    data: { empresaId: tenantA.empresaId, nome: "Cliente Simulacao Segura" },
+  });
+  await prisma.contatoCanal.update({
+    where: { id: testConversation.contatoCanalId },
+    data: { clienteId: simulatedClient.id },
+  });
   const conversations = {};
   for (const [key, channel] of Object.entries(channels)) {
     conversations[key] = await createConversation(tenantA, channel, key);
@@ -68,6 +75,13 @@ test("writers simulados aceitam somente WhatsApp test-only e falham sem mutacao"
   }, tenantA.token);
   assert.equal(allowed.status, 201);
   assert.equal(allowed.body.simulada, true);
+  const { createCustomer360Service } = require("../src/customer-360/service");
+  const timeline = await createCustomer360Service({ prisma }).getTimeline(
+    { empresaId: tenantA.empresaId },
+    simulatedClient.id,
+    { tipo: "MENSAGEM" },
+  );
+  assert.equal(timeline.data[0].titulo, "Resposta simulada");
 
   const forged = await request("POST", `/conversas/${conversations.whatsapp.id}/mensagens/simuladas`, {
     externalId: "reply-safety-forged",

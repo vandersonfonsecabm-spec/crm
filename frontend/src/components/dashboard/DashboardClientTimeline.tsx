@@ -17,6 +17,7 @@ import type { ReactNode } from "react";
 import { ApiHttpError, fetchCustomer360Timeline } from "../../services/crmApi";
 import type { Customer360TimelineEvent, Customer360TimelineType } from "../../services/crmApi";
 import type { Client } from "../../types/dashboard";
+import { getChannelPresentation } from "../leads-communication/communicationChannels";
 
 type DashboardClientTimelineProps = {
   selectedClient: Client;
@@ -154,13 +155,18 @@ function TimelineRow({ event, onNavigate }: { event: Customer360TimelineEvent; o
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-600">
           {event.status ? <span>{humanize(event.status)}</span> : null}
           {event.responsavel ? <span>{event.responsavel.nome}</span> : null}
-          {event.canal ? <span>{event.canal.nome}</span> : null}
+          {event.canal ? <span>{timelineChannelLabel(event.canal)}</span> : null}
           {event.valor !== null ? <span className="font-medium text-emerald-200">{formatCurrency(event.valor)}</span> : null}
           {event.navegacao ? <button className="ml-auto font-semibold text-teal-200 hover:text-teal-100" onClick={() => onNavigate(event.navegacao!.destino, event.navegacao!.id)} type="button">Abrir contexto</button> : null}
         </div>
       </div>
     </li>
   );
+}
+
+function timelineChannelLabel(channel: NonNullable<Customer360TimelineEvent["canal"]>) {
+  const canonical = getChannelPresentation(channel.tipo).label;
+  return channel.nome && channel.nome !== canonical ? `${canonical} · ${channel.nome}` : canonical;
 }
 
 function eventMeta(type: Customer360TimelineEvent["tipo"]): { icon: ReactNode; label: string; tone: string } {

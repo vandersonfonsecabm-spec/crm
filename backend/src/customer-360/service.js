@@ -292,11 +292,12 @@ function presentFollowUp(item) {
 
 function messageEvent(item) {
   const inbound = item.direcao === "ENTRADA";
+  const simulated = !inbound && item.simulada === true;
   return event({
     id: `mensagem:${item.id}`,
     tipo: "MENSAGEM",
     data: item.enviadaEm || item.createdAt,
-    titulo: inbound ? "Mensagem recebida" : "Mensagem enviada",
+    titulo: inbound ? "Mensagem recebida" : simulated ? "Resposta simulada" : "Mensagem enviada",
     descricao: item.texto || "Mensagem sem conteudo textual.",
     status: item.statusEntrega || item.status,
     responsavel: item.autorUsuario,
