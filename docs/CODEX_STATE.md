@@ -1339,3 +1339,24 @@ integracoes autorizadas.
 - Proximo passo: quando existirem ativos Meta autorizados, executar um piloto
   real por canal com gates graduais, rollback por pausa e observacao de
   envelopes, permissoes e callbacks externos.
+
+## E-mail inbound - fundacao agnostica de provider
+
+- Em 31/07/2026, foi implementada a fundacao aditiva do canal `EMAIL`, com
+  capabilities `EMAIL_INTEGRATION` e `EMAIL_INBOUND`, identidade primaria e
+  aliases dedicados, metadata MIME 1:1 e threading persistente.
+- O provisionamento e lifecycle sao platform-only, usam CAS e auditoria e nao
+  configuram credencial, provider real ou outbound.
+- O adapter inicial `GENERIC` normaliza MIME em memoria. Raw e binarios nao sao
+  persistidos; HTML e sanitizado e a interface renderiza apenas texto.
+- O simulador e importavel, test-only, reservado a `@example.test` e
+  indisponivel em `production`; nenhuma rota de simulacao foi criada.
+- Texto sintetico percorre EventoWebhook, ContatoCanal, Cliente, Lead,
+  ConversaCanal, MensagemCanal, Inbox e Cliente 360. Replay e concorrencia
+  convergem para uma cadeia, e auto-reply, bounce e anexo sem texto sao
+  terminais sem escrita comercial.
+- A Inbox identifica E-mail separadamente, mostra assunto/remetente/anexos e
+  informa que respostas por E-mail ainda nao estao habilitadas.
+- Proximo passo externo: escolher Gmail API, Microsoft Graph ou IMAP,
+  implementar o adapter real e executar o runbook de ativacao com gates OFF
+  ate a janela de piloto aprovada.
