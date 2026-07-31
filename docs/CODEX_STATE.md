@@ -1308,3 +1308,34 @@ integracoes autorizadas.
   engine.
 - Nao houve schema, migration, Meta, Graph API, accessTokenRef ou outbound
   real.
+
+## Piloto sintetico multicanal sem Meta
+
+- Em 31/07/2026, o piloto sintetico multicanal foi consolidado nos commits
+  `287bf7c3706aea1496793f7f68c4aeec95b96b70`,
+  `1bcdab8b47d2d5f430703dda60f980ff29acb717` e
+  `3b08378745744b9c855ddfe6ff1ff11f14e8539b`.
+- WhatsApp, Instagram e Messenger percorreram os webhooks e o pipeline
+  comercial reais em bancos temporarios. Cada canal produziu evento, contato,
+  Cliente, Lead, conversa e mensagem tenant-scoped, visiveis na Inbox e no
+  Cliente 360, sem compartilhar identificadores entre canais ou tenants.
+- O WhatsApp passou a deduplicar eventos por tenant e canal, rejeitar lotes e
+  Content-Encoding ambiguos antes da persistencia e preservar sucesso diante
+  de falha atrasada ou pausa concorrente. Os limites focais sao 1 MiB de body,
+  3 entries, 5 changes por entry, 5 eventos por change e 10 eventos por
+  request.
+- Respostas simuladas permanecem exclusivas de WhatsApp test-only e agora sao
+  apresentadas na Inbox e no Cliente 360 como simulacao nao enviada. Canais
+  reais, Instagram, Messenger e SITE_FORM continuam sem outbound.
+- SQLite aprovou os testes focais de transporte, lifecycle, seguranca de
+  resposta e o piloto cruzado. PostgreSQL 16 descartavel aprovou o piloto e o
+  lifecycle afetado; o cluster foi removido e o Prisma SQLite restaurado.
+- A validacao visual local cobriu desktop e mobile com dados criados pelo
+  pipeline real. Site, WhatsApp, Instagram e Messenger apareceram separados,
+  Messenger mostrou o aviso inbound-only, nao houve overflow horizontal nem
+  erro de console.
+- Nenhum schema, migration, Meta, Graph API, token real, accessTokenRef,
+  outbound real, canal, capability ou tenant de producao foi alterado.
+- Proximo passo: quando existirem ativos Meta autorizados, executar um piloto
+  real por canal com gates graduais, rollback por pausa e observacao de
+  envelopes, permissoes e callbacks externos.
