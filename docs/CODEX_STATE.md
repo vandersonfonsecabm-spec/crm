@@ -1252,3 +1252,36 @@ integracoes autorizadas.
   lote maximo, configurar gates/callback/subscriptions, provisionar a Page,
   ativar um piloto isolado e validar o primeiro Messenger real com rollback por
   pausa disponivel.
+
+## Inbox multicanal - fundacao visual e operacional
+
+- Em 31/07/2026, a Inbox unificada foi reformulada nos commits `82516b5`,
+  `cbc6678` e `2595b6c`.
+- Site, WhatsApp, Instagram e Messenger possuem mapeamentos visuais e textuais
+  explicitos. Canal desconhecido falha para um rotulo neutro, sem reutilizar a
+  semantica de outro provedor.
+- A fila ganhou busca e filtros combinaveis de escopo, status, SLA,
+  responsavel, canal e lead. A selecao passou a ser explicita e a paginacao
+  existente foi preservada.
+- O layout usa tres regioes em desktop, duas em tablet e navegacao progressiva
+  em mobile. O contexto comercial abre como painel contextual sem duplicar o
+  Cliente 360.
+- Outbound continua fail-closed. Site e os canais Meta reais mostram o aviso
+  de indisponibilidade; resposta simulada permanece disponivel somente para
+  WhatsApp com `modoTeste=true` e permissao explicita da API.
+- Loading, vazio, erro, foco por teclado, retorno mobile e polling de novas
+  mensagens foram cobertos sem marcar mensagens fora da area visualizada como
+  lidas.
+- Quatorze testes focais passaram, assim como ESLint focal, TypeScript/build e
+  `git diff --check`. A revisao visual cobriu 390, 1024, 1366, 1440 e 1920 px
+  sem overflow horizontal ou erro de console no cenario sintetico autorizado.
+- O deploy Vercel do frontend terminou com sucesso. API e worker nao foram
+  reconstruidos por se tratar de mudanca somente de frontend; ambos
+  permaneceram online e `/health` permaneceu HTTP 200.
+- Nao houve alteracao de backend, schema, migration, gates, autenticacao,
+  tenant, canal, capability, Meta, Graph API ou outbound.
+- Riscos residuais fora deste patch: o endpoint backend de resposta simulada
+  deve receber uma revisao propria para exigir `modoTeste=true`; e a derivacao
+  comercial de follow-up ainda possui fallback telefonico para canais sem
+  telefone. E-mail e Telegram devem ganhar contratos explicitos antes de serem
+  adicionados ao mesmo mapeamento da Inbox.
