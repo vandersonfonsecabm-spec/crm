@@ -1149,3 +1149,33 @@ integracoes autorizadas.
 - Proximo passo recomendado: implementar o webhook/intake Instagram em fase
   separada, mantendo a JavaGro sem provisionamento ate existir identidade Meta
   real.
+
+## Instagram Direct - webhook inbound
+
+- Em 31/07/2026, o webhook Instagram Direct foi publicado nos commits
+  `73015ccb39313dff6d27a98ac5731881beed01f3` e
+  `a12a9adcc0a327405e59d6a6bebd338515af1be3`.
+- `GET/POST /webhooks/instagram` reutilizam o contrato Meta de challenge e
+  HMAC SHA-256 sobre o corpo bruto. O intake exige identidade canonica, canal
+  real ativo, App ID/ambiente globais e as capabilities
+  `INSTAGRAM_INTEGRATION` e `INSTAGRAM_INBOUND`.
+- Texto Direct cria a cadeia tenant-scoped de evento, contato, Cliente, Lead,
+  conversa e mensagem. Replay e concorrencia preservam uma unica cadeia;
+  `is_echo`, status, midia e eventos desconhecidos terminam sem mensagem
+  textual falsa.
+- A reconciliacao de falha usa reserva transacional do `EventoWebhook`: uma
+  falha atrasada nao sobrescreve processamento ja concluido. Pausa concorrente
+  reverte os efeitos comerciais e nao deixa falha operacional indevida.
+- SQLite e PostgreSQL 16 descartavel aprovaram os seis grupos focais. O Prisma
+  SQLite foi restaurado, o `dev.db` permaneceu no hash protegido e o
+  PostgreSQL temporario foi removido.
+- API e worker foram publicados no SHA funcional `a12a9ad`, terminaram
+  `SUCCESS`/`Online` e `/health` permaneceu HTTP 200 durante a observacao. Os
+  gates Instagram continuam ausentes, GET e POST publicos permanecem em 404 e
+  o simulador nao possui rota de producao.
+- Nenhum canal, capability, identidade, timestamp ou efeito Instagram foi
+  criado por esta release. Nao houve Meta, Graph API, OAuth, accessTokenRef,
+  outbound, schema ou migration.
+- Antes de ativar Meta real, ainda devem ser definidos limite atomico por lote,
+  comportamento para lotes com multiplas identidades e rejeicao explicita de
+  `Content-Encoding` duplicado.
