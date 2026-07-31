@@ -205,9 +205,11 @@ model Empresa {
   importacoesDados           ImportacaoDados[]
   oauthStatesIntegracao      IntegracaoOAuthState[]
   canaisIntegracao           CanalIntegracao[]
+  enderecosCaixaEmail        EmailMailboxAddress[]
   contatosCanal              ContatoCanal[]
   conversasCanal             ConversaCanal[]
   mensagensCanal             MensagemCanal[]
+  metadadosMensagemEmail     EmailMessageMetadata[]
   leads                      Lead[]
   negocios                   Negocio[]
   notasInternasConversa      NotaInternaConversa[]
@@ -540,6 +542,9 @@ model CanalIntegracao {
   instagramUsernameMasked    String?
   messengerPageId            String?                   @unique
   messengerPageNameMasked    String?
+  emailProviderType          String?
+  emailProviderAccountIdMasked String?
+  emailDisplayNameMasked     String?
   qualityRating       String?
   graphApiVersion     String?
   onboardingMethod    MetodoOnboardingWhatsApp?
@@ -556,6 +561,7 @@ model CanalIntegracao {
   conversas           ConversaCanal[]
   mensagens           MensagemCanal[]
   eventosWebhook      EventoWebhook[]
+  enderecosEmail      EmailMailboxAddress[]
 
   @@unique([empresaId, chaveInterna])
   @@unique([tipo, providerEnvironment, metaAppId, phoneNumberId])
@@ -564,6 +570,23 @@ model CanalIntegracao {
   @@index([empresaId, ativo])
   @@index([empresaId, tipo, ativo])
   @@index([empresaId, tipo, wabaId])
+}
+
+model EmailMailboxAddress {
+  id                  Int                       @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  canalIntegracaoId   Int
+  canalIntegracao     CanalIntegracao            @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  addressNormalized   String                     @unique
+  kind                EmailMailboxAddressKind
+  primarySlot         String?                    @unique
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@index([empresaId])
+  @@index([canalIntegracaoId])
+  @@index([canalIntegracaoId, kind])
 }
 
 model ContatoCanal {
@@ -605,6 +628,8 @@ model ConversaCanal {
   respostaReservadaAte     DateTime?
   status                   StatusConversa        @default(ABERTA)
   chaveAberta              String?               @unique
+  emailThreadKey           String?               @unique
+  emailSubject             String?
   primeiraMensagemEm       DateTime?
   ultimaMensagemEm         DateTime?
   primeiraRespostaHumanaEm DateTime?
@@ -629,6 +654,7 @@ model ConversaCanal {
   @@index([empresaId, respostaReservadaPorId])
   @@index([empresaId, respostaReservadaAte])
   @@index([empresaId, leadId])
+  @@index([empresaId, emailThreadKey])
 }
 
 model MensagemCanal {
@@ -656,6 +682,7 @@ model MensagemCanal {
   simulada          Boolean                @default(true)
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
+  emailMetadata     EmailMessageMetadata?
 
   @@unique([canalIntegracaoId, externalId])
   @@index([empresaId])
@@ -665,6 +692,39 @@ model MensagemCanal {
   @@index([empresaId, statusEntrega])
   @@index([empresaId, conversaCanalId, autorUsuarioId])
   @@index([createdAt])
+}
+
+model EmailMessageMetadata {
+  id                  Int             @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  mensagemCanalId     Int             @unique
+  mensagemCanal       MensagemCanal   @relation(fields: [mensagemCanalId], references: [id], onDelete: Cascade)
+  messageId           String?
+  providerMessageId   String?
+  providerThreadId    String?
+  threadKey           String
+  inReplyTo           String?
+  referencesJson      String          @default("[]")
+  fromAddress         String
+  fromName            String?
+  toJson              String          @default("[]")
+  ccJson              String          @default("[]")
+  bccCount            Int             @default(0)
+  replyTo             String?
+  subject             String?
+  htmlSanitized       String?
+  attachmentsJson     String          @default("[]")
+  attachmentCount     Int             @default(0)
+  rawSize             Int
+  receivedAt          DateTime
+  createdAt           DateTime        @default(now())
+
+  @@index([empresaId])
+  @@index([empresaId, threadKey])
+  @@index([empresaId, messageId])
+  @@index([empresaId, providerMessageId])
+  @@index([empresaId, providerThreadId])
 }
 
 model Lead {
@@ -1132,6 +1192,8 @@ enum ChaveFuncionalidade {
   INSTAGRAM_INBOUND
   MESSENGER_INTEGRATION
   MESSENGER_INBOUND
+  EMAIL_INTEGRATION
+  EMAIL_INBOUND
 }
 
 enum GatilhoAutomacao {
@@ -1176,7 +1238,13 @@ enum TipoCanal {
   WHATSAPP_META
   INSTAGRAM_META
   MESSENGER_META
+  EMAIL
   SITE_FORM
+}
+
+enum EmailMailboxAddressKind {
+  PRIMARY
+  ALIAS
 }
 
 enum StatusCanal {

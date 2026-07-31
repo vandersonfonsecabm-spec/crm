@@ -20,7 +20,7 @@ const historicalTestDb = path.join(historicalPrisma, "test.db");
 const command = process.argv.slice(2);
 const expectedHash = "cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a";
 const expectedSize = 532480;
-const expectedMigrationCount = 27;
+const expectedMigrationCount = 28;
 const historicalMigrationCount = 9;
 const prismaCli = resolvePrismaCli();
 const prismaConfigModule = require.resolve("prisma/config", { paths: [backendDir] });
@@ -36,8 +36,10 @@ main().catch((error) => {
     process.exitCode = 1;
     console.error(`[isolated-prisma] BANCO PROTEGIDO ALTERADO: ${error.stack || error.message}`);
   }
-  if (completed && process.exitCode !== 1) console.log(`[isolated-prisma] OK ${runId}`);
-  else console.error(`[isolated-prisma] evidencias preservadas em ${runDir}`);
+  if (completed && process.exitCode !== 1) {
+    await removeRunDirectory(runDir);
+    console.log(`[isolated-prisma] OK ${runId} (cleanup concluido)`);
+  } else console.error(`[isolated-prisma] evidencias preservadas em ${runDir}`);
 });
 
 process.once("SIGINT", () => { process.exitCode = 130; assertProtectedDatabases(); process.exit(); });
@@ -306,3 +308,18 @@ function treeManifest(root) {
 }
 
 function databaseUrl(file) { return `file:${path.resolve(file).replace(/\\/g, "/")}`; }
+
+async function removeRunDirectory(directory) {
+  let lastError;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      await fs.promises.rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!['EPERM', 'EBUSY', 'ENOTEMPTY'].includes(error.code) || attempt === 5) break;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 150));
+    }
+  }
+  throw lastError;
+}
