@@ -50,23 +50,39 @@ function createWhatsAppWebhookOrchestrator({
 }
 
 async function recordProcessingFailure(prisma, eventoWebhookId, error, clock) {
-  const event = await prisma.eventoWebhook.findUnique({
-    where: { id: eventoWebhookId },
-    select: { id: true, empresaId: true, canalIntegracaoId: true, provedor: true },
-  });
-  if (!event || event.provedor !== "WHATSAPP") return;
   const occurredAt = clock();
   if (!(occurredAt instanceof Date) || Number.isNaN(occurredAt.getTime())) return;
-  await prisma.canalIntegracao.updateMany({
-    where: {
-      id: event.canalIntegracaoId,
-      empresaId: event.empresaId,
-      tipo: "WHATSAPP_META",
-    },
-    data: {
-      lastFailureAt: occurredAt,
-      lastFailureCode: safeFailureCode(error?.code),
-    },
+  await prisma.$transaction(async (tx) => {
+    const reserved = await tx.eventoWebhook.updateMany({
+      where: {
+        id: eventoWebhookId,
+        provedor: "WHATSAPP",
+        statusProcessamento: "RECEBIDO",
+        processadoEm: null,
+      },
+      data: { statusProcessamento: "RECEBIDO" },
+    });
+    if (reserved.count !== 1) return;
+    const event = await tx.eventoWebhook.findUnique({
+      where: { id: eventoWebhookId },
+      select: { empresaId: true, canalIntegracaoId: true },
+    });
+    if (!event) return;
+    await tx.canalIntegracao.updateMany({
+      where: {
+        id: event.canalIntegracaoId,
+        empresaId: event.empresaId,
+        tipo: "WHATSAPP_META",
+        chaveInterna: "whatsapp-meta-inbound-real",
+        modoTeste: false,
+        ativo: true,
+        status: "ATIVO",
+      },
+      data: {
+        lastFailureAt: occurredAt,
+        lastFailureCode: safeFailureCode(error?.code),
+      },
+    });
   });
 }
 

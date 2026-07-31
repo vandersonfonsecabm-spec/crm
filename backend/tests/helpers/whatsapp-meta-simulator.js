@@ -9,6 +9,7 @@ const DEFAULT_IDENTITY = Object.freeze({
 function createWhatsAppMetaSimulator({
   endpoint,
   identity = DEFAULT_IDENTITY,
+  appSecret = crypto.randomBytes(32).toString("hex"),
   env = process.env,
 } = {}) {
   if (env.NODE_ENV !== "test"
@@ -19,8 +20,6 @@ function createWhatsAppMetaSimulator({
     throw new Error("Simulador Meta exige endpoint local.");
   }
   const normalizedIdentity = validateIdentity(identity);
-  const appSecret = crypto.randomBytes(32).toString("hex");
-
   function configureEnvironment(target = env) {
     target.WHATSAPP_APP_SECRET = appSecret;
     target.WHATSAPP_INTEGRATION_ENABLED = "true";
@@ -94,7 +93,7 @@ function createWhatsAppMetaSimulator({
   }
 
   function forIdentity(nextIdentity) {
-    return createWhatsAppMetaSimulator({ endpoint, identity: nextIdentity, env });
+    return createWhatsAppMetaSimulator({ endpoint, identity: nextIdentity, appSecret, env });
   }
 
   function messageEnvelope(message) {

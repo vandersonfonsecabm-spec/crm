@@ -72,6 +72,23 @@ after(async () => {
   if (databasePath) removeDatabase(databasePath);
 });
 
+test("simulador WhatsApp permanece bloqueado em production", () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousFlag = process.env.WHATSAPP_META_SIMULATOR_ENABLED;
+  process.env.NODE_ENV = "production";
+  process.env.WHATSAPP_META_SIMULATOR_ENABLED = "true";
+  assert.throws(
+    () => createWhatsAppMetaSimulator({
+      endpoint: `${baseUrl}/webhooks/whatsapp`,
+      identity: simulator.identity,
+    }),
+    /indisponivel neste ambiente/,
+  );
+  process.env.NODE_ENV = previousNodeEnv;
+  if (previousFlag === undefined) delete process.env.WHATSAPP_META_SIMULATOR_ENABLED;
+  else process.env.WHATSAPP_META_SIMULATOR_ENABLED = previousFlag;
+});
+
 test("texto assinado completa intake, Inbox, Cliente 360, replay e lifecycle sem duplicacao", async () => {
   const primary = await seedSyntheticTenant("primary", simulator.identity);
   const isolated = await seedSyntheticTenant("isolated", {
@@ -327,6 +344,92 @@ test("assinatura, mapeamento e falha pos-intake permanecem fechados e sanitizado
   }), 1);
   assert.equal((await commercialCounts(failureFixture.tenant.id)).messages, 1);
   assert.equal((await lifecycle.getStatus({ tenantId: failureFixture.tenant.id })).state, "CONNECTED");
+});
+
+test("pausa entre intake e processor bloqueia conclusao sem marcar falha", async () => {
+  const identity = {
+    wabaId: `test-waba-paused-${suffix}`,
+    phoneNumberId: `test-phone-paused-${suffix}`,
+    senderId: "15550000007",
+  };
+  const fixture = await seedSyntheticTenant("paused", identity);
+  const pausedSimulator = simulator.forIdentity(identity);
+  const payload = pausedSimulator.text({ id: `test-paused-${suffix}` });
+  const pausedOrchestrator = createWhatsAppWebhookOrchestrator({
+    prisma,
+    processEvent: async (input) => {
+      await prisma.canalIntegracao.update({
+        where: { id: fixture.channel.id },
+        data: { ativo: false, status: "INATIVO" },
+      });
+      return processWhatsAppWebhookEvent(input);
+    },
+  });
+
+  await assert.rejects(
+    pausedOrchestrator(payload),
+    (error) => error.status === 409 && error.code === "WEBHOOK_PROCESSING_CONFLICT",
+  );
+  const channel = await prisma.canalIntegracao.findUniqueOrThrow({ where: { id: fixture.channel.id } });
+  assert.equal(channel.lastFailureAt, null);
+  assert.equal(channel.lastFailureCode, null);
+  assert.deepEqual(await commercialCounts(fixture.tenant.id), {
+    contacts: 0,
+    clients: 0,
+    leads: 0,
+    conversations: 0,
+    messages: 0,
+  });
+});
+
+test("falha concorrente atrasada nao sobrescreve processamento concluido", async () => {
+  const identity = {
+    wabaId: `test-waba-failure-race-${suffix}`,
+    phoneNumberId: `test-phone-failure-race-${suffix}`,
+    senderId: "15550000008",
+  };
+  const fixture = await seedSyntheticTenant("failure-race", identity);
+  const raceSimulator = simulator.forIdentity(identity);
+  const payload = raceSimulator.text({ id: `test-failure-race-${suffix}` });
+  let releaseFailure;
+  let signalFailureStarted;
+  const failureStarted = new Promise((resolve) => { signalFailureStarted = resolve; });
+  const waitForSuccess = new Promise((resolve) => { releaseFailure = resolve; });
+  const delayedFailure = createWhatsAppWebhookOrchestrator({
+    prisma,
+    processEvent: async () => {
+      signalFailureStarted();
+      await waitForSuccess;
+      const error = new Error("Falha sintetica atrasada.");
+      error.code = "WHATSAPP_DELAYED_FAILURE";
+      throw error;
+    },
+  });
+
+  const delayedResult = delayedFailure(payload);
+  await failureStarted;
+  assert.deepEqual(await createWhatsAppWebhookOrchestrator({ prisma })(payload), { accepted: true });
+  releaseFailure();
+  await assert.rejects(
+    delayedResult,
+    (error) => error.status === 503 && error.code === "WEBHOOK_PROCESSING_UNAVAILABLE",
+  );
+
+  const event = await prisma.eventoWebhook.findFirstOrThrow({
+    where: { empresaId: fixture.tenant.id, externalEventId: `test-failure-race-${suffix}` },
+  });
+  const channel = await prisma.canalIntegracao.findUniqueOrThrow({ where: { id: fixture.channel.id } });
+  assert.equal(event.statusProcessamento, "PROCESSADO");
+  assert.ok(event.processadoEm instanceof Date);
+  assert.equal(channel.lastFailureAt, null);
+  assert.equal(channel.lastFailureCode, null);
+  assert.deepEqual(await commercialCounts(fixture.tenant.id), {
+    contacts: 1,
+    clients: 1,
+    leads: 1,
+    conversations: 1,
+    messages: 1,
+  });
 });
 
 async function seedSyntheticTenant(label, identity, channelOverrides = {}) {

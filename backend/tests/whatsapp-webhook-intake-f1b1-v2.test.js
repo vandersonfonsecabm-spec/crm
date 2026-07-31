@@ -1,12 +1,17 @@
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const net = require("node:net");
 const path = require("node:path");
 const { after, before, beforeEach, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const express = require("express");
 const { mountWhatsAppWebhookRoutes } = require("../src/integrations/whatsappWebhook");
 const {
+  MAX_CHANGES_PER_ENTRY,
+  MAX_ENTRIES_PER_REQUEST,
+  MAX_EVENTS_PER_CHANGE,
+  MAX_TOTAL_EVENTS_PER_REQUEST,
   canonicalStringify,
   createWhatsAppWebhookIntake,
   parseAtomicMessages,
@@ -245,6 +250,44 @@ test("lote, duplicidade interna e lotes sobrepostos permanecem idempotentes", as
   assert.equal(await whatsappEventCount(), 4);
 });
 
+test("limites rejeitam o lote inteiro antes de persistir", async () => {
+  const accepted = payloadWithChanges([MAX_EVENTS_PER_CHANGE, MAX_EVENTS_PER_CHANGE]);
+  assert.equal(parseAtomicMessages(accepted).length, MAX_TOTAL_EVENTS_PER_REQUEST);
+
+  const excessiveEntries = {
+    ...validPayload(),
+    entry: Array.from({ length: MAX_ENTRIES_PER_REQUEST + 1 }, (_, index) => (
+      payloadWithChanges([1], index * 100).entry[0]
+    )),
+  };
+  const excessiveChanges = payloadWithChanges(Array(MAX_CHANGES_PER_ENTRY + 1).fill(1));
+  const excessivePerChange = payloadWithChanges([MAX_EVENTS_PER_CHANGE + 1]);
+  const excessiveTotal = payloadWithChanges([MAX_EVENTS_PER_CHANGE, MAX_EVENTS_PER_CHANGE, 1]);
+
+  for (const payload of [excessiveEntries, excessiveChanges, excessivePerChange, excessiveTotal]) {
+    assertIntakeError(() => parseAtomicMessages(payload), 413);
+  }
+  assert.equal(await whatsappEventCount(), 0);
+});
+
+test("transporte rejeita Content-Encoding duplicado, concatenado ou comprimido", async () => {
+  const raw = bodyFor("wamid.encoding");
+  assert.equal((await sendExactHttpRequest(raw)).status, 200);
+  assert.equal((await sendExactHttpRequest(raw, ["Content-Encoding: identity"])).status, 200);
+  for (const headers of [
+    ["Content-Encoding: identity", "Content-Encoding: identity"],
+    ["Content-Encoding: identity, gzip"],
+    ["Content-Encoding: gzip"],
+    ["Content-Encoding: deflate"],
+    ["Content-Encoding: br"],
+    ["Content-Encoding: identity", "Content-Encoding: gzip"],
+  ]) {
+    const response = await sendExactHttpRequest(raw, headers);
+    assert.equal(response.status, 415);
+    assert.equal(response.body.codigo, "UNSUPPORTED_MEDIA_TYPE");
+  }
+});
+
 test("retries equivalentes retornam 200 e conflitos nunca sobrescrevem", async () => {
   const originalBody = bodyFor("wamid.retry", "Original");
   assert.equal((await rawRequest(originalBody)).status, 200);
@@ -272,8 +315,12 @@ test("retries equivalentes retornam 200 e conflitos nunca sobrescrevem", async (
   assert.equal(await prisma.eventoWebhook.count({ where: { externalEventId: "wamid.conflict.first" } }), 0);
 });
 
-test("wamid existente em outro tenant gera conflito sanitizado", async () => {
-  const parsed = parseAtomicMessages(validPayload({ messages: [message("wamid.cross-tenant")] }))[0];
+test("wamid existente em outro tenant permanece isolado", async () => {
+  const parsed = parseAtomicMessages(validPayload({
+    messages: [message("wamid.cross-tenant")],
+    entryId: integrationB.wabaId,
+    phoneId: integrationB.phoneNumberId,
+  }))[0];
   await prisma.eventoWebhook.create({
     data: {
       empresaId: empresaB.id,
@@ -285,8 +332,13 @@ test("wamid existente em outro tenant gera conflito sanitizado", async () => {
       payloadJson: parsed.payloadJson,
     },
   });
-  assert.equal((await rawRequest(bodyFor("wamid.cross-tenant"))).status, 409);
-  assert.equal(await prisma.eventoWebhook.count({ where: { externalEventId: "wamid.cross-tenant" } }), 1);
+  assert.equal((await rawRequest(bodyFor("wamid.cross-tenant"))).status, 200);
+  const events = await prisma.eventoWebhook.findMany({
+    where: { externalEventId: "wamid.cross-tenant" },
+    orderBy: { empresaId: "asc" },
+  });
+  assert.equal(events.length, 2);
+  assert.deepEqual(new Set(events.map((event) => event.empresaId)), new Set([empresaA.id, empresaB.id]));
 });
 
 test("concorrencia equivalente cria uma linha e concorrencia divergente conflita", async () => {
@@ -419,6 +471,24 @@ function bodyForMessages(messages) {
   return Buffer.from(JSON.stringify(validPayload({ messages })), "utf8");
 }
 
+function payloadWithChanges(eventCounts, offset = 0) {
+  return {
+    object: "whatsapp_business_account",
+    entry: [{
+      id: wabaId,
+      changes: eventCounts.map((count, changeIndex) => ({
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: phoneNumberId },
+          messages: Array.from({ length: count }, (_, eventIndex) => (
+            message(`wamid.limit.${offset + changeIndex}.${eventIndex}`)
+          )),
+        },
+      })),
+    }],
+  };
+}
+
 async function rawRequest(rawBody, options = {}) {
   const response = await fetch(`${baseUrl}${options.pathname || "/webhooks/whatsapp"}`, {
     method: "POST",
@@ -439,6 +509,39 @@ async function rawRequest(rawBody, options = {}) {
 
 function sign(rawBody) {
   return `sha256=${crypto.createHmac("sha256", appSecret).update(rawBody).digest("hex")}`;
+}
+
+function sendExactHttpRequest(raw, extraHeaders = []) {
+  return new Promise((resolve, reject) => {
+    const port = server.address().port;
+    const socket = net.createConnection({ host: "127.0.0.1", port });
+    const chunks = [];
+    socket.on("connect", () => {
+      const headers = [
+        "POST /webhooks/whatsapp HTTP/1.1",
+        `Host: 127.0.0.1:${port}`,
+        "Content-Type: application/json; charset=utf-8",
+        `Content-Length: ${raw.length}`,
+        `X-Hub-Signature-256: ${sign(raw)}`,
+        ...extraHeaders,
+        "Connection: close",
+        "",
+        "",
+      ];
+      socket.write(Buffer.concat([Buffer.from(headers.join("\r\n"), "ascii"), raw]));
+    });
+    socket.on("data", (chunk) => chunks.push(chunk));
+    socket.on("error", reject);
+    socket.on("end", () => {
+      const response = Buffer.concat(chunks).toString("utf8");
+      const separator = response.indexOf("\r\n\r\n");
+      const headerText = separator === -1 ? response : response.slice(0, separator);
+      const bodyText = separator === -1 ? "" : response.slice(separator + 4);
+      let body = null;
+      try { body = JSON.parse(bodyText); } catch {}
+      resolve({ status: Number(/^HTTP\/1\.1 (\d{3})/.exec(headerText)?.[1]), body });
+    });
+  });
 }
 
 async function whatsappEventCount() {

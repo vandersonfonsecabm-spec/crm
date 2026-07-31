@@ -99,6 +99,7 @@ async function processTransaction(tx, eventoWebhookId) {
     await updateConversationActivity(tx, conversation, message, atomic.messageTime);
   }
 
+  await reserveActiveChannel(tx, event);
   const completedAt = new Date();
   const completed = await tx.eventoWebhook.updateMany({
     where: {
@@ -121,6 +122,24 @@ async function processTransaction(tx, eventoWebhookId) {
     await markChannelConnected(tx, event, completedAt);
   }
   return result(false);
+}
+
+async function reserveActiveChannel(tx, event) {
+  const reserved = await tx.canalIntegracao.updateMany({
+    where: {
+      id: event.canalIntegracaoId,
+      empresaId: event.empresaId,
+      tipo: "WHATSAPP_META",
+      chaveInterna: "whatsapp-meta-inbound-real",
+      modoTeste: false,
+      ativo: true,
+      status: "ATIVO",
+      wabaId: event.canalIntegracao.wabaId,
+      phoneNumberId: event.canalIntegracao.phoneNumberId,
+    },
+    data: { ativo: true },
+  });
+  if (reserved.count !== 1) throw processingError("WHATSAPP_EVENT_INTEGRATION_INVALID");
 }
 
 async function loadEvent(client, eventoWebhookId) {

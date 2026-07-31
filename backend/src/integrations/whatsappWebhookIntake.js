@@ -17,6 +17,10 @@ const MAX_MESSAGE_ID_LENGTH = 512;
 const MAX_SENDER_ID_LENGTH = 64;
 const MAX_TIMESTAMP_LENGTH = 20;
 const MAX_EVENT_KIND_LENGTH = 64;
+const MAX_ENTRIES_PER_REQUEST = 3;
+const MAX_CHANGES_PER_ENTRY = 5;
+const MAX_EVENTS_PER_CHANGE = 5;
+const MAX_TOTAL_EVENTS_PER_REQUEST = 10;
 
 function createWhatsAppWebhookIntake({ prisma, clock = () => new Date() }) {
   if (!prisma) throw new Error("Prisma e obrigatorio para o intake WhatsApp.");
@@ -59,13 +63,20 @@ function parseAtomicEvents(payload) {
     throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
   }
   if (payload.entry.length === 0) throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
+  if (payload.entry.length > MAX_ENTRIES_PER_REQUEST) {
+    throw intakeError(413, "WEBHOOK_BATCH_LIMIT_EXCEEDED");
+  }
 
   const items = [];
+  let totalEvents = 0;
   for (const entry of payload.entry) {
     if (!isObject(entry)) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
     const wabaId = requiredIdentifier(entry.id, MAX_WABA_ID_LENGTH);
     if (!wabaId || !Array.isArray(entry.changes)) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
     if (entry.changes.length === 0) throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
+    if (entry.changes.length > MAX_CHANGES_PER_ENTRY) {
+      throw intakeError(413, "WEBHOOK_BATCH_LIMIT_EXCEEDED");
+    }
 
     for (const change of entry.changes) {
       if (!isObject(change)) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
@@ -85,6 +96,16 @@ function parseAtomicEvents(payload) {
       }
       if (hasStatuses && change.value.statuses.length === 0) {
         throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
+      }
+      const eventCount = hasMessages
+        ? change.value.messages.length
+        : change.value.statuses.length;
+      if (eventCount > MAX_EVENTS_PER_CHANGE) {
+        throw intakeError(413, "WEBHOOK_BATCH_LIMIT_EXCEEDED");
+      }
+      totalEvents += eventCount;
+      if (totalEvents > MAX_TOTAL_EVENTS_PER_REQUEST) {
+        throw intakeError(413, "WEBHOOK_BATCH_LIMIT_EXCEEDED");
       }
 
       const contacts = readContacts(change.value.contacts);
@@ -302,8 +323,12 @@ async function persistBatch(prisma, records, integration, receivedAt, allowUniqu
 async function findExisting(client, records) {
   return client.eventoWebhook.findMany({
     where: {
-      provedor: PROVIDER,
-      externalEventId: { in: records.map((record) => record.externalEventId) },
+      OR: records.map((record) => ({
+        empresaId: record.empresaId,
+        canalIntegracaoId: record.canalIntegracaoId,
+        provedor: record.provedor,
+        externalEventId: record.externalEventId,
+      })),
     },
     select: {
       id: true,
@@ -395,6 +420,10 @@ function isUniqueConflict(error) {
 module.exports = {
   EVENT_TYPE,
   EVENT_TYPES,
+  MAX_CHANGES_PER_ENTRY,
+  MAX_ENTRIES_PER_REQUEST,
+  MAX_EVENTS_PER_CHANGE,
+  MAX_TOTAL_EVENTS_PER_REQUEST,
   MEDIA_MESSAGE_TYPES,
   PROVIDER,
   canonicalStringify,
