@@ -10,6 +10,9 @@ const {
 const {
   createWhatsappInboundLifecycleService,
 } = require("../integrations/whatsappInboundLifecycle");
+const {
+  createInstagramInboundLifecycleService,
+} = require("../integrations/instagramInboundLifecycle");
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
@@ -21,6 +24,7 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
   const whatsappInboundProvisioning = createWhatsappInboundProvisioningService({ prisma });
   const whatsappInboundLifecycle = createWhatsappInboundLifecycleService({ prisma });
   const instagramInboundProvisioning = createInstagramInboundProvisioningService({ prisma });
+  const instagramInboundLifecycle = createInstagramInboundLifecycleService({ prisma });
 
   app.get("/platform/tenants", ...guarded, route(async (req, res) => {
     const page = positiveInteger(req.query.page, 1);
@@ -187,7 +191,7 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
     if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
 
     try {
-      return res.json(await instagramInboundProvisioning.getStatus({ tenantId }));
+      return res.json(await instagramInboundLifecycle.getStatus({ tenantId }));
     } catch (error) {
       if (isInstagramPlatformError(error)) {
         return platformError(res, error.status, error.message, error.code);
@@ -195,6 +199,31 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
       throw error;
     }
   }));
+
+  for (const [path, action] of [
+    ["activate", "activate"],
+    ["pause", "pause"],
+    ["reactivate", "reactivate"],
+  ]) {
+    app.post(`/platform/tenants/:tenantId/integrations/instagram/inbound/${path}`, ...guarded, route(async (req, res) => {
+      const tenantId = parseId(req.params.tenantId);
+      if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
+
+      try {
+        return res.json(await instagramInboundLifecycle[action]({
+          tenantId,
+          actorUserId: req.auth.usuarioId,
+          body: req.body,
+          correlationId: req.get("x-correlation-id"),
+        }));
+      } catch (error) {
+        if (isInstagramPlatformError(error)) {
+          return platformError(res, error.status, error.message, error.code);
+        }
+        throw error;
+      }
+    }));
+  }
 
   app.get("/platform/tenants/:tenantId/integrations/whatsapp/inbound/status", ...guarded, route(async (req, res) => {
     const tenantId = parseId(req.params.tenantId);
