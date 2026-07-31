@@ -505,7 +505,7 @@ function createLeadsCommunicationServices({ prisma }) {
         data.reabertaEm = now;
         data.encerradaEm = null;
         data.aguardandoDesde = now;
-        data.chaveAberta = `canal:${current.canalIntegracaoId}:contato:${current.contatoCanalId}`;
+        data.chaveAberta = current.emailThreadKey || `canal:${current.canalIntegracaoId}:contato:${current.contatoCanalId}`;
       }
       const updated = await tx.conversaCanal.updateMany({
         where: { id, empresaId: context.empresaId, status: current.status, responsavelId: current.responsavelId },
@@ -1064,7 +1064,17 @@ function assignmentHistoryIncludes() {
 }
 
 function messageIncludes() {
-  return { autorUsuario: { select: { id: true, nome: true } } };
+  return {
+    autorUsuario: { select: { id: true, nome: true } },
+    emailMetadata: {
+      select: {
+        subject: true,
+        fromAddress: true,
+        fromName: true,
+        attachmentCount: true,
+      },
+    },
+  };
 }
 
 function presentConversation(conversation) {

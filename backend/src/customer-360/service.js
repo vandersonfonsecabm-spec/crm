@@ -134,6 +134,7 @@ function createCustomer360Service({ prisma }) {
           include: {
             autorUsuario: { select: { id: true, nome: true } },
             canalIntegracao: { select: { id: true, tipo: true, nome: true } },
+            emailMetadata: { select: { subject: true, attachmentCount: true } },
           },
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           take,
@@ -293,12 +294,22 @@ function presentFollowUp(item) {
 function messageEvent(item) {
   const inbound = item.direcao === "ENTRADA";
   const simulated = !inbound && item.simulada === true;
+  const emailSubject = item.canalIntegracao.tipo === "EMAIL" ? item.emailMetadata?.subject : null;
+  const attachmentLabel = item.emailMetadata?.attachmentCount
+    ? ` (${item.emailMetadata.attachmentCount} anexo${item.emailMetadata.attachmentCount === 1 ? "" : "s"})`
+    : "";
+  const baseDescription = item.texto || "Mensagem sem conteudo textual.";
+  const description = attachmentLabel
+    ? `${String(baseDescription).slice(0, Math.max(0, 280 - attachmentLabel.length)).trimEnd()}${attachmentLabel}`
+    : baseDescription;
   return event({
     id: `mensagem:${item.id}`,
     tipo: "MENSAGEM",
     data: item.enviadaEm || item.createdAt,
-    titulo: inbound ? "Mensagem recebida" : simulated ? "Resposta simulada" : "Mensagem enviada",
-    descricao: item.texto || "Mensagem sem conteudo textual.",
+    titulo: inbound
+      ? emailSubject ? `E-mail recebido: ${emailSubject}` : "Mensagem recebida"
+      : simulated ? "Resposta simulada" : "Mensagem enviada",
+    descricao: description,
     status: item.statusEntrega || item.status,
     responsavel: item.autorUsuario,
     origem: { entidade: "MensagemCanal", id: item.id },
