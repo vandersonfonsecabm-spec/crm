@@ -9,6 +9,9 @@ const EVENT_TYPES = Object.freeze({
 });
 const PAYLOAD_SCHEMA_VERSION = 1;
 const MAX_ID_LENGTH = 512;
+const MAX_ENTRIES_PER_REQUEST = 3;
+const MAX_EVENTS_PER_ENTRY = 5;
+const MAX_TOTAL_EVENTS_PER_REQUEST = 10;
 
 function createInstagramWebhookIntake({ prisma, clock = () => new Date() }) {
   if (!prisma) throw new Error("Prisma e obrigatorio para o intake Instagram.");
@@ -40,8 +43,12 @@ function parseAtomicEvents(payload) {
     throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
   }
   if (payload.entry.length === 0) throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
+  if (payload.entry.length > MAX_ENTRIES_PER_REQUEST) {
+    throw intakeError(413, "WEBHOOK_BATCH_LIMIT_EXCEEDED");
+  }
 
   const items = [];
+  let totalEvents = 0;
   for (const entry of payload.entry) {
     if (!isObject(entry)) throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
     const instagramBusinessAccountId = requiredIdentifier(entry.id, MAX_ID_LENGTH);
@@ -49,6 +56,13 @@ function parseAtomicEvents(payload) {
       throw intakeError(400, "WEBHOOK_PAYLOAD_INVALID");
     }
     if (entry.messaging.length === 0) throw intakeError(422, "WEBHOOK_EVENT_UNSUPPORTED");
+    if (entry.messaging.length > MAX_EVENTS_PER_ENTRY) {
+      throw intakeError(413, "WEBHOOK_BATCH_LIMIT_EXCEEDED");
+    }
+    totalEvents += entry.messaging.length;
+    if (totalEvents > MAX_TOTAL_EVENTS_PER_REQUEST) {
+      throw intakeError(413, "WEBHOOK_BATCH_LIMIT_EXCEEDED");
+    }
     for (const event of entry.messaging) {
       items.push(parseMessagingEvent(event, instagramBusinessAccountId));
     }
@@ -385,6 +399,9 @@ function isUniqueConflict(error) {
 
 module.exports = {
   EVENT_TYPES,
+  MAX_ENTRIES_PER_REQUEST,
+  MAX_EVENTS_PER_ENTRY,
+  MAX_TOTAL_EVENTS_PER_REQUEST,
   PROVIDER,
   canonicalStringify,
   createInstagramWebhookIntake,

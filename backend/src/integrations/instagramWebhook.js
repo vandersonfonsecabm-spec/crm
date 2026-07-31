@@ -49,15 +49,31 @@ function inboundGate(req, res, next, env) {
 
 function requireJsonContentType(req, res, next) {
   const contentType = readSingleHeader(req, "content-type");
-  const contentEncoding = readSingleHeader(req, "content-encoding");
   if (
     !contentType
     || !/^application\/json(?:\s*;\s*charset\s*=\s*(?:"?utf-8"?))?\s*$/i.test(contentType.trim())
-    || (contentEncoding && contentEncoding.toLowerCase() !== "identity")
+    || !hasSupportedContentEncoding(req)
   ) {
     return sendError(res, 415, "UNSUPPORTED_MEDIA_TYPE");
   }
   return next();
+}
+
+function hasSupportedContentEncoding(req) {
+  const values = readRawHeaderValues(req, "content-encoding");
+  return values.length === 0
+    || (values.length === 1 && values[0].trim().toLowerCase() === "identity");
+}
+
+function readRawHeaderValues(req, name) {
+  const values = [];
+  const rawHeaders = Array.isArray(req.rawHeaders) ? req.rawHeaders : [];
+  for (let index = 0; index < rawHeaders.length; index += 2) {
+    if (String(rawHeaders[index]).toLowerCase() === name && typeof rawHeaders[index + 1] === "string") {
+      values.push(rawHeaders[index + 1]);
+    }
+  }
+  return values;
 }
 
 async function handleWebhook(req, res, env, processWebhook) {
@@ -131,5 +147,6 @@ function isEnabled(value) {
 
 module.exports = {
   INSTAGRAM_WEBHOOK_PATH,
+  MAX_WEBHOOK_BODY_BYTES,
   mountInstagramWebhookRoutes,
 };
