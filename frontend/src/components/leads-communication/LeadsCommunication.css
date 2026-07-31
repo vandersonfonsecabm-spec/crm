@@ -1,11 +1,145 @@
+.inbox-page {
+  --text-muted: #5f6d65;
+  --inbox-info-bg: #f2f7f4;
+  --inbox-info-border: #c8dbcf;
+  --inbox-warning-bg: #fff8e8;
+  --inbox-warning-border: #ead59f;
+  --inbox-success-bg: #edf8f0;
+  --inbox-success-border: #b9d9c1;
+}
+
+.inbox-command-bar {
+  min-height: 48px;
+}
+
+.inbox-filter-trigger,
+.inbox-mobile-back {
+  display: none !important;
+}
+
 .inbox-workspace {
-  grid-template-columns: minmax(180px, 204px) minmax(280px, 332px) minmax(0, 1fr);
-  height: clamp(520px, calc(100dvh - 164px), 760px);
+  grid-template-columns: minmax(184px, 208px) minmax(300px, 344px) minmax(0, 1fr);
+  height: clamp(560px, calc(100dvh - 170px), 780px);
 }
 
 .inbox-workspace button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.inbox-conversation-item {
+  min-height: 116px;
+}
+
+.inbox-conversation-item.is-selected {
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.inbox-conversation-item[aria-current="true"] {
+  background: var(--bg-muted);
+}
+
+.communication-channel-badge {
+  max-width: 100%;
+  border-color: var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+
+.communication-channel-site {
+  border-left: 3px solid #5f7f9a;
+}
+
+.communication-channel-whatsapp {
+  border-left: 3px solid #328a55;
+}
+
+.communication-channel-instagram {
+  border-left: 3px solid #9b5b7f;
+}
+
+.communication-channel-messenger {
+  border-left: 3px solid #4d6fa9;
+}
+
+.communication-channel-unknown {
+  border-left: 3px solid #7b827e;
+}
+
+.communication-channel-mode {
+  border-left: 1px solid var(--border-default);
+  padding-left: 6px;
+  color: var(--text-muted);
+}
+
+.inbox-actions-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.inbox-actions-menu > div button {
+  display: flex;
+  min-height: 36px;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border-radius: 4px;
+  padding: 7px 9px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.inbox-actions-menu > div button:hover,
+.inbox-actions-menu > div button:focus-visible {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.inbox-actions-menu > div button:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.inbox-notice {
+  margin: 0;
+  border-bottom: 1px solid;
+  padding: 9px 16px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+
+.inbox-notice-info {
+  border-color: var(--inbox-info-border);
+  background: var(--inbox-info-bg);
+}
+
+.inbox-notice-warning {
+  border-color: var(--inbox-warning-border);
+  background: var(--inbox-warning-bg);
+}
+
+.inbox-notice-success {
+  border-color: var(--inbox-success-border);
+  background: var(--inbox-success-bg);
+}
+
+.inbox-note {
+  border-color: #e1d6b8;
+  background: #fffaf0;
+}
+
+.inbox-note-composer {
+  border-color: #d9c99f;
+  background: #fffdf7;
+}
+
+.inbox-new-messages {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgb(31 45 37 / 12%);
 }
 
 .communication-drawer {
@@ -26,22 +160,105 @@
 
 @media (max-width: 1199px) {
   .inbox-workspace {
-    grid-template-columns: 168px minmax(250px, 286px) minmax(420px, 1fr);
-  }
-}
-
-@media (max-width: 1023px) {
-  .inbox-workspace {
-    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+    grid-template-columns: minmax(286px, 320px) minmax(0, 1fr);
   }
 
   .inbox-workspace .inbox-filters {
     display: none;
   }
+
+  .inbox-filter-trigger {
+    display: inline-flex !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .inbox-page {
+    margin-inline: -4px;
+  }
+
+  .inbox-command-bar {
+    align-items: flex-start;
+  }
+
+  .inbox-workspace {
+    display: block;
+    height: calc(100dvh - 158px);
+    min-height: 520px;
+  }
+
+  .inbox-workspace[data-mobile-view="list"] .inbox-conversation {
+    display: none;
+  }
+
+  .inbox-workspace[data-mobile-view="conversation"] .inbox-conversation-list {
+    display: none;
+  }
+
+  .inbox-conversation-list,
+  .inbox-conversation {
+    height: 100%;
+    border-right: 0;
+  }
+
+  .inbox-mobile-back {
+    display: inline-flex !important;
+  }
+
+  .inbox-conversation-item {
+    min-height: 112px;
+  }
+
+  .inbox-conversation-actions {
+    width: 100%;
+  }
+
+  .inbox-conversation-actions > button:first-child {
+    flex: 1;
+  }
+
+  .inbox-notice {
+    padding-inline: 12px;
+  }
+
+  .inbox-conversation header,
+  .inbox-conversation footer {
+    padding-inline: 12px;
+  }
+
+  .inbox-conversation textarea {
+    min-height: 78px;
+  }
+
+  .inbox-workspace button,
+  .inbox-workspace summary {
+    touch-action: manipulation;
+  }
+
+  .inbox-pagination {
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 419px) {
+  .inbox-command-bar > div:last-child {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .inbox-conversation-actions > button {
+    min-height: 40px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .communication-drawer {
-    animation: none;
+  .communication-drawer,
+  .inbox-page *,
+  .inbox-page *::before,
+  .inbox-page *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

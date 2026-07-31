@@ -1,4 +1,5 @@
 import type { ConversationStatus, LeadStatus } from "../../services/crmApi";
+import { getChannelPresentation } from "./communicationChannels";
 
 export const leadStatusLabels: Record<LeadStatus, string> = {
   NOVO: "Novo",
@@ -35,12 +36,8 @@ export function formatCommunicationTime(value?: string | null) {
 }
 
 export function channelLabel(type?: string | null, name?: string | null) {
-  const normalized = `${name ?? ""} ${type ?? ""}`.toUpperCase();
-  if (normalized.includes("INSTAGRAM")) return "Instagram";
-  if (normalized.includes("FACEBOOK")) return "Facebook";
-  if (normalized.includes("SITE") || normalized.includes("WEB")) return "Site";
-  if (normalized.includes("WHATSAPP")) return "WhatsApp";
-  return name?.trim() || "Canal simulado";
+  void name;
+  return getChannelPresentation(type).label;
 }
 
 export function initials(name?: string | null) {
