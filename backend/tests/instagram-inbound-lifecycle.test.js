@@ -24,6 +24,10 @@ Object.assign(process.env, {
   CRM_TEST_DATABASE_URL: postgres ? requiredEnv("CRM_TEST_DATABASE_URL") : databaseUrl(databasePath),
   INSTAGRAM_META_APP_ID: "000GLOBAL_INSTAGRAM_LIFECYCLE",
   INSTAGRAM_PROVIDER_ENVIRONMENT: "INSTAGRAM_LIFECYCLE_TEST",
+  INSTAGRAM_INTEGRATION_ENABLED: "true",
+  INSTAGRAM_INBOUND_ENABLED: "true",
+  INSTAGRAM_APP_SECRET: "test-only-instagram-app-secret",
+  INSTAGRAM_WEBHOOK_VERIFY_TOKEN: "test-only-instagram-verify-token",
 });
 delete process.env.PLATFORM_ADMIN_EMAILS;
 
@@ -134,6 +138,21 @@ test("lifecycle Instagram protege RBAC, allowlist, configuracao e canais nao can
   assert.equal(response.status, 503);
   assert.equal(response.body.codigo, "INSTAGRAM_GLOBAL_CONFIGURATION_INVALID");
   process.env.INSTAGRAM_META_APP_ID = appId;
+
+  const appSecret = process.env.INSTAGRAM_APP_SECRET;
+  delete process.env.INSTAGRAM_APP_SECRET;
+  response = await status(target.empresaId, operator.token);
+  assert.equal(response.status, 200);
+  assert.equal(response.body.state, "ERROR");
+  response = await action(
+    "activate",
+    target.empresaId,
+    lifecycleBody(configured.updatedAt),
+    operator.token,
+  );
+  assert.equal(response.status, 503);
+  assert.equal(response.body.codigo, "INSTAGRAM_GLOBAL_CONFIGURATION_INVALID");
+  process.env.INSTAGRAM_APP_SECRET = appSecret;
 
   const protectedSnapshot = await prisma.canalIntegracao.findUnique({
     where: { id: configured.id },

@@ -32,6 +32,8 @@ const { mountSiteLeadAdminRoutes, mountSiteLeadPublicRoutes, siteLeadBodyLimit }
 const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
 const { mountWhatsAppWebhookRoutes } = require("./integrations/whatsappWebhook");
 const { createWhatsAppWebhookOrchestrator } = require("./integrations/whatsappWebhookOrchestrator");
+const { mountInstagramWebhookRoutes } = require("./integrations/instagramWebhook");
+const { createInstagramWebhookOrchestrator } = require("./integrations/instagramWebhookOrchestrator");
 
 const prisma = createPrismaClient();
 
@@ -50,6 +52,7 @@ app.use(createMaintenanceReadOnlyMiddleware({
   mutatingGetPaths: ["/integracoes/bling/callback"],
 }));
 mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookOrchestrator({ prisma }) });
+mountInstagramWebhookRoutes({ app, processWebhook: createInstagramWebhookOrchestrator({ prisma }) });
 app.use(siteLeadBodyLimit);
 app.use(express.json());
 mountSiteLeadPublicRoutes({ app, prisma });

@@ -277,7 +277,7 @@ function presentStatus(context) {
       integrationCapability: context.capabilities.integration,
       inboundCapability: context.capabilities.inbound,
     },
-    callback: null,
+    callback: "/webhooks/instagram",
     nextRequirement: nextRequirement(state),
   };
 }
@@ -307,7 +307,7 @@ function unavailableStatus() {
       integrationCapability: false,
       inboundCapability: false,
     },
-    callback: null,
+    callback: "/webhooks/instagram",
     nextRequirement: "RETRY_STATUS",
   };
 }
@@ -582,7 +582,7 @@ function assertExpectedState(action, state, channel) {
 
 function requireGlobalConfiguration(env) {
   try {
-    return readGlobalInstagramConfiguration(env);
+    return readInboundRuntimeConfiguration(env);
   } catch {
     throw lifecycleError(
       503,
@@ -594,11 +594,28 @@ function requireGlobalConfiguration(env) {
 
 function inspectGlobalConfiguration(env) {
   try {
-    const configuration = readGlobalInstagramConfiguration(env);
+    const configuration = readInboundRuntimeConfiguration(env);
     return { ...configuration, valid: true };
   } catch {
     return { metaAppId: null, providerEnvironment: null, valid: false };
   }
+}
+
+function readInboundRuntimeConfiguration(env) {
+  const configuration = readGlobalInstagramConfiguration(env);
+  if (
+    env.INSTAGRAM_INTEGRATION_ENABLED !== "true"
+    || env.INSTAGRAM_INBOUND_ENABLED !== "true"
+    || !hasConfiguredSecret(env.INSTAGRAM_APP_SECRET)
+    || !hasConfiguredSecret(env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN)
+  ) {
+    throw new Error("Instagram inbound indisponivel.");
+  }
+  return configuration;
+}
+
+function hasConfiguredSecret(value) {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function hasEssentialIdentity(channel) {
