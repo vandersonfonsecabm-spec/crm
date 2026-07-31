@@ -19,14 +19,16 @@ test("H1 apresenta fila, estados oficiais, SLA e nao lidas sem criar uma interfa
   ]);
 
   for (const label of [
-    "Todas", "Não atribuídas", "Minhas conversas", "Em atendimento",
-    "Aguardando cliente", "Pendente", "Encerrada", "SLA em atenção", "SLA crítico",
+    "Todas", "Sem responsável", "Meu atendimento", "Em atendimento",
+    "Aguardando cliente", "Pendente", "Encerrada", "Em atenção", "Crítico",
   ]) assert.match(`${inbox}\n${presentation}\n${formatters}`, new RegExp(label));
   assert.match(inbox, /item\.naoLidas/);
   assert.match(inbox, /ConversationSlaBadge/);
   assert.match(presentation, /Dentro do prazo|sla\.label/);
   assert.match(styles, /grid-template-columns/);
-  assert.match(styles, /@media \(max-width: 1023px\)/);
+  assert.match(styles, /@media \(max-width: 767px\)/);
+  assert.match(inbox, /data-mobile-view=\{mobileView\}/);
+  assert.doesNotMatch(inbox, /setSelectedId\(response\.data\[0\]\.id\)/);
 });
 
 test("H1 conecta somente as acoes operacionais explicitas e trata conflito concorrente", async () => {
@@ -61,6 +63,8 @@ test("H1 preserva lease, timeline e ausencia de chamadas externas", async () => 
   assert.match(inbox, /Observação \(opcional\)/);
   assert.match(inbox, /Falha ao carregar conversas/);
   assert.match(inbox, /aria-label="Atualizar conversas"[^>]+onClick=\{\(\) => void loadList\(\)\}/);
-  assert.match(inbox, /Nenhuma conversa encontrada/);
+  assert.match(inbox, /Nenhuma conversa na fila/);
+  assert.match(inbox, /isNearMessageEnd/);
+  assert.match(inbox, /fetchLatestCommunicationMessages/);
   assert.doesNotMatch(`${inbox}\n${api}`, /graph\.facebook|api\.whatsapp|oauth|axios/i);
 });

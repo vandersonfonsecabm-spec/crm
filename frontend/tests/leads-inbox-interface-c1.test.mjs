@@ -29,8 +29,9 @@ test("C1 mantém Leads e Inbox desligados salvo valor literal true", async () =>
 });
 
 test("C1 preserva autoria, responsabilidade e idempotência no compositor", async () => {
-  const [inbox, api] = await Promise.all([
+  const [inbox, channelBadge, api] = await Promise.all([
     source("src/components/leads-communication/DashboardInboxPanel.tsx"),
+    source("src/components/leads-communication/communicationChannels.ts"),
     source("src/services/crmApi.ts"),
   ]);
 
@@ -39,7 +40,11 @@ test("C1 preserva autoria, responsabilidade e idempotência no compositor", asyn
   assert.match(inbox, /crypto\.randomUUID/);
   assert.match(inbox, /idempotencyKey\.current/);
   assert.match(inbox, /activeLeaseFromOther/);
-  assert.match(inbox, /Ctrl\+Enter ou Cmd\+Enter envia/);
+  assert.match(inbox, /Registrar simulação/);
+  assert.match(inbox, /nenhuma mensagem será enviada ao cliente/);
+  assert.match(channelBadge, /podeResponderDiretamente === true/);
+  assert.match(channelBadge, /tipo === "WHATSAPP_META"/);
+  assert.match(channelBadge, /modoTeste === true/);
   assert.match(api, /\/mensagens\/simuladas/);
   assert.match(api, /\/reserva-resposta\/renovar/);
   assert.doesNotMatch(inbox, /api\.whatsapp|graph\.facebook|graph\.instagram/i);

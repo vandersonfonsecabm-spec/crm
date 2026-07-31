@@ -17,9 +17,13 @@ test("D1 protege a configuracao administrativa por feature flag", () => {
 
 test("D1 distingue Site de canal com resposta direta", () => {
   const inbox = read("src/components/leads-communication/DashboardInboxPanel.tsx");
+  const channelBadge = read("src/components/leads-communication/communicationChannels.ts");
   const api = read("src/services/crmApi.ts");
-  assert.match(inbox, /Formulário do Site não possui resposta direta/);
-  assert.match(inbox, /conversation\?\.podeResponderDiretamente !== false/);
+  assert.match(inbox, /Respostas por este canal ainda não estão habilitadas/);
+  assert.match(inbox, /canUseSimulatedReply\(conversation\)/);
+  assert.match(channelBadge, /conversation\.canalIntegracao\.tipo === "WHATSAPP_META"/);
+  assert.match(channelBadge, /conversation\.canalIntegracao\.modoTeste === true/);
+  assert.doesNotMatch(channelBadge, /podeResponderDiretamente !== false/);
   assert.match(api, /podeResponderDiretamente: boolean/);
   assert.match(api, /rotateSiteFormPublicId/);
 });
