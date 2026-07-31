@@ -11,6 +11,9 @@ const {
   createMessengerInboundProvisioningService,
 } = require("./messengerInboundProvisioning");
 const {
+  createEmailInboundProvisioningService,
+} = require("./emailInboundProvisioning");
+const {
   createWhatsappInboundLifecycleService,
 } = require("../integrations/whatsappInboundLifecycle");
 const {
@@ -19,6 +22,10 @@ const {
 const {
   createMessengerInboundLifecycleService,
 } = require("../integrations/messengerInboundLifecycle");
+const {
+  createEmailInboundLifecycleService,
+} = require("../integrations/emailInboundLifecycle");
+const { isEmailError } = require("../integrations/emailFoundation");
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
@@ -33,6 +40,8 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
   const instagramInboundLifecycle = createInstagramInboundLifecycleService({ prisma });
   const messengerInboundProvisioning = createMessengerInboundProvisioningService({ prisma });
   const messengerInboundLifecycle = createMessengerInboundLifecycleService({ prisma });
+  const emailInboundProvisioning = createEmailInboundProvisioningService({ prisma });
+  const emailInboundLifecycle = createEmailInboundLifecycleService({ prisma });
 
   app.get("/platform/tenants", ...guarded, route(async (req, res) => {
     const page = positiveInteger(req.query.page, 1);
@@ -213,6 +222,42 @@ function mountPlatformRoutes({ app, prisma, authenticate }) {
       throw error;
     }
   }));
+
+  app.put("/platform/tenants/:tenantId/integrations/email/inbound", ...guarded, route(async (req, res) => {
+    const tenantId = parseId(req.params.tenantId);
+    if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
+    try {
+      const result = await emailInboundProvisioning.provision({ tenantId, actorUserId: req.auth.usuarioId, body: req.body, correlationId: req.get("x-correlation-id") });
+      return res.status(result.created ? 201 : 200).json(result.body);
+    } catch (error) {
+      if (isEmailError(error)) return platformError(res, error.status, error.message, error.code);
+      throw error;
+    }
+  }));
+
+  app.get("/platform/tenants/:tenantId/integrations/email/inbound/status", ...guarded, route(async (req, res) => {
+    const tenantId = parseId(req.params.tenantId);
+    if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
+    try {
+      return res.json(await emailInboundLifecycle.getStatus({ tenantId }));
+    } catch (error) {
+      if (isEmailError(error)) return platformError(res, error.status, error.message, error.code);
+      throw error;
+    }
+  }));
+
+  for (const [path, action] of [["activate", "activate"], ["pause", "pause"], ["reactivate", "reactivate"]]) {
+    app.post(`/platform/tenants/:tenantId/integrations/email/inbound/${path}`, ...guarded, route(async (req, res) => {
+      const tenantId = parseId(req.params.tenantId);
+      if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
+      try {
+        return res.json(await emailInboundLifecycle[action]({ tenantId, actorUserId: req.auth.usuarioId, body: req.body, correlationId: req.get("x-correlation-id") }));
+      } catch (error) {
+        if (isEmailError(error)) return platformError(res, error.status, error.message, error.code);
+        throw error;
+      }
+    }));
+  }
 
   app.get("/platform/tenants/:tenantId/integrations/messenger/inbound/status", ...guarded, route(async (req, res) => {
     const tenantId = parseId(req.params.tenantId);
