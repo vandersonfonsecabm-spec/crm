@@ -1179,3 +1179,32 @@ integracoes autorizadas.
 - Antes de ativar Meta real, ainda devem ser definidos limite atomico por lote,
   comportamento para lotes com multiplas identidades e rejeicao explicita de
   `Content-Encoding` duplicado.
+
+## Instagram Direct - hardening do webhook
+
+- Em 31/07/2026, o transporte e o intake do Instagram Direct foram endurecidos
+  nos commits `c199da4` e `1406f0c`.
+- O corpo bruto permanece limitado a 1 MiB. O intake aceita no maximo 3
+  `entry`, 5 eventos por `entry` e 10 eventos por request. Excesso retorna
+  `413 WEBHOOK_BATCH_LIMIT_EXCEEDED` antes de consulta ou escrita.
+- Todos os eventos processaveis do lote devem usar a mesma identidade
+  Instagram. Identidades diferentes retornam erro sanitizado e o lote inteiro
+  termina sem `EventoWebhook`, timestamp ou efeito comercial parcial.
+- `Content-Encoding` aceita somente ausencia ou um unico `identity`.
+  Duplicidade, lista concatenada, `gzip`, `deflate` e `br` retornam 415 antes
+  do parser comercial. Corpo bruto, HMAC SHA-256 e challenge stateless foram
+  preservados sem alterar o transporte do WhatsApp.
+- SQLite e PostgreSQL 16 descartavel aprovaram os oito grupos focais, incluindo
+  limites exatos e excedidos, header HTTP bruto duplicado, replay,
+  concorrencia, isolamento multi-tenant e simulador bloqueado em producao.
+- A API foi publicada no deployment
+  `d854b10d-0d9e-40e0-8e14-1f27773a12f8` e o worker no deployment
+  `1ae0e48a-dc5f-464c-ba3f-fc3ec8c51c89`, ambos com `SUCCESS`. O health
+  permaneceu HTTP 200 e nao houve erro novo durante a observacao.
+- Os gates Instagram permanecem desligados; webhook e simulador continuam em
+  404, e a rota platform-only sem autenticacao continua em 401. Nao houve
+  canal, capability, Meta, Graph API, outbound, accessTokenRef, schema ou
+  migration.
+- Riscos residuais nao bloqueantes: lotes validos sao processados atomicamente
+  por evento, nao por request inteiro; e os limites conservadores devem ser
+  reavaliados somente quando houver envelope Meta real autorizado.
