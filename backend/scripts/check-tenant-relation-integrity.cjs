@@ -174,14 +174,8 @@ async function main() {
   }
 }
 
-if (require.main === module) {
-  main().catch((error) => {
-    const code = String(error?.code || error?.message || "PREFLIGHT_FAILED")
-      .replace(/postgres(ql)?:\/\/[^\s"']+/gi, "[POSTGRES_URL_REDACTED]")
-      .slice(0, 160);
-    console.error(JSON.stringify({ event: "tenant_relation_preflight", safe: false, error: code }));
-    process.exitCode = 1;
-  });
-}
-
 module.exports = { relationSpecs };
+
+if (require.main === module) {
+  require("./tenant-isolation-gate.cjs").runCli({ defaultMode: "production-readonly" });
+}

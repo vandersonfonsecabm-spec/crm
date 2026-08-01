@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { runGate } = require("./tenant-isolation-gate.cjs");
 
 const backendDir = path.resolve(__dirname, "..");
 const sqliteSchemaPath = path.join(backendDir, "prisma", "schema.prisma");
@@ -46,6 +47,16 @@ function latestMigrationSqlPath(migrationsDir) {
   const latestMigration = migrationNames.at(-1);
   if (!latestMigration) throw new Error("Nenhuma migration PostgreSQL versionada foi encontrada.");
   return path.join(migrationsDir, latestMigration, "migration.sql");
+}
+
+function latestMigrationName(migrationsDir) {
+  const migrationNames = fs.readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((item) => item.isDirectory())
+    .map((item) => item.name)
+    .sort();
+  const latestMigration = migrationNames.at(-1);
+  if (!latestMigration) throw new Error("Nenhuma migration PostgreSQL versionada foi encontrada.");
+  return latestMigration;
 }
 
 function postgresSchemaText(sqliteSchema) {
@@ -160,11 +171,30 @@ async function main() {
   }
   if (command === "generate") {
     runPrisma(["generate", "--schema", workspace.schemaPath], { ...process.env, DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder" });
+    await runGate({
+      mode: "architecture",
+      env: process.env,
+      schemaPath: workspace.schemaPath,
+      postgresMigrationDir: workspace.migrationsDir,
+      migrationName: latestMigrationName(workspace.migrationsDir),
+    });
     return;
   }
   assertWriteConfirmation(process.env);
   const databaseUrl = postgresUrlFromEnv(process.env);
-  runPrisma(["migrate", "deploy", "--schema", workspace.schemaPath], { ...process.env, DATABASE_URL: databaseUrl });
+  const migrationEnv = { ...process.env, DATABASE_URL: databaseUrl };
+  const migrationOptions = {
+    env: migrationEnv,
+    schemaPath: workspace.schemaPath,
+    postgresMigrationDir: workspace.migrationsDir,
+    migrationName: latestMigrationName(workspace.migrationsDir),
+  };
+  runPrisma(["validate", "--schema", workspace.schemaPath], { ...migrationEnv, DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder" });
+  runPrisma(["generate", "--schema", workspace.schemaPath], { ...migrationEnv, DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder" });
+  await runGate({ mode: "architecture", ...migrationOptions });
+  await runGate({ mode: "pre-migration", ...migrationOptions });
+  runPrisma(["migrate", "deploy", "--schema", workspace.schemaPath], migrationEnv);
+  await runGate({ mode: "post-migration", ...migrationOptions });
 }
 
 if (require.main === module) {
@@ -176,6 +206,7 @@ if (require.main === module) {
 
 module.exports = {
   generatePostgresMigrationSql,
+  latestMigrationName,
   latestMigrationSqlPath,
   postgresSchemaWithClientOutput,
   postgresSchemaText,

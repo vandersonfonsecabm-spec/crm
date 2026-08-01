@@ -25,7 +25,7 @@
     "legacy:nest:start:debug": "nest start --debug --watch",
     "legacy:nest:start:prod": "node dist/main",
     "legacy:nest:prisma:generate": "prisma generate",
-    "legacy:nest:prisma:migrate": "prisma migrate deploy",
+    "legacy:nest:prisma:migrate": "node scripts/legacy-nest-migration-block.cjs",
     "legacy:nest:prisma:seed": "ts-node prisma/seed.ts",
     "legacy:nest:format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "legacy:nest:lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",

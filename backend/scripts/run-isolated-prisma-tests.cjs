@@ -91,10 +91,13 @@ async function main() {
   };
   runPrisma(["validate", "--schema", sandboxA.schema, "--config", sandboxA.config], runDir, env);
   runPrisma(["generate", "--schema", sourceSchema], backendDir, env);
+  await runTenantGate("architecture", env, sourceSchema, sourceMigrations, migrationNames.at(-1));
 
+  await runTenantGate("pre-migration", env, sourceSchema, sourceMigrations, migrationNames.at(-1));
   runPrisma(["migrate", "deploy", "--schema", sandboxA.schema, "--config", sandboxA.config], runDir, env);
   runPrisma(["migrate", "status", "--schema", sandboxA.schema, "--config", sandboxA.config], runDir, env);
   await assertDatabase(testDb, migrationCount);
+  await runTenantGate("post-migration", env, sourceSchema, sourceMigrations, migrationNames.at(-1));
 
   runPrisma(["migrate", "deploy", "--schema", historical.schema, "--config", historical.config], runDir, env);
   await assertDatabase(historicalTestDb, historicalMigrationCount, ["Cliente"]);
@@ -106,6 +109,7 @@ async function main() {
   runPrisma(["migrate", "deploy", "--schema", sandboxB.schema, "--config", sandboxB.config], runDir, env);
   runPrisma(["migrate", "status", "--schema", sandboxB.schema, "--config", sandboxB.config], runDir, env);
   await assertDatabase(upgradeDb, migrationCount);
+  await runTenantGate("post-migration", { ...env, DATABASE_URL: databaseUrl(upgradeDb), CRM_TEST_DATABASE_URL: databaseUrl(upgradeDb) }, sourceSchema, sourceMigrations, migrationNames.at(-1));
 
   assertProtectedDatabases();
   runRequestedCommand(command, env);
@@ -204,6 +208,12 @@ function runRequestedCommand(args, env) {
 
 function runPrisma(args, cwd, env) {
   runNode([prismaCli, ...args], cwd, env, `Prisma ${args[0] || "CLI"}`);
+}
+
+async function runTenantGate(mode, env, schemaPath, migrationsDir, migrationName) {
+  const gateScript = path.join(backendDir, "scripts", "tenant-isolation-gate.cjs");
+  const args = [gateScript, mode, "--schema", schemaPath, "--migration-dir", migrationsDir, "--migration-name", migrationName];
+  runNode(args, backendDir, env, `Tenant isolation gate ${mode}`);
 }
 
 function runNode(args, cwd, env, logicalCommand) {

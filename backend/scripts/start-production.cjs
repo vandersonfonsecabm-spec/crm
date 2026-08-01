@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const {
   databaseEngineFromUrl,
   databaseProviderFromEnv,
@@ -9,6 +9,7 @@ const {
   runtimePrismaConfig,
 } = require("./prisma-runtime.cjs");
 const { maintenanceReadOnlyEnabled } = require("../src/database/maintenance-read-only");
+const { runGate } = require("./tenant-isolation-gate.cjs");
 
 const BACKEND_DIRECTORY = path.resolve(__dirname, "..");
 const SCHEMA_PATH = path.join(BACKEND_DIRECTORY, "prisma", "schema.prisma");
@@ -157,6 +158,17 @@ function validateRailwayEnvironment({
 }
 
 async function runPrismaMigration(runtime, { spawnImpl = spawn } = {}) {
+  const pending = hasPendingMigrations(runtime);
+  const migrationDirectory = path.join(path.dirname(runtime.schemaPath), "migrations");
+  const migrationOptions = {
+    env: runtime.env,
+    schemaPath: runtime.schemaPath,
+    migrationName: latestMigrationName(migrationDirectory),
+    ...(runtime.provider === "postgresql"
+      ? { postgresMigrationDir: migrationDirectory }
+      : { migrationDir: migrationDirectory }),
+  };
+  if (pending) await runGate({ mode: "pre-migration", ...migrationOptions });
   const child = spawnImpl(
     process.execPath,
     [runtime.prismaCliPath, "migrate", "deploy", "--schema", runtime.schemaPath],
@@ -167,6 +179,38 @@ async function runPrismaMigration(runtime, { spawnImpl = spawn } = {}) {
   if (result.code !== 0) {
     throw startupError("PRISMA_MIGRATION_FAILED", result.code);
   }
+  if (pending) await runGate({ mode: "post-migration", ...migrationOptions });
+}
+
+function hasPendingMigrations(runtime) {
+  const result = spawnSync(
+    process.execPath,
+    [runtime.prismaCliPath, "migrate", "status", "--schema", runtime.schemaPath],
+    {
+      cwd: runtime.backendDirectory,
+      env: runtime.env,
+      encoding: "utf8",
+      shell: false,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  if (result.error) throw startupError("PRISMA_MIGRATION_STATUS_FAILED");
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+  if (result.status === 0 && /database schema is up[- ]to[- ]date|no pending migrations|already in sync/i.test(output)) return false;
+  if (/following migration|not yet been applied|pending migration|have not been applied/i.test(output)) return true;
+  throw startupError("PRISMA_MIGRATION_STATUS_UNCLEAR");
+}
+
+function latestMigrationName(migrationsDirectory) {
+  if (!fs.existsSync(migrationsDirectory)) throw startupError("PRISMA_MIGRATION_DIRECTORY_MISSING");
+  const name = fs.readdirSync(migrationsDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(migrationsDirectory, entry.name, "migration.sql")))
+    .map((entry) => entry.name)
+    .sort()
+    .at(-1);
+  if (!name) throw startupError("PRISMA_MIGRATION_MISSING");
+  return name;
 }
 
 async function startApiServer(runtime, { spawnImpl = spawn } = {}) {
@@ -297,6 +341,8 @@ module.exports = {
   isRailwayEnvironment,
   resolveSqliteDatabasePath,
   resolvePrismaCli,
+  hasPendingMigrations,
+  latestMigrationName,
   runPrismaMigration,
   runStartup,
   startApiServer,

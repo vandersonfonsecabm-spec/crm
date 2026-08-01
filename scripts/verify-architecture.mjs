@@ -54,6 +54,7 @@ export function verifyArchitecture({ root = repositoryRoot, overrides = {} } = {
 
   check(rootPackage.scripts?.["legacy:nest:build"] === "nest build", "Build Nest deve existir somente sob legacy:nest:build.");
   check(rootPackage.scripts?.["legacy:nest:start"] === "nest start", "Start Nest deve existir somente sob legacy:nest:start.");
+  check(rootPackage.scripts?.["legacy:nest:prisma:migrate"] === "node scripts/legacy-nest-migration-block.cjs", "Migration Nest legada deve falhar fechada fora do runner oficial.");
   check(rootPackage.scripts?.["verify:architecture"] === "node scripts/verify-architecture.mjs", "Guard arquitetural nao registrado.");
 
   const startupEntrypoint = nodeEntrypoint(backendPackage.scripts?.start);
@@ -61,6 +62,8 @@ export function verifyArchitecture({ root = repositoryRoot, overrides = {} } = {
   check(backendPackage.main === "src/server.js", "Entrypoint declarado do pacote backend deve ser o Express.");
   check(backendPackage.scripts?.["start:production"] === backendPackage.scripts?.start, "Start de producao diverge do start oficial.");
   check(backendPackage.scripts?.["railway:start"] === "npm run start:production", "Alias Railway nao aponta para o start de producao.");
+  check(backendPackage.scripts?.["db:migrate:manual"] === "node scripts/migrate-with-tenant-gate.cjs", "Migration manual deve passar pelo gate tenant-scoped.");
+  check(backendPackage.scripts?.["db:tenant-gate"] === "node scripts/tenant-isolation-gate.cjs", "Gate tenant-scoped deve possuir entrypoint oficial.");
   if (startupEntrypoint) {
     const startupPath = path.posix.join("backend", startupEntrypoint.replaceAll("\\", "/"));
     const startupSource = read(startupPath);
@@ -135,6 +138,12 @@ export function verifyStartupComposition(source) {
   const migration = migrationStart >= 0 && migrationEnd > migrationStart ? source.slice(migrationStart, migrationEnd) : "";
   if (!/"migrate",\s*"deploy"/.test(migration) || !/"--schema"/.test(migration) || !/shell:\s*false/.test(source)) {
     failures.push("Migration de startup deve executar prisma migrate deploy com schema explicito e sem shell.");
+  }
+  if (!/hasPendingMigrations/.test(migration)
+    || !/runGate/.test(migration)
+    || !/pre-migration/.test(migration)
+    || !/post-migration/.test(migration)) {
+    failures.push("Migration de startup deve ser protegida pelo gate tenant-scoped antes e depois da aplicacao.");
   }
 
   const serverStart = source.indexOf("async function startApiServer");
