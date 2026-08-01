@@ -22,6 +22,8 @@ const EMAIL_LIMITS = Object.freeze({
 
 const SINGLETON_HEADERS = new Set([
   "auto-submitted",
+  "content-transfer-encoding",
+  "content-type",
   "date",
   "from",
   "in-reply-to",

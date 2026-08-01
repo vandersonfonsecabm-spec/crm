@@ -26,6 +26,7 @@ const { PrismaClient } = require("@prisma/client");
 const { mountPlatformRoutes } = require("../src/platform/routes");
 const { createChannelService } = require("../src/channels/channelService");
 const { createEmailInboundLifecycleService } = require("../src/integrations/emailInboundLifecycle");
+const { createEmailInboundProvisioningService } = require("../src/platform/emailInboundProvisioning");
 
 let prisma;
 let server;
@@ -150,6 +151,44 @@ test("metadata usa CAS e identidade primaria permanece imutavel", async () => {
   const persisted = await prisma.canalIntegracao.findFirst({ where: { empresaId: target.tenant.id, tipo: "EMAIL", modoTeste: false }, include: { enderecosEmail: true } });
   assert.equal(persisted.nome, "Caixa comercial atualizada");
   assert.equal(persisted.enderecosEmail.filter((item) => item.kind === "PRIMARY").length, 1);
+});
+
+test("provisionamento e CAS concorrentes convergem no PostgreSQL", { skip: !postgres }, async () => {
+  const operator = await seedTenant("email-pg-operator");
+  const target = await seedTenant("email-pg-target");
+  const clients = [new PrismaClient(), new PrismaClient()];
+  const services = clients.map((client) => createEmailInboundProvisioningService({ prisma: client, env: process.env }));
+  try {
+    const createResults = await Promise.all(services.map((service) => service.provision({ tenantId: target.tenant.id, actorUserId: operator.user.id, body: provisioningPayload(target.tenant.id), correlationId: "email-create-race" })));
+    assert.equal(createResults.filter((result) => result.body.changed === true).length, 1);
+    assert.equal(createResults.filter((result) => result.body.changed === false).length, 1);
+    assert.equal(await prisma.canalIntegracao.count({ where: { empresaId: target.tenant.id, tipo: "EMAIL", modoTeste: false } }), 1);
+
+    const current = await prisma.canalIntegracao.findFirstOrThrow({ where: { empresaId: target.tenant.id, tipo: "EMAIL", modoTeste: false } });
+    const updates = await Promise.allSettled(services.map((service, index) => service.provision({
+      tenantId: target.tenant.id,
+      actorUserId: operator.user.id,
+      body: { name: `Concurrent metadata ${index}`, reason: `CAS concorrente ${index}`, expectedUpdatedAt: current.updatedAt.toISOString() },
+      correlationId: `email-cas-race-${index}`,
+    })));
+    assert.equal(updates.filter((result) => result.status === "fulfilled").length, 1);
+    assert.equal(updates.filter((result) => result.status === "rejected" && result.reason?.code === "EMAIL_CHANNEL_CONFLICT").length, 1);
+
+    const otherA = await seedTenant("email-pg-identity-a");
+    const otherB = await seedTenant("email-pg-identity-b");
+    const sharedAddress = `shared-race-${suffix}@tenant.example.test`;
+    const identityResults = await Promise.allSettled(services.map((service, index) => service.provision({
+      tenantId: index === 0 ? otherA.tenant.id : otherB.tenant.id,
+      actorUserId: operator.user.id,
+      body: { ...provisioningPayload(index === 0 ? otherA.tenant.id : otherB.tenant.id), emailAddress: sharedAddress, aliases: [] },
+      correlationId: `email-identity-race-${index}`,
+    })));
+    assert.equal(identityResults.filter((result) => result.status === "fulfilled").length, 1);
+    assert.equal(identityResults.filter((result) => result.status === "rejected" && result.reason?.code === "EMAIL_IDENTITY_CONFLICT").length, 1);
+    assert.equal(await prisma.emailMailboxAddress.count({ where: { addressNormalized: sharedAddress } }), 1);
+  } finally {
+    await Promise.all(clients.map((client) => client.$disconnect()));
+  }
 });
 
 test("activate pause e reactivate sao atomicos, auditados e preservam timestamps", async () => {

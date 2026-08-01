@@ -9,6 +9,7 @@ const {
   stableHash,
 } = require("./emailFoundation");
 const { readGlobalEmailConfiguration } = require("../platform/emailInboundProvisioning");
+const { createAutomationService } = require("../automations/service");
 
 const PROVIDER = "EMAIL";
 const PROCESSABLE = "RECEBIDO";
@@ -28,7 +29,7 @@ function createEmailInboundProcessor({ prisma, env = process.env, clock = () => 
     const integration = await mapMailbox(prisma, normalized, env);
     const intake = await persistIntake(prisma, integration, normalized, clock());
     try {
-      const processing = await processWithRecovery(prisma, intake.event.id, clock);
+      const processing = await processWithRecovery(prisma, intake.event.id, clock, env);
       return {
         accepted: true,
         idempotent: intake.idempotent || processing.idempotent,
@@ -147,10 +148,13 @@ async function persistIntake(prisma, integration, normalized, receivedAt, allowR
   }
 }
 
-async function processWithRecovery(prisma, eventId, clock) {
+async function processWithRecovery(prisma, eventId, clock, env) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await prisma.$transaction((tx) => processTransaction(tx, eventId, clock));
+      return await prisma.$transaction(
+        (tx) => processTransaction(tx, eventId, clock, env),
+        { isolationLevel: "Serializable" },
+      );
     } catch (error) {
       if (!isRetryableConflict(error) || attempt === 2) throw error;
       await delay(15 * (attempt + 1));
@@ -159,7 +163,7 @@ async function processWithRecovery(prisma, eventId, clock) {
   throw emailProcessingError("EMAIL_CONCURRENCY_CONFLICT", "Concorrencia no processamento de E-mail.");
 }
 
-async function processTransaction(tx, eventId, clock) {
+async function processTransaction(tx, eventId, clock, env) {
   let event = await loadEvent(tx, eventId);
   const normalized = validateStoredEvent(event);
   await requireActiveProcessingContext(tx, event);
@@ -188,7 +192,7 @@ async function processTransaction(tx, eventId, clock) {
     const client = await resolveClient(tx, event, contact, normalized);
     const linkedContact = await linkContact(tx, event, contact, client);
     const thread = await resolveThread(tx, event, normalized, linkedContact, clock());
-    const lead = await resolveLead(tx, event, client, thread.conversation);
+    const lead = await resolveLead(tx, event, client, thread.conversation, env);
     const conversation = await attachLead(tx, event, thread.conversation, lead);
     const message = await resolveMessage(tx, event, normalized, conversation);
     await updateConversationActivity(tx, conversation, message, new Date(normalized.receivedAt));
@@ -313,12 +317,13 @@ async function resolveThread(tx, event, normalized, contact, now) {
   if (conversation) {
     assertConversationOwnership(conversation, event, contact);
     if (conversation.status === "ENCERRADA") {
+      const nextStatus = inboundConversationStatus(conversation);
       const reopened = await tx.conversaCanal.updateMany({
         where: { id: conversation.id, empresaId: event.empresaId, canalIntegracaoId: event.canalIntegracaoId, status: "ENCERRADA", emailThreadKey },
-        data: { status: "AGUARDANDO_ATENDIMENTO", chaveAberta: emailThreadKey, encerradaEm: null, reabertaEm: now, aguardandoDesde: event.recebidoEm },
+        data: { status: nextStatus, chaveAberta: emailThreadKey, encerradaEm: null, reabertaEm: now, aguardandoDesde: event.recebidoEm },
       });
       if (reopened.count !== 1) throw emailProcessingError("EMAIL_THREAD_CONFLICT", "Thread de E-mail alterada concorrentemente.");
-      conversation = { ...conversation, status: "AGUARDANDO_ATENDIMENTO", chaveAberta: emailThreadKey, encerradaEm: null, reabertaEm: now };
+      conversation = { ...conversation, status: nextStatus, chaveAberta: emailThreadKey, encerradaEm: null, reabertaEm: now };
     }
     return { conversation, emailThreadKey };
   }
@@ -343,12 +348,17 @@ async function findReferencedConversation(tx, event, normalized) {
   if (normalized.providerThreadId) clauses.push({ providerThreadId: normalized.providerThreadId });
   if (identifiers.length) clauses.push({ messageId: { in: identifiers } }, { providerMessageId: { in: identifiers } });
   if (!clauses.length) return null;
-  const matches = await tx.emailMessageMetadata.findMany({
-    where: { empresaId: event.empresaId, OR: clauses, mensagemCanal: { canalIntegracaoId: event.canalIntegracaoId } },
-    include: { mensagemCanal: { include: { conversaCanal: true } } },
-    take: 3,
+  const matches = await tx.mensagemCanal.findMany({
+    where: {
+      empresaId: event.empresaId,
+      canalIntegracaoId: event.canalIntegracaoId,
+      emailMetadata: { is: { empresaId: event.empresaId, OR: clauses } },
+    },
+    select: { conversaCanal: true },
+    distinct: ["conversaCanalId"],
+    take: 2,
   });
-  const conversations = new Map(matches.map((item) => [item.mensagemCanal.conversaCanal.id, item.mensagemCanal.conversaCanal]));
+  const conversations = new Map(matches.map((item) => [item.conversaCanal.id, item.conversaCanal]));
   if (conversations.size > 1) throw emailProcessingError("EMAIL_THREAD_AMBIGUOUS", "Referencias de E-mail ambiguas.");
   return [...conversations.values()][0] || null;
 }
@@ -359,7 +369,7 @@ function assertConversationOwnership(conversation, event, contact) {
   }
 }
 
-async function resolveLead(tx, event, client, conversation) {
+async function resolveLead(tx, event, client, conversation, env) {
   if (conversation?.leadId) {
     const lead = await tx.lead.findFirst({ where: { id: conversation.leadId, empresaId: event.empresaId, clienteId: client.id } });
     if (!lead || !ACTIVE_LEAD_STATUSES.includes(lead.status)) throw emailProcessingError("EMAIL_LEAD_INTEGRITY", "Lead de E-mail inconsistente.");
@@ -368,7 +378,15 @@ async function resolveLead(tx, event, client, conversation) {
   const candidates = await tx.lead.findMany({ where: { empresaId: event.empresaId, clienteId: client.id, origem: "EMAIL", status: { in: ACTIVE_LEAD_STATUSES } }, orderBy: { id: "asc" }, take: 2 });
   if (candidates.length > 1) throw emailProcessingError("EMAIL_LEAD_AMBIGUOUS", "Lead de E-mail ambiguo.");
   if (candidates.length === 1) return candidates[0];
-  return tx.lead.create({ data: { empresaId: event.empresaId, clienteId: client.id, responsavelId: null, status: "NOVO", origem: "EMAIL" } });
+  const lead = await tx.lead.create({ data: { empresaId: event.empresaId, clienteId: client.id, responsavelId: null, status: "NOVO", origem: "EMAIL" } });
+  await createAutomationService({ prisma: tx, env }).enqueueLeadCreated({
+    tx,
+    empresaId: event.empresaId,
+    leadId: lead.id,
+    originalEventId: `email:${event.id}`,
+    occurredAt: lead.createdAt,
+  });
+  return lead;
 }
 
 async function attachLead(tx, event, conversation, lead) {
@@ -426,7 +444,27 @@ async function updateConversationActivity(tx, conversation, message, messageTime
   if (!message.createdNow) return;
   const first = conversation.primeiraMensagemEm ? new Date(Math.min(conversation.primeiraMensagemEm.getTime(), messageTime.getTime())) : messageTime;
   const last = conversation.ultimaMensagemEm ? new Date(Math.max(conversation.ultimaMensagemEm.getTime(), messageTime.getTime())) : messageTime;
-  await tx.conversaCanal.update({ where: { id: conversation.id }, data: { primeiraMensagemEm: first, ultimaMensagemEm: last, emailSubject: conversation.emailSubject || message.emailMetadata?.subject || null } });
+  const nextStatus = inboundConversationStatus(conversation);
+  const updated = await tx.conversaCanal.updateMany({
+    where: {
+      id: conversation.id,
+      empresaId: conversation.empresaId,
+      canalIntegracaoId: conversation.canalIntegracaoId,
+      status: conversation.status,
+      responsavelId: conversation.responsavelId,
+    },
+    data: {
+      primeiraMensagemEm: first,
+      ultimaMensagemEm: last,
+      emailSubject: conversation.emailSubject || message.emailMetadata?.subject || null,
+      status: nextStatus,
+    },
+  });
+  if (updated.count !== 1) throw emailProcessingError("EMAIL_THREAD_CONFLICT", "Thread de E-mail alterada concorrentemente.");
+}
+
+function inboundConversationStatus(conversation) {
+  return conversation.responsavelId === null ? "AGUARDANDO_ATENDIMENTO" : "EM_ATENDIMENTO";
 }
 
 async function verifyProcessedState(tx, event, normalized) {
@@ -521,7 +559,10 @@ function isUniqueConflict(error) {
 }
 
 function isRetryableConflict(error) {
-  return isUniqueConflict(error) || error?.code === "P2034" || error?.code === "EMAIL_CONCURRENCY_CONFLICT";
+  return isUniqueConflict(error)
+    || error?.code === "P2034"
+    || error?.code === "EMAIL_CONCURRENCY_CONFLICT"
+    || error?.code === "EMAIL_THREAD_CONFLICT";
 }
 
 function delay(ms) {

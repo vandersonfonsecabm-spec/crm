@@ -24,6 +24,7 @@ const { normalizeInboundMessage, EMAIL_LIMITS } = require("../src/integrations/e
 const { normalizeEmailAddress } = require("../src/integrations/emailFoundation");
 const { createLeadsCommunicationServices } = require("../src/leads-communication/services");
 const { createCustomer360Service } = require("../src/customer-360/service");
+const { createAutomationService } = require("../src/automations/service");
 
 let prisma;
 const tenantIds = [];
@@ -126,6 +127,94 @@ test("threading por In-Reply-To preserva conversa e remetente sem telefone", asy
   assert.equal(new Set(reopened.map((item) => item.chaveAberta)).size, 2);
 });
 
+test("inbound restaura estado coerente e preserva responsavel ao reabrir thread", async () => {
+  const fixture = await seedActiveMailbox("email-inbound-status");
+  const simulator = simulatorFor(fixture.env);
+  const rootId = `<status-root-${suffix}@events.example.test>`;
+  await simulator.deliver({ mailboxAddress: fixture.mailbox, fromAddress: "status@contact.example.test", messageId: rootId, subject: "Status", text: "Mensagem inicial" });
+  const owner = await prisma.usuario.create({ data: { empresaId: fixture.tenant.id, nome: "Email owner", email: `email-owner-${suffix}@operator.example.test`, senhaHash: "not-used", papel: "ADMIN", ativo: true } });
+  let conversation = await prisma.conversaCanal.findFirstOrThrow({ where: { empresaId: fixture.tenant.id } });
+  await prisma.conversaCanal.update({ where: { id: conversation.id }, data: { responsavelId: owner.id, status: "AGUARDANDO_CLIENTE" } });
+  const replyId = `<status-reply-${suffix}@events.example.test>`;
+  await simulator.deliver({ mailboxAddress: fixture.mailbox, fromAddress: "status@contact.example.test", messageId: replyId, inReplyTo: rootId, references: [rootId], subject: "Re: Status", text: "Resposta do cliente" });
+  conversation = await prisma.conversaCanal.findUniqueOrThrow({ where: { id: conversation.id } });
+  assert.equal(conversation.status, "EM_ATENDIMENTO");
+  assert.equal(conversation.responsavelId, owner.id);
+
+  await prisma.conversaCanal.update({ where: { id: conversation.id }, data: { status: "ENCERRADA", chaveAberta: null, encerradaEm: new Date() } });
+  await simulator.deliver({ mailboxAddress: fixture.mailbox, fromAddress: "status@contact.example.test", messageId: `<status-reopen-${suffix}@events.example.test>`, inReplyTo: replyId, references: [rootId, replyId], subject: "Re: Status", text: "Nova resposta do cliente" });
+  conversation = await prisma.conversaCanal.findUniqueOrThrow({ where: { id: conversation.id } });
+  assert.equal(conversation.status, "EM_ATENDIMENTO");
+  assert.equal(conversation.responsavelId, owner.id);
+  assert.equal(conversation.chaveAberta, conversation.emailThreadKey);
+});
+
+test("threading ambiguo e replay divergente falham sem sobrescrever o fluxo original", async () => {
+  const fixture = await seedActiveMailbox("email-thread-conflict");
+  const simulator = simulatorFor(fixture.env);
+  const sender = "thread-conflict@contact.example.test";
+  const firstRoot = `<thread-a-${suffix}@events.example.test>`;
+  const secondRoot = `<thread-b-${suffix}@events.example.test>`;
+  await simulator.deliver({ mailboxAddress: fixture.mailbox, fromAddress: sender, messageId: firstRoot, subject: "Thread A", text: "A0" });
+  const firstReferences = [firstRoot];
+  for (let index = 1; index <= 3; index += 1) {
+    const messageId = `<thread-a-${index}-${suffix}@events.example.test>`;
+    await simulator.deliver({ mailboxAddress: fixture.mailbox, fromAddress: sender, messageId, inReplyTo: firstReferences.at(-1), references: [...firstReferences], subject: "Re: Thread A", text: `A${index}` });
+    firstReferences.push(messageId);
+  }
+  await simulator.deliver({ mailboxAddress: fixture.mailbox, fromAddress: sender, messageId: secondRoot, subject: "Thread B", text: "B0" });
+  const before = await commercialCounts(fixture.tenant.id);
+  await assert.rejects(
+    simulator.deliver({ mailboxAddress: fixture.mailbox, fromAddress: sender, messageId: `<ambiguous-${suffix}@events.example.test>`, references: [...firstReferences, secondRoot], subject: "Ambiguous", text: "Must not attach" }),
+    (error) => error.code === "EMAIL_THREAD_AMBIGUOUS",
+  );
+  const afterAmbiguous = await commercialCounts(fixture.tenant.id);
+  assert.equal(afterAmbiguous.messages, before.messages);
+  assert.equal(afterAmbiguous.conversations, before.conversations);
+
+  const originalRaw = buildRawEmailFixture({ mailboxAddress: fixture.mailbox, fromAddress: sender, messageId: `<replay-conflict-${suffix}@events.example.test>`, text: "Original" });
+  await simulator.deliver({ raw: originalRaw, mailboxAddress: fixture.mailbox });
+  const beforeReplay = await commercialCounts(fixture.tenant.id);
+  const divergentRaw = buildRawEmailFixture({ mailboxAddress: fixture.mailbox, fromAddress: sender, messageId: `<replay-conflict-${suffix}@events.example.test>`, text: "Divergent" });
+  await assert.rejects(simulator.deliver({ raw: divergentRaw, mailboxAddress: fixture.mailbox }), (error) => error.code === "EMAIL_REPLAY_CONFLICT");
+  assert.deepEqual(await commercialCounts(fixture.tenant.id), beforeReplay);
+});
+
+test("lead novo de E-mail aciona automacao canonicamente e uma unica vez", async () => {
+  const fixture = await seedActiveMailbox("email-automation");
+  const operator = await prisma.usuario.create({ data: { empresaId: fixture.tenant.id, nome: "Automation owner", email: `automation-owner-${suffix}@operator.example.test`, senhaHash: "not-used", papel: "ADMIN", ativo: true } });
+  await prisma.empresaFuncionalidade.create({ data: { empresaId: fixture.tenant.id, chave: "AUTOMATIONS", habilitada: true, habilitadoEm: new Date(), habilitadoPorUsuarioId: operator.id } });
+  const automationEnv = { ...fixture.env, AUTOMATIONS_ENABLED: "true" };
+  const automation = createAutomationService({ prisma, env: automationEnv });
+  const context = { empresaId: fixture.tenant.id, usuarioId: operator.id, papel: "ADMIN" };
+  const rule = await automation.createRule(context, { nome: "Lead de E-mail", prioridade: 10, gatilho: "LEAD_CREATED", timezone: "UTC", condicoes: [], acoes: [{ tipo: "CREATE_INTERNAL_EVENT", eventoTipo: "EMAIL_LEAD_CREATED_TEST", resumo: "Evento tecnico." }] });
+  await automation.activateRule(context, rule.id);
+  const simulator = simulatorFor(automationEnv);
+  const raw = buildRawEmailFixture({ mailboxAddress: fixture.mailbox, fromAddress: "automation@contact.example.test", messageId: `<automation-${suffix}@events.example.test>`, text: "Create lead" });
+  await simulator.deliver({ raw, mailboxAddress: fixture.mailbox });
+  await simulator.deliver({ raw, mailboxAddress: fixture.mailbox });
+  assert.equal(await prisma.automacaoExecucao.count({ where: { empresaId: fixture.tenant.id, leadId: { not: null } } }), 1);
+  assert.equal(await prisma.automacaoAcaoJob.count({ where: { empresaId: fixture.tenant.id } }), 1);
+});
+
+test("duas threads raiz concorrentes convergem para um lead no PostgreSQL", { skip: !postgres }, async () => {
+  const fixture = await seedActiveMailbox("email-root-concurrency");
+  const sender = "root-concurrency@contact.example.test";
+  const client = await prisma.cliente.create({ data: { empresaId: fixture.tenant.id, nome: "Concurrent sender", telefone: "", email: sender, empresa: "", interesse: "", origem: "E-mail" } });
+  await prisma.contatoCanal.create({ data: { empresaId: fixture.tenant.id, canalIntegracaoId: fixture.channel.id, clienteId: client.id, externalId: sender, telefoneNormalizado: null, nome: "Concurrent sender" } });
+  const clients = [new PrismaClient(), new PrismaClient()];
+  try {
+    const results = await Promise.all(clients.map((db, index) => simulatorFor(fixture.env, db).deliver({ mailboxAddress: fixture.mailbox, fromAddress: sender, messageId: `<root-concurrent-${index}-${suffix}@events.example.test>`, subject: `Root ${index}`, text: `Concurrent root ${index}` })));
+    assert.equal(results.every((item) => item.state === "PROCESSED"), true);
+  } finally {
+    await Promise.all(clients.map((db) => db.$disconnect()));
+  }
+  const counts = await commercialCounts(fixture.tenant.id);
+  assert.equal(counts.leads, 1);
+  assert.equal(counts.conversations, 2);
+  assert.equal(counts.messages, 2);
+});
+
 test("envelope confiavel aceita BCC e usa fallback normalizado sem Message-ID", async () => {
   const fixture = await seedActiveMailbox("email-envelope");
   const raw = buildRawEmailFixture({
@@ -209,6 +298,10 @@ test("gates, limites, identidade e simulador falham fechado sem efeitos", async 
   const validRaw = buildRawEmailFixture({ mailboxAddress: fixture.mailbox, messageId: `<headers-${suffix}@events.example.test>` });
   const duplicateFrom = Buffer.from(validRaw.toString("utf8").replace("From:", "From: duplicate@contact.example.test\r\nFrom:"), "utf8");
   await assert.rejects(normalizeInboundMessage({ raw: duplicateFrom, mailboxAddress: fixture.mailbox, providerType: "GENERIC" }), (error) => error.code === "EMAIL_HEADER_AMBIGUOUS");
+  const duplicateContentType = Buffer.from(validRaw.toString("utf8").replace("Content-Type:", "Content-Type: text/plain\r\nContent-Type:"), "utf8");
+  await assert.rejects(normalizeInboundMessage({ raw: duplicateContentType, mailboxAddress: fixture.mailbox, providerType: "GENERIC" }), (error) => error.code === "EMAIL_HEADER_AMBIGUOUS");
+  const duplicateTransferEncoding = Buffer.from(validRaw.toString("utf8").replace("Content-Transfer-Encoding:", "Content-Transfer-Encoding: 7bit\r\nContent-Transfer-Encoding:"), "utf8");
+  await assert.rejects(normalizeInboundMessage({ raw: duplicateTransferEncoding, mailboxAddress: fixture.mailbox, providerType: "GENERIC" }), (error) => error.code === "EMAIL_HEADER_AMBIGUOUS");
   const deepMime = Buffer.from(`From: sender@contact.example.test\r\nTo: ${fixture.mailbox}\r\nMessage-ID: <deep-${suffix}@events.example.test>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="b0"\r\n\r\n${Array.from({ length: EMAIL_LIMITS.multipartContainers + 1 }, (_, index) => `--b${index}\r\nContent-Type: multipart/mixed; boundary="b${index + 1}"\r\n`).join("")}--b${EMAIL_LIMITS.multipartContainers + 1}--\r\n`, "utf8");
   await assert.rejects(normalizeInboundMessage({ raw: deepMime, mailboxAddress: fixture.mailbox, providerType: "GENERIC" }), (error) => error.code === "EMAIL_MIME_STRUCTURE_LIMIT_EXCEEDED");
   await assert.rejects(simulatorFor(fixture.env).deliver({ mailboxAddress: "not-reserved@example.com" }), (error) => error.code === "EMAIL_SIMULATOR_IDENTITY_INVALID");
@@ -266,6 +359,10 @@ async function commercialCounts(empresaId) {
 
 async function cleanupTenants(ids) {
   const where = { empresaId: { in: ids } };
+  await prisma.automacaoEventoInterno.deleteMany({ where });
+  await prisma.automacaoAcaoJob.deleteMany({ where });
+  await prisma.automacaoExecucao.deleteMany({ where });
+  await prisma.automacaoRegra.deleteMany({ where });
   await prisma.emailMessageMetadata.deleteMany({ where });
   await prisma.mensagemCanal.deleteMany({ where });
   await prisma.eventoWebhook.deleteMany({ where });
