@@ -1360,3 +1360,28 @@ integracoes autorizadas.
 - Proximo passo externo: escolher Gmail API, Microsoft Graph ou IMAP,
   implementar o adapter real e executar o runbook de ativacao com gates OFF
   ate a janela de piloto aprovada.
+
+## Isolamento estrutural multi-tenant
+
+- Em 01/08/2026, 83 relacoes tenant-scoped passaram a usar foreign keys
+  compostas por tenant em SQLite e PostgreSQL. Atores globais de plataforma,
+  produtos e categorias globais mantiveram sua semantica intencional.
+- A migration `20260801123000_enforce_tenant_safe_relations` executa preflight
+  antes de DDL, falha fechado diante de orfao ou vinculo cruzado e nao faz
+  backfill, remocao ou reescrita de dados.
+- Writers de integracoes, imports e automacoes foram escopados pelo tenant; as
+  consultas de propostas validam o contexto das relacoes antes de responder.
+  O importador SQLite para PostgreSQL valida contagens antes do commit e
+  reverte integralmente qualquer divergencia.
+- SQLite validou migrate-empty, upgrade historico, preservacao de fixture e
+  rejeicao pre-DDL. PostgreSQL 16.14 validou as 83 constraints, P2003,
+  rollback, duas conexoes concorrentes, upgrade incremental e zero drift.
+- O preflight read-only de producao encontrou zero orfao e zero vinculo
+  cruzado. Um backup logico pre-migration foi verificado com `pg_restore
+  --list` antes do deploy.
+- A API aplicou a migration uma unica vez pelo startup oficial e iniciou com
+  PostgreSQL. O smoke pos-migration confirmou 83/83 constraints, zero
+  incompatibilidade e `/health = 200`; o worker permaneceu saudavel.
+- Os commits locais anteriores de autorizacao, OAuth Bling e sessao frontend
+  foram preservados sem squash ou rebase. O proximo passo e manter o verifier
+  read-only no checklist de migrations que adicionem novas relacoes tenant.
