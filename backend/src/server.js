@@ -76,7 +76,10 @@ app.use(
 const UNIDADES_MEDIDA = new Set(["UN", "KG", "L", "SC", "TON"]);
 const SORT_DIRECTIONS = new Set(["asc", "desc"]);
 const TIPOS_MOVIMENTACAO_ESTOQUE = new Set(["ENTRADA", "SAIDA", "AJUSTE"]);
-const auth = createAuth({ prisma });
+const testSecurityDelivery = process.env.NODE_ENV === "test"
+  ? globalThis.__CRM_TEST_SECURITY_DELIVERY
+  : undefined;
+const auth = createAuth({ prisma, allowedOrigins, ...(testSecurityDelivery ? { securityDelivery: testSecurityDelivery } : {}) });
 const requireAuth = auth.authenticate;
 const requireRole = auth.requireRole;
 const commercialAuth = [requireAuth, requireCommercialTenant];

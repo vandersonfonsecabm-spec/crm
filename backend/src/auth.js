@@ -1,6 +1,8 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { capabilitiesForTenant } = require("./tenant-features/service");
+const { createSecurityDelivery } = require("./security-delivery");
+const { createUserSecurity } = require("./user-security");
 const {
   authIdentity,
   createAuthRateLimiter,
@@ -12,7 +14,7 @@ const JWT_ISSUER = "crm-agro-saas-api";
 const JWT_AUDIENCE = "crm-agro-saas";
 const LOCAL_JWT_SECRET = "local-development-only-change-me";
 
-function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
+function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securityDelivery = createSecurityDelivery({ env: process.env }), allowedOrigins = [] }) {
   const production = process.env.NODE_ENV === "production";
   const jwtSecret = String(process.env.JWT_SECRET || "").trim();
 
@@ -26,12 +28,35 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
 
   const config = {
     secret: jwtSecret || LOCAL_JWT_SECRET,
-    expiresIn: String(process.env.JWT_EXPIRES_IN || "8h").trim(),
+    expiresIn: String(process.env.JWT_EXPIRES_IN || "15m").trim(),
     allowCompanyRegistration: parseBoolean(
       process.env.ALLOW_COMPANY_REGISTRATION,
       !production,
     ),
   };
+
+  const security = createUserSecurity({
+    prisma,
+    jwt,
+    bcrypt,
+    config: {
+      ...config,
+      signAccessToken: ({ usuario, sessionId }) => jwt.sign(
+        { empresaId: usuario.empresaId, papel: usuario.papel, sid: sessionId },
+        config.secret,
+        {
+          subject: String(usuario.id),
+          expiresIn: config.expiresIn,
+          issuer: JWT_ISSUER,
+          audience: JWT_AUDIENCE,
+        },
+      ),
+      jwtDecode: (token) => jwt.decode(token),
+    },
+    production,
+    reservedPlatformEmails: parsePlatformAdminEmails(process.env.PLATFORM_ADMIN_EMAILS),
+    securityDelivery,
+  });
 
   async function authenticate(req, res, next) {
     const authorization = String(req.headers.authorization || "");
@@ -61,6 +86,14 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
     }
 
     try {
+      const accessSession = await security.validateAccessSession({
+        sessionId: typeof payload.sid === "string" ? payload.sid : null,
+        empresaId: Number(payload.empresaId),
+        usuarioId,
+      });
+      if (!accessSession.valid) {
+        return authError(res, 401, "Sessao invalida ou revogada.", "AUTH_SESSION_REVOKED");
+      }
       const usuario = await prisma.usuario.findUnique({
         where: { id: usuarioId },
         include: { empresa: true },
@@ -81,6 +114,7 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
         usuarioId: usuario.id,
         empresaId: usuario.empresaId,
         papel: usuario.papel,
+        sessionId: typeof payload.sid === "string" ? payload.sid : null,
         usuario: publicUsuario(usuario),
         empresa: publicEmpresa(usuario.empresa),
         isPlatformOperator: platformOperator,
@@ -102,6 +136,14 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
   }
 
   function mountRoutes(app) {
+    security.mountRoutes(app, {
+      authenticate,
+      requireRole,
+      publicUser: publicUsuario,
+      publicUserSelect: publicUsuarioSelect,
+      allowedOrigins,
+    });
+
     app.post("/auth/register-company", async (req, res) => {
       if (!config.allowCompanyRegistration) {
         return authError(res, 403, "Cadastro de empresas desabilitado.", "AUTH_FORBIDDEN");
@@ -187,6 +229,18 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
         const usuario = usuarios[0];
         const senhaCorreta = await bcrypt.compare(senha, usuario.senhaHash);
         if (!senhaCorreta) {
+          try {
+            await security.recordAudit({
+              empresaId: usuario.empresaId,
+              targetUsuarioId: usuario.id,
+              acao: "LOGIN_REJECTED",
+              resultado: "FAILURE",
+              motivo: "Credencial rejeitada.",
+              correlationId: req.headers["x-correlation-id"],
+            });
+          } catch (auditError) {
+            logInternalError("Falha ao registrar rejeicao de login.", auditError);
+          }
           loginRateLimiter.recordFailure(limiterContext);
           return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
         }
@@ -203,9 +257,25 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
           include: { empresa: true },
         });
         const platformOperator = await resolvePlatformOperator({ prisma, usuario: updated, env: process.env });
+        const session = await security.createLoginSession({ usuario: updated, req });
+        security.setRefreshCookie(res, session.rawRefreshToken);
+        try {
+          await security.recordAudit({
+            empresaId: updated.empresaId,
+            actorUsuarioId: updated.id,
+            targetUsuarioId: updated.id,
+            acao: "LOGIN_SUCCESS",
+            resultado: "SUCCESS",
+            motivo: "Login concluido.",
+            correlationId: req.headers["x-correlation-id"],
+          });
+        } catch (auditError) {
+          logInternalError("Falha ao registrar sucesso de login.", auditError);
+        }
         loginRateLimiter.recordSuccess(limiterContext);
-        return res.json(loginResponse(updated, config, platformOperator));
+        return res.json(loginResponse(updated, config, platformOperator, session));
       } catch (error) {
+        if (error?.status) return authError(res, error.status, error.code === "ACCOUNT_INACTIVE" ? "Usuario inativo." : "Nao foi possivel autenticar agora.", error.code);
         logInternalError("Falha ao autenticar usuario.", error);
         return authError(res, 500, "Nao foi possivel autenticar agora.", "AUTH_LOGIN_ERROR");
       }
@@ -224,95 +294,6 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
       });
     });
 
-    app.get("/usuarios", authenticate, requireRole("ADMIN", "GERENTE"), async (req, res) => {
-      const page = positiveInteger(req.query.page, 1);
-      const limit = Math.min(positiveInteger(req.query.limit, 20), 100);
-      const search = String(req.query.busca || req.query.search || "").trim();
-      const where = {
-        empresaId: req.auth.empresaId,
-        ...(search
-          ? { OR: [{ nome: { contains: search } }, { email: { contains: search.toLowerCase() } }] }
-          : {}),
-      };
-
-      try {
-        const [data, total] = await prisma.$transaction([
-          prisma.usuario.findMany({
-            where,
-            select: publicUsuarioSelect,
-            orderBy: [{ ativo: "desc" }, { nome: "asc" }],
-            skip: (page - 1) * limit,
-            take: limit,
-          }),
-          prisma.usuario.count({ where }),
-        ]);
-        return res.json({
-          data,
-          pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-        });
-      } catch (error) {
-        logInternalError("Falha ao listar usuarios.", error);
-        return authError(res, 500, "Nao foi possivel listar os usuarios.", "USER_LIST_ERROR");
-      }
-    });
-
-    app.post("/usuarios", authenticate, requireRole("ADMIN"), async (req, res) => {
-      const validation = validateNewUser(req.body);
-      if (validation.error) {
-        return authError(res, 400, validation.error, "VALIDATION_ERROR");
-      }
-      if (isReservedPlatformEmail(validation.data.email, process.env)) {
-        return authError(res, 409, "Ja existe um usuario com este e-mail na empresa.", "EMAIL_ALREADY_EXISTS");
-      }
-
-      try {
-        const senhaHash = await bcrypt.hash(validation.data.senha, 12);
-        const usuario = await prisma.usuario.create({
-          data: {
-            empresaId: req.auth.empresaId,
-            nome: validation.data.nome,
-            email: validation.data.email,
-            senhaHash,
-            papel: validation.data.papel,
-          },
-          select: publicUsuarioSelect,
-        });
-        return res.status(201).json(usuario);
-      } catch (error) {
-        if (error && error.code === "P2002") {
-          return authError(res, 409, "Ja existe um usuario com este e-mail na empresa.", "EMAIL_ALREADY_EXISTS");
-        }
-        logInternalError("Falha ao criar usuario.", error);
-        return authError(res, 500, "Nao foi possivel criar o usuario.", "USER_CREATE_ERROR");
-      }
-    });
-
-    app.patch("/usuarios/:id", authenticate, requireRole("ADMIN"), async (req, res) => {
-      const id = positiveInteger(req.params.id, null);
-      const validation = validateUserUpdate(req.body);
-      if (!id || validation.error) {
-        return authError(res, 400, validation.error || "ID de usuario invalido.", "VALIDATION_ERROR");
-      }
-
-      try {
-        const result = await updateTenantUser({
-          prisma,
-          id,
-          empresaId: req.auth.empresaId,
-          data: validation.data,
-        });
-        if (result.kind === "not-found") {
-          return authError(res, 404, "Usuario nao encontrado.", "USER_NOT_FOUND");
-        }
-        if (result.kind === "last-admin") {
-          return authError(res, 409, "A empresa precisa manter ao menos um ADMIN ativo.", "LAST_ADMIN_REQUIRED");
-        }
-        return res.json(result.usuario);
-      } catch (error) {
-        logInternalError("Falha ao atualizar usuario.", error);
-        return authError(res, 500, "Nao foi possivel atualizar o usuario.", "USER_UPDATE_ERROR");
-      }
-    });
   }
 
   return { authenticate, requireRole, mountRoutes, config };
@@ -330,8 +311,8 @@ const publicUsuarioSelect = {
   updatedAt: true,
 };
 
-function loginResponse(usuario, config, platformOperator = false) {
-  const token = jwt.sign(
+function loginResponse(usuario, config, platformOperator = false, session = null) {
+  const token = session?.accessToken || jwt.sign(
     {
       empresaId: usuario.empresaId,
       papel: usuario.papel,
@@ -347,7 +328,7 @@ function loginResponse(usuario, config, platformOperator = false) {
   const decoded = jwt.decode(token);
   return {
     access_token: token,
-    expires_at: new Date(decoded.exp * 1000).toISOString(),
+    expires_at: session?.expiresAt || new Date(decoded.exp * 1000).toISOString(),
     usuario: publicUsuario(usuario),
     user: publicUsuario(usuario),
     empresa: publicEmpresa(usuario.empresa),
@@ -362,7 +343,7 @@ function publicUsuario(usuario) {
 }
 
 function hasOnlyExpectedClaims(payload) {
-  const expected = new Set(["sub", "empresaId", "papel", "iat", "exp", "iss", "aud"]);
+  const expected = new Set(["sub", "empresaId", "papel", "sid", "iat", "exp", "iss", "aud"]);
   return payload && typeof payload === "object" && Object.keys(payload).every((claim) => expected.has(claim));
 }
 
@@ -389,7 +370,7 @@ function validateCompanyRegistration(body = {}) {
   if (!empresaNome || empresaNome.length > 120) return { error: "Nome da empresa obrigatorio, com ate 120 caracteres." };
   if (!adminNome || adminNome.length > 120) return { error: "Nome do administrador obrigatorio, com ate 120 caracteres." };
   if (!isValidEmail(email)) return { error: "E-mail invalido." };
-  if (senha.length < 8 || senha.length > 128) return { error: "A senha deve ter entre 8 e 128 caracteres." };
+  if (senha.length < 12 || senha.length > 128) return { error: "A senha deve ter entre 12 e 128 caracteres." };
   if (!slug || slug.length > 80) return { error: "Slug da empresa invalido." };
   return { data: { empresaNome, adminNome, email, senha, slug } };
 }
