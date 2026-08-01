@@ -202,10 +202,15 @@ function createCommercialProposalService({ prisma }) {
 async function loadBusiness(client, context, id, requireWrite) {
   const business = await client.negocio.findFirst({
     where: { id, empresaId: context.empresaId },
-    include: { cliente: true, lead: true, responsavel: { select: { id: true, nome: true } } },
+    include: { cliente: true, lead: true, responsavel: { select: { id: true, empresaId: true, nome: true } } },
   });
   if (!business) throw notFound("Negocio nao encontrado.");
-  if (business.clienteId !== business.cliente.id || (business.lead && business.lead.empresaId !== context.empresaId)) throw conflict("PROPOSAL_CONTEXT_CONFLICT", "Contexto comercial inconsistente.");
+  if (
+    business.empresaId !== context.empresaId
+    || business.cliente.empresaId !== context.empresaId
+    || (business.lead && business.lead.empresaId !== context.empresaId)
+    || (business.responsavel && business.responsavel.empresaId !== context.empresaId)
+  ) throw conflict("PROPOSAL_CONTEXT_CONFLICT", "Contexto comercial inconsistente.");
   if (requireWrite) requireProposalWrite(context, business);
   return business;
 }
@@ -213,20 +218,30 @@ async function loadBusiness(client, context, id, requireWrite) {
 async function loadProposal(client, context, id, withDetails) {
   const proposal = await client.propostaComercial.findFirst({ where: { id, empresaId: context.empresaId }, include: proposalIncludes(withDetails) });
   if (!proposal) throw notFound("Proposta nao encontrada.");
+  assertProposalTenantContext(context.empresaId, proposal);
   return proposal;
 }
 
 function proposalIncludes(withDetails) {
   return {
     empresa: { select: { id: true, nome: true } },
-    cliente: { select: { id: true, nome: true, empresa: true, email: true, telefone: true } },
-    negocio: { select: { id: true, titulo: true, etapa: true, responsavelId: true } },
-    lead: { select: { id: true, status: true, interesse: true } },
-    responsavel: { select: { id: true, nome: true } },
-    autor: { select: { id: true, nome: true } },
+    cliente: { select: { id: true, empresaId: true, nome: true, empresa: true, email: true, telefone: true } },
+    negocio: { select: { id: true, empresaId: true, titulo: true, etapa: true, responsavelId: true } },
+    lead: { select: { id: true, empresaId: true, status: true, interesse: true } },
+    responsavel: { select: { id: true, empresaId: true, nome: true } },
+    autor: { select: { id: true, empresaId: true, nome: true } },
     itens: { orderBy: [{ ordem: "asc" }, { id: "asc" }] },
-    ...(withDetails ? { historico: { include: { autor: { select: { id: true, nome: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50 } } : {}),
+    ...(withDetails ? { historico: { include: { autor: { select: { id: true, empresaId: true, nome: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 50 } } : {}),
   };
+}
+
+function assertProposalTenantContext(empresaId, proposal) {
+  const tenantRows = [proposal, proposal.cliente, proposal.negocio, proposal.lead, proposal.responsavel, proposal.autor]
+    .filter(Boolean);
+  const historyRows = (proposal.historico || []).flatMap((row) => [row, row.autor]).filter(Boolean);
+  if ([...tenantRows, ...historyRows].some((row) => row.empresaId !== empresaId)) {
+    throw conflict("PROPOSAL_CONTEXT_CONFLICT", "Contexto comercial inconsistente.");
+  }
 }
 
 function requireProposalWrite(context, business) {
@@ -234,8 +249,22 @@ function requireProposalWrite(context, business) {
 }
 
 function presentProposal(context, proposal) {
+  const safeRelations = {
+    cliente: withoutTenantContext(proposal.cliente),
+    negocio: withoutTenantContext(proposal.negocio),
+    lead: withoutTenantContext(proposal.lead),
+    responsavel: withoutTenantContext(proposal.responsavel),
+    autor: withoutTenantContext(proposal.autor),
+    ...(proposal.historico ? {
+      historico: proposal.historico.map((row) => ({
+        ...withoutTenantContext(row),
+        autor: withoutTenantContext(row.autor),
+      })),
+    } : {}),
+  };
   return {
     ...proposal,
+    ...safeRelations,
     itens: proposal.itens.map((item) => ({ ...item, quantidade: item.quantidade.toString() })),
     permissoes: {
       editar: EDITABLE_STATUSES.has(proposal.status) && (isManager(context) || proposal.negocio.responsavelId === context.usuarioId),
@@ -243,6 +272,12 @@ function presentProposal(context, proposal) {
       duplicar: isManager(context) || proposal.negocio.responsavelId === context.usuarioId,
     },
   };
+}
+
+function withoutTenantContext(row) {
+  if (!row) return row;
+  const { empresaId: _empresaId, ...safe } = row;
+  return safe;
 }
 
 function parseProposalInput(input, { create }) {
