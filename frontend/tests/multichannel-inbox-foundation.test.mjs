@@ -107,6 +107,7 @@ test("Inbox preserva leitura durante polling e abre detalhes sob demanda", async
   assert.match(inbox, /markCommunicationConversationRead\(conversation\.id\)/);
   assert.doesNotMatch(inbox, /role="listbox"|role="option"/);
   assert.match(inbox, /aria-current=\{active \? "true" : undefined\}/);
+  assert.match(inbox, /function selectConversation\(id: number\)[\s\S]*id !== selectedId[\s\S]*setComposerText\(""\)[\s\S]*idempotencyKey\.current = null[\s\S]*setSelectedId\(id\)/);
 });
 
 test("Inbox cobre estados operacionais sem esconder falhas", async () => {

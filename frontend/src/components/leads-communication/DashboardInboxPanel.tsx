@@ -400,6 +400,13 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
   }
 
   function selectConversation(id: number) {
+    if (id !== selectedId) {
+      setComposerText("");
+      setComposerError("");
+      idempotencyKey.current = null;
+      setLease(null);
+      setLeaseOwned(false);
+    }
     setSelectedId(id);
     setMobileView("conversation");
     if (window.matchMedia("(max-width: 767px)").matches) {
