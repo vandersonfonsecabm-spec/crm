@@ -6,10 +6,19 @@ const { test } = require("node:test");
 const { Prisma } = require("@prisma/client");
 const { relationSpecs } = require("../scripts/check-tenant-relation-integrity.cjs");
 const {
+  classifyPolymorphicRows,
+  parsePilotSyntheticMetadata,
+} = require("../scripts/tenant-isolation-verifier-utils.cjs");
+const { sanitizePrismaOutput } = require("../scripts/tenant-isolation-log-utils.cjs");
+const {
+  EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
   GLOBAL_RELATION_EXCEPTIONS,
+  MIGRATION_REGISTRY,
   inspectArchitecture,
   migrationTouchesTenantRelations,
+  failureIfUnsafe,
   runGate,
+  tenantRelationManifestHash,
 } = require("../scripts/tenant-isolation-gate.cjs");
 
 const backendDir = path.resolve(__dirname, "..");
@@ -22,10 +31,85 @@ test("arquitetura atual cobre as 83 relacoes e as excecoes documentadas", () => 
   const result = inspectArchitecture();
   assert.deepEqual(result.failures, []);
   assert.equal(result.relationCount, 83);
+  assert.equal(result.relationManifestHash, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
+  assert.equal(tenantRelationManifestHash(), EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
+  assert.equal(MIGRATION_REGISTRY[currentMigration].relationManifestSha256, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.deepEqual(Object.keys(GLOBAL_RELATION_EXCEPTIONS).sort(), [
     "AuditoriaFuncionalidade.usuarioId->Usuario",
     "PlatformTenantAudit.actorUserId->Usuario",
   ]);
+});
+
+test("hash do manifesto e deterministico e muda quando uma relacao muda", () => {
+  const unchanged = tenantRelationManifestHash(relationSpecs);
+  const changed = relationSpecs.map((spec, index) => index === 0 ? ["changed", ...spec.slice(1)] : spec);
+  const reordered = [...relationSpecs].reverse();
+  assert.equal(unchanged, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
+  assert.equal(tenantRelationManifestHash(relationSpecs), unchanged);
+  assert.notEqual(tenantRelationManifestHash(changed), unchanged);
+  assert.notEqual(tenantRelationManifestHash(reordered), unchanged);
+});
+
+test("PILOT_SYNTHETIC exige JSON estruturado e contrato minimo", () => {
+  const valid = parsePilotSyntheticMetadata(JSON.stringify({
+    sourceType: "PILOT_SYNTHETIC",
+    sourceId: "pilot-1",
+    idempotencyKey: "pilot-1",
+    synthetic: true,
+    payload: { name: "Lead de teste", origin: "PILOT" },
+  }));
+  const invalid = parsePilotSyntheticMetadata('{"sourceType":"PILOT_SYNTHETIC","synthetic":true}');
+  const malformed = parsePilotSyntheticMetadata('{"sourceType":"PILOT_SYNTHETIC"');
+  assert.equal(valid.marked, true);
+  assert.equal(valid.valid, true);
+  assert.equal(invalid.marked, true);
+  assert.equal(invalid.valid, false);
+  assert.equal(malformed.marked, true);
+  assert.equal(malformed.valid, false);
+  assert.deepEqual(classifyPolymorphicRows([
+    { entityType: "LEAD", entityId: "lead-1", leadId: null, businessId: null, tenantId: "tenant-1", summaryJson: JSON.stringify(valid.value), leadExists: null, leadTenantId: null, businessExists: null, businessTenantId: null },
+    { entityType: "LEAD", entityId: "lead-2", leadId: null, businessId: null, tenantId: "tenant-1", summaryJson: '{"sourceType":"PILOT_SYNTHETIC"', leadExists: null, leadTenantId: null, businessExists: null, businessTenantId: null },
+  ]), {
+    synthetic: 1,
+    invalid_pilot_synthetic: 1,
+    orphaned_lead: 1,
+    crossed_lead: 0,
+    incoherent_lead: 1,
+    orphaned_business: 0,
+    crossed_business: 0,
+    incoherent_business: 0,
+  });
+});
+
+test("PILOT_SYNTHETIC invalido reprova a integridade do gate", () => {
+  assert.throws(
+    () => failureIfUnsafe({
+      relations: [],
+      polymorphic: {
+        invalid_pilot_synthetic: 1,
+        orphaned_lead: 0,
+        crossed_lead: 0,
+        incoherent_lead: 0,
+        orphaned_business: 0,
+        crossed_business: 0,
+        incoherent_business: 0,
+      },
+    }),
+    { code: "TENANT_GATE_DATA_INTEGRITY_FAILED" },
+  );
+});
+
+test("saida Prisma e reduzida a categoria, codigo e contexto", () => {
+  const safe = sanitizePrismaOutput(
+    "PrismaClientKnownRequestError P2002 SELECT password FROM \"Usuario\" postgresql://user:redacted-secret@example.invalid/db C:\\private\\trace.js",
+    "unit-test",
+  );
+  const serialized = JSON.stringify(safe);
+  assert.equal(safe.category, "DATABASE");
+  assert.equal(safe.code, "P2002");
+  assert.equal(safe.context, "unit-test");
+  assert.doesNotMatch(serialized, /SELECT|password|redacted-secret|example\.invalid|private|trace\.js/);
+  assert.deepEqual(Object.keys(safe).sort(), ["category", "code", "context", "message"]);
 });
 
 test("relacao composta fora do manifesto reprova o gate", () => {
