@@ -229,6 +229,11 @@ model Empresa {
   funcionalidades            EmpresaFuncionalidade[]
   auditoriasFuncionalidade   AuditoriaFuncionalidade[]
   auditoriasPlataforma       PlatformTenantAudit[]
+  sessoesUsuario             SessaoUsuario[]
+  tokensRefreshUsuario       SessaoRefreshToken[]
+  tokensRecuperacaoSenha     TokenRecuperacaoSenha[]
+  convitesUsuario            ConviteUsuario[]
+  auditoriasSeguranca        AuditoriaSeguranca[]
 }
 
 model Usuario {
@@ -274,12 +279,111 @@ model Usuario {
   auditoriasFuncionalidade   AuditoriaFuncionalidade[] @relation("AuditoriaFuncionalidadeUsuario")
   auditoriasPlataforma       PlatformTenantAudit[]      @relation("PlatformTenantAuditActor")
   tenantsCriadosPlataforma   PlatformTenantAudit[]      @relation("PlatformTenantAuditAdmin")
+  sessoes                     SessaoUsuario[]
+  tokensRecuperacaoSenha      TokenRecuperacaoSenha[]
+  convitesCriados             ConviteUsuario[]
 
   @@unique([empresaId, email])
   @@unique([empresaId, id])
   @@index([empresaId])
   @@index([email])
   @@index([ativo])
+}
+
+model SessaoUsuario {
+  id                    String                 @id @default(cuid())
+  empresaId             Int
+  usuarioId             Int
+  empresa               Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario               Usuario                @relation(fields: [empresaId, usuarioId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  familyId              String
+  userAgentSanitizado   String?
+  ipHash                String?
+  criadoEm              DateTime               @default(now())
+  ultimoUsoEm           DateTime               @default(now())
+  expiraEm              DateTime
+  revogadoEm            DateTime?
+  motivoRevogacao       String?
+  tokens                SessaoRefreshToken[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId, usuarioId, revogadoEm])
+  @@index([empresaId, expiraEm])
+  @@index([familyId])
+}
+
+model SessaoRefreshToken {
+  id          String        @id @default(cuid())
+  empresaId   Int
+  sessaoId    String
+  empresa     Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  sessao      SessaoUsuario @relation(fields: [empresaId, sessaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  tokenHash   String        @unique
+  emitidoEm   DateTime      @default(now())
+  usadoEm     DateTime?
+  revogadoEm  DateTime?
+  expiraEm    DateTime
+
+  @@unique([empresaId, id])
+  @@index([empresaId, sessaoId])
+  @@index([empresaId, expiraEm])
+}
+
+model TokenRecuperacaoSenha {
+  id          String   @id @default(cuid())
+  empresaId   Int
+  usuarioId   Int
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario     Usuario  @relation(fields: [empresaId, usuarioId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  tokenHash   String   @unique
+  expiraEm    DateTime
+  usadoEm     DateTime?
+  revogadoEm  DateTime?
+  criadoEm    DateTime @default(now())
+
+  @@unique([empresaId, id])
+  @@index([empresaId, usuarioId, expiraEm])
+}
+
+model ConviteUsuario {
+  id                 String       @id @default(cuid())
+  empresaId          Int
+  convidadoPorId     Int
+  empresa            Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  convidadoPor       Usuario      @relation(fields: [empresaId, convidadoPorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  nomeConvidado      String
+  emailNormalizado   String
+  papel              PapelUsuario @default(VENDEDOR)
+  tokenHash          String       @unique
+  expiraEm           DateTime
+  aceitoEm           DateTime?
+  revogadoEm         DateTime?
+  deliveryStatus     String       @default("PENDING_DELIVERY")
+  criadoEm           DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, emailNormalizado])
+  @@index([empresaId, expiraEm])
+  @@index([empresaId, aceitoEm, revogadoEm])
+}
+
+model AuditoriaSeguranca {
+  id              Int      @id @default(autoincrement())
+  empresaId       Int
+  empresa         Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  actorUsuarioId  Int?
+  targetUsuarioId Int?
+  acao            String
+  resultado       String
+  correlationId   String?
+  motivo          String?
+  createdAt       DateTime @default(now())
+
+  @@index([empresaId, createdAt])
+  @@index([empresaId, actorUsuarioId, createdAt])
+  @@index([empresaId, targetUsuarioId, createdAt])
+  @@index([empresaId, acao, createdAt])
 }
 
 model IntegracaoOAuthState {

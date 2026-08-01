@@ -7,9 +7,9 @@ const { relationSpecs } = require("./check-tenant-relation-integrity.cjs");
 const { classifyPolymorphicRows, POLYMORPHIC_ROWS_QUERY } = require("./tenant-isolation-verifier-utils.cjs");
 const { sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation-log-utils.cjs");
 
-const EXPECTED_RELATION_COUNT = 83;
+const EXPECTED_RELATION_COUNT = 87;
 const TENANT_RELATION_MANIFEST_VERSION = 1;
-const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "ae8072157e89ddf48032eebcc65f5954989c8ffbe438f83ba4695d6db815a4b4";
+const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "1d0a06953fcc75873ab7b6f07b3949e8f7bf17d48386557e3c1c48cb679928f9";
 const DEFAULT_MIGRATION_NAME = "20260801123000_enforce_tenant_safe_relations";
 const DEFAULT_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma", "migrations");
 const DEFAULT_POSTGRES_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma-postgres", "migrations");
@@ -33,6 +33,9 @@ const CASCADE_RELATIONS = new Set([
   "MensagemCanal.canalIntegracaoId->CanalIntegracao",
   "MensagemCanal.conversaCanalId->ConversaCanal",
   "EmailMessageMetadata.mensagemCanalId->MensagemCanal",
+  "SessaoUsuario.usuarioId->Usuario",
+  "SessaoRefreshToken.sessaoId->SessaoUsuario",
+  "TokenRecuperacaoSenha.usuarioId->Usuario",
   "HistoricoPropostaComercial.propostaId->PropostaComercial",
   "AutomacaoExecucao.regraId->AutomacaoRegra",
   "AutomacaoAcaoJob.execucaoId->AutomacaoExecucao",
@@ -60,6 +63,12 @@ const MIGRATION_REGISTRY = Object.freeze({
     relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
     sqliteSha256: "1ed42b8752af6234c4abcb3aaff6805d610819848eb8ab6fbb7e4e67b3532b0c",
     postgresSha256: "d37a4ddbec32dacece4892c8e09bc457ce53a01a3acb973cb4fe02c992a4fa96",
+  }),
+  "20260801150000_add_user_security_foundation": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: "b34acdfebadf0ae3badc55af5ca86a64a1627c3aece46edb414463a3c48dbca7",
+    postgresSha256: "176b4502032affd3d779bd968b13094aadc71128681ed937bfffcd0e03776174",
   }),
 });
 
