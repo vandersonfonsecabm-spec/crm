@@ -329,7 +329,9 @@ function assertMigrationRegistration({
   const directories = [
     { directory: sqliteMigrationDir, hashKey: "sqliteSha256" },
     { directory: postgresMigrationDir, hashKey: "postgresSha256" },
-    ...(!sqliteMigrationDir && !postgresMigrationDir ? [{ directory: migrationDir, hashKey: inferHashKey(migrationDir) }] : []),
+    ...(!sqliteMigrationDir && !postgresMigrationDir && migrationDir
+      ? [{ directory: migrationDir, hashKey: inferHashKey(migrationDir) }]
+      : []),
   ].filter((item) => item.directory);
   if (directories.length === 0) return { migrationName: null, relationAffecting: false };
 
