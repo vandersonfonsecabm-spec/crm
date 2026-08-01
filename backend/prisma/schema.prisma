@@ -38,6 +38,7 @@ model Cliente {
   historicosQualificacao HistoricoQualificacaoConversa[]
   propostasComerciais PropostaComercial[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([empresaId, status])
   @@index([empresaId, quente])
@@ -52,7 +53,7 @@ model Nota {
   tipo      String   @default("nota")
   createdAt DateTime @default(now())
   clienteId Int
-  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  cliente   Cliente  @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
 
   @@index([empresaId])
   @@index([clienteId])
@@ -113,23 +114,23 @@ model Acompanhamento {
   empresaId       Int
   empresa         Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   clienteId       Int?
-  cliente         Cliente?                 @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  cliente         Cliente?                 @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   leadId          Int?
-  lead            Lead?                    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead            Lead?                    @relation(fields: [empresaId, leadId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   conversaCanalId Int?
-  conversaCanal   ConversaCanal?           @relation(fields: [conversaCanalId], references: [id], onDelete: SetNull)
+  conversaCanal   ConversaCanal?           @relation(fields: [empresaId, conversaCanalId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   negocioId       Int?
-  negocio         Negocio?                 @relation(fields: [negocioId], references: [id], onDelete: SetNull)
+  negocio         Negocio?                 @relation(fields: [empresaId, negocioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   propostaComercialId Int?
-  propostaComercial   PropostaComercial?   @relation(fields: [propostaComercialId], references: [id], onDelete: SetNull)
+  propostaComercial   PropostaComercial?   @relation(fields: [empresaId, propostaComercialId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   responsavelId   Int?
-  responsavelUsuario Usuario?               @relation("AcompanhamentoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  responsavelUsuario Usuario?               @relation("AcompanhamentoResponsavel", fields: [empresaId, responsavelId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   autorId         Int?
-  autor            Usuario?                 @relation("AcompanhamentoAutor", fields: [autorId], references: [id], onDelete: SetNull)
+  autor            Usuario?                 @relation("AcompanhamentoAutor", fields: [empresaId, autorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   concluidoPorId  Int?
-  concluidoPor    Usuario?                  @relation("AcompanhamentoConcluidoPor", fields: [concluidoPorId], references: [id], onDelete: SetNull)
+  concluidoPor    Usuario?                  @relation("AcompanhamentoConcluidoPor", fields: [empresaId, concluidoPorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   canceladoPorId  Int?
-  canceladoPor    Usuario?                  @relation("AcompanhamentoCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
+  canceladoPor    Usuario?                  @relation("AcompanhamentoCanceladoPor", fields: [empresaId, canceladoPorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   titulo          String
   descricao       String?
   dataHora        DateTime
@@ -145,6 +146,7 @@ model Acompanhamento {
   historico       HistoricoAcompanhamento[]
   automacaoEventosInternos AutomacaoEventoInterno[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([clienteId])
   @@index([empresaId, clienteId])
@@ -165,16 +167,16 @@ model HistoricoAcompanhamento {
   empresaId                Int
   empresa                  Empresa                    @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   acompanhamentoId         Int
-  acompanhamento           Acompanhamento             @relation(fields: [acompanhamentoId], references: [id], onDelete: Cascade)
+  acompanhamento           Acompanhamento             @relation(fields: [empresaId, acompanhamentoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   autorId                  Int
-  autor                    Usuario                     @relation("HistoricoAcompanhamentoAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  autor                    Usuario                     @relation("HistoricoAcompanhamentoAutor", fields: [empresaId, autorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   acao                     TipoAcaoAcompanhamento
   statusAnterior           StatusAcompanhamento?
   statusNovo               StatusAcompanhamento?
   responsavelAnteriorId    Int?
-  responsavelAnterior      Usuario?                    @relation("HistoricoAcompanhamentoResponsavelAnterior", fields: [responsavelAnteriorId], references: [id], onDelete: SetNull)
+  responsavelAnterior      Usuario?                    @relation("HistoricoAcompanhamentoResponsavelAnterior", fields: [empresaId, responsavelAnteriorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   responsavelNovoId        Int?
-  responsavelNovo          Usuario?                    @relation("HistoricoAcompanhamentoResponsavelNovo", fields: [responsavelNovoId], references: [id], onDelete: SetNull)
+  responsavelNovo          Usuario?                    @relation("HistoricoAcompanhamentoResponsavelNovo", fields: [empresaId, responsavelNovoId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   dataHoraAnterior         DateTime?
   dataHoraNova             DateTime?
   observacao               String?
@@ -267,12 +269,14 @@ model Usuario {
   automacaoRegrasCriadas        AutomacaoRegra[] @relation("AutomacaoRegraCriador")
   automacaoRegrasAtualizadas    AutomacaoRegra[] @relation("AutomacaoRegraAtualizador")
   automacaoEventosInternos      AutomacaoEventoInterno[] @relation("AutomacaoEventoAutor")
+  automacaoRoundRobinEstados    AutomacaoRoundRobinEstado[] @relation("AutomacaoRoundRobinResponsavel")
   funcionalidadesHabilitadas EmpresaFuncionalidade[]   @relation("FuncionalidadeHabilitadaPor")
   auditoriasFuncionalidade   AuditoriaFuncionalidade[] @relation("AuditoriaFuncionalidadeUsuario")
   auditoriasPlataforma       PlatformTenantAudit[]      @relation("PlatformTenantAuditActor")
   tenantsCriadosPlataforma   PlatformTenantAudit[]      @relation("PlatformTenantAuditAdmin")
 
   @@unique([empresaId, email])
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([email])
   @@index([ativo])
@@ -283,7 +287,7 @@ model IntegracaoOAuthState {
   empresaId Int
   empresa   Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   usuarioId Int
-  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario   Usuario   @relation(fields: [empresaId, usuarioId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   provedor  String
   stateHash String    @unique
   expiresAt DateTime
@@ -320,6 +324,7 @@ model Integracao {
   condicoesPagamento        CondicaoPagamentoExterna[]
   importacoes               ImportacaoDados[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([empresaId, status])
   @@index([empresaId, tipo])
@@ -329,7 +334,7 @@ model Integracao {
 model SincronizacaoIntegracao {
   id               Int                 @id @default(autoincrement())
   integracaoId     Int
-  integracao       Integracao          @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  integracao       Integracao          @relation(fields: [empresaId, integracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   empresaId        Int
   empresa          Empresa             @relation(fields: [empresaId], references: [id])
   status           StatusSincronizacao @default(PENDENTE)
@@ -345,6 +350,7 @@ model SincronizacaoIntegracao {
   updatedAt        DateTime            @updatedAt
   erros            ErroIntegracao[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([integracaoId])
   @@index([status])
@@ -357,9 +363,9 @@ model ErroIntegracao {
   empresaId           Int
   empresa             Empresa                  @relation(fields: [empresaId], references: [id])
   integracaoId        Int
-  integracao          Integracao               @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  integracao          Integracao               @relation(fields: [empresaId, integracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   sincronizacaoId     Int?
-  sincronizacao       SincronizacaoIntegracao? @relation(fields: [sincronizacaoId], references: [id], onDelete: SetNull)
+  sincronizacao       SincronizacaoIntegracao? @relation(fields: [empresaId, sincronizacaoId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   codigo              String
   mensagem            String
   detalhesSanitizados String?
@@ -379,7 +385,7 @@ model ProdutoExterno {
   empresaId          Int
   empresa            Empresa          @relation(fields: [empresaId], references: [id])
   integracaoId       Int
-  integracao         Integracao       @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  integracao         Integracao       @relation(fields: [empresaId, integracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   externalId         String
   sku                String?
   codigoBarras       String?
@@ -397,6 +403,7 @@ model ProdutoExterno {
   precos             PrecoExterno[]
 
   @@unique([integracaoId, externalId])
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([integracaoId])
   @@index([sku])
@@ -410,9 +417,9 @@ model EstoqueExterno {
   empresaId        Int
   empresa          Empresa        @relation(fields: [empresaId], references: [id])
   integracaoId     Int
-  integracao       Integracao     @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  integracao       Integracao     @relation(fields: [empresaId, integracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   produtoExternoId Int
-  produtoExterno   ProdutoExterno @relation(fields: [produtoExternoId], references: [id], onDelete: Cascade)
+  produtoExterno   ProdutoExterno @relation(fields: [empresaId, produtoExternoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   localExternalId  String?
   localNome        String?
   quantidade       Decimal        @default(0)
@@ -433,9 +440,9 @@ model PrecoExterno {
   empresaId                Int
   empresa                  Empresa        @relation(fields: [empresaId], references: [id])
   integracaoId             Int
-  integracao               Integracao     @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  integracao               Integracao     @relation(fields: [empresaId, integracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   produtoExternoId         Int
-  produtoExterno           ProdutoExterno @relation(fields: [produtoExternoId], references: [id], onDelete: Cascade)
+  produtoExterno           ProdutoExterno @relation(fields: [empresaId, produtoExternoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   tabela                   String?
   precoCentavos            Int
   precoPromocionalCentavos Int?
@@ -456,7 +463,7 @@ model CondicaoPagamentoExterna {
   empresaId           Int
   empresa             Empresa    @relation(fields: [empresaId], references: [id])
   integracaoId        Int
-  integracao          Integracao @relation(fields: [integracaoId], references: [id], onDelete: Cascade)
+  integracao          Integracao @relation(fields: [empresaId, integracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   externalId          String
   nome                String
   parcelas            Int?
@@ -477,7 +484,7 @@ model ImportacaoDados {
   empresaId          Int
   empresa            Empresa           @relation(fields: [empresaId], references: [id])
   integracaoId       Int?
-  integracao         Integracao?       @relation(fields: [integracaoId], references: [id], onDelete: SetNull)
+  integracao         Integracao?       @relation(fields: [empresaId, integracaoId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   formato            FormatoImportacao
   status             StatusImportacao  @default(ENVIADO)
   nomeArquivo        String
@@ -491,7 +498,7 @@ model ImportacaoDados {
   iniciadaEm         DateTime?
   finalizadaEm       DateTime?
   createdByUsuarioId Int
-  createdByUsuario   Usuario           @relation(fields: [createdByUsuarioId], references: [id])
+  createdByUsuario   Usuario           @relation(fields: [empresaId, createdByUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   erros              ErroImportacao[]
@@ -564,6 +571,7 @@ model CanalIntegracao {
   enderecosEmail      EmailMailboxAddress[]
 
   @@unique([empresaId, chaveInterna])
+  @@unique([empresaId, id])
   @@unique([tipo, providerEnvironment, metaAppId, phoneNumberId])
   @@index([empresaId])
   @@index([empresaId, tipo])
@@ -577,7 +585,7 @@ model EmailMailboxAddress {
   empresaId           Int
   empresa             Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   canalIntegracaoId   Int
-  canalIntegracao     CanalIntegracao            @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  canalIntegracao     CanalIntegracao            @relation(fields: [empresaId, canalIntegracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   addressNormalized   String                     @unique
   kind                EmailMailboxAddressKind
   primarySlot         String?                    @unique
@@ -594,9 +602,9 @@ model ContatoCanal {
   empresaId           Int
   empresa             Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   canalIntegracaoId   Int
-  canalIntegracao     CanalIntegracao @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  canalIntegracao     CanalIntegracao @relation(fields: [empresaId, canalIntegracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   clienteId           Int?
-  cliente             Cliente?        @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  cliente             Cliente?        @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   externalId          String
   telefoneNormalizado String?
   nome                String?
@@ -605,6 +613,7 @@ model ContatoCanal {
   conversas           ConversaCanal[]
 
   @@unique([canalIntegracaoId, externalId])
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([canalIntegracaoId])
   @@index([empresaId, telefoneNormalizado])
@@ -616,15 +625,15 @@ model ConversaCanal {
   empresaId                Int
   empresa                  Empresa               @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   canalIntegracaoId        Int
-  canalIntegracao          CanalIntegracao       @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  canalIntegracao          CanalIntegracao       @relation(fields: [empresaId, canalIntegracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   contatoCanalId           Int
-  contatoCanal             ContatoCanal          @relation(fields: [contatoCanalId], references: [id], onDelete: Cascade)
+  contatoCanal             ContatoCanal          @relation(fields: [empresaId, contatoCanalId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   leadId                   Int?
-  lead                     Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead                     Lead?                 @relation(fields: [empresaId, leadId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   responsavelId            Int?
-  responsavel              Usuario?              @relation("ConversaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  responsavel              Usuario?              @relation("ConversaResponsavel", fields: [empresaId, responsavelId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   respostaReservadaPorId   Int?
-  respostaReservadaPor     Usuario?              @relation("ConversaRespostaReservadaPor", fields: [respostaReservadaPorId], references: [id], onDelete: SetNull)
+  respostaReservadaPor     Usuario?              @relation("ConversaRespostaReservadaPor", fields: [empresaId, respostaReservadaPorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   respostaReservadaAte     DateTime?
   status                   StatusConversa        @default(ABERTA)
   chaveAberta              String?               @unique
@@ -644,6 +653,7 @@ model ConversaCanal {
   acompanhamentos          Acompanhamento[]
   historicosQualificacao   HistoricoQualificacaoConversa[]
 
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([canalIntegracaoId])
   @@index([contatoCanalId])
@@ -662,11 +672,11 @@ model MensagemCanal {
   empresaId         Int
   empresa           Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   canalIntegracaoId Int
-  canalIntegracao   CanalIntegracao        @relation(fields: [canalIntegracaoId], references: [id], onDelete: Cascade)
+  canalIntegracao   CanalIntegracao        @relation(fields: [empresaId, canalIntegracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   conversaCanalId   Int
-  conversaCanal     ConversaCanal          @relation(fields: [conversaCanalId], references: [id], onDelete: Cascade)
+  conversaCanal     ConversaCanal          @relation(fields: [empresaId, conversaCanalId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   autorUsuarioId    Int?
-  autorUsuario      Usuario?               @relation("MensagemCanalAutor", fields: [autorUsuarioId], references: [id], onDelete: SetNull)
+  autorUsuario      Usuario?               @relation("MensagemCanalAutor", fields: [empresaId, autorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   externalId        String
   direcao           DirecaoMensagem
   tipo              TipoMensagemCanal      @default(TEXTO)
@@ -685,6 +695,7 @@ model MensagemCanal {
   emailMetadata     EmailMessageMetadata?
 
   @@unique([canalIntegracaoId, externalId])
+  @@unique([empresaId, id])
   @@index([empresaId])
   @@index([canalIntegracaoId])
   @@index([conversaCanalId])
@@ -699,7 +710,7 @@ model EmailMessageMetadata {
   empresaId           Int
   empresa             Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   mensagemCanalId     Int             @unique
-  mensagemCanal       MensagemCanal   @relation(fields: [mensagemCanalId], references: [id], onDelete: Cascade)
+  mensagemCanal       MensagemCanal   @relation(fields: [empresaId, mensagemCanalId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   messageId           String?
   providerMessageId   String?
   providerThreadId    String?
@@ -720,6 +731,7 @@ model EmailMessageMetadata {
   receivedAt          DateTime
   createdAt           DateTime        @default(now())
 
+  @@unique([empresaId, mensagemCanalId])
   @@index([empresaId])
   @@index([empresaId, threadKey])
   @@index([empresaId, messageId])
@@ -732,9 +744,9 @@ model Lead {
   empresaId                 Int
   empresa                   Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   clienteId                 Int
-  cliente                   Cliente               @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  cliente                   Cliente               @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   responsavelId             Int?
-  responsavel               Usuario?              @relation("LeadResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  responsavel               Usuario?              @relation("LeadResponsavel", fields: [empresaId, responsavelId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   status                    StatusLead            @default(NOVO)
   origem                    String?
   campanha                  String?
@@ -758,6 +770,7 @@ model Lead {
   automacaoExecucoes         AutomacaoExecucao[]
   automacaoEventosInternos   AutomacaoEventoInterno[]
 
+  @@unique([empresaId, id])
   @@index([empresaId, status])
   @@index([empresaId, responsavelId, status])
   @@index([empresaId, clienteId])
@@ -769,15 +782,15 @@ model Negocio {
   empresaId            Int
   empresa              Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   clienteId            Int
-  cliente              Cliente               @relation("NegocioCliente", fields: [clienteId], references: [id], onDelete: Restrict)
+  cliente              Cliente               @relation("NegocioCliente", fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   legacyClienteId      Int?                  @unique
-  legacyCliente        Cliente?              @relation("NegocioClienteLegado", fields: [legacyClienteId], references: [id], onDelete: SetNull)
+  legacyCliente        Cliente?              @relation("NegocioClienteLegado", fields: [empresaId, legacyClienteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   leadId               Int?                  @unique
-  lead                 Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead                 Lead?                 @relation(fields: [empresaId, leadId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   responsavelId        Int?
-  responsavel          Usuario?              @relation("NegocioResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  responsavel          Usuario?              @relation("NegocioResponsavel", fields: [empresaId, responsavelId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   convertidoPorId      Int?
-  convertidoPor        Usuario?              @relation("NegocioConvertidoPor", fields: [convertidoPorId], references: [id], onDelete: SetNull)
+  convertidoPor        Usuario?              @relation("NegocioConvertidoPor", fields: [empresaId, convertidoPorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   statusLeadAnterior   StatusLead?
   titulo               String?
   observacao           String?
@@ -797,6 +810,7 @@ model Negocio {
   automacaoExecucoes      AutomacaoExecucao[]
   automacaoEventosInternos AutomacaoEventoInterno[]
 
+  @@unique([empresaId, id])
   @@index([empresaId, etapa])
   @@index([empresaId, responsavelId, etapa])
   @@index([empresaId, clienteId])
@@ -810,9 +824,9 @@ model NotaInternaConversa {
   empresaId       Int
   empresa         Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   conversaCanalId Int
-  conversaCanal   ConversaCanal @relation(fields: [conversaCanalId], references: [id], onDelete: Restrict)
+  conversaCanal   ConversaCanal @relation(fields: [empresaId, conversaCanalId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   autorId         Int
-  autor           Usuario       @relation("NotaInternaAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  autor           Usuario       @relation("NotaInternaAutor", fields: [empresaId, autorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   conteudo        String
   sistema         Boolean       @default(false)
   createdAt       DateTime      @default(now())
@@ -827,17 +841,17 @@ model HistoricoAtribuicao {
   empresaId             Int
   empresa               Empresa          @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   leadId                Int?
-  lead                  Lead?            @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  lead                  Lead?            @relation(fields: [empresaId, leadId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   conversaCanalId       Int?
-  conversaCanal         ConversaCanal?   @relation(fields: [conversaCanalId], references: [id], onDelete: Restrict)
+  conversaCanal         ConversaCanal?   @relation(fields: [empresaId, conversaCanalId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   negocioId             Int?
-  negocio               Negocio?         @relation(fields: [negocioId], references: [id], onDelete: Restrict)
+  negocio               Negocio?         @relation(fields: [empresaId, negocioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   responsavelAnteriorId Int?
-  responsavelAnterior   Usuario?         @relation("AtribuicaoResponsavelAnterior", fields: [responsavelAnteriorId], references: [id], onDelete: SetNull)
+  responsavelAnterior   Usuario?         @relation("AtribuicaoResponsavelAnterior", fields: [empresaId, responsavelAnteriorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   responsavelNovoId     Int?
-  responsavelNovo       Usuario?         @relation("AtribuicaoResponsavelNovo", fields: [responsavelNovoId], references: [id], onDelete: SetNull)
+  responsavelNovo       Usuario?         @relation("AtribuicaoResponsavelNovo", fields: [empresaId, responsavelNovoId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   alteradoPorId         Int?
-  alteradoPor           Usuario?         @relation("AtribuicaoAlteradoPor", fields: [alteradoPorId], references: [id], onDelete: SetNull)
+  alteradoPor           Usuario?         @relation("AtribuicaoAlteradoPor", fields: [empresaId, alteradoPorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   tipo                  TipoAtribuicao   @default(ATRIBUIR)
   origem                OrigemAtribuicao @default(MANUAL)
   acaoAtendimento       TipoAcaoAtendimento?
@@ -863,15 +877,15 @@ model HistoricoQualificacaoConversa {
   empresaId       Int
   empresa         Empresa                          @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   conversaCanalId Int
-  conversaCanal   ConversaCanal                    @relation(fields: [conversaCanalId], references: [id], onDelete: Restrict)
+  conversaCanal   ConversaCanal                    @relation(fields: [empresaId, conversaCanalId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   clienteId       Int
-  cliente         Cliente                          @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  cliente         Cliente                          @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   leadId          Int
-  lead            Lead                             @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  lead            Lead                             @relation(fields: [empresaId, leadId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   negocioId       Int?
-  negocio         Negocio?                         @relation(fields: [negocioId], references: [id], onDelete: SetNull)
+  negocio         Negocio?                         @relation(fields: [empresaId, negocioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   autorId         Int
-  autor           Usuario                          @relation("QualificacaoComercialAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  autor           Usuario                          @relation("QualificacaoComercialAutor", fields: [empresaId, autorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   acao            TipoAcaoQualificacaoConversa
   interesse       String?
   prioridade      PrioridadeAcompanhamento?
@@ -893,17 +907,17 @@ model PropostaComercial {
   empresaId                Int
   empresa                  Empresa                     @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   clienteId                Int
-  cliente                  Cliente                     @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  cliente                  Cliente                     @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   negocioId                Int
-  negocio                  Negocio                     @relation(fields: [negocioId], references: [id], onDelete: Restrict)
+  negocio                  Negocio                     @relation(fields: [empresaId, negocioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   leadId                   Int?
-  lead                     Lead?                       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead                     Lead?                       @relation(fields: [empresaId, leadId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   responsavelId            Int?
-  responsavel              Usuario?                    @relation("PropostaComercialResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  responsavel              Usuario?                    @relation("PropostaComercialResponsavel", fields: [empresaId, responsavelId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   autorId                  Int
-  autor                    Usuario                     @relation("PropostaComercialAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  autor                    Usuario                     @relation("PropostaComercialAutor", fields: [empresaId, autorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   propostaOrigemId         Int?
-  propostaOrigem           PropostaComercial?          @relation("VersoesPropostaComercial", fields: [propostaOrigemId], references: [id], onDelete: SetNull)
+  propostaOrigem           PropostaComercial?          @relation("VersoesPropostaComercial", fields: [empresaId, propostaOrigemId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   versoes                  PropostaComercial[]          @relation("VersoesPropostaComercial")
   codigo                   String
   titulo                   String
@@ -924,6 +938,7 @@ model PropostaComercial {
   acompanhamentos          Acompanhamento[]
 
   @@unique([empresaId, codigo])
+  @@unique([empresaId, id])
   @@unique([empresaId, propostaOrigemId, versao])
   @@index([empresaId, clienteId, status])
   @@index([empresaId, negocioId, status])
@@ -953,9 +968,9 @@ model HistoricoPropostaComercial {
   empresaId                Int
   empresa                  Empresa                     @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   propostaId               Int
-  proposta                 PropostaComercial           @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+  proposta                 PropostaComercial           @relation(fields: [empresaId, propostaId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   autorId                  Int
-  autor                    Usuario                     @relation("HistoricoPropostaComercialAutor", fields: [autorId], references: [id], onDelete: Restrict)
+  autor                    Usuario                     @relation("HistoricoPropostaComercialAutor", fields: [empresaId, autorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   acao                     TipoAcaoPropostaComercial
   statusAnterior           StatusPropostaComercial?
   statusNovo               StatusPropostaComercial?
@@ -972,7 +987,7 @@ model EventoWebhook {
   empresaId           Int
   empresa             Empresa                    @relation(fields: [empresaId], references: [id], onDelete: Restrict)
   canalIntegracaoId   Int
-  canalIntegracao     CanalIntegracao            @relation(fields: [canalIntegracaoId], references: [id], onDelete: Restrict)
+  canalIntegracao     CanalIntegracao            @relation(fields: [empresaId, canalIntegracaoId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   provedor            String
   externalEventId     String
   tipoEvento          String?
@@ -1008,14 +1023,15 @@ model AutomacaoRegra {
   versao          Int                 @default(1)
   activatedAt     DateTime?
   createdById     Int?
-  createdBy       Usuario?            @relation("AutomacaoRegraCriador", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy       Usuario?            @relation("AutomacaoRegraCriador", fields: [empresaId, createdById], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   updatedById     Int?
-  updatedBy       Usuario?            @relation("AutomacaoRegraAtualizador", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy       Usuario?            @relation("AutomacaoRegraAtualizador", fields: [empresaId, updatedById], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
   execucoes       AutomacaoExecucao[]
   roundRobinState AutomacaoRoundRobinEstado?
 
+  @@unique([empresaId, id])
   @@index([empresaId, ativa, prioridade])
   @@index([empresaId, gatilho, ativa])
   @@index([empresaId, activatedAt])
@@ -1026,15 +1042,15 @@ model AutomacaoExecucao {
   empresaId         Int
   empresa           Empresa                  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   regraId           Int
-  regra             AutomacaoRegra           @relation(fields: [regraId], references: [id], onDelete: Cascade)
+  regra             AutomacaoRegra           @relation(fields: [empresaId, regraId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   regraVersao       Int
   regraSnapshotJson String
   entidadeTipo      EntidadeAutomacao
   entidadeId        Int
   leadId            Int?
-  lead              Lead?                    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead              Lead?                    @relation(fields: [empresaId, leadId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   negocioId         Int?
-  negocio           Negocio?                 @relation(fields: [negocioId], references: [id], onDelete: SetNull)
+  negocio           Negocio?                 @relation(fields: [empresaId, negocioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   occurrenceKey     String
   idempotencyKey    String
   status            StatusExecucaoAutomacao  @default(PENDENTE)
@@ -1050,6 +1066,7 @@ model AutomacaoExecucao {
   eventosInternos   AutomacaoEventoInterno[]
 
   @@unique([empresaId, regraId, occurrenceKey])
+  @@unique([empresaId, id])
   @@unique([empresaId, idempotencyKey])
   @@index([empresaId, status, createdAt])
   @@index([empresaId, entidadeTipo, entidadeId])
@@ -1062,7 +1079,7 @@ model AutomacaoAcaoJob {
   empresaId      Int
   empresa        Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   execucaoId     Int
-  execucao       AutomacaoExecucao  @relation(fields: [execucaoId], references: [id], onDelete: Cascade)
+  execucao       AutomacaoExecucao  @relation(fields: [empresaId, execucaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   indice         Int
   tipo           AcaoAutomacao
   actionKey      String
@@ -1088,8 +1105,9 @@ model AutomacaoRoundRobinEstado {
   empresaId           Int
   empresa             Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   regraId             Int              @unique
-  regra               AutomacaoRegra   @relation(fields: [regraId], references: [id], onDelete: Cascade)
+  regra               AutomacaoRegra   @relation(fields: [empresaId, regraId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
   ultimoResponsavelId Int?
+  ultimoResponsavel   Usuario?          @relation("AutomacaoRoundRobinResponsavel", fields: [empresaId, ultimoResponsavelId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   revisao             Int              @default(1)
   updatedAt           DateTime         @updatedAt
 
@@ -1102,15 +1120,15 @@ model AutomacaoEventoInterno {
   empresaId        Int
   empresa          Empresa             @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   execucaoId       Int?
-  execucao         AutomacaoExecucao?  @relation(fields: [execucaoId], references: [id], onDelete: SetNull)
+  execucao         AutomacaoExecucao?  @relation(fields: [empresaId, execucaoId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   leadId           Int?
-  lead             Lead?               @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  lead             Lead?               @relation(fields: [empresaId, leadId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   negocioId        Int?
-  negocio          Negocio?            @relation(fields: [negocioId], references: [id], onDelete: SetNull)
+  negocio          Negocio?            @relation(fields: [empresaId, negocioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   acompanhamentoId Int?
-  acompanhamento   Acompanhamento?     @relation(fields: [acompanhamentoId], references: [id], onDelete: SetNull)
+  acompanhamento   Acompanhamento?     @relation(fields: [empresaId, acompanhamentoId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   autorId          Int?
-  autor            Usuario?            @relation("AutomacaoEventoAutor", fields: [autorId], references: [id], onDelete: SetNull)
+  autor            Usuario?            @relation("AutomacaoEventoAutor", fields: [empresaId, autorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   tipo             String
   resumo           String
   payloadJson      String?
@@ -1132,12 +1150,13 @@ model EmpresaFuncionalidade {
   habilitada             Boolean                   @default(false)
   habilitadoEm           DateTime?
   habilitadoPorUsuarioId Int?
-  habilitadoPorUsuario   Usuario?                  @relation("FuncionalidadeHabilitadaPor", fields: [habilitadoPorUsuarioId], references: [id], onDelete: SetNull)
+  habilitadoPorUsuario   Usuario?                  @relation("FuncionalidadeHabilitadaPor", fields: [empresaId, habilitadoPorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
   auditorias             AuditoriaFuncionalidade[]
 
   @@unique([empresaId, chave])
+  @@unique([empresaId, id])
   @@index([empresaId, habilitada])
   @@index([habilitadoPorUsuarioId])
 }
@@ -1147,13 +1166,13 @@ model AuditoriaFuncionalidade {
   empresaId        Int
   empresa          Empresa                @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   funcionalidadeId Int?
-  funcionalidade   EmpresaFuncionalidade? @relation(fields: [funcionalidadeId], references: [id], onDelete: SetNull)
+  funcionalidade   EmpresaFuncionalidade? @relation(fields: [empresaId, funcionalidadeId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   chave            ChaveFuncionalidade
   valorAnterior    Boolean?
   valorNovo        Boolean
   operadoPor       String
   usuarioId        Int?
-  usuario          Usuario?               @relation("AuditoriaFuncionalidadeUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  usuario          Usuario?               @relation("AuditoriaFuncionalidadeUsuario", fields: [usuarioId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   motivo           String
   createdAt        DateTime               @default(now())
 
@@ -1172,7 +1191,7 @@ model PlatformTenantAudit {
   tenantName   String
   tenantSlug   String
   adminUserId  Int
-  adminUser    Usuario  @relation("PlatformTenantAuditAdmin", fields: [adminUserId], references: [id], onDelete: Restrict)
+  adminUser    Usuario  @relation("PlatformTenantAuditAdmin", fields: [tenantId, adminUserId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   createdAt    DateTime @default(now())
 
   @@index([tenantId, createdAt])

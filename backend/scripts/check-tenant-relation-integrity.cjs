@@ -1,0 +1,187 @@
+const { Client } = require("pg");
+
+const relationSpecs = Object.freeze([
+  ["commercial", "Nota", "clienteId", "Cliente"],
+  ["commercial", "Acompanhamento", "clienteId", "Cliente"],
+  ["commercial", "Acompanhamento", "leadId", "Lead"],
+  ["commercial", "Acompanhamento", "conversaCanalId", "ConversaCanal"],
+  ["commercial", "Acompanhamento", "negocioId", "Negocio"],
+  ["commercial", "Acompanhamento", "propostaComercialId", "PropostaComercial"],
+  ["commercial", "Acompanhamento", "responsavelId", "Usuario"],
+  ["commercial", "Acompanhamento", "autorId", "Usuario"],
+  ["commercial", "Acompanhamento", "concluidoPorId", "Usuario"],
+  ["commercial", "Acompanhamento", "canceladoPorId", "Usuario"],
+  ["commercial", "HistoricoAcompanhamento", "acompanhamentoId", "Acompanhamento"],
+  ["commercial", "HistoricoAcompanhamento", "autorId", "Usuario"],
+  ["commercial", "HistoricoAcompanhamento", "responsavelAnteriorId", "Usuario"],
+  ["commercial", "HistoricoAcompanhamento", "responsavelNovoId", "Usuario"],
+  ["integration", "IntegracaoOAuthState", "usuarioId", "Usuario"],
+  ["integration", "SincronizacaoIntegracao", "integracaoId", "Integracao"],
+  ["integration", "ErroIntegracao", "integracaoId", "Integracao"],
+  ["integration", "ErroIntegracao", "sincronizacaoId", "SincronizacaoIntegracao"],
+  ["integration", "ProdutoExterno", "integracaoId", "Integracao"],
+  ["integration", "EstoqueExterno", "integracaoId", "Integracao"],
+  ["integration", "EstoqueExterno", "produtoExternoId", "ProdutoExterno"],
+  ["integration", "PrecoExterno", "integracaoId", "Integracao"],
+  ["integration", "PrecoExterno", "produtoExternoId", "ProdutoExterno"],
+  ["integration", "CondicaoPagamentoExterna", "integracaoId", "Integracao"],
+  ["integration", "ImportacaoDados", "integracaoId", "Integracao"],
+  ["integration", "ImportacaoDados", "createdByUsuarioId", "Usuario"],
+  ["shared-channel", "EmailMailboxAddress", "canalIntegracaoId", "CanalIntegracao"],
+  ["shared-channel", "ContatoCanal", "canalIntegracaoId", "CanalIntegracao"],
+  ["shared-channel", "ContatoCanal", "clienteId", "Cliente"],
+  ["shared-channel", "ConversaCanal", "canalIntegracaoId", "CanalIntegracao"],
+  ["shared-channel", "ConversaCanal", "contatoCanalId", "ContatoCanal"],
+  ["shared-channel", "ConversaCanal", "leadId", "Lead"],
+  ["shared-channel", "ConversaCanal", "responsavelId", "Usuario"],
+  ["shared-channel", "ConversaCanal", "respostaReservadaPorId", "Usuario"],
+  ["shared-channel", "MensagemCanal", "canalIntegracaoId", "CanalIntegracao"],
+  ["shared-channel", "MensagemCanal", "conversaCanalId", "ConversaCanal"],
+  ["shared-channel", "MensagemCanal", "autorUsuarioId", "Usuario"],
+  ["shared-channel", "EmailMessageMetadata", "mensagemCanalId", "MensagemCanal"],
+  ["commercial", "Lead", "clienteId", "Cliente"],
+  ["commercial", "Lead", "responsavelId", "Usuario"],
+  ["commercial", "Negocio", "clienteId", "Cliente"],
+  ["commercial", "Negocio", "legacyClienteId", "Cliente"],
+  ["commercial", "Negocio", "leadId", "Lead"],
+  ["commercial", "Negocio", "responsavelId", "Usuario"],
+  ["commercial", "Negocio", "convertidoPorId", "Usuario"],
+  ["commercial", "NotaInternaConversa", "conversaCanalId", "ConversaCanal"],
+  ["commercial", "NotaInternaConversa", "autorId", "Usuario"],
+  ["commercial", "HistoricoAtribuicao", "leadId", "Lead"],
+  ["commercial", "HistoricoAtribuicao", "conversaCanalId", "ConversaCanal"],
+  ["commercial", "HistoricoAtribuicao", "negocioId", "Negocio"],
+  ["commercial", "HistoricoAtribuicao", "responsavelAnteriorId", "Usuario"],
+  ["commercial", "HistoricoAtribuicao", "responsavelNovoId", "Usuario"],
+  ["commercial", "HistoricoAtribuicao", "alteradoPorId", "Usuario"],
+  ["commercial", "HistoricoQualificacaoConversa", "conversaCanalId", "ConversaCanal"],
+  ["commercial", "HistoricoQualificacaoConversa", "clienteId", "Cliente"],
+  ["commercial", "HistoricoQualificacaoConversa", "leadId", "Lead"],
+  ["commercial", "HistoricoQualificacaoConversa", "negocioId", "Negocio"],
+  ["commercial", "HistoricoQualificacaoConversa", "autorId", "Usuario"],
+  ["commercial", "PropostaComercial", "clienteId", "Cliente"],
+  ["commercial", "PropostaComercial", "negocioId", "Negocio"],
+  ["commercial", "PropostaComercial", "leadId", "Lead"],
+  ["commercial", "PropostaComercial", "responsavelId", "Usuario"],
+  ["commercial", "PropostaComercial", "autorId", "Usuario"],
+  ["commercial", "PropostaComercial", "propostaOrigemId", "PropostaComercial"],
+  ["commercial", "HistoricoPropostaComercial", "propostaId", "PropostaComercial"],
+  ["commercial", "HistoricoPropostaComercial", "autorId", "Usuario"],
+  ["shared-channel", "EventoWebhook", "canalIntegracaoId", "CanalIntegracao"],
+  ["automation", "AutomacaoRegra", "createdById", "Usuario"],
+  ["automation", "AutomacaoRegra", "updatedById", "Usuario"],
+  ["automation", "AutomacaoExecucao", "regraId", "AutomacaoRegra"],
+  ["automation", "AutomacaoExecucao", "leadId", "Lead"],
+  ["automation", "AutomacaoExecucao", "negocioId", "Negocio"],
+  ["automation", "AutomacaoAcaoJob", "execucaoId", "AutomacaoExecucao"],
+  ["automation", "AutomacaoRoundRobinEstado", "regraId", "AutomacaoRegra"],
+  ["automation", "AutomacaoRoundRobinEstado", "ultimoResponsavelId", "Usuario"],
+  ["automation", "AutomacaoEventoInterno", "execucaoId", "AutomacaoExecucao"],
+  ["automation", "AutomacaoEventoInterno", "leadId", "Lead"],
+  ["automation", "AutomacaoEventoInterno", "negocioId", "Negocio"],
+  ["automation", "AutomacaoEventoInterno", "acompanhamentoId", "Acompanhamento"],
+  ["automation", "AutomacaoEventoInterno", "autorId", "Usuario"],
+  ["governance", "EmpresaFuncionalidade", "habilitadoPorUsuarioId", "Usuario"],
+  ["governance", "AuditoriaFuncionalidade", "funcionalidadeId", "EmpresaFuncionalidade"],
+  ["governance", "PlatformTenantAudit", "adminUserId", "Usuario", "tenantId"],
+]);
+
+function ident(value) {
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(value)) throw new Error("PREFLIGHT_IDENTIFIER_INVALID");
+  return `"${value}"`;
+}
+
+function databaseUrl(env) {
+  const value = String(env.POSTGRES_DATABASE_URL || env.DATABASE_URL || "").trim();
+  if (!/^postgres(ql)?:\/\//i.test(value)) throw new Error("PREFLIGHT_POSTGRES_REQUIRED");
+  return value;
+}
+
+async function relationCount(client, spec) {
+  const [category, child, foreignKey, parent, tenantKey = "empresaId"] = spec;
+  const sql = `
+    SELECT
+      COUNT(*) FILTER (WHERE p."id" IS NULL)::int AS orphaned,
+      COUNT(*) FILTER (WHERE p."id" IS NOT NULL AND p."empresaId" <> c.${ident(tenantKey)})::int AS crossed
+    FROM ${ident(child)} c
+    LEFT JOIN ${ident(parent)} p ON p."id" = c.${ident(foreignKey)}
+    WHERE c.${ident(foreignKey)} IS NOT NULL`;
+  const row = (await client.query(sql)).rows[0];
+  return {
+    category,
+    relation: `${child}.${foreignKey}->${parent}`,
+    orphaned: Number(row.orphaned || 0),
+    crossed: Number(row.crossed || 0),
+  };
+}
+
+async function polymorphicCount(client) {
+  const result = await client.query(`
+    WITH executions AS (
+      SELECT e.*,
+        (e."entidadeTipo" = 'LEAD'
+          AND e."leadId" IS NULL
+          AND e."negocioId" IS NULL
+          AND e."resumoJson" LIKE '%"sourceType":"PILOT_SYNTHETIC"%'
+          AND e."resumoJson" LIKE '%"synthetic":true%') AS synthetic
+      FROM "AutomacaoExecucao" e
+    )
+    SELECT
+      COUNT(*) FILTER (WHERE e.synthetic)::int AS synthetic,
+      COUNT(*) FILTER (WHERE NOT e.synthetic AND e."entidadeTipo" = 'LEAD' AND l."id" IS NULL)::int AS orphaned_lead,
+      COUNT(*) FILTER (WHERE NOT e.synthetic AND e."entidadeTipo" = 'LEAD' AND l."id" IS NOT NULL AND l."empresaId" <> e."empresaId")::int AS crossed_lead,
+      COUNT(*) FILTER (WHERE NOT e.synthetic AND e."entidadeTipo" = 'LEAD' AND (e."leadId" IS NULL OR e."leadId" <> e."entidadeId" OR e."negocioId" IS NOT NULL))::int AS incoherent_lead,
+      COUNT(*) FILTER (WHERE e."entidadeTipo" = 'NEGOCIO' AND n."id" IS NULL)::int AS orphaned_business,
+      COUNT(*) FILTER (WHERE e."entidadeTipo" = 'NEGOCIO' AND n."id" IS NOT NULL AND n."empresaId" <> e."empresaId")::int AS crossed_business,
+      COUNT(*) FILTER (WHERE e."entidadeTipo" = 'NEGOCIO' AND (e."negocioId" IS NULL OR e."negocioId" <> e."entidadeId" OR e."leadId" IS NOT NULL))::int AS incoherent_business
+    FROM executions e
+    LEFT JOIN "Lead" l ON l."id" = e."entidadeId" AND e."entidadeTipo" = 'LEAD'
+    LEFT JOIN "Negocio" n ON n."id" = e."entidadeId" AND e."entidadeTipo" = 'NEGOCIO'`);
+  const row = result.rows[0] || {};
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Number(value || 0)]));
+}
+
+async function main() {
+  const client = new Client({ connectionString: databaseUrl(process.env), statement_timeout: 30000 });
+  await client.connect();
+  try {
+    await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    const relations = [];
+    for (const spec of relationSpecs) relations.push(await relationCount(client, spec));
+    const polymorphic = await polymorphicCount(client);
+    await client.query("ROLLBACK");
+    const totals = relations.reduce(
+      (sum, item) => ({ orphaned: sum.orphaned + item.orphaned, crossed: sum.crossed + item.crossed }),
+      { orphaned: 0, crossed: 0 },
+    );
+    const affected = relations.filter((item) => item.orphaned > 0 || item.crossed > 0);
+    console.log(JSON.stringify({
+      event: "tenant_relation_preflight",
+      checkedRelations: relations.length,
+      totals: { ...totals, polymorphic },
+      affected,
+      safe: totals.orphaned === 0
+        && totals.crossed === 0
+        && polymorphic.orphaned_lead === 0
+        && polymorphic.crossed_lead === 0
+        && polymorphic.incoherent_lead === 0
+        && polymorphic.orphaned_business === 0
+        && polymorphic.crossed_business === 0
+        && polymorphic.incoherent_business === 0,
+    }));
+  } finally {
+    await client.end();
+  }
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    const code = String(error?.code || error?.message || "PREFLIGHT_FAILED")
+      .replace(/postgres(ql)?:\/\/[^\s"']+/gi, "[POSTGRES_URL_REDACTED]")
+      .slice(0, 160);
+    console.error(JSON.stringify({ event: "tenant_relation_preflight", safe: false, error: code }));
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { relationSpecs };
