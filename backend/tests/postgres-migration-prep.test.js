@@ -236,21 +236,23 @@ test("runtime Prisma seleciona schema SQLite somente para provider SQLite", () =
 });
 
 test("runtime Prisma seleciona schema PostgreSQL derivado para provider PostgreSQL", () => {
-  const config = runtimePrismaConfig({
-    env: {
-      CRM_DATABASE_PROVIDER: "postgresql",
-      DATABASE_URL: "file:/app/data/dev.db",
-      POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
-    },
-    provider: "postgresql",
-    postgresWorkspaceOptions: {
-      root: require("node:fs").mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "crm-pg-runtime-test-")),
-      migrationSql: "-- baseline test\n",
-    },
-  });
-  assert.doesNotMatch(config.schemaPath, /backend[\\/]prisma[\\/]schema\.prisma$/);
-  assert.match(require("node:fs").readFileSync(config.schemaPath, "utf8"), /provider = "postgresql"/);
-  assert.equal(config.env.DATABASE_URL, "postgresql://user:pass@localhost:5432/crm_migration_test");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-pg-runtime-test-"));
+  try {
+    const config = runtimePrismaConfig({
+      env: {
+        CRM_DATABASE_PROVIDER: "postgresql",
+        DATABASE_URL: "file:/app/data/dev.db",
+        POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+      },
+      provider: "postgresql",
+      postgresWorkspaceOptions: { root, migrationSql: "-- baseline test\n" },
+    });
+    assert.doesNotMatch(config.schemaPath, /backend[\\/]prisma[\\/]schema\.prisma$/);
+    assert.match(fs.readFileSync(config.schemaPath, "utf8"), /provider = "postgresql"/);
+    assert.equal(config.env.DATABASE_URL, "postgresql://user:pass@localhost:5432/crm_migration_test");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("runtime Prisma falha quando provider e DATABASE_URL divergem", () => {
@@ -277,21 +279,23 @@ test("script de build runtime executa Prisma com schema do provider escolhido", 
   assert.match(sqlite.schemaPath, /backend[\\/]prisma[\\/]schema\.prisma$/);
   assert.match(calls.at(-1).args.join(" "), /generate .*--schema .*backend[\\/]prisma[\\/]schema\.prisma/);
 
-  const postgres = runPrismaForProvider("generate", {
-    env: {
-      CRM_DATABASE_PROVIDER: "postgresql",
-      DATABASE_URL: "file:/app/data/dev.db",
-      POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
-    },
-    postgresWorkspaceOptions: {
-      root: require("node:fs").mkdtempSync(require("node:path").join(require("node:os").tmpdir(), "crm-pg-build-test-")),
-      migrationSql: "-- baseline test\n",
-    },
-    runCommand: (command, args, env) => calls.push({ command, args, env }),
-  });
-  assert.doesNotMatch(postgres.schemaPath, /backend[\\/]prisma[\\/]schema\.prisma$/);
-  assert.match(calls.at(-1).args.join(" "), /generate .*--schema/);
-  assert.equal(calls.at(-1).env.DATABASE_URL, "postgresql://user:pass@localhost:5432/crm_migration_test");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-pg-build-test-"));
+  try {
+    const postgres = runPrismaForProvider("generate", {
+      env: {
+        CRM_DATABASE_PROVIDER: "postgresql",
+        DATABASE_URL: "file:/app/data/dev.db",
+        POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
+      },
+      postgresWorkspaceOptions: { root, migrationSql: "-- baseline test\n" },
+      runCommand: (command, args, env) => calls.push({ command, args, env }),
+    });
+    assert.doesNotMatch(postgres.schemaPath, /backend[\\/]prisma[\\/]schema\.prisma$/);
+    assert.match(calls.at(-1).args.join(" "), /generate .*--schema/);
+    assert.equal(calls.at(-1).env.DATABASE_URL, "postgresql://user:pass@localhost:5432/crm_migration_test");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("check de conexao PostgreSQL aceita somente URL PostgreSQL explicita", () => {

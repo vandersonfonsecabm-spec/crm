@@ -6,8 +6,12 @@ const DATABASE_KEYS = Object.freeze([
 ]);
 
 async function checkEmailProductionState(env = process.env) {
+  const declaredProvider = String(env.CRM_DATABASE_PROVIDER || "").trim().toLowerCase();
+  if (declaredProvider && !["postgres", "postgresql"].includes(declaredProvider)) {
+    throw verifierError("EMAIL_PRODUCTION_PROVIDER_INVALID");
+  }
   const databaseKey = DATABASE_KEYS.find((key) => /^postgres(ql)?:\/\//i.test(String(env[key] || "")));
-  if (!databaseKey) throw new Error("POSTGRES_RUNTIME_UNAVAILABLE");
+  if (!databaseKey) throw verifierError("POSTGRES_RUNTIME_UNAVAILABLE");
 
   const client = new Client({ connectionString: env[databaseKey], statement_timeout: 15_000 });
   await client.connect();
@@ -39,8 +43,39 @@ async function checkEmailProductionState(env = process.env) {
 }
 
 function gateState(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return normalized === "true" ? "ON" : normalized ? "OFF" : "MISSING";
+  const raw = String(value || "");
+  return raw === "true" ? "ON" : raw ? "OFF" : "MISSING";
+}
+
+function assertSafeEmailProductionState(result) {
+  if (result.gates?.integration === "ON" || result.gates?.inbound === "ON") {
+    throw verifierError("EMAIL_PRODUCTION_GATES_ENABLED");
+  }
+  if (result.migrationApplied !== 1 || result.tables !== 2) {
+    throw verifierError("EMAIL_PRODUCTION_SCHEMA_INVALID");
+  }
+  const mutableCounts = [
+    "channels",
+    "activeOrTimestampedChannels",
+    "capabilities",
+    "enabledCapabilities",
+    "mailboxAddresses",
+    "messageMetadata",
+    "events",
+    "messages",
+    "contacts",
+    "conversations",
+  ];
+  if (mutableCounts.some((key) => result[key] !== 0)) {
+    throw verifierError("EMAIL_PRODUCTION_STATE_NOT_EMPTY");
+  }
+  return result;
+}
+
+function verifierError(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
 }
 
 async function scalar(client, sql, params = []) {
@@ -62,11 +97,12 @@ function sanitize(error) {
 
 if (require.main === module) {
   checkEmailProductionState()
-    .then((result) => console.log(JSON.stringify({ event: "email_production_state", ...result })))
+    .then((result) => assertSafeEmailProductionState(result))
+    .then((result) => console.log(JSON.stringify({ event: "email_production_state", safe: true, ...result })))
     .catch((error) => {
       console.error(`[email-production-state] ${sanitize(error)}`);
       process.exitCode = 1;
     });
 }
 
-module.exports = { checkEmailProductionState };
+module.exports = { assertSafeEmailProductionState, checkEmailProductionState, gateState };
