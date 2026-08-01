@@ -360,6 +360,21 @@ function migrationTouchesTenantRelations(sql, architecture) {
   return false;
 }
 
+function createdTablesFromMigrationSql(sql) {
+  const created = new Set();
+  for (const statement of splitSqlStatements(sql)) {
+    const tokens = sqlTokens(statement);
+    const createIndex = tokens.indexOf("CREATE");
+    if (createIndex < 0 || tokens[createIndex + 1] !== "TABLE") continue;
+    let tableIndex = createIndex + 2;
+    if (tokens[tableIndex] === "IF" && tokens[tableIndex + 1] === "NOT" && tokens[tableIndex + 2] === "EXISTS") {
+      tableIndex += 3;
+    }
+    if (tokens[tableIndex]) created.add(tokens[tableIndex]);
+  }
+  return created;
+}
+
 function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
@@ -391,12 +406,18 @@ function assertMigrationRegistration({
   if (!resolvedName) throw new GateFailure("TENANT_GATE_MIGRATION_MISSING");
   const registry = MIGRATION_REGISTRY[resolvedName];
   let relationAffecting = false;
+  let createdTables = null;
 
   for (const { directory, hashKey } of directories) {
     const file = path.join(directory, resolvedName, "migration.sql");
     if (!fs.existsSync(file)) throw new GateFailure("TENANT_GATE_MIGRATION_FILE_MISSING");
     const sql = fs.readFileSync(file, "utf8");
     relationAffecting ||= migrationTouchesTenantRelations(sql, architecture);
+    const providerCreatedTables = createdTablesFromMigrationSql(sql);
+    if (createdTables && JSON.stringify([...createdTables].sort()) !== JSON.stringify([...providerCreatedTables].sort())) {
+      throw new GateFailure("TENANT_GATE_MIGRATION_PROVIDER_DRIFT");
+    }
+    createdTables = providerCreatedTables;
     if (registry && hashKey && registry[hashKey] !== sha256(file)) throw new GateFailure("TENANT_GATE_MIGRATION_HASH_MISMATCH");
   }
 
@@ -405,7 +426,9 @@ function assertMigrationRegistration({
   if (registry && registry.relationManifestSha256 !== architecture.relationManifestHash) {
     throw new GateFailure("TENANT_GATE_REGISTRY_MANIFEST_HASH_MISMATCH");
   }
-  return { migrationName: resolvedName, relationAffecting };
+  const result = { migrationName: resolvedName, relationAffecting };
+  Object.defineProperty(result, "createdTables", { value: createdTables || new Set(), enumerable: false });
+  return result;
 }
 
 function allRelationTables() {
@@ -464,7 +487,22 @@ async function listTables(client, kind) {
   return new Set(rows.map((row) => String(row.name)));
 }
 
-async function inspectData(client, kind, { allowEmpty = false } = {}) {
+function relationSpecsForExistingSchema(tables, allowedMissingTables = new Set()) {
+  const required = allRelationTables();
+  const missing = required.filter((table) => !tables.has(table));
+  const allowed = new Set([...allowedMissingTables].map((table) => String(table).toUpperCase()));
+  if (missing.some((table) => !allowed.has(table.toUpperCase()))) {
+    throw new GateFailure("TENANT_GATE_SCHEMA_INCOMPLETE");
+  }
+  for (const [, child, , parent] of relationSpecs) {
+    if (!tables.has(parent) && tables.has(child)) {
+      throw new GateFailure("TENANT_GATE_SCHEMA_INCOMPLETE");
+    }
+  }
+  return relationSpecs.filter(([, child, , parent]) => tables.has(child) && tables.has(parent));
+}
+
+async function inspectData(client, kind, { allowEmpty = false, allowedMissingTables = new Set() } = {}) {
   const tables = await listTables(client, kind);
   const required = allRelationTables();
   const present = required.filter((table) => tables.has(table));
@@ -472,9 +510,9 @@ async function inspectData(client, kind, { allowEmpty = false } = {}) {
     if (allowEmpty) return { emptyDatabase: true, relations: [], polymorphic: {} };
     throw new GateFailure("TENANT_GATE_SCHEMA_EMPTY");
   }
-  if (present.length !== required.length) throw new GateFailure("TENANT_GATE_SCHEMA_INCOMPLETE");
+  const inspectableSpecs = relationSpecsForExistingSchema(tables, allowedMissingTables);
   const relations = [];
-  for (const spec of relationSpecs) relations.push(await relationCount(client, spec, kind));
+  for (const spec of inspectableSpecs) relations.push(await relationCount(client, spec, kind));
   const polymorphic = await polymorphicCount(client);
   const result = failureIfUnsafe({ relations, polymorphic });
   return { emptyDatabase: false, relations, ...result };
@@ -615,14 +653,14 @@ async function inspectConstraints(client, kind, architecture) {
   return { checkedForeignKeys: actual.length, checkedUniqueParents: new Set(relationSpecs.map((spec) => spec[3])).size };
 }
 
-async function inspectPostgres({ mode, env, architecture, allowEmpty }) {
+async function inspectPostgres({ mode, env, architecture, allowEmpty, allowedMissingTables }) {
   const url = databaseUrl(env);
   const client = new Client({ connectionString: url, statement_timeout: 30000 });
   await client.connect();
   let rolledBack = false;
   try {
     await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
-    const data = await inspectData(client, "postgresql", { allowEmpty });
+    const data = await inspectData(client, "postgresql", { allowEmpty, allowedMissingTables });
     const constraints = data.emptyDatabase || mode === "pre-migration" ? null : await inspectConstraints(client, "postgresql", architecture);
     await client.query("ROLLBACK");
     rolledBack = true;
@@ -635,13 +673,13 @@ async function inspectPostgres({ mode, env, architecture, allowEmpty }) {
   }
 }
 
-async function inspectSqlite({ mode, env, architecture, allowEmpty }) {
+async function inspectSqlite({ mode, env, architecture, allowEmpty, allowedMissingTables }) {
   const url = databaseUrl(env);
   const prisma = new PrismaClient({ datasourceUrl: url });
   try {
     await prisma.$connect();
     await prisma.$queryRawUnsafe("PRAGMA query_only = ON");
-    const data = await inspectData({ query: (sql) => prisma.$queryRawUnsafe(sql) }, "sqlite", { allowEmpty });
+    const data = await inspectData({ query: (sql) => prisma.$queryRawUnsafe(sql) }, "sqlite", { allowEmpty, allowedMissingTables });
     const constraints = data.emptyDatabase || mode === "pre-migration" ? null : await inspectConstraints({ query: (sql) => prisma.$queryRawUnsafe(sql) }, "sqlite", architecture);
     return { database: "sqlite", data, constraints, rolledBack: false };
   } finally {
@@ -682,9 +720,10 @@ async function runGate({
 
   const url = databaseUrl(env);
   const kind = databaseKind(url);
+  const allowedMissingTables = mode === "pre-migration" ? migration.createdTables : new Set();
   const database = kind === "postgresql"
-    ? await inspectPostgres({ mode, env, architecture, allowEmpty: mode === "pre-migration" })
-    : await inspectSqlite({ mode, env, architecture, allowEmpty: mode === "pre-migration" });
+    ? await inspectPostgres({ mode, env, architecture, allowEmpty: mode === "pre-migration", allowedMissingTables })
+    : await inspectSqlite({ mode, env, architecture, allowEmpty: mode === "pre-migration", allowedMissingTables });
   if (mode === "production-readonly" && database.database !== "postgresql") throw new GateFailure("TENANT_GATE_PRODUCTION_POSTGRES_REQUIRED");
   return {
     mode,
@@ -742,9 +781,11 @@ module.exports = {
   EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
   GateFailure,
   canonicalRelationManifest,
+  createdTablesFromMigrationSql,
   failureIfUnsafe,
   inspectArchitecture,
   migrationTouchesTenantRelations,
+  relationSpecsForExistingSchema,
   runCli,
   runGate,
   sanitizeFailure,

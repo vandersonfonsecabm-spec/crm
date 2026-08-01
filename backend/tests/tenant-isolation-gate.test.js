@@ -14,9 +14,11 @@ const {
   EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
   GLOBAL_RELATION_EXCEPTIONS,
   MIGRATION_REGISTRY,
+  createdTablesFromMigrationSql,
   inspectArchitecture,
   migrationTouchesTenantRelations,
   failureIfUnsafe,
+  relationSpecsForExistingSchema,
   runGate,
   tenantRelationManifestHash,
 } = require("../scripts/tenant-isolation-gate.cjs");
@@ -27,10 +29,10 @@ const currentMigration = "20260801123000_enforce_tenant_safe_relations";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 
-test("arquitetura atual cobre as 83 relacoes e as excecoes documentadas", () => {
+test("arquitetura atual cobre as 87 relacoes e as excecoes documentadas", () => {
   const result = inspectArchitecture();
   assert.deepEqual(result.failures, []);
-  assert.equal(result.relationCount, 83);
+  assert.equal(result.relationCount, 87);
   assert.equal(result.relationManifestHash, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(tenantRelationManifestHash(), EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(MIGRATION_REGISTRY[currentMigration].relationManifestSha256, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
@@ -137,6 +139,37 @@ test("detector classifica DDL relacional sem depender de grep de linha", () => {
   const architecture = inspectArchitecture();
   assert.equal(migrationTouchesTenantRelations('ALTER TABLE "Cliente" ADD COLUMN "apelidoGate" TEXT;', architecture), false);
   assert.equal(migrationTouchesTenantRelations('ALTER TABLE "Cliente" ADD CONSTRAINT "fk_gate" FOREIGN KEY ("empresaId", "id") REFERENCES "Empresa"("id", "id");', architecture), true);
+});
+
+test("pre-migration aceita somente tabelas novas da migration registrada", () => {
+  const migrationSql = fs.readFileSync(
+    path.join(migrationDir, "20260801150000_add_user_security_foundation", "migration.sql"),
+    "utf8",
+  );
+  const createdTables = createdTablesFromMigrationSql(migrationSql);
+  assert.deepEqual([...createdTables].sort(), [
+    "AUDITORIASEGURANCA",
+    "CONVITEUSUARIO",
+    "SESSAOREFRESHTOKEN",
+    "SESSAOUSUARIO",
+    "TOKENRECUPERACAOSENHA",
+  ]);
+
+  const existingTables = new Set();
+  for (const [, child, , parent] of relationSpecs) {
+    if (!createdTables.has(child.toUpperCase())) existingTables.add(child);
+    if (!createdTables.has(parent.toUpperCase())) existingTables.add(parent);
+  }
+  existingTables.add("AutomacaoExecucao");
+  existingTables.add("Lead");
+  existingTables.add("Negocio");
+  assert.equal(relationSpecsForExistingSchema(existingTables, createdTables).length, 83);
+
+  existingTables.delete("Cliente");
+  assert.throws(
+    () => relationSpecsForExistingSchema(existingTables, createdTables),
+    { code: "TENANT_GATE_SCHEMA_INCOMPLETE" },
+  );
 });
 
 test("migration relacional futura sem registro reprova antes do DDL", async () => {
