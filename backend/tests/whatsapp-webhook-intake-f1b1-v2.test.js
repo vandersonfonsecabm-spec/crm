@@ -24,6 +24,8 @@ const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 const appSecret = crypto.randomBytes(32).toString("hex");
 const wabaId = "waba-f1b1-v2";
 const phoneNumberId = "phone-f1b1-v2";
+const metaAppId = "app-f1b1-v2";
+const providerEnvironment = "F1B1_V2_TEST";
 
 Object.assign(process.env, {
   NODE_ENV: "test",
@@ -32,6 +34,8 @@ Object.assign(process.env, {
   WHATSAPP_INTEGRATION_ENABLED: "true",
   WHATSAPP_INBOUND_ENABLED: "true",
   WHATSAPP_APP_SECRET: appSecret,
+  WHATSAPP_META_APP_ID: metaAppId,
+  WHATSAPP_PROVIDER_ENVIRONMENT: providerEnvironment,
   JWT_SECRET: crypto.randomBytes(48).toString("hex"),
   INTEGRATION_ENCRYPTION_KEY: crypto.randomBytes(32).toString("hex"),
 });
@@ -89,7 +93,16 @@ beforeEach(async () => {
   });
   await prisma.canalIntegracao.update({
     where: { id: integrationA.id },
-    data: { ativo: true, status: "ATIVO", wabaId, phoneNumberId },
+    data: {
+      ativo: true,
+      status: "ATIVO",
+      chaveInterna: "whatsapp-meta-inbound-real",
+      modoTeste: false,
+      metaAppId,
+      providerEnvironment,
+      wabaId,
+      phoneNumberId,
+    },
   });
   await prisma.empresaFuncionalidade.deleteMany({
     where: { empresaId: empresaA.id, chave: { in: ["WHATSAPP_INTEGRATION", "WHATSAPP_INBOUND"] } },
@@ -204,12 +217,19 @@ test("gates, mapping e capabilities falham fechados sem escrita", async () => {
   assert.equal(await whatsappEventCount(), 0);
 });
 
-test("mapping ambiguo e tenant externo sao tratados sem ampliar escopo", async () => {
-  await createIntegration(empresaA.id, "ambiguous", wabaId, phoneNumberId);
-  assert.equal((await rawRequest(bodyFor("wamid.ambiguous"))).status, 503);
+test("canal nao canonico falha antes do intake e tenant externo nao amplia escopo", async () => {
+  await prisma.canalIntegracao.update({
+    where: { id: integrationA.id },
+    data: { chaveInterna: "whatsapp-legacy-f1b1-v2", modoTeste: true },
+  });
+  assert.equal((await rawRequest(bodyFor("wamid.legacy"))).status, 404);
   assert.equal(await whatsappEventCount(), 0);
+  assert.equal((await prisma.canalIntegracao.findUnique({ where: { id: integrationA.id } })).lastWebhookAt, null);
 
-  await prisma.canalIntegracao.deleteMany({ where: { chaveInterna: "whatsapp-ambiguous-f1b1-v2" } });
+  await prisma.canalIntegracao.update({
+    where: { id: integrationA.id },
+    data: { chaveInterna: "whatsapp-meta-inbound-real", modoTeste: false },
+  });
   const payload = validPayload({ messages: [message("wamid.tenant-internal")] });
   payload.empresaId = empresaB.id;
   payload.tenantId = empresaB.id;
@@ -414,12 +434,12 @@ async function createIntegration(empresaId, suffix, integrationWabaId, integrati
       empresaId,
       tipo: "WHATSAPP_META",
       nome: `WhatsApp ${suffix}`,
-      chaveInterna: `whatsapp-${suffix}-f1b1-v2`,
+      chaveInterna: "whatsapp-meta-inbound-real",
       status: "ATIVO",
-      modoTeste: true,
+      modoTeste: false,
       ativo: true,
-      providerEnvironment: `sandbox-${suffix}`,
-      metaAppId: `app-${suffix}`,
+      providerEnvironment,
+      metaAppId,
       wabaId: integrationWabaId,
       phoneNumberId: integrationPhoneId,
     },

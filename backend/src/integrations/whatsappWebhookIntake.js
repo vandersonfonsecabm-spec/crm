@@ -1,5 +1,9 @@
 const crypto = require("node:crypto");
 const { isFeatureEnabledForTenant, FEATURE_KEYS } = require("../tenant-features/service");
+const {
+  REAL_WHATSAPP_INBOUND_KEY,
+  readGlobalWhatsappConfiguration,
+} = require("../platform/whatsappInboundProvisioning");
 
 const PROVIDER = "WHATSAPP";
 const EVENT_TYPE = "WHATSAPP_MESSAGE_RECEIVED";
@@ -30,7 +34,13 @@ function createWhatsAppWebhookIntake({ prisma, clock = () => new Date() }) {
     const parsedItems = parseAtomicEvents(payload);
     const items = deduplicateBatch(parsedItems);
     const identity = requireSingleIntegrationIdentity(items);
-    const integration = await mapIntegration(prisma, identity);
+    let globalConfig;
+    try {
+      globalConfig = readGlobalWhatsappConfiguration(env);
+    } catch {
+      throw intakeError(404, "WEBHOOK_NOT_AVAILABLE");
+    }
+    const integration = await mapIntegration(prisma, identity, globalConfig);
 
     const integrationEnabled = await isFeatureEnabledForTenant({
       prisma,
@@ -229,19 +239,28 @@ function requireSingleIntegrationIdentity(items) {
   return { wabaId: first.wabaId, phoneNumberId: first.phoneNumberId };
 }
 
-async function mapIntegration(prisma, { wabaId, phoneNumberId }) {
+async function mapIntegration(prisma, { wabaId, phoneNumberId }, globalConfig) {
   let matches;
   try {
     matches = await prisma.canalIntegracao.findMany({
       where: {
         tipo: "WHATSAPP_META",
+        chaveInterna: REAL_WHATSAPP_INBOUND_KEY,
+        modoTeste: false,
+        metaAppId: globalConfig.metaAppId,
+        providerEnvironment: globalConfig.providerEnvironment,
         wabaId,
         phoneNumberId,
         ativo: true,
         status: "ATIVO",
         empresa: { ativo: true },
       },
-      select: { id: true, empresaId: true },
+      select: {
+        id: true,
+        empresaId: true,
+        metaAppId: true,
+        providerEnvironment: true,
+      },
       take: 2,
     });
   } catch {
@@ -289,6 +308,13 @@ async function persistBatch(prisma, records, integration, receivedAt, allowUniqu
         where: {
           id: integration.id,
           empresaId: integration.empresaId,
+          tipo: "WHATSAPP_META",
+          chaveInterna: REAL_WHATSAPP_INBOUND_KEY,
+          modoTeste: false,
+          metaAppId: integration.metaAppId,
+          providerEnvironment: integration.providerEnvironment,
+          ativo: true,
+          status: "ATIVO",
           OR: [
             { lastWebhookAt: null },
             { lastWebhookAt: { lt: receivedAt } },
