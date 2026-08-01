@@ -67,15 +67,21 @@ compatibility command and delegates to the same central gate.
 
 Uses the generated Prisma DMMF and the canonical relation inventory. It checks
 tenant model relations, composite tenant keys, relation actions, documented
-exceptions, the migration registry, and relation-affecting SQL. It fails when
-the schema, inventory, registry, or migration hashes disagree.
+exceptions, the migration registry, and relation-affecting SQL. It also emits
+and validates a deterministic SHA-256 over manifest version 1, the ordered 83
+relation entries, and the sorted documented exceptions. The current manifest
+hash is `ae8072157e89ddf48032eebcc65f5954989c8ffbe438f83ba4695d6db815a4b4`.
+It fails when the schema, inventory, registry, or migration hashes disagree.
 
 ### `pre-migration`
 
 Runs the architecture checks and reads the target database before DDL. It
 detects orphaned rows, cross-tenant links, incoherent polymorphic references,
-and unsupported database/provider state. An empty database is accepted for an
-empty migration flow; an incomplete non-empty schema fails closed.
+invalid structured `PILOT_SYNTHETIC` metadata, and unsupported
+database/provider state. `PILOT_SYNTHETIC` is recognized only when its JSON
+object contains the required source identifiers, `synthetic: true`, and the
+validated payload shape. An empty database is accepted for an empty migration
+flow; an incomplete non-empty schema fails closed.
 
 ### `post-migration`
 
@@ -136,10 +142,12 @@ mismatch, missing registry entries, and cleanup failures are failures.
 ## Failure Handling
 
 The gate fails before migration for missing coverage, orphaned data,
-cross-tenant links, schema drift, unknown relation actions, registry mismatch,
-provider mismatch, database errors, or timeout. It emits sanitized category
-codes only; it does not print connection URLs, secrets, full IDs, payloads, or
-PII.
+cross-tenant links, invalid pilot JSON, schema drift, unknown relation actions,
+registry mismatch, provider mismatch, database errors, or timeout. Prisma
+subprocesses are captured before logging; only a sanitized category, Prisma
+code when available, stable context, and fixed message are emitted. The gate
+does not print SQL, stack traces, local paths, connection URLs, secrets, full
+IDs, payloads, or PII.
 
 Do not repair production data, delete rows, rewrite tenant IDs, or bypass the
 gate. Freeze the affected migration flow, preserve the evidence, and resolve
@@ -168,7 +176,7 @@ codes, relation names, and masked identifiers only.
 - SQLite isolated migrations and upgrades pass the gate;
 - PostgreSQL 16 discardable `migrate-empty` passes pre/post gate checks;
 - negative fixtures reject missing relations, undocumented exceptions, action
-  drift, unregistered relation migrations, registry hash drift, and orphaned
-  data;
+  drift, unregistered relation migrations, registry hash drift, orphaned data,
+  manifest hash drift, malformed pilot JSON, and unsanitized Prisma output;
 - startup pending-migration coverage proves the gate runs before and after
   the official deploy command.
