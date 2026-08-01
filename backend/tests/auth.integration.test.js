@@ -10,7 +10,16 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "integration-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
+process.env.AUTH_TEST_CAPTURE = "true";
 process.env.DATABASE_URL = testDatabaseUrl;
+
+const capturedSecurityMessages = [];
+globalThis.__CRM_TEST_SECURITY_DELIVERY = {
+  async deliver(message) {
+    capturedSecurityMessages.push({ ...message });
+    return { status: "TEST_CAPTURED" };
+  },
+};
 
 let api;
 let prisma;
@@ -27,6 +36,7 @@ before(async () => {
 });
 
 after(async () => {
+  delete globalThis.__CRM_TEST_SECURITY_DELIVERY;
   if (prisma) await prisma.$disconnect();
   if (server) await new Promise((resolve) => server.close(resolve));
 });
@@ -98,14 +108,22 @@ test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", 
   assert.equal(me.body.usuario.id, storedAdmin.id);
   assert.equal(me.body.empresa.id, storedAdmin.empresaId);
 
-  const managerCreation = await request("POST", "/usuarios", {
+  const managerInvite = await request("POST", "/usuarios", {
     nome: "Gerente QA",
     email: "gerente@qa.example",
-    senha: "SenhaGerente123",
     papel: "GERENTE",
   }, adminToken);
+  assert.equal(managerInvite.status, 202);
+  assert.equal(managerInvite.body.invite.deliveryStatus, "TEST_CAPTURED");
+  const managerInviteMessage = capturedSecurityMessages.find((message) => message.kind === "USER_INVITE" && message.email === "gerente@qa.example");
+  assert.ok(managerInviteMessage);
+  const managerCreation = await request("POST", "/auth/accept-invite", {
+    token: managerInviteMessage.token,
+    nome: "Gerente QA",
+    senha: "SenhaGerente123",
+  });
   assert.equal(managerCreation.status, 201);
-  assert.equal(managerCreation.body.senhaHash, undefined);
+  assert.equal(managerCreation.body.usuario.senhaHash, undefined);
 
   const managerLogin = await request("POST", "/auth/login", {
     email: "gerente@qa.example",
@@ -184,7 +202,7 @@ test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", 
 
   const roleUpdate = await request(
     "PATCH",
-    `/usuarios/${managerCreation.body.id}`,
+    `/usuarios/${managerCreation.body.usuario.id}`,
     { papel: "VENDEDOR" },
     adminToken,
   );
@@ -192,15 +210,15 @@ test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", 
   assert.equal(roleUpdate.body.papel, "VENDEDOR");
 
   const lastAdminAttempt = await request(
-    "PATCH",
-    `/usuarios/${storedAdmin.id}`,
-    { ativo: false },
+    "POST",
+    `/usuarios/${storedAdmin.id}/desativar`,
+    undefined,
     adminToken,
   );
   assert.equal(lastAdminAttempt.status, 409);
-  assert.equal(lastAdminAttempt.body.codigo, "LAST_ADMIN_REQUIRED");
+  assert.equal(lastAdminAttempt.body.codigo, "SELF_LOCKOUT_BLOCKED");
 
-  await prisma.usuario.update({ where: { id: managerCreation.body.id }, data: { ativo: false } });
+  await prisma.usuario.update({ where: { id: managerCreation.body.usuario.id }, data: { ativo: false } });
   const inactiveUserLogin = await request("POST", "/auth/login", {
     email: "gerente@qa.example",
     senha: "SenhaGerente123",
@@ -282,6 +300,9 @@ async function request(method, pathname, body, token) {
 
 function requiredTestDatabaseUrl() {
   const value = String(process.env.CRM_TEST_DATABASE_URL || "").trim();
+  if (process.env.CRM_TEST_DATABASE_PROVIDER === "postgresql" && /^postgres(ql)?:\/\//i.test(value)) {
+    return value;
+  }
   if (!value.startsWith("file:")) throw new Error("CRM_TEST_DATABASE_URL absoluta e obrigatoria.");
   const databasePath = path.resolve(value.slice("file:".length));
   const testRoot = path.join(os.tmpdir(), "crm-prisma-tests");
