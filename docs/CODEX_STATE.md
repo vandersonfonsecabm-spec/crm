@@ -1,6 +1,6 @@
 # Estado atual do CRM
 
-Data da verificacao: 26/07/2026.
+Data da verificacao: 01/08/2026.
 
 ## Estrutura ativa
 
@@ -11,9 +11,16 @@ Data da verificacao: 26/07/2026.
 
 ## Git
 
-- Baseline oficial publicado: `2819c1da4db8c68446df001f996b0d57ab735843`.
-- Branch local: `feature/customer-360`, com um commit documental local a frente
-  de `origin/master`, zero atras e worktree limpo apos a publicacao H6.
+- Baseline oficial publicado em `origin/master`:
+  `365a7f9dca051bfdab39021c87d666e8467c512e`.
+- Branch de trabalho ativa: `feature/postgres-migration-prep`, baseada em
+  `origin/master`, zero atras e dez commits a frente na base funcional
+  `85a91d641faca33e5b891a695595e5b25fc8b15e`.
+- A branch remota correspondente e `origin/feature/postgres-migration-prep`.
+  O worktree preserva nove alteracoes acumuladas e ainda nao commitadas da
+  release de Usuarios e Seguranca.
+- `feature/customer-360` e uma referencia historica totalmente incorporada em
+  `origin/master`; nao representa o fluxo de trabalho ativo.
 - A master local divergente preserva o trabalho isolado de Estoque.
 - Commit isolado de Estoque: `618a289`.
 - Branch de arquivo: `archive/estoque-local-618a289`.
