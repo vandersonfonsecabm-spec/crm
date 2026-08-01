@@ -134,6 +134,46 @@ test("Bling OAuth bloqueia perfis, usa state persistente e criptografa tokens", 
   assert.ok(expiredStart.id);
 });
 
+test("Bling OAuth rejeita callback apos revogacao do ADMIN", async () => {
+  const admin = await registerAndLogin("Empresa Bling Revogada", "Admin Bling Revogada", "admin-bling-revogada@test.local");
+  const started = await request("POST", "/integracoes/bling/iniciar", {}, admin.token);
+  const state = new URL(started.body.authorizationUrl).searchParams.get("state");
+  await prisma.usuario.update({ where: { id: admin.usuarioId }, data: { ativo: false } });
+
+  let tokenExchanges = 0;
+  mockFetch(async () => {
+    tokenExchanges += 1;
+    return jsonResponse({ access_token: "revoked-access", refresh_token: "revoked-refresh", expires_in: 21600 });
+  });
+
+  const callback = await request("GET", `/integracoes/bling/callback?code=revoked-code&state=${encodeURIComponent(state)}`);
+  assert.equal(callback.status, 302);
+  assert.match(callback.headers.location, /bling=erro/);
+  assert.equal(tokenExchanges, 0);
+  assert.equal(await prisma.integracao.count({ where: { empresaId: admin.empresaId, tipo: "BLING" } }), 0);
+});
+
+test("Bling OAuth consome state uma unica vez sob callbacks concorrentes", async () => {
+  const admin = await registerAndLogin("Empresa Bling Concorrente", "Admin Bling Concorrente", "admin-bling-concorrente@test.local");
+  const started = await request("POST", "/integracoes/bling/iniciar", {}, admin.token);
+  const state = new URL(started.body.authorizationUrl).searchParams.get("state");
+
+  let tokenExchanges = 0;
+  mockFetch(async () => {
+    tokenExchanges += 1;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return jsonResponse({ access_token: "concurrent-access", refresh_token: "concurrent-refresh", expires_in: 21600 });
+  });
+
+  const callbacks = await Promise.all([
+    request("GET", `/integracoes/bling/callback?code=concurrent-code&state=${encodeURIComponent(state)}`),
+    request("GET", `/integracoes/bling/callback?code=concurrent-code&state=${encodeURIComponent(state)}`),
+  ]);
+  assert.deepEqual(callbacks.map((response) => /bling=conectado/.test(response.headers.location)).sort(), [false, true]);
+  assert.equal(tokenExchanges, 1);
+  assert.equal(await prisma.integracao.count({ where: { empresaId: admin.empresaId, tipo: "BLING" } }), 1);
+});
+
 test("Bling sincroniza com refresh, 429, paginação, normalização e idempotência", async () => {
   const adminA = await registerAndLogin("Empresa Bling Sync A", "Admin Sync A", "admin-sync-a@test.local");
   const adminB = await registerAndLogin("Empresa Bling Sync B", "Admin Sync B", "admin-sync-b@test.local");

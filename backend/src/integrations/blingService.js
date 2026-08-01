@@ -605,12 +605,33 @@ function emptyCounters() {
 async function consumeState({ prisma, state }) {
   const stateHash = hashState(state);
   const now = new Date();
-  const value = await prisma.integracaoOAuthState.findUnique({ where: { stateHash } });
-  if (!value || value.usedAt || value.expiresAt < now || value.provedor !== "BLING") {
-    throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
-  }
-  await prisma.integracaoOAuthState.update({ where: { id: value.id }, data: { usedAt: now } });
-  return value;
+  return prisma.$transaction(async (tx) => {
+    const value = await tx.integracaoOAuthState.findUnique({ where: { stateHash } });
+    if (!value || value.usedAt || value.expiresAt < now || value.provedor !== "BLING") {
+      throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
+    }
+    await assertOAuthActorActive(tx, value);
+    const claimed = await tx.integracaoOAuthState.updateMany({
+      where: { id: value.id, provedor: "BLING", usedAt: null, expiresAt: { gte: now } },
+      data: { usedAt: now },
+    });
+    if (claimed.count !== 1) throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
+    return value;
+  });
+}
+
+async function assertOAuthActorActive(client, state) {
+  const actor = await client.usuario.findFirst({
+    where: {
+      id: state.usuarioId,
+      empresaId: state.empresaId,
+      ativo: true,
+      papel: "ADMIN",
+      empresa: { ativo: true },
+    },
+    select: { id: true },
+  });
+  if (!actor) throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
 }
 
 function hashState(state) {
