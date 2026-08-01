@@ -7,7 +7,7 @@ same fail-closed verifier used by the production read-only integrity check.
 The gate protects the relation contract before and after DDL; it does not
 replace application RBAC, tenant-scoped queries, backups, or release review.
 
-The current contract contains 83 tenant-scoped relations. The following
+The current contract contains 87 tenant-scoped relations. The following
 relations are explicit exceptions and must remain documented:
 
 - `AuditoriaFuncionalidade.usuarioId -> Usuario`: global actor history;
@@ -68,9 +68,9 @@ compatibility command and delegates to the same central gate.
 Uses the generated Prisma DMMF and the canonical relation inventory. It checks
 tenant model relations, composite tenant keys, relation actions, documented
 exceptions, the migration registry, and relation-affecting SQL. It also emits
-and validates a deterministic SHA-256 over manifest version 1, the ordered 83
+and validates a deterministic SHA-256 over manifest version 1, the ordered 87
 relation entries, and the sorted documented exceptions. The current manifest
-hash is `ae8072157e89ddf48032eebcc65f5954989c8ffbe438f83ba4695d6db815a4b4`.
+hash is `1d0a06953fcc75873ab7b6f07b3949e8f7bf17d48386557e3c1c48cb679928f9`.
 It fails when the schema, inventory, registry, or migration hashes disagree.
 
 ### `pre-migration`
@@ -81,7 +81,10 @@ invalid structured `PILOT_SYNTHETIC` metadata, and unsupported
 database/provider state. `PILOT_SYNTHETIC` is recognized only when its JSON
 object contains the required source identifiers, `synthetic: true`, and the
 validated payload shape. An empty database is accepted for an empty migration
-flow; an incomplete non-empty schema fails closed.
+flow. During an incremental upgrade, missing tables are accepted only when the
+registered and hash-validated migration creates them; all existing relations
+remain read-only checked before DDL. Any other incomplete non-empty schema
+fails closed.
 
 ### `post-migration`
 
@@ -172,7 +175,7 @@ codes, relation names, and masked identifiers only.
 
 ## Current Evidence
 
-- 83 tenant relations pass the architecture and data checks;
+- 87 tenant relations pass the architecture and data checks;
 - SQLite isolated migrations and upgrades pass the gate;
 - PostgreSQL 16 discardable `migrate-empty` passes pre/post gate checks;
 - negative fixtures reject missing relations, undocumented exceptions, action

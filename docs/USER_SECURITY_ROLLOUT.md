@@ -81,6 +81,14 @@ Nunca registrar senha, hash de senha, token, hash de token, Authorization, cooki
 6. observar API, worker e frontend sem mutation manual em produção;
 7. configurar entrega externa somente depois da aprovação operacional.
 
+## Rollback operacional
+
+- se build ou gate falhar antes da migration, interromper a release sem alterar o banco;
+- se a migration falhar, o startup permanece fechado e o artefato anterior continua sendo a referência de rollback;
+- se API ou worker falharem depois da migration, redeployar o artefato anterior pelo pipeline oficial;
+- a migration é somente aditiva, portanto o código anterior ignora as novas tabelas e colunas;
+- não remover tabelas, não executar downgrade SQL, não marcar migration manualmente e não restaurar banco sem um procedimento separado e autorizado.
+
 ## Limitações atuais
 
 - não há entrega real de convite ou recuperação;
