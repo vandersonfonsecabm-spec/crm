@@ -18,6 +18,11 @@ The canonical relation inventory is exported by `backend/scripts/check-tenant-re
 
 The application still scopes every lookup by tenant. Database constraints are the final boundary, not a replacement for RBAC or tenant-aware queries.
 
+The mandatory migration gate and its architecture, pre-migration,
+post-migration, and production-readonly modes are documented in
+`docs/TENANT_ISOLATION_MIGRATION_GATE.md`. Official migration runners must use
+the gate; there is no warning-only or skip path.
+
 ## Delete Policy
 
 Composite relations with a required tenant key cannot portably use `SET NULL`, because that action would also null the required tenant key. Those relations use `RESTRICT`.
