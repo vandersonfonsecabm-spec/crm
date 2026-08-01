@@ -33,6 +33,7 @@ function main(options = {}) {
     });
     for (const file of [
       "tests/postgres-migration-prep.test.js",
+      "tests/auth-admin-concurrency-postgres.test.js",
       "tests/internal-automations-h7.test.js",
       "tests/next-follow-up-projection.test.js",
       "tests/email-inbound-lifecycle.test.js",

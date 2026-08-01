@@ -76,13 +76,14 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
         return authError(res, 403, "Empresa inativa.", "COMPANY_INACTIVE");
       }
 
+      const platformOperator = await resolvePlatformOperator({ prisma, usuario, env: process.env });
       req.auth = {
         usuarioId: usuario.id,
         empresaId: usuario.empresaId,
         papel: usuario.papel,
         usuario: publicUsuario(usuario),
         empresa: publicEmpresa(usuario.empresa),
-        isPlatformOperator: isPlatformOperator(usuario, process.env),
+        isPlatformOperator: platformOperator,
       };
       return next();
     } catch (error) {
@@ -109,6 +110,9 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
       const validation = validateCompanyRegistration(req.body);
       if (validation.error) {
         return authError(res, 400, validation.error, "VALIDATION_ERROR");
+      }
+      if (isReservedPlatformEmail(validation.data.email, process.env)) {
+        return authError(res, 409, "Empresa ou e-mail ja cadastrado.", "EMAIL_ALREADY_EXISTS");
       }
 
       try {
@@ -198,8 +202,9 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
           data: { ultimoLoginEm: new Date() },
           include: { empresa: true },
         });
+        const platformOperator = await resolvePlatformOperator({ prisma, usuario: updated, env: process.env });
         loginRateLimiter.recordSuccess(limiterContext);
-        return res.json(loginResponse(updated, config));
+        return res.json(loginResponse(updated, config, platformOperator));
       } catch (error) {
         logInternalError("Falha ao autenticar usuario.", error);
         return authError(res, 500, "Nao foi possivel autenticar agora.", "AUTH_LOGIN_ERROR");
@@ -256,6 +261,9 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
       if (validation.error) {
         return authError(res, 400, validation.error, "VALIDATION_ERROR");
       }
+      if (isReservedPlatformEmail(validation.data.email, process.env)) {
+        return authError(res, 409, "Ja existe um usuario com este e-mail na empresa.", "EMAIL_ALREADY_EXISTS");
+      }
 
       try {
         const senhaHash = await bcrypt.hash(validation.data.senha, 12);
@@ -287,31 +295,19 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter() }) {
       }
 
       try {
-        const usuario = await prisma.usuario.findFirst({
-          where: { id, empresaId: req.auth.empresaId },
+        const result = await updateTenantUser({
+          prisma,
+          id,
+          empresaId: req.auth.empresaId,
+          data: validation.data,
         });
-        if (!usuario) {
+        if (result.kind === "not-found") {
           return authError(res, 404, "Usuario nao encontrado.", "USER_NOT_FOUND");
         }
-
-        const removesActiveAdmin =
-          usuario.ativo && usuario.papel === "ADMIN" &&
-          (validation.data.ativo === false || (validation.data.papel && validation.data.papel !== "ADMIN"));
-        if (removesActiveAdmin) {
-          const activeAdmins = await prisma.usuario.count({
-            where: { empresaId: req.auth.empresaId, papel: "ADMIN", ativo: true },
-          });
-          if (activeAdmins <= 1) {
-            return authError(res, 409, "A empresa precisa manter ao menos um ADMIN ativo.", "LAST_ADMIN_REQUIRED");
-          }
+        if (result.kind === "last-admin") {
+          return authError(res, 409, "A empresa precisa manter ao menos um ADMIN ativo.", "LAST_ADMIN_REQUIRED");
         }
-
-        const updated = await prisma.usuario.update({
-          where: { id },
-          data: validation.data,
-          select: publicUsuarioSelect,
-        });
-        return res.json(updated);
+        return res.json(result.usuario);
       } catch (error) {
         logInternalError("Falha ao atualizar usuario.", error);
         return authError(res, 500, "Nao foi possivel atualizar o usuario.", "USER_UPDATE_ERROR");
@@ -334,7 +330,7 @@ const publicUsuarioSelect = {
   updatedAt: true,
 };
 
-function loginResponse(usuario, config) {
+function loginResponse(usuario, config, platformOperator = false) {
   const token = jwt.sign(
     {
       empresaId: usuario.empresaId,
@@ -356,7 +352,7 @@ function loginResponse(usuario, config) {
     user: publicUsuario(usuario),
     empresa: publicEmpresa(usuario.empresa),
     papel: usuario.papel,
-    isPlatformOperator: isPlatformOperator(usuario, process.env),
+    isPlatformOperator: platformOperator === true,
   };
 }
 
@@ -485,8 +481,55 @@ function isPlatformOperator(usuario, env = process.env) {
   return parsePlatformAdminEmails(env.PLATFORM_ADMIN_EMAILS).has(email);
 }
 
+function isReservedPlatformEmail(email, env = process.env) {
+  return parsePlatformAdminEmails(env.PLATFORM_ADMIN_EMAILS).has(normalizeEmail(email));
+}
+
+async function resolvePlatformOperator({ prisma, usuario, env = process.env }) {
+  if (!isPlatformOperator(usuario, env)) return false;
+  const email = normalizeEmail(usuario.email);
+  const matchingUsers = await prisma.usuario.count({ where: { email } });
+  return matchingUsers === 1;
+}
+
+async function updateTenantUser({ prisma, id, empresaId, data }) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const usuario = await tx.usuario.findFirst({ where: { id, empresaId } });
+        if (!usuario) return { kind: "not-found" };
+
+        const removesActiveAdmin = usuario.ativo && usuario.papel === "ADMIN"
+          && (data.ativo === false || (data.papel && data.papel !== "ADMIN"));
+        if (removesActiveAdmin) {
+          const activeAdmins = await tx.usuario.count({ where: { empresaId, papel: "ADMIN", ativo: true } });
+          if (activeAdmins <= 1) return { kind: "last-admin" };
+        }
+
+        const changed = await tx.usuario.updateMany({ where: { id, empresaId }, data });
+        if (changed.count !== 1) return { kind: "not-found" };
+        const updated = await tx.usuario.findFirst({ where: { id, empresaId }, select: publicUsuarioSelect });
+        return { kind: "updated", usuario: updated };
+      }, { isolationLevel: "Serializable" });
+    } catch (error) {
+      if (!isRetryableUserUpdateConflict(error) || attempt === 2) throw error;
+      await delay(15 * (attempt + 1));
+    }
+  }
+  throw new Error("Falha inesperada ao atualizar usuario.");
+}
+
+function isRetryableUserUpdateConflict(error) {
+  return ["P1008", "P2028", "P2034"].includes(error?.code)
+    || /database is locked/i.test(String(error?.message || ""));
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function authError(res, status, erro, codigo) {
   return res.status(status).json({ erro, codigo });
 }
 
-module.exports = { createAuth, isPlatformOperator, normalizeEmail, normalizeSlug, parsePlatformAdminEmails, validateCompanyRegistration };
+module.exports = { createAuth, isPlatformOperator, normalizeEmail, normalizeSlug, parsePlatformAdminEmails, resolvePlatformOperator, updateTenantUser, validateCompanyRegistration };

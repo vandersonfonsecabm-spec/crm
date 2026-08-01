@@ -44,11 +44,33 @@ test("H7.1 protege operacoes de plataforma por allowlist backend e sem acesso te
   const operator = await register("Operadora Plataforma H71", "Operadora H71", "operator-h71@platform.test");
   const control = await register("Controle Plataforma H71", "Admin Controle", "admin-control-h71@platform.test");
   const manager = await createUser(control, "Gerente Controle", "manager-control-h71@platform.test", "GERENTE");
+  const legacyCollisionPassword = "SenhaColidenteH71Segura123";
+  const legacyCollision = await request("POST", "/usuarios", {
+    nome: "Operador Colidente H71",
+    email: "operator-h71@platform.test",
+    senha: legacyCollisionPassword,
+    papel: "ADMIN",
+  }, control.token);
+  assert.equal(legacyCollision.status, 201);
 
   assert.equal((await request("GET", "/platform/tenants")).status, 401);
   assert.equal((await request("GET", "/platform/tenants", undefined, operator.token)).status, 403);
 
   process.env.PLATFORM_ADMIN_EMAILS = " outra@platform.test, OPERATOR-H71@PLATFORM.TEST ";
+  const ambiguousOperator = await request("GET", "/auth/me", undefined, operator.token);
+  assert.equal(ambiguousOperator.status, 200);
+  assert.equal(ambiguousOperator.body.isPlatformOperator, false);
+  assert.equal((await request("GET", "/platform/tenants", undefined, operator.token)).status, 403);
+  const legacyCollisionLogin = await request("POST", "/auth/login", {
+    email: "operator-h71@platform.test",
+    senha: legacyCollisionPassword,
+    empresaSlug: "controle-plataforma-h71",
+  });
+  assert.equal(legacyCollisionLogin.status, 200);
+  assert.equal(legacyCollisionLogin.body.isPlatformOperator, false);
+  assert.equal((await request("GET", "/platform/tenants", undefined, legacyCollisionLogin.body.access_token)).status, 403);
+  await prisma.usuario.delete({ where: { id: legacyCollision.body.id } });
+
   const operatorMe = await request("GET", "/auth/me", undefined, operator.token);
   assert.equal(operatorMe.status, 200);
   assert.equal(operatorMe.body.isPlatformOperator, true);
@@ -57,6 +79,26 @@ test("H7.1 protege operacoes de plataforma por allowlist backend e sem acesso te
   assert.equal(JSON.stringify(operatorMe.body).includes("senhaHash"), false);
   assert.equal(JSON.stringify(operatorMe.body).includes("PLATFORM_ADMIN_EMAILS"), false);
   assert.equal(JSON.stringify(operatorMe.body).includes("outra@platform.test"), false);
+
+  const rejectedCollision = await request("POST", "/usuarios", {
+    nome: "Operador Colidente H71",
+    email: "operator-h71@platform.test",
+    senha: "SenhaColidenteH71Segura123",
+    papel: "ADMIN",
+  }, control.token);
+  assert.equal(rejectedCollision.status, 409);
+  assert.equal(rejectedCollision.body.codigo, "EMAIL_ALREADY_EXISTS");
+  const companiesBeforeReservedRegistration = await prisma.empresa.count();
+  const rejectedRegistration = await request("POST", "/auth/register-company", {
+    empresaNome: "Tenant Colidente H71",
+    adminNome: "Operador Colidente H71",
+    email: "operator-h71@platform.test",
+    senha: "SenhaColidenteH71Segura123",
+  });
+  assert.equal(rejectedRegistration.status, 409);
+  assert.equal(rejectedRegistration.body.codigo, "EMAIL_ALREADY_EXISTS");
+  assert.equal(await prisma.empresa.count(), companiesBeforeReservedRegistration);
+  assert.equal((await request("GET", "/platform/tenants", undefined, operator.token)).status, 200);
 
   assert.equal((await request("GET", "/platform/tenants", undefined, control.token)).status, 403);
   assert.equal((await request("GET", "/platform/tenants", undefined, manager.token)).status, 403);
