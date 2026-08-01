@@ -57,6 +57,58 @@ export type ApiAuthUser = {
   ativo?: boolean;
 };
 
+export type ManagedUser = ApiAuthUser & {
+  id: number;
+  empresaId: number;
+  nome: string;
+  email: string;
+  papel: ApiUserRole;
+  ativo: boolean;
+  ultimoLoginEm?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type UserInvite = {
+  id: string;
+  nome: string;
+  email: string;
+  papel: ApiUserRole;
+  expiraEm: string;
+  aceitoEm: string | null;
+  revogadoEm: string | null;
+  deliveryStatus: string;
+  criadoEm: string;
+};
+
+export type UserSession = {
+  id: string;
+  userAgent: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  current: boolean;
+  active: boolean;
+};
+
+export type SecurityAuditEntry = {
+  id: number;
+  acao: string;
+  resultado: string;
+  ator: string;
+  alvo: string | null;
+  motivo: string | null;
+  correlationId: string | null;
+  createdAt: string;
+};
+
+export type UserProfileResponse = {
+  usuario: ManagedUser;
+  empresa: ApiAuthCompany;
+  papel: ApiUserRole;
+};
+
 export type ApiAuthCompany = {
   id?: number;
   nome: string;
@@ -1486,7 +1538,8 @@ function setAuthSessionFromResponse(data: ApiAuthResponse) {
   localStorage.setItem(PLATFORM_OPERATOR_KEY, data.isPlatformOperator === true ? "true" : "false");
 }
 
-export async function fetchAuthMe() {
+export async function fetchAuthMe(options: { allowRefresh?: boolean } = {}) {
+  const allowRefresh = options.allowRefresh !== false;
   const token = getAuthToken();
   if (!token || !hasRemoteApi()) {
     throw new Error("Sessao indisponivel.");
@@ -1495,6 +1548,7 @@ export async function fetchAuthMe() {
   let response: Response;
   try {
     response = await fetch(`${API_URL}/auth/me`, {
+      credentials: "include",
       headers: buildHeaders(token),
     });
   } catch {
@@ -1503,7 +1557,14 @@ export async function fetchAuthMe() {
 
   if (!response.ok) {
     const error = await readApiErrorDetails(response);
-    if (response.status === 401) clearAuthSession();
+    if (response.status === 401 && allowRefresh) {
+      try {
+        await refreshAuthSession();
+        return fetchAuthMe({ allowRefresh: false });
+      } catch {
+        clearAuthSession();
+      }
+    }
     throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
@@ -1532,6 +1593,7 @@ export async function loginWithBackend(email: string, senha: string, empresaSlug
 
   const response = await fetch(`${API_URL}/auth/login`, {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -1545,6 +1607,111 @@ export async function loginWithBackend(email: string, senha: string, empresaSlug
   const data = (await response.json()) as ApiAuthResponse;
   setAuthSessionFromResponse(data);
   return data;
+}
+
+export async function refreshAuthSession() {
+  if (!hasRemoteApi()) throw new ApiHttpError("Servico indisponivel.", 0, "NETWORK_UNAVAILABLE");
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/auth/refresh`, { method: "POST", credentials: "include" });
+  } catch {
+    throw new ApiHttpError("Nao foi possivel renovar a sessao agora.", 0, "NETWORK_ERROR");
+  }
+  if (!response.ok) {
+    const error = await readApiErrorDetails(response);
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
+  }
+  const data = (await response.json()) as ApiAuthResponse;
+  setAuthSessionFromResponse(data);
+  return data;
+}
+
+export async function logoutFromBackend() {
+  const token = getAuthToken();
+  if (!token || !hasRemoteApi()) return;
+  const response = await fetch(`${API_URL}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+    headers: buildHeaders(token),
+  });
+  if (!response.ok) {
+    const error = await readApiErrorDetails(response);
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
+  }
+}
+
+export async function fetchManagedUsers(params: { page?: number; limit?: number; busca?: string; ativo?: boolean } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<ManagedUser>>(`/usuarios${toQueryString(params)}`);
+}
+
+export async function createUserInvite(payload: { nome: string; email: string; papel: ApiUserRole }) {
+  return requestApiWrite<{ kind: string; invite: UserInvite }>("POST", "/usuarios", payload);
+}
+
+export async function updateManagedUser(id: number, payload: { nome?: string; papel?: ApiUserRole }) {
+  return requestApiWrite<ManagedUser>("PATCH", `/usuarios/${id}`, payload);
+}
+
+export async function setManagedUserActive(id: number, active: boolean) {
+  return requestApiWrite<ManagedUser>("POST", `/usuarios/${id}/${active ? "reativar" : "desativar"}`, {});
+}
+
+export async function startAdminPasswordReset(id: number) {
+  return requestApiWrite<{ ok: boolean; deliveryStatus: string; expiresAt: string }>("POST", `/usuarios/${id}/iniciar-reset-senha`, {});
+}
+
+export async function fetchUserSessions(id?: number) {
+  const path = id ? `/usuarios/${id}/sessoes` : "/auth/sessions";
+  return requestApiGetAuthenticated<{ data: UserSession[] }>(path);
+}
+
+export async function revokeUserSessions(id?: number) {
+  const path = id ? `/usuarios/${id}/revogar-sessoes` : "/auth/logout-all";
+  return requestApiWrite<{ ok: boolean; revoked: number }>("POST", path, {});
+}
+
+export async function revokeOwnSession(id: string) {
+  return requestApiWrite<{ ok: boolean }>("POST", `/auth/sessions/${encodeURIComponent(id)}/revoke`, {});
+}
+
+export async function fetchUserInvites() {
+  return requestApiGetAuthenticated<{ data: UserInvite[] }>("/usuarios/convites");
+}
+
+export async function fetchSecurityAudit(params: { page?: number; limit?: number; acao?: string } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<SecurityAuditEntry>>(`/seguranca/auditoria${toQueryString(params)}`);
+}
+
+export async function resendUserInvite(id: string) {
+  return requestApiWrite<{ ok: boolean; deliveryStatus: string; expiresAt: string }>("POST", `/usuarios/convites/${id}/reenvia`, {});
+}
+
+export async function revokeUserInvite(id: string) {
+  return requestApiWrite<{ ok: boolean }>("POST", `/usuarios/convites/${id}/revoga`, {});
+}
+
+export async function fetchUserProfile() {
+  return requestApiGetAuthenticated<UserProfileResponse>("/perfil");
+}
+
+export async function updateUserProfile(payload: { nome: string }) {
+  return requestApiWrite<ManagedUser>("PATCH", "/perfil", payload);
+}
+
+export async function changeOwnPassword(payload: { senhaAtual: string; novaSenha: string }) {
+  return requestApiWrite<{ ok: boolean }>("POST", "/auth/change-password", payload);
+}
+
+export async function requestPasswordRecovery(email: string) {
+  return requestApiPublicPost<{ ok: boolean; message: string }>("/auth/forgot-password", { email });
+}
+
+export async function resetPasswordWithToken(payload: { token: string; novaSenha: string }) {
+  return requestApiPublicPost<{ ok: boolean }>("/auth/reset-password", payload);
+}
+
+export async function acceptUserInvite(payload: { token: string; nome?: string; senha: string }) {
+  return requestApiPublicPost<{ usuario: ManagedUser }>("/auth/accept-invite", payload);
 }
 
 export async function fetchClientesFromBackend(params: ClientListQuery = {}): Promise<ClientPage | null> {
@@ -2210,6 +2377,7 @@ async function requestCliente(method: "POST" | "PATCH" | "PUT" | "DELETE", path:
 
   const response = await fetch(`${API_URL}${path}`, {
     method,
+    credentials: "include",
     headers: {
       ...buildHeaders(token),
       ...(payload ? { "Content-Type": "application/json" } : {}),
@@ -2254,6 +2422,7 @@ async function requestApiGetAuthenticated<T>(path: string, options: { signal?: A
   let response: Response;
   try {
     response = await fetch(API_URL + path, {
+      credentials: "include",
       headers: buildHeaders(token),
       signal: options.signal,
     });
@@ -2282,6 +2451,7 @@ async function requestApiMultipart<T>(path: string, body: FormData): Promise<T> 
 
   const response = await fetch(API_URL + path, {
     method: "POST",
+    credentials: "include",
     headers: buildHeaders(token),
     body,
   });
@@ -2298,6 +2468,31 @@ async function requestApiPost<T>(path: string, payload: Record<string, unknown>)
   return requestApiWrite<T>("POST", path, payload);
 }
 
+async function requestApiPublicPost<T>(path: string, payload: Record<string, unknown>): Promise<T> {
+  if (!hasRemoteApi()) {
+    throw new Error("Nao foi possivel concluir a acao agora.");
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new ApiHttpError("Nao foi possivel se comunicar com o servidor.", 0, "NETWORK_ERROR");
+  }
+
+  if (!response.ok) {
+    const error = await readApiErrorDetails(response);
+    throw new ApiHttpError(error.message, response.status, error.code, error.details);
+  }
+
+  return (await response.json()) as T;
+}
+
 async function requestApiWrite<T>(method: "POST" | "PATCH" | "DELETE", path: string, payload?: Record<string, unknown>): Promise<T> {
   if (!hasRemoteApi()) {
     throw new Error("Nao foi possivel concluir a acao agora.");
@@ -2310,6 +2505,7 @@ async function requestApiWrite<T>(method: "POST" | "PATCH" | "DELETE", path: str
 
   const response = await fetch(`${API_URL}${path}`, {
     method,
+    credentials: "include",
     headers: {
       ...buildHeaders(token),
       ...(payload ? { "Content-Type": "application/json" } : {}),

@@ -7,6 +7,7 @@ export type DashboardRoute = {
   requiresIntegrationAccess?: boolean;
   requiresLeadsCommunication?: boolean;
   requiresPlatformOperator?: boolean;
+  requiresUserManagement?: boolean;
   showInSidebar: boolean;
 };
 
@@ -28,6 +29,8 @@ export const dashboardRoutes = [
   },
   { page: "automacoes", pathname: "/automacoes", label: "Automações", showInSidebar: false },
   { page: "platformTenants", pathname: "/platform/tenants", label: "Tenants", requiresPlatformOperator: true, showInSidebar: true },
+  { page: "usuarios", pathname: "/usuarios", label: "Usuários", requiresUserManagement: true, showInSidebar: true },
+  { page: "perfil", pathname: "/perfil", label: "Meu perfil", showInSidebar: false },
 ] as const satisfies readonly DashboardRoute[];
 
 export const dashboardNavigationGroups: ReadonlyArray<{
@@ -37,7 +40,7 @@ export const dashboardNavigationGroups: ReadonlyArray<{
   { label: "Visão geral", pages: ["dashboard"] },
   { label: "Comercial", pages: ["comercial", "inbox", "leads", "clientes", "kanban", "agenda"] },
   { label: "Operação", pages: ["estoque"] },
-  { label: "Administração", pages: ["integracoes"] },
+  { label: "Administração", pages: ["integracoes", "usuarios"] },
   { label: "Plataforma", pages: ["platformTenants"] },
 ];
 

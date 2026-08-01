@@ -5,9 +5,10 @@ import { loginWithBackend } from "../services/crmApi";
 
 type LoginProps = {
   onLogin: () => void;
+  onOpenRecovery: () => void;
 };
 
-export function Login({ onLogin }: LoginProps) {
+export function Login({ onLogin, onOpenRecovery }: LoginProps) {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [empresaSlug, setEmpresaSlug] = useState("");
@@ -98,6 +99,10 @@ export function Login({ onLogin }: LoginProps) {
             Entrar
           </Button>
         </form>
+
+        <button className="mt-4 w-full text-center text-[11px] font-medium text-[var(--primary)] hover:underline" onClick={onOpenRecovery} type="button">
+          Esqueci minha senha
+        </button>
 
         <p className="mt-5 border-t border-[var(--border-default)] pt-4 text-center text-[11px] leading-4 text-[var(--text-muted)]">
           Use a conta ativa vinculada à sua empresa.

@@ -26,6 +26,7 @@ type DashboardSidebarProps = {
   setActivePage: (page: ActivePage) => void;
   authSession: AuthSession | null;
   canManageIntegrations?: boolean;
+  canManageUsers?: boolean;
   isPlatformOperator?: boolean;
   leadsCommunicationEnabled?: boolean;
 };
@@ -42,6 +43,8 @@ const navigationIcons: Record<ActivePage, ReactNode> = {
   integracoes: <PlugZap size={16} />,
   automacoes: <Sprout size={16} />,
   platformTenants: <ShieldCheck size={16} />,
+  usuarios: <Users size={16} />,
+  perfil: <ShieldCheck size={16} />,
 };
 
 export default function DashboardSidebar({
@@ -49,6 +52,7 @@ export default function DashboardSidebar({
   setActivePage,
   authSession,
   canManageIntegrations = false,
+  canManageUsers = false,
   isPlatformOperator = false,
   leadsCommunicationEnabled = false,
 }: DashboardSidebarProps) {
@@ -59,6 +63,7 @@ export default function DashboardSidebar({
         .map((page) => getDashboardRoute(page))
         .filter((route) => route.showInSidebar)
         .filter((route) => !route.requiresIntegrationAccess || canManageIntegrations)
+        .filter((route) => !route.requiresUserManagement || canManageUsers)
         .filter((route) => !route.requiresLeadsCommunication || leadsCommunicationEnabled)
         .filter((route) => !route.requiresPlatformOperator || isPlatformOperator),
     }))

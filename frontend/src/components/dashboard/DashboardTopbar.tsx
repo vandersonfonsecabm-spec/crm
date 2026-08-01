@@ -14,6 +14,7 @@ type DashboardTopbarProps = {
   setCreating: (client: Client | null) => void;
   exportCsv: () => void;
   onLogout: () => void;
+  onOpenProfile: () => void;
   authSession: AuthSession | null;
   canManageIntegrations: boolean;
   leadsCommunicationEnabled: boolean;
@@ -28,6 +29,7 @@ export default function DashboardTopbar({
   setCreating,
   exportCsv,
   onLogout,
+  onOpenProfile,
   authSession,
   canManageIntegrations,
   leadsCommunicationEnabled,
@@ -72,7 +74,7 @@ export default function DashboardTopbar({
 
           <NotificationsMenu />
 
-          <UserMenu authSession={authSession} onLogout={onLogout} />
+          <UserMenu authSession={authSession} onLogout={onLogout} onOpenProfile={onOpenProfile} />
         </div>
       </div>
     </header>
@@ -136,7 +138,7 @@ function NotificationsMenu() {
   );
 }
 
-function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; onLogout: () => void }) {
+function UserMenu({ authSession, onLogout, onOpenProfile }: { authSession: AuthSession | null; onLogout: () => void; onOpenProfile: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -201,6 +203,19 @@ function UserMenu({ authSession, onLogout }: { authSession: AuthSession | null; 
             <ShieldCheck size={14} />
             <span>Sessão protegida</span>
           </div>
+
+          <button
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+            onClick={() => {
+              onOpenProfile();
+              setIsOpen(false);
+            }}
+            role="menuitem"
+            type="button"
+          >
+            <ShieldCheck size={14} />
+            Meu perfil e segurança
+          </button>
 
           <button
             className="user-menu-logout mt-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[11px] font-medium"

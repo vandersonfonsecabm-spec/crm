@@ -172,4 +172,12 @@ const pageMeta: Record<ActivePage, { breadcrumb: string; description: string }> 
     breadcrumb: "Plataforma",
     description: "Operações internas restritas para tenants e capabilities.",
   },
+  usuarios: {
+    breadcrumb: "Usuários",
+    description: "Administre acesso, convites, papéis e sessões da empresa.",
+  },
+  perfil: {
+    breadcrumb: "Meu perfil",
+    description: "Atualize seus dados e proteja suas sessões de acesso.",
+  },
 };
