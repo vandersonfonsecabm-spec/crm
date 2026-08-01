@@ -223,14 +223,15 @@ async function removeTempFile(filePath) {
   }
 }
 
-async function mapImportacao({ prisma, importacao, body }) {
+async function mapImportacao({ prisma, importacao, empresaId, body }) {
+  importacao = await loadTenantImport(prisma, importacao, empresaId);
   assertImportEditable(importacao);
   const cache = await loadImportCache(importacao.id);
   const config = normalizeMappingPayload(body);
   validateMapping(config.mapping);
   const validation = validateRows(cache.rows, config, { maxErrors: getImportLimits().maxErrors, collectErrors: false });
   const updated = await prisma.importacaoDados.update({
-    where: { id: importacao.id },
+    where: { empresaId_id: { empresaId, id: importacao.id } },
     data: {
       status: "VALIDANDO",
       mapeamentoJson: JSON.stringify(config),
@@ -250,7 +251,8 @@ async function mapImportacao({ prisma, importacao, body }) {
   };
 }
 
-async function validateImportacao({ prisma, importacao }) {
+async function validateImportacao({ prisma, importacao, empresaId }) {
+  importacao = await loadTenantImport(prisma, importacao, empresaId);
   if (!importacao.mapeamentoJson) throw httpError(400, "Mapeamento ausente.", "IMPORT_MAPPING_REQUIRED");
   if (!["VALIDANDO", "PRONTO", "FALHOU"].includes(importacao.status)) {
     throw httpError(409, "Importação não está pronta para validação.", "IMPORT_INVALID_STATUS");
@@ -270,7 +272,7 @@ async function validateImportacao({ prisma, importacao }) {
 
   const status = validation.validRows.length ? "PRONTO" : "FALHOU";
   const updated = await prisma.importacaoDados.update({
-    where: { id: importacao.id },
+    where: { empresaId_id: { empresaId, id: importacao.id } },
     data: {
       status,
       totalLinhas: cache.rows.length,
@@ -285,6 +287,7 @@ async function validateImportacao({ prisma, importacao }) {
 }
 
 async function processImportacao({ prisma, importacao, empresaId, usuarioId, body }) {
+  importacao = await loadTenantImport(prisma, importacao, empresaId);
   if (importacao.status !== "PRONTO") throw httpError(409, "Importação precisa estar validada antes do processamento.", "IMPORT_INVALID_STATUS");
   if (!body || body.importarLinhasValidas !== true) {
     throw httpError(400, "Confirme a importação das linhas válidas.", "IMPORT_CONFIRMATION_REQUIRED");
@@ -310,7 +313,7 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
   const processingErrors = [];
 
   await prisma.importacaoDados.update({
-    where: { id: importacao.id },
+    where: { empresaId_id: { empresaId, id: importacao.id } },
     data: { status: "PROCESSANDO", iniciadaEm: now, integracaoId: integration.id },
   });
 
@@ -367,7 +370,7 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
 
   const finalStatus = importacao.linhasComErro > 0 || processingErrors.length ? "CONCLUIDO_COM_ERROS" : "CONCLUIDO";
   const finished = await prisma.importacaoDados.update({
-    where: { id: importacao.id },
+    where: { empresaId_id: { empresaId, id: importacao.id } },
     data: {
       status: finalStatus,
       finalizadaEm: new Date(),
@@ -377,7 +380,7 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
   });
 
   await prisma.integracao.update({
-    where: { id: integration.id },
+    where: { empresaId_id: { empresaId, id: integration.id } },
     data: { status: "ATIVA", ultimaSincronizacaoEm: new Date(), ultimoSucessoEm: new Date() },
   });
   await removeImportCache(importacao.id);
@@ -400,16 +403,30 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
   };
 }
 
-async function cancelImportacao({ prisma, importacao }) {
+async function cancelImportacao({ prisma, importacao, empresaId }) {
+  importacao = await loadTenantImport(prisma, importacao, empresaId);
   if (FINAL_IMPORT_STATUSES.has(importacao.status)) throw httpError(409, "Importação concluída não pode ser cancelada.", "IMPORT_INVALID_STATUS");
   if (importacao.status === "PROCESSANDO") throw httpError(409, "Importação em processamento não pode ser cancelada.", "IMPORT_INVALID_STATUS");
   const updated = await prisma.importacaoDados.update({
-    where: { id: importacao.id },
+    where: { empresaId_id: { empresaId, id: importacao.id } },
     data: { status: "CANCELADO", finalizadaEm: new Date() },
   });
   await removeImportCache(importacao.id);
   await removeValidatedRows(importacao.id);
   return updated;
+}
+
+async function loadTenantImport(prisma, importCandidate, empresaId) {
+  const id = Number(importCandidate?.id);
+  if (!Number.isInteger(empresaId) || empresaId < 1 || !Number.isInteger(id) || id < 1) {
+    throw httpError(404, "Importação não encontrada.", "IMPORT_NOT_FOUND");
+  }
+  const importacao = await prisma.importacaoDados.findFirst({
+    where: { id, empresaId },
+    include: { erros: true, integracao: true, createdByUsuario: true },
+  });
+  if (!importacao) throw httpError(404, "Importação não encontrada.", "IMPORT_NOT_FOUND");
+  return importacao;
 }
 
 function normalizeMappingPayload(body = {}) {

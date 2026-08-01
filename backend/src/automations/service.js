@@ -575,12 +575,12 @@ function createAutomationService({ prisma, env = process.env, logger = console }
       const leaseUntil = new Date(now.getTime() + config.leaseMs);
       const claimStartedAt = Date.now();
       const claimed = await prisma.automacaoAcaoJob.updateMany({
-        where: { id: candidate.id, ...dueJobWhere(now, config.maxAttempts) },
+        where: { id: candidate.id, empresaId: candidate.empresaId, ...dueJobWhere(now, config.maxAttempts) },
         data: { status: "PROCESSANDO", leaseOwner, leaseExpiresAt: leaseUntil, tentativas: { increment: 1 } },
       });
       if (claimed.count === 1) {
-        const job = await prisma.automacaoAcaoJob.findUnique({
-          where: { id: candidate.id },
+        const job = await prisma.automacaoAcaoJob.findFirst({
+          where: { id: candidate.id, empresaId: candidate.empresaId },
           include: { execucao: { include: { regra: true } } },
         });
         if (!job) return null;
@@ -633,7 +633,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     let actionStartedAt = null;
     try {
       const executionStarted = await prisma.automacaoExecucao.updateMany({
-        where: { id: job.execucaoId, status: { in: ["PENDENTE", "PROCESSANDO", "FALHOU"] } },
+        where: { id: job.execucaoId, empresaId: job.empresaId, status: { in: ["PENDENTE", "PROCESSANDO", "FALHOU"] } },
         data: { status: "PROCESSANDO", iniciadaEm: job.execucao.iniciadaEm || now, tentativas: { increment: 1 } },
       });
       if (executionStarted.count === 1) {
@@ -658,7 +658,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         status: "SUCCEEDED",
       });
       const succeeded = await prisma.automacaoAcaoJob.updateMany({
-        where: { id: job.id, leaseOwner, status: "PROCESSANDO" },
+        where: { id: job.id, empresaId: job.empresaId, leaseOwner, status: "PROCESSANDO" },
         data: { status: "CONCLUIDO", leaseOwner: null, leaseExpiresAt: null, erroCodigo: null, erroResumo: null },
       });
       await refreshExecutionStatus(prisma, job.empresaId, job.execucaoId);
@@ -689,7 +689,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         }, error);
       }
       const failed = await prisma.automacaoAcaoJob.updateMany({
-        where: { id: job.id, leaseOwner, status: "PROCESSANDO" },
+        where: { id: job.id, empresaId: job.empresaId, leaseOwner, status: "PROCESSANDO" },
         data: {
           status: final ? "FALHA_DEFINITIVA" : "FALHOU",
           nextAttemptAt: retryAt,
@@ -730,6 +730,9 @@ function createAutomationService({ prisma, env = process.env, logger = console }
   }
 
   async function executeAction(job, { supportedActions = WORKER_ACTION_TYPES } = {}) {
+    if (job.execucao.empresaId !== job.empresaId || job.execucao.regra.empresaId !== job.empresaId) {
+      throw domainError(409, "AUTOMATION_TENANT_CONFLICT", "Contexto da automacao inconsistente.", { permanent: true });
+    }
     const snapshot = safeJson(job.execucao.regraSnapshotJson, null);
     const action = snapshot?.acoes?.[job.indice];
     if (!action) throw domainError(422, "ACTION_CONFIG_MISSING", "Acao inexistente.", { permanent: true });
@@ -907,10 +910,12 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     const job = await prisma.automacaoAcaoJob.findFirst({ where: { id: jobId, empresaId: context.empresaId }, include: { execucao: true } });
     if (!job) throw notFound("Acao nao encontrada.");
     if (!["FALHOU", "FALHA_DEFINITIVA"].includes(job.status)) throw domainError(409, "JOB_RETRY_UNAVAILABLE", "Acao nao esta elegivel para reprocessamento.");
-    return prisma.automacaoAcaoJob.update({
-      where: { id: job.id },
+    const updated = await prisma.automacaoAcaoJob.updateMany({
+      where: { id: job.id, empresaId: context.empresaId, status: { in: ["FALHOU", "FALHA_DEFINITIVA"] } },
       data: { status: "PENDENTE", tentativas: 0, nextAttemptAt: new Date(), leaseOwner: null, leaseExpiresAt: null, erroCodigo: null, erroResumo: null },
     });
+    if (updated.count !== 1) throw domainError(409, "JOB_RETRY_CONFLICT", "A acao mudou durante o reprocessamento.");
+    return prisma.automacaoAcaoJob.findFirstOrThrow({ where: { id: job.id, empresaId: context.empresaId } });
   }
 
   async function summary(context) {

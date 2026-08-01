@@ -119,11 +119,11 @@ async function copyTable({ sqlite, pgClient, table, batchSize = DEFAULT_BATCH_SI
     const sql = [
       `INSERT INTO ${quoteIdentifier(table)} (${columns.map(quoteIdentifier).join(", ")})`,
       `VALUES ${placeholders.join(", ")}`,
-      "ON CONFLICT DO NOTHING",
     ].join(" ");
     const result = await pgClient.query(sql, values);
     inserted += result.rowCount || 0;
   }
+  if (inserted !== count) throw new Error(`Importacao incompleta para ${table}: origem=${count}, inseridos=${inserted}`);
   return { table, source: count, inserted, dryRun };
 }
 
@@ -152,6 +152,34 @@ async function resetSequences(pgClient, tables) {
     if (!seq) continue;
     await pgClient.query(`SELECT setval($1::regclass, GREATEST((SELECT COALESCE(MAX("id"), 0) FROM ${quoteIdentifier(table)}), 1), true)`, [seq]);
   }
+}
+
+async function copyWithinTransaction({
+  sqlite,
+  pgClient,
+  tables,
+  batchSize,
+  dryRun,
+  copyTableFn = copyTable,
+  resetSequencesFn = resetSequences,
+  validateCountsFn = validateCounts,
+}) {
+  const copied = [];
+  let mismatches = [];
+  await pgClient.query("BEGIN");
+  try {
+    for (const table of tables) copied.push(await copyTableFn({ sqlite, pgClient, table, batchSize, dryRun }));
+    if (!dryRun) {
+      await resetSequencesFn(pgClient, tables);
+      mismatches = await validateCountsFn({ sqlite, pgClient, tables });
+      if (mismatches.length) throw new Error(`Divergencia de contagem: ${JSON.stringify(mismatches)}`);
+    }
+    await pgClient.query(dryRun ? "ROLLBACK" : "COMMIT");
+  } catch (error) {
+    await pgClient.query("ROLLBACK");
+    throw error;
+  }
+  return { copied, mismatches };
 }
 
 function safeSummary(rows) {
@@ -202,19 +230,7 @@ async function runMigration(env = process.env) {
     }
     const dryRun = mode === "dry-run";
     const batchSize = boundedInteger(env.POSTGRES_IMPORT_BATCH_SIZE, DEFAULT_BATCH_SIZE, 1, 5000);
-    const copied = [];
-    await pgClient.query("BEGIN");
-    try {
-      for (const table of tables) copied.push(await copyTable({ sqlite, pgClient, table, batchSize, dryRun }));
-      if (!dryRun) await resetSequences(pgClient, tables);
-      if (dryRun) await pgClient.query("ROLLBACK");
-      else await pgClient.query("COMMIT");
-    } catch (error) {
-      await pgClient.query("ROLLBACK");
-      throw error;
-    }
-    const mismatches = dryRun ? [] : await validateCounts({ sqlite, pgClient, tables });
-    if (mismatches.length) throw new Error(`Divergencia de contagem: ${JSON.stringify(mismatches)}`);
+    const { copied, mismatches } = await copyWithinTransaction({ sqlite, pgClient, tables, batchSize, dryRun });
     return { mode, tables: tables.length, copied: safeSummary(copied), mismatches };
   } finally {
     sqlite.close();
@@ -239,6 +255,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  copyWithinTransaction,
   convertValue,
   orderedTables,
   sanitizeError,

@@ -146,7 +146,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     try {
       const integracao = await findIntegrationOrThrow(prisma, req);
       const adapter = integracao.tipo === "BLING"
-        ? { testConnection: () => blingService.testar({ integracao }) }
+        ? { testConnection: () => blingService.testar({ integracao, empresaId: req.auth.empresaId }) }
         : createIntegrationAdapter(integracao.tipo, safeJson(integracao.configuracaoJson, {}));
       const sync = await prisma.sincronizacaoIntegracao.create({
         data: {
@@ -209,7 +209,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     try {
       const integracao = await findIntegrationOrThrow(prisma, req);
       if (integracao.tipo !== "BLING") throw httpError(400, "Esta ação exige uma integração Bling.", "INTEGRATION_INVALID_TYPE");
-      const result = await blingService.testar({ integracao });
+      const result = await blingService.testar({ integracao, empresaId: req.auth.empresaId });
       return res.json(result);
     } catch (error) {
       return integrationError(res, error, "Não foi possível testar a conexão Bling.");
@@ -220,7 +220,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     try {
       const integracao = await findIntegrationOrThrow(prisma, req);
       if (integracao.tipo !== "BLING") throw httpError(400, "Esta ação exige uma integração Bling.", "INTEGRATION_INVALID_TYPE");
-      const updated = await blingService.desconectar({ integracao, usuarioId: req.auth.usuarioId });
+      const updated = await blingService.desconectar({ integracao, empresaId: req.auth.empresaId, usuarioId: req.auth.usuarioId });
       return res.json(integrationResponse(updated));
     } catch (error) {
       return integrationError(res, error, "Não foi possível desconectar o Bling.");
@@ -373,7 +373,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   app.post("/importacoes/:id/mapear", ...requireAdmin, async (req, res) => {
     try {
       const importacao = await findImportacaoOrThrow(prisma, req);
-      const result = await mapImportacao({ prisma, importacao, body: req.body });
+      const result = await mapImportacao({ prisma, importacao, empresaId: req.auth.empresaId, body: req.body });
       return res.json({
         importacao: importResponse(result.importacao),
         previa: result.previa,
@@ -390,7 +390,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   app.post("/importacoes/:id/validar", ...requireAdmin, async (req, res) => {
     try {
       const importacao = await findImportacaoOrThrow(prisma, req);
-      const result = await validateImportacao({ prisma, importacao });
+      const result = await validateImportacao({ prisma, importacao, empresaId: req.auth.empresaId });
       return res.json({ importacao: importResponse(result.importacao), resumo: result.resumo });
     } catch (error) {
       return integrationError(res, error, "Não foi possível validar a importação.");
@@ -410,7 +410,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   app.post("/importacoes/:id/cancelar", ...requireAdmin, async (req, res) => {
     try {
       const importacao = await findImportacaoOrThrow(prisma, req);
-      const updated = await cancelImportacao({ prisma, importacao });
+      const updated = await cancelImportacao({ prisma, importacao, empresaId: req.auth.empresaId });
       return res.json(importResponse(updated));
     } catch (error) {
       return integrationError(res, error, "Não foi possível cancelar a importação.");

@@ -57,7 +57,8 @@ function createBlingService({ prisma }) {
     });
   }
 
-  async function desconectar({ integracao, usuarioId }) {
+  async function desconectar({ integracao, empresaId, usuarioId }) {
+    integracao = await loadTenantIntegration(prisma, integracao, empresaId);
     const credentials = safeDecrypt(integracao.credenciaisCriptografadas);
     try {
       await revokeBlingToken(credentials?.accessToken, "access_token");
@@ -66,7 +67,7 @@ function createBlingService({ prisma }) {
       // Revogação remota é melhor esforço; os tokens locais ainda serão removidos.
     }
     return prisma.integracao.update({
-      where: { id: integracao.id },
+      where: { empresaId_id: { empresaId, id: integracao.id } },
       data: {
         status: "INATIVA",
         ativo: false,
@@ -81,17 +82,19 @@ function createBlingService({ prisma }) {
     });
   }
 
-  async function testar({ integracao }) {
+  async function testar({ integracao, empresaId }) {
+    integracao = await loadTenantIntegration(prisma, integracao, empresaId);
     const client = await clientForIntegration(integracao);
     const result = await client.testConnection();
     await prisma.integracao.update({
-      where: { id: integracao.id },
+      where: { empresaId_id: { empresaId, id: integracao.id } },
       data: { status: "ATIVA", ultimoSucessoEm: new Date(), ultimaSincronizacaoEm: new Date(), ultimoErroEm: null },
     });
     return result;
   }
 
   async function sincronizar({ integracao, empresaId, entidades }) {
+    integracao = await loadTenantIntegration(prisma, integracao, empresaId);
     const requested = normalizeEntities(entidades);
     if (integracao.tipo !== "BLING") throw blingError("INTEGRATION_INVALID_TYPE", "Sincronização Bling exige integração do tipo BLING.");
     if (!integracao.ativo || integracao.status !== "ATIVA") throw blingError("INTEGRATION_INACTIVE", "Integração Bling inativa ou desconectada.");
@@ -164,7 +167,7 @@ function createBlingService({ prisma }) {
       const finishedAt = new Date();
       const updated = await prisma.$transaction(async (tx) => {
         const syncDone = await tx.sincronizacaoIntegracao.update({
-          where: { id: sync.id },
+          where: { empresaId_id: { empresaId, id: sync.id } },
           data: {
             status: counters.erros > 0 ? "CONCLUIDA_COM_ERROS" : "CONCLUIDA",
             finalizadaEm: finishedAt,
@@ -175,7 +178,7 @@ function createBlingService({ prisma }) {
           },
         });
         await tx.integracao.update({
-          where: { id: integracao.id },
+          where: { empresaId_id: { empresaId, id: integracao.id } },
           data: { ultimaSincronizacaoEm: finishedAt, ultimoSucessoEm: finishedAt, ultimoErroEm: counters.erros > 0 ? finishedAt : null, status: "ATIVA" },
         });
         return syncDone;
@@ -187,7 +190,7 @@ function createBlingService({ prisma }) {
       const sanitized = sanitizeError(error);
       const failed = await prisma.$transaction(async (tx) => {
         const syncFailed = await tx.sincronizacaoIntegracao.update({
-          where: { id: sync.id },
+          where: { empresaId_id: { empresaId, id: sync.id } },
           data: {
             status: "FALHOU",
             finalizadaEm: now,
@@ -207,7 +210,7 @@ function createBlingService({ prisma }) {
           },
         });
         await tx.integracao.update({
-          where: { id: integracao.id },
+          where: { empresaId_id: { empresaId, id: integracao.id } },
           data: { status: statusAfterSyncError(integracao, error), ultimoErroEm: now, ultimaSincronizacaoEm: now },
         });
         return syncFailed;
@@ -222,22 +225,33 @@ function createBlingService({ prisma }) {
     const credentials = safeDecrypt(integracao.credenciaisCriptografadas);
     return new BlingHttpClient({
       credentials,
-      onTokenRefresh: (updatedCredentials) => saveCredentialsOnce(integracao.id, updatedCredentials),
+      onTokenRefresh: (updatedCredentials) => saveCredentialsOnce(integracao.empresaId, integracao.id, updatedCredentials),
       correlationId: `bling-${integracao.id}-${Date.now()}`,
     });
   }
 
-  async function saveCredentialsOnce(integracaoId, credentials) {
-    const current = refreshLocks.get(integracaoId) || Promise.resolve();
+  async function saveCredentialsOnce(empresaId, integracaoId, credentials) {
+    const lockKey = `${empresaId}:${integracaoId}`;
+    const current = refreshLocks.get(lockKey) || Promise.resolve();
     const next = current.then(() => prisma.integracao.update({
-      where: { id: integracaoId },
+      where: { empresaId_id: { empresaId, id: integracaoId } },
       data: { credenciaisCriptografadas: encryptCredentials(credentials) },
     }));
-    refreshLocks.set(integracaoId, next.catch(() => null));
+    refreshLocks.set(lockKey, next.catch(() => null));
     await next;
   }
 
   return { iniciarOAuth, concluirOAuth, desconectar, testar, sincronizar };
+}
+
+async function loadTenantIntegration(prisma, integrationCandidate, empresaId) {
+  const id = Number(integrationCandidate?.id);
+  if (!Number.isInteger(empresaId) || empresaId < 1 || !Number.isInteger(id) || id < 1) {
+    throw blingError("INTEGRATION_NOT_FOUND", "Integração não encontrada.", 404);
+  }
+  const integration = await prisma.integracao.findFirst({ where: { id, empresaId } });
+  if (!integration) throw blingError("INTEGRATION_NOT_FOUND", "Integração não encontrada.", 404);
+  return integration;
 }
 
 async function upsertProducts({ prisma, empresaId, integracaoId, products, now }) {
