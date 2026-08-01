@@ -11,7 +11,7 @@ const { createPrismaClient, validateTestPostgresUrl } = require("../src/database
 const { dashboardScoreQuery } = require("../src/dashboard-score");
 const { postgresUrlFromEnv } = require("../scripts/check-postgres-connection.cjs");
 const { resolveSqliteDatabasePath } = require("../scripts/start-production.cjs");
-const { convertValue, orderedTables, sanitizeError } = require("../scripts/migrate-sqlite-to-postgres.cjs");
+const { copyWithinTransaction, convertValue, orderedTables, sanitizeError } = require("../scripts/migrate-sqlite-to-postgres.cjs");
 const {
   latestMigrationSqlPath,
   postgresSchemaText,
@@ -86,12 +86,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260730160000_add_instagram_direct_schema_foundation",
       "20260731120000_add_messenger_direct_schema_foundation",
       "20260731190000_add_email_inbound_foundation",
+      "20260801123000_enforce_tenant_safe_relations",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
         workspace.migrationsDir,
-        "20260731190000_add_email_inbound_foundation",
+        "20260801123000_enforce_tenant_safe_relations",
         "migration.sql",
       ),
     );
@@ -129,6 +130,14 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(emailIncremental, /EmailMailboxAddress/);
     assert.match(emailIncremental, /EmailMessageMetadata/);
     assert.doesNotMatch(emailIncremental, /^\s*(?:DROP|DELETE|UPDATE|TRUNCATE)\b/im);
+    const tenantIsolationIncremental = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260801123000_enforce_tenant_safe_relations",
+      "migration.sql",
+    ), "utf8");
+    assert.match(tenantIsolationIncremental, /__tenant_relation_preflight/);
+    assert.match(tenantIsolationIncremental, /FOREIGN KEY \("empresaId", "clienteId"\)/);
+    assert.match(tenantIsolationIncremental, /REFERENCES "Cliente"\("empresaId", "id"\)/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -327,6 +336,48 @@ test("importador converte booleanos e timestamps para PostgreSQL", () => {
   assert.equal(convertValue(0, { udt_name: "bool" }), false);
   assert.ok(convertValue("2026-07-28T10:00:00.000Z", { data_type: "timestamp without time zone" }) instanceof Date);
   assert.equal(convertValue("texto", { data_type: "text" }), "texto");
+});
+
+test("importador valida contagens antes do commit e reverte divergencias", async () => {
+  const statements = [];
+  const pgClient = { query: async (sql) => statements.push(sql) };
+  await assert.rejects(
+    copyWithinTransaction({
+      sqlite: {},
+      pgClient,
+      tables: ["Cliente"],
+      batchSize: 100,
+      dryRun: false,
+      copyTableFn: async () => ({ table: "Cliente", source: 1, inserted: 1, dryRun: false }),
+      resetSequencesFn: async () => statements.push("RESET_SEQUENCES"),
+      validateCountsFn: async () => {
+        statements.push("VALIDATE_COUNTS");
+        return [{ table: "Cliente", source: 1, target: 0 }];
+      },
+    }),
+    /Divergencia de contagem/,
+  );
+  assert.deepEqual(statements, ["BEGIN", "RESET_SEQUENCES", "VALIDATE_COUNTS", "ROLLBACK"]);
+});
+
+test("importador confirma somente depois da validacao sem divergencias", async () => {
+  const statements = [];
+  const pgClient = { query: async (sql) => statements.push(sql) };
+  const result = await copyWithinTransaction({
+    sqlite: {},
+    pgClient,
+    tables: ["Cliente"],
+    batchSize: 100,
+    dryRun: false,
+    copyTableFn: async () => ({ table: "Cliente", source: 1, inserted: 1, dryRun: false }),
+    resetSequencesFn: async () => statements.push("RESET_SEQUENCES"),
+    validateCountsFn: async () => {
+      statements.push("VALIDATE_COUNTS");
+      return [];
+    },
+  });
+  assert.deepEqual(statements, ["BEGIN", "RESET_SEQUENCES", "VALIDATE_COUNTS", "COMMIT"]);
+  assert.deepEqual(result.mismatches, []);
 });
 
 test("logs de migracao sanitizam URLs e termos sensiveis", () => {

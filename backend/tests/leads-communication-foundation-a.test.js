@@ -190,22 +190,22 @@ test("fundacao suporta cardinalidade, auditoria e idempotencia sem backfill", as
   await assert.rejects(migrated.conversaCanal.delete({ where: { id: conversa.id } }), (error) => error.code === "P2003");
   await assert.rejects(migrated.usuario.delete({ where: { id: autorNota.id } }), (error) => error.code === "P2003");
 
-  await migrated.usuario.delete({ where: { id: usuarioRemovivel.id } });
+  await assert.rejects(migrated.usuario.delete({ where: { id: usuarioRemovivel.id } }), (error) => error.code === "P2003");
   const historicoPreservado = await migrated.historicoAtribuicao.findUnique({ where: { id: historico.id } });
-  assert.equal(historicoPreservado.responsavelAnteriorId, null);
-  assert.equal(historicoPreservado.alteradoPorId, null);
+  assert.equal(historicoPreservado.responsavelAnteriorId, usuarioRemovivel.id);
+  assert.equal(historicoPreservado.alteradoPorId, usuarioRemovivel.id);
 
   const clienteSomenteContato = await migrated.cliente.create({ data: { empresaId: empresaA.id, nome: "Cliente desvinculavel" } });
   const contatoDesvinculavel = await migrated.contatoCanal.create({
     data: { empresaId: empresaA.id, canalIntegracaoId: canal.id, clienteId: clienteSomenteContato.id, externalId: unique("desvinculavel") },
   });
-  await migrated.cliente.delete({ where: { id: clienteSomenteContato.id } });
-  assert.equal((await migrated.contatoCanal.findUnique({ where: { id: contatoDesvinculavel.id } })).clienteId, null);
+  await assert.rejects(migrated.cliente.delete({ where: { id: clienteSomenteContato.id } }), (error) => error.code === "P2003");
+  assert.equal((await migrated.contatoCanal.findUnique({ where: { id: contatoDesvinculavel.id } })).clienteId, clienteSomenteContato.id);
 
-  // SQLite valida a existencia das FKs, mas nao a igualdade de empresaId entre elas.
-  const crossTenant = await migrated.lead.create({ data: { empresaId: empresaA.id, clienteId: clienteB.id } });
-  assert.equal(crossTenant.clienteId, clienteB.id);
-  await migrated.lead.delete({ where: { id: crossTenant.id } });
+  await assert.rejects(
+    migrated.lead.create({ data: { empresaId: empresaA.id, clienteId: clienteB.id } }),
+    (error) => error.code === "P2003",
+  );
 });
 
 test("schema possui indices tenant e a fundacao so e ativada por modulos protegidos", async () => {

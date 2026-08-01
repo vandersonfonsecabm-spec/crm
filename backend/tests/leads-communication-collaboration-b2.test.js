@@ -288,10 +288,13 @@ test("Release B2 habilita atendimento colaborativo sem misturar autoria e respon
     texto: "Autoria sera preservada como nula apos remocao",
   }, removableAuthor.token);
   assert.equal(removableReply.body.autor.id, removableAuthor.usuarioId);
-  await prisma.usuario.delete({ where: { id: removableAuthor.usuarioId } });
-  const afterAuthorRemoval = await prisma.mensagemCanal.findUnique({ where: { id: removableReply.body.id } });
-  assert.equal(afterAuthorRemoval.autorUsuarioId, null);
-  assert.equal((await request("GET", `/conversas/${conversationA.id}/mensagens`, undefined, adminA.token)).body.data.find((item) => item.id === removableReply.body.id).autor, null);
+  await assert.rejects(
+    prisma.usuario.delete({ where: { id: removableAuthor.usuarioId } }),
+    (error) => error?.code === "P2003",
+  );
+  const afterBlockedRemoval = await prisma.mensagemCanal.findUnique({ where: { id: removableReply.body.id } });
+  assert.equal(afterBlockedRemoval.autorUsuarioId, removableAuthor.usuarioId);
+  assert.equal((await request("GET", `/conversas/${conversationA.id}/mensagens`, undefined, adminA.token)).body.data.find((item) => item.id === removableReply.body.id).autor.id, removableAuthor.usuarioId);
 });
 
 function context(identity, papel) {

@@ -669,15 +669,18 @@ test("H8.3 CREATE_FOLLOW_UP rejeita cliente e autor invalidos como erro permanen
   const rule = await createLegacyRule(context, "Follow-up cliente externo", followUpAction(), { active: true });
   const lead = await seedLead(crossTenant);
   const otherClient = await prisma.cliente.findUniqueOrThrow({ where: { id: otherLead.clienteId } });
-  await prisma.lead.update({ where: { id: lead.id }, data: { clienteId: otherClient.id } });
   await seedActionJob({
     tenant: crossTenant,
     rule,
     entityType: "LEAD",
-    entity: { ...lead, clienteId: otherClient.id },
+    entity: lead,
     marker: "follow-up-cross-client",
   });
-  await service.processDueJobs({
+  const crossTenantService = createAutomationService({
+    prisma: prismaWithEntityMutation((entity) => ({ ...entity, clienteId: otherClient.id })),
+    env,
+  });
+  await crossTenantService.processDueJobs({
     now: new Date(Date.now() + 2000),
     limit: 1,
     leaseOwner: "follow-up-cross-client",
@@ -699,12 +702,18 @@ test("H8.3 CREATE_FOLLOW_UP rejeita autor inativo ou de outro tenant e reverte f
       setup: async (tenant) => {
         const user = await seedUser(tenant.empresa.id, "Autor Inativo", "VENDEDOR");
         await prisma.usuario.update({ where: { id: user.id }, data: { ativo: false } });
-        return user.id;
+        return { responsavelId: user.id, mutate: (entity) => entity };
       },
     },
     {
       label: "outro-tenant",
-      setup: async () => otherTenant.admin.id,
+      setup: async (tenant) => {
+        const localUser = await seedUser(tenant.empresa.id, "Autor Local", "VENDEDOR");
+        return {
+          responsavelId: localUser.id,
+          mutate: (entity) => ({ ...entity, responsavelId: otherTenant.admin.id }),
+        };
+      },
     },
   ];
 
@@ -712,7 +721,7 @@ test("H8.3 CREATE_FOLLOW_UP rejeita autor inativo ou de outro tenant e reverte f
     const tenant = await seedTenant(`h8-3-follow-up-author-${item.label}`);
     const context = adminContext(tenant);
     const rule = await createLegacyRule(context, `Follow-up autor ${item.label}`, followUpAction(), { active: true });
-    const responsavelId = await item.setup(tenant);
+    const { responsavelId, mutate } = await item.setup(tenant);
     const lead = await seedLead(tenant, { responsavelId });
     await seedActionJob({
       tenant,
@@ -721,7 +730,8 @@ test("H8.3 CREATE_FOLLOW_UP rejeita autor inativo ou de outro tenant e reverte f
       entity: lead,
       marker: `follow-up-author-${item.label}`,
     });
-    await service.processDueJobs({
+    const caseService = createAutomationService({ prisma: prismaWithEntityMutation(mutate), env });
+    await caseService.processDueJobs({
       now: new Date(Date.now() + 1000),
       limit: 1,
       leaseOwner: `follow-up-author-${item.label}`,
