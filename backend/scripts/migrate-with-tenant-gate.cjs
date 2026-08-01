@@ -6,6 +6,7 @@ const {
   latestMigrationName,
 } = require("./postgres-prisma.cjs");
 const { runGate, sanitizeFailure } = require("./tenant-isolation-gate.cjs");
+const { createPrismaFailure } = require("./tenant-isolation-log-utils.cjs");
 
 const backendDir = path.resolve(__dirname, "..");
 const sqliteSchemaPath = path.join(backendDir, "prisma", "schema.prisma");
@@ -29,11 +30,12 @@ function runPrisma(args, env) {
     cwd: backendDir,
     env,
     shell: false,
-    stdio: "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
+    encoding: "utf8",
     windowsHide: true,
   });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error("TENANT_MIGRATION_PRISMA_FAILED");
+  if (result.error) throw createPrismaFailure(`tenant-migration-${args[0] || "command"}`, result.error.message);
+  if (result.status !== 0) throw createPrismaFailure(`tenant-migration-${args[0] || "command"}`, `${result.stderr || ""}\n${result.stdout || ""}`);
 }
 
 async function main() {

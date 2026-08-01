@@ -172,7 +172,7 @@ async function runPrismaMigration(runtime, { spawnImpl = spawn } = {}) {
   const child = spawnImpl(
     process.execPath,
     [runtime.prismaCliPath, "migrate", "deploy", "--schema", runtime.schemaPath],
-    childOptions(runtime, "inherit"),
+    childOptions(runtime, "ignore"),
   );
   const result = await waitForChild(child);
 

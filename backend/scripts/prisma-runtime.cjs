@@ -3,8 +3,11 @@ const { spawnSync } = require("node:child_process");
 const {
   preparePostgresWorkspace,
   resolvePrismaCli,
-  sanitize,
 } = require("./postgres-prisma.cjs");
+const {
+  createPrismaFailure,
+  sanitizeFailure: sanitizeVerifierFailure,
+} = require("./tenant-isolation-log-utils.cjs");
 
 const backendDir = path.resolve(__dirname, "..");
 const sqliteSchemaPath = path.join(backendDir, "prisma", "schema.prisma");
@@ -92,11 +95,12 @@ function run(command, args, env) {
     cwd: backendDir,
     env,
     shell: false,
-    stdio: "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
+    encoding: "utf8",
     windowsHide: true,
   });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`Prisma ${args.join(" ")} falhou com codigo ${result.status}.`);
+  if (result.error) throw createPrismaFailure(`runtime-${args[0] || "command"}`, result.error.message);
+  if (result.status !== 0) throw createPrismaFailure(`runtime-${args[0] || "command"}`, `${result.stderr || ""}\n${result.stdout || ""}`);
 }
 
 if (require.main === module) {
@@ -104,7 +108,7 @@ if (require.main === module) {
   try {
     runPrismaForProvider(command);
   } catch (error) {
-    console.error(`[prisma-runtime] ${sanitize(error.stack || error.message)}`);
+    console.error(JSON.stringify({ event: "prisma_runtime", safe: false, error: sanitizeVerifierFailure(error, "prisma-runtime") }));
     process.exitCode = 1;
   }
 }

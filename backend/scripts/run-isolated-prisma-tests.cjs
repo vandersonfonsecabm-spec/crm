@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { PrismaClient } = require("@prisma/client");
+const { createPrismaFailure, sanitizeFailure } = require("./tenant-isolation-log-utils.cjs");
 
 const backendDir = path.resolve(__dirname, "..");
 const officialDb = path.join(backendDir, "prisma", "dev.db");
@@ -30,16 +31,16 @@ let completed = false;
 
 main().catch((error) => {
   process.exitCode = 1;
-  console.error(`[isolated-prisma] ${error.stack || error.message}`);
+  console.error(JSON.stringify({ event: "isolated_prisma", safe: false, error: sanitizeFailure(error, "isolated-prisma") }));
 }).finally(async () => {
   try { assertProtectedDatabases(); } catch (error) {
     process.exitCode = 1;
-    console.error(`[isolated-prisma] BANCO PROTEGIDO ALTERADO: ${error.stack || error.message}`);
+    console.error(JSON.stringify({ event: "isolated_prisma", safe: false, error: sanitizeFailure(error, "isolated-prisma") }));
   }
   if (completed && process.exitCode !== 1) {
     await removeRunDirectory(runDir);
     console.log(`[isolated-prisma] OK ${runId} (cleanup concluido)`);
-  } else console.error(`[isolated-prisma] evidencias preservadas em ${runDir}`);
+  } else console.error(JSON.stringify({ event: "isolated_prisma", safe: false, cleanup: "preservado" }));
 });
 
 process.once("SIGINT", () => { process.exitCode = 130; assertProtectedDatabases(); process.exit(); });
@@ -217,21 +218,25 @@ async function runTenantGate(mode, env, schemaPath, migrationsDir, migrationName
 }
 
 function runNode(args, cwd, env, logicalCommand) {
+  const capturePrisma = logicalCommand.startsWith("Prisma");
   const result = spawnSync(process.execPath, args, {
     cwd,
     env,
-    stdio: "inherit",
+    stdio: capturePrisma ? ["ignore", "pipe", "pipe"] : "inherit",
+    encoding: capturePrisma ? "utf8" : undefined,
     windowsHide: true,
     shell: false,
   });
   assertProtectedDatabases();
   if (result.error) {
-    throw new Error(`${logicalCommand} nao iniciou (${result.error.code || "SPAWN_ERROR"}).`);
+    if (capturePrisma) throw createPrismaFailure(logicalCommand, result.error.message);
+    throw new Error(`${logicalCommand} nao iniciou.`);
   }
   if (!Number.isInteger(result.status)) {
     throw new Error(`${logicalCommand} terminou sem codigo de saida.`);
   }
   if (result.status !== 0) {
+    if (capturePrisma) throw createPrismaFailure(logicalCommand, `${result.stderr || ""}\n${result.stdout || ""}`);
     throw new Error(`${logicalCommand} falhou com codigo ${result.status}.`);
   }
 }

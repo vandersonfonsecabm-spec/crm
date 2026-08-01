@@ -3,6 +3,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { runGate } = require("./tenant-isolation-gate.cjs");
+const {
+  createPrismaFailure,
+  sanitizeFailure: sanitizeVerifierFailure,
+  sanitizePrismaOutput,
+} = require("./tenant-isolation-log-utils.cjs");
 
 const backendDir = path.resolve(__dirname, "..");
 const sqliteSchemaPath = path.join(backendDir, "prisma", "schema.prisma");
@@ -90,7 +95,7 @@ function generatePostgresMigrationSql(schemaPath) {
     shell: false,
   });
   if (result.status !== 0) {
-    throw new Error(`Falha ao gerar migration PostgreSQL (${result.status}): ${sanitize(result.stderr || result.stdout)}`);
+    throw createPrismaFailure("migration-sql", result.stderr || result.stdout);
   }
   return result.stdout;
 }
@@ -99,12 +104,13 @@ function runPrisma(args, env = process.env) {
   const result = spawnSync(process.execPath, [resolvePrismaCli(), ...args], {
     cwd: backendDir,
     env,
-    stdio: "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
+    encoding: "utf8",
     windowsHide: true,
     shell: false,
   });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(`Prisma falhou com codigo ${result.status}.`);
+  if (result.error) throw createPrismaFailure(`prisma-${args[0] || "command"}`, result.error.message);
+  if (result.status !== 0) throw createPrismaFailure(`prisma-${args[0] || "command"}`, `${result.stderr || ""}\n${result.stdout || ""}`);
 }
 
 function postgresUrlFromEnv(env = process.env) {
@@ -137,9 +143,7 @@ function resolvePrismaCli() {
 }
 
 function sanitize(text) {
-  return String(text || "")
-    .replace(/postgres(ql)?:\/\/[^\s"'`]+/gi, "postgresql://***")
-    .slice(0, 2000);
+  return JSON.stringify(sanitizePrismaOutput(text, "postgres-prisma"));
 }
 
 async function main() {
@@ -199,7 +203,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((error) => {
-    console.error(`[postgres-prisma] ${sanitize(error.stack || error.message)}`);
+    console.error(JSON.stringify({ event: "postgres_prisma", safe: false, error: sanitizeVerifierFailure(error, "postgres-prisma") }));
     process.exitCode = 1;
   });
 }

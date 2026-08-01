@@ -1,4 +1,8 @@
 const { Client } = require("pg");
+const {
+  classifyPolymorphicRows,
+  POLYMORPHIC_ROWS_QUERY,
+} = require("./tenant-isolation-verifier-utils.cjs");
 
 const relationSpecs = Object.freeze([
   ["commercial", "Nota", "clienteId", "Cliente"],
@@ -116,29 +120,8 @@ async function relationCount(client, spec) {
 }
 
 async function polymorphicCount(client) {
-  const result = await client.query(`
-    WITH executions AS (
-      SELECT e.*,
-        (e."entidadeTipo" = 'LEAD'
-          AND e."leadId" IS NULL
-          AND e."negocioId" IS NULL
-          AND e."resumoJson" LIKE '%"sourceType":"PILOT_SYNTHETIC"%'
-          AND e."resumoJson" LIKE '%"synthetic":true%') AS synthetic
-      FROM "AutomacaoExecucao" e
-    )
-    SELECT
-      COUNT(*) FILTER (WHERE e.synthetic)::int AS synthetic,
-      COUNT(*) FILTER (WHERE NOT e.synthetic AND e."entidadeTipo" = 'LEAD' AND l."id" IS NULL)::int AS orphaned_lead,
-      COUNT(*) FILTER (WHERE NOT e.synthetic AND e."entidadeTipo" = 'LEAD' AND l."id" IS NOT NULL AND l."empresaId" <> e."empresaId")::int AS crossed_lead,
-      COUNT(*) FILTER (WHERE NOT e.synthetic AND e."entidadeTipo" = 'LEAD' AND (e."leadId" IS NULL OR e."leadId" <> e."entidadeId" OR e."negocioId" IS NOT NULL))::int AS incoherent_lead,
-      COUNT(*) FILTER (WHERE e."entidadeTipo" = 'NEGOCIO' AND n."id" IS NULL)::int AS orphaned_business,
-      COUNT(*) FILTER (WHERE e."entidadeTipo" = 'NEGOCIO' AND n."id" IS NOT NULL AND n."empresaId" <> e."empresaId")::int AS crossed_business,
-      COUNT(*) FILTER (WHERE e."entidadeTipo" = 'NEGOCIO' AND (e."negocioId" IS NULL OR e."negocioId" <> e."entidadeId" OR e."leadId" IS NOT NULL))::int AS incoherent_business
-    FROM executions e
-    LEFT JOIN "Lead" l ON l."id" = e."entidadeId" AND e."entidadeTipo" = 'LEAD'
-    LEFT JOIN "Negocio" n ON n."id" = e."entidadeId" AND e."entidadeTipo" = 'NEGOCIO'`);
-  const row = result.rows[0] || {};
-  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Number(value || 0)]));
+  const result = await client.query(POLYMORPHIC_ROWS_QUERY);
+  return classifyPolymorphicRows(result.rows);
 }
 
 async function main() {
@@ -163,6 +146,7 @@ async function main() {
       safe: totals.orphaned === 0
         && totals.crossed === 0
         && polymorphic.orphaned_lead === 0
+        && polymorphic.invalid_pilot_synthetic === 0
         && polymorphic.crossed_lead === 0
         && polymorphic.incoherent_lead === 0
         && polymorphic.orphaned_business === 0

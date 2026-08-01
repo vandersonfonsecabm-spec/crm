@@ -4,8 +4,12 @@ const path = require("node:path");
 const { Client } = require("pg");
 const { Prisma, PrismaClient } = require("@prisma/client");
 const { relationSpecs } = require("./check-tenant-relation-integrity.cjs");
+const { classifyPolymorphicRows, POLYMORPHIC_ROWS_QUERY } = require("./tenant-isolation-verifier-utils.cjs");
+const { sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation-log-utils.cjs");
 
 const EXPECTED_RELATION_COUNT = 83;
+const TENANT_RELATION_MANIFEST_VERSION = 1;
+const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "ae8072157e89ddf48032eebcc65f5954989c8ffbe438f83ba4695d6db815a4b4";
 const DEFAULT_MIGRATION_NAME = "20260801123000_enforce_tenant_safe_relations";
 const DEFAULT_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma", "migrations");
 const DEFAULT_POSTGRES_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma-postgres", "migrations");
@@ -53,6 +57,7 @@ const GLOBAL_RELATION_EXCEPTIONS = Object.freeze({
 const MIGRATION_REGISTRY = Object.freeze({
   [DEFAULT_MIGRATION_NAME]: Object.freeze({
     relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
     sqliteSha256: "1ed42b8752af6234c4abcb3aaff6805d610819848eb8ab6fbb7e4e67b3532b0c",
     postgresSha256: "d37a4ddbec32dacece4892c8e09bc457ce53a01a3acb973cb4fe02c992a4fa96",
   }),
@@ -85,6 +90,39 @@ function normalizeFields(fields) {
 
 function expectedDeleteAction(key) {
   return CASCADE_RELATIONS.has(key) ? "Cascade" : "Restrict";
+}
+
+function canonicalRelationManifest(specs = relationSpecs, exceptions = GLOBAL_RELATION_EXCEPTIONS) {
+  return {
+    version: TENANT_RELATION_MANIFEST_VERSION,
+    relations: specs.map(([category, child, childField, parent, tenantKey = "empresaId"]) => {
+      const key = relationKey(child, childField, parent);
+      return {
+        category,
+        child,
+        childField,
+        parent,
+        tenantKey,
+        onDelete: expectedDeleteAction(key),
+        onUpdate: "Restrict",
+      };
+    }),
+    exceptions: Object.entries(exceptions)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => ({
+        key,
+        fromFields: [...value.fromFields],
+        toFields: [...value.toFields],
+        scope: value.scope,
+        reason: value.reason,
+      })),
+  };
+}
+
+function tenantRelationManifestHash(specs = relationSpecs, exceptions = GLOBAL_RELATION_EXCEPTIONS) {
+  return crypto.createHash("sha256")
+    .update(JSON.stringify(canonicalRelationManifest(specs, exceptions)))
+    .digest("hex");
 }
 
 function loadDatamodel() {
@@ -145,6 +183,10 @@ function inspectArchitecture({
 } = {}) {
   const failures = [];
   if (specs.length !== EXPECTED_RELATION_COUNT) failures.push("TENANT_GATE_RELATION_COUNT_MISMATCH");
+  const relationManifestHash = tenantRelationManifestHash(specs, exceptions);
+  if (relationManifestHash !== EXPECTED_TENANT_RELATION_MANIFEST_SHA256) {
+    failures.push("TENANT_GATE_RELATION_MANIFEST_HASH_MISMATCH");
+  }
 
   const { models, tenantModels, candidates } = discoverTenantRelations(datamodel);
   const composite = new Map();
@@ -209,6 +251,7 @@ function inspectArchitecture({
   return {
     failures: [...new Set(failures)],
     relationCount: composite.size,
+    relationManifestHash,
     tenantModelCount: tenantModels.length,
     discovered: { composite, simple, models },
   };
@@ -350,6 +393,9 @@ function assertMigrationRegistration({
 
   if (relationAffecting && !registry) throw new GateFailure("TENANT_GATE_MIGRATION_UNREGISTERED");
   if (registry && registry.relationCount !== relationSpecs.length) throw new GateFailure("TENANT_GATE_REGISTRY_RELATION_COUNT_MISMATCH");
+  if (registry && registry.relationManifestSha256 !== architecture.relationManifestHash) {
+    throw new GateFailure("TENANT_GATE_REGISTRY_MANIFEST_HASH_MISMATCH");
+  }
   return { migrationName: resolvedName, relationAffecting };
 }
 
@@ -371,6 +417,7 @@ function failureIfUnsafe(result) {
     { orphaned: 0, crossed: 0 },
   );
   const polymorphicUnsafe = [
+    "invalid_pilot_synthetic",
     "orphaned_lead",
     "crossed_lead",
     "incoherent_lead",
@@ -396,12 +443,9 @@ async function relationCount(client, spec, kind) {
   return { category: spec[0], relation: relationSpecKey(spec), orphaned: Number(row.orphaned || 0), crossed: Number(row.crossed || 0) };
 }
 
-async function polymorphicCount(client, kind) {
-  const count = (expression) => kind === "postgresql" ? `COUNT(*) FILTER (WHERE ${expression})` : `SUM(CASE WHEN ${expression} THEN 1 ELSE 0 END)`;
-  const synthetic = `e."entidadeTipo" = 'LEAD' AND e."leadId" IS NULL AND e."negocioId" IS NULL AND e."resumoJson" LIKE '%"sourceType":"PILOT_SYNTHETIC"%' AND e."resumoJson" LIKE '%"synthetic":true%'`;
-  const real = `NOT (${synthetic})`;
-  const result = (await queryRows(client, `SELECT ${count(synthetic)} AS synthetic, ${count(`${real} AND e."entidadeTipo" = 'LEAD' AND l."id" IS NULL`)} AS orphaned_lead, ${count(`${real} AND e."entidadeTipo" = 'LEAD' AND l."id" IS NOT NULL AND l."empresaId" <> e."empresaId"`)} AS crossed_lead, ${count(`${real} AND e."entidadeTipo" = 'LEAD' AND (e."leadId" IS NULL OR e."leadId" <> e."entidadeId" OR e."negocioId" IS NOT NULL)`)} AS incoherent_lead, ${count(`${real} AND e."entidadeTipo" = 'NEGOCIO' AND n."id" IS NULL`)} AS orphaned_business, ${count(`${real} AND e."entidadeTipo" = 'NEGOCIO' AND n."id" IS NOT NULL AND n."empresaId" <> e."empresaId"`)} AS crossed_business, ${count(`${real} AND e."entidadeTipo" = 'NEGOCIO' AND (e."negocioId" IS NULL OR e."negocioId" <> e."entidadeId" OR e."leadId" IS NOT NULL)`)} AS incoherent_business FROM "AutomacaoExecucao" e LEFT JOIN "Lead" l ON l."id" = e."entidadeId" AND e."entidadeTipo" = 'LEAD' LEFT JOIN "Negocio" n ON n."id" = e."entidadeId" AND e."entidadeTipo" = 'NEGOCIO'`))[0] || {};
-  return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, Number(value || 0)]));
+async function polymorphicCount(client) {
+  const rows = await queryRows(client, POLYMORPHIC_ROWS_QUERY);
+  return classifyPolymorphicRows(rows);
 }
 
 async function listTables(client, kind) {
@@ -422,7 +466,7 @@ async function inspectData(client, kind, { allowEmpty = false } = {}) {
   if (present.length !== required.length) throw new GateFailure("TENANT_GATE_SCHEMA_INCOMPLETE");
   const relations = [];
   for (const spec of relationSpecs) relations.push(await relationCount(client, spec, kind));
-  const polymorphic = await polymorphicCount(client, kind);
+  const polymorphic = await polymorphicCount(client);
   const result = failureIfUnsafe({ relations, polymorphic });
   return { emptyDatabase: false, relations, ...result };
 }
@@ -597,9 +641,7 @@ async function inspectSqlite({ mode, env, architecture, allowEmpty }) {
 }
 
 function sanitizeFailure(error) {
-  return String(error?.code || error?.message || "TENANT_GATE_FAILED")
-    .replace(/postgres(ql)?:\/\/[^\s"'`]+/gi, "[POSTGRES_URL_REDACTED]")
-    .slice(0, 160);
+  return sanitizeVerifierFailure(error, "tenant-isolation-gate");
 }
 
 async function runGate({
@@ -621,7 +663,13 @@ async function runGate({
   const architecture = inspectArchitecture({ datamodel: datamodel || loadDatamodel(), specs, exceptions });
   if (architecture.failures.length > 0) throw new GateFailure(architecture.failures[0]);
   const migration = assertMigrationRegistration({ architecture, migrationDir, migrationName, sqliteMigrationDir, postgresMigrationDir });
-  if (mode === "architecture") return { mode, safe: true, relationCount: architecture.relationCount, migration };
+  if (mode === "architecture") return {
+    mode,
+    safe: true,
+    relationCount: architecture.relationCount,
+    relationManifestHash: architecture.relationManifestHash,
+    migration,
+  };
 
   const url = databaseUrl(env);
   const kind = databaseKind(url);
@@ -633,6 +681,7 @@ async function runGate({
     mode,
     safe: true,
     relationCount: architecture.relationCount,
+    relationManifestHash: architecture.relationManifestHash,
     migration,
     database: database.database,
     emptyDatabase: database.data.emptyDatabase,
@@ -680,10 +729,15 @@ module.exports = {
   GLOBAL_RELATION_EXCEPTIONS,
   MIGRATION_REGISTRY,
   EXPECTED_RELATION_COUNT,
+  TENANT_RELATION_MANIFEST_VERSION,
+  EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
   GateFailure,
+  canonicalRelationManifest,
+  failureIfUnsafe,
   inspectArchitecture,
   migrationTouchesTenantRelations,
   runCli,
   runGate,
   sanitizeFailure,
+  tenantRelationManifestHash,
 };
