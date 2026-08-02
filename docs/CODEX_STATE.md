@@ -1,6 +1,6 @@
 # Estado atual do CRM
 
-Data da verificacao: 01/08/2026.
+Data da verificacao: 02/08/2026.
 
 ## Estrutura ativa
 
@@ -12,11 +12,12 @@ Data da verificacao: 01/08/2026.
 ## Git
 
 - Baseline oficial publicado em `origin/master` e HEAD atual:
-  `eff7bc978a6a38cf690da623725a9410ec43ae4f`.
+  `9b14b0587fd4a5f223589440f7d4b186e2d91b0e`.
 - Branch de trabalho ativa: `feature/postgres-migration-prep`, alinhada a
   `origin/master` na relacao `0 0`.
 - A branch remota correspondente e `origin/feature/postgres-migration-prep`;
-  o worktree esta limpo e nao possui arquivos untracked.
+  ambas apontam para o mesmo SHA. O worktree esta limpo e nao possui arquivos
+  untracked.
 - `feature/customer-360` e uma referencia historica totalmente incorporada em
   `origin/master`; nao representa o fluxo de trabalho ativo.
 - A master local divergente preserva o trabalho isolado de Estoque.
@@ -32,6 +33,10 @@ Data da verificacao: 01/08/2026.
 - A release de Usuarios e Seguranca foi promovida pelo pipeline oficial no SHA
   `eff7bc978a6a38cf690da623725a9410ec43ae4f`. API, worker, frontend e
   PostgreSQL estao online; `/health` e o frontend respondem HTTP 200.
+- O frontend do Painel Comercial foi publicado posteriormente no SHA
+  `9b14b0587fd4a5f223589440f7d4b186e2d91b0e`. O status Vercel do commit esta
+  concluido, o frontend canonico responde HTTP 200 e o bundle publicado contem
+  a nova estrutura do Painel Comercial.
 - A migration aditiva `20260801150000_add_user_security_foundation` foi
   aplicada pelo startup oficial, sem drop, rename ou backfill. O gate
   `production-readonly` reconhece 87 relacoes, zero orfaos e zero vinculos
@@ -1422,9 +1427,14 @@ integracoes autorizadas.
 
 ## Proxima fase visual
 
-- A reformulacao visual global ainda nao foi iniciada. A proxima missao deve
-  comecar por tres propostas isoladas para o shell e o Dashboard, sem aplicar
-  uma paleta definitiva em todo o frontend.
+- A reformulacao do Painel Comercial ja foi iniciada e publicada. O commit
+  `0189e8d1fcf31b70a283928adb4ea84ec2907264` reestruturou a experiencia do
+  dashboard comercial, e o commit
+  `9b14b0587fd4a5f223589440f7d4b186e2d91b0e` removeu os icones decorativos de
+  prioridade.
+- O blueprint amplo do design system, shell, navegacao e Painel Comercial ainda
+  nao foi realizado. A proxima etapa e pesquisar padroes atuais de SaaS B2B
+  maduras e fechar um blueprint estrutural antes de qualquer novo redesign.
 - O custom agent `design_worker` esta configurado e disponivel para delegacao,
   usando `gpt-5.6-terra` com reasoning `high`. A skill local
   `interface-design` permanece a autoridade principal para UI/UX.
