@@ -8,7 +8,7 @@ test("PostgreSQL preserva ao menos um ADMIN ativo sob remocoes concorrentes", { 
   process.env.DATABASE_URL = requiredPostgresUrl();
 
   const { PrismaClient } = require("@prisma/client");
-  const { updateTenantUser } = require("../src/auth");
+  const { updateUserWithLastAdminGuard } = require("../src/user-security");
   const firstClient = new PrismaClient();
   const secondClient = new PrismaClient();
   const suffix = `${Date.now()}-${process.pid}`;
@@ -41,8 +41,8 @@ test("PostgreSQL preserva ao menos um ADMIN ativo sob remocoes concorrentes", { 
     ]);
 
     const results = await Promise.all([
-      updateTenantUser({ prisma: firstClient, id: firstAdmin.id, empresaId, data: { ativo: false } }),
-      updateTenantUser({ prisma: secondClient, id: secondAdmin.id, empresaId, data: { ativo: false } }),
+      updateUserWithLastAdminGuard({ prisma: firstClient, id: firstAdmin.id, empresaId, data: { ativo: false } }),
+      updateUserWithLastAdminGuard({ prisma: secondClient, id: secondAdmin.id, empresaId, data: { ativo: false } }),
     ]);
 
     assert.deepEqual(results.map((result) => result.kind).sort(), ["last-admin", "updated"]);

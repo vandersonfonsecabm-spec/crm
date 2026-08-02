@@ -44,6 +44,6 @@ test("H3 nao cria envio externo nem usa o frontend como autoridade dos totais", 
   assert.doesNotMatch(`${panel}\n${api}`, /graph\.facebook|api\.whatsapp|oauth|embedded.signup/i);
   assert.doesNotMatch(panel, /fetch\(|axios|empresaId/);
   assert.doesNotMatch(api, /enviar-proposta|send-proposal/i);
-  assert.match(api, /fetchCommercialProposalPdf[\s\S]*?fetch\(`\$\{API_URL\}\/propostas\/\$\{id\}\/pdf`, \{ headers/);
+  assert.match(api, /fetchCommercialProposalPdf[\s\S]*?fetchAuthenticated\(`\/propostas\/\$\{id\}\/pdf`\)/);
   assert.match(panel, /estado ENVIADA|ENVIADA/);
 });
