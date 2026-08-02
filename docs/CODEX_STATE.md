@@ -11,14 +11,12 @@ Data da verificacao: 01/08/2026.
 
 ## Git
 
-- Baseline oficial publicado em `origin/master`:
-  `365a7f9dca051bfdab39021c87d666e8467c512e`.
-- Branch de trabalho ativa: `feature/postgres-migration-prep`, baseada em
-  `origin/master`, zero atras e dez commits a frente na base funcional
-  `85a91d641faca33e5b891a695595e5b25fc8b15e`.
-- A branch remota correspondente e `origin/feature/postgres-migration-prep`.
-  O worktree preserva nove alteracoes acumuladas e ainda nao commitadas da
-  release de Usuarios e Seguranca.
+- Baseline oficial publicado em `origin/master` e HEAD atual:
+  `eff7bc978a6a38cf690da623725a9410ec43ae4f`.
+- Branch de trabalho ativa: `feature/postgres-migration-prep`, alinhada a
+  `origin/master` na relacao `0 0`.
+- A branch remota correspondente e `origin/feature/postgres-migration-prep`;
+  o worktree esta limpo e nao possui arquivos untracked.
 - `feature/customer-360` e uma referencia historica totalmente incorporada em
   `origin/master`; nao representa o fluxo de trabalho ativo.
 - A master local divergente preserva o trabalho isolado de Estoque.
@@ -31,11 +29,19 @@ Data da verificacao: 01/08/2026.
 - Frontend canonico: https://crm-murex-six-83.vercel.app.
 - Backend: https://api-production-875f9.up.railway.app.
 - Servico Railway: `api`; nao utilizar `crm-agro-demo-api`.
-- Railway esta `Active`, Vercel esta `Ready` e producao possui 23 migrations;
-  health esperado HTTP 200.
+- A release de Usuarios e Seguranca foi promovida pelo pipeline oficial no SHA
+  `eff7bc978a6a38cf690da623725a9410ec43ae4f`. API, worker, frontend e
+  PostgreSQL estao online; `/health` e o frontend respondem HTTP 200.
+- A migration aditiva `20260801150000_add_user_security_foundation` foi
+  aplicada pelo startup oficial, sem drop, rename ou backfill. O gate
+  `production-readonly` reconhece 87 relacoes, zero orfaos e zero vinculos
+  cruzados.
 - H2, H3, H4, H5 e H6 estao publicadas. A qualificacao comercial, as propostas,
   a Agenda e Acompanhamentos, o Cliente 360 graus e o tempo de etapa com
   proxima acao estao disponiveis em producao.
+
+### Historico operacional de releases anteriores
+
 - H1.1 foi publicada no commit
   `93e1c0b2ea7d9d4f13b06fba2f8c275c734bb312`. O Railway publicou o deployment
   `769fba0f-d9b5-4076-bbd9-810059f05912` e a Vercel publicou o deployment
@@ -1392,3 +1398,33 @@ integracoes autorizadas.
 - Os commits locais anteriores de autorizacao, OAuth Bling e sessao frontend
   foram preservados sem squash ou rebase. O proximo passo e manter o verifier
   read-only no checklist de migrations que adicionem novas relacoes tenant.
+
+## Usuarios e Seguranca - estado publicado
+
+- Em 01/08/2026, o modulo de Usuarios e Seguranca foi publicado pelo pipeline
+  oficial no SHA `eff7bc978a6a38cf690da623725a9410ec43ae4f`.
+- A release inclui sessoes persistidas, refresh token opaco armazenado por
+  hash, rotacao e protecao contra replay, logout e revogacao, troca e
+  recuperacao de senha, convites, administracao de usuarios, protecao do
+  ultimo ADMIN, coordenacao multiaba, auditoria sanitizada e interfaces
+  frontend.
+- A migration `20260801150000_add_user_security_foundation` e exclusivamente
+  aditiva e foi aplicada uma vez pelo mecanismo oficial. O codigo anterior
+  permanece compativel com as novas tabelas para rollback de artefato.
+- API e worker Railway terminaram `SUCCESS`, PostgreSQL permaneceu saudavel e
+  o frontend publicou novos assets. O smoke read-only confirmou `/health = 200`,
+  rotas protegidas sem autenticacao em 401 e paginas publicas de login,
+  recuperacao, redefinicao e convite em 200.
+- O verifier produtivo aprovou 87 relacoes tenant-scoped, 134 foreign keys e
+  17 parents unique, com zero orfaos e zero vinculos cruzados.
+- A entrega real de e-mail permanece pendente de provider. Nenhum SMTP, Gmail
+  ou Microsoft Graph foi integrado e nenhum e-mail real foi enviado.
+
+## Proxima fase visual
+
+- A reformulacao visual global ainda nao foi iniciada. A proxima missao deve
+  comecar por tres propostas isoladas para o shell e o Dashboard, sem aplicar
+  uma paleta definitiva em todo o frontend.
+- O custom agent `design_worker` esta configurado e disponivel para delegacao,
+  usando `gpt-5.6-terra` com reasoning `high`. A skill local
+  `interface-design` permanece a autoridade principal para UI/UX.
