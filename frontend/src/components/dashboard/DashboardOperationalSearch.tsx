@@ -1,4 +1,4 @@
-import { Download, Flame, RotateCcw, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { Download, RotateCcw, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import type { ActivePage, KanbanOwner, SortBy, Status } from "../../types/dashboard";
 import { Button, FilterBar, Select, Surface, Toolbar } from "../ui";
 
@@ -169,7 +169,6 @@ export default function DashboardOperationalSearch({
           aria-pressed={onlyHot}
           onClick={() => setOnlyHot((value) => !value)}
           className={onlyHot ? "border-amber-300 bg-amber-50 text-amber-800" : ""}
-          leftIcon={<Flame size={13} />}
           size="sm"
           variant="secondary"
         >

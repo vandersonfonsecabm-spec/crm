@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowUpRight, Flame, Gauge, Target, Users } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Gauge, Target, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ApiDashboardSummary } from "../../services/crmApi";
 import type { Client, Status } from "../../types/dashboard";
@@ -50,7 +50,7 @@ export default function DashboardClientsInsights({
         />
         <div className="grid grid-cols-2">
           <SummaryMetric caption="Receita em carteira" icon={<Target size={14} />} label="Potencial" value={money(totalPotential)} />
-          <SummaryMetric caption="Oportunidades prioritárias" className="border-l border-[var(--border-default)]" icon={<Flame size={14} />} label="Quentes" tone="warning" value={`${hotClients} clientes`} />
+          <SummaryMetric caption="Oportunidades prioritárias" className="border-l border-[var(--border-default)]" label="Quentes" tone="warning" value={`${hotClients} clientes`} />
           <SummaryMetric caption="Risco alto" className="border-t border-[var(--border-default)]" icon={<AlertTriangle size={14} />} label="Atenção" tone="danger" value={`${riskClients} clientes`} />
           <SummaryMetric caption="Acompanhamentos do dia" className="border-l border-t border-[var(--border-default)]" icon={<Users size={14} />} label="Hoje" tone="info" value={`${todayFollowUps} ações`} />
         </div>
@@ -119,7 +119,7 @@ export default function DashboardClientsInsights({
   );
 }
 
-function SummaryMetric({ caption, className = "", icon, label, tone = "default", value }: { caption: string; className?: string; icon: ReactNode; label: string; tone?: "default" | "warning" | "danger" | "info"; value: string }) {
+function SummaryMetric({ caption, className = "", icon, label, tone = "default", value }: { caption: string; className?: string; icon?: ReactNode; label: string; tone?: "default" | "warning" | "danger" | "info"; value: string }) {
   const toneClass = tone === "warning" ? "text-[var(--warning)]" : tone === "danger" ? "text-[var(--danger)]" : tone === "info" ? "text-[var(--info)]" : "text-[var(--text-primary)]";
   return (
     <div className={`min-w-0 p-4 ${className}`}>

@@ -1,6 +1,5 @@
 import {
   Eye,
-  Flame,
   MessageCircle,
   Star,
   UserCheck,
@@ -175,7 +174,6 @@ function ClientTableRow({
             <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-xs font-semibold text-[var(--text-primary)]" title={client.name}>{client.name}</span>
               {client.favorite && <Star aria-label="Favorito" className="shrink-0 fill-[var(--warning)] text-[var(--warning)]" size={12} />}
-              {client.hot && <Flame aria-label="Oportunidade quente" className="shrink-0 text-[var(--warning)]" size={12} />}
             </span>
             <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]" title={client.company}>
               {client.company}{tags.length > 0 ? ` · ${tags.join(" · ")}` : ""}{hiddenTags > 0 ? ` · +${hiddenTags}` : ""}
@@ -218,9 +216,18 @@ function ClientTableRow({
           <IconButton aria-label={client.favorite ? "Remover dos favoritos" : "Adicionar aos favoritos"} aria-pressed={client.favorite} onClick={() => onToggleFavorite(client.id)}>
             <Star className={client.favorite ? "fill-[var(--warning)] text-[var(--warning)]" : ""} size={14} />
           </IconButton>
-          <IconButton aria-label={client.hot ? "Remover dos quentes" : "Marcar como quente"} aria-pressed={client.hot} onClick={() => onToggleHot(client.id)}>
-            <Flame className={client.hot ? "text-[var(--warning)]" : ""} size={14} />
-          </IconButton>
+          <label
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center"
+            title={client.hot ? "Remover dos quentes" : "Marcar como quente"}
+          >
+            <input
+              aria-label={client.hot ? "Remover dos quentes" : "Marcar como quente"}
+              checked={client.hot}
+              className="h-4 w-4 cursor-pointer accent-[var(--warning)]"
+              onChange={() => onToggleHot(client.id)}
+              type="checkbox"
+            />
+          </label>
           <IconButton aria-label="Abrir WhatsApp" className="hover:text-[var(--primary)]" onClick={() => onRequestWhatsapp(client)}>
             <MessageCircle size={14} />
           </IconButton>

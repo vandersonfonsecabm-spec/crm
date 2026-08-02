@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Clock3, Flame, Target, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock3, Target, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ApiDashboardSummary } from "../../services/crmApi";
 import type { Client, SmartFilterType, Status } from "../../types/dashboard";
@@ -72,7 +72,6 @@ export default function DashboardPortfolioInsights({
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
                       <p className="truncate text-xs font-semibold text-[var(--text-primary)]" title={client.name}>{client.name}</p>
-                      {client.hot && <Flame aria-label="Oportunidade quente" className="shrink-0 text-[var(--warning)]" size={13} />}
                     </div>
                     <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{client.company} · {attentionReason(client, getRisk)} · {enterpriseHealthLabel(client)}</p>
                   </div>
@@ -135,7 +134,7 @@ export default function DashboardPortfolioInsights({
           <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--border-default)] pt-4">
             <SummaryValue icon={<Users size={13} />} label="Ativos" value={String(activeClients)} />
             <SummaryValue icon={<AlertTriangle size={13} />} label="Risco" value={String(highRiskCount)} />
-            <SummaryValue icon={<Flame size={13} />} label="Quentes" value={String(hotOpportunities)} />
+            <SummaryValue label="Quentes" value={String(hotOpportunities)} />
             <SummaryValue icon={<Clock3 size={13} />} label="Propostas" value={money(proposalValue)} />
           </dl>
 
@@ -149,7 +148,7 @@ export default function DashboardPortfolioInsights({
   );
 }
 
-function SummaryValue({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+function SummaryValue({ icon, label, value }: { icon?: ReactNode; label: string; value: string }) {
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-1 text-[var(--icon-muted)]">{icon}<dt className="text-[11px] text-[var(--text-muted)]">{label}</dt></div>

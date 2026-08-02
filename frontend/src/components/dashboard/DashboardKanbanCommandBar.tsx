@@ -1,4 +1,4 @@
-import { AlertTriangle, BadgeDollarSign, Flame, GitBranch, Target, TrendingUp } from "lucide-react";
+import { AlertTriangle, BadgeDollarSign, GitBranch, Target, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Client } from "../../types/dashboard";
 
@@ -30,7 +30,7 @@ export default function DashboardKanbanCommandBar({
   return (
     <div className="grid overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <KanbanCommandPill icon={<Target size={12} />} label="Gargalo" value={biggestBottleneck} tone="default" />
-      <KanbanCommandPill icon={<Flame size={12} />} label="Prioridade" value={`${hotLeads} oportunidades`} tone="warning" />
+      <KanbanCommandPill label="Prioridade" value={`${hotLeads} oportunidades`} tone="warning" />
       <KanbanCommandPill icon={<GitBranch size={12} />} label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
       <KanbanCommandPill icon={<AlertTriangle size={12} />} label="Silenciosos" value={`${stalledLeads} oportunidades`} tone="danger" />
       <KanbanCommandPill icon={<BadgeDollarSign size={12} />} label="Receita prevista" value={money(expectedRevenue)} tone="success" />
@@ -45,7 +45,7 @@ function KanbanCommandPill({
   value,
   tone,
 }: {
-  icon: ReactNode;
+  icon?: ReactNode;
   label: string;
   value: string;
   tone: "default" | "warning" | "danger" | "success" | "info";
