@@ -1,4 +1,5 @@
 import type { Client, Note, Status } from "../types/dashboard";
+import { isAuthRefreshCoordinationError, runAuthRefreshSingleFlight } from "./auth-refresh-coordinator.ts";
 
 const runtimeEnv = import.meta.env as ImportMetaEnv | undefined;
 const configuredApiUrl = runtimeEnv?.VITE_API_URL?.trim();
@@ -1558,14 +1559,19 @@ export async function fetchAuthMe(options: { allowRefresh?: boolean } = {}) {
   if (!response.ok) {
     const error = await readApiErrorDetails(response);
     if (response.status === 401 && allowRefresh) {
+      const latestToken = getAuthToken();
+      if (latestToken && latestToken !== token) return fetchAuthMe({ allowRefresh: false });
       try {
         await refreshAuthSession();
-        return fetchAuthMe({ allowRefresh: false });
-      } catch {
-        clearAuthSession();
+      } catch (refreshError) {
+        if (shouldInvalidateAuthSession(refreshError)) clearAuthSession();
+        throw refreshError;
       }
+      return fetchAuthMe({ allowRefresh: false });
     }
-    throw new ApiHttpError(error.message, response.status, error.code, error.details);
+    const apiError = new ApiHttpError(error.message, response.status, error.code, error.details);
+    if (response.status === 401) clearAuthSession();
+    throw apiError;
   }
 
   const data = (await response.json()) as Pick<ApiAuthResponse, "usuario" | "user" | "email" | "empresa" | "papel" | "capabilities" | "isPlatformOperator">;
@@ -1609,7 +1615,16 @@ export async function loginWithBackend(email: string, senha: string, empresaSlug
   return data;
 }
 
-export async function refreshAuthSession() {
+export function refreshAuthSession() {
+  return runAuthRefreshSingleFlight(performAuthRefresh).catch((error) => {
+    if (isAuthRefreshCoordinationError(error)) {
+      throw new ApiHttpError(error.message, error.status, error.code);
+    }
+    throw error;
+  });
+}
+
+async function performAuthRefresh() {
   if (!hasRemoteApi()) throw new ApiHttpError("Servico indisponivel.", 0, "NETWORK_UNAVAILABLE");
   let response: Response;
   try {
@@ -1627,12 +1642,9 @@ export async function refreshAuthSession() {
 }
 
 export async function logoutFromBackend() {
-  const token = getAuthToken();
-  if (!token || !hasRemoteApi()) return;
-  const response = await fetch(`${API_URL}/auth/logout`, {
+  if (!getAuthToken() || !hasRemoteApi()) return;
+  const response = await fetchAuthenticated("/auth/logout", {
     method: "POST",
-    credentials: "include",
-    headers: buildHeaders(token),
   });
   if (!response.ok) {
     const error = await readApiErrorDetails(response);
@@ -1702,8 +1714,8 @@ export async function changeOwnPassword(payload: { senhaAtual: string; novaSenha
   return requestApiWrite<{ ok: boolean }>("POST", "/auth/change-password", payload);
 }
 
-export async function requestPasswordRecovery(email: string) {
-  return requestApiPublicPost<{ ok: boolean; message: string }>("/auth/forgot-password", { email });
+export async function requestPasswordRecovery(email: string, empresaSlug: string) {
+  return requestApiPublicPost<{ ok: boolean; message: string }>("/auth/forgot-password", { email, empresaSlug });
 }
 
 export async function resetPasswordWithToken(payload: { token: string; novaSenha: string }) {
@@ -1715,16 +1727,13 @@ export async function acceptUserInvite(payload: { token: string; nome?: string; 
 }
 
 export async function fetchClientesFromBackend(params: ClientListQuery = {}): Promise<ClientPage | null> {
-  const token = getAuthToken();
-  if (!token || !hasRemoteApi()) return null;
+  if (!getAuthToken() || !hasRemoteApi()) return null;
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/clientes${toQueryString(params)}`, {
-      headers: buildHeaders(token),
-    });
-  } catch {
-    throw new ApiHttpError("Nao foi possivel carregar clientes agora.", 0, "NETWORK_ERROR");
+    response = await fetchAuthenticated(`/clientes${toQueryString(params)}`);
+  } catch (error) {
+    throwNetworkErrorUnlessApiHttpError(error, "Nao foi possivel carregar clientes agora.");
   }
 
   if (!response.ok) {
@@ -1749,16 +1758,13 @@ export async function fetchClienteDetailFromBackend(id: number | string) {
 }
 
 export async function fetchDashboardSummaryFromBackend() {
-  const token = getAuthToken();
-  if (!token || !hasRemoteApi()) return null;
+  if (!getAuthToken() || !hasRemoteApi()) return null;
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/dashboard`, {
-      headers: buildHeaders(token),
-    });
-  } catch {
-    throw new ApiHttpError("Nao foi possivel carregar o resumo agora.", 0, "NETWORK_ERROR");
+    response = await fetchAuthenticated("/dashboard");
+  } catch (error) {
+    throwNetworkErrorUnlessApiHttpError(error, "Nao foi possivel carregar o resumo agora.");
   }
 
   if (!response.ok) {
@@ -1916,15 +1922,9 @@ export async function simulateWhatsappMessage(payload: WhatsappSimulationPayload
     throw new Error("Não foi possível executar o simulador agora.");
   }
 
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error("Sessão expirada. Entre novamente para continuar.");
-  }
-
-  const response = await fetch(`${API_URL}/whatsapp/simular-mensagem`, {
+  const response = await fetchAuthenticated("/whatsapp/simular-mensagem", {
     method: "POST",
     headers: {
-      ...buildHeaders(token),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
@@ -2015,15 +2015,9 @@ export async function deleteClienteOnBackend(client: Client) {
 export async function createNotaOnBackend(client: Client, text: string) {
   if (!client.backendId || !hasRemoteApi()) throw new Error("Cliente não sincronizado.");
 
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error("Sem token de autenticação.");
-  }
-
-  const response = await fetch(`${API_URL}/clientes/${client.backendId}/notas`, {
+  const response = await fetchAuthenticated(`/clientes/${client.backendId}/notas`, {
     method: "POST",
     headers: {
-      ...buildHeaders(token),
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -2157,13 +2151,11 @@ export async function fetchCommercialProposalHistory(id: number) {
 }
 
 export async function fetchCommercialProposalPdf(id: number) {
-  const token = getAuthToken();
-  if (!token) throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/propostas/${id}/pdf`, { headers: buildHeaders(token) });
-  } catch {
-    throw new ApiHttpError("Nao foi possivel gerar o PDF agora.", 0, "NETWORK_ERROR");
+    response = await fetchAuthenticated(`/propostas/${id}/pdf`);
+  } catch (error) {
+    throwNetworkErrorUnlessApiHttpError(error, "Nao foi possivel gerar o PDF agora.");
   }
   if (!response.ok) {
     const error = await readApiErrorDetails(response);
@@ -2370,16 +2362,9 @@ export function getApiBaseUrl() {
 async function requestCliente(method: "POST" | "PATCH" | "PUT", path: string, payload: ClientePayload): Promise<ApiCliente>;
 async function requestCliente(method: "DELETE", path: string): Promise<null>;
 async function requestCliente(method: "POST" | "PATCH" | "PUT" | "DELETE", path: string, payload?: ClientePayload) {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error("Sem token de autenticação.");
-  }
-
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetchAuthenticated(path, {
     method,
-    credentials: "include",
     headers: {
-      ...buildHeaders(token),
       ...(payload ? { "Content-Type": "application/json" } : {}),
     },
     body: payload ? JSON.stringify(payload) : undefined,
@@ -2414,21 +2399,14 @@ async function requestApiGetAuthenticated<T>(path: string, options: { signal?: A
     throw new ApiHttpError("Nao foi possivel se comunicar com o servidor.", 0, "NETWORK_UNAVAILABLE");
   }
 
-  const token = getAuthToken();
-  if (!token) {
-    throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
-  }
-
   let response: Response;
   try {
-    response = await fetch(API_URL + path, {
-      credentials: "include",
-      headers: buildHeaders(token),
+    response = await fetchAuthenticated(path, {
       signal: options.signal,
     });
   } catch (error) {
     if (options.signal?.aborted) throw error;
-    throw new ApiHttpError("Nao foi possivel se comunicar com o servidor.", 0, "NETWORK_ERROR");
+    throwNetworkErrorUnlessApiHttpError(error, "Nao foi possivel se comunicar com o servidor.");
   }
 
   if (!response.ok) {
@@ -2444,15 +2422,8 @@ async function requestApiMultipart<T>(path: string, body: FormData): Promise<T> 
     throw new Error("Nao foi possivel enviar o arquivo agora.");
   }
 
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error("Sessao expirada. Entre novamente para continuar.");
-  }
-
-  const response = await fetch(API_URL + path, {
+  const response = await fetchAuthenticated(path, {
     method: "POST",
-    credentials: "include",
-    headers: buildHeaders(token),
     body,
   });
 
@@ -2498,16 +2469,9 @@ async function requestApiWrite<T>(method: "POST" | "PATCH" | "DELETE", path: str
     throw new Error("Nao foi possivel concluir a acao agora.");
   }
 
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error("Autentique-se novamente para continuar.");
-  }
-
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetchAuthenticated(path, {
     method,
-    credentials: "include",
     headers: {
-      ...buildHeaders(token),
       ...(payload ? { "Content-Type": "application/json" } : {}),
     },
     body: payload ? JSON.stringify(payload) : undefined,
@@ -2519,6 +2483,31 @@ async function requestApiWrite<T>(method: "POST" | "PATCH" | "DELETE", path: str
   }
 
   return (await response.json()) as T;
+}
+
+async function fetchAuthenticated(path: string, init: RequestInit = {}, allowRefresh = true): Promise<Response> {
+  const request = async (token: string) => {
+    if (!token) throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${token}`);
+    return fetch(`${API_URL}${path}`, { ...init, credentials: "include", headers });
+  };
+
+  const token = getAuthToken();
+  if (!token) throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
+  const response = await request(token);
+  if (response.status !== 401 || !allowRefresh) return response;
+  const latestToken = getAuthToken();
+  if (latestToken && latestToken !== token) return request(latestToken);
+  await refreshAuthSession();
+  const refreshedToken = getAuthToken();
+  if (!refreshedToken) throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
+  return request(refreshedToken);
+}
+
+function throwNetworkErrorUnlessApiHttpError(error: unknown, message: string): never {
+  if (error instanceof ApiHttpError) throw error;
+  throw new ApiHttpError(message, 0, "NETWORK_ERROR");
 }
 
 async function readApiError(response: Response) {

@@ -244,6 +244,9 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securi
           loginRateLimiter.recordFailure(limiterContext);
           return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
         }
+        if (process.env.NODE_ENV === "test" && typeof globalThis.__CRM_TEST_AUTH_AFTER_PASSWORD_COMPARE === "function") {
+          await globalThis.__CRM_TEST_AUTH_AFTER_PASSWORD_COMPARE({ usuarioId: usuario.id, empresaId: usuario.empresaId });
+        }
         if (!usuario.ativo) {
           return authError(res, 403, "Usuario inativo.", "USER_INACTIVE");
         }
@@ -251,13 +254,9 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securi
           return authError(res, 403, "Empresa inativa.", "COMPANY_INACTIVE");
         }
 
-        const updated = await prisma.usuario.update({
-          where: { id: usuario.id },
-          data: { ultimoLoginEm: new Date() },
-          include: { empresa: true },
-        });
+        const session = await security.createLoginSession({ usuario, expectedPasswordHash: usuario.senhaHash, req });
+        const updated = session.usuario;
         const platformOperator = await resolvePlatformOperator({ prisma, usuario: updated, env: process.env });
-        const session = await security.createLoginSession({ usuario: updated, req });
         security.setRefreshCookie(res, session.rawRefreshToken);
         try {
           await security.recordAudit({
@@ -275,7 +274,14 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securi
         loginRateLimiter.recordSuccess(limiterContext);
         return res.json(loginResponse(updated, config, platformOperator, session));
       } catch (error) {
-        if (error?.status) return authError(res, error.status, error.code === "ACCOUNT_INACTIVE" ? "Usuario inativo." : "Nao foi possivel autenticar agora.", error.code);
+        if (error?.status) {
+          const message = error.code === "ACCOUNT_INACTIVE"
+            ? "Usuario inativo."
+            : error.code === "AUTH_CREDENTIAL_CHANGED"
+              ? "E-mail ou senha invalidos."
+              : "Nao foi possivel autenticar agora.";
+          return authError(res, error.status, message, error.code);
+        }
         logInternalError("Falha ao autenticar usuario.", error);
         return authError(res, 500, "Nao foi possivel autenticar agora.", "AUTH_LOGIN_ERROR");
       }

@@ -14,6 +14,7 @@ export default function PublicSecurityFlow({ mode, onBack }: SecurityFlowProps) 
     return new URLSearchParams(window.location.search).get("token") || "";
   });
   const [email, setEmail] = useState("");
+  const [companySlug, setCompanySlug] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -27,7 +28,7 @@ export default function PublicSecurityFlow({ mode, onBack }: SecurityFlowProps) 
 
   const title = mode === "recovery" ? "Recuperar acesso" : mode === "reset" ? "Definir nova senha" : "Aceitar convite";
   const description = mode === "recovery"
-    ? "Informe seu e-mail. A resposta será a mesma exista ou não uma conta cadastrada."
+    ? "Informe seu e-mail e a empresa. A resposta será a mesma exista ou não uma conta cadastrada."
     : mode === "reset"
       ? "Escolha uma nova senha para concluir a recuperação."
       : "Defina sua senha para entrar na empresa convidante.";
@@ -38,7 +39,7 @@ export default function PublicSecurityFlow({ mode, onBack }: SecurityFlowProps) 
     setLoading(true);
     try {
       if (mode === "recovery") {
-        const result = await requestPasswordRecovery(email.trim());
+        const result = await requestPasswordRecovery(email.trim(), companySlug.trim());
         setMessage(result.message);
         return;
       }
@@ -76,7 +77,7 @@ export default function PublicSecurityFlow({ mode, onBack }: SecurityFlowProps) 
   }
 
   return <main className="login-shell flex min-h-screen items-center justify-center px-4 py-8"><section className="w-full max-w-[420px] rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 shadow-[var(--shadow-md)] sm:p-7"><FlowMark /><div className="mt-6"><button className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]" onClick={onBack} type="button"><ArrowLeft size={14} /> Voltar ao login</button><h1 className="mt-5 text-xl font-semibold text-[var(--text-primary)]">{title}</h1><p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{description}</p></div><form className="mt-5 space-y-4" onSubmit={submit}>
-    {mode === "recovery" && <Field autoComplete="email" label="E-mail" onChange={setEmail} placeholder="seuemail@empresa.com.br" type="email" value={email} />}
+    {mode === "recovery" && <><Field autoComplete="email" label="E-mail" onChange={setEmail} placeholder="seuemail@empresa.com.br" type="email" value={email} /><Field autoComplete="organization" label="Empresa" onChange={setCompanySlug} placeholder="identificador-da-empresa" type="text" value={companySlug} /></>}
     {mode !== "recovery" && <Field autoComplete="off" label="Token de acesso" onChange={setToken} placeholder="Cole o token recebido" type="text" value={token} />}
     {mode === "invite" && <Field autoComplete="name" label="Nome" onChange={setName} placeholder="Seu nome" type="text" value={name} />}
     {mode !== "recovery" && <><Field autoComplete="new-password" label="Nova senha" onChange={setPassword} placeholder="Mínimo de 12 caracteres" type="password" value={password} /><Field autoComplete="new-password" label="Confirmar senha" onChange={setConfirmation} placeholder="Repita a nova senha" type="password" value={confirmation} /></>}

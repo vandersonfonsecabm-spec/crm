@@ -31,41 +31,61 @@ function createUserSecurity({
   const delivery = securityDelivery;
   const sensitiveRateLimiter = createAuthRateLimiter({ identityLimit: 8, ipLimit: 40 });
 
-  async function createLoginSession({ usuario, req }) {
+  async function createLoginSession({ usuario, expectedPasswordHash = usuario?.senhaHash, req }) {
     const now = new Date();
     const sessionId = crypto.randomUUID();
     const familyId = crypto.randomUUID();
     const rawRefreshToken = randomToken();
     const expiraEm = addMilliseconds(now, refreshDays * 24 * 60 * 60 * 1000);
 
-    await prisma.$transaction(async (tx) => {
-      const activeUser = await tx.usuario.findFirst({
-        where: { id: usuario.id, empresaId: usuario.empresaId, ativo: true, empresa: { ativo: true } },
-        select: { id: true },
-      });
-      if (!activeUser) throw securityError("ACCOUNT_INACTIVE", 403);
-      await tx.sessaoUsuario.create({
-        data: {
-          id: sessionId,
-          empresaId: usuario.empresaId,
-          usuarioId: usuario.id,
-          familyId,
-          userAgentSanitizado: sanitizeUserAgent(req?.headers?.["user-agent"]),
-          ipHash: hashIp(req),
-          expiraEm,
-        },
-      });
-      await tx.sessaoRefreshToken.create({
-        data: {
-          empresaId: usuario.empresaId,
-          sessaoId: sessionId,
-          tokenHash: hashToken(rawRefreshToken),
-          expiraEm,
-        },
-      });
-    });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const activeUser = await prisma.$transaction(async (tx) => {
+          const changed = await tx.usuario.updateMany({
+            where: {
+              id: usuario.id,
+              empresaId: usuario.empresaId,
+              ativo: true,
+              senhaHash: expectedPasswordHash,
+              empresa: { ativo: true },
+            },
+            data: { ultimoLoginEm: now },
+          });
+          if (changed.count !== 1) throw securityError("AUTH_CREDENTIAL_CHANGED", 401);
+          const currentUser = await tx.usuario.findFirst({
+            where: { id: usuario.id, empresaId: usuario.empresaId, ativo: true, empresa: { ativo: true } },
+            include: { empresa: true },
+          });
+          if (!currentUser) throw securityError("ACCOUNT_INACTIVE", 403);
+          await tx.sessaoUsuario.create({
+            data: {
+              id: sessionId,
+              empresaId: usuario.empresaId,
+              usuarioId: usuario.id,
+              familyId,
+              userAgentSanitizado: sanitizeUserAgent(req?.headers?.["user-agent"]),
+              ipHash: hashIp(req),
+              expiraEm,
+            },
+          });
+          await tx.sessaoRefreshToken.create({
+            data: {
+              empresaId: usuario.empresaId,
+              sessaoId: sessionId,
+              tokenHash: hashToken(rawRefreshToken),
+              expiraEm,
+            },
+          });
+          return currentUser;
+        }, { isolationLevel: "Serializable" });
 
-    return buildSessionTokens({ usuario, sessionId, rawRefreshToken, config });
+        return buildSessionTokens({ usuario: activeUser, sessionId, rawRefreshToken, config });
+      } catch (error) {
+        if (!isRetryableConflict(error) || attempt === 2) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 15 * (attempt + 1)));
+      }
+    }
+    throw securityError("AUTH_LOGIN_CONFLICT", 409);
   }
 
   async function validateAccessSession({ sessionId, empresaId, usuarioId }) {
@@ -141,19 +161,20 @@ function createUserSecurity({
     return buildSessionTokens({ usuario, sessionId: current.sessao.id, rawRefreshToken: nextRawToken, config });
   }
 
-  async function revokeSession(empresaId, sessionId, motivo = "USER_REQUEST") {
+  async function revokeSession(empresaId, sessionId, motivo = "USER_REQUEST", usuarioId = null) {
     if (!sessionId) return false;
     const now = new Date();
     return prisma.$transaction(async (tx) => {
       const result = await tx.sessaoUsuario.updateMany({
-        where: { id: sessionId, empresaId, revogadoEm: null },
+        where: { id: sessionId, empresaId, revogadoEm: null, ...(usuarioId ? { usuarioId } : {}) },
         data: { revogadoEm: now, motivoRevogacao: sanitizeReason(motivo) },
       });
+      if (result.count !== 1) return false;
       await tx.sessaoRefreshToken.updateMany({
         where: { empresaId, sessaoId: sessionId, revogadoEm: null },
         data: { revogadoEm: now },
       });
-      return result.count === 1;
+      return true;
     });
   }
 
@@ -304,19 +325,34 @@ function createUserSecurity({
 
   async function acceptInvite({ rawToken, nome, newPassword, req }) {
     assertPassword(newPassword);
-    const token = await prisma.conviteUsuario.findUnique({ where: { tokenHash: hashToken(rawToken || "") } });
+    const presentedTokenHash = hashToken(rawToken || "");
+    const token = await prisma.conviteUsuario.findUnique({ where: { tokenHash: presentedTokenHash } });
     if (!token || token.aceitoEm || token.revogadoEm || token.expiraEm <= new Date()) throw securityError("INVITE_INVALID", 400);
     const finalName = normalizeName(nome) || token.nomeConvidado;
     if (!finalName) throw securityError("VALIDATION_ERROR", 400);
+    if (process.env.NODE_ENV === "test" && typeof globalThis.__CRM_TEST_SECURITY_AFTER_INVITE_READ === "function") {
+      await globalThis.__CRM_TEST_SECURITY_AFTER_INVITE_READ({ inviteId: token.id, empresaId: token.empresaId });
+    }
     const senhaHash = await bcrypt.hash(newPassword, 12);
     let usuario;
     try {
       usuario = await prisma.$transaction(async (tx) => {
+        const acceptedAt = new Date();
+        const accepted = await tx.conviteUsuario.updateMany({
+          where: {
+            id: token.id,
+            empresaId: token.empresaId,
+            tokenHash: presentedTokenHash,
+            expiraEm: { gt: acceptedAt },
+            aceitoEm: null,
+            revogadoEm: null,
+          },
+          data: { aceitoEm: acceptedAt },
+        });
+        if (accepted.count !== 1) throw securityError("INVITE_INVALID", 400);
         const existing = await tx.usuario.findFirst({ where: { empresaId: token.empresaId, email: token.emailNormalizado } });
         if (existing) throw securityError("USER_ALREADY_EXISTS", 409);
         const created = await tx.usuario.create({ data: { empresaId: token.empresaId, nome: finalName, email: token.emailNormalizado, senhaHash, papel: token.papel, ativo: true }, select: publicUserSelect });
-        const accepted = await tx.conviteUsuario.updateMany({ where: { id: token.id, aceitoEm: null, revogadoEm: null }, data: { aceitoEm: new Date() } });
-        if (accepted.count !== 1) throw securityError("INVITE_INVALID", 400);
         await audit(tx, { empresaId: token.empresaId, targetUsuarioId: created.id, acao: "USER_INVITE_ACCEPTED", resultado: "SUCCESS", motivo: "Convite aceito.", correlationId: correlationId(req) });
         return created;
       });
@@ -332,8 +368,21 @@ function createUserSecurity({
       if (!refreshRequestOriginAllowed(req, allowedOrigins, production)) {
         return authError(res, 403, "Origem nao autorizada para renovar sessao.", "AUTH_CSRF_ORIGIN_REJECTED");
       }
+      const rawRefreshToken = readCookie(req, REFRESH_COOKIE_NAME);
+      if (!rawRefreshToken) {
+        try {
+          applyAnonymousRefreshRateLimit(req);
+        } catch (error) {
+          if (error?.status) {
+            res.set("Retry-After", String(error.retryAfterSeconds || 60));
+            return authError(res, error.status, "Sessao de renovacao temporariamente bloqueada.", error.code);
+          }
+          throw error;
+        }
+        return authError(res, 401, "Sessao de renovacao invalida.", "AUTH_REFRESH_INVALID");
+      }
       try {
-        applySensitiveRateLimit(req, `refresh:${hashToken(readCookie(req, REFRESH_COOKIE_NAME)) || "missing"}`);
+        applySensitiveRateLimit(req, `refresh:${hashToken(rawRefreshToken)}`);
       } catch (error) {
         if (error?.status) {
           res.set("Retry-After", String(error.retryAfterSeconds || 60));
@@ -342,7 +391,7 @@ function createUserSecurity({
         throw error;
       }
     try {
-      const result = await refreshSession({ rawRefreshToken: readCookie(req, REFRESH_COOKIE_NAME), req });
+      const result = await refreshSession({ rawRefreshToken, req });
       setRefreshCookie(res, result.rawRefreshToken, production);
       try {
         await recordAudit({
@@ -381,7 +430,7 @@ function createUserSecurity({
 
     app.get("/auth/sessions", authenticate, async (req, res) => res.json({ data: await listSessions(req.auth.empresaId, req.auth.usuarioId, req.auth.sessionId) }));
     app.post("/auth/sessions/:id/revoke", authenticate, async (req, res) => {
-      const changed = await revokeSession(req.auth.empresaId, String(req.params.id), "USER_REQUEST");
+      const changed = await revokeSession(req.auth.empresaId, String(req.params.id), "USER_REQUEST", req.auth.usuarioId);
       if (!changed) return authError(res, 404, "Sessao nao encontrada.", "SESSION_NOT_FOUND");
       await recordAudit({ empresaId: req.auth.empresaId, actorUsuarioId: req.auth.usuarioId, acao: "SESSION_REVOKED", resultado: "SUCCESS", motivo: "Sessao revogada pelo usuario.", correlationId: correlationId(req) });
       return res.json({ ok: true });
@@ -408,8 +457,11 @@ function createUserSecurity({
         if (!usuario || !(await bcrypt.compare(current, usuario.senhaHash))) return authError(res, 400, "Senha atual invalida.", "CURRENT_PASSWORD_INVALID");
         const senhaHash = await bcrypt.hash(String(req.body.novaSenha), 12);
         await prisma.$transaction(async (tx) => {
-          const changed = await tx.usuario.updateMany({ where: { id: usuario.id, empresaId: req.auth.empresaId }, data: { senhaHash } });
-          if (changed.count !== 1) throw securityError("USER_NOT_FOUND", 404);
+          const changed = await tx.usuario.updateMany({
+            where: { id: usuario.id, empresaId: req.auth.empresaId, ativo: true, senhaHash: usuario.senhaHash },
+            data: { senhaHash },
+          });
+          if (changed.count !== 1) throw securityError("CURRENT_PASSWORD_INVALID", 400);
           const sessions = await tx.sessaoUsuario.findMany({ where: { empresaId: req.auth.empresaId, usuarioId: usuario.id, revogadoEm: null, id: { not: req.auth.sessionId || "" } }, select: { id: true } });
           const ids = sessions.map((session) => session.id);
           if (ids.length) {
@@ -428,9 +480,10 @@ function createUserSecurity({
 
     app.post("/auth/forgot-password", async (req, res) => {
       const email = normalizeEmail(req.body?.email);
+      const empresaSlug = normalizeCompanySlug(req.body?.empresaSlug || req.body?.slug);
       const generic = { ok: true, message: "Se a conta existir, as instrucoes serao entregues pelo canal configurado." };
       try {
-        applySensitiveRateLimit(req, email || "invalid-email");
+        applySensitiveRateLimit(req, `${email || "invalid-email"}:${empresaSlug || "missing-company"}`);
       } catch (error) {
         if (error?.status) {
           res.set("Retry-After", String(error.retryAfterSeconds || 60));
@@ -438,8 +491,11 @@ function createUserSecurity({
         }
         throw error;
       }
-      if (!isValidEmail(email)) return res.json(generic);
-      const usuario = await prisma.usuario.findFirst({ where: { email, ativo: true }, include: { empresa: true } });
+      if (!isValidEmail(email) || !empresaSlug) return res.json(generic);
+      const usuario = await prisma.usuario.findFirst({
+        where: { email, ativo: true, empresa: { slug: empresaSlug, ativo: true } },
+        include: { empresa: true },
+      });
       if (!usuario || !usuario.empresa.ativo) return res.json(generic);
       try {
         await createPasswordReset({ usuario, req });
@@ -611,7 +667,15 @@ function createUserSecurity({
   }
 
   async function resendInvite(req, res) {
-    applySensitiveRateLimit(req, `invite-resend:${req.auth.usuarioId}`);
+    try {
+      applySensitiveRateLimit(req, `invite-resend:${req.auth.usuarioId}`);
+    } catch (error) {
+      if (error?.status) {
+        res.set("Retry-After", String(error.retryAfterSeconds || 60));
+        return authError(res, error.status, "Nao foi possivel reenviar o convite agora.", error.code);
+      }
+      throw error;
+    }
     const id = String(req.params.id || "");
     const existing = await prisma.conviteUsuario.findFirst({ where: { id, empresaId: req.auth.empresaId, aceitoEm: null, revogadoEm: null } });
     if (!existing) return authError(res, 404, "Convite nao encontrado.", "INVITE_NOT_FOUND");
@@ -666,6 +730,12 @@ function createUserSecurity({
     const ip = requestIp(req);
     sensitiveRateLimiter.check({ identity, ip });
     sensitiveRateLimiter.recordFailure({ identity, ip });
+  }
+
+  function applyAnonymousRefreshRateLimit(req) {
+    const ip = requestIp(req);
+    if (!ip || ip === "unknown") return;
+    applySensitiveRateLimit(req, `refresh-anonymous:${ip}`);
   }
 
   function setRefreshCookie(res, rawToken) {
@@ -784,6 +854,16 @@ function normalizeName(value) {
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizeCompanySlug(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function normalizeRole(value) {
@@ -913,4 +993,5 @@ module.exports = {
   publicInvite,
   hashToken,
   refreshRequestOriginAllowed,
+  updateUserWithLastAdminGuard,
 };

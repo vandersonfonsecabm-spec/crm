@@ -13,10 +13,20 @@ import {
   shouldInvalidateAuthSession,
 } from "./services/crmApi";
 
+type PublicSecurityMode = "recovery" | "reset" | "invite";
+
+function getPublicSecurityMode(pathname: string): PublicSecurityMode | null {
+  if (pathname === "/recuperar-senha") return "recovery";
+  if (pathname === "/redefinir-senha") return "reset";
+  if (pathname === "/aceitar-convite") return "invite";
+  return null;
+}
+
 function App() {
   const [authState, setAuthState] = useState<"checking" | "authenticated" | "unauthenticated" | "unavailable">("checking");
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
   const [publicPath, setPublicPath] = useState(() => window.location.pathname);
+  const securityMode = getPublicSecurityMode(publicPath);
 
   useEffect(() => {
     const handlePopState = () => setPublicPath(window.location.pathname);
@@ -25,6 +35,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (securityMode) return;
     let active = true;
 
     async function validateStoredSession() {
@@ -47,7 +58,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [authCheckAttempt]);
+  }, [authCheckAttempt, securityMode]);
 
   function entrar() {
     setAuthState("authenticated");
@@ -69,6 +80,8 @@ function App() {
     }
   }
 
+  if (securityMode) return <PublicSecurityFlow mode={securityMode} onBack={() => navigatePublic("/")} />;
+
   if (authState === "checking") {
     return (
       <main className="login-shell flex min-h-screen items-center justify-center px-4" aria-busy="true">
@@ -78,14 +91,6 @@ function App() {
   }
 
   if (authState === "unauthenticated") {
-    const securityMode = publicPath === "/recuperar-senha"
-      ? "recovery"
-      : publicPath === "/redefinir-senha"
-        ? "reset"
-        : publicPath === "/aceitar-convite"
-          ? "invite"
-          : null;
-    if (securityMode) return <PublicSecurityFlow mode={securityMode} onBack={() => navigatePublic("/")} />;
     return <Login onLogin={entrar} onOpenRecovery={() => navigatePublic("/recuperar-senha")} />;
   }
 
