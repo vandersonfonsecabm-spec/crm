@@ -133,8 +133,8 @@ const pageMeta: Record<ActivePage, { breadcrumb: string; description: string }> 
     description: "Indicadores, prioridades e atividades da operação comercial.",
   },
   comercial: {
-    breadcrumb: "Central Comercial",
-    description: "Decisões, oportunidades e ações comerciais em um só contexto.",
+    breadcrumb: "Painel Comercial",
+    description: "Prioridades, negociações e compromissos da operação comercial.",
   },
   inbox: {
     breadcrumb: "Caixa de Entrada",

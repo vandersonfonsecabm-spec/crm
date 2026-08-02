@@ -1,163 +1,192 @@
-import { AlertTriangle, ArrowRight, ArrowUpRight, Plus, RefreshCw, Target } from "lucide-react";
-import type { ReactNode } from "react";
-import type { Analytics, Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
+import { CalendarClock, ChevronRight } from "lucide-react";
+import type { Client, SmartFilterType, Status } from "../../types/dashboard";
 import { formatNextFollowUp } from "../../utils/followUpProjection";
-import { Badge, EmptyState, SectionHeader, Surface } from "../ui";
+import { Button, EmptyState, SectionHeader, Surface } from "../ui";
+
+type FollowUpGroup = {
+  label: string;
+  hint: string;
+  clients: Client[];
+};
 
 type DashboardControlCenterProps = {
   clients: Client[];
-  analytics: Analytics;
+  analytics: {
+    totalValue: number;
+    forecastValue: number;
+    hotCount: number;
+    todayFollowUps: number;
+  };
   backendCaption: string;
-  smartAlerts: string[];
-  recentActivities: RecentActivity[];
   emptyClient: Client;
+  followUpAgenda: FollowUpGroup[];
   money: (value: number) => string;
   statusClass: (status: Status) => string;
   getPriority: (client: Client) => string;
   getLeadScore: (client: Client) => number;
+  getRisk: (client: Client) => string;
   setSelectedId: (clientId: number | null) => void;
   setCreating: (client: Client | null) => void;
   applySmartFilter: (type: SmartFilterType) => void;
 };
 
-export default function DashboardControlCenter({ clients, analytics, backendCaption, smartAlerts, recentActivities, emptyClient, money, statusClass, getPriority, getLeadScore, setSelectedId, setCreating, applySmartFilter }: DashboardControlCenterProps) {
-  const priorityClients = [...clients]
-    .sort((a, b) => {
-      if (getPriority(a) !== getPriority(b)) return getPriority(a) === "Alta" ? -1 : 1;
-      return getLeadScore(b) - getLeadScore(a);
-    })
+export default function DashboardControlCenter({
+  clients,
+  analytics,
+  backendCaption,
+  emptyClient,
+  followUpAgenda,
+  money,
+  statusClass,
+  getPriority,
+  getLeadScore,
+  getRisk,
+  setSelectedId,
+  setCreating,
+  applySmartFilter,
+}: DashboardControlCenterProps) {
+  const attentionClients = [...clients]
+    .filter((client) => client.status !== "Fechado" && client.status !== "Perdido")
+    .filter((client) => getRisk(client) === "Alto" || client.lastContactDays >= 7 || (client.hot && client.status === "Proposta") || getPriority(client) === "Alta")
+    .sort((first, second) => attentionWeight(second, getPriority, getRisk, getLeadScore) - attentionWeight(first, getPriority, getRisk, getLeadScore))
     .slice(0, 6);
-  const highPriorityCount = clients.filter((client) => getPriority(client) === "Alta").length;
-  const silentCount = clients.filter((client) => client.lastContactDays >= 7).length;
-  const proposalCount = clients.filter((client) => client.status === "Proposta").length;
-  const topPriority = priorityClients[0] ?? null;
+  const pipelineStages: Status[] = ["Novo", "Contato", "Proposta", "Fechado", "Perdido"];
+  const stageTotals = pipelineStages.map((status) => ({
+    status,
+    count: clients.filter((client) => client.status === status).length,
+    value: clients.filter((client) => client.status === status).reduce((total, client) => total + client.value, 0),
+  }));
+  const pipelineValue = stageTotals.filter((stage) => stage.status !== "Fechado" && stage.status !== "Perdido").reduce((total, stage) => total + stage.value, 0);
+  const riskValue = clients.filter((client) => getRisk(client) === "Alto").reduce((total, client) => total + client.value, 0);
+  const nextClient = attentionClients[0] ?? followUpAgenda.flatMap((group) => group.clients)[0] ?? null;
 
   return (
-    <Surface className="min-w-0 overflow-hidden">
-      <SectionHeader
-        actions={(
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]"><RefreshCw aria-hidden="true" size={12} />{backendCaption}</span>
-            <Badge variant={highPriorityCount > 0 ? "warning" : "success"}>{highPriorityCount} em atenção</Badge>
-            <span className="text-[11px] font-medium text-[var(--text-secondary)]">{proposalCount} propostas</span>
+    <div className="commercial-workbench space-y-3 pb-8">
+      <Surface className="commercial-summary overflow-hidden">
+        <div className="commercial-executive-heading">
+          <div>
+            <p className="commercial-eyebrow">Leitura executiva</p>
+            <p className="mt-1 text-[12px] text-[var(--text-secondary)]">{backendCaption}</p>
+          </div>
+        </div>
+        <dl className="commercial-metric-grid">
+          <Metric label="Carteira total" value={money(analytics.totalValue)} detail={`${clients.length} registros carregados`} />
+          <Metric label="Previsão aberta" value={money(analytics.forecastValue)} detail={`${analytics.hotCount} oportunidades prioritárias`} />
+          <Metric label="Em risco alto" value={String(clients.filter((client) => getRisk(client) === "Alto").length)} detail={riskValue > 0 ? money(riskValue) : "Sem valor em risco"} tone={riskValue > 0 ? "danger" : undefined} />
+          <Metric label="Agenda de hoje" value={String(analytics.todayFollowUps)} detail="Acompanhamentos previstos" />
+        </dl>
+      </Surface>
+
+      <Surface className="commercial-immediate-focus overflow-hidden">
+        {nextClient ? (
+          <div className="commercial-focus-layout">
+            <div className="min-w-0">
+              <p className="commercial-eyebrow">Foco imediato</p>
+              <div className="commercial-focus-name">
+                <h2 className="truncate">{nextClient.name}</h2>
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusClass(nextClient.status)}`}>{nextClient.status}</span>
+              </div>
+              <p className="mt-1 truncate text-[12px] text-[var(--text-secondary)]">{nextClient.company}</p>
+            </div>
+            <dl className="commercial-focus-details">
+              <div><dt>Motivo</dt><dd>{attentionReason(nextClient, getRisk, getPriority)}</dd></div>
+              <div><dt>Próxima ação</dt><dd>{formatNextFollowUp(nextClient.nextFollowUp)}</dd></div>
+              <div><dt>Valor</dt><dd>{money(nextClient.value)}</dd></div>
+            </dl>
+            <Button className="commercial-focus-cta" onClick={() => setSelectedId(nextClient.id)} rightIcon={<ChevronRight aria-hidden="true" size={16} />} variant="primary">Abrir cliente</Button>
+          </div>
+        ) : (
+          <div className="commercial-focus-empty">
+            <div><p className="commercial-eyebrow">Foco imediato</p><h2>Nenhuma prioridade disponível</h2><p>Crie um cliente ou aguarde um acompanhamento previsto para começar a fila.</p></div>
+            <Button onClick={() => setCreating({ ...emptyClient })} variant="primary">Novo cliente</Button>
           </div>
         )}
-        description="Priorize a fila, resolva sinais críticos e avance a próxima oportunidade."
-        status={topPriority ? <span className="text-[11px] text-[var(--text-muted)]">Próxima: <strong className="font-medium text-[var(--text-secondary)]">{topPriority.name}</strong></span> : undefined}
-        title="Mesa de ação comercial"
-      />
+      </Surface>
 
-      <div className="grid min-w-0 items-start xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.7fr)]">
-        <section className="min-w-0" aria-labelledby="commercial-queue-title">
-          <div className="flex items-center justify-between gap-3 border-b border-[var(--border-default)] px-4 py-2.5">
-            <div>
-              <h3 className="text-xs font-semibold text-[var(--text-primary)]" id="commercial-queue-title">Fila comercial</h3>
-              <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Ordem de abordagem por prioridade e score.</p>
+      <Surface className="commercial-queue overflow-hidden">
+        <SectionHeader
+          actions={<Button onClick={() => applySmartFilter("risk")} size="sm" variant="ghost">Ver fila de risco</Button>}
+          description="Registros que merecem decisão ou contato antes da próxima rodada comercial."
+          title="Ações que exigem atenção"
+        />
+        {attentionClients.length > 0 ? (
+          <div className="commercial-table" aria-label="Ações que exigem atenção">
+            <div className="commercial-table-head">
+              <span>Cliente</span><span>Motivo</span><span>Prazo</span><span>Valor</span><span className="sr-only">Ação</span>
             </div>
-            <span className="text-[11px] text-[var(--text-muted)]">{priorityClients.length} em foco</span>
+            {attentionClients.map((client) => (
+              <button aria-label={`Abrir ${client.name}: ${attentionReason(client, getRisk, getPriority)}, ${formatNextFollowUp(client.nextFollowUp)}`} className="commercial-table-row" key={client.id} onClick={() => setSelectedId(client.id)} type="button">
+                <span className="min-w-0 text-left"><strong className="block truncate">{client.name}</strong><small className="block truncate">{client.company}</small></span>
+                <span className="commercial-row-reason text-left">{attentionReason(client, getRisk, getPriority)}</span>
+                <span className="commercial-row-deadline text-left">{formatNextFollowUp(client.nextFollowUp)}</span>
+                <span className="commercial-row-value">{money(client.value)}</span>
+                <ChevronRight aria-hidden="true" className="commercial-row-arrow" size={16} />
+              </button>
+            ))}
           </div>
+        ) : <EmptyState description="Não há registros críticos na página atual." title="Nenhuma ação pendente" />}
+      </Surface>
 
-          {priorityClients.length > 0 ? (
-            <div className="divide-y divide-[var(--border-default)]">
-              {priorityClients.map((client, index) => {
-                const score = getLeadScore(client);
-                return (
-                  <button
-                    aria-label={`Abrir ${client.name}, próxima ação ${formatNextFollowUp(client.nextFollowUp)}`}
-                    className="grid w-full min-w-0 gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] md:grid-cols-[32px_minmax(0,1fr)_132px_112px_16px] md:items-center"
-                    key={client.id}
-                    onClick={() => setSelectedId(client.id)}
-                    type="button"
-                  >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--surface-subtle)] text-[10px] font-semibold text-[var(--text-secondary)]">{index + 1}</span>
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{client.name}</p>
-                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${statusClass(client.status)}`}>{client.status}</span>
-                      </div>
-                      <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{client.company} · Prioridade {getPriority(client)}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[11px] text-[var(--text-muted)]">Próxima ação</p>
-                      <p className="mt-0.5 truncate text-[11px] font-medium text-[var(--text-secondary)]">{formatNextFollowUp(client.nextFollowUp)}</p>
-                    </div>
-                    <div className="text-right tabular-nums">
-                      <p className="text-[11px] font-semibold text-[var(--text-primary)]">{money(client.value)}</p>
-                      <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Score {score}</p>
-                    </div>
-                    <ArrowRight aria-hidden="true" className="hidden text-[var(--icon-muted)] md:block" size={14} />
-                  </button>
-                );
-              })}
-            </div>
-          ) : <EmptyState description="Nenhum cliente corresponde à fila comercial atual." title="Fila comercial vazia" />}
+      <Surface className="commercial-context-panel min-w-0 overflow-hidden">
+        <section aria-label="Pipeline e previsão" className="commercial-pipeline-context">
+          <SectionHeader
+            description="Distribuição do valor carregado por etapa. Use como contexto para a fila, não como uma segunda prioridade."
+            title="Pipeline e previsão"
+          />
+          <div className="commercial-pipeline-summary">
+            <div><span>Pipeline em aberto</span><strong>{money(pipelineValue)}</strong></div>
+            <div><span>Previsão aberta</span><strong>{money(analytics.forecastValue)}</strong></div>
+          </div>
+          <dl className="commercial-stage-list">
+            {stageTotals.map((stage) => (
+              <div className="commercial-stage-row" key={stage.status}>
+                <span className={`commercial-stage-dot ${statusClass(stage.status)}`} aria-hidden="true" />
+                <dt>{stage.status}</dt>
+                <dd>{stage.count} {stage.count === 1 ? "registro" : "registros"}</dd>
+                <strong>{money(stage.value)}</strong>
+              </div>
+            ))}
+          </dl>
         </section>
 
-        <aside className="min-w-0 border-t border-[var(--border-default)] bg-[var(--bg-muted)] xl:border-l xl:border-t-0">
-          <section className="p-4" aria-labelledby="critical-signals-title">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h3 className="text-xs font-semibold text-[var(--text-primary)]" id="critical-signals-title">Sinais críticos</h3>
-                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Atalhos para filas que exigem atenção.</p>
-              </div>
-              <AlertTriangle className="text-[var(--warning)]" size={15} />
-            </div>
-            <div className="mt-3 divide-y divide-[var(--border-default)] border-y border-[var(--border-default)]">
-              {smartAlerts.map((alert, index) => (
-                <button
-                  className="flex w-full items-center justify-between gap-3 py-2.5 text-left text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  key={alert}
-                  onClick={() => applySmartFilter(index === 0 ? "risk" : index === 1 ? "proposal" : "silent")}
-                  type="button"
-                >
-                  <span className="line-clamp-2">{alert}</span>
-                  <ArrowUpRight aria-hidden="true" className="shrink-0 text-[var(--icon-muted)]" size={13} />
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="border-t border-[var(--border-default)] p-4" aria-labelledby="quick-actions-title">
-            <h3 className="text-xs font-semibold text-[var(--text-primary)]" id="quick-actions-title">Ações rápidas</h3>
-            <div className="mt-2 grid gap-1.5">
-              <QuickCommand icon={<Target size={14} />} label={`Atacar propostas · ${proposalCount}`} onClick={() => applySmartFilter("proposal")} />
-              <QuickCommand icon={<AlertTriangle size={14} />} label={`Reativar silenciosos · ${silentCount}`} onClick={() => applySmartFilter("silent")} />
-              <QuickCommand icon={<Plus size={14} />} label="Nova oportunidade" onClick={() => setCreating({ ...emptyClient })} />
-            </div>
-          </section>
-
-        </aside>
-      </div>
-
-      <section className="border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3" aria-labelledby="recent-activities-title">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h3 className="text-xs font-semibold text-[var(--text-primary)]" id="recent-activities-title">Últimas atividades</h3>
-            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Contexto recente para a próxima abordagem.</p>
+        <section aria-label="Agenda comercial" className="commercial-agenda-context">
+          <SectionHeader
+            actions={<span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]"><CalendarClock aria-hidden="true" size={14} /> Hoje e próximos dias</span>}
+            description="Acompanhamentos derivados da agenda comercial disponível nesta página."
+            title="Agenda comercial"
+          />
+          <div className="commercial-agenda-list">
+            {followUpAgenda.map((group) => (
+              <section className="commercial-agenda-group" key={group.label}>
+                <div className="commercial-agenda-group-head"><strong>{group.label}</strong><span>{group.hint}</span></div>
+                {group.clients.length > 0 ? group.clients.slice(0, 3).map((client) => (
+                  <button aria-label={`Abrir acompanhamento de ${client.name}, ${client.status}`} className="commercial-agenda-row" key={client.id} onClick={() => setSelectedId(client.id)} type="button">
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${statusClass(client.status)}`}>{client.status}</span>
+                    <span className="min-w-0 flex-1 text-left"><strong className="block truncate">{client.name}</strong><small className="block truncate">{client.company}</small></span>
+                    <span className="whitespace-nowrap text-[11px] tabular-nums text-[var(--text-muted)]">{money(client.value)}</span>
+                  </button>
+                )) : <p className="commercial-agenda-empty">Nenhum acompanhamento previsto.</p>}
+              </section>
+            ))}
           </div>
-          <span className="text-[11px] text-[var(--text-muted)]">{analytics.todayFollowUps} hoje</span>
-        </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          {recentActivities.length > 0 ? recentActivities.slice(0, 3).map((activity) => (
-            <div className="min-w-0 border-l-2 border-[var(--border-strong)] pl-3" key={activity.id}>
-              <div className="flex items-center justify-between gap-2">
-                <p className="truncate text-[11px] font-medium text-[var(--text-secondary)]">{activity.client}</p>
-                <span className="shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">{activity.date}</span>
-              </div>
-              <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-[var(--text-muted)]">{activity.text}</p>
-            </div>
-          )) : <p className="text-[11px] text-[var(--text-muted)]">Nenhuma atividade recente registrada.</p>}
-        </div>
-      </section>
-    </Surface>
+        </section>
+      </Surface>
+    </div>
   );
 }
 
-function QuickCommand({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
-  return (
-    <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]" onClick={onClick} type="button">
-      <span className="text-[var(--icon-muted)]">{icon}</span>
-      <span>{label}</span>
-    </button>
-  );
+function Metric({ detail, label, tone, value }: { detail: string; label: string; tone?: "danger"; value: string }) {
+  return <div className={tone ? "is-danger" : undefined}><dt>{label}</dt><dd>{value}</dd><p>{detail}</p></div>;
+}
+
+function attentionReason(client: Client, getRisk: (client: Client) => string, getPriority: (client: Client) => string) {
+  if (getRisk(client) === "Alto") return "Risco alto";
+  if (client.lastContactDays >= 7) return `${client.lastContactDays} dias sem contato`;
+  if (client.hot && client.status === "Proposta") return "Proposta prioritária";
+  if (getPriority(client) === "Alta") return "Prioridade alta";
+  return "Revisar andamento";
+}
+
+function attentionWeight(client: Client, getPriority: (client: Client) => string, getRisk: (client: Client) => string, getLeadScore: (client: Client) => number) {
+  return (getRisk(client) === "Alto" ? 400 : 0) + (client.lastContactDays >= 7 ? 300 : 0) + (client.hot && client.status === "Proposta" ? 200 : 0) + (getPriority(client) === "Alta" ? 100 : 0) + getLeadScore(client);
 }

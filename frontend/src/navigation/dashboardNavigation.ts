@@ -13,7 +13,7 @@ export type DashboardRoute = {
 
 export const dashboardRoutes = [
   { page: "dashboard", pathname: "/", label: "Visão Geral", showInSidebar: true },
-  { page: "comercial", pathname: "/central-comercial", label: "Central Comercial", showInSidebar: true },
+  { page: "comercial", pathname: "/central-comercial", label: "Painel Comercial", showInSidebar: true },
   { page: "inbox", pathname: "/caixa-de-entrada", label: "Caixa de Entrada", requiresLeadsCommunication: true, showInSidebar: true },
   { page: "leads", pathname: "/leads", label: "Leads", requiresLeadsCommunication: true, showInSidebar: true },
   { page: "clientes", pathname: "/clientes", label: "Clientes", showInSidebar: true },
@@ -37,7 +37,7 @@ export const dashboardNavigationGroups: ReadonlyArray<{
   label: string;
   pages: readonly ActivePage[];
 }> = [
-  { label: "Visão geral", pages: ["dashboard"] },
+  { label: "Início", pages: ["dashboard"] },
   { label: "Comercial", pages: ["comercial", "inbox", "leads", "clientes", "kanban", "agenda"] },
   { label: "Operação", pages: ["estoque"] },
   { label: "Administração", pages: ["integracoes", "usuarios"] },

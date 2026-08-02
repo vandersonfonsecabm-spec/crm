@@ -149,7 +149,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   const pageTitle = isWhatsAppIntegrationDetail ? "WhatsApp" : ({
     dashboard: "Visão Geral",
-    comercial: "Central Comercial",
+    comercial: "Painel Comercial",
     inbox: "Caixa de Entrada",
     leads: "Leads",
     clientes: "Clientes",
@@ -651,7 +651,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }
 
   return (
-    <div className="crm-workspace premium-shell min-h-screen select-none overflow-x-hidden">
+    <div className="crm-workspace premium-shell min-h-screen select-none">
       <div className="crm-shell-layout flex min-h-screen">
         <DashboardSidebar
           activePage={activePage}
@@ -679,7 +679,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             leadsCommunicationEnabled={leadsCommunicationEnabled}
           />
 
-          <main className="crm-content mx-auto w-full max-w-[1680px] px-5 pb-8 pt-5 lg:px-7">
+          <main className="crm-content mx-auto w-full max-w-[1680px] px-4 pb-24 pt-5 sm:px-5 lg:px-7 lg:pb-8">
           {backendLoadError && clients.length === 0 && (
             <ErrorState
               className="mb-4 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)]"
@@ -750,7 +750,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             </section>
           )}
 
-          {!["usuarios", "perfil"].includes(activePage) && activePage !== "agenda" && activePage !== "leads" && activePage !== "inbox" && !usingNegociosKanban && (
+          {!["usuarios", "perfil"].includes(activePage) && activePage !== "comercial" && activePage !== "agenda" && activePage !== "leads" && activePage !== "inbox" && !usingNegociosKanban && (
             <DashboardMetricsSection
               activePage={activePage}
               clients={clients}
@@ -861,12 +861,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   clients={clients}
                   analytics={analytics}
                   backendCaption={backendCaption}
-                  smartAlerts={smartAlerts}
-                  recentActivities={recentActivities}
+                  followUpAgenda={followUpAgenda}
                   emptyClient={emptyClient}
                   money={money}
                   statusClass={statusClass}
                   getPriority={getPriority}
+                  getRisk={getRisk}
                   getLeadScore={getLeadScore}
                   setSelectedId={handleSelectClient}
                   setCreating={setCreating}
