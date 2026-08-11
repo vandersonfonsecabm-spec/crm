@@ -1,12 +1,17 @@
 import {
+  AlertTriangle,
+  CalendarClock,
   Eye,
-  MessageCircle,
+  MapPin,
   Star,
   UserCheck,
 } from "lucide-react";
 import type { Client, Status } from "../../types/dashboard";
-import { formatNextFollowUp } from "../../utils/followUpProjection";
-import { EmptyState, IconButton, Pagination, SectionHeader, Surface } from "../ui";
+import { classifyNextFollowUp, formatNextFollowUp } from "../../utils/followUpProjection";
+import { Button, EmptyState, Pagination, Surface } from "../ui";
+import DashboardActionOverflow from "./DashboardActionOverflow";
+import type { PageAction } from "./DashboardActionOverflow";
+import "./DashboardClientes.css";
 
 type DashboardClientsTableProps = {
   paginatedClients: Client[];
@@ -14,20 +19,12 @@ type DashboardClientsTableProps = {
   selectedId: number | null;
   page: number;
   totalPages: number;
-  money: (value: number) => string;
   initials: (name: string) => string;
   statusClass: (status: Status) => string;
-  idleLabel: (client: Client) => string;
-  leadOwner: (client: Client) => string;
-  getPriority: (client: Client) => string;
   getRisk: (client: Client) => string;
-  getLeadScore: (client: Client) => number;
-  forecastLabel: (client: Client) => string;
   onSelectClient: (clientId: number) => void;
   onToggleFavorite: (clientId: number) => void;
   onToggleHot: (clientId: number) => void;
-  onEditClient: (client: Client) => void;
-  onCopyText: (text: string, message: string) => void;
   onRequestWhatsapp: (client: Client) => void;
   onPreviousPage: () => void;
   onNextPage: () => void;
@@ -39,15 +36,9 @@ export default function DashboardClientsTable({
   selectedId,
   page,
   totalPages,
-  money,
   initials,
   statusClass,
-  idleLabel,
-  leadOwner,
-  getPriority,
   getRisk,
-  getLeadScore,
-  forecastLabel,
   onSelectClient,
   onToggleFavorite,
   onToggleHot,
@@ -56,47 +47,40 @@ export default function DashboardClientsTable({
   onNextPage,
 }: DashboardClientsTableProps) {
   return (
-    <Surface className="overflow-hidden">
-      <SectionHeader
-        actions={<span className="text-[11px] text-[var(--text-muted)]">{filteredClientsCount} registros · Página {page}/{totalPages}</span>}
-        description="Clientes, contatos, oportunidade e próxima ação em uma visão operacional."
-        icon={<UserCheck size={16} />}
-        title="Carteira de clientes"
-      />
+    <Surface className="clientes-table-surface overflow-hidden">
+      <div className="clientes-table-count" role="status">
+        <UserCheck aria-hidden="true" size={15} />
+        <span>{filteredClientsCount} {filteredClientsCount === 1 ? "cliente" : "clientes"}</span>
+        <span aria-hidden="true">·</span>
+        <span>Página {page}/{totalPages}</span>
+      </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1000px] table-fixed border-collapse text-left">
-          <thead className="bg-[var(--bg-muted)] text-[11px] font-medium text-[var(--text-secondary)]">
-            <tr className="border-b border-[var(--border-default)]">
-              <th className="w-[22%] px-4 py-2.5 font-medium">Cliente</th>
-              <th className="w-[16%] px-3 py-2.5 font-medium">Contato principal</th>
-              <th className="w-[9%] px-3 py-2.5 font-medium">Status</th>
-              <th className="w-[14%] px-3 py-2.5 text-right font-medium">Oportunidade</th>
-              <th className="w-[12%] px-3 py-2.5 font-medium">Score</th>
-              <th className="w-[14%] px-3 py-2.5 font-medium">Próxima ação</th>
-              <th className="w-[13%] px-3 py-2.5 text-right font-medium">Ações</th>
+      <div className="clientes-table-scroll overflow-x-auto">
+        <table aria-label="Tabela de clientes" className="clientes-table w-full min-w-[1024px] table-fixed border-collapse text-left" data-clientes-table>
+          <thead>
+            <tr>
+              <th className="w-[25%] px-4 py-2.5 font-medium" data-clientes-sticky="client">Cliente</th>
+              <th className="w-[14%] px-3 py-2.5 font-medium">Localização</th>
+              <th className="w-[17%] px-3 py-2.5 font-medium">Contato</th>
+              <th className="w-[15%] px-3 py-2.5 font-medium">Status + risco</th>
+              <th className="w-[17%] px-3 py-2.5 font-medium">Próxima ação</th>
+              <th className="w-[12%] px-3 py-2.5 text-right font-medium" data-clientes-sticky="actions">Ações</th>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-[var(--border-default)]">
+          <tbody>
             {paginatedClients.map((client) => (
               <ClientTableRow
                 client={client}
-                getLeadScore={getLeadScore}
-                getPriority={getPriority}
-                getRisk={getRisk}
-                idleLabel={idleLabel}
                 initials={initials}
                 key={client.id}
-                leadOwner={leadOwner}
-                money={money}
                 onRequestWhatsapp={onRequestWhatsapp}
                 onSelectClient={onSelectClient}
                 onToggleFavorite={onToggleFavorite}
                 onToggleHot={onToggleHot}
+                risk={getRisk(client)}
                 selected={selectedId === client.id}
                 statusClass={statusClass}
-                forecastLabel={forecastLabel}
               />
             ))}
           </tbody>
@@ -104,7 +88,7 @@ export default function DashboardClientsTable({
 
         {paginatedClients.length === 0 && (
           <EmptyState
-            description="Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar o funil."
+            description="Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar a carteira."
             icon={<UserCheck size={16} />}
             title="Nenhum cliente encontrado"
           />
@@ -112,7 +96,7 @@ export default function DashboardClientsTable({
       </div>
 
       <Pagination
-        itemLabel="registros"
+        itemLabel="clientes"
         onPageChange={(nextPage) => nextPage < page ? onPreviousPage() : onNextPage()}
         page={page}
         total={filteredClientsCount}
@@ -126,54 +110,41 @@ export default function DashboardClientsTable({
 function ClientTableRow({
   client,
   selected,
-  money,
   initials,
   statusClass,
-  idleLabel,
-  leadOwner,
-  getPriority,
-  getRisk,
-  getLeadScore,
-  forecastLabel,
   onSelectClient,
   onToggleFavorite,
   onToggleHot,
   onRequestWhatsapp,
+  risk,
 }: {
   client: Client;
   selected: boolean;
-  money: (value: number) => string;
   initials: (name: string) => string;
   statusClass: (status: Status) => string;
-  idleLabel: (client: Client) => string;
-  leadOwner: (client: Client) => string;
-  getPriority: (client: Client) => string;
-  getRisk: (client: Client) => string;
-  getLeadScore: (client: Client) => number;
-  forecastLabel: (client: Client) => string;
   onSelectClient: (clientId: number) => void;
   onToggleFavorite: (clientId: number) => void;
   onToggleHot: (clientId: number) => void;
   onRequestWhatsapp: (client: Client) => void;
+  risk: string;
 }) {
-  const score = getLeadScore(client);
   const tags = client.tags.slice(0, 2);
   const hiddenTags = Math.max(0, client.tags.length - tags.length);
+  const nextAction = formatNextFollowUp(client.nextFollowUp);
+  const isNextActionOverdue = classifyNextFollowUp(client.nextFollowUp) === "OVERDUE";
+  const isHighRisk = risk === "Alto";
 
   return (
-    <tr
-      aria-selected={selected}
-      className={`group transition-colors hover:bg-[var(--bg-muted)] ${selected ? "bg-[var(--bg-muted)] shadow-[inset_3px_0_0_var(--primary)]" : "bg-[var(--bg-surface)]"}`}
-    >
-      <td className="px-4 py-3 align-middle">
-        <button aria-label={`Abrir detalhes de ${client.name}`} className="flex w-full min-w-0 items-center gap-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]" onClick={() => onSelectClient(client.id)} type="button">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--surface-subtle)] text-[11px] font-semibold text-[var(--text-secondary)]">
+    <tr aria-selected={selected} className={`clientes-table-row ${selected ? "is-selected" : ""}`} data-client-risk={isHighRisk ? "high" : "normal"} data-client-timing={isNextActionOverdue ? "overdue" : "planned"}>
+      <td className="px-4 py-3 align-middle" data-clientes-sticky="client">
+        <button aria-label={`Abrir Cliente 360 de ${client.name}`} className="clientes-client-link flex w-full min-w-0 items-center gap-2.5 text-left" onClick={() => onSelectClient(client.id)} type="button">
+          <span className="clientes-client-avatar flex h-8 w-8 shrink-0 items-center justify-center text-[11px] font-semibold">
             {initials(client.name)}
           </span>
           <span className="min-w-0">
             <span className="flex min-w-0 items-center gap-1.5">
               <span className="truncate text-xs font-semibold text-[var(--text-primary)]" title={client.name}>{client.name}</span>
-              {client.favorite && <Star aria-label="Favorito" className="shrink-0 fill-[var(--warning)] text-[var(--warning)]" size={12} />}
+              {client.favorite && <Star aria-label="Favorito" className="clientes-favorite-icon shrink-0" size={12} />}
             </span>
             <span className="mt-0.5 block truncate text-[11px] text-[var(--text-muted)]" title={client.company}>
               {client.company}{tags.length > 0 ? ` · ${tags.join(" · ")}` : ""}{hiddenTags > 0 ? ` · +${hiddenTags}` : ""}
@@ -183,67 +154,79 @@ function ClientTableRow({
       </td>
 
       <td className="px-3 py-3 align-middle">
+        <p className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium text-[var(--text-secondary)]" title={formatLocation(client)}>
+          <MapPin aria-hidden="true" className="shrink-0 text-[var(--icon-muted)]" size={12} />
+          {formatLocation(client)}
+        </p>
+      </td>
+
+      <td className="px-3 py-3 align-middle">
         <p className="truncate text-[11px] font-medium text-[var(--text-secondary)]">{maskPhone(client.phone)}</p>
         <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{maskEmail(client.email)}</p>
       </td>
 
       <td className="px-3 py-3 align-middle">
-        <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] ${statusClass(client.status)}`}>{client.status}</span>
-      </td>
-
-      <td className="px-3 py-3 text-right align-middle tabular-nums">
-        <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{money(client.value)}</p>
-        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{getPriority(client)} · Risco {getRisk(client)}</p>
-      </td>
-
-      <td className="px-3 py-3 align-middle">
-        <div className="flex items-center justify-between gap-2 text-[11px] tabular-nums">
-          <span className="font-semibold text-[var(--text-primary)]">{score}</span>
-          <span className="truncate text-[var(--text-muted)]">{forecastLabel(client)}</span>
-        </div>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--surface-subtle)]">
-          <div className={`h-full rounded-full ${scoreClass(score)}`} style={{ width: `${score}%` }} />
+        <div className="clientes-status-cell flex flex-wrap items-center gap-1.5">
+          <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] ${statusClass(client.status)}`}>{client.status}</span>
+          {isHighRisk && (
+            <span className="clientes-risk-indicator inline-flex items-center gap-1" title="Risco alto informado no resumo atual">
+              <AlertTriangle aria-hidden="true" size={11} />
+              Risco alto
+            </span>
+          )}
         </div>
       </td>
 
       <td className="px-3 py-3 align-middle">
-        <p className="truncate text-[11px] font-medium text-[var(--text-primary)]" title={formatNextFollowUp(client.nextFollowUp)}>{formatNextFollowUp(client.nextFollowUp)}</p>
-        <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{leadOwner(client)} · {idleLabel(client)}</p>
+        <p className={`clientes-next-action flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium ${isNextActionOverdue ? "clientes-next-action--overdue" : ""}`} title={nextAction}>
+          <CalendarClock aria-hidden="true" className="shrink-0" size={12} />
+          {nextAction}
+        </p>
+        {isNextActionOverdue && <p className="mt-0.5 text-[10px] font-medium text-[var(--danger)]">Ação atrasada</p>}
       </td>
 
-      <td className="px-3 py-3 align-middle">
-        <div className="flex justify-end gap-0.5">
-          <IconButton aria-label={client.favorite ? "Remover dos favoritos" : "Adicionar aos favoritos"} aria-pressed={client.favorite} onClick={() => onToggleFavorite(client.id)}>
-            <Star className={client.favorite ? "fill-[var(--warning)] text-[var(--warning)]" : ""} size={14} />
-          </IconButton>
-          <label
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center"
-            title={client.hot ? "Remover dos quentes" : "Marcar como quente"}
-          >
-            <input
-              aria-label={client.hot ? "Remover dos quentes" : "Marcar como quente"}
-              checked={client.hot}
-              className="h-4 w-4 cursor-pointer accent-[var(--warning)]"
-              onChange={() => onToggleHot(client.id)}
-              type="checkbox"
-            />
-          </label>
-          <IconButton aria-label="Abrir WhatsApp" className="hover:text-[var(--primary)]" onClick={() => onRequestWhatsapp(client)}>
-            <MessageCircle size={14} />
-          </IconButton>
-          <IconButton aria-label="Abrir detalhes do cliente" onClick={() => onSelectClient(client.id)}>
-            <Eye size={14} />
-          </IconButton>
+      <td className="px-3 py-3 align-middle" data-clientes-sticky="actions">
+        <div className="clientes-row-actions flex justify-end gap-0.5">
+          <Button aria-label={`Abrir Cliente 360 de ${client.name}`} className="clientes-open-action" leftIcon={<Eye size={13} />} onClick={() => onSelectClient(client.id)} size="sm" variant="secondary">
+            Abrir
+          </Button>
+          <DashboardActionOverflow
+            actions={rowActions(client, onToggleFavorite, onToggleHot, onRequestWhatsapp)}
+            menuClassName="clientes-row-actions-menu"
+            pageTitle={client.name}
+            triggerClassName="clientes-row-overflow-trigger"
+          />
         </div>
       </td>
     </tr>
   );
 }
 
-function scoreClass(score: number) {
-  if (score >= 80) return "bg-[var(--success)]";
-  if (score >= 60) return "bg-[var(--warning)]";
-  return "bg-[var(--icon-muted)]";
+function rowActions(
+  client: Client,
+  onToggleFavorite: (clientId: number) => void,
+  onToggleHot: (clientId: number) => void,
+  onRequestWhatsapp: (client: Client) => void,
+): PageAction[] {
+  return [
+    {
+      label: client.favorite ? "Remover dos favoritos" : "Adicionar aos favoritos",
+      onClick: () => onToggleFavorite(client.id),
+    },
+    {
+      label: client.hot ? "Remover dos quentes" : "Marcar como quente",
+      onClick: () => onToggleHot(client.id),
+    },
+    {
+      label: "Abrir confirmação de WhatsApp",
+      onClick: () => onRequestWhatsapp(client),
+    },
+  ];
+}
+
+function formatLocation(client: Client) {
+  const location = [client.city, client.state].map((value) => value.trim()).filter(Boolean).join(" · ");
+  return location || "Localização não informada";
 }
 
 function maskPhone(phone: string) {

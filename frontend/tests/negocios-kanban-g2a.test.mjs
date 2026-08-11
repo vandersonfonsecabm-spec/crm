@@ -38,12 +38,13 @@ test("G2A usa Negocio como fonte, lock de etapa e rollback otimista", async () =
   assert.doesNotMatch(panel, /updateClienteOnBackend|Cliente\.status|lead\.status\s*=/);
 });
 
-test("G2A separa metricas e detalhes do fluxo legado", async () => {
+test("G2A separa a contagem do Kanban e detalhes do fluxo legado", async () => {
   const panel = await source("src/components/negocios/DashboardNegociosKanbanPanel.tsx");
   assert.match(panel, /summary\?\.total/);
-  assert.match(panel, /summary\?\.fechados/);
-  assert.match(panel, /summary\?\.perdidos/);
+  assert.match(panel, /const totalLabel = total === 1 \? "negócio" : "negócios"/);
+  assert.match(panel, /aria-label=\{`Total: \$\{total\} \$\{totalLabel\}`\}/);
+  assert.doesNotMatch(panel, /summary\?\.fechados|summary\?\.perdidos|Resumo do pipeline/);
   assert.match(panel, /Conversas relacionadas/);
-  assert.match(panel, /Nenhum Negócio encontrado/);
+  assert.match(panel, /Sem negócios nesta etapa/);
   assert.doesNotMatch(panel, /changeStatus|statusUpdatesInFlight|KanbanLeadCard/);
 });

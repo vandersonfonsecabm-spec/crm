@@ -12,7 +12,7 @@ export type DashboardRoute = {
 };
 
 export const dashboardRoutes = [
-  { page: "dashboard", pathname: "/", label: "Visão Geral", showInSidebar: true },
+  { page: "dashboard", pathname: "/visao-geral", label: "Visão Geral", showInSidebar: true },
   { page: "comercial", pathname: "/central-comercial", label: "Painel Comercial", showInSidebar: true },
   { page: "inbox", pathname: "/caixa-de-entrada", label: "Caixa de Entrada", requiresLeadsCommunication: true, showInSidebar: true },
   { page: "leads", pathname: "/leads", label: "Leads", requiresLeadsCommunication: true, showInSidebar: true },
@@ -37,8 +37,7 @@ export const dashboardNavigationGroups: ReadonlyArray<{
   label: string;
   pages: readonly ActivePage[];
 }> = [
-  { label: "Início", pages: ["dashboard"] },
-  { label: "Comercial", pages: ["comercial", "inbox", "leads", "clientes", "kanban", "agenda"] },
+  { label: "Comercial", pages: ["dashboard", "comercial", "inbox", "leads", "clientes", "kanban", "agenda"] },
   { label: "Operação", pages: ["estoque"] },
   { label: "Administração", pages: ["integracoes", "usuarios"] },
   { label: "Plataforma", pages: ["platformTenants"] },
@@ -51,6 +50,8 @@ const routeByPage = new Map<ActivePage, DashboardRoute>(
 const routeByPathname = new Map<string, DashboardRoute>(
   dashboardRoutes.map((route) => [route.pathname, route]),
 );
+
+const legacyDashboardPathnames = new Set(["/"]);
 
 const dashboardDetailRoutes = new Map([
   ["/integracoes/whatsapp", { page: "integracoes" as const, detail: "whatsapp" as const }],
@@ -79,6 +80,18 @@ export function normalizeDashboardPathname(pathname: string) {
 
 export function resolveDashboardPathname(pathname: string) {
   const normalizedPathname = normalizeDashboardPathname(pathname);
+
+  if (legacyDashboardPathnames.has(normalizedPathname)) {
+    const route = getDashboardRoute("comercial");
+    return {
+      page: route.page,
+      detail: null,
+      pathname: route.pathname,
+      isKnown: true,
+      needsReplace: pathname !== route.pathname,
+    };
+  }
+
   const detailRoute = dashboardDetailRoutes.get(normalizedPathname);
   if (detailRoute) {
     return {
@@ -93,9 +106,9 @@ export function resolveDashboardPathname(pathname: string) {
 
   if (!route) {
     return {
-      page: "dashboard" as const,
+      page: "comercial" as const,
       detail: null,
-      pathname: "/",
+      pathname: getDashboardPath("comercial"),
       isKnown: false,
       needsReplace: true,
     };
@@ -107,5 +120,15 @@ export function resolveDashboardPathname(pathname: string) {
     pathname: route.pathname,
     isKnown: true,
     needsReplace: pathname !== route.pathname,
+  };
+}
+
+type DashboardLocation = Pick<Location, "pathname" | "search" | "hash">;
+
+export function resolveDashboardLocation(location: DashboardLocation) {
+  return {
+    ...resolveDashboardPathname(location.pathname),
+    search: location.search,
+    hash: location.hash,
   };
 }

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gate de acessibilidade — Kanban por teclado</title>
+    <script>
+      (() => {
+        window.fetch = () => Promise.reject(new TypeError("ACCESSIBILITY_GATE_NEGOCIOS_OUTBOUND_OR_WRITE_BLOCKED"));
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/tests/fixtures/accessibility-gate-negocios-keyboard.tsx"></script>
+  </body>
+</html>

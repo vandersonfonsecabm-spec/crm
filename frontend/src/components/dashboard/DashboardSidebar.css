@@ -1,6 +1,19 @@
+.crm-workspace .sidebar-shell {
+  border-color: var(--sidebar-border);
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+}
+
 .crm-workspace .sidebar-shell .sidebar-brand,
 .crm-workspace .sidebar-shell .sidebar-account {
-  border-color: color-mix(in srgb, var(--sidebar-border) 55%, transparent);
+  border-color: var(--sidebar-border);
+}
+
+.crm-workspace .sidebar-shell .brand-mark {
+  border: 1px solid var(--sidebar-border);
+  border-radius: var(--radius-md);
+  background: var(--sidebar-surface);
+  color: var(--sidebar-indicator);
 }
 
 .crm-workspace .sidebar-shell .sidebar-brand p:last-child,
@@ -10,13 +23,15 @@
 }
 
 .crm-workspace .sidebar-shell .sidebar-navigation {
-  padding: 16px 12px;
+  overscroll-behavior: contain;
+  padding: 14px 10px;
+  scrollbar-width: thin;
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-groups {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-group {
@@ -24,7 +39,7 @@
 }
 
 .crm-workspace .sidebar-shell .sidebar-group-label {
-  margin: 0 8px 6px;
+  margin: 0 8px 5px;
   font-size: 11px;
   font-weight: 600;
   line-height: 16px;
@@ -33,31 +48,48 @@
 
 .crm-workspace .sidebar-shell .sidebar-nav-list {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-item {
+  height: 38px;
+  min-height: 38px;
   border-color: transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--sidebar-text-secondary);
   box-shadow: none;
   outline: none;
+  white-space: nowrap;
   transition:
     background-color 150ms ease,
+    border-color 150ms ease,
     color 150ms ease;
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-item:hover {
-  border-color: transparent;
+  border-color: var(--border-subtle);
   background: var(--sidebar-hover);
   color: var(--sidebar-text);
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-item.is-active {
-  border-color: transparent;
+  border-color: var(--selected-border);
   background: var(--sidebar-active);
-  color: var(--sidebar-text);
+  color: var(--selected-text);
   box-shadow: none;
+  font-weight: 600;
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-item.is-active::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: -1px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--selected-marker);
+  content: "";
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-item:focus {
@@ -65,9 +97,11 @@
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-item:focus-visible {
-  border-color: transparent;
-  outline: 1px solid var(--sidebar-indicator);
-  outline-offset: -2px;
+  position: relative;
+  z-index: 1;
+  border-color: var(--focus);
+  outline: 2px solid var(--emphasis-focus-outline);
+  outline-offset: 2px;
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-icon {
@@ -80,7 +114,16 @@
   stroke-width: 1.8;
 }
 
-.crm-workspace .sidebar-shell .sidebar-nav-item:hover .sidebar-nav-icon,
-.crm-workspace .sidebar-shell .sidebar-nav-item.is-active .sidebar-nav-icon {
+.crm-workspace .sidebar-shell .sidebar-avatar {
+  border: 1px solid var(--sidebar-border);
+  background: var(--sidebar-surface);
   color: var(--sidebar-text);
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-item:hover .sidebar-nav-icon {
+  color: var(--sidebar-text);
+}
+
+.crm-workspace .sidebar-shell .sidebar-nav-item.is-active .sidebar-nav-icon {
+  color: var(--selected-marker);
 }

@@ -1,0 +1,333 @@
+.agenda-page,
+.agenda-workspace,
+.agenda-list-surface,
+.agenda-list-content {
+  min-width: 0;
+}
+
+.agenda-week-toolbar,
+.agenda-next-commitment,
+.agenda-list-surface {
+  border-color: var(--border-default);
+}
+
+.agenda-week-toolbar-content {
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.agenda-period-control {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.agenda-toolbar-label {
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.agenda-period-label {
+  min-width: 9.5rem;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.agenda-view-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0.125rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.375rem;
+  background: var(--bg-muted);
+}
+
+.agenda-view-toggle-button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.375rem;
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0 0.625rem;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background-color 160ms ease-out, color 160ms ease-out;
+}
+
+.agenda-view-toggle-button:hover {
+  color: var(--text-primary);
+}
+
+.agenda-view-toggle-button:focus-visible,
+.agenda-filter-disclosure summary:focus-visible,
+.agenda-row-context summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.agenda-view-toggle-button--active {
+  background: var(--bg-surface);
+  color: var(--primary);
+}
+
+.agenda-toolbar-search {
+  flex: 1 1 16rem;
+  min-width: min(100%, 14rem);
+}
+
+.agenda-toolbar-view {
+  width: auto;
+  min-width: 9rem;
+}
+
+.agenda-filter-disclosure {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.agenda-filter-disclosure summary,
+.agenda-row-context summary {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  border: 1px solid var(--control-border);
+  border-radius: 0.3125rem;
+  padding: 0 0.75rem;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  list-style: none;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out;
+}
+
+.agenda-filter-disclosure summary:hover,
+.agenda-row-context summary:hover {
+  border-color: var(--control-border-hover);
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.agenda-filter-disclosure summary::-webkit-details-marker,
+.agenda-row-context summary::-webkit-details-marker {
+  display: none;
+}
+
+.agenda-filter-count {
+  color: var(--primary);
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.agenda-filter-disclosure[open] {
+  flex: 1 0 100%;
+  order: 8;
+}
+
+.agenda-filter-disclosure-panel {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-default);
+}
+
+.agenda-filter-disclosure[open] > .agenda-filter-disclosure-panel {
+  display: grid;
+}
+
+.agenda-next-commitment {
+  border-left: 3px solid var(--brand);
+}
+
+.agenda-temporal-list {
+  min-width: 0;
+}
+
+.agenda-temporal-group + .agenda-temporal-group {
+  border-top: 1px solid var(--border-strong);
+}
+
+.agenda-temporal-group-header {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border-default);
+  border-left: 3px solid transparent;
+  background: var(--surface-subtle);
+}
+
+.agenda-temporal-group--overdue .agenda-temporal-group-header {
+  border-left-color: var(--danger);
+}
+
+.agenda-temporal-group--today .agenda-temporal-group-header {
+  border-left-color: var(--brand);
+}
+
+.agenda-temporal-group--upcoming .agenda-temporal-group-header {
+  border-left-color: var(--info);
+}
+
+.agenda-temporal-group-label {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.agenda-temporal-group-count {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.agenda-row {
+  border-left: 3px solid transparent;
+}
+
+.agenda-row--overdue {
+  border-left-color: var(--danger);
+}
+
+.agenda-row--today {
+  border-left-color: var(--primary);
+}
+
+.agenda-row--upcoming {
+  border-left-color: var(--info);
+}
+
+.agenda-row--completed {
+  border-left-color: transparent;
+}
+
+.agenda-row--cancelled {
+  border-left-color: transparent;
+}
+
+.agenda-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.agenda-row-context {
+  position: relative;
+}
+
+.agenda-row-context-panel {
+  min-width: min(100%, 20rem);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0 0.125rem;
+}
+
+.agenda-filter-disclosure:not([open]) > .agenda-filter-disclosure-panel,
+.agenda-row-context:not([open]) > .agenda-row-context-panel {
+  display: none;
+}
+
+.agenda-row-context[open] > .agenda-row-context-panel {
+  display: flex;
+}
+
+.agenda-row-observation {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.agenda-row-context-links {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+@media (max-width: 1359px) {
+  .agenda-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1279px) {
+  .agenda-week-toolbar-content {
+    gap: 0.5rem;
+  }
+
+  .agenda-filter-disclosure-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .agenda-period-control {
+    flex-basis: 100%;
+    justify-content: space-between;
+  }
+
+  .agenda-period-label {
+    min-width: 0;
+  }
+
+  .agenda-toolbar-search,
+  .agenda-toolbar-view,
+  .agenda-filter-disclosure {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .agenda-filter-disclosure summary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .agenda-filter-disclosure-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agenda-temporal-group-header {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .agenda-row-context-panel {
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agenda-row,
+  .agenda-view-toggle-button,
+  .agenda-filter-disclosure summary,
+  .agenda-row-context summary {
+    transition: none;
+  }
+}

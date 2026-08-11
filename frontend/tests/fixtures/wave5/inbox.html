@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wave 5 · Inbox QA local</title>
+    <script>
+      (() => {
+        const fixturePrefix = "/__wave5-inbox/";
+        const localHosts = new Set(["localhost", "127.0.0.1"]);
+
+        window.fetch = (input, init) => {
+          const request = input instanceof Request ? input : null;
+          const raw = typeof input === "string" ? input : request ? request.url : input && "url" in input ? input.url : String(input);
+          const method = String((init && init.method) || (request && request.method) || "GET").toUpperCase();
+          let target;
+
+          try {
+            target = new URL(raw, window.location.href);
+          } catch {
+            return Promise.reject(new TypeError("WAVE5_INBOX_FIXTURE_URL_BLOCKED"));
+          }
+
+          if (
+            method !== "GET"
+            || target.origin !== window.location.origin
+            || !localHosts.has(target.hostname)
+            || !target.pathname.startsWith(fixturePrefix)
+          ) {
+            return Promise.reject(new TypeError("WAVE5_INBOX_OUTBOUND_OR_WRITE_BLOCKED"));
+          }
+
+          const resolver = window.__WAVE5_INBOX_FIXTURE_READ__;
+          if (typeof resolver !== "function") {
+            return Promise.reject(new TypeError("WAVE5_INBOX_FIXTURE_NOT_READY"));
+          }
+
+          try {
+            const result = resolver(target);
+            return Promise.resolve(new Response(JSON.stringify(result.body ?? null), {
+              status: result.status || 200,
+              headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+            }));
+          } catch {
+            return Promise.reject(new TypeError("WAVE5_INBOX_FIXTURE_READ_FAILED"));
+          }
+        };
+      })();
+    </script>
+    <script type="module" src="./inbox-fixture.tsx"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

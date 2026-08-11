@@ -1,5 +1,6 @@
-import { AlertTriangle, BriefcaseBusiness, CalendarClock, Clock3, GripVertical, UserRound, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, CalendarClock, Clock3, GripVertical, UserRound, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import {
   fetchNegocioKanban,
   fetchNegociosKanban,
@@ -12,10 +13,11 @@ import type {
   CommunicationBusiness,
   NegociosKanbanResponse,
 } from "../../services/crmApi";
-import { Button, EmptyState, ErrorState, Input, LoadingState, Pagination, Select, Surface } from "../ui";
+import { Button, ErrorState, Input, LoadingState, Pagination, Select, Surface } from "../ui";
 import BusinessStageTimingPanel from "./BusinessStageTimingPanel";
 import { formatBusinessDuration } from "./businessStagePresentation";
 import CommercialProposalsPanel from "./CommercialProposalsPanel";
+import "./DashboardNegocios.css";
 
 const stages: BusinessStage[] = ["NOVO", "CONTATO", "PROPOSTA", "FECHADO", "PERDIDO"];
 const stageLabels: Record<BusinessStage, string> = {
@@ -26,15 +28,28 @@ const stageLabels: Record<BusinessStage, string> = {
   PERDIDO: "Perdido",
 };
 
+export type NegociosKanbanAdapter = {
+  fetchNegocioKanban: typeof fetchNegocioKanban;
+  fetchNegociosKanban: typeof fetchNegociosKanban;
+  updateNegocioKanbanStage: typeof updateNegocioKanbanStage;
+};
+
+const defaultNegociosKanbanAdapter: NegociosKanbanAdapter = {
+  fetchNegocioKanban,
+  fetchNegociosKanban,
+  updateNegocioKanbanStage,
+};
+
 type Props = {
   authSession: AuthSession | null;
   initialBusinessId?: number | null;
+  adapter?: NegociosKanbanAdapter;
   onInitialBusinessHandled?: () => void;
   onOpenAgenda: () => void;
   onToast: (message: string) => void;
 };
 
-export default function DashboardNegociosKanbanPanel({ authSession, initialBusinessId, onInitialBusinessHandled, onOpenAgenda, onToast }: Props) {
+export default function DashboardNegociosKanbanPanel({ adapter = defaultNegociosKanbanAdapter, authSession, initialBusinessId, onInitialBusinessHandled, onOpenAgenda, onToast }: Props) {
   const [businesses, setBusinesses] = useState<CommunicationBusiness[]>([]);
   const [summary, setSummary] = useState<NegociosKanbanResponse["resumo"] | null>(null);
   const [page, setPage] = useState(1);
@@ -52,6 +67,9 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
   const requestSequence = useRef(0);
   const stageUpdates = useRef(new Set<number>());
   const detailTrigger = useRef<HTMLElement | null>(null);
+  const detailTriggerBusinessId = useRef<number | null>(null);
+  const workspaceFallbackFocus = useRef<HTMLInputElement>(null);
+  const [movingBusinessId, setMovingBusinessId] = useState<number | null>(null);
 
   const load = useCallback(async (background = false) => {
     const sequence = ++requestSequence.current;
@@ -59,7 +77,7 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
     else setLoading(true);
     setError("");
     try {
-      const response = await fetchNegociosKanban({
+      const response = await adapter.fetchNegociosKanban({
         page,
         limit: 100,
         ...(stageFilter ? { etapa: stageFilter } : {}),
@@ -78,7 +96,7 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
         setRefreshing(false);
       }
     }
-  }, [operationalFilter, page, search, stageFilter]);
+  }, [adapter, operationalFilter, page, search, stageFilter]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -97,23 +115,11 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
   }, [query]);
 
   useEffect(() => {
-    if (!selected) return;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSelected(null);
-        window.setTimeout(() => detailTrigger.current?.focus(), 0);
-      }
-    };
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
-  }, [selected]);
-
-  useEffect(() => {
     if (!initialBusinessId) return;
     let active = true;
     const timer = window.setTimeout(() => {
       setDetailLoading(true);
-      fetchNegocioKanban(initialBusinessId)
+      adapter.fetchNegocioKanban(initialBusinessId)
         .then((business) => { if (active) setSelected(business); })
         .catch(() => { if (active) onToast("Não foi possível abrir o Negócio selecionado."); })
         .finally(() => {
@@ -122,21 +128,15 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
         });
     }, 0);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [initialBusinessId, onInitialBusinessHandled, onToast]);
-
-  const metrics = useMemo(() => ({
-    total: summary?.total ?? 0,
-    active: (summary?.porEtapa.NOVO ?? 0) + (summary?.porEtapa.CONTATO ?? 0) + (summary?.porEtapa.PROPOSTA ?? 0),
-    closed: summary?.fechados ?? 0,
-    lost: summary?.perdidos ?? 0,
-  }), [summary]);
+  }, [adapter, initialBusinessId, onInitialBusinessHandled, onToast]);
 
   async function openBusiness(business: CommunicationBusiness, trigger: HTMLElement) {
     detailTrigger.current = trigger;
+    detailTriggerBusinessId.current = business.id;
     setSelected(business);
     setDetailLoading(true);
     try {
-      setSelected(await fetchNegocioKanban(business.id));
+      setSelected(await adapter.fetchNegocioKanban(business.id));
     } catch {
       onToast("Não foi possível carregar todos os detalhes.");
     } finally {
@@ -144,22 +144,49 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
     }
   }
 
-  async function moveBusiness(id: number, nextStage: BusinessStage) {
+  const closeBusiness = useCallback(() => {
+    const businessId = detailTriggerBusinessId.current;
+    const originalTrigger = detailTrigger.current;
+    detailTriggerBusinessId.current = null;
+    detailTrigger.current = null;
+    setSelected(null);
+    window.setTimeout(() => {
+      const currentCard = businessId === null
+        ? null
+        : document.querySelector<HTMLElement>('[data-negocio-card-id="' + businessId + '"]');
+      if (currentCard?.isConnected) {
+        currentCard.focus({ preventScroll: true });
+        return;
+      }
+      if (originalTrigger?.isConnected) {
+        originalTrigger.focus({ preventScroll: true });
+        return;
+      }
+      workspaceFallbackFocus.current?.focus({ preventScroll: true });
+    }, 0);
+  }, []);
+
+  async function moveBusiness(id: number, nextStage: BusinessStage): Promise<boolean> {
     const current = businesses.find((business) => business.id === id);
-    if (!current || !current.permissoes?.movimentar || current.etapa === nextStage || stageUpdates.current.has(id)) return;
+    if (!current || !current.permissoes?.movimentar || current.etapa === nextStage || stageUpdates.current.has(id)) return false;
     stageUpdates.current.add(id);
+    setMovingBusinessId(id);
     const snapshot = businesses;
     setBusinesses((items) => items.map((business) => business.id === id ? { ...business, etapa: nextStage } : business));
     try {
-      const updated = await updateNegocioKanbanStage(id, nextStage, current.etapa);
+      const updated = await adapter.updateNegocioKanbanStage(id, nextStage, current.etapa);
       setBusinesses((items) => items.map((business) => business.id === id ? updated : business));
+      setSelected((selectedBusiness) => selectedBusiness?.id === id ? { ...selectedBusiness, ...updated } : selectedBusiness);
       onToast(`Negócio movido para ${stageLabels[nextStage]}.`);
       await load(true);
+      return true;
     } catch {
       setBusinesses(snapshot);
       onToast("Não foi possível mover o Negócio. A etapa anterior foi restaurada.");
+      return false;
     } finally {
       stageUpdates.current.delete(id);
+      setMovingBusinessId((movingId) => movingId === id ? null : movingId);
       setDragOverStage(null);
     }
   }
@@ -167,106 +194,161 @@ export default function DashboardNegociosKanbanPanel({ authSession, initialBusin
   if (loading) return <LoadingState label="Carregando Kanban de Negócios" rows={5} />;
   if (error) return <ErrorState description="Tente novamente sem alterar os filtros." onRetry={() => void load()} title={error} />;
 
-  return (
-    <section className="space-y-3" aria-label="Kanban de Negócios">
-      <Surface className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border-default)] px-4 py-3">
-          <div>
-            <p className="text-sm font-semibold text-[var(--text-primary)]">Pipeline de Negócios</p>
-            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Oportunidades confirmadas, sem projeções de Clientes ou Leads.</p>
-          </div>
-          <span className="text-[11px] text-[var(--text-muted)]" aria-live="polite">{refreshing ? "Atualizando…" : `${pagination.total} Negócio(s)`}</span>
-        </div>
-        <div className="grid grid-cols-2 gap-px bg-[var(--border-default)] sm:grid-cols-4">
-          {[
-            ["Total", metrics.total],
-            ["Em andamento", metrics.active],
-            ["Fechados", metrics.closed],
-            ["Perdidos", metrics.lost],
-          ].map(([label, value]) => (
-            <div className="bg-[var(--bg-surface)] px-4 py-2.5" key={label}>
-              <p className="text-[10px] font-medium text-[var(--text-muted)]">{label}</p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-[var(--text-primary)]">{value}</p>
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border-default)] p-3">
-          <Input aria-label="Buscar Negócios" containerClassName="min-w-[220px] flex-1" onChange={(event) => setQuery(event.target.value)} placeholder="Título ou Cliente" value={query} />
-          <Select aria-label="Filtrar por etapa" containerClassName="w-48" onChange={(event) => { setStageFilter(event.target.value as BusinessStage | ""); setPage(1); }} value={stageFilter}>
-            <option value="">Todas as etapas</option>
-            {stages.map((stage) => <option key={stage} value={stage}>{stageLabels[stage]}</option>)}
-          </Select>
-          <Select
-            aria-label="Filtrar por situação operacional"
-            containerClassName="w-56"
-            onChange={(event) => { setOperationalFilter(event.target.value as BusinessOperationalFilter | ""); setPage(1); }}
-            value={operationalFilter}
-          >
-            <option value="">Todas as situações</option>
-            <option value="PARADOS">Negócios parados</option>
-            <option value="SEM_PROXIMA_ACAO">Sem próxima ação</option>
-            <option value="PROXIMA_ACAO_ATRASADA">Próxima ação atrasada</option>
-            <option value="PROXIMA_ACAO_HOJE">Próxima ação hoje</option>
-          </Select>
-          <Button disabled={!query && !stageFilter && !operationalFilter} onClick={() => { setQuery(""); setSearch(""); setStageFilter(""); setOperationalFilter(""); setPage(1); }} size="sm" variant="secondary">Limpar</Button>
-        </div>
-      </Surface>
+  const totalBusinesses = summary?.total ?? pagination.total;
 
-      {businesses.length === 0 ? (
-        <Surface><EmptyState description="Somente Negócios confirmados aparecem neste Kanban." icon={<BriefcaseBusiness size={18} />} title="Nenhum Negócio encontrado" /></Surface>
-      ) : (
-        <div className="overflow-x-auto pb-1">
-          <div className="grid min-w-[1120px] grid-cols-5 gap-2.5">
-            {stages.map((stage) => {
-              const stageBusinesses = businesses.filter((business) => business.etapa === stage);
-              return (
-                <div
-                  aria-label={`Etapa ${stageLabels[stage]}`}
-                  className={`min-h-[390px] rounded-lg border p-2.5 ${dragOverStage === stage ? "border-[var(--primary)] bg-[var(--surface-subtle)]" : "border-[var(--border-default)] bg-[var(--bg-surface)]"}`}
-                  key={stage}
-                  onDragLeave={() => setDragOverStage(null)}
-                  onDragOver={(event) => { event.preventDefault(); setDragOverStage(stage); }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const id = Number(event.dataTransfer.getData("negocioId"));
-                    if (id) void moveBusiness(id, stage);
-                  }}
-                  role="group"
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2 border-b border-[var(--border-default)] pb-2">
-                    <p className="text-xs font-semibold text-[var(--text-primary)]">{stageLabels[stage]}</p>
-                    <span className="rounded-full bg-[var(--bg-muted)] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--text-secondary)]">{stageBusinesses.length}</span>
-                  </div>
-                  <div className="space-y-2">
-                    {stageBusinesses.length === 0 && <p className="rounded-md border border-dashed border-[var(--border-default)] px-3 py-6 text-center text-[11px] text-[var(--text-muted)]">Etapa vazia</p>}
-                    {stageBusinesses.map((business) => (
-                      <BusinessCard business={business} key={business.id} onOpen={openBusiness} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+  return (
+    <section className="negocios-workspace space-y-3" aria-label="Kanban de Negócios">
+      <NegociosKanbanToolbar
+        operationalFilter={operationalFilter}
+        onClear={() => { setQuery(""); setSearch(""); setStageFilter(""); setOperationalFilter(""); setPage(1); }}
+        onOperationalFilterChange={(value) => { setOperationalFilter(value); setPage(1); }}
+        onQueryChange={setQuery}
+        onStageFilterChange={(value) => { setStageFilter(value); setPage(1); }}
+        query={query}
+        refreshing={refreshing}
+        stageFilter={stageFilter}
+        searchInputRef={workspaceFallbackFocus}
+        total={totalBusinesses}
+      />
+
+      <NegociosKanbanBoard
+        businesses={businesses}
+        dragOverStage={dragOverStage}
+        onDragOverStageChange={setDragOverStage}
+        onMoveBusiness={(id, stage) => { void moveBusiness(id, stage); }}
+        onOpenBusiness={openBusiness}
+      />
 
       <Surface>
         <Pagination disabled={refreshing} itemLabel="Negócios" onPageChange={setPage} page={page} total={pagination.total} totalPages={pagination.totalPages} visibleCount={businesses.length} />
       </Surface>
 
-      {selected && <BusinessDrawer authSession={authSession} business={selected} loading={detailLoading} onClose={() => { setSelected(null); window.setTimeout(() => detailTrigger.current?.focus(), 0); }} onOpenAgenda={onOpenAgenda} />}
+      {selected && <BusinessDrawer authSession={authSession} business={selected} isMoving={movingBusinessId === selected.id} loading={detailLoading} onClose={closeBusiness} onMoveBusiness={moveBusiness} onOpenAgenda={onOpenAgenda} />}
     </section>
   );
 }
 
-function BusinessCard({ business, onOpen }: { business: CommunicationBusiness; onOpen: (business: CommunicationBusiness, trigger: HTMLElement) => void }) {
+type NegociosKanbanToolbarProps = {
+  total: number;
+  refreshing: boolean;
+  query: string;
+  stageFilter: BusinessStage | "";
+  operationalFilter: BusinessOperationalFilter | "";
+  searchInputRef: RefObject<HTMLInputElement | null>;
+  onQueryChange: (value: string) => void;
+  onStageFilterChange: (value: BusinessStage | "") => void;
+  onOperationalFilterChange: (value: BusinessOperationalFilter | "") => void;
+  onClear: () => void;
+};
+
+export function NegociosKanbanToolbar({
+  total,
+  refreshing,
+  query,
+  stageFilter,
+  operationalFilter,
+  searchInputRef,
+  onQueryChange,
+  onStageFilterChange,
+  onOperationalFilterChange,
+  onClear,
+}: NegociosKanbanToolbarProps) {
+  const totalLabel = total === 1 ? "negócio" : "negócios";
+
+  return (
+    <Surface className="negocios-command-surface overflow-hidden">
+      <div aria-label="Filtros do pipeline" className="negocios-filterbar flex flex-wrap items-center gap-2 p-3" role="search">
+        <div aria-label={`Total: ${total} ${totalLabel}`} aria-live="polite" className="negocios-total" role="status">
+          <span>Total</span>
+          <strong>{total}</strong>
+          <span>{totalLabel}</span>
+          {refreshing && <span className="negocios-total-refresh">Atualizando…</span>}
+        </div>
+        <Input aria-label="Buscar Negócios" containerClassName="min-w-[220px] flex-1" onChange={(event) => onQueryChange(event.target.value)} placeholder="Título ou Cliente" ref={searchInputRef} value={query} />
+        <Select aria-label="Filtrar por etapa" containerClassName="w-48" onChange={(event) => onStageFilterChange(event.target.value as BusinessStage | "")} value={stageFilter}>
+          <option value="">Todas as etapas</option>
+          {stages.map((stage) => <option key={stage} value={stage}>{stageLabels[stage]}</option>)}
+        </Select>
+        <Select
+          aria-label="Filtrar por situação operacional"
+          containerClassName="w-56"
+          onChange={(event) => onOperationalFilterChange(event.target.value as BusinessOperationalFilter | "")}
+          value={operationalFilter}
+        >
+          <option value="">Todas as situações</option>
+          <option value="PARADOS">Negócios parados</option>
+          <option value="SEM_PROXIMA_ACAO">Sem próxima ação</option>
+          <option value="PROXIMA_ACAO_ATRASADA">Próxima ação atrasada</option>
+          <option value="PROXIMA_ACAO_HOJE">Próxima ação hoje</option>
+        </Select>
+        <Button disabled={!query && !stageFilter && !operationalFilter} onClick={onClear} size="md" variant="secondary">Limpar</Button>
+      </div>
+    </Surface>
+  );
+}
+
+type NegociosKanbanBoardProps = {
+  businesses: CommunicationBusiness[];
+  dragOverStage: BusinessStage | null;
+  onDragOverStageChange: (stage: BusinessStage | null) => void;
+  onMoveBusiness: (id: number, stage: BusinessStage) => void;
+  onOpenBusiness: (business: CommunicationBusiness, trigger: HTMLElement) => void;
+};
+
+export function NegociosKanbanBoard({
+  businesses,
+  dragOverStage,
+  onDragOverStageChange,
+  onMoveBusiness,
+  onOpenBusiness,
+}: NegociosKanbanBoardProps) {
+  return (
+    <div className="negocios-board-scroll overflow-x-auto pb-1" data-negocios-board-scroll>
+      <div className="negocios-board">
+        {stages.map((stage) => {
+          const stageBusinesses = businesses.filter((business) => business.etapa === stage);
+          return (
+            <section
+              aria-labelledby={`negocios-stage-${stage}`}
+              className={`negocios-stage ${dragOverStage === stage ? "is-drag-over" : ""}`}
+              data-stage={stage}
+              key={stage}
+              onDragLeave={() => onDragOverStageChange(null)}
+              onDragOver={(event) => { event.preventDefault(); onDragOverStageChange(stage); }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const id = Number(event.dataTransfer.getData("negocioId"));
+                if (id) onMoveBusiness(id, stage);
+              }}
+            >
+              <header className="negocios-stage-header">
+                <h3 id={`negocios-stage-${stage}`}>{stageLabels[stage]}</h3>
+                <span aria-label={stageBusinesses.length === 1 ? "1 negócio" : `${stageBusinesses.length} negócios`} className="negocios-stage-count">{stageBusinesses.length}</span>
+              </header>
+              <div className="negocios-stage-list space-y-2">
+                {stageBusinesses.length === 0 && <p className="negocios-stage-empty">Sem negócios nesta etapa</p>}
+                {stageBusinesses.map((business) => (
+                  <BusinessCard business={business} key={business.id} onOpen={onOpenBusiness} />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function BusinessCard({ business, onOpen }: { business: CommunicationBusiness; onOpen: (business: CommunicationBusiness, trigger: HTMLElement) => void }) {
   const canMove = business.permissoes?.movimentar === true;
   const currentStageTime = formatBusinessDuration(business.tempoEtapa?.atualSegundos);
   const nextAction = business.proximaAcao;
+  const isNextActionOverdue = nextAction?.atrasada === true;
   return (
     <div
       aria-label={`Abrir Negócio ${business.titulo || business.id}`}
-      className={`rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-2.5 shadow-sm transition hover:border-[var(--border-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${canMove ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
+      className={`negocios-card ${business.negocioParado ? "is-stalled" : ""} ${isNextActionOverdue ? "is-overdue" : ""} ${canMove ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
+      data-negocio-card-id={business.id}
       draggable={canMove}
       onClick={(event) => void onOpen(business, event.currentTarget)}
       onDragStart={(event) => { event.dataTransfer.setData("negocioId", String(business.id)); event.dataTransfer.effectAllowed = "move"; }}
@@ -276,32 +358,32 @@ function BusinessCard({ business, onOpen }: { business: CommunicationBusiness; o
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{business.titulo || `Negócio #${business.id}`}</p>
-          <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{business.cliente?.nome || "Cliente não informado"}</p>
+          <p className="negocios-card-title truncate">{business.titulo || `Negócio #${business.id}`}</p>
+          <p className="negocios-card-client mt-0.5 truncate">{business.cliente?.nome || "Cliente não informado"}</p>
         </div>
         {canMove && <GripVertical aria-hidden="true" className="shrink-0 text-[var(--icon-muted)]" size={14} />}
       </div>
-      <div className="mt-2 border-t border-[var(--border-default)] pt-2 text-[11px] text-[var(--text-secondary)]">
+      <div className="negocios-card-context mt-2 border-t border-[var(--border-default)] pt-2">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <p className="truncate">{business.responsavel?.nome || "Sem responsável"}</p>
-          <p className="shrink-0 tabular-nums text-[var(--text-muted)]">{business.valor === null ? "Sem valor" : business.valor.toLocaleString("pt-BR")}</p>
+          <p className="negocios-card-value shrink-0">{formatBusinessValue(business.valor)}</p>
         </div>
-        <div className="mt-2 flex min-w-0 items-center justify-between gap-2 rounded-sm bg-[var(--bg-muted)] px-2 py-1.5">
-          <span className="inline-flex min-w-0 items-center gap-1.5 truncate font-medium tabular-nums text-[var(--text-secondary)]" title={business.tempoEtapa?.estimado ? "Tempo estimado na etapa" : "Tempo na etapa atual"}>
+        <div className="negocios-card-rhythm mt-2 flex min-w-0 items-center justify-between gap-2">
+          <span className="inline-flex min-w-0 items-center gap-1.5 truncate" title={business.tempoEtapa?.estimado ? "Tempo estimado na etapa" : "Tempo na etapa atual"}>
             <Clock3 aria-hidden="true" className="shrink-0" size={12} />
             {business.tempoEtapa?.estimado ? "~ " : ""}{currentStageTime}
           </span>
           {business.negocioParado && (
-            <span className="inline-flex shrink-0 items-center gap-1 font-semibold text-[var(--warning)]" title={business.motivoParado === "PROXIMA_ACAO_ATRASADA" ? "Próxima ação atrasada" : "Sem próxima ação"}>
+            <span className="negocios-card-stalled inline-flex shrink-0 items-center gap-1" data-negocio-stalled title={business.motivoParado === "PROXIMA_ACAO_ATRASADA" ? "Próxima ação atrasada" : "Sem próxima ação"}>
               <AlertTriangle aria-hidden="true" size={11} />
               Parado
             </span>
           )}
         </div>
-        <div className="mt-2 min-w-0">
-          <p className="inline-flex items-center gap-1 text-[10px] text-[var(--text-muted)]"><CalendarClock aria-hidden="true" size={11} /> Próxima ação</p>
+        <div className={`negocios-card-action mt-2 min-w-0 ${nextAction?.atrasada ? "is-overdue" : ""}`}>
+          <p className="inline-flex items-center gap-1"><CalendarClock aria-hidden="true" size={11} /> Próxima ação</p>
           {nextAction ? (
-            <p className={`mt-0.5 truncate font-medium ${nextAction.atrasada ? "text-[var(--danger)]" : "text-[var(--text-primary)]"}`} title={`${nextAction.titulo} · ${formatCompactDateTime(nextAction.dataHora)}`}>
+            <p className="mt-0.5 font-medium" title={`${nextAction.titulo} · ${formatCompactDateTime(nextAction.dataHora)}`}>
               {nextAction.titulo} · {formatCompactDateTime(nextAction.dataHora)}
             </p>
           ) : (
@@ -313,29 +395,97 @@ function BusinessCard({ business, onOpen }: { business: CommunicationBusiness; o
   );
 }
 
-function BusinessDrawer({ authSession, business, loading, onClose, onOpenAgenda }: { authSession: AuthSession | null; business: CommunicationBusiness; loading: boolean; onClose: () => void; onOpenAgenda: () => void }) {
+function BusinessDrawer({ authSession, business, isMoving, loading, onClose, onMoveBusiness, onOpenAgenda }: { authSession: AuthSession | null; business: CommunicationBusiness; isMoving: boolean; loading: boolean; onClose: () => void; onMoveBusiness: (id: number, stage: BusinessStage) => Promise<boolean>; onOpenAgenda: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const stageSelectRef = useRef<HTMLSelectElement>(null);
+  const canMove = business.permissoes?.movimentar === true;
+
+  const requestClose = useCallback(() => {
+    if (isMoving) return;
+    onClose();
+  }, [isMoving, onClose]);
+
+  function handleStageChange(nextStage: BusinessStage) {
+    if (!canMove || isMoving || nextStage === business.etapa) return;
+    void onMoveBusiness(business.id, nextStage).finally(() => {
+      window.requestAnimationFrame(() => stageSelectRef.current?.focus({ preventScroll: true }));
+    });
+  }
+
+  useLayoutEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButtonRef.current?.focus({ preventScroll: true });
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = drawerRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [requestClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/35" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <aside aria-label="Detalhes do Negócio" aria-modal="true" className="flex h-full w-full max-w-[760px] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-xl" role="dialog">
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--border-default)] px-4 py-3">
+    <div className="negocios-drawer-layer fixed inset-0 z-[220] flex justify-end" role="presentation">
+      <button aria-label="Fechar detalhes do Negócio" className="negocios-drawer-backdrop absolute inset-0 cursor-default" disabled={isMoving} onClick={requestClose} tabIndex={-1} type="button" />
+      <aside aria-labelledby={`negocios-drawer-title-${business.id}`} aria-modal="true" className="negocios-drawer relative flex h-full w-full max-w-[760px] flex-col" ref={drawerRef} role="dialog">
+        <header className="negocios-drawer-header flex items-start justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">Negócio #{business.id}</p>
-            <h2 className="mt-1 truncate text-base font-semibold text-[var(--text-primary)]">{business.titulo || "Sem título"}</h2>
+            <p className="negocios-drawer-eyebrow">Negócio #{business.id} · {stageLabels[business.etapa]}</p>
+            <h2 className="negocios-drawer-title mt-1 truncate" id={`negocios-drawer-title-${business.id}`}>{business.titulo || "Sem título"}</h2>
+            <p className="negocios-drawer-client mt-1 truncate">{business.cliente?.nome || "Cliente não informado"}</p>
           </div>
-          <Button aria-label="Fechar detalhes" onClick={onClose} size="sm" variant="ghost"><X size={16} /></Button>
+          <Button aria-label="Fechar detalhes" disabled={isMoving} onClick={requestClose} ref={closeButtonRef} size="sm" variant="ghost"><X size={16} /></Button>
         </header>
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="negocios-drawer-body flex-1 overflow-y-auto p-4">
           {loading && <LoadingState label="Carregando detalhes" rows={2} />}
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+          <dl className="negocios-drawer-facts grid grid-cols-2 gap-x-4 gap-y-3">
             <Detail label="Etapa" value={stageLabels[business.etapa]} />
             <Detail label="Responsável" value={business.responsavel?.nome || "Sem responsável"} />
             <Detail label="Cliente" value={business.cliente?.nome || "Não informado"} />
             <Detail label="Empresa" value={business.cliente?.empresa || "Não informada"} />
             <Detail label="Lead" value={business.lead ? `#${business.lead.id} · ${business.lead.status}` : "Sem Lead de origem"} />
             <Detail label="Origem" value={business.lead?.origem || "Não informada"} />
-            <Detail label="Valor" value={business.valor === null ? "Não informado" : business.valor.toLocaleString("pt-BR")} />
+            <Detail label="Valor" value={formatBusinessValue(business.valor, "Não informado")} />
             <Detail label="Criado em" value={new Date(business.createdAt).toLocaleString("pt-BR")} />
           </dl>
+          <section aria-labelledby={`negocios-move-stage-${business.id}`} className="mt-5 border-t border-[var(--border-default)] pt-4">
+            <h3 className="text-xs font-semibold text-[var(--text-primary)]" id={`negocios-move-stage-${business.id}`}>Movimentar etapa</h3>
+            <Select
+              aria-busy={isMoving}
+              containerClassName="mt-2 max-w-sm"
+              disabled={!canMove || isMoving}
+              helperText={canMove ? isMoving ? "Movendo Negócio..." : "Selecione a próxima etapa." : "Você não tem permissão para movimentar este Negócio."}
+              label="Mover para etapa"
+              onChange={(event) => handleStageChange(event.target.value as BusinessStage)}
+              ref={stageSelectRef}
+              value={business.etapa}
+            >
+              {stages.map((stage) => <option key={stage} value={stage}>{stageLabels[stage]}</option>)}
+            </Select>
+          </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]">Observação</h3>
             <p className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-[var(--text-secondary)]">{business.observacao || "Nenhuma observação registrada."}</p>
@@ -369,7 +519,12 @@ function BusinessDrawer({ authSession, business, loading, onClose, onOpenAgenda 
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
-  return <div className="min-w-0"><dt className="text-[10px] font-medium text-[var(--text-muted)]">{label}</dt><dd className="mt-1 break-words font-medium text-[var(--text-primary)]">{value}</dd></div>;
+  return <div className="min-w-0"><dt>{label}</dt><dd>{value}</dd></div>;
+}
+
+function formatBusinessValue(value: number | null, emptyLabel = "Sem valor") {
+  if (value === null) return emptyLabel;
+  return new Intl.NumberFormat("pt-BR", { currency: "BRL", maximumFractionDigits: 0, style: "currency" }).format(value);
 }
 
 function formatCompactDateTime(value: string) {

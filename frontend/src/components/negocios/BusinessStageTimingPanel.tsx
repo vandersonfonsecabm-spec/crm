@@ -81,7 +81,7 @@ export default function BusinessStageTimingPanel({ business, onOpenAgenda }: Pro
   const timing = business.tempoEtapa;
 
   return (
-    <section aria-labelledby={`stage-timing-title-${business.id}`} className="space-y-4">
+    <section aria-labelledby={`stage-timing-title-${business.id}`} className="negocios-timing-panel space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-xs font-semibold text-[var(--text-primary)]" id={`stage-timing-title-${business.id}`}>
@@ -99,7 +99,7 @@ export default function BusinessStageTimingPanel({ business, onOpenAgenda }: Pro
         )}
       </div>
 
-      <dl className="grid overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--border-default)] sm:grid-cols-3">
+      <dl className="negocios-timing-metrics grid overflow-hidden border border-[var(--border-default)] bg-[var(--border-default)] sm:grid-cols-3">
         <TimingMetric icon={<Route size={14} />} label="Etapa atual" value={stageLabels[business.etapa]} />
         <TimingMetric
           detail={timing?.estimado ? "Tempo estimado" : "Desde a última movimentação"}
@@ -116,7 +116,7 @@ export default function BusinessStageTimingPanel({ business, onOpenAgenda }: Pro
       </dl>
 
       {timing?.estimado && (
-        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-900">
+        <div className="negocios-estimated-note flex items-start gap-2 px-3 py-2 text-[11px] leading-5">
           <AlertTriangle aria-hidden="true" className="mt-0.5 shrink-0" size={13} />
           <p>
             Histórico parcial. O tempo atual usa uma referência estimada de {formatDateTime(timing.entrouEm)} até a primeira movimentação rastreada.
@@ -173,8 +173,8 @@ export default function BusinessStageTimingPanel({ business, onOpenAgenda }: Pro
             {history.map((entry) => (
               <HistoryEntry entry={entry} key={entry.id} />
             ))}
-            <li className="grid grid-cols-[18px_minmax(0,1fr)] gap-2.5 rounded-md bg-[var(--bg-muted)] px-3 py-2.5">
-              <span className="mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <li className="negocios-history-current grid grid-cols-[18px_minmax(0,1fr)] gap-2.5 px-3 py-2.5">
+              <span className="negocios-history-current-icon mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full">
                 <Clock3 aria-hidden="true" size={11} />
               </span>
               <div className="min-w-0">
@@ -220,7 +220,7 @@ function TimingMetric({ detail, icon, label, value }: { detail?: string; icon: R
 function NextAction({ action, onOpenAgenda }: { action: BusinessNextAction | null; onOpenAgenda: () => void }) {
   if (!action) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-[var(--border-default)] px-3 py-3">
+      <div className="negocios-next-action is-empty flex flex-wrap items-center justify-between gap-3 px-3 py-3">
         <div className="min-w-0">
           <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-primary)]">
             <CalendarClock aria-hidden="true" size={14} />
@@ -234,7 +234,7 @@ function NextAction({ action, onOpenAgenda }: { action: BusinessNextAction | nul
   }
 
   return (
-    <div className="rounded-md border border-[var(--border-default)] px-3 py-3">
+    <div className={`negocios-next-action flex-col px-3 py-3 ${action.atrasada ? "is-overdue" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] font-medium text-[var(--text-muted)]">Próxima ação · {followUpTypeLabel(action.tipo)}</p>
@@ -264,7 +264,7 @@ function NextAction({ action, onOpenAgenda }: { action: BusinessNextAction | nul
 
 function HistoryEntry({ entry }: { entry: BusinessStageHistoryEntry }) {
   return (
-    <li className="grid grid-cols-[18px_minmax(0,1fr)] gap-2.5 rounded-md border border-[var(--border-default)] px-3 py-2.5">
+    <li className="negocios-history-entry grid grid-cols-[18px_minmax(0,1fr)] gap-2.5 px-3 py-2.5">
       <span className="mt-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--surface-subtle)] text-[var(--text-secondary)]">
         <Check aria-hidden="true" size={11} />
       </span>

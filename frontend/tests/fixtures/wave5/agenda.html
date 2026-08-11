@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wave 5 · Agenda QA local</title>
+    <script>
+      (() => {
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = (input, init) => {
+          const raw = typeof input === "string" ? input : input && "url" in input ? input.url : String(input);
+          const target = new URL(raw, window.location.href);
+          if (target.origin !== window.location.origin || target.hostname !== "127.0.0.1") {
+            return Promise.reject(new TypeError("WAVE5_OUTBOUND_BLOCKED"));
+          }
+          return nativeFetch(target, init);
+        };
+      })();
+    </script>
+    <script type="module" src="./agenda-fixture.tsx"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

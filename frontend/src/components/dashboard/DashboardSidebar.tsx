@@ -50,7 +50,6 @@ const navigationIcons: Record<ActivePage, ReactNode> = {
 export default function DashboardSidebar({
   activePage,
   setActivePage,
-  authSession,
   canManageIntegrations = false,
   canManageUsers = false,
   isPlatformOperator = false,
@@ -69,16 +68,12 @@ export default function DashboardSidebar({
     }))
     .filter((group) => group.items.length > 0);
 
-  const displayName = authSession?.usuario.nome || "Usuário";
-  const companyName = authSession?.empresa?.nome || "CRM Agro SaaS";
-  const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel);
-
-  const mobilePages: ActivePage[] = ["dashboard", "comercial", "clientes", "kanban", "agenda"];
+  const mobilePages: ActivePage[] = ["comercial", "clientes", "kanban", "agenda"];
 
   return (
     <>
-    <aside className="sidebar-shell hidden h-screen w-[224px] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex">
-      <div className="sidebar-brand flex h-14 shrink-0 items-center gap-3 border-b px-4">
+    <aside className="sidebar-shell hidden h-screen w-[var(--sidebar-width)] shrink-0 flex-col border-r lg:sticky lg:top-0 lg:flex">
+      <div className="sidebar-brand flex h-[52px] shrink-0 items-center gap-3 border-b px-4">
         <div className="brand-mark flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
           <Sprout size={16} />
         </div>
@@ -110,17 +105,6 @@ export default function DashboardSidebar({
         </div>
       </nav>
 
-      <div className="sidebar-account border-t px-3 py-3">
-        <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
-          <div className="sidebar-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold">
-            {getInitials(displayName)}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-[11px] font-medium">{displayName}</p>
-            <p className="truncate text-[11px]">{roleLabel} · {companyName}</p>
-          </div>
-        </div>
-      </div>
     </aside>
     <nav aria-label="Navegação móvel" className="mobile-navigation lg:hidden">
       {mobilePages.map((page) => {
@@ -139,7 +123,7 @@ export default function DashboardSidebar({
             to={route.pathname}
           >
             {navigationIcons[page]}
-            <span>{route.label === "Painel Comercial" ? "Painel" : route.label}</span>
+            <span>{route.label}</span>
           </Link>
         );
       })}
@@ -171,28 +155,13 @@ function SidebarButton({
     <Link
       to={href}
       onClick={handleClick}
+      aria-label={label}
       aria-current={active ? "page" : undefined}
       className={`sidebar-nav-item relative flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[12px] ${active ? "is-active" : ""}`}
+      title={label}
     >
       <span className="sidebar-nav-icon flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </Link>
   );
-}
-
-function getRoleLabel(role?: string) {
-  const labels: Record<string, string> = {
-    ADMIN: "Administrador",
-    GERENTE: "Gerente",
-    VENDEDOR: "Vendedor",
-  };
-  return role ? labels[role] ?? role : "Operador";
-}
-
-function getInitials(name: string) {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return "U";
-  const first = words[0]?.[0] ?? "";
-  const second = words.length > 1 ? words[words.length - 1]?.[0] ?? "" : words[0]?.[1] ?? "";
-  return `${first}${second}`.toUpperCase();
 }

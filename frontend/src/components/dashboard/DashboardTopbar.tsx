@@ -1,4 +1,4 @@
-import { Bell, Building2, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
+import { Building2, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import DashboardCommandSearch from "./DashboardCommandSearch";
 import DashboardQuickActions from "./DashboardQuickActions";
@@ -18,6 +18,7 @@ type DashboardTopbarProps = {
   authSession: AuthSession | null;
   canManageIntegrations: boolean;
   leadsCommunicationEnabled: boolean;
+  readOnly?: boolean;
 };
 
 export default function DashboardTopbar({
@@ -33,116 +34,57 @@ export default function DashboardTopbar({
   authSession,
   canManageIntegrations,
   leadsCommunicationEnabled,
+  readOnly = false,
 }: DashboardTopbarProps) {
   return (
-    <header className="topbar-shell sticky top-0 z-40 flex h-14 items-center border-b px-5 lg:px-7">
+    <header className="topbar-shell sticky top-0 z-40 flex h-[52px] items-center border-b px-5 lg:px-7">
       <div className="topbar-content mx-auto flex w-full max-w-[1680px] items-center justify-between gap-4">
-        <div className="min-w-0 lg:w-[220px]">
-          <p className="hidden text-[11px] font-medium text-slate-500 lg:block">Área de trabalho</p>
-        </div>
-
         <DashboardCommandSearch
           onSelectClient={setSelectedId}
           onSetActivePage={setActivePage}
           onCloseQuickActions={() => setShowQuickActions(false)}
           canManageIntegrations={canManageIntegrations}
           leadsCommunicationEnabled={leadsCommunicationEnabled}
+          readOnly={readOnly}
         />
 
-        <div className="flex min-w-0 items-center justify-end gap-1.5 lg:w-[220px]">
-          <DashboardQuickActions
-            isOpen={showQuickActions}
-            onToggle={() => setShowQuickActions((value) => !value)}
-            onClose={() => setShowQuickActions(false)}
-            onCreateClient={() => {
-              setCreating({ ...emptyClient });
-              setShowQuickActions(false);
-            }}
-            onGoToClients={() => {
-              setActivePage("clientes");
-              setShowQuickActions(false);
-            }}
-            onGoToKanban={() => {
-              setActivePage("kanban");
-              setShowQuickActions(false);
-            }}
-            onExportCsv={() => {
-              exportCsv();
-              setShowQuickActions(false);
-            }}
-          />
+        <div className="flex min-w-0 items-center justify-end gap-1.5">
+          {!readOnly && (
+            <DashboardQuickActions
+              isOpen={showQuickActions}
+              onToggle={() => setShowQuickActions((value) => !value)}
+              onClose={() => setShowQuickActions(false)}
+              onCreateClient={() => {
+                setCreating({ ...emptyClient });
+                setShowQuickActions(false);
+              }}
+              onGoToClients={() => {
+                setActivePage("clientes");
+                setShowQuickActions(false);
+              }}
+              onGoToKanban={() => {
+                setActivePage("kanban");
+                setShowQuickActions(false);
+              }}
+              onExportCsv={() => {
+                exportCsv();
+                setShowQuickActions(false);
+              }}
+            />
+          )}
 
-          <NotificationsMenu />
-
-          <UserMenu authSession={authSession} onLogout={onLogout} onOpenProfile={onOpenProfile} />
+          <UserMenu authSession={authSession} onLogout={onLogout} onOpenProfile={onOpenProfile} readOnly={readOnly} />
         </div>
       </div>
     </header>
   );
 }
 
-function NotificationsMenu() {
+function UserMenu({ authSession, onLogout, onOpenProfile, readOnly = false }: { authSession: AuthSession | null; onLogout: () => void; onOpenProfile: () => void; readOnly?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && isOpen) {
-        setIsOpen(false);
-        buttonRef.current?.focus({ preventScroll: true });
-      }
-    }
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen]);
-
-  return (
-    <div className="relative" ref={menuRef}>
-      <button
-        aria-expanded={isOpen}
-        aria-haspopup="dialog"
-        aria-label="Notificações"
-        className="topbar-icon-button inline-flex h-9 w-9 items-center justify-center rounded-md"
-        onClick={() => setIsOpen((current) => !current)}
-        ref={buttonRef}
-        title="Notificações"
-        type="button"
-      >
-        <Bell size={16} />
-      </button>
-
-      {isOpen && (
-        <div aria-label="Notificações" className="user-menu absolute right-0 top-11 z-[240] w-72 overflow-hidden rounded-lg border shadow-lg" role="dialog">
-          <div className="border-b border-[var(--border-default)] px-4 py-3">
-            <p className="text-[12px] font-semibold text-[var(--text-primary)]">Notificações</p>
-            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Atualizações da operação comercial</p>
-          </div>
-          <div className="flex flex-col items-center px-5 py-7 text-center">
-            <span className="flex h-9 w-9 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--icon-muted)]">
-              <Bell size={16} />
-            </span>
-            <p className="mt-3 text-[11px] font-semibold text-[var(--text-primary)]">Nenhuma notificação disponível</p>
-            <p className="mt-1 text-[11px] leading-4 text-[var(--text-muted)]">Os alertas operacionais continuam disponíveis nas áreas correspondentes.</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function UserMenu({ authSession, onLogout, onOpenProfile }: { authSession: AuthSession | null; onLogout: () => void; onOpenProfile: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const displayName = authSession?.usuario.nome || "Usuário local";
+  const displayName = authSession?.usuario.nome || "Usuário";
   const userEmail = authSession?.usuario.email;
   const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel);
   const companyName = authSession?.empresa?.nome || "CRM Agro SaaS";
@@ -168,12 +110,13 @@ function UserMenu({ authSession, onLogout, onOpenProfile }: { authSession: AuthS
   return (
     <div ref={menuRef} className="relative">
       <button
-        aria-expanded={isOpen}
+        aria-expanded={readOnly ? false : isOpen}
         aria-haspopup="menu"
-        aria-label="Abrir menu do usuário"
-        className="topbar-user-button flex h-9 items-center gap-2 rounded-md px-1.5 pr-2"
+        aria-label={readOnly ? "Menu do usuário indisponível na fixture" : "Abrir menu do usuário"}
+        className="topbar-user-button flex h-11 items-center gap-2 rounded-md px-1.5 pr-2"
         onClick={() => setIsOpen((current) => !current)}
         ref={buttonRef}
+        disabled={readOnly}
         type="button"
       >
         <span className="user-avatar flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold">
@@ -183,7 +126,7 @@ function UserMenu({ authSession, onLogout, onOpenProfile }: { authSession: AuthS
         <ChevronDown size={13} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
-      {isOpen && (
+      {isOpen && !readOnly && (
         <div className="user-menu absolute right-0 top-11 z-[240] w-64 rounded-lg border p-2 shadow-lg" role="menu">
           <div className="border-b px-2.5 pb-3 pt-2">
             <p className="truncate text-[12px] font-semibold">{displayName}</p>
@@ -197,11 +140,6 @@ function UserMenu({ authSession, onLogout, onOpenProfile }: { authSession: AuthS
               <p className="text-[11px] text-slate-500">Empresa</p>
               <p className="truncate text-[11px] font-medium">{companyName}</p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[11px] text-slate-500">
-            <ShieldCheck size={14} />
-            <span>Sessão protegida</span>
           </div>
 
           <button

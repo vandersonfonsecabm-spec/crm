@@ -2,7 +2,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 import { cx } from "./utils";
 
 export function Surface({ className, ...props }: HTMLAttributes<HTMLElement>) {
-  return <section {...props} className={cx("rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] shadow-sm", className)} />;
+  return <section {...props} className={cx("rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-surface)]", className)} />;
 }
 
 export function Toolbar({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
@@ -10,7 +10,7 @@ export function Toolbar({ className, ...props }: HTMLAttributes<HTMLDivElement>)
 }
 
 export function FilterBar({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div {...props} className={cx("flex min-w-0 flex-wrap items-end gap-2 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-3", className)} />;
+  return <div {...props} className={cx("flex min-w-0 flex-wrap items-end gap-2 rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3", className)} />;
 }
 
 type SectionHeaderProps = HTMLAttributes<HTMLDivElement> & {
@@ -25,7 +25,7 @@ export function SectionHeader({ actions, className, description, icon, status, t
   return (
     <div {...props} className={cx("flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-[var(--border-default)] px-4 py-3", className)}>
       <div className="flex min-w-0 items-center gap-3">
-        {icon && <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--icon-default)]">{icon}</div>}
+        {icon && <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--icon-default)]">{icon}</div>}
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h2>

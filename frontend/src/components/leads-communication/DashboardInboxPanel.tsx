@@ -92,10 +92,14 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
   const conversationPanel = useRef<HTMLElement>(null);
   const selectedConversationButton = useRef<HTMLButtonElement>(null);
   const actionsMenu = useRef<HTMLDetailsElement>(null);
+  const filtersTriggerRef = useRef<HTMLButtonElement>(null);
+  const contextTriggerRef = useRef<HTMLButtonElement>(null);
+  const actionModalTriggerRef = useRef<HTMLElement>(null);
   const shouldScrollToLatest = useRef(true);
   const lastMessageId = useRef<number | null>(null);
   const manager = ["ADMIN", "GERENTE"].includes(authSession.papel ?? authSession.usuario.papel ?? "");
   const currentUserId = authSession.usuario.id ?? 0;
+  const compactInboxContext = useCompactInboxContext();
 
   useEffect(() => {
     let active = true;
@@ -269,6 +273,9 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
     Boolean(search.trim()),
   ].filter(Boolean).length;
   const selectedChannel = getChannelPresentation(conversation?.canalIntegracao.tipo);
+  const hasInlineContext = Boolean(conversation && !compactInboxContext);
+  const hasContextDrawer = Boolean(conversation && compactInboxContext && contextOpen);
+  const selectedSlaException = isSlaException(conversation?.sla ?? null);
 
   async function acquireLease() {
     if (!selectedId || isClosed || composerMode !== "reply" || leaseOwned || activeLeaseFromOther) return;
@@ -439,23 +446,18 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
   return (
     <div className="inbox-page space-y-3" data-testid="inbox-page">
       {feedback && <div aria-live="polite" className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-2 text-xs text-[var(--text-secondary)]">{feedback}</div>}
-      <div className="inbox-command-bar flex flex-wrap items-center justify-between gap-3 border-y border-[var(--border-default)] py-2">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-[var(--text-primary)]">Fila multicanal</p>
-          <p className="mt-0.5 text-xs text-[var(--text-muted)]">Atendimentos inbound de Site, WhatsApp, Instagram, Messenger e E-mail.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span aria-live="polite" className="text-xs tabular-nums text-[var(--text-muted)]">{list?.pagination.total ?? 0} conversas</span>
-          <Button className="inbox-filter-trigger" leftIcon={<Filter size={14} />} onClick={() => setFiltersOpen(true)} size="sm" variant="secondary">
-            Filtros{activeFilterCount ? ` (${activeFilterCount})` : ""}
-          </Button>
-          <IconButton aria-label="Atualizar conversas" disabled={listRefreshing} onClick={() => void loadList()}>
-            <RefreshCw className={listRefreshing ? "animate-spin motion-reduce:animate-none" : ""} size={14} />
-          </IconButton>
-        </div>
-      </div>
+      <InboxQueueToolbar
+        activeFilterCount={activeFilterCount}
+        filtersTriggerRef={filtersTriggerRef}
+        onOpenFilters={() => setFiltersOpen(true)}
+        onRefresh={() => void loadList()}
+        onSearchChange={(value) => { setSearch(value); setPage(1); }}
+        refreshing={listRefreshing}
+        search={search}
+        total={list?.pagination.total ?? 0}
+      />
 
-      <Surface className="inbox-workspace grid min-h-[520px] overflow-hidden" data-mobile-view={mobileView}>
+      <Surface className={`inbox-workspace ${hasInlineContext ? "has-context" : "without-context"} grid min-h-[520px] overflow-hidden`} data-mobile-view={mobileView}>
         <aside className="inbox-filters flex min-h-0 flex-col border-r border-[var(--border-default)] bg-[var(--bg-muted)]" aria-label="Filas e filtros">
           <InboxFilters
             channelId={channelId}
@@ -477,14 +479,8 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
         </aside>
 
         <section className="inbox-conversation-list flex min-h-0 flex-col border-r border-[var(--border-default)]" aria-label="Lista de conversas">
-          <div className="border-b border-[var(--border-default)] p-3">
-            <div className="relative min-w-0 flex-1">
-              <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--icon-muted)]" size={14} />
-              <input aria-label="Buscar conversas" className="h-10 w-full rounded-md border border-[var(--control-border)] bg-[var(--control-bg)] pl-9 pr-3 text-xs outline-none focus:border-[var(--control-border-focus)] focus:ring-2 focus:ring-[var(--control-ring)]" onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Buscar contato ou interesse" value={search} />
-            </div>
-            {activeFilterCount > 0 && <div className="mt-2 flex items-center justify-between gap-2 text-xs text-[var(--text-muted)]"><span>{activeFilterCount} {activeFilterCount === 1 ? "filtro ativo" : "filtros ativos"}</span><button className="font-semibold text-[var(--primary)] hover:underline" onClick={resetFilters} type="button">Limpar</button></div>}
-          </div>
-          <div aria-busy={listLoading || listRefreshing} className="min-h-0 flex-1 overflow-y-auto">{listLoading ? <LoadingState className="p-3" rows={7} /> : listError ? <ErrorState className="m-3" description={listError} onRetry={() => void loadList()} title="Falha ao carregar conversas" /> : list?.data.length ? list.data.map((item) => <ConversationListItem active={selectedId === item.id} buttonRef={selectedId === item.id ? selectedConversationButton : undefined} currentUserId={currentUserId} item={item} key={item.id} onClick={() => selectConversation(item.id)} />) : <EmptyState className="m-3" description={activeFilterCount ? "Remova ou ajuste os filtros para ampliar a busca." : "Novos atendimentos inbound aparecerão aqui."} icon={<Inbox size={18} />} title={activeFilterCount ? "Nenhuma conversa neste filtro" : "Nenhuma conversa na fila"} />}</div>
+          {activeFilterCount > 0 && <div className="inbox-list-filter-summary flex items-center justify-between gap-2 border-b border-[var(--border-default)] px-3 py-2 text-xs text-[var(--text-muted)]"><span>{activeFilterCount} {activeFilterCount === 1 ? "filtro ativo" : "filtros ativos"}</span><button className="font-semibold text-[var(--primary)] hover:underline" onClick={resetFilters} type="button">Limpar</button></div>}
+          <div aria-busy={listLoading || listRefreshing} className="inbox-list-scroll min-h-0 flex-1 overflow-y-auto">{listLoading ? <LoadingState className="p-3" rows={7} /> : listError ? <ErrorState className="m-3" description={listError} onRetry={() => void loadList()} title="Falha ao carregar conversas" /> : list?.data.length ? list.data.map((item) => <ConversationListItem active={selectedId === item.id} buttonRef={selectedId === item.id ? selectedConversationButton : undefined} currentUserId={currentUserId} item={item} key={item.id} onClick={() => selectConversation(item.id)} />) : <EmptyState className="m-3" description={activeFilterCount ? "Remova ou ajuste os filtros para ampliar a busca." : "Novos atendimentos inbound aparecerão aqui."} icon={<Inbox size={18} />} title={activeFilterCount ? "Nenhuma conversa neste filtro" : "Nenhuma conversa na fila"} />}</div>
           <Pagination
             className="inbox-pagination"
             disabled={listLoading || listRefreshing}
@@ -500,24 +496,24 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
         <section aria-label="Conversa selecionada" className="inbox-conversation flex min-h-0 min-w-0 flex-col bg-[var(--bg-surface)]" ref={conversationPanel} tabIndex={-1}>
           {!selectedId ? <EmptyState className="m-auto max-w-sm" description="Escolha uma conversa para consultar mensagens, atendimento e contexto comercial." icon={<MessageCircle size={18} />} title="Selecione uma conversa" /> : detailLoading ? <LoadingState className="p-4" rows={6} /> : detailError ? <ErrorState className="m-4" description={detailError} onRetry={() => selectedId && void loadDetail(selectedId)} title="Falha ao abrir a conversa" /> : conversation && <>
             <p aria-live="polite" className="sr-only">Conversa de {conversation.contatoCanal.cliente?.nome ?? conversation.contatoCanal.nome ?? "contato sem nome"} carregada.</p>
-            <header className="shrink-0 border-b border-[var(--border-default)] px-4 py-3">
+            <header className="inbox-conversation-header shrink-0 border-b border-[var(--border-default)] px-4 py-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <IconButton aria-label="Voltar para a lista de conversas" className="inbox-mobile-back" onClick={returnToConversationList}><ArrowLeft size={16} /></IconButton>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] text-[11px] font-semibold">{initials(conversation.contatoCanal.cliente?.nome ?? conversation.contatoCanal.nome)}</span>
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-sm font-semibold text-[var(--text-primary)]">{conversation.contatoCanal.cliente?.nome ?? conversation.contatoCanal.nome ?? "Contato sem nome"}</h2><CommunicationChannelBadge channel={conversation.canalIntegracao} /><ConversationStatusBadge status={conversation.status} /><ConversationSlaBadge sla={conversation.sla} /></div>
+                    <div className="flex flex-wrap items-center gap-2" data-sla-exception={selectedSlaException ? "true" : "false"}><h2 className="truncate text-sm font-semibold text-[var(--text-primary)]">{conversation.contatoCanal.cliente?.nome ?? conversation.contatoCanal.nome ?? "Contato sem nome"}</h2><CommunicationChannelBadge channel={conversation.canalIntegracao} /><ConversationStatusBadge status={conversation.status} /><ConversationSlaBadge sla={conversation.sla} /></div>
                     {conversation.canalIntegracao.tipo === "EMAIL" && conversation.emailSubject && <p className="mt-1 truncate text-xs font-medium text-[var(--text-secondary)]">{conversation.emailSubject}</p>}
                     <p className="mt-1 truncate text-xs text-[var(--text-muted)]">Responsável: {conversation.responsavelPrincipal?.nome ?? "Fila compartilhada"} · Última atividade: {formatCommunicationTime(conversation.ultimaMensagemEm)}</p>
                   </div>
                 </div>
                 <div className="inbox-conversation-actions flex flex-wrap items-center justify-end gap-1">
                   {conversation.responsavelId === null && !isClosed && <Button disabled={busy} leftIcon={<UserPlus size={13} />} onClick={() => void assumeConversation()} size="sm">Assumir atendimento</Button>}
-                  {!isClosed && (manager || conversationIsMine) && <Button onClick={() => { setActionModal({ kind: "assign", conversation }); setActionValue(String(conversation.responsavelId ?? "")); }} size="sm" variant="secondary">{conversation.responsavelId ? "Transferir" : "Atribuir"}</Button>}
-                  <IconButton aria-label="Abrir contexto do Cliente, Lead e histórico" onClick={() => setContextOpen(true)}><PanelRightOpen size={15} /></IconButton>
+                  {compactInboxContext && <IconButton aria-expanded={hasContextDrawer} aria-label={hasContextDrawer ? "Ocultar contexto do Cliente, Lead e histórico" : "Abrir contexto do Cliente, Lead e histórico"} onClick={() => setContextOpen((open) => !open)} ref={contextTriggerRef}><PanelRightOpen size={15} /></IconButton>}
                   {canChangeConversation && <details className="inbox-actions-menu relative" onKeyDown={(event) => { if (event.key === "Escape") { closeActionsMenu(); actionsMenu.current?.querySelector("summary")?.focus(); } }} ref={actionsMenu}>
-                    <summary aria-label="Mais ações da conversa" className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md border border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"><MoreHorizontal aria-hidden="true" size={16} /></summary>
+                    <summary aria-label="Mais ações da conversa" className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md border border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]" ref={actionModalTriggerRef}><MoreHorizontal aria-hidden="true" size={16} /></summary>
                     <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-1 shadow-md">
+                      {!isClosed && (manager || conversationIsMine) && <button disabled={busy} onClick={() => { closeActionsMenu(); setActionModal({ kind: "assign", conversation }); setActionValue(String(conversation.responsavelId ?? "")); }} type="button">{conversation.responsavelId ? "Transferir" : "Atribuir"}</button>}
                       {conversation.status === "EM_ATENDIMENTO" && <button disabled={busy} onClick={() => { closeActionsMenu(); void waitForCustomer(); }} type="button">Aguardar cliente</button>}
                       {["EM_ATENDIMENTO", "AGUARDANDO_CLIENTE"].includes(conversation.status) && <button onClick={() => { closeActionsMenu(); setActionModal({ kind: "pending", conversation }); }} type="button">Marcar pendente</button>}
                       {!isClosed && conversation.responsavelId !== null && <button onClick={() => { closeActionsMenu(); setActionModal({ kind: "queue", conversation }); }} type="button">Devolver à fila</button>}
@@ -534,20 +530,21 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
             {leaseOwned && <div className="inbox-notice inbox-notice-success">Você está preparando uma resposta simulada. Isso não altera o responsável principal.</div>}
 
             <div className="relative min-h-0 flex-1">
-              <div className="h-full overflow-y-auto bg-[var(--bg-muted)] px-4 py-3" ref={messageViewport}>
+              <div className="inbox-message-viewport h-full overflow-y-auto bg-[var(--bg-muted)] px-4 py-3" ref={messageViewport}>
                 {messages.length ? <MessageTimeline currentUserId={currentUserId} messages={messages} /> : <EmptyState description="As mensagens recebidas por este canal aparecerão aqui." icon={<MessageCircle size={18} />} title="Sem mensagens" />}
                 {notes.length > 0 && <div className="mt-5 border-t border-[var(--border-default)] pt-3"><p className="mb-2 text-xs font-semibold text-[var(--text-secondary)]">Notas internas</p><div className="space-y-2">{notes.map((note) => <article className="inbox-note rounded-md border px-3 py-2 text-xs" key={note.id}><p className="whitespace-pre-wrap text-[var(--text-primary)]">{note.conteudo}</p><p className="mt-1 text-[11px] text-[var(--text-muted)]">{note.autor?.nome ?? "Usuário removido"} · {formatCommunicationDate(note.createdAt)}</p></article>)}</div></div>}
               </div>
               {hasNewMessages && <Button className="inbox-new-messages" onClick={scrollToLatestMessage} size="sm">Novas mensagens</Button>}
             </div>
 
-            <footer className="shrink-0 border-t border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
-              {canReplyDirectly && <div className="mb-2 flex items-center gap-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-1" role="group" aria-label="Modo do compositor"><button aria-pressed={composerMode === "reply"} className={`rounded px-3 py-1.5 text-xs font-medium ${composerMode === "reply" ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)]"}`} onClick={() => { setComposerMode("reply"); setComposerText(""); setComposerError(""); }} type="button">Resposta simulada</button><button aria-pressed={composerMode === "note"} className={`rounded px-3 py-1.5 text-xs font-medium ${composerMode === "note" ? "bg-[var(--bg-surface)] text-[var(--warning)] shadow-sm" : "text-[var(--text-secondary)]"}`} onClick={() => { setComposerMode("note"); setComposerText(""); setComposerError(""); }} type="button">Nota interna</button></div>}
+            <footer className="inbox-composer shrink-0 border-t border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
+              {canReplyDirectly && <div className="mb-2 flex items-center gap-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-1" role="group" aria-label="Modo do compositor"><button aria-pressed={composerMode === "reply"} className={`rounded px-3 py-1.5 text-xs font-medium ${composerMode === "reply" ? "bg-[var(--bg-surface)] text-[var(--primary)]" : "text-[var(--text-secondary)]"}`} onClick={() => { setComposerMode("reply"); setComposerText(""); setComposerError(""); }} type="button">Resposta simulada</button><button aria-pressed={composerMode === "note"} className={`rounded px-3 py-1.5 text-xs font-medium ${composerMode === "note" ? "bg-[var(--bg-surface)] text-[var(--warning)]" : "text-[var(--text-secondary)]"}`} onClick={() => { setComposerMode("note"); setComposerText(""); setComposerError(""); }} type="button">Nota interna</button></div>}
               <Textarea aria-label={effectiveComposerMode === "reply" ? "Resposta simulada" : "Nota interna"} className={effectiveComposerMode === "note" ? "inbox-note-composer" : ""} disabled={(effectiveComposerMode === "reply" && (isClosed || activeLeaseFromOther)) || sending} error={composerError || undefined} helperText={effectiveComposerMode === "reply" ? isClosed ? "Conversa encerrada. O histórico permanece disponível." : "Simulação interna: nenhuma mensagem será enviada ao cliente." : "Nota interna — visível somente para a equipe."} maxLength={4000} onChange={(event) => { setComposerText(event.target.value); if (effectiveComposerMode === "reply" && event.target.value.trim()) void acquireLease(); }} onFocus={() => { if (effectiveComposerMode === "reply") void acquireLease(); }} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void (effectiveComposerMode === "reply" ? sendReply() : saveNote()); } }} placeholder={effectiveComposerMode === "reply" ? "Registrar resposta simulada..." : "Adicionar nota interna..."} value={composerText} />
               <div className="mt-2 flex justify-end"><Button disabled={sending || !composerText.trim() || (effectiveComposerMode === "reply" && (isClosed || activeLeaseFromOther))} leftIcon={effectiveComposerMode === "reply" ? <Send size={13} /> : <StickyNote size={13} />} onClick={() => void (effectiveComposerMode === "reply" ? sendReply() : saveNote())} size="sm">{sending ? "Salvando..." : effectiveComposerMode === "reply" ? "Registrar simulação" : "Adicionar nota"}</Button></div>
             </footer>
           </>}
         </section>
+        {hasInlineContext && conversation && <aside aria-label="Contexto comercial" className="inbox-context-pane" id="inbox-conversation-context"><InboxContextContent conversation={conversation} history={history} onOpenBusiness={onOpenBusiness} /></aside>}
       </Surface>
 
       <CommunicationDrawer
@@ -556,6 +553,7 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
         onClose={() => setFiltersOpen(false)}
         open={filtersOpen}
         title="Filtrar conversas"
+        triggerRef={filtersTriggerRef}
       >
         <InboxFilters
           channelId={channelId}
@@ -577,12 +575,67 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
         />
       </CommunicationDrawer>
 
-      <CommunicationDrawer description="Qualificação comercial, cadastro e histórico deste atendimento." onClose={() => setContextOpen(false)} open={contextOpen && Boolean(conversation)} title="Contexto do atendimento">
-        {conversation && <div className="mb-4 border-b border-[var(--border-default)] pb-4"><InboxCommercialPanel conversationId={conversation.id} key={conversation.id} onOpenBusiness={onOpenBusiness} /></div>}
-        {conversation && <div className="space-y-4"><section><h3 className="mb-1 text-xs font-semibold">Cliente</h3><dl><DetailRow label="Nome" value={conversation.contatoCanal.cliente?.nome ?? conversation.contatoCanal.nome ?? "Não informado"} /><DetailRow label="Telefone" value={conversation.contatoCanal.cliente?.telefone || "Não informado"} /><DetailRow label="E-mail" value={conversation.contatoCanal.cliente?.email || "Não informado"} /><DetailRow label="Empresa / propriedade" value={conversation.contatoCanal.cliente?.empresa || "Não informado"} /></dl></section><section><h3 className="mb-1 text-xs font-semibold">Lead</h3><dl><DetailRow label="Interesse" value={conversation.lead?.interesse ?? "Não informado"} /><DetailRow label="Origem" value={conversation.lead?.origem ?? "Não informado"} /><DetailRow label="Campanha" value={conversation.lead?.campanha ?? "Não informado"} /><DetailRow label="Página de origem" value={conversation.lead?.paginaOrigem ?? "Não informado"} /><DetailRow label="Responsável" value={conversation.lead?.responsavel?.nome ?? "Sem responsável"} /></dl></section><section><h3 className="mb-1 text-xs font-semibold">Conversa</h3><dl><DetailRow label="Canal" value={channelLabel(conversation.canalIntegracao.tipo, conversation.canalIntegracao.nome)} /><DetailRow label="Estado" value={<ConversationStatusBadge status={conversation.status} />} /><DetailRow label="SLA" value={<ConversationSlaBadge sla={conversation.sla} />} /><DetailRow label="Responsável" value={conversation.responsavelPrincipal?.nome ?? "Fila compartilhada"} /><DetailRow label="Criada em" value={formatCommunicationDate(conversation.createdAt)} /><DetailRow label="Última atividade" value={formatCommunicationDate(conversation.ultimaMensagemEm)} /></dl></section><section><div className="mb-2 flex items-center gap-2"><History size={13} /><h3 className="text-xs font-semibold">Histórico de atendimento</h3></div>{history.length ? <ol className="space-y-2">{history.map((entry) => <li className="rounded-md bg-[var(--bg-muted)] px-3 py-2 text-xs" key={entry.id}><p className="font-medium">{historyLabel(entry.acaoAtendimento ?? entry.tipo, entry.responsavelAnterior?.nome, entry.responsavelNovo?.nome, entry.estadoAnterior, entry.estadoNovo)}</p><p className="mt-0.5 text-[var(--text-muted)]">Por {entry.alteradoPor?.nome ?? "Usuário removido"} · {formatCommunicationDate(entry.createdAt)}</p>{entry.motivo && <p className="mt-1">{entry.motivo}</p>}</li>)}</ol> : <p className="text-xs text-[var(--text-muted)]">Nenhuma ação registrada.</p>}</section></div>}
+      <CommunicationDrawer description="Dados e histórico da conversa selecionada." onClose={() => setContextOpen(false)} open={hasContextDrawer} title="Contexto do atendimento" triggerRef={contextTriggerRef}>
+        {conversation && <InboxContextContent conversation={conversation} history={history} onOpenBusiness={onOpenBusiness} />}
       </CommunicationDrawer>
 
-      <CommunicationModal description={actionModalDescription(actionModal?.kind)} footer={<div className="flex justify-end gap-2"><Button disabled={busy} onClick={() => setActionModal(null)} size="sm" variant="ghost">Cancelar</Button><Button disabled={busy} onClick={() => void submitAction()} size="sm" variant={actionModal?.kind === "close" ? "destructive" : "primary"}>Confirmar</Button></div>} onClose={() => setActionModal(null)} open={Boolean(actionModal)} title={actionModalTitle(actionModal?.kind)}>{actionModal?.kind === "assign" && <Select error={actionError} label="Responsável" onChange={(event) => setActionValue(event.target.value)} value={actionValue}><option value="">Selecione</option>{teamUsers.map((user) => <option key={user.id} value={user.id}>{user.nome}</option>)}</Select>}{actionModal?.kind !== "assign" && <Textarea error={actionError} label="Observação (opcional)" maxLength={240} onChange={(event) => setActionReason(event.target.value)} value={actionReason} />}{actionModal?.kind === "assign" && <Input className="mt-3" label="Observação (opcional)" maxLength={240} onChange={(event) => setActionReason(event.target.value)} value={actionReason} />}</CommunicationModal>
+      <CommunicationModal description={actionModalDescription(actionModal?.kind)} footer={<div className="flex justify-end gap-2"><Button disabled={busy} onClick={() => setActionModal(null)} size="sm" variant="ghost">Cancelar</Button><Button disabled={busy} onClick={() => void submitAction()} size="sm" variant={actionModal?.kind === "close" ? "destructive" : "primary"}>Confirmar</Button></div>} onClose={() => setActionModal(null)} open={Boolean(actionModal)} title={actionModalTitle(actionModal?.kind)} triggerRef={actionModalTriggerRef}>{actionModal?.kind === "assign" && <Select error={actionError} label="Responsável" onChange={(event) => setActionValue(event.target.value)} value={actionValue}><option value="">Selecione</option>{teamUsers.map((user) => <option key={user.id} value={user.id}>{user.nome}</option>)}</Select>}{actionModal?.kind !== "assign" && <Textarea error={actionError} label="Observação (opcional)" maxLength={240} onChange={(event) => setActionReason(event.target.value)} value={actionReason} />}{actionModal?.kind === "assign" && <Input className="mt-3" label="Observação (opcional)" maxLength={240} onChange={(event) => setActionReason(event.target.value)} value={actionReason} />}</CommunicationModal>
+    </div>
+  );
+}
+
+type InboxQueueToolbarProps = {
+  activeFilterCount: number;
+  filtersTriggerRef: RefObject<HTMLButtonElement | null>;
+  onOpenFilters: () => void;
+  onRefresh: () => void;
+  onSearchChange: (value: string) => void;
+  refreshing: boolean;
+  search: string;
+  total: number;
+};
+
+export function InboxQueueToolbar({ activeFilterCount, filtersTriggerRef, onOpenFilters, onRefresh, onSearchChange, refreshing, search, total }: InboxQueueToolbarProps) {
+  return (
+    <div className="inbox-command-bar" role="search">
+      <p className="inbox-command-title">Conversas</p>
+      <div className="inbox-command-search">
+        <Search aria-hidden="true" className="inbox-command-search-icon" size={15} />
+        <Input aria-label="Buscar conversas" className="pl-9" onChange={(event) => onSearchChange(event.target.value)} placeholder="Buscar contato ou interesse" value={search} />
+      </div>
+      <div className="inbox-command-actions">
+        <span aria-live="polite" className="inbox-command-total">{total} conversas</span>
+        <Button className="inbox-filter-trigger" leftIcon={<Filter size={14} />} onClick={onOpenFilters} ref={filtersTriggerRef} size="md" variant="secondary">
+          Filtros{activeFilterCount ? ` (${activeFilterCount})` : ""}
+        </Button>
+        <IconButton aria-label="Atualizar conversas" disabled={refreshing} onClick={onRefresh} size="md">
+          <RefreshCw className={refreshing ? "animate-spin motion-reduce:animate-none" : ""} size={15} />
+        </IconButton>
+      </div>
+    </div>
+  );
+}
+
+export function InboxContextContent({ conversation, history, onOpenBusiness, showCommercialPanel = true }: { conversation: CommunicationConversation; history: Awaited<ReturnType<typeof fetchCommunicationConversationHistory>>; onOpenBusiness: (businessId: number) => void; showCommercialPanel?: boolean }) {
+  return (
+    <div className="inbox-context-content">
+      <section className="inbox-context-profile">
+        <h3>Contato</h3>
+        <dl><DetailRow label="Nome" value={conversation.contatoCanal.cliente?.nome ?? conversation.contatoCanal.nome ?? "Não informado"} /><DetailRow label="Telefone" value={conversation.contatoCanal.cliente?.telefone || "Não informado"} /><DetailRow label="E-mail" value={conversation.contatoCanal.cliente?.email || "Não informado"} /><DetailRow label="Interesse" value={conversation.lead?.interesse ?? "Não informado"} /></dl>
+      </section>
+      <details className="inbox-context-disclosure">
+        <summary>Campanha e origem</summary>
+        <dl><DetailRow label="Origem" value={conversation.lead?.origem ?? "Não informado"} /><DetailRow label="Campanha" value={conversation.lead?.campanha ?? "Não informado"} /><DetailRow label="Página de origem" value={conversation.lead?.paginaOrigem ?? "Não informado"} /><DetailRow label="Responsável do lead" value={conversation.lead?.responsavel?.nome ?? "Sem responsável"} /></dl>
+      </details>
+      <details className="inbox-context-disclosure">
+        <summary>Detalhes do atendimento</summary>
+        <dl><DetailRow label="Empresa / propriedade" value={conversation.contatoCanal.cliente?.empresa || "Não informado"} /><DetailRow label="Canal" value={channelLabel(conversation.canalIntegracao.tipo, conversation.canalIntegracao.nome)} /><DetailRow label="Estado" value={<ConversationStatusBadge status={conversation.status} />} /><DetailRow label="SLA" value={<ConversationSlaBadge sla={conversation.sla} />} /><DetailRow label="Responsável" value={conversation.responsavelPrincipal?.nome ?? "Fila compartilhada"} /><DetailRow label="Criada em" value={formatCommunicationDate(conversation.createdAt)} /><DetailRow label="Última atividade" value={formatCommunicationDate(conversation.ultimaMensagemEm)} /></dl>
+      </details>
+      {showCommercialPanel && <details className="inbox-context-disclosure"><summary>Qualificação comercial</summary><div className="inbox-context-commercial"><InboxCommercialPanel conversationId={conversation.id} key={conversation.id} onOpenBusiness={onOpenBusiness} /></div></details>}
+      <section className="inbox-context-section inbox-context-history">
+        <div className="mb-2 flex items-center gap-2"><History size={13} /><h4>Histórico de atendimento</h4></div>
+        {history.length ? <ol className="space-y-2">{history.map((entry) => <li className="inbox-context-history-item" key={entry.id}><p className="font-medium">{historyLabel(entry.acaoAtendimento ?? entry.tipo, entry.responsavelAnterior?.nome, entry.responsavelNovo?.nome, entry.estadoAnterior, entry.estadoNovo)}</p><p className="mt-0.5 text-[var(--text-muted)]">Por {entry.alteradoPor?.nome ?? "Usuário removido"} · {formatCommunicationDate(entry.createdAt)}</p>{entry.motivo && <p className="mt-1">{entry.motivo}</p>}</li>)}</ol> : <p className="text-xs text-[var(--text-muted)]">Nenhuma ação registrada.</p>}
+      </section>
     </div>
   );
 }
@@ -668,17 +721,59 @@ function InboxFilters({
 }
 
 function QueueButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-  return <button aria-pressed={active} className={`flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium transition-colors ${active ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]"}`} onClick={onClick} type="button"><span aria-hidden="true" className="flex h-5 w-5 items-center justify-center">{icon}</span><span className="truncate">{label}</span></button>;
+  return <button aria-pressed={active} className={`flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium transition-colors ${active ? "bg-[var(--bg-surface)] text-[var(--primary)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]"}`} onClick={onClick} type="button"><span aria-hidden="true" className="flex h-5 w-5 items-center justify-center">{icon}</span><span className="truncate">{label}</span></button>;
 }
 
-function ConversationListItem({ active, buttonRef, currentUserId, item, onClick }: { active: boolean; buttonRef?: RefObject<HTMLButtonElement | null>; currentUserId: number; item: CommunicationConversation; onClick: () => void }) {
+function isSlaException(sla: CommunicationConversation["sla"]) {
+  return Boolean(sla && ["ATENCAO", "ATRASADO", "CRITICO"].includes(sla.status));
+}
+
+export function ConversationListItem({ active, buttonRef, currentUserId, item, onClick }: { active: boolean; buttonRef?: RefObject<HTMLButtonElement | null>; currentUserId: number; item: CommunicationConversation; onClick: () => void }) {
   const otherLease = item.reservaResposta && item.reservaResposta.usuarioId !== currentUserId;
   const name = item.contatoCanal.cliente?.nome ?? item.contatoCanal.nome ?? "Contato sem nome";
-  return <button aria-current={active ? "true" : undefined} className={`inbox-conversation-item w-full border-b border-[var(--border-default)] px-3 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${active ? "is-selected bg-[var(--bg-muted)]" : "bg-[var(--bg-surface)]"}`} onClick={onClick} ref={buttonRef} type="button"><div className="flex items-start gap-2.5"><span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--surface-subtle)] text-xs font-semibold">{initials(name)}{item.naoLidas > 0 && <span aria-label={`${item.naoLidas} mensagens não lidas`} className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--primary)] px-1 text-[9px] font-bold text-white">{Math.min(item.naoLidas, 99)}</span>}</span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className={`truncate text-xs text-[var(--text-primary)] ${item.naoLidas > 0 ? "font-bold" : "font-semibold"}`}>{name}</span><span className="shrink-0 text-xs tabular-nums text-[var(--text-muted)]">{formatCommunicationTime(item.ultimaMensagemEm ?? item.updatedAt)}</span></span><span className="mt-1 flex min-w-0 items-center justify-between gap-2"><CommunicationChannelBadge channel={item.canalIntegracao} /><span className={`truncate text-xs ${item.responsavel ? "text-[var(--text-muted)]" : "font-medium text-[var(--warning)]"}`}>{item.responsavel?.nome ?? "Sem responsável"}</span></span>{item.canalIntegracao.tipo === "EMAIL" && item.emailSubject && <span className="mt-1.5 block truncate text-xs font-semibold text-[var(--text-primary)]">{item.emailSubject}</span>}<span className="mt-1 line-clamp-2 text-xs leading-4 text-[var(--text-secondary)]">{item.ultimaMensagem?.texto ?? "Sem mensagens"}</span><span className="mt-2 flex flex-wrap items-center gap-1.5"><ConversationStatusBadge status={item.status} />{item.sla && <ConversationSlaBadge sla={item.sla} />}{otherLease && <Badge variant="warning">{item.reservaResposta?.nome ?? "Equipe"} respondendo</Badge>}</span></span></div></button>;
+  const slaException = isSlaException(item.sla);
+  const primaryQueueBadge = slaException
+    ? <ConversationSlaBadge sla={item.sla} />
+    : otherLease
+      ? <Badge variant="warning">{item.reservaResposta?.nome ?? "Equipe"} respondendo</Badge>
+      : <ConversationStatusBadge status={item.status} />;
+
+  return <button aria-current={active ? "true" : undefined} className={`inbox-conversation-item w-full border-b border-[var(--border-default)] px-3 py-3 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${active ? "is-selected bg-[var(--bg-muted)]" : "bg-[var(--bg-surface)]"}`} onClick={onClick} ref={buttonRef} type="button"><div className="flex items-start gap-2.5"><span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--surface-subtle)] text-xs font-semibold">{initials(name)}{item.naoLidas > 0 && <span aria-label={`${item.naoLidas} mensagens não lidas`} className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--primary)] px-1 text-[9px] font-bold text-white">{Math.min(item.naoLidas, 99)}</span>}</span><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className={`inbox-conversation-name truncate text-xs text-[var(--text-primary)] ${item.naoLidas > 0 ? "font-bold" : "font-semibold"}`}>{name}</span><span className="shrink-0 text-xs tabular-nums text-[var(--text-muted)]">{formatCommunicationTime(item.ultimaMensagemEm ?? item.updatedAt)}</span></span><span className="mt-1 flex min-w-0 items-center justify-between gap-2"><CommunicationChannelBadge channel={item.canalIntegracao} /><span className={`truncate text-xs ${item.responsavel ? "text-[var(--text-muted)]" : "font-medium text-[var(--warning)]"}`}>{item.responsavel?.nome ?? "Sem responsável"}</span></span>{item.canalIntegracao.tipo === "EMAIL" && item.emailSubject && <span className="mt-1.5 block truncate text-xs font-semibold text-[var(--text-primary)]">{item.emailSubject}</span>}<span className="mt-1 line-clamp-2 text-xs leading-4 text-[var(--text-secondary)]">{item.ultimaMensagem?.texto ?? "Sem mensagens"}</span><span className="mt-2 flex flex-wrap items-center gap-1.5">{(slaException || otherLease) && <span className="inbox-conversation-status-text">{conversationStatusLabels[item.status]}</span>}{primaryQueueBadge}{slaException && otherLease && <span className="inbox-conversation-status-text">{item.reservaResposta?.nome ?? "Equipe"} respondendo</span>}</span></span></div></button>;
 }
 
-function MessageTimeline({ currentUserId, messages }: { currentUserId: number; messages: CommunicationMessage[] }) {
-  return <div className="space-y-3">{messages.map((message, index) => { const outgoing = message.direcao === "SAIDA"; const simulated = outgoing && message.simulada; const mine = message.autor?.id === currentUserId; const previous = messages[index - 1]; const showDate = !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString(); const email = message.emailMetadata; return <div key={message.id}>{showDate && <div className="my-3 flex items-center gap-3 text-xs text-[var(--text-muted)]"><span className="h-px flex-1 bg-[var(--border-default)]" /><span>{formatCommunicationDate(message.createdAt, false)}</span><span className="h-px flex-1 bg-[var(--border-default)]" /></div>}<article className={`flex ${outgoing ? "justify-end" : "justify-start"}`}><div className={`max-w-[76%] rounded-lg border px-3 py-2 ${outgoing ? mine ? "border-emerald-200 bg-emerald-50" : "border-sky-200 bg-sky-50" : "border-[var(--border-default)] bg-[var(--bg-surface)]"}`}>{email?.subject && <p className="mb-1 break-words text-xs font-semibold text-[var(--text-primary)]">{email.subject}</p>}{email && <p className="mb-1 break-words text-xs text-[var(--text-muted)]">De {email.fromName ? `${email.fromName} <${email.fromAddress}>` : email.fromAddress}</p>}<p className="whitespace-pre-wrap break-words text-xs leading-5 text-[var(--text-primary)]">{message.texto || "Mensagem sem conteúdo"}</p>{email && email.attachmentCount > 0 && <p className="mt-2 flex items-center gap-1 text-xs text-[var(--text-secondary)]"><Paperclip aria-hidden={true} size={12} />{email.attachmentCount} {email.attachmentCount === 1 ? "anexo" : "anexos"}</p>}<p className="mt-1 text-xs text-[var(--text-muted)]">{simulated ? `Simulação registrada por ${message.autor?.nome ?? "Automação"} às ${formatCommunicationTime(message.createdAt)} · Não enviada` : outgoing ? `Respondido por ${message.autor?.nome ?? "Automação"} às ${formatCommunicationTime(message.createdAt)}` : `Recebida às ${formatCommunicationTime(message.createdAt)}`}{outgoing && !simulated && message.statusEntrega ? ` · ${deliveryLabel(message.statusEntrega)}` : ""}</p></div></article></div>; })}</div>;
+export function MessageTimeline({ currentUserId, messages }: { currentUserId: number; messages: CommunicationMessage[] }) {
+  return (
+    <div className="space-y-3">
+      {messages.map((message, index) => {
+        const outgoing = message.direcao === "SAIDA";
+        const simulated = outgoing && message.simulada;
+        const mine = message.autor?.id === currentUserId;
+        const previous = messages[index - 1];
+        const showDate = !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString();
+        const email = message.emailMetadata;
+        const bubbleTone = outgoing
+          ? mine
+            ? "border-[var(--brand-border)] bg-[var(--brand-subtle)]"
+            : "border-[var(--info-border)] bg-[var(--info-subtle)]"
+          : "border-[var(--border-default)] bg-[var(--bg-surface)]";
+
+        return (
+          <div key={message.id}>
+            {showDate && <div className="my-3 flex items-center gap-3 text-xs text-[var(--text-muted)]"><span className="h-px flex-1 bg-[var(--border-default)]" /><span>{formatCommunicationDate(message.createdAt, false)}</span><span className="h-px flex-1 bg-[var(--border-default)]" /></div>}
+            <article className={`flex ${outgoing ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[76%] rounded-lg border px-3 py-2 ${bubbleTone}`}>
+                {email?.subject && <p className="mb-1 break-words text-xs font-semibold text-[var(--text-primary)]">{email.subject}</p>}
+                {email && <p className="mb-1 break-words text-xs text-[var(--text-muted)]">De {email.fromName ? `${email.fromName} <${email.fromAddress}>` : email.fromAddress}</p>}
+                <p className="whitespace-pre-wrap break-words text-xs leading-5 text-[var(--text-primary)]">{message.texto || "Mensagem sem conteúdo"}</p>
+                {email && email.attachmentCount > 0 && <p className="mt-2 flex items-center gap-1 text-xs text-[var(--text-secondary)]"><Paperclip aria-hidden={true} size={12} />{email.attachmentCount} {email.attachmentCount === 1 ? "anexo" : "anexos"}</p>}
+                <p className="mt-1 text-xs text-[var(--text-muted)]">{simulated ? `Simulação registrada por ${message.autor?.nome ?? "Automação"} às ${formatCommunicationTime(message.createdAt)} · Não enviada` : outgoing ? `Respondido por ${message.autor?.nome ?? "Automação"} às ${formatCommunicationTime(message.createdAt)}` : `Recebida às ${formatCommunicationTime(message.createdAt)}`}{outgoing && !simulated && message.statusEntrega ? ` · ${deliveryLabel(message.statusEntrega)}` : ""}</p>
+              </div>
+            </article>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function deliveryLabel(status: string) {
@@ -743,6 +838,21 @@ async function fetchLatestCommunicationMessages(id: number) {
 function isNearMessageEnd(viewport: HTMLDivElement | null) {
   if (!viewport) return true;
   return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 72;
+}
+
+function useCompactInboxContext() {
+  const query = "(max-width: 1359px)";
+  const [compact, setCompact] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const update = () => setCompact(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, [query]);
+
+  return compact;
 }
 
 function errorMessage(error: unknown) {

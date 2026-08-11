@@ -1,6 +1,8 @@
-import { Download, RotateCcw, Search, SlidersHorizontal, Star, X } from "lucide-react";
+import { Download, RotateCcw, Search, Star, X } from "lucide-react";
 import type { ActivePage, KanbanOwner, SortBy, Status } from "../../types/dashboard";
-import { Button, FilterBar, Select, Surface, Toolbar } from "../ui";
+import { Button, FilterBar, Select, Surface } from "../ui";
+import DashboardActionOverflow from "./DashboardActionOverflow";
+import type { PageAction } from "./DashboardActionOverflow";
 
 type DashboardOperationalSearchProps = {
   activePage: ActivePage;
@@ -23,6 +25,7 @@ type DashboardOperationalSearchProps = {
   setOnlyHot: (callback: (value: boolean) => boolean) => void;
   exportCsv: () => void;
   clearFilters: () => void;
+  pageActions?: PageAction[];
 };
 
 export default function DashboardOperationalSearch({
@@ -46,40 +49,18 @@ export default function DashboardOperationalSearch({
   setOnlyHot,
   exportCsv,
   clearFilters,
+  pageActions = [],
 }: DashboardOperationalSearchProps) {
   if (activePage === "automacoes") return null;
+  const isClientsPage = activePage === "clientes";
+  const toolbarStatus = metadata ?? `${filteredClientsCount} encontrados`;
 
   return (
-    <Surface className="mt-3 overflow-hidden">
-      <Toolbar className="border-b border-[var(--border-default)] px-3 py-2.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--icon-default)]">
-            <SlidersHorizontal size={15} />
-          </div>
-
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-[var(--text-primary)]">
-              {activePage === "clientes" ? "Filtro da carteira" : "Busca operacional"}
-            </p>
-            <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-              {filteredClientsCount} encontrados · {activeFiltersCount > 0 ? `${activeFiltersCount} filtro(s) ativo(s)` : "Sem filtros ativos"}{metadata ? ` · ${metadata}` : ""}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            leftIcon={<Download size={14} />}
-            onClick={exportCsv}
-            size="sm"
-            variant="secondary"
-          >
-            CSV
-          </Button>
-        </div>
-      </Toolbar>
-
-      <FilterBar className="border-0 bg-transparent p-3 shadow-none">
+    <Surface className={`mt-3 overflow-hidden ${isClientsPage ? "clientes-filters" : ""}`}>
+      <FilterBar
+        aria-label={`${isClientsPage ? "Buscar e filtrar clientes" : "Buscar e filtrar registros"}: ${toolbarStatus}${activeFiltersCount > 0 ? `, ${activeFiltersCount} filtro(s) ativo(s)` : ""}`}
+        className="compositional-local-toolbar border-0 bg-transparent px-3 py-1.5 shadow-none"
+      >
         <div
           className={`flex h-9 min-w-[280px] items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--control-bg)] px-3 transition-colors hover:border-[var(--control-border-hover)] focus-within:border-[var(--control-border-focus)] focus-within:ring-2 focus-within:ring-[var(--control-ring)] ${
             activePage === "kanban" ? "flex-[1_1_280px]" : "flex-[1_1_380px]"
@@ -88,7 +69,7 @@ export default function DashboardOperationalSearch({
           <Search size={14} className="text-[var(--icon-muted)]" />
 
           <input
-            aria-label="Buscar clientes"
+            aria-label={isClientsPage ? "Buscar clientes" : "Buscar registros"}
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -134,12 +115,22 @@ export default function DashboardOperationalSearch({
           className="min-w-[120px]"
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value as SortBy)}
-          aria-label="Ordenar clientes"
+            aria-label={isClientsPage ? "Ordenar clientes" : "Ordenar registros"}
         >
-          <option value="score">Score</option>
-          <option value="value">Maior valor</option>
-          <option value="name">Nome</option>
-          <option value="status">Status</option>
+          {isClientsPage ? (
+            <>
+              <option value="score">Ordem padrão</option>
+              <option value="name">Nome</option>
+              <option value="status">Status</option>
+            </>
+          ) : (
+            <>
+              <option value="score">Score</option>
+              <option value="value">Maior valor</option>
+              <option value="name">Nome</option>
+              <option value="status">Status</option>
+            </>
+          )}
         </Select>
 
         {activePage === "kanban" && (
@@ -159,7 +150,7 @@ export default function DashboardOperationalSearch({
           onClick={() => setOnlyFavorites((value) => !value)}
           className={onlyFavorites ? "border-[var(--filter-active-border)] bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""}
           leftIcon={<Star size={13} />}
-          size="sm"
+          size="md"
           variant="secondary"
         >
           Favoritos
@@ -168,21 +159,41 @@ export default function DashboardOperationalSearch({
         <Button
           aria-pressed={onlyHot}
           onClick={() => setOnlyHot((value) => !value)}
-          className={onlyHot ? "border-amber-300 bg-amber-50 text-amber-800" : ""}
-          size="sm"
+          className={onlyHot ? isClientsPage ? "clientes-filter-hot" : "border-amber-300 bg-amber-50 text-amber-800" : ""}
+          size="md"
           variant="secondary"
         >
           Quentes
         </Button>
 
-        {activeFiltersCount > 0 && (
+        {isClientsPage && pageActions.length > 0 && (
+          <DashboardActionOverflow
+            actions={pageActions}
+            pageTitle="Clientes"
+            triggerClassName="clientes-toolbar-more"
+            triggerLabel="Mais"
+          />
+        )}
+
+        {activeFiltersCount > 0 && !isClientsPage && (
           <Button
             leftIcon={<RotateCcw size={14} />}
             onClick={clearFilters}
-            size="sm"
+            size="md"
             variant="ghost"
           >
             Limpar filtros
+          </Button>
+        )}
+
+        {!isClientsPage && (
+          <Button
+            leftIcon={<Download size={14} />}
+            onClick={exportCsv}
+            size="md"
+            variant="secondary"
+          >
+            CSV
           </Button>
         )}
       </FilterBar>

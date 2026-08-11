@@ -15,11 +15,11 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "border-[var(--primary)] bg-[var(--primary)] text-white hover:border-[var(--primary-hover)] hover:bg-[var(--primary-hover)]",
-  secondary: "border-[var(--border-default)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)]",
+  primary: "border-[var(--action-primary-border)] bg-[var(--action-primary-bg)] text-[var(--text-inverse)] hover:border-[var(--action-primary-hover)] hover:bg-[var(--action-primary-hover)]",
+  secondary: "border-[var(--control-border)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:border-[var(--control-border-hover)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]",
   ghost: "border-transparent bg-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)]",
-  destructive: "border-[var(--danger)] bg-[var(--danger)] text-white hover:brightness-95",
-  subtle: "border-[var(--border-default)] bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]",
+  destructive: "border-[var(--action-danger-border)] bg-[var(--action-danger-bg)] text-[var(--text-inverse)] hover:border-[var(--action-danger-hover)] hover:bg-[var(--action-danger-hover)]",
+  subtle: "border-[var(--control-border)] bg-[var(--bg-muted)] text-[var(--text-secondary)] hover:border-[var(--control-border-hover)] hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -35,7 +35,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       {...props}
       className={cx(
-        "relative inline-flex shrink-0 items-center justify-center rounded-md border font-semibold shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--disabled-bg)] disabled:text-[var(--disabled-text)] disabled:shadow-none",
+        "relative inline-flex shrink-0 items-center justify-center rounded-[5px] border font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:cursor-not-allowed disabled:border-[var(--border-strong)] disabled:bg-[var(--disabled-bg)] disabled:text-[var(--disabled-text)]",
         variantClasses[variant],
         sizeClasses[size],
         className,
@@ -70,7 +70,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       {...props}
       aria-label={ariaLabel}
       className={cx(
-        "inline-flex shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:cursor-not-allowed disabled:bg-[var(--disabled-bg)] disabled:text-[var(--disabled-text)]",
+        "inline-flex shrink-0 items-center justify-center rounded-[5px] border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:cursor-not-allowed disabled:bg-[var(--disabled-bg)] disabled:text-[var(--disabled-text)]",
         size === "sm" ? "h-8 w-8" : "h-9 w-9",
         variantClasses[variant],
         className,

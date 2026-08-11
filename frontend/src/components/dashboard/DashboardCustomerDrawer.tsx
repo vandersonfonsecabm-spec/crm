@@ -1,11 +1,12 @@
 import { X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { ActivePage, Analytics, Client, SmartFilterType, Status } from "../../types/dashboard";
 import { IconButton } from "../ui";
 import DashboardCommercialDecisionCenter from "./DashboardCommercialDecisionCenter";
 import { EmptyDecisionState } from "./DashboardDrawerPrimitives";
 import DashboardExecutiveRadar from "./DashboardExecutiveRadar";
 import DashboardSelectedClientPanel from "./DashboardSelectedClientPanel";
+import type { DrawerFocusSession } from "./useDrawerFocusSession";
 
 type DashboardCustomerDrawerProps = {
   activePage: ActivePage;
@@ -35,6 +36,10 @@ type DashboardCustomerDrawerProps = {
   onNavigateContext: (destination: "INBOX" | "KANBAN" | "AGENDA", id: number) => void;
   onUnauthorized: () => void;
   onApplySmartFilter: (type: SmartFilterType) => void;
+  focusSession: DrawerFocusSession | null;
+  isFocusSessionActive: (token: number) => boolean;
+  onRequestFocusSessionClose: (token: number) => void;
+  onFocusSessionSettled: (token: number) => void;
   overlay?: boolean;
   open?: boolean;
 };
@@ -82,20 +87,36 @@ export default function DashboardCustomerDrawer({
   onNavigateContext,
   onUnauthorized,
   onApplySmartFilter,
+  focusSession,
+  isFocusSessionActive,
+  onRequestFocusSessionClose,
+  onFocusSessionSettled,
   overlay = false,
   open = false,
 }: DashboardCustomerDrawerProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const overlayDrawerRef = useRef<HTMLElement>(null);
+  const focusSessionToken = focusSession?.token;
 
-  useEffect(() => {
-    if (!overlay || !open) return;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
+  const requestOverlayClose = () => {
+    const token = focusSessionToken;
+    if (token === undefined || !isFocusSessionActive(token)) return;
+    onRequestFocusSessionClose(token);
+  };
+
+  useLayoutEffect(() => {
+    if (!overlay || !open || focusSessionToken === undefined || !isFocusSessionActive(focusSessionToken)) return;
+    const token = focusSessionToken;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const timeout = window.setTimeout(() => closeButtonRef.current?.focus(), 0);
+    closeButtonRef.current?.focus({ preventScroll: true });
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClearSelectedClient();
+      if (!isFocusSessionActive(token)) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onRequestFocusSessionClose(token);
+        return;
+      }
       if (event.key !== "Tab") return;
       const focusable = overlayDrawerRef.current?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
@@ -105,20 +126,19 @@ export default function DashboardCustomerDrawer({
       const last = focusable[focusable.length - 1];
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
-        last.focus();
+        last.focus({ preventScroll: true });
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault();
-        first.focus();
+        first.focus({ preventScroll: true });
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.clearTimeout(timeout);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
-      previouslyFocused?.focus();
+      onFocusSessionSettled(token);
     };
-  }, [onClearSelectedClient, open, overlay]);
+  }, [focusSessionToken, isFocusSessionActive, onFocusSessionSettled, onRequestFocusSessionClose, open, overlay]);
 
   const overlayTitle = activePage === "clientes"
     ? "Detalhes do cliente"
@@ -137,11 +157,11 @@ export default function DashboardCustomerDrawer({
     if (!open || !selectedClient) return null;
     return (
       <div className="fixed inset-0 z-[220] flex justify-end" role="presentation">
-        <button aria-label={`Fechar ${overlayTitle.toLowerCase()}`} className="absolute inset-0 cursor-default bg-[var(--overlay-backdrop)]" onClick={onClearSelectedClient} tabIndex={-1} type="button" />
+        <button aria-label={`Fechar ${overlayTitle.toLowerCase()}`} className="absolute inset-0 cursor-default bg-[var(--overlay-backdrop)]" onClick={requestOverlayClose} tabIndex={-1} type="button" />
         <aside
           aria-labelledby="customer-decision-title"
           aria-modal="true"
-          className="relative h-full w-[min(440px,calc(100vw-24px))] overflow-y-auto border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-2xl"
+          className="relative h-full w-[clamp(400px,32vw,440px)] max-w-[calc(100vw-24px)] overflow-y-auto border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-2xl"
           ref={overlayDrawerRef}
           role="dialog"
         >
@@ -150,7 +170,7 @@ export default function DashboardCustomerDrawer({
               <h2 className="text-sm font-semibold text-[var(--text-primary)]" id="customer-decision-title">{overlayTitle}</h2>
               <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">{overlayDescription}</p>
             </div>
-            <IconButton aria-label={`Fechar ${overlayTitle.toLowerCase()}`} onClick={onClearSelectedClient} ref={closeButtonRef}><X size={15} /></IconButton>
+            <IconButton aria-label={`Fechar ${overlayTitle.toLowerCase()}`} onClick={requestOverlayClose} ref={closeButtonRef}><X size={15} /></IconButton>
           </div>
           <DashboardSelectedClientPanel
             selectedClient={selectedClient}

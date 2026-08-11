@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   actionIntensity,
   activitySignalLabel,
-  enterpriseHealthLabel,
   forecastLabel,
   getLeadScore,
-  getPriority,
   getRisk,
   idleLabel,
   initials,
@@ -21,17 +19,14 @@ import {
   statusClass,
   tagClass,
 } from "../utils/dashboardHelpers";
-import DashboardMetrics from "../components/dashboard/DashboardMetrics";
-import DashboardContextToolbar from "../components/dashboard/DashboardContextToolbar";
 import DashboardMetricsSection from "../components/dashboard/DashboardMetricsSection";
 import DashboardHeader from "../components/dashboard/DashboardHeader";
 import type { PageAction } from "../components/dashboard/DashboardHeader";
-import DashboardPortfolioInsights from "../components/dashboard/DashboardPortfolioInsights";
 import DashboardClientsTable from "../components/dashboard/DashboardClientsTable";
-import DashboardClientsInsights from "../components/dashboard/DashboardClientsInsights";
 import ClientModal from "../components/dashboard/ClientModal";
-import DashboardFollowUpCalendar from "../components/dashboard/DashboardFollowUpCalendar";
 import DashboardCustomerDrawer from "../components/dashboard/DashboardCustomerDrawer";
+import { useDrawerFocusSession } from "../components/dashboard/useDrawerFocusSession";
+import DashboardOverview from "../components/dashboard/DashboardOverview";
 import DashboardSidebar from "../components/dashboard/DashboardSidebar";
 import DashboardTopbar from "../components/dashboard/DashboardTopbar";
 import DashboardOperationalSearch from "../components/dashboard/DashboardOperationalSearch";
@@ -68,17 +63,36 @@ import type { ActivePage, Client, KanbanOwner, SortBy, Status } from "../types/d
 import {
   getDashboardPath,
   normalizeDashboardPathname,
-  resolveDashboardPathname,
+  resolveDashboardLocation,
 } from "../navigation/dashboardNavigation";
+import { resetDashboardPageScroll } from "../navigation/dashboardScroll";
 
 type DashboardProps = {
   onLogout: () => void;
 };
 
+// Shared only with the behavioral focus fixture so it exercises the production layout cycle.
+// eslint-disable-next-line react-refresh/only-export-components
+export function useCloseCustomerDrawerOnPageKeyChange(
+  pageKey: string,
+  invalidateSession: () => void,
+  setDrawerOpen: (open: boolean) => void,
+) {
+  const previousPageKeyRef = useRef(pageKey);
+
+  useLayoutEffect(() => {
+    if (previousPageKeyRef.current === pageKey) return;
+    previousPageKeyRef.current = pageKey;
+    invalidateSession();
+    setDrawerOpen(false);
+  }, [invalidateSession, pageKey, setDrawerOpen]);
+}
+
 export default function Dashboard({ onLogout }: DashboardProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const resolvedNavigation = resolveDashboardPathname(location.pathname);
+  const contentRef = useRef<HTMLElement | null>(null);
+  const resolvedNavigation = resolveDashboardLocation(location);
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
@@ -101,6 +115,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
   const [isBooting, setIsBooting] = useState(true);
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
+  const [dashboardSummaryLoadState, setDashboardSummaryLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [clientsLoadState, setClientsLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [clientPagination, setClientPagination] = useState({ page: 1, limit: 8, total: 0, totalPages: 0 });
   const [backendLoadError, setBackendLoadError] = useState("");
   const [backendLoadRequest, setBackendLoadRequest] = useState(0);
@@ -108,8 +124,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [whatsappExternalRequest, setWhatsappExternalRequest] = useState<WhatsappExternalRequest | null>(null);
   const [blingReturnMessage, setBlingReturnMessage] = useState("");
   const [agendaCreateRequestKey, setAgendaCreateRequestKey] = useState(0);
-  const [agendaTodayRequestKey, setAgendaTodayRequestKey] = useState(0);
-  const [kanbanStageRequest, setKanbanStageRequest] = useState<{ group: "pipeline" | "resultado"; key: number }>({ group: "pipeline", key: 0 });
+  const [agendaTodayRequestKey] = useState(0);
+  const kanbanStageRequest = { group: "pipeline" as const, key: 0 };
   const [leadsCreateRequestKey, setLeadsCreateRequestKey] = useState(0);
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
   const [kanbanBusinessId, setKanbanBusinessId] = useState<number | null>(null);
@@ -124,28 +140,58 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
   const requestedActivePage = resolvedNavigation.page;
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations
-    ? "dashboard"
+    ? "comercial"
     : requestedActivePage === "platformTenants" && !isPlatformOperator
-      ? "dashboard"
+      ? "comercial"
       : requestedActivePage === "usuarios" && !canManageUsers
-        ? "dashboard"
+        ? "comercial"
       : requestedActivePage;
   const isWhatsAppIntegrationDetail = activePage === "integracoes" && resolvedNavigation.detail === "whatsapp";
   const usingNegociosKanban = activePage === "kanban" && negociosKanbanEnabled;
+  const customerDrawerPageKey = `${activePage}:${location.pathname}${location.search}${location.hash}`;
+  const {
+    session: customerDrawerFocusSession,
+    startSession: startCustomerDrawerFocusSession,
+    isSessionActive: isCustomerDrawerFocusSessionActive,
+    requestClose: requestCustomerDrawerFocusClose,
+    settleClose: settleCustomerDrawerFocusClose,
+    invalidateSession: invalidateCustomerDrawerFocusSession,
+  } = useDrawerFocusSession(customerDrawerPageKey);
+  useCloseCustomerDrawerOnPageKeyChange(
+    customerDrawerPageKey,
+    invalidateCustomerDrawerFocusSession,
+    setIsCustomerDrawerOpen,
+  );
 
   const pageSize = 8;
 
-  const handleSelectClient = useCallback((clientId: number | null) => {
+  const handleSelectClient = useCallback((clientId: number | null, origin: HTMLElement | null = null, fallback: HTMLElement | null = null) => {
     setSelectedId(clientId);
     setSelectedClientDetail(null);
+    if (clientId === null) {
+      invalidateCustomerDrawerFocusSession();
+      setIsCustomerDrawerOpen(false);
+      return;
+    }
     if (clientId !== null && ["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(requestedActivePage)) {
+      const activeElement = typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+      startCustomerDrawerFocusSession(origin ?? activeElement, fallback);
       setIsCustomerDrawerOpen(true);
     }
-  }, [requestedActivePage]);
+  }, [invalidateCustomerDrawerFocusSession, requestedActivePage, startCustomerDrawerFocusSession]);
 
-  const handleCloseCustomerDrawer = useCallback(() => {
+  const handleCloseCustomerDrawer = useCallback((token: number) => {
+    if (!requestCustomerDrawerFocusClose(token)) return;
     setIsCustomerDrawerOpen(false);
-  }, []);
+  }, [requestCustomerDrawerFocusClose]);
+
+  const handleClearSelectedClient = useCallback(() => {
+    invalidateCustomerDrawerFocusSession();
+    setIsCustomerDrawerOpen(false);
+    setSelectedId(null);
+  }, [invalidateCustomerDrawerFocusSession]);
 
   const pageTitle = isWhatsAppIntegrationDetail ? "WhatsApp" : ({
     dashboard: "Visão Geral",
@@ -170,6 +216,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       const savedSession = getAuthSession();
       setAuthSession(savedSession);
       setBackendLoadError("");
+      setDashboardSummaryLoadState("loading");
 
       try {
         const refreshedSession = await fetchAuthMe();
@@ -177,9 +224,15 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
         try {
           const summary = await fetchDashboardSummaryFromBackend();
-          if (!ignore) setDashboardSummary(summary);
+          if (!ignore) {
+            setDashboardSummary(summary);
+            setDashboardSummaryLoadState(summary ? "ready" : "error");
+          }
         } catch {
-          if (!ignore) setDashboardSummary(null);
+          if (!ignore) {
+            setDashboardSummary(null);
+            setDashboardSummaryLoadState("error");
+          }
         }
       } catch (error) {
         if (ignore) return;
@@ -188,6 +241,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           onLogout();
           return;
         }
+        setDashboardSummaryLoadState("error");
         setBackendLoadError("Nao foi possivel carregar os dados agora. Sua sessao foi preservada.");
       }
     }
@@ -202,6 +256,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => {
     let ignore = false;
     const timeout = window.setTimeout(async () => {
+      setClientsLoadState("loading");
       try {
         const result = await fetchClientesFromBackend({
           page,
@@ -214,13 +269,18 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           silencioso: onlySilent || undefined,
           sortBy,
         });
-        if (ignore || !result) return;
+        if (ignore) return;
+        if (!result) {
+          setClientsLoadState("ready");
+          return;
+        }
         setClients(result.data);
         setClientPagination(result.pagination);
         setSelectedId((current) => current !== null && result.data.some((client) => client.id === current)
           ? current
           : result.data[0]?.id ?? null);
         setBackendLoadError("");
+        setClientsLoadState("ready");
       } catch (error) {
         if (ignore) return;
         if (error instanceof ApiHttpError && error.status === 401) {
@@ -228,6 +288,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           onLogout();
           return;
         }
+        setClientsLoadState("error");
         setBackendLoadError("Nao foi possivel carregar os dados agora. Sua sessao foi preservada.");
       }
     }, 250);
@@ -278,7 +339,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }, []);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0 });
+    resetDashboardPageScroll(contentRef.current, window);
   }, [activePage]);
 
 
@@ -288,12 +349,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       : clients.find((client) => client.id === selectedId) || null,
     [clients, selectedClientDetail, selectedId],
   );
-  const priorityClient = useMemo(() => {
-    return [...clients]
-      .filter((client) => client.hot || getPriority(client) === "Alta" || getRisk(client) === "Alto" || client.lastContactDays >= 7)
-      .sort((first, second) => priorityWeight(second) - priorityWeight(first))[0] ?? null;
-  }, [clients]);
-
   const filteredClients = clients;
 
   const kanbanClients = useMemo(() => {
@@ -310,8 +365,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const {
     analytics,
     kanbanEnterpriseStats,
-    recentActivities,
-    followUpAgenda,
     smartAlerts,
     activeFiltersCount,
   } = useDashboardAnalytics({
@@ -371,10 +424,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   });
 
   const handleSetActivePage = useCallback((page: ActivePage) => {
+    invalidateCustomerDrawerFocusSession();
     setIsCustomerDrawerOpen(false);
     if (page === "integracoes" && !canManageIntegrations) {
       setToast("Acesso negado para Integrações.");
-      navigate(getDashboardPath("dashboard"), { replace: true });
+      navigate(getDashboardPath("comercial"), { replace: true });
       return;
     }
     if ((page === "inbox" || page === "leads") && !leadsCommunicationEnabled) {
@@ -383,12 +437,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
     if (page === "platformTenants" && !isPlatformOperator) {
       setToast("Acesso restrito ao operador da plataforma.");
-      navigate(getDashboardPath("dashboard"), { replace: true });
+      navigate(getDashboardPath("comercial"), { replace: true });
       return;
     }
     if (page === "usuarios" && !canManageUsers) {
       setToast("Acesso restrito à administração de usuários.");
-      navigate(getDashboardPath("dashboard"), { replace: true });
+      navigate(getDashboardPath("comercial"), { replace: true });
       return;
     }
 
@@ -396,7 +450,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     if (normalizeDashboardPathname(location.pathname) !== pathname) {
       navigate(pathname);
     }
-  }, [canManageIntegrations, canManageUsers, isPlatformOperator, leadsCommunicationEnabled, location.pathname, navigate, setToast]);
+  }, [canManageIntegrations, canManageUsers, invalidateCustomerDrawerFocusSession, isPlatformOperator, leadsCommunicationEnabled, location.pathname, navigate, setToast]);
 
   const openInboxConversation = useCallback((conversationId: number) => {
     setInboxConversationId(conversationId);
@@ -409,7 +463,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }, [handleSetActivePage]);
 
   const openCustomerContext = useCallback((destination: "INBOX" | "KANBAN" | "AGENDA", id: number) => {
-    setIsCustomerDrawerOpen(false);
     if (destination === "INBOX") {
       openInboxConversation(id);
       return;
@@ -423,21 +476,25 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   useEffect(() => {
     if (!resolvedNavigation.isKnown || resolvedNavigation.needsReplace) {
-      navigate(resolvedNavigation.pathname, { replace: true });
+      navigate({
+        pathname: resolvedNavigation.pathname,
+        search: resolvedNavigation.search,
+        hash: resolvedNavigation.hash,
+      }, { replace: true });
       return;
     }
 
     if (requestedActivePage === "integracoes" && !canManageIntegrations) {
       setToast("Acesso negado para Integrações.");
-      navigate(getDashboardPath("dashboard"), { replace: true });
+      navigate(getDashboardPath("comercial"), { replace: true });
     }
     if (requestedActivePage === "platformTenants" && !isPlatformOperator) {
       setToast("Acesso restrito ao operador da plataforma.");
-      navigate(getDashboardPath("dashboard"), { replace: true });
+      navigate(getDashboardPath("comercial"), { replace: true });
     }
     if (requestedActivePage === "usuarios" && !canManageUsers) {
       setToast("Acesso restrito à administração de usuários.");
-      navigate(getDashboardPath("dashboard"), { replace: true });
+      navigate(getDashboardPath("comercial"), { replace: true });
     }
   }, [
     canManageIntegrations,
@@ -448,22 +505,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     resolvedNavigation.isKnown,
     resolvedNavigation.needsReplace,
     resolvedNavigation.pathname,
+    resolvedNavigation.search,
+    resolvedNavigation.hash,
     setToast,
   ]);
 
   const backendCaption = dashboardSummary
     ? `${clientPagination.total} clientes encontrados`
     : "Dados sincronizados";
-
-  const openKanbanWithStatus = useCallback((nextStatus: Status | "Todos") => {
-    clearFilters();
-    setStatusFilter(nextStatus);
-    setKanbanStageRequest((current) => ({
-      group: nextStatus === "Fechado" || nextStatus === "Perdido" ? "resultado" : "pipeline",
-      key: current.key + 1,
-    }));
-    handleSetActivePage("kanban");
-  }, [clearFilters, handleSetActivePage]);
 
   const pageActions = useMemo<PageAction[]>(() => {
     const riskAction = {
@@ -555,9 +604,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }, [whatsappMessage]);
 
   const handleEditClient = useCallback((client: Client) => {
+    invalidateCustomerDrawerFocusSession();
     setIsCustomerDrawerOpen(false);
     setEditing({ ...client });
-  }, []);
+  }, [invalidateCustomerDrawerFocusSession]);
 
   const customerDrawer = (
     <DashboardCustomerDrawer
@@ -576,7 +626,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       getRisk={getRisk}
       slaLabel={slaLabel}
       priorityLabel={priorityLabel}
-      onClearSelectedClient={["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(activePage) ? handleCloseCustomerDrawer : () => setSelectedId(null)}
+      onClearSelectedClient={handleClearSelectedClient}
       onSetNoteText={setNoteText}
       onSetTagText={setTagText}
       onAddNote={addNote}
@@ -588,6 +638,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       onNavigateContext={openCustomerContext}
       onUnauthorized={onLogout}
       onApplySmartFilter={applySmartFilter}
+      focusSession={customerDrawerFocusSession}
+      isFocusSessionActive={isCustomerDrawerFocusSessionActive}
+      onRequestFocusSessionClose={handleCloseCustomerDrawer}
+      onFocusSessionSettled={settleCustomerDrawerFocusClose}
       overlay={["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(activePage)}
       open={isCustomerDrawerOpen}
     />
@@ -617,6 +671,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           </div>
 
           <main className="flex-1 space-y-4">
+            {activePage === "comercial" && (
+              <p aria-live="polite" className="text-[12px] font-medium text-[var(--text-secondary)]" role="status">
+                Carregando operação comercial
+              </p>
+            )}
             <div className="h-14 animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
 
             <div className="flex items-center justify-between">
@@ -679,8 +738,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             leadsCommunicationEnabled={leadsCommunicationEnabled}
           />
 
-          <main className="crm-content mx-auto w-full max-w-[1680px] px-4 pb-24 pt-5 sm:px-5 lg:px-7 lg:pb-8">
-          {backendLoadError && clients.length === 0 && (
+          <main ref={contentRef} className="crm-content mx-auto w-full max-w-[1680px] px-4 pb-24 pt-5 sm:px-5 lg:px-7 lg:pb-8">
+          {backendLoadError && clients.length === 0 && activePage !== "dashboard" && activePage !== "comercial" && (
             <ErrorState
               className="mb-4 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)]"
               description={backendLoadError}
@@ -688,69 +747,34 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               title="Dados temporariamente indisponiveis"
             />
           )}
-          <DashboardHeader
-            key={activePage}
-            activePage={activePage}
-            pageTitle={pageTitle}
-            backendCaption={
-              backendCaption
-            }
-            onCreateClient={() => setCreating({ ...emptyClient })}
-            showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes" && activePage !== "platformTenants" && activePage !== "kanban" && activePage !== "leads" && activePage !== "inbox" && activePage !== "usuarios" && activePage !== "perfil"}
-            showBackendCaption={false}
-            compact
-            primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : activePage === "leads" && leadsCommunicationEnabled && canManageLeads ? { label: "Novo Lead", onClick: () => setLeadsCreateRequestKey((current) => current + 1) } : undefined}
-            actions={pageActions}
-          />
-
-          {activePage === "dashboard" && (
-            <section className="dashboard-overview space-y-3" aria-label="Resumo operacional">
-              <DashboardContextToolbar
-                backendCaption={backendCaption}
-                priorityClient={priorityClient}
-                money={money}
-                onOpenPriority={handleSelectClient}
-                onOpenCommercialQueue={() => handleSetActivePage("comercial")}
-              />
-              <DashboardMetrics
-                analytics={analytics}
-                money={money}
-                onOpenPipeline={() => openKanbanWithStatus("Todos")}
-                onOpenWon={() => openKanbanWithStatus("Fechado")}
-                onOpenForecast={() => openKanbanWithStatus("Proposta")}
-                onOpenTodayAgenda={() => {
-                  setAgendaTodayRequestKey((current) => current + 1);
-                  handleSetActivePage("agenda");
-                }}
-              />
-            </section>
+          {activePage !== "dashboard" && activePage !== "comercial" && (
+            <DashboardHeader
+              key={activePage}
+              activePage={activePage}
+              pageTitle={pageTitle}
+              backendCaption={backendCaption}
+              onCreateClient={() => setCreating({ ...emptyClient })}
+              showCreateClient={activePage !== "estoque" && activePage !== "integracoes" && activePage !== "automacoes" && activePage !== "platformTenants" && activePage !== "kanban" && activePage !== "leads" && activePage !== "inbox" && activePage !== "usuarios" && activePage !== "perfil"}
+              showBackendCaption={false}
+              compact
+              primaryAction={activePage === "agenda" ? { label: "Novo acompanhamento", onClick: () => setAgendaCreateRequestKey((current) => current + 1) } : activePage === "leads" && leadsCommunicationEnabled && canManageLeads ? { label: "Novo Lead", onClick: () => setLeadsCreateRequestKey((current) => current + 1) } : undefined}
+              actions={usingNegociosKanban ? [] : pageActions}
+              actionsPlacement={activePage === "clientes" ? "toolbar" : "header"}
+            />
           )}
 
           {activePage === "dashboard" && (
-            <section className="dashboard-overview-grid mt-3 grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1.68fr)_minmax(320px,0.78fr)]">
-              <DashboardPortfolioInsights
-                clients={clients}
-                summary={dashboardSummary}
-                money={money}
-                getPriority={getPriority}
-                getRisk={getRisk}
-                getLeadScore={getLeadScore}
-                enterpriseHealthLabel={enterpriseHealthLabel}
-                onOpenClient={handleSelectClient}
-                onApplySmartFilter={applySmartFilter}
-              />
-              <DashboardFollowUpCalendar
-                todayFollowUps={analytics.todayFollowUps}
-                followUpAgenda={followUpAgenda}
-                money={money}
-                statusClass={statusClass}
-                onSelectClient={handleSelectClient}
-              />
-              {customerDrawer}
-            </section>
+            <DashboardOverview
+              summary={dashboardSummary}
+              summaryLoadState={dashboardSummaryLoadState}
+              isAuthorized={authSession !== null}
+              money={money}
+              onOpenCommercial={() => handleSetActivePage("comercial")}
+              onRetry={() => setBackendLoadRequest((current) => current + 1)}
+            />
           )}
 
-          {!["usuarios", "perfil"].includes(activePage) && activePage !== "comercial" && activePage !== "agenda" && activePage !== "leads" && activePage !== "inbox" && !usingNegociosKanban && (
+          {!["usuarios", "perfil"].includes(activePage) && activePage !== "dashboard" && activePage !== "comercial" && activePage !== "clientes" && activePage !== "agenda" && activePage !== "leads" && activePage !== "inbox" && !usingNegociosKanban && (
             <DashboardMetricsSection
               activePage={activePage}
               clients={clients}
@@ -780,11 +804,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               setOnlyHot={setOnlyHot}
               exportCsv={exportCsv}
               clearFilters={clearFilters}
+              pageActions={activePage === "clientes" ? pageActions : []}
             />
           )}
 
           {activePage !== "dashboard" && <section
-            className={`${activePage === "comercial" || activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" ? "mt-3" : "mt-4"} ${
+            className={`${activePage === "comercial" ? "" : activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" ? "mt-3" : "mt-4"} ${
               activePage === "comercial" || activePage === "leads" || activePage === "inbox" || activePage === "usuarios" || activePage === "perfil"
                 ? "block"
                 : activePage === "clientes" || activePage === "kanban"
@@ -800,7 +825,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           >
             <div className={activePage === "comercial" || activePage === "leads" || activePage === "inbox" || activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" || activePage === "usuarios" || activePage === "perfil" ? "space-y-3" : "space-y-4"}>
               {(activePage === "leads" || activePage === "inbox") && !leadsCommunicationEnabled && (
-                <EmptyState description="Este recurso permanece indisponível enquanto a feature flag local estiver desligada." icon={<LockKeyhole size={18} />} title="Recurso não habilitado" />
+                <EmptyState description="Este recurso permanece indisponível enquanto a feature flag local estiver desligada." icon={<LockKeyhole size={18} />} state="unavailable" title="Recurso não habilitado" />
               )}
 
               {activePage === "leads" && leadsCommunicationEnabled && authSession && (
@@ -824,69 +849,47 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                     selectedId={selectedId}
                     page={page}
                     totalPages={totalPages}
-                    money={money}
                     initials={initials}
                     statusClass={statusClass}
-                    leadOwner={leadOwner}
-                    getPriority={getPriority}
                     getRisk={getRisk}
-                    getLeadScore={getLeadScore}
-                    forecastLabel={forecastLabel}
-                    idleLabel={idleLabel}
                     onSelectClient={handleSelectClient}
                     onToggleFavorite={toggleFavorite}
                     onToggleHot={toggleHot}
-                    onEditClient={setEditing}
-                    onCopyText={copyText}
                     onRequestWhatsapp={requestExternalWhatsapp}
                     onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
                     onNextPage={() => setPage((current) => Math.min(totalPages, current + 1))}
-                  />
-
-                  <DashboardClientsInsights
-                    clients={clients}
-                    filteredClients={filteredClients}
-                    summary={dashboardSummary}
-                    statusList={statusList}
-                    money={money}
-                    statusClass={statusClass}
-                    getRisk={getRisk}
-                    getLeadScore={getLeadScore}
-                    onSelectClient={handleSelectClient}
                   />
                 </>
               )}
               {activePage === "comercial" && (
                 <DashboardControlCenter
                   clients={clients}
-                  analytics={analytics}
-                  backendCaption={backendCaption}
-                  followUpAgenda={followUpAgenda}
-                  emptyClient={emptyClient}
+                  summary={dashboardSummary}
+                  summaryLoadState={dashboardSummaryLoadState}
+                  clientsLoadState={clientsLoadState}
+                  isAuthorized={authSession !== null}
                   money={money}
-                  statusClass={statusClass}
-                  getPriority={getPriority}
                   getRisk={getRisk}
-                  getLeadScore={getLeadScore}
+                  onCreateClient={() => setCreating({ ...emptyClient })}
                   setSelectedId={handleSelectClient}
-                  setCreating={setCreating}
-                  applySmartFilter={applySmartFilter}
+                  onOpenRiskClients={() => {
+                    applySmartFilter("risk");
+                    handleSetActivePage("clientes");
+                  }}
+                  onOpenProposals={() => {
+                    applySmartFilter("proposal");
+                    handleSetActivePage("clientes");
+                  }}
+                  onRetry={() => setBackendLoadRequest((current) => current + 1)}
                 />
               )}
 
               {activePage === "agenda" && (
                 <DashboardAgendaPanel
                   clients={clients}
-                  backendCaption={backendCaption}
                   createRequestKey={agendaCreateRequestKey}
                   todayRequestKey={agendaTodayRequestKey}
-                  followUpAgenda={followUpAgenda}
-                  recentActivities={recentActivities}
-                  smartAlerts={smartAlerts}
-                  money={money}
-                  statusClass={statusClass}
                   onSelectClient={handleSelectClient}
-                  onApplySmartFilter={applySmartFilter}
                 />
               )}
 
@@ -993,12 +996,4 @@ function blingErrorMessage(reason: string) {
   if (normalized === "state") return "Não foi possível concluir a conexão com o Bling. A autorização expirou ou é inválida.";
   if (normalized === "token") return "Não foi possível concluir a conexão com o Bling. Tente iniciar a conexão novamente.";
   return "Não foi possível concluir a conexão com o Bling.";
-}
-
-function priorityWeight(client: Client) {
-  return (getRisk(client) === "Alto" ? 300 : 0)
-    + (getPriority(client) === "Alta" ? 200 : 0)
-    + (client.hot ? 100 : 0)
-    + client.lastContactDays
-    + getLeadScore(client);
 }

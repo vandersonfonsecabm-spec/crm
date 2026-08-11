@@ -62,7 +62,8 @@ test("H1 preserva lease, timeline e ausencia de chamadas externas", async () => 
   assert.match(inbox, /entry\.acaoAtendimento \?\? entry\.tipo/);
   assert.match(inbox, /Observação \(opcional\)/);
   assert.match(inbox, /Falha ao carregar conversas/);
-  assert.match(inbox, /aria-label="Atualizar conversas"[^>]+onClick=\{\(\) => void loadList\(\)\}/);
+  assert.match(inbox, /<InboxQueueToolbar[\s\S]*onRefresh=\{\(\) => void loadList\(\)\}/);
+  assert.match(inbox, /aria-label="Atualizar conversas"[^>]+onClick=\{onRefresh\}/);
   assert.match(inbox, /Nenhuma conversa na fila/);
   assert.match(inbox, /isNearMessageEnd/);
   assert.match(inbox, /fetchLatestCommunicationMessages/);

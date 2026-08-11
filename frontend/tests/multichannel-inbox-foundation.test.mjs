@@ -29,7 +29,8 @@ test("Inbox identifica os cinco canais sem heurística semântica", async () => 
   }
 
   assert.match(inbox, /CommunicationChannelBadge/);
-  assert.match(inbox, /Site, WhatsApp, Instagram, Messenger e E-mail/);
+  assert.match(inbox, /getChannelPresentation\(/);
+  assert.doesNotMatch(inbox, /Site, WhatsApp, Instagram, Messenger e E-mail/);
   assert.match(badge, /Canal não reconhecido/);
   assert.doesNotMatch(`${badge}\n${formatters}`, /includes\("insta"\)|includes\("facebook"\)/i);
 });

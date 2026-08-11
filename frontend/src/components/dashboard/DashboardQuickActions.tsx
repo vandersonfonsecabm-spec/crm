@@ -51,7 +51,7 @@ export default function DashboardQuickActions({
         aria-label="Abrir ações rápidas"
         onClick={onToggle}
         ref={buttonRef}
-        className="topbar-icon-button inline-flex h-9 w-9 items-center justify-center rounded-md"
+        className="topbar-icon-button inline-flex h-11 w-11 items-center justify-center rounded-md"
         title="Ações rápidas"
         type="button"
       >
@@ -82,7 +82,7 @@ function ActionItem({
   return (
     <button
       onClick={onClick}
-      className="quick-action-item flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] font-medium"
+      className="quick-action-item flex min-h-11 w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[11px] font-medium"
       role="menuitem"
       type="button"
     >

@@ -1,4 +1,4 @@
-import { AlertTriangle, Bell, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock, Columns3, Edit3, History, Link2, List, Play, Plus, RefreshCw, RotateCcw, StickyNote, Target, X } from "lucide-react";
+import { BriefcaseBusiness, ChevronLeft, ChevronRight, Clock, Columns3, Link2, List, RotateCcw, StickyNote, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -17,7 +17,6 @@ import {
   type AcompanhamentoPayload,
   type ApiAcompanhamento,
   type ApiAcompanhamentoHistorico,
-  type ApiAcompanhamentoResumo,
   type ApiAcompanhamentoPrioridade,
   type ApiAcompanhamentoStatus,
   type ApiAcompanhamentoTipo,
@@ -25,28 +24,17 @@ import {
   type ApiAgendaOptions,
   type AcompanhamentoQueryParams,
 } from "../../services/crmApi";
-import type { Client, RecentActivity, SmartFilterType, Status } from "../../types/dashboard";
-import { Button, EmptyState, ErrorState, IconButton, Input, LoadingState, Pagination, SectionHeader, Select, Surface, Textarea, Toolbar } from "../ui";
-import DashboardMetricStrip from "./DashboardMetricStrip";
-
-type FollowUpGroup = {
-  label: string;
-  hint: string;
-  clients: Client[];
-};
+import type { Client } from "../../types/dashboard";
+import { Button, EmptyState, ErrorState, IconButton, Input, LoadingState, Pagination, Select, Surface, Textarea, Toolbar } from "../ui";
+import DashboardActionOverflow from "./DashboardActionOverflow";
+import type { PageAction } from "./DashboardActionOverflow";
+import "./DashboardAgenda.css";
 
 type DashboardAgendaPanelProps = {
   clients: Client[];
-  backendCaption: string;
   createRequestKey: number;
   todayRequestKey: number;
-  followUpAgenda: FollowUpGroup[];
-  recentActivities: RecentActivity[];
-  smartAlerts: string[];
-  money: (value: number) => string;
-  statusClass: (status: Status) => string;
   onSelectClient: (clientId: number) => void;
-  onApplySmartFilter: (type: SmartFilterType) => void;
 };
 
 type AgendaForm = {
@@ -63,6 +51,14 @@ type AgendaForm = {
   tipo: ApiAcompanhamentoTipo;
   responsavelId: string;
   observacao: string;
+};
+
+export type AgendaTemporalGroupKey = "overdue" | "today" | "upcoming" | "completed" | "cancelled";
+
+export type AgendaTemporalGroup = {
+  key: AgendaTemporalGroupKey;
+  label: string;
+  items: ApiAcompanhamento[];
 };
 
 const PAGE_SIZE = 6;
@@ -98,17 +94,11 @@ const initialForm: AgendaForm = {
 
 export default function DashboardAgendaPanel({
   clients,
-  backendCaption,
   createRequestKey,
   todayRequestKey,
-  recentActivities,
-  smartAlerts,
   onSelectClient,
-  onApplySmartFilter,
 }: DashboardAgendaPanelProps) {
   const [items, setItems] = useState<ApiAcompanhamento[]>([]);
-  const [periodItems, setPeriodItems] = useState<ApiAcompanhamento[]>([]);
-  const [periodSummary, setPeriodSummary] = useState<ApiAcompanhamentoResumo | null>(null);
   const [nextCommitment, setNextCommitment] = useState<ApiAcompanhamento | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -123,7 +113,6 @@ export default function DashboardAgendaPanel({
   const [viewMode, setViewMode] = useState<"list" | "week">("list");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [isLoading, setIsLoading] = useState(true);
-  const [isContextLoading, setIsContextLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -225,21 +214,14 @@ export default function DashboardAgendaPanel({
     let ignore = false;
 
     async function loadAgendaContext() {
-      setIsContextLoading(true);
       try {
-        const { summary, next } = await fetchAgendaDashboardContext(periodQuery);
+        const { next } = await fetchAgendaDashboardContext(periodQuery);
         if (ignore) return;
-        setPeriodItems(summary.proximos);
-        setPeriodSummary(summary);
         setNextCommitment(next);
       } catch {
         if (ignore) return;
         console.error("AGENDA_CONTEXT_LOAD_FAILED");
-        setPeriodItems([]);
-        setPeriodSummary(null);
         setNextCommitment(null);
-      } finally {
-        if (!ignore) setIsContextLoading(false);
       }
     }
 
@@ -275,19 +257,7 @@ export default function DashboardAgendaPanel({
     [clients],
   );
 
-  const statusCounts = useMemo(
-    () => periodSummary ? agendaStatusCountsFromSummary(periodSummary) : agendaStatusCounts(periodItems),
-    [periodItems, periodSummary],
-  );
-  const upcomingThisWeek = useMemo(
-    () => periodItems
-      .filter((item) => (item.status === "PENDENTE" || item.status === "EM_ANDAMENTO") && !item.atrasado)
-      .sort((first, second) => new Date(first.dataHora).getTime() - new Date(second.dataHora).getTime())
-      .slice(0, 4),
-    [periodItems],
-  );
-  const silentClientsCount = clients.filter((client) => client.lastContactDays >= 7).length;
-  const proposalClientsCount = clients.filter((client) => client.status === "Proposta").length;
+  const temporalGroups = useMemo(() => buildAgendaTemporalGroups(items), [items]);
 
   function moveWeek(offset: number) {
     setWeekStart((current) => addDays(current, offset * 7));
@@ -300,21 +270,6 @@ export default function DashboardAgendaPanel({
     setStatus("Todos");
     setPriority("Todas");
     setPage(1);
-  }
-
-  function selectAgendaStatus(next: AgendaStatusKey) {
-    if (next === "today") setWeekStart(startOfWeek(new Date()));
-    setAgendaView(next === "today" ? "HOJE" : next === "late" ? "ATRASADOS" : next === "done" ? "CONCLUIDOS" : next === "all" ? "TODOS" : "MINHA");
-    setPriority(next === "critical" ? "URGENTE" : "Todas");
-    setStatus(next === "pending" || next === "critical" ? "PENDENTE" : "Todos");
-    setPage(1);
-  }
-
-  function openCreate() {
-    setEditing(null);
-    setForm({ ...initialForm, responsavelId: options?.usuarios[0] ? String(options.usuarios[0].id) : "" });
-    setFormError("");
-    setModalMode("create");
   }
 
   function openEdit(item: ApiAcompanhamento) {
@@ -422,123 +377,90 @@ export default function DashboardAgendaPanel({
   }
 
   return (
-    <div className="space-y-3 pb-8">
+    <div className="agenda-page space-y-3 pb-8">
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3 text-xs font-semibold text-[var(--text-primary)] shadow-[var(--shadow-md)]">
+        <div aria-atomic="true" aria-live="polite" className="fixed bottom-4 right-4 z-50 rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] px-4 py-3 text-xs font-semibold text-[var(--text-primary)] shadow-[var(--shadow-md)]" role="status">
           {toast}
         </div>
       )}
 
-      <Surface className="overflow-hidden">
-        <Toolbar className="min-h-12 gap-3 px-3 py-2">
-          <div className="flex items-center gap-1.5">
-            <IconButton aria-label="Semana anterior" onClick={() => moveWeek(-1)} variant="secondary"><ChevronLeft size={14} /></IconButton>
-            <div className="min-w-[170px] text-center">
-              <p className="text-xs font-semibold tabular-nums text-[var(--text-primary)]">{formatWeekLabel(weekStart, weekEnd)}</p>
-              <p className="text-[11px] text-[var(--text-muted)]">Semana comercial</p>
-            </div>
-            <IconButton aria-label="Próxima semana" onClick={() => moveWeek(1)} variant="secondary"><ChevronRight size={14} /></IconButton>
-            <Button onClick={goToToday} size="sm" variant="ghost">Hoje</Button>
-          </div>
-
-          <div aria-label="Visualização da agenda" className="flex rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-1" role="group">
-            <button aria-pressed={viewMode === "list"} className={`inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${viewMode === "list" ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`} onClick={() => { setViewMode("list"); setPage(1); }} type="button">
-              <List size={13} /> Lista
-            </button>
-            <button aria-pressed={viewMode === "week"} className={`inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${viewMode === "week" ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`} onClick={() => { setViewMode("week"); setPage(1); }} type="button">
-              <Columns3 size={13} /> Semana
-            </button>
-          </div>
-
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-muted)]">
-            <RefreshCw aria-hidden="true" size={12} /> {backendCaption}
-          </span>
-        </Toolbar>
-      </Surface>
-
-      <AgendaNextCommitment
-        disabled={isSubmitting}
-        isLoading={isContextLoading}
-        item={nextCommitment}
-        onComplete={(item) => void runAction(item, "concluir")}
-        onOpen={openEdit}
-        onSchedule={openCreate}
-      />
-
-      <DashboardMetricStrip metrics={[
-        { label: "Acompanhamentos hoje", value: String(statusCounts.today), context: "Agenda imediata", icon: <Bell size={15} />, tone: "info", onClick: goToToday, actionLabel: "Filtrar" },
-        { label: "Sem contato", value: String(silentClientsCount), context: "Retomar relação", icon: <AlertTriangle size={15} />, tone: silentClientsCount > 0 ? "danger" : "default" },
-        { label: "Propostas", value: String(proposalClientsCount), context: "Janelas abertas", icon: <Target size={15} />, tone: proposalClientsCount > 0 ? "warning" : "default" },
-        { label: "Notas recentes", value: String(clients.reduce((sum, client) => sum + client.notes.length, 0)), context: "Histórico comercial", icon: <StickyNote size={15} /> },
-      ]} />
-
-      <AgendaStatusSummary
-        active={agendaView === "HOJE" ? "today" : agendaView === "ATRASADOS" ? "late" : priority === "URGENTE" && status === "PENDENTE" ? "critical" : agendaView === "CONCLUIDOS" ? "done" : status === "PENDENTE" ? "pending" : agendaView === "TODOS" ? "all" : null}
-        counts={statusCounts}
-        onSelect={selectAgendaStatus}
-      />
-
-      <section className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <Surface className="min-w-0 overflow-hidden">
-          <SectionHeader
-            description={viewMode === "list" ? "Contatos e retornos da semana, com filtros e ações preservados." : "Acompanhamentos agrupados por dia para leitura temporal rápida."}
-            icon={<CalendarDays size={15} />}
-            title={viewMode === "list" ? "Agenda da semana" : "Visão semanal"}
-          />
-
-          <div className="border-b border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
-            <Toolbar className="items-end justify-start">
-              <Input aria-label="Buscar cliente ou título" containerClassName="min-w-[240px] flex-[1_1_300px]" onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente ou título" value={search} />
-
-              <Select aria-label="Selecionar visão da agenda" className="w-auto min-w-[145px]" onChange={(event) => { setAgendaView(event.target.value as ApiAcompanhamentoVisao); setPage(1); }} value={agendaView}>
-                {VIEWS.filter((item) => item.value !== "EQUIPE" || options?.podeVerEquipe).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-              </Select>
-
-              <Select aria-label="Filtrar por status" className="w-auto min-w-[132px]" onChange={(event) => { setStatus(event.target.value as typeof status); setPage(1); }} value={status}>
+      <AgendaToolbarFrame
+        filters={(
+          <AgendaFilterDisclosure
+            hasFilters={hasFilters}
+            onClear={() => {
+              setSearch("");
+              setDebouncedSearch("");
+              setStatus("Todos");
+              setPriority("Todas");
+              setType("Todos");
+              setClientFilter("Todos");
+              setResponsibleFilter("Todos");
+              setAgendaView("MINHA");
+              setPage(1);
+            }}
+          >
+            <Select aria-label="Filtrar por status" onChange={(event) => { setStatus(event.target.value as typeof status); setPage(1); }} value={status}>
               {STATUSES.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}
-              </Select>
+            </Select>
 
-              <Select aria-label="Filtrar por prioridade" className="w-auto min-w-[145px]" onChange={(event) => { setPriority(event.target.value as typeof priority); setPage(1); }} value={priority}>
+            <Select aria-label="Filtrar por prioridade" onChange={(event) => { setPriority(event.target.value as typeof priority); setPage(1); }} value={priority}>
               {PRIORITIES.map((item) => <option key={item} value={item}>{priorityLabel(item)}</option>)}
-              </Select>
+            </Select>
 
-              <Select aria-label="Filtrar por tipo" className="w-auto min-w-[130px]" onChange={(event) => { setType(event.target.value as typeof type); setPage(1); }} value={type}>
+            <Select aria-label="Filtrar por tipo" onChange={(event) => { setType(event.target.value as typeof type); setPage(1); }} value={type}>
               {TYPES.map((item) => <option key={item} value={item}>{typeLabel(item)}</option>)}
-              </Select>
+            </Select>
 
-              <Select aria-label="Filtrar por cliente" className="w-auto min-w-[190px]" onChange={(event) => { setClientFilter(event.target.value); setPage(1); }} value={clientFilter}>
+            <Select aria-label="Filtrar por cliente" onChange={(event) => { setClientFilter(event.target.value); setPage(1); }} value={clientFilter}>
               <option value="Todos">Todos os clientes</option>
               {clientOptions.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}
+            </Select>
+
+            {options?.podeVerEquipe && (
+              <Select aria-label="Filtrar por responsável" onChange={(event) => { setResponsibleFilter(event.target.value); setPage(1); }} value={responsibleFilter}>
+                <option value="Todos">Todos os responsáveis</option>
+                {options.usuarios.map((user) => <option key={user.id} value={user.id}>{user.nome}</option>)}
               </Select>
+            )}
+          </AgendaFilterDisclosure>
+        )}
+        onMovePeriod={moveWeek}
+        onToday={goToToday}
+        onViewModeChange={(mode) => { setViewMode(mode); setPage(1); }}
+        periodLabel={formatWeekLabel(weekStart, weekEnd)}
+        viewMode={viewMode}
+      >
+        <Input aria-label="Buscar cliente ou título" containerClassName="agenda-toolbar-search" onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente ou título" value={search} />
 
-              {options?.podeVerEquipe && (
-                <Select aria-label="Filtrar por responsável" className="w-auto min-w-[180px]" onChange={(event) => { setResponsibleFilter(event.target.value); setPage(1); }} value={responsibleFilter}>
-                  <option value="Todos">Todos os responsáveis</option>
-                  {options.usuarios.map((user) => <option key={user.id} value={user.id}>{user.nome}</option>)}
-                </Select>
-              )}
+        <Select aria-label="Minha agenda" className="agenda-toolbar-view" onChange={(event) => { setAgendaView(event.target.value as ApiAcompanhamentoVisao); setPage(1); }} value={agendaView}>
+          {VIEWS.filter((item) => item.value !== "EQUIPE" || options?.podeVerEquipe).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </Select>
+      </AgendaToolbarFrame>
 
-              <Button disabled={!hasFilters} leftIcon={<RotateCcw size={13} />} onClick={() => { setSearch(""); setDebouncedSearch(""); setStatus("Todos"); setPriority("Todas"); setType("Todos"); setClientFilter("Todos"); setResponsibleFilter("Todos"); setAgendaView("MINHA"); setPage(1); }} size="sm" variant="ghost">
-                Limpar filtros
-              </Button>
-            </Toolbar>
-          </div>
+      {nextCommitment && (
+        <AgendaNextCommitment
+          disabled={isSubmitting}
+          item={nextCommitment}
+          onComplete={(item) => void runAction(item, "concluir")}
+          onOpen={openEdit}
+        />
+      )}
 
-          <div aria-busy={isLoading} className={viewMode === "list" ? "divide-y divide-[var(--border-default)]" : ""}>
+      <section className="agenda-workspace min-w-0">
+        <Surface className="agenda-list-surface min-w-0 overflow-hidden">
+          <div aria-busy={isLoading} className={viewMode === "list" ? "agenda-list-content" : ""}>
             {isLoading && <LoadingState className="p-4" label="Carregando acompanhamentos" rows={4} />}
             {!isLoading && items.length === 0 && <EmptyState description={hasFilters ? "Ajuste ou limpe os filtros para ampliar a consulta." : "Crie um acompanhamento para organizar o próximo contato comercial."} title={hasFilters ? "Nenhum acompanhamento para os filtros" : "Nenhum acompanhamento encontrado"} />}
-            {!isLoading && viewMode === "list" && items.map((item) => (
-              <AgendaRow
-                key={item.id}
-                item={item}
-                disabled={isSubmitting}
-                onSelectClient={onSelectClient}
-                onEdit={openEdit}
-                onReschedule={openReschedule}
-                onHistory={openHistory}
-                onAction={runAction}
-              />
-            ))}
+            {!isLoading && viewMode === "list" && <AgendaTemporalList
+              disabled={isSubmitting}
+              groups={temporalGroups}
+              onAction={runAction}
+              onEdit={openEdit}
+              onHistory={openHistory}
+              onReschedule={openReschedule}
+              onSelectClient={onSelectClient}
+            />}
             {!isLoading && viewMode === "week" && items.length > 0 && (
               <AgendaWeekView
                 disabled={isSubmitting}
@@ -559,41 +481,6 @@ export default function DashboardAgendaPanel({
           </div>
 
           {viewMode === "list" && <Pagination disabled={isLoading} itemLabel="acompanhamentos" onPageChange={setPage} page={page} total={total} totalPages={totalPages} visibleCount={items.length} />}
-        </Surface>
-
-        <Surface className="min-w-0 self-start overflow-hidden">
-          <SectionHeader description="Contexto temporal e sinais que pedem ação." icon={<Clock size={15} />} title="Painel operacional" />
-          <SideSection title="Próximos nesta semana">
-            {upcomingThisWeek.length === 0 && <p className="px-4 py-3 text-[11px] text-[var(--text-muted)]">Nenhum acompanhamento pendente.</p>}
-            {upcomingThisWeek.map((item) => (
-              <button key={item.id} className="w-full px-4 py-2.5 text-left transition-colors hover:bg-[var(--bg-muted)] disabled:cursor-default" disabled={!item.clienteId} onClick={() => item.clienteId && onSelectClient(item.clienteId)} type="button">
-                <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{item.titulo}</p>
-                <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Sem cliente"} · {formatDateTime(item.dataHora)}</p>
-              </button>
-            ))}
-          </SideSection>
-
-          <SideSection title="Alertas operacionais">
-            {smartAlerts.map((alert, index) => (
-              <button key={alert} onClick={() => onApplySmartFilter(index === 0 ? "risk" : index === 1 ? "proposal" : "silent")} className="w-full px-4 py-2.5 text-left transition-colors hover:bg-[var(--bg-muted)]" type="button">
-                <p className="text-xs font-medium text-[var(--text-secondary)]">{alert}</p>
-                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Aplicar filtro inteligente</p>
-              </button>
-            ))}
-          </SideSection>
-
-          <SideSection title="Atividades recentes">
-            {recentActivities.length === 0 && <p className="px-4 py-3 text-[11px] text-[var(--text-muted)]">Nenhuma atividade recente registrada.</p>}
-            {recentActivities.slice(0, 4).map((activity) => (
-              <div key={activity.id} className="px-4 py-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{activity.client}</p>
-                  <span className="shrink-0 text-[11px] tabular-nums text-[var(--text-muted)]">{activity.date}</span>
-                </div>
-                <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[var(--text-muted)]">{activity.text}</p>
-              </div>
-            ))}
-          </SideSection>
         </Surface>
       </section>
 
@@ -623,23 +510,92 @@ export default function DashboardAgendaPanel({
   );
 }
 
-function AgendaNextCommitment({
+type AgendaToolbarFrameProps = {
+  children: ReactNode;
+  filters: ReactNode;
+  periodLabel: string;
+  viewMode: "list" | "week";
+  onMovePeriod: (offset: number) => void;
+  onToday: () => void;
+  onViewModeChange: (mode: "list" | "week") => void;
+};
+
+export function AgendaToolbarFrame({
+  children,
+  filters,
+  periodLabel,
+  viewMode,
+  onMovePeriod,
+  onToday,
+  onViewModeChange,
+}: AgendaToolbarFrameProps) {
+  return (
+    <Surface className="agenda-week-toolbar overflow-hidden">
+      <Toolbar className="agenda-week-toolbar-content min-h-[52px] gap-2 px-3 py-2">
+        <div aria-label="Período" className="agenda-period-control">
+          <span className="agenda-toolbar-label">Período</span>
+          <div className="flex min-w-0 items-center gap-1">
+            <IconButton aria-label="Semana anterior" onClick={() => onMovePeriod(-1)} size="md" variant="secondary"><ChevronLeft size={14} /></IconButton>
+            <p className="agenda-period-label">{periodLabel}</p>
+            <IconButton aria-label="Próxima semana" onClick={() => onMovePeriod(1)} size="md" variant="secondary"><ChevronRight size={14} /></IconButton>
+          </div>
+        </div>
+
+        <div aria-label="Visualização da agenda" className="agenda-view-toggle" role="group">
+          <button aria-pressed={viewMode === "list"} className={`agenda-view-toggle-button ${viewMode === "list" ? "agenda-view-toggle-button--active" : ""}`} onClick={() => onViewModeChange("list")} type="button">
+            <List size={14} /> Lista
+          </button>
+          <button aria-pressed={viewMode === "week"} className={`agenda-view-toggle-button ${viewMode === "week" ? "agenda-view-toggle-button--active" : ""}`} onClick={() => onViewModeChange("week")} type="button">
+            <Columns3 size={14} /> Semana
+          </button>
+        </div>
+
+        <Button onClick={onToday} size="md" variant="ghost">Hoje</Button>
+        {filters}
+        {children}
+      </Toolbar>
+    </Surface>
+  );
+}
+
+type AgendaFilterDisclosureProps = {
+  children: ReactNode;
+  hasFilters: boolean;
+  onClear: () => void;
+};
+
+export function AgendaFilterDisclosure({ children, hasFilters, onClear }: AgendaFilterDisclosureProps) {
+  return (
+    <details className="agenda-filter-disclosure">
+      <summary>
+        Filtros
+        {hasFilters && <span aria-label="Filtros ativos" className="agenda-filter-count">•</span>}
+      </summary>
+      <div className="agenda-filter-disclosure-panel">
+        {children}
+        <Button disabled={!hasFilters} leftIcon={<RotateCcw size={13} />} onClick={onClear} size="md" variant="ghost">
+          Limpar filtros
+        </Button>
+      </div>
+    </details>
+  );
+}
+
+export function AgendaNextCommitment({
   disabled,
-  isLoading,
   item,
   onComplete,
   onOpen,
-  onSchedule,
 }: {
   disabled: boolean;
-  isLoading: boolean;
   item: ApiAcompanhamento | null;
   onComplete: (item: ApiAcompanhamento) => void;
   onOpen: (item: ApiAcompanhamento) => void;
-  onSchedule: () => void;
 }) {
+  if (!item) return null;
+
   return (
-    <Surface className="overflow-hidden">
+    <Surface className="agenda-next-commitment overflow-hidden">
       <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--surface-subtle)] text-[var(--primary)]">
@@ -647,34 +603,69 @@ function AgendaNextCommitment({
           </div>
           <div className="min-w-0">
             <p className="text-[11px] font-medium text-[var(--text-muted)]">Próximo compromisso</p>
-            {isLoading ? (
-              <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Carregando agenda...</p>
-            ) : item ? (
-              <p className="mt-0.5 truncate text-xs font-semibold text-[var(--text-primary)]">
-                {formatTime(item.dataHora)} · {item.cliente?.nome ?? "Sem cliente"} · {typeLabel(item.tipo)} · {item.titulo}
-              </p>
-            ) : (
-              <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Nenhum compromisso futuro agendado.</p>
-            )}
+            <p className="mt-0.5 truncate text-xs font-semibold text-[var(--text-primary)]">
+              {formatTime(item.dataHora)} · {item.cliente?.nome ?? "Sem cliente"} · {typeLabel(item.tipo)} · {item.titulo}
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {item ? (
-            <>
-              <Button onClick={() => onOpen(item)} size="sm" variant="secondary">Abrir</Button>
-              <Button disabled={disabled || !item.permissoes?.concluir} onClick={() => onComplete(item)} size="sm" variant="subtle">Concluir</Button>
-            </>
-          ) : (
-            <Button leftIcon={<Plus size={13} />} onClick={onSchedule} size="sm">Agendar</Button>
-          )}
+          <Button onClick={() => onOpen(item)} size="md" variant="secondary">Abrir</Button>
+          <Button disabled={disabled || !item.permissoes?.concluir} onClick={() => onComplete(item)} size="md" variant="subtle">Concluir</Button>
         </div>
       </div>
     </Surface>
   );
 }
 
-function AgendaWeekView({
+export function AgendaTemporalList({
+  disabled,
+  groups,
+  onAction,
+  onEdit,
+  onHistory,
+  onReschedule,
+  onSelectClient,
+}: {
+  disabled: boolean;
+  groups: AgendaTemporalGroup[];
+  onAction: (item: ApiAcompanhamento, action: "iniciar" | "concluir" | "reabrir" | "cancelar") => void;
+  onEdit: (item: ApiAcompanhamento) => void;
+  onHistory: (item: ApiAcompanhamento) => void;
+  onReschedule: (item: ApiAcompanhamento) => void;
+  onSelectClient: (clientId: number) => void;
+}) {
+  return (
+    <div className="agenda-temporal-list">
+      {groups.map((group) => (
+        <section className={`agenda-temporal-group agenda-temporal-group--${group.key}`} key={group.key}>
+          <header className="agenda-temporal-group-header">
+            <p className="agenda-temporal-group-label">{group.label}</p>
+            <span className="agenda-temporal-group-count">{group.items.length} {group.items.length === 1 ? "compromisso" : "compromissos"}</span>
+          </header>
+
+          <div className="divide-y divide-[var(--border-default)]">
+            {group.items.map((item) => (
+              <AgendaRow
+                disabled={disabled}
+                item={item}
+                key={item.id}
+                onAction={onAction}
+                onEdit={onEdit}
+                onHistory={onHistory}
+                onReschedule={onReschedule}
+                onSelectClient={onSelectClient}
+                temporalGroup={group.key}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+export function AgendaWeekView({
   disabled,
   items,
   weekStart,
@@ -735,6 +726,7 @@ function AgendaRow({
   onHistory,
   onReschedule,
   onAction,
+  temporalGroup,
 }: {
   item: ApiAcompanhamento;
   disabled: boolean;
@@ -743,19 +735,44 @@ function AgendaRow({
   onHistory: (item: ApiAcompanhamento) => void;
   onReschedule: (item: ApiAcompanhamento) => void;
   onAction: (item: ApiAcompanhamento, action: "iniciar" | "concluir" | "reabrir" | "cancelar") => void;
+  temporalGroup?: AgendaTemporalGroupKey;
 }) {
   const isNeutral = item.status === "CONCLUIDO" || item.status === "CANCELADO";
+  const temporalEmphasis = temporalGroup
+    ?? (item.atrasado
+      ? "overdue"
+      : item.status === "CONCLUIDO"
+        ? "completed"
+        : item.status === "CANCELADO"
+          ? "cancelled"
+          : isSameLocalDay(new Date(item.dataHora), new Date())
+            ? "today"
+            : "upcoming");
+  const timeTone = item.atrasado
+    ? "text-[var(--danger)]"
+    : temporalEmphasis === "today"
+      ? "text-[var(--primary)]"
+      : temporalEmphasis === "upcoming"
+        ? "text-[var(--info)]"
+        : "text-[var(--text-secondary)]";
+  const temporalRowClass = temporalGroup ? `agenda-row--${temporalGroup}` : `agenda-row--${temporalEmphasis}`;
+  const overflowActions: PageAction[] = [
+    { label: "Histórico", onClick: () => onHistory(item) },
+    { label: "Editar", disabled: !item.permissoes?.editar, onClick: () => onEdit(item) },
+    ...(item.status === "PENDENTE" ? [{ label: "Iniciar", disabled: disabled || !item.permissoes?.editar, onClick: () => onAction(item, "iniciar") }] : []),
+    ...(isNeutral ? [{ label: "Reabrir", disabled: disabled || !item.permissoes?.reabrir, onClick: () => onAction(item, "reabrir") }] : []),
+    ...(!isNeutral ? [{ label: "Cancelar", disabled: disabled || !item.permissoes?.cancelar, onClick: () => onAction(item, "cancelar") }] : []),
+  ];
   return (
-    <article className={`px-4 py-3 transition-colors hover:bg-[var(--bg-muted)] ${isNeutral ? "bg-[var(--bg-muted)]" : ""}`}>
+    <article className={`agenda-row ${temporalRowClass} px-4 py-3 transition-colors hover:bg-[var(--bg-muted)] ${isNeutral ? "bg-[var(--bg-muted)]" : ""}`} data-temporal-emphasis={temporalEmphasis}>
       <div className="grid min-w-0 gap-3 lg:grid-cols-[112px_minmax(0,1fr)_120px_112px] lg:items-center">
         <div className="min-w-0">
-          <p className={`text-sm font-semibold tabular-nums ${item.atrasado ? "text-[var(--danger)]" : "text-[var(--primary)]"}`}>{formatTime(item.dataHora)}</p>
+          <p className={`text-sm font-semibold tabular-nums ${timeTone}`}>{formatTime(item.dataHora)}</p>
           <p className="mt-0.5 truncate text-[11px] tabular-nums text-[var(--text-muted)]">{formatDateLabel(item.dataHora)} · {item.responsavelUsuario?.nome || item.responsavel || "Sem responsável"}</p>
         </div>
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold text-[var(--text-primary)]">{item.titulo}</p>
-          <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Sem vínculo comercial"} · {linkSummary(item)}</p>
-          {item.descricao && <p className="mt-1 line-clamp-1 text-[11px] text-[var(--text-muted)]">{item.descricao}</p>}
+          <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{item.cliente?.nome ?? "Sem vínculo comercial"}</p>
         </div>
         <div className="min-w-0">
           <p className="text-[11px] font-medium text-[var(--text-secondary)]">{typeLabel(item.tipo)}</p>
@@ -767,21 +784,22 @@ function AgendaRow({
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {item.clienteId && <ActionButton onClick={() => onSelectClient(item.clienteId as number)}>Cliente</ActionButton>}
-        {item.negocioId && <EntityLink href={`/kanban?negocioId=${item.negocioId}`} icon={<BriefcaseBusiness size={12} />}>Negócio</EntityLink>}
-        {item.conversaCanalId && <EntityLink href={`/inbox?conversaId=${item.conversaCanalId}`} icon={<Link2 size={12} />}>Conversa</EntityLink>}
-        {item.propostaComercialId && <EntityLink href={`/kanban?negocioId=${item.negocioId || ""}&propostaId=${item.propostaComercialId}`} icon={<StickyNote size={12} />}>Proposta</EntityLink>}
-        <ActionButton onClick={() => onHistory(item)} icon={<History size={12} />}>Histórico</ActionButton>
-        <ActionButton disabled={!item.permissoes?.editar} onClick={() => onEdit(item)} icon={<Edit3 size={12} />}>Editar</ActionButton>
+      <div className="agenda-row-actions mt-2">
         <ActionButton disabled={!item.permissoes?.editar} onClick={() => onReschedule(item)} icon={<RotateCcw size={12} />}>Reagendar</ActionButton>
-        {item.status === "PENDENTE" && <ActionButton disabled={disabled || !item.permissoes?.editar} onClick={() => onAction(item, "iniciar")} icon={<Play size={12} />}>Iniciar</ActionButton>}
-        {item.status === "CONCLUIDO" || item.status === "CANCELADO" ? (
-          <ActionButton disabled={disabled || !item.permissoes?.reabrir} onClick={() => onAction(item, "reabrir")}>Reabrir</ActionButton>
-        ) : (
-          <ActionButton disabled={disabled || !item.permissoes?.concluir} onClick={() => onAction(item, "concluir")}>Concluir</ActionButton>
-        )}
-        {item.status !== "CANCELADO" && item.status !== "CONCLUIDO" && <ActionButton disabled={disabled || !item.permissoes?.cancelar} onClick={() => onAction(item, "cancelar")}>Cancelar</ActionButton>}
+        {!isNeutral && <ActionButton disabled={disabled || !item.permissoes?.concluir} onClick={() => onAction(item, "concluir")}>Concluir</ActionButton>}
+        <details className="agenda-row-context">
+          <summary>Contexto</summary>
+          <div className="agenda-row-context-panel">
+            {item.descricao && <p className="agenda-row-observation">{item.descricao}</p>}
+            <div className="agenda-row-context-links">
+              {item.clienteId && <ActionButton onClick={() => onSelectClient(item.clienteId as number)}>Cliente</ActionButton>}
+              {item.negocioId && <EntityLink href={`/kanban?negocioId=${item.negocioId}`} icon={<BriefcaseBusiness size={12} />}>Negócio</EntityLink>}
+              {item.conversaCanalId && <EntityLink href={`/inbox?conversaId=${item.conversaCanalId}`} icon={<Link2 size={12} />}>Conversa</EntityLink>}
+              {item.propostaComercialId && <EntityLink href={`/kanban?negocioId=${item.negocioId || ""}&propostaId=${item.propostaComercialId}`} icon={<StickyNote size={12} />}>Proposta</EntityLink>}
+            </div>
+            <DashboardActionOverflow actions={overflowActions} pageTitle={`acompanhamento ${item.titulo}`} triggerLabel="Mais" />
+          </div>
+        </details>
       </div>
     </article>
   );
@@ -812,14 +830,37 @@ function AgendaModal({
   const title = mode === "create" ? "Novo acompanhamento" : isReschedule ? "Reagendar acompanhamento" : "Editar acompanhamento";
   const submitLabel = mode === "create" ? "Criar acompanhamento" : isReschedule ? "Salvar reagendamento" : "Salvar alterações";
   const dialogRef = useRef<HTMLDivElement>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   const isSubmittingRef = useRef(isSubmitting);
+  const wasSubmittingRef = useRef(isSubmitting);
   const restoreScrollFrameRef = useRef<number | null>(null);
+  const submitFocusFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     onCloseRef.current = onClose;
     isSubmittingRef.current = isSubmitting;
   }, [isSubmitting, onClose]);
+
+  useEffect(() => {
+    const wasSubmitting = wasSubmittingRef.current;
+    wasSubmittingRef.current = isSubmitting;
+    if (!wasSubmitting || isSubmitting || !error || !dialogRef.current?.isConnected) return;
+
+    submitFocusFrameRef.current = window.requestAnimationFrame(() => {
+      submitFocusFrameRef.current = null;
+      if (dialogRef.current?.isConnected && submitButtonRef.current?.isConnected && !isSubmittingRef.current) {
+        submitButtonRef.current.focus({ preventScroll: true });
+      }
+    });
+
+    return () => {
+      if (submitFocusFrameRef.current !== null) {
+        window.cancelAnimationFrame(submitFocusFrameRef.current);
+        submitFocusFrameRef.current = null;
+      }
+    };
+  }, [error, isSubmitting]);
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -920,7 +961,7 @@ function AgendaModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-      <div aria-labelledby="agenda-modal-title" aria-modal="true" className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-lg p-4 text-white shadow-2xl" ref={dialogRef} role="dialog">
+      <div aria-describedby={error ? "agenda-form-error" : undefined} aria-labelledby="agenda-modal-title" aria-modal="true" className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-lg p-4 text-white shadow-2xl" ref={dialogRef} role="dialog">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold" id="agenda-modal-title">{title}</p>
@@ -994,11 +1035,11 @@ function AgendaModal({
           )}
         </div>
 
-        {error && <div className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/[0.055] px-3 py-2 text-xs text-rose-100">{error}</div>}
+        {error && <div aria-atomic="true" aria-live="assertive" className="mt-3 rounded-xl border border-rose-300/20 bg-rose-300/[0.055] px-3 py-2 text-xs text-rose-100" id="agenda-form-error" role="alert">{error}</div>}
 
         <div className="mt-4 flex justify-end gap-2">
           <Button disabled={isSubmitting} onClick={onClose} size="sm" variant="secondary">Cancelar</Button>
-          <Button className="min-w-36" disabled={isSubmitting} loading={isSubmitting} onClick={onSubmit} size="sm">
+          <Button className="min-w-36" disabled={isSubmitting} loading={isSubmitting} onClick={onSubmit} ref={submitButtonRef} size="sm">
             {isSubmitting ? "Salvando" : submitLabel}
           </Button>
         </div>
@@ -1007,52 +1048,9 @@ function AgendaModal({
   );
 }
 
-type AgendaStatusKey = "all" | "pending" | "today" | "late" | "critical" | "done";
-type AgendaStatusCounts = Record<AgendaStatusKey, number>;
-
-function AgendaStatusSummary({ active, counts, onSelect }: { active: AgendaStatusKey | null; counts: AgendaStatusCounts; onSelect: (status: AgendaStatusKey) => void }) {
-  const items: Array<{ key: AgendaStatusKey; label: string; value: number; icon: ReactNode; tone: string }> = [
-    { key: "all", label: "Todos", value: counts.all, icon: <CalendarDays size={14} />, tone: "text-[var(--text-secondary)]" },
-    { key: "pending", label: "Pendentes", value: counts.pending, icon: <Clock size={14} />, tone: "text-[var(--text-secondary)]" },
-    { key: "today", label: "Hoje", value: counts.today, icon: <CalendarDays size={14} />, tone: "text-[var(--info)]" },
-    { key: "late", label: "Atrasados", value: counts.late, icon: <AlertTriangle size={14} />, tone: "text-[var(--danger)]" },
-    { key: "critical", label: "Críticos", value: counts.critical, icon: <Bell size={14} />, tone: "text-[var(--warning)]" },
-    { key: "done", label: "Concluídos", value: counts.done, icon: <CheckCircle2 size={14} />, tone: "text-[var(--success)]" },
-  ];
-
-  return (
-    <Surface className="overflow-x-auto" aria-label="Filtros de status da agenda">
-      <div className="flex min-w-max items-stretch" role="tablist">
-      {items.map((item, index) => (
-        <button
-          aria-selected={active === item.key}
-          className={`flex min-w-[132px] items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-[var(--bg-muted)] focus-visible:relative focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] ${index > 0 ? "border-l border-[var(--border-default)]" : ""} ${active === item.key ? "bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""}`}
-          key={item.key}
-          onClick={() => onSelect(item.key)}
-          role="tab"
-          type="button"
-        >
-          <span className={`text-[11px] font-medium ${active === item.key ? "text-[var(--filter-active-text)]" : "text-[var(--text-secondary)]"}`}>{item.label}</span>
-          <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${active === item.key ? "text-[var(--filter-active-text)]" : item.tone}`}>{item.icon}{item.value}</span>
-        </button>
-      ))}
-      </div>
-    </Surface>
-  );
-}
-
-function SideSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="border-b border-[var(--border-default)] last:border-b-0">
-      <h3 className="px-4 pb-1 pt-3 text-[11px] font-semibold text-[var(--text-secondary)]">{title}</h3>
-      <div className="divide-y divide-[var(--border-default)]">{children}</div>
-    </section>
-  );
-}
-
 function ActionButton({ children, icon, disabled, onClick }: { children: ReactNode; icon?: ReactNode; disabled?: boolean; onClick: () => void }) {
   return (
-    <button className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:cursor-not-allowed disabled:text-[var(--disabled-text)]" disabled={disabled} onClick={onClick} type="button">
+    <button className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:cursor-not-allowed disabled:text-[var(--disabled-text)]" disabled={disabled} onClick={onClick} type="button">
       {icon}
       {children}
     </button>
@@ -1203,14 +1201,6 @@ function toFriendlyAgendaError(message: string) {
   return "Não foi possível concluir a ação agora.";
 }
 
-function linkSummary(item: ApiAcompanhamento) {
-  if (item.propostaComercial) return `${item.propostaComercial.codigo} · ${item.propostaComercial.titulo}`;
-  if (item.negocio) return item.negocio.titulo || `Negócio ${item.negocio.id}`;
-  if (item.lead) return item.lead.interesse || `Lead ${item.lead.id}`;
-  if (item.conversaCanal) return `Conversa · ${item.conversaCanal.status.replaceAll("_", " ").toLowerCase()}`;
-  return "Sem vínculo adicional";
-}
-
 function historyActionLabel(action: ApiAcompanhamentoHistorico["acao"]) {
   const labels: Record<ApiAcompanhamentoHistorico["acao"], string> = {
     CRIAR: "Acompanhamento criado",
@@ -1287,29 +1277,31 @@ function priorityTone(priority: ApiAcompanhamentoPrioridade) {
   return "text-[var(--text-muted)]";
 }
 
-function agendaStatusCounts(items: ApiAcompanhamento[]): AgendaStatusCounts {
-  const now = new Date();
-  return {
-    all: items.length,
-    pending: items.filter((item) => item.status === "PENDENTE").length,
-    today: items.filter((item) => item.status === "PENDENTE" && isSameLocalDay(new Date(item.dataHora), now)).length,
-    late: items.filter((item) => item.status === "PENDENTE" && new Date(item.dataHora).getTime() < now.getTime()).length,
-    critical: items.filter((item) => item.status === "PENDENTE" && (item.prioridade === "URGENTE" || item.prioridade === "CRITICA")).length,
-    done: items.filter((item) => item.status === "CONCLUIDO").length,
-  };
-}
+function buildAgendaTemporalGroups(items: ApiAcompanhamento[]): AgendaTemporalGroup[] {
+  const today = new Date();
+  const groups: AgendaTemporalGroup[] = [
+    { key: "overdue", label: "Atrasados", items: [] },
+    { key: "today", label: "Hoje", items: [] },
+    { key: "upcoming", label: "A seguir", items: [] },
+    { key: "completed", label: "Concluídos", items: [] },
+    { key: "cancelled", label: "Cancelados", items: [] },
+  ];
 
-function agendaStatusCountsFromSummary(summary: ApiAcompanhamentoResumo): AgendaStatusCounts {
-  return {
-    all: summary.indicadores.total,
-    pending: summary.indicadores.pendentes,
-    today: summary.indicadores.paraHoje,
-    late: summary.indicadores.atrasados,
-    critical: summary.indicadores.criticos,
-    done: summary.indicadores.concluidosPeriodo,
-  };
-}
+  for (const item of items) {
+    const key: AgendaTemporalGroupKey = item.atrasado
+      ? "overdue"
+      : item.status === "CONCLUIDO"
+        ? "completed"
+        : item.status === "CANCELADO"
+          ? "cancelled"
+          : isSameLocalDay(new Date(item.dataHora), today)
+            ? "today"
+            : "upcoming";
+    groups.find((group) => group.key === key)?.items.push(item);
+  }
 
+  return groups.filter((group) => group.items.length > 0);
+}
 function startOfWeek(value: Date) {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);

@@ -9,6 +9,7 @@ type DashboardCommandSearchProps = {
   onCloseQuickActions: () => void;
   canManageIntegrations: boolean;
   leadsCommunicationEnabled: boolean;
+  readOnly?: boolean;
 };
 
 type CommandResult = {
@@ -24,6 +25,7 @@ export default function DashboardCommandSearch({
   onCloseQuickActions,
   canManageIntegrations,
   leadsCommunicationEnabled,
+  readOnly = false,
 }: DashboardCommandSearchProps) {
   const [commandSearch, setCommandSearch] = useState("");
   const [showCommandResults, setShowCommandResults] = useState(false);
@@ -32,6 +34,8 @@ export default function DashboardCommandSearch({
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (readOnly) return;
+
     function handleShortcuts(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const isTyping =
@@ -62,7 +66,7 @@ export default function DashboardCommandSearch({
 
     window.addEventListener("keydown", handleShortcuts);
     return () => window.removeEventListener("keydown", handleShortcuts);
-  }, [onCloseQuickActions]);
+  }, [onCloseQuickActions, readOnly]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -73,6 +77,8 @@ export default function DashboardCommandSearch({
   }, []);
 
   useEffect(() => {
+    if (readOnly) return;
+
     const term = normalizeCommandTerm(commandSearch);
     if (term.length < 2) return;
     let ignore = false;
@@ -89,7 +95,7 @@ export default function DashboardCommandSearch({
       ignore = true;
       window.clearTimeout(timeout);
     };
-  }, [commandSearch]);
+  }, [commandSearch, readOnly]);
 
   const commandResults = useMemo(() => {
     const term = normalizeCommandTerm(commandSearch);
@@ -99,8 +105,8 @@ export default function DashboardCommandSearch({
     }
 
     const pages: CommandResult[] = [
-      { label: "Visão Geral", type: "Página", searchText: "visao geral dashboard inicio", action: () => onSetActivePage("dashboard") },
-      { label: "Central Comercial", type: "Página", searchText: "central comercial operacao", action: () => onSetActivePage("comercial") },
+      { label: "Visão Geral", type: "Página", searchText: "visao geral dashboard inicio leitura transversal carteira", action: () => onSetActivePage("dashboard") },
+      { label: "Painel Comercial", type: "Página", searchText: "painel central comercial operacao", action: () => onSetActivePage("comercial") },
       ...(leadsCommunicationEnabled
         ? [
             { label: "Caixa de Entrada", type: "Página", searchText: "caixa de entrada conversas mensagens inbox atendimento whatsapp instagram facebook omnichannel", action: () => onSetActivePage("inbox") },
@@ -140,19 +146,24 @@ export default function DashboardCommandSearch({
 
   return (
     <div className="relative hidden min-w-0 flex-1 md:block md:max-w-xl" ref={searchRef}>
-      <div className="command-search flex h-9 w-full items-center gap-2 rounded-md border px-3 transition">
+      <div className="command-search flex h-11 w-full items-center gap-2 rounded-md border px-3 transition">
         <Search size={13} className="text-slate-500" />
 
         <input
           id="crm-command-search"
           value={commandSearch}
           onChange={(event) => {
+            if (readOnly) return;
             setCommandSearch(event.target.value);
             setShowCommandResults(true);
             setSelectedIndex(0);
           }}
-          onFocus={() => setShowCommandResults(true)}
+          onFocus={() => {
+            if (!readOnly) setShowCommandResults(true);
+          }}
           onKeyDown={(event) => {
+            if (readOnly) return;
+
             if (event.key === "Escape") {
               setShowCommandResults(false);
               setCommandSearch("");
@@ -180,13 +191,14 @@ export default function DashboardCommandSearch({
               runCommandResult(commandResults[boundedSelectedIndex] ?? commandResults[0]);
             }
           }}
-          placeholder="Buscar cliente, empresa ou página..."
+          placeholder="Buscar páginas e clientes…"
           aria-label="Busca global"
           aria-autocomplete="list"
           aria-controls="crm-command-results"
-          aria-expanded={showCommandResults && Boolean(commandSearch)}
+          aria-expanded={!readOnly && showCommandResults && Boolean(commandSearch)}
           aria-activedescendant={commandResults.length > 0 ? `crm-command-result-${boundedSelectedIndex}` : undefined}
           className="w-full select-text bg-transparent text-xs outline-none"
+          readOnly={readOnly}
           role="combobox"
         />
 

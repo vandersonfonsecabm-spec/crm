@@ -22,6 +22,7 @@ type InventoryErrorState = {
   title: string;
   description: string;
   canRetry: boolean;
+  state: "restricted" | "unavailable" | "danger";
 };
 
 export default function DashboardInventoryPanel({ onOpenIntegrations }: { onOpenIntegrations: () => void }) {
@@ -186,6 +187,7 @@ export default function DashboardInventoryPanel({ onOpenIntegrations }: { onOpen
         <ErrorState
           description={errorState.description}
           onRetry={errorState.canRetry ? () => setRetryKey((current) => current + 1) : undefined}
+          state={errorState.state}
           title={errorState.title}
         />
       </Surface>
@@ -271,6 +273,7 @@ export default function DashboardInventoryPanel({ onOpenIntegrations }: { onOpen
                 : "O catálogo canônico ainda não possui produtos para esta empresa."
             }
             icon={<Package size={18} />}
+            state={sourceState === "disconnected" ? "unavailable" : "empty"}
             title={sourceState === "disconnected" ? "Nenhuma fonte de produtos conectada" : "Nenhum produto foi encontrado"}
           />
         )}
@@ -279,6 +282,7 @@ export default function DashboardInventoryPanel({ onOpenIntegrations }: { onOpen
           <EmptyState
             action={<Button onClick={clearFilters} size="sm" variant="secondary">Limpar filtros</Button>}
             description="Revise a busca ou remova os filtros para voltar ao catálogo completo."
+            state="no-results"
             title="Nenhum produto corresponde aos filtros"
           />
         )}
@@ -361,21 +365,21 @@ function toInventoryErrorState(error: unknown): InventoryErrorState {
 
 function inventoryErrorForStatus(status: number): InventoryErrorState {
   if (status === 401) {
-    return { title: "Sessão expirada", description: "Sua sessão expirou. Entre novamente para continuar.", canRetry: false };
+    return { title: "Sessão expirada", description: "Sua sessão expirou. Entre novamente para continuar.", canRetry: false, state: "restricted" };
   }
   if (status === 403) {
-    return { title: "Acesso ao estoque não permitido", description: "Você não possui permissão para visualizar o estoque.", canRetry: false };
+    return { title: "Acesso ao estoque não permitido", description: "Você não possui permissão para visualizar o estoque.", canRetry: false, state: "restricted" };
   }
   if (status === 410) {
-    return { title: "Fonte de estoque indisponível", description: "Esta fonte de estoque não está mais disponível.", canRetry: false };
+    return { title: "Fonte de estoque indisponível", description: "Esta fonte de estoque não está mais disponível.", canRetry: false, state: "unavailable" };
   }
   if (status >= 500) {
-    return { title: "Erro interno no estoque", description: "Não foi possível carregar os produtos devido a um erro interno.", canRetry: true };
+    return { title: "Erro interno no estoque", description: "Não foi possível carregar os produtos devido a um erro interno.", canRetry: true, state: "danger" };
   }
   if (status === 0) {
-    return { title: "Servidor indisponível", description: "Não foi possível se comunicar com o servidor.", canRetry: true };
+    return { title: "Servidor indisponível", description: "Não foi possível se comunicar com o servidor.", canRetry: true, state: "unavailable" };
   }
-  return { title: "Não foi possível carregar o estoque", description: "A consulta foi interrompida sem alterar dados externos.", canRetry: false };
+  return { title: "Não foi possível carregar o estoque", description: "A consulta foi interrompida sem alterar dados externos.", canRetry: false, state: "danger" };
 }
 
 function integratedProductKey(product: HubProdutoEstoque) {

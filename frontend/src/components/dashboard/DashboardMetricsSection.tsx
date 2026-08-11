@@ -40,12 +40,13 @@ export default function DashboardMetricsSection({
   }
 
   if (activePage === "clientes") {
+    const totalClients = summary?.indicadores.clientes;
+    const highRiskCount = summary?.analytics.highRiskCount;
     return (
       <DashboardMetricStrip metrics={[
-        { label: "Carteira ativa", value: String(summary?.indicadores.clientes ?? 0), context: "Base completa", icon: <Users size={15} />, tone: "info" },
-        { label: "Favoritos na página", value: String(clients.filter((client) => client.favorite).length), context: "Página atual", icon: <Star size={15} />, tone: "warning" },
-        { label: "Em risco", value: String(summary?.analytics.highRiskCount ?? 0), context: "Carteira completa", icon: <AlertTriangle size={15} />, tone: "danger" },
-        { label: "Atividades recentes", value: String(summary?.atividadesRecentes.length ?? 0), context: "Últimos registros", icon: <StickyNote size={15} /> },
+        { label: "Carteira ativa", value: totalClients === undefined ? "—" : String(totalClients), context: totalClients === undefined ? "Resumo indisponível" : "Carteira completa", icon: <Users size={15} />, tone: "info" },
+        { label: "Favoritos carregados", value: String(clients.filter((client) => client.favorite).length), context: "Página atual", icon: <Star size={15} />, tone: "warning" },
+        { label: "Em atenção", value: highRiskCount === undefined ? "—" : String(highRiskCount), context: highRiskCount === undefined ? "Resumo indisponível" : "Carteira completa", icon: <AlertTriangle size={15} />, tone: "danger" },
       ]} />
     );
   }

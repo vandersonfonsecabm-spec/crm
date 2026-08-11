@@ -1,192 +1,334 @@
-import { CalendarClock, ChevronRight } from "lucide-react";
-import type { Client, SmartFilterType, Status } from "../../types/dashboard";
-import { formatNextFollowUp } from "../../utils/followUpProjection";
-import { Button, EmptyState, SectionHeader, Surface } from "../ui";
-
-type FollowUpGroup = {
-  label: string;
-  hint: string;
-  clients: Client[];
-};
+import { AlertCircle, ChevronRight, LockKeyhole, Plus } from "lucide-react";
+import { type RefObject, useRef } from "react";
+import { Link } from "react-router-dom";
+import type { ApiDashboardSummary } from "../../services/crmApi";
+import type { Client } from "../../types/dashboard";
+import { classifyNextFollowUp, formatNextFollowUp } from "../../utils/followUpProjection";
+import { getDashboardPath } from "../../navigation/dashboardNavigation";
+import { Button, Skeleton, Surface } from "../ui";
+import {
+  buildCommercialControlCenterModel,
+  type CommercialAgendaItem,
+  type CommercialControlCenterModel,
+  type CommercialPriorityItem,
+} from "./DashboardControlCenterModel";
 
 type DashboardControlCenterProps = {
   clients: Client[];
-  analytics: {
-    totalValue: number;
-    forecastValue: number;
-    hotCount: number;
-    todayFollowUps: number;
-  };
-  backendCaption: string;
-  emptyClient: Client;
-  followUpAgenda: FollowUpGroup[];
+  summary: ApiDashboardSummary | null;
+  summaryLoadState: "loading" | "ready" | "error";
+  clientsLoadState: "loading" | "ready" | "error";
+  isAuthorized: boolean;
   money: (value: number) => string;
-  statusClass: (status: Status) => string;
-  getPriority: (client: Client) => string;
-  getLeadScore: (client: Client) => number;
   getRisk: (client: Client) => string;
-  setSelectedId: (clientId: number | null) => void;
-  setCreating: (client: Client | null) => void;
-  applySmartFilter: (type: SmartFilterType) => void;
+  onCreateClient: () => void;
+  setSelectedId: (clientId: number | null, origin?: HTMLElement | null, fallback?: HTMLElement | null) => void;
+  onOpenRiskClients: () => void;
+  onOpenProposals: () => void;
+  onRetry: () => void;
 };
 
 export default function DashboardControlCenter({
   clients,
-  analytics,
-  backendCaption,
-  emptyClient,
-  followUpAgenda,
+  summary,
+  summaryLoadState,
+  clientsLoadState,
+  isAuthorized,
   money,
-  statusClass,
-  getPriority,
-  getLeadScore,
   getRisk,
+  onCreateClient,
   setSelectedId,
-  setCreating,
-  applySmartFilter,
+  onOpenRiskClients,
+  onOpenProposals,
+  onRetry,
 }: DashboardControlCenterProps) {
-  const attentionClients = [...clients]
-    .filter((client) => client.status !== "Fechado" && client.status !== "Perdido")
-    .filter((client) => getRisk(client) === "Alto" || client.lastContactDays >= 7 || (client.hot && client.status === "Proposta") || getPriority(client) === "Alta")
-    .sort((first, second) => attentionWeight(second, getPriority, getRisk, getLeadScore) - attentionWeight(first, getPriority, getRisk, getLeadScore))
-    .slice(0, 6);
-  const pipelineStages: Status[] = ["Novo", "Contato", "Proposta", "Fechado", "Perdido"];
-  const stageTotals = pipelineStages.map((status) => ({
-    status,
-    count: clients.filter((client) => client.status === status).length,
-    value: clients.filter((client) => client.status === status).reduce((total, client) => total + client.value, 0),
-  }));
-  const pipelineValue = stageTotals.filter((stage) => stage.status !== "Fechado" && stage.status !== "Perdido").reduce((total, stage) => total + stage.value, 0);
-  const riskValue = clients.filter((client) => getRisk(client) === "Alto").reduce((total, client) => total + client.value, 0);
-  const nextClient = attentionClients[0] ?? followUpAgenda.flatMap((group) => group.clients)[0] ?? null;
+  const model = buildCommercialControlCenterModel({
+    clients,
+    summary,
+    summaryLoadState,
+    clientsLoadState,
+    isAuthorized,
+    getRisk,
+    classifyFollowUp: classifyNextFollowUp,
+    formatFollowUp: formatNextFollowUp,
+  });
+  const priorityHeadingRef = useRef<HTMLHeadingElement>(null);
+  const agendaHeadingRef = useRef<HTMLHeadingElement>(null);
 
   return (
-    <div className="commercial-workbench space-y-3 pb-8">
-      <Surface className="commercial-summary overflow-hidden">
-        <div className="commercial-executive-heading">
-          <div>
-            <p className="commercial-eyebrow">Leitura executiva</p>
-            <p className="mt-1 text-[12px] text-[var(--text-secondary)]">{backendCaption}</p>
-          </div>
-        </div>
-        <dl className="commercial-metric-grid">
-          <Metric label="Carteira total" value={money(analytics.totalValue)} detail={`${clients.length} registros carregados`} />
-          <Metric label="Previsão aberta" value={money(analytics.forecastValue)} detail={`${analytics.hotCount} oportunidades prioritárias`} />
-          <Metric label="Em risco alto" value={String(clients.filter((client) => getRisk(client) === "Alto").length)} detail={riskValue > 0 ? money(riskValue) : "Sem valor em risco"} tone={riskValue > 0 ? "danger" : undefined} />
-          <Metric label="Agenda de hoje" value={String(analytics.todayFollowUps)} detail="Acompanhamentos previstos" />
-        </dl>
-      </Surface>
+    <section aria-labelledby="commercial-panel-title" className="commercial-workbench">
+      <CommercialHeader onCreateClient={onCreateClient} showAction={model.state !== "fail-closed"} />
 
-      <Surface className="commercial-immediate-focus overflow-hidden">
-        {nextClient ? (
-          <div className="commercial-focus-layout">
-            <div className="min-w-0">
-              <p className="commercial-eyebrow">Foco imediato</p>
-              <div className="commercial-focus-name">
-                <h2 className="truncate">{nextClient.name}</h2>
-                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${statusClass(nextClient.status)}`}>{nextClient.status}</span>
-              </div>
-              <p className="mt-1 truncate text-[12px] text-[var(--text-secondary)]">{nextClient.company}</p>
-            </div>
-            <dl className="commercial-focus-details">
-              <div><dt>Motivo</dt><dd>{attentionReason(nextClient, getRisk, getPriority)}</dd></div>
-              <div><dt>Próxima ação</dt><dd>{formatNextFollowUp(nextClient.nextFollowUp)}</dd></div>
-              <div><dt>Valor</dt><dd>{money(nextClient.value)}</dd></div>
-            </dl>
-            <Button className="commercial-focus-cta" onClick={() => setSelectedId(nextClient.id)} rightIcon={<ChevronRight aria-hidden="true" size={16} />} variant="primary">Abrir cliente</Button>
-          </div>
-        ) : (
-          <div className="commercial-focus-empty">
-            <div><p className="commercial-eyebrow">Foco imediato</p><h2>Nenhuma prioridade disponível</h2><p>Crie um cliente ou aguarde um acompanhamento previsto para começar a fila.</p></div>
-            <Button onClick={() => setCreating({ ...emptyClient })} variant="primary">Novo cliente</Button>
-          </div>
-        )}
-      </Surface>
-
-      <Surface className="commercial-queue overflow-hidden">
-        <SectionHeader
-          actions={<Button onClick={() => applySmartFilter("risk")} size="sm" variant="ghost">Ver fila de risco</Button>}
-          description="Registros que merecem decisão ou contato antes da próxima rodada comercial."
-          title="Ações que exigem atenção"
+      {model.state === "loading" && <CommercialLoading />}
+      {model.state === "error" && <CommercialState onRetry={onRetry} state="error" />}
+      {model.state === "fail-closed" && <CommercialState state="fail-closed" />}
+      {isDataState(model.state) && (
+        <CommercialData
+          model={model}
+          money={money}
+          onOpenAgenda={(clientId, origin) => setSelectedId(clientId, origin, agendaHeadingRef.current)}
+          onOpenPriority={(clientId, origin) => setSelectedId(clientId, origin, priorityHeadingRef.current)}
+          onOpenProposals={onOpenProposals}
+          onOpenRiskClients={onOpenRiskClients}
+          agendaHeadingRef={agendaHeadingRef}
+          priorityHeadingRef={priorityHeadingRef}
         />
-        {attentionClients.length > 0 ? (
-          <div className="commercial-table" aria-label="Ações que exigem atenção">
-            <div className="commercial-table-head">
-              <span>Cliente</span><span>Motivo</span><span>Prazo</span><span>Valor</span><span className="sr-only">Ação</span>
-            </div>
-            {attentionClients.map((client) => (
-              <button aria-label={`Abrir ${client.name}: ${attentionReason(client, getRisk, getPriority)}, ${formatNextFollowUp(client.nextFollowUp)}`} className="commercial-table-row" key={client.id} onClick={() => setSelectedId(client.id)} type="button">
-                <span className="min-w-0 text-left"><strong className="block truncate">{client.name}</strong><small className="block truncate">{client.company}</small></span>
-                <span className="commercial-row-reason text-left">{attentionReason(client, getRisk, getPriority)}</span>
-                <span className="commercial-row-deadline text-left">{formatNextFollowUp(client.nextFollowUp)}</span>
-                <span className="commercial-row-value">{money(client.value)}</span>
-                <ChevronRight aria-hidden="true" className="commercial-row-arrow" size={16} />
-              </button>
-            ))}
-          </div>
-        ) : <EmptyState description="Não há registros críticos na página atual." title="Nenhuma ação pendente" />}
-      </Surface>
+      )}
+    </section>
+  );
+}
 
-      <Surface className="commercial-context-panel min-w-0 overflow-hidden">
-        <section aria-label="Pipeline e previsão" className="commercial-pipeline-context">
-          <SectionHeader
-            description="Distribuição do valor carregado por etapa. Use como contexto para a fila, não como uma segunda prioridade."
-            title="Pipeline e previsão"
-          />
-          <div className="commercial-pipeline-summary">
-            <div><span>Pipeline em aberto</span><strong>{money(pipelineValue)}</strong></div>
-            <div><span>Previsão aberta</span><strong>{money(analytics.forecastValue)}</strong></div>
-          </div>
-          <dl className="commercial-stage-list">
-            {stageTotals.map((stage) => (
-              <div className="commercial-stage-row" key={stage.status}>
-                <span className={`commercial-stage-dot ${statusClass(stage.status)}`} aria-hidden="true" />
-                <dt>{stage.status}</dt>
-                <dd>{stage.count} {stage.count === 1 ? "registro" : "registros"}</dd>
-                <strong>{money(stage.value)}</strong>
-              </div>
-            ))}
-          </dl>
-        </section>
+function CommercialHeader({ onCreateClient, showAction }: { onCreateClient: () => void; showAction: boolean }) {
+  return (
+    <header className="commercial-header">
+      <h1 className="commercial-title truncate" id="commercial-panel-title">Painel Comercial</h1>
 
-        <section aria-label="Agenda comercial" className="commercial-agenda-context">
-          <SectionHeader
-            actions={<span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]"><CalendarClock aria-hidden="true" size={14} /> Hoje e próximos dias</span>}
-            description="Acompanhamentos derivados da agenda comercial disponível nesta página."
-            title="Agenda comercial"
-          />
-          <div className="commercial-agenda-list">
-            {followUpAgenda.map((group) => (
-              <section className="commercial-agenda-group" key={group.label}>
-                <div className="commercial-agenda-group-head"><strong>{group.label}</strong><span>{group.hint}</span></div>
-                {group.clients.length > 0 ? group.clients.slice(0, 3).map((client) => (
-                  <button aria-label={`Abrir acompanhamento de ${client.name}, ${client.status}`} className="commercial-agenda-row" key={client.id} onClick={() => setSelectedId(client.id)} type="button">
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${statusClass(client.status)}`}>{client.status}</span>
-                    <span className="min-w-0 flex-1 text-left"><strong className="block truncate">{client.name}</strong><small className="block truncate">{client.company}</small></span>
-                    <span className="whitespace-nowrap text-[11px] tabular-nums text-[var(--text-muted)]">{money(client.value)}</span>
-                  </button>
-                )) : <p className="commercial-agenda-empty">Nenhum acompanhamento previsto.</p>}
-              </section>
-            ))}
+      {showAction && (
+        <Button className="commercial-create-client" leftIcon={<Plus aria-hidden="true" size={14} />} onClick={onCreateClient} variant="primary">
+          Novo cliente
+        </Button>
+      )}
+    </header>
+  );
+}
+
+function CommercialData({
+  model,
+  money,
+  onOpenAgenda,
+  onOpenPriority,
+  onOpenProposals,
+  onOpenRiskClients,
+  agendaHeadingRef,
+  priorityHeadingRef,
+}: {
+  model: CommercialControlCenterModel<Client>;
+  money: (value: number) => string;
+  onOpenAgenda: (clientId: number, origin: HTMLButtonElement) => void;
+  onOpenPriority: (clientId: number, origin: HTMLButtonElement) => void;
+  onOpenProposals: () => void;
+  onOpenRiskClients: () => void;
+  agendaHeadingRef: RefObject<HTMLHeadingElement | null>;
+  priorityHeadingRef: RefObject<HTMLHeadingElement | null>;
+}) {
+  return (
+    <>
+      <CommercialMetricStrip metrics={model.metrics} money={money} />
+      <CommercialAttention attention={model.attention} onOpenProposals={onOpenProposals} onOpenRiskClients={onOpenRiskClients} />
+
+      <div className="commercial-operational-grid">
+        <Surface aria-labelledby="commercial-priority-title" className="commercial-priority">
+          <PriorityHeading headingRef={priorityHeadingRef} />
+          {model.priorityState === "loading" ? (
+            <PriorityLoading />
+          ) : model.priorities.length > 0 ? (
+            <PriorityList items={model.priorities} onOpen={onOpenPriority} />
+          ) : (
+            <QueueEmpty />
+          )}
+        </Surface>
+
+        <Surface aria-labelledby="commercial-agenda-title" className="commercial-agenda">
+          <AgendaHeading headingRef={agendaHeadingRef} />
+          {model.agendaState === "loading" ? (
+            <AgendaLoading />
+          ) : model.agenda.length > 0 ? (
+            <AgendaList items={model.agenda} onOpen={onOpenAgenda} />
+          ) : (
+            <AgendaEmpty />
+          )}
+        </Surface>
+      </div>
+    </>
+  );
+}
+
+function CommercialMetricStrip({
+  metrics,
+  money,
+}: {
+  metrics: CommercialControlCenterModel<Client>["metrics"];
+  money: (value: number) => string;
+}) {
+  return (
+    <section aria-labelledby="commercial-summary-title" className="commercial-summary">
+      <p className="commercial-summary-label" id="commercial-summary-title">Resumo da carteira</p>
+      <dl className="commercial-metric-strip">
+        {metrics.map((metric) => (
+          <div data-commercial-metric={metric.key} data-commercial-value={metric.value === null ? "unavailable" : metric.value > 0 ? "present" : "zero"} key={metric.key}>
+            <dt>{metric.label}</dt>
+            <dd>{metric.value === null ? "Indisponível" : metric.kind === "money" ? money(metric.value) : String(metric.value)}</dd>
           </div>
-        </section>
-      </Surface>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function CommercialAttention({
+  attention,
+  onOpenProposals,
+  onOpenRiskClients,
+}: {
+  attention: CommercialControlCenterModel<Client>["attention"];
+  onOpenProposals: () => void;
+  onOpenRiskClients: () => void;
+}) {
+  if (attention.highRiskCount === null || attention.highRiskCount === 0) return null;
+
+  return (
+    <section aria-label="Atenção" className="commercial-attention" role="status">
+      <span className="commercial-attention-label">Atenção</span>
+      <span className="commercial-attention-copy"><strong>{attention.highRiskCount}</strong> clientes em alto risco</span>
+      <div className="commercial-attention-actions">
+        <Button className="commercial-attention-action" onClick={onOpenRiskClients} size="sm" variant="ghost">Ver clientes em risco</Button>
+        <Button className="commercial-attention-action" onClick={onOpenProposals} size="sm" variant="ghost">Ver propostas</Button>
+      </div>
+    </section>
+  );
+}
+
+function PriorityHeading({ headingRef }: { headingRef?: RefObject<HTMLHeadingElement | null> }) {
+  return (
+    <header className="commercial-section-heading commercial-priority-heading">
+      <h2 id="commercial-priority-title" ref={headingRef} tabIndex={-1}>
+        Prioridades <span aria-hidden="true">—</span> <span className="commercial-section-scope">Página atual</span>
+      </h2>
+    </header>
+  );
+}
+
+function PriorityList({
+  items,
+  onOpen,
+}: {
+  items: CommercialPriorityItem<Client>[];
+  onOpen: (clientId: number, origin: HTMLButtonElement) => void;
+}) {
+  return (
+    <>
+      <div aria-hidden="true" className="commercial-queue-columns commercial-queue-table-head">
+        <span>Cliente</span><span>Motivo</span><span>Prazo</span><span>Abrir</span>
+      </div>
+      <ol className="commercial-queue-list">
+        {items.map((item) => (
+          <li key={item.client.id}>
+            <button
+              aria-label={`Abrir ${item.client.name}: ${item.reasonLabel}, ${item.deadlineLabel}`}
+              className="commercial-queue-columns commercial-queue-row"
+              data-commercial-priority-id={item.client.id}
+              data-timing={item.timing.toLowerCase()}
+              onClick={(event) => onOpen(item.client.id, event.currentTarget)}
+              type="button"
+            >
+              <span className="commercial-queue-client"><strong>{item.client.name}</strong><small>{item.client.company}</small></span>
+              <span className="commercial-queue-reason">{item.reasonLabel}</span>
+              <span className={`commercial-queue-deadline commercial-timing-${item.timing.toLowerCase()}`}>{item.deadlineLabel}</span>
+              <span className="commercial-queue-action">Abrir <ChevronRight aria-hidden="true" size={14} /></span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </>
+  );
+}
+
+function QueueEmpty() {
+  return <p className="commercial-inline-empty" role="status">Nenhuma prioridade na página atual.</p>;
+}
+
+function AgendaHeading({ headingRef }: { headingRef?: RefObject<HTMLHeadingElement | null> }) {
+  return (
+    <header className="commercial-section-heading commercial-agenda-heading">
+      <div className="commercial-agenda-heading-row">
+        <h2 id="commercial-agenda-title" ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
+          Hoje <span aria-hidden="true">—</span> <span className="commercial-section-scope">Página atual</span>
+        </h2>
+        <Link className="commercial-heading-link" to={getDashboardPath("agenda")}>Abrir Agenda <ChevronRight aria-hidden="true" size={14} /></Link>
+      </div>
+    </header>
+  );
+}
+
+function AgendaList({ items, onOpen }: { items: CommercialAgendaItem<Client>[]; onOpen: (clientId: number, origin: HTMLButtonElement) => void }) {
+  return (
+    <ol className="commercial-agenda-list">
+      {items.map((item) => (
+        <li key={item.client.id}>
+          <button
+            aria-label={`Abrir compromisso de ${item.client.name}, ${item.deadlineLabel}`}
+            className="commercial-agenda-row"
+            data-timing={item.timing.toLowerCase()}
+            onClick={(event) => onOpen(item.client.id, event.currentTarget)}
+            type="button"
+          >
+            <span className={`commercial-agenda-time commercial-timing-${item.timing.toLowerCase()}`}>{item.deadlineLabel}</span>
+            <span className="commercial-agenda-client"><strong>{item.client.name}</strong><small>{item.client.company}</small></span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function AgendaEmpty() {
+  return <p className="commercial-agenda-empty" role="status">Nenhum compromisso de hoje nesta página.</p>;
+}
+
+function CommercialLoading() {
+  return (
+    <div aria-busy="true" aria-label="Carregando Painel Comercial" className="commercial-loading" role="status">
+      <span className="sr-only">Carregando Painel Comercial</span>
+      <div className="commercial-loading-metrics">
+        {Array.from({ length: 4 }).map((_, index) => <Skeleton className="commercial-loading-metric" key={index} />)}
+      </div>
+      <div className="commercial-operational-grid">
+        <Surface className="commercial-priority">
+          <PriorityHeading />
+          <PriorityLoading />
+        </Surface>
+        <Surface className="commercial-agenda">
+          <AgendaHeading />
+          <AgendaLoading />
+        </Surface>
+      </div>
     </div>
   );
 }
 
-function Metric({ detail, label, tone, value }: { detail: string; label: string; tone?: "danger"; value: string }) {
-  return <div className={tone ? "is-danger" : undefined}><dt>{label}</dt><dd>{value}</dd><p>{detail}</p></div>;
+function PriorityLoading() {
+  return <div aria-hidden="true" className="commercial-priority-loading">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} />)}</div>;
 }
 
-function attentionReason(client: Client, getRisk: (client: Client) => string, getPriority: (client: Client) => string) {
-  if (getRisk(client) === "Alto") return "Risco alto";
-  if (client.lastContactDays >= 7) return `${client.lastContactDays} dias sem contato`;
-  if (client.hot && client.status === "Proposta") return "Proposta prioritária";
-  if (getPriority(client) === "Alta") return "Prioridade alta";
-  return "Revisar andamento";
+function AgendaLoading() {
+  return <div aria-hidden="true" className="commercial-agenda-loading">{Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} />)}</div>;
 }
 
-function attentionWeight(client: Client, getPriority: (client: Client) => string, getRisk: (client: Client) => string, getLeadScore: (client: Client) => number) {
-  return (getRisk(client) === "Alto" ? 400 : 0) + (client.lastContactDays >= 7 ? 300 : 0) + (client.hot && client.status === "Proposta" ? 200 : 0) + (getPriority(client) === "Alta" ? 100 : 0) + getLeadScore(client);
+function CommercialState({
+  state,
+  onRetry,
+}: {
+  state: "error" | "fail-closed";
+  onRetry?: () => void;
+}) {
+  const restricted = state === "fail-closed";
+
+  return (
+    <div className="commercial-state" role="alert">
+      {restricted ? <LockKeyhole aria-hidden="true" size={18} /> : <AlertCircle aria-hidden="true" size={18} />}
+      <div>
+        <h2>{restricted ? "Painel Comercial não confirmado" : "Leitura comercial indisponível"}</h2>
+        <p>
+          {restricted
+            ? "O painel só é exibido após a confirmação da sessão comercial."
+            : "Não foi possível obter os dados essenciais. Nenhum indicador, prioridade ou compromisso foi exibido."}
+        </p>
+        {!restricted && onRetry && <Button className="commercial-retry" onClick={onRetry} size="sm" variant="secondary">Tentar novamente</Button>}
+      </div>
+    </div>
+  );
+}
+
+function isDataState(state: CommercialControlCenterModel<Client>["state"]) {
+  return state === "ready" || state === "partial" || state === "empty";
 }

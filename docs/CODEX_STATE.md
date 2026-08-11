@@ -1,6 +1,6 @@
 # Estado atual do CRM
 
-Data da verificacao: 02/08/2026.
+Data da verificacao: 10/08/2026.
 
 ## Estrutura ativa
 
@@ -11,13 +11,17 @@ Data da verificacao: 02/08/2026.
 
 ## Git
 
-- Baseline oficial publicado em `origin/master` e HEAD atual:
+- Ultimo commit funcional publicado do frontend:
   `9b14b0587fd4a5f223589440f7d4b186e2d91b0e`.
-- Branch de trabalho ativa: `feature/postgres-migration-prep`, alinhada a
-  `origin/master` na relacao `0 0`.
-- A branch remota correspondente e `origin/feature/postgres-migration-prep`;
-  ambas apontam para o mesmo SHA. O worktree esta limpo e nao possui arquivos
-  untracked.
+- O baseline Git do candidato RC1 validado e o commit exclusivamente documental
+  `6e76d9695744da7c2edfa1e4481dfdeb9c750fa4`, posterior ao ultimo commit
+  funcional e sem alteracao de produto; o HEAD local e `origin/master`
+  permanecem nesse SHA, na relacao `0 0`.
+- Branch de trabalho ativa: `feature/postgres-migration-prep`.
+- Neste checkpoint, o candidato RC1 validado possui 102 paths explicitamente
+  staged para publicacao controlada. O worktree coincide com o index e nao ha
+  alteracoes unstaged nem extras untracked.
+- Ainda nao houve commit, push ou deploy do RC1 neste checkpoint.
 - `feature/customer-360` e uma referencia historica totalmente incorporada em
   `origin/master`; nao representa o fluxo de trabalho ativo.
 - A master local divergente preserva o trabalho isolado de Estoque.
@@ -80,10 +84,15 @@ Data da verificacao: 02/08/2026.
 ## Banco local protegido
 
 - Arquivo: `backend/prisma/dev.db`.
-- Tamanho: 532.480 bytes.
-- SHA-256: `cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a`.
-- Migrations locais: 9; quick check esperado `ok`; foreign key check esperado
-  zero.
+- Tamanho: 1.282.048 bytes.
+- SHA-256: `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- Migrations locais: 30; `integrity_check` e `quick_check` esperados `ok`;
+  foreign key check esperado zero.
+- Baseline forense de 03/08/2026: paginas de 4.096 bytes, `page_count=313`,
+  `freelist_count=0`, 47 tabelas de aplicacao coerentes com os 47 models
+  Prisma e nenhum objeto inesperado. O crescimento desde o baseline historico
+  de 9 migrations corresponde as 21 migrations aditivas posteriores; os
+  registros historicos abaixo preservam os valores observados em suas datas.
 - Nunca escrever nesse banco durante testes.
 
 ## Reconciliacao read-only do banco de producao
@@ -1432,9 +1441,77 @@ integracoes autorizadas.
   dashboard comercial, e o commit
   `9b14b0587fd4a5f223589440f7d4b186e2d91b0e` removeu os icones decorativos de
   prioridade.
-- O blueprint amplo do design system, shell, navegacao e Painel Comercial ainda
-  nao foi realizado. A proxima etapa e pesquisar padroes atuais de SaaS B2B
-  maduras e fechar um blueprint estrutural antes de qualquer novo redesign.
+- O blueprint amplo do design system, shell, navegacao e Painel Comercial foi
+  concluido com base em padroes atuais de SaaS B2B maduras. A proxima etapa e
+  implementar, no projeto principal e sem copia paralela, a fundacao visual, o
+  shell desktop e o Painel Comercial para validacao visual antes de publicar.
 - O custom agent `design_worker` esta configurado e disponivel para delegacao,
   usando `gpt-5.6-terra` com reasoning `high`. A skill local
   `interface-design` permanece a autoridade principal para UI/UX.
+
+## Onda 4 - Clientes + Negocios
+
+- A nomenclatura canonica foi normalizada em 08/08/2026: a Onda 4 compreende
+  conjuntamente Clientes e Negocios.
+- O estado permanece local na branch `feature/postgres-migration-prep`, no HEAD
+  `6e76d9695744da7c2edfa1e4481dfdeb9c750fa4`, alinhado ao upstream na relacao
+  `0 0`, com index vazio. Nao houve commit, push ou deploy da Onda 4.
+
+### Clientes
+
+- Clientes foi implementado e validado preservando o contrato real do backend:
+  Cliente, localizacao, contato, status, score explicitamente indisponivel
+  quando nao ha fonte confiavel, proxima acao e acoes existentes. O Cliente 360,
+  favoritos, paginacao, busca e filtros foram preservados.
+- O QA visual controlado aprovou 1366x768, 1440x900, 1920x1080 e 900x768, sem
+  overflow da pagina ou erros no console. O smoke funcional aprovou abertura e
+  fechamento acessivel do Cliente 360, retorno de foco e estados recuperaveis
+  de erro.
+- As adaptacoes por contratos ausentes permanecem explicitas: a listagem nao
+  inventa responsavel nem valor individual de Cliente, e nao projeta score ou
+  receita sem fonte confiavel. O teste focal ativo e
+  `frontend/tests/wave4-clients.test.mjs`.
+
+### Negocios
+
+- Negocios foi implementado e validado preservando `Negocio` como fonte de
+  verdade, o pipeline real, o feature flag, a capability, o drag-and-drop e o
+  movimento otimista com rollback. As etapas `Fechado` e `Perdido` permanecem
+  no quadro; valores usam BRL e os estados parado e atrasado sao semanticos.
+- O QA visual aprovou 1366x768, 1440x900, 1920x1080 e 900x768, sem overflow da
+  pagina ou erros no console. O drawer aprovou foco inicial, contencao de Tab,
+  Escape, bloqueio e restauracao do scroll e retorno do foco ao card de origem.
+- O teste focal ativo foi normalizado para
+  `frontend/tests/wave4-negocios.test.mjs`; nenhuma logica de produto foi
+  alterada pela renomeacao.
+
+### Evidencias, deltas e limites
+
+- As validacoes funcionais e visuais anteriores permanecem validas: 12/12
+  testes focais, ESLint alvo, `git diff --check`, 91/91 testes do frontend e
+  build. O aviso conhecido de chunk acima de 500 kB permanece sem regressao.
+- Os artefatos canonicos sao `WAVE_4_CLIENTS_DELTA.patch`,
+  `WAVE_4_DEALS_DELTA.patch` e `WAVE_4_DELTA.patch`, derivados mecanicamente
+  dos marcos existentes, sem selecao manual de hunks. As evidencias historicas
+  `WAVE_4_MARK_A.patch` e `WAVE_4_CLIENTES_PARTIAL_DELTA.patch` permanecem
+  imutaveis.
+- Permanecem como divida funcional futura, fora desta normalizacao: responsavel
+  na listagem de Clientes, definicao oficial do valor individual de Cliente,
+  fluxo real de Novo negocio e agregado confiavel de receita por etapa.
+- `backend/prisma/dev.db` permaneceu imutavel, com SHA-256
+  `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+  Nao houve alteracao de backend, API, banco, Prisma, schema ou migration.
+- Producao nao foi acessada nem alterada. Nao houve browser, nova implementacao,
+  mudanca visual, commit, push, deploy ou inicio da Onda 5 nesta normalizacao.
+
+## Estado visual canonico - normalizacao administrativa
+
+- As Ondas 1 a 6 estao concluidas: fundacao e shell, Visao Geral, Painel
+  Comercial, Clientes + Negocios, Agenda + Caixa de Entrada e o redesign visual
+  final. O redesign visual e o redesign composicional foram implementados e
+  aprovados.
+- O Gate Final de Acessibilidade Funcional foi concluido com
+  `ACCESSIBILITY_GATE_PASS`.
+- O RC1 foi validado com decisao `SHIP` e esta staged para publicacao controlada.
+  Ainda nao houve commit, push ou deploy neste checkpoint.
+- A producao permanece intacta.

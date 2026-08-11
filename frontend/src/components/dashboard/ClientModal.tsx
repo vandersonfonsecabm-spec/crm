@@ -119,7 +119,7 @@ export default function ClientModal({
   const isBusyRef = useRef(false);
 
   const fieldBaseClass =
-    "rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm outline-none transition-all duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70";
+    "rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm outline-none transition-[border-color,background-color] duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70";
   const invalidFieldClass = "border-rose-300/45 bg-rose-950/10 focus:border-rose-200/70";
 
   const fieldLabelClass =
@@ -548,7 +548,7 @@ export default function ClientModal({
               type="button"
               onClick={onClose}
               disabled={isBusy}
-              className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300 transition-all duration-200 hover:border-slate-400/24 hover:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300 transition-[border-color,background-color] duration-200 hover:border-slate-400/24 hover:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-45"
             >
               Cancelar
             </button>
@@ -557,7 +557,7 @@ export default function ClientModal({
               type="submit"
               disabled={isBusy}
               aria-disabled={isBusy}
-              className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-950 transition-all duration-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-950 transition-colors duration-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? "Salvando..." : saveLabel}
             </button>
