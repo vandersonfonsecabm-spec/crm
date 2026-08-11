@@ -84,7 +84,8 @@ function createSiteLeadService({ prisma }) {
     } catch (error) {
       if (error?.code === "P2002") {
         const existing = await prisma.eventoWebhook.findUnique({ where: { empresaId_canalIntegracaoId_provedor_externalEventId: { empresaId: integration.empresaId, canalIntegracaoId: integration.id, provedor: PROVIDER, externalEventId: payload.submissionId } } });
-        if (existing) return { accepted: true, submissionId: payload.submissionId, idempotent: true };
+        if (existing && existing.payloadHash === payloadHash) return { accepted: true, submissionId: payload.submissionId, idempotent: true };
+        if (existing) throw idempotencyConflictError();
       }
       throw error;
     }
@@ -143,6 +144,7 @@ function pick(value, fields) { return Object.fromEntries(fields.filter((field) =
 function requireAdmin(context) { if (context.papel !== "ADMIN") { const error = new Error("Acesso negado."); error.status = 403; error.codigo = "SITE_INTEGRATION_FORBIDDEN"; throw error; } }
 function notFound() { const error = new Error("Integracao nao encontrada."); error.status = 404; error.codigo = "SITE_INTEGRATION_NOT_FOUND"; return error; }
 function validationError(message, campos) { const error = new Error(message); error.status = 400; error.codigo = "VALIDATION_ERROR"; error.campos = campos; return error; }
+function idempotencyConflictError() { const error = new Error("submissionId ja utilizado com dados diferentes."); error.status = 409; error.codigo = "IDEMPOTENCY_CONFLICT"; return error; }
 function isUuid(value) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "")); }
 
 module.exports = { createSiteLeadService, isEnabled, presentIntegration, readConfiguration };

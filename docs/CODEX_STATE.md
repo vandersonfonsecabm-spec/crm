@@ -1512,6 +1512,17 @@ integracoes autorizadas.
   aprovados.
 - O Gate Final de Acessibilidade Funcional foi concluido com
   `ACCESSIBILITY_GATE_PASS`.
-- O RC1 foi validado com decisao `SHIP` e esta staged para publicacao controlada.
-  Ainda nao houve commit, push ou deploy neste checkpoint.
-- A producao permanece intacta.
+- O RC1 foi publicado anteriormente pelo fluxo oficial no SHA
+  `544f9da7617e3bd5ae3c8453fcc73ac39185f252`; naquele checkpoint, o HEAD local
+  e `origin/master` permaneciam nesse SHA, na relacao `0 0`, sem codigo local
+  pendente para publicar. Esse registro e historico.
+- Depois do RC1, o Teste Luna #2 aprovou dois deltas do Site Form:
+  `backend/src/site-leads/service.js` e
+  `backend/tests/site-lead-capture-d1.test.js`. Esses deltas integram o pacote
+  de publicacao controlada correspondente a este checkpoint; este registro nao
+  antecipa o resultado de commit, push ou deploy.
+- O deploy Vercel foi concluido e o smoke publico de producao foi aprovado no
+  escopo autorizado. O Railway nao precisou de novo deploy porque nenhum path
+  observado exigia publicacao de backend.
+- A producao permanece intacta quanto a banco, backend, ambiente, dependencias
+  e dados; nenhum outbound ou alteracao de dados reais ocorreu.

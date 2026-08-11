@@ -49,6 +49,13 @@ test("D1 capta formulario Site com seguranca, tenant e idempotencia", async () =
   const counts = await domainCounts(adminA.empresaId);
   assert.equal((await publicRequest(integration.publicId, payload)).status, 202);
   assert.deepEqual(await domainCounts(adminA.empresaId), counts);
+  const conflictId = crypto.randomUUID();
+  assert.equal((await publicRequest(integration.publicId, submission(conflictId, { mensagem: "Primeiro envio" }))).status, 202);
+  const beforeConflict = await domainCounts(adminA.empresaId);
+  const conflict = await publicRequest(integration.publicId, submission(conflictId, { mensagem: "Payload alterado" }));
+  assert.equal(conflict.status, 409);
+  assert.equal(conflict.body.codigo, "IDEMPOTENCY_CONFLICT");
+  assert.deepEqual(await domainCounts(adminA.empresaId), beforeConflict);
   const raceId = crypto.randomUUID();
   const race = await Promise.all([publicRequest(integration.publicId, submission(raceId)), publicRequest(integration.publicId, submission(raceId))]);
   assert.deepEqual(race.map((item) => item.status), [202, 202]);
@@ -60,6 +67,13 @@ test("D1 capta formulario Site com seguranca, tenant e idempotencia", async () =
   assert.equal(preserved.nome, "Cliente Existente"); assert.equal(preserved.empresa, "Empresa preservada"); assert.equal(preserved.cidade, "Sao Paulo"); assert.equal(preserved.estado, "SP");
 
   const beforeBlocked = await domainCounts(adminA.empresaId);
+  const preflight = await preflightRequest(integration.publicId, "http://127.0.0.1:4178");
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), "http://127.0.0.1:4178");
+  assert.equal(preflight.headers.get("access-control-allow-methods"), "POST, OPTIONS");
+  const deniedPreflight = await preflightRequest(integration.publicId, "http://malicioso.local");
+  assert.equal(deniedPreflight.status, 403);
+  assert.equal(deniedPreflight.headers.get("access-control-allow-origin"), null);
   assert.equal((await publicRequest(integration.publicId, submission(crypto.randomUUID()), "http://malicioso.local")).status, 403);
   assert.deepEqual(await domainCounts(adminA.empresaId), beforeBlocked);
   const honey = await publicRequest(integration.publicId, submission(crypto.randomUUID(), { campoHoneypot: "spam" }));
@@ -100,6 +114,7 @@ test("D1 capta formulario Site com seguranca, tenant e idempotencia", async () =
 function integrationPayload(name = "Site institucional") { return { nome: name, identificacao: "Formulario principal", origensPermitidas: ["http://127.0.0.1:4178", "http://localhost:4178"], politicaPrivacidade: "politica-d1-v1", ativo: true }; }
 function submission(submissionId, patch = {}) { return { submissionId, nome: "Visitante QA", telefone: "11999991000", email: "visitante@d1.test", cidade: "Campinas", estado: "SP", produtoInteresse: "Trator D1", mensagem: "Gostaria de receber informacoes.", paginaOrigem: "http://127.0.0.1:4178/tratores", campanha: "Safra D1", aceitePoliticaPrivacidade: true, versaoPoliticaPrivacidade: "politica-d1-v1", campoHoneypot: "", ...patch }; }
 async function publicRequest(publicId, body, origin = "http://127.0.0.1:4178") { return request("POST", `/public/site-leads/${publicId}`, body, undefined, origin); }
+async function preflightRequest(publicId, origin) { return fetch(`${baseUrl}/public/site-leads/${publicId}`, { method: "OPTIONS", headers: { origin, "access-control-request-method": "POST", "access-control-request-headers": "content-type" } }); }
 async function rawPublicRequest(publicId, body, origin = "http://127.0.0.1:4178") { const response = await fetch(`${baseUrl}/public/site-leads/${publicId}`, { method: "POST", headers: { "content-type": "application/json", origin }, body }); const text = await response.text(); return { status: response.status, body: text && response.headers.get("content-type")?.includes("application/json") ? JSON.parse(text) : text || null }; }
 async function authRequest(method, pathname, body, token) { return request(method, pathname, body, token); }
 async function request(method, pathname, body, token, origin) { const response = await fetch(`${baseUrl}${pathname}`, { method, headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), ...(token ? { authorization: `Bearer ${token}` } : {}), ...(origin ? { origin } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); const text = await response.text(); const contentType = response.headers.get("content-type") || ""; return { status: response.status, body: text && contentType.includes("application/json") ? JSON.parse(text) : text || null }; }
