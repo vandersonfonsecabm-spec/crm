@@ -1,6 +1,33 @@
 # Estado atual do CRM
 
-Data da verificacao: 10/08/2026.
+Data da verificacao: 12/08/2026.
+
+## Checkpoint operacional atual — V37 pre-convergencia Meta/Instagram
+
+- Branch real: `feature/postgres-migration-prep`.
+- HEAD local e `origin/feature/postgres-migration-prep`: `177d2e192fcc31e0f89542a5c03e8700d9532431`.
+- `origin/master`: `6e39e2a5b9dbb2bba1cf4c0376ef2e09a367db62`; relacao
+  `origin/master...HEAD`: `0 3` (feature 3 commits a frente, 0 atras).
+- No preflight, o indice Git estava vazio, sem untracked nem conflitos, e o
+  worktree continha somente `docs/CODEX_STATE.md` modificado preexistente; esta
+  reconciliacao altera exclusivamente esse mesmo arquivo.
+- O codigo Meta/Instagram esta presente na feature e no HOMOLOG; o master
+  oficial em `6e39e2a` permanece sem essa preparacao.
+- O deploy/QA read-only do HOMOLOG Vercel/Railway foi comprovado no SHA
+  `177d2e1`; health 200 e 32 migrations sao evidencias do checkpoint V20 e a
+  sessao V35 confirmou a UI. O oficial permanece em `6e39e2a`; producao ainda
+  nao deve ser promovida.
+- QA V35 no HOMOLOG confirmou card Instagram/Meta visivel, estado
+  `NOT_CONFIGURED` e CTA honesto desabilitado por falta de canal real.
+- V36 classificou o estado como `DIVERGED_WITH_UNIQUE_CHANGES` e `FIX_FIRST`.
+- O contrato oficial Meta foi pesquisado; OAuth/E2E real nao foi executado e
+  nenhuma conta Meta foi conectada.
+- `backend/prisma/dev.db` permanece imutavel, SHA-256
+  `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- Nenhum segredo, login Meta, token, Graph API autenticada, webhook externo ou
+  conta foi usado nesta preparacao. Nao houve mutacao de producao/master.
+- O bloco Git abaixo preserva historico anterior; suas afirmacoes de worktree
+  limpo e HEAD antigo nao descrevem este checkpoint atual.
 
 ## Estrutura ativa
 
@@ -13,15 +40,14 @@ Data da verificacao: 10/08/2026.
 
 - Ultimo commit funcional publicado do frontend:
   `9b14b0587fd4a5f223589440f7d4b186e2d91b0e`.
-- O baseline Git do candidato RC1 validado e o commit exclusivamente documental
+- Historico: o baseline Git do candidato RC1 validado foi o commit exclusivamente documental
   `6e76d9695744da7c2edfa1e4481dfdeb9c750fa4`, posterior ao ultimo commit
-  funcional e sem alteracao de produto; o HEAD local e `origin/master`
-  permanecem nesse SHA, na relacao `0 0`.
+  funcional e sem alteracao de produto. O checkpoint atual avancou para a
+  feature Meta acima; `origin/master` continua em `6e39e2a`.
 - Branch de trabalho ativa: `feature/postgres-migration-prep`.
-- Neste checkpoint, o candidato RC1 validado possui 102 paths explicitamente
-  staged para publicacao controlada. O worktree coincide com o index e nao ha
-  alteracoes unstaged nem extras untracked.
-- Ainda nao houve commit, push ou deploy do RC1 neste checkpoint.
+- Historico: naquele checkpoint, o candidato RC1 possuia 102 paths explicitamente
+  staged para publicacao controlada e o worktree coincidia com o index.
+- Historico: ainda nao havia commit, push ou deploy do RC1 naquele checkpoint.
 - `feature/customer-360` e uma referencia historica totalmente incorporada em
   `origin/master`; nao representa o fluxo de trabalho ativo.
 - A master local divergente preserva o trabalho isolado de Estoque.
@@ -86,7 +112,9 @@ Data da verificacao: 10/08/2026.
 - Arquivo: `backend/prisma/dev.db`.
 - Tamanho: 1.282.048 bytes.
 - SHA-256: `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
-- Migrations locais: 30; `integrity_check` e `quick_check` esperados `ok`;
+- O `dev.db` protegido registra 30 migrations; a arvore de migrations da
+  feature possui 32, incluindo as duas migrations Meta. `integrity_check` e
+  `quick_check` sao esperados `ok`;
   foreign key check esperado zero.
 - Baseline forense de 03/08/2026: paginas de 4.096 bytes, `page_count=313`,
   `freelist_count=0`, 47 tabelas de aplicacao coerentes com os 47 models
@@ -959,8 +987,9 @@ integracoes autorizadas.
 - `docs/POSTGRES_CUTOVER_RUNBOOK.md` documenta pre-requisitos, backup,
   congelamento de escrita, baseline, importacao, validacao, troca controlada de
   `DATABASE_URL`, smoke tests e rollback.
-- Producao, Railway, Vercel, worker, piloto JavaGro, tenant principal e
-  WhatsApp nao foram alterados nesta preparacao.
+- Producao oficial, Railway/Vercel oficiais, worker, piloto JavaGro, tenant
+  principal e WhatsApp nao foram alterados nesta preparacao; o Railway/Vercel
+  HOMOLOG foi apenas o alvo de deploy/QA read-only documentado acima.
 
 ## H8 encerrada
 
@@ -1453,9 +1482,11 @@ integracoes autorizadas.
 
 - A nomenclatura canonica foi normalizada em 08/08/2026: a Onda 4 compreende
   conjuntamente Clientes e Negocios.
-- O estado permanece local na branch `feature/postgres-migration-prep`, no HEAD
-  `6e76d9695744da7c2edfa1e4481dfdeb9c750fa4`, alinhado ao upstream na relacao
-  `0 0`, com index vazio. Nao houve commit, push ou deploy da Onda 4.
+- Historico da normalizacao: a Onda 4 permaneceu local na branch
+  `feature/postgres-migration-prep`, no HEAD `6e76d9695744da7c2edfa1e4481dfdeb9c750fa4`,
+  alinhado ao upstream na relacao `0 0`, com index vazio. Depois, os commits
+  Meta `38fda4b`, `377cffa` e `177d2e1` avancaram somente a feature; nao foram
+  incorporados ao `origin/master`.
 
 ### Clientes
 
