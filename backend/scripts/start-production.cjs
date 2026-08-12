@@ -16,6 +16,7 @@ const SCHEMA_PATH = path.join(BACKEND_DIRECTORY, "prisma", "schema.prisma");
 const VALIDATE_RUNTIME_PATH = path.join(BACKEND_DIRECTORY, "scripts", "validate-runtime.js");
 const SERVER_PATH = path.join(BACKEND_DIRECTORY, "src", "server.js");
 const OFFICIAL_SERVICE_ID = "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92";
+const HOMOLOGATION_ENVIRONMENT = "homolog";
 const OFFICIAL_MOUNT_PATH = path.resolve("/app/data");
 
 async function runStartup(options = {}) {
@@ -39,7 +40,7 @@ async function runStartup(options = {}) {
         env,
         backendDirectory: runtime.backendDirectory,
         schemaPath: runtime.schemaPath,
-        expectedServiceId: options.expectedServiceId || OFFICIAL_SERVICE_ID,
+        expectedServiceId: options.expectedServiceId || resolveExpectedServiceId(env),
         expectedMountPath: options.expectedMountPath || OFFICIAL_MOUNT_PATH,
         preparePrismaRuntime: options.preparePrismaRuntime || runtimePrismaConfig,
         prismaCliPath: options.prismaCliPath,
@@ -155,6 +156,17 @@ function validateRailwayEnvironment({
     prismaCliPath: resolvedPrismaCli,
     schemaPath: runtimeSchemaPath,
   };
+}
+
+function resolveExpectedServiceId(env = process.env) {
+  const environment = String(env.CRM_RAILWAY_ENVIRONMENT || "").trim().toLowerCase();
+  if (environment !== HOMOLOGATION_ENVIRONMENT) return OFFICIAL_SERVICE_ID;
+
+  const homologServiceId = String(env.CRM_RAILWAY_HOMOLOG_SERVICE_ID || "").trim();
+  if (!homologServiceId || !/^[A-Za-z0-9_-]+$/.test(homologServiceId)) {
+    throw startupError("RAILWAY_HOMOLOG_SERVICE_ID_MISSING");
+  }
+  return homologServiceId;
 }
 
 async function runPrismaMigration(runtime, { spawnImpl = spawn } = {}) {
@@ -338,6 +350,7 @@ if (require.main === module) {
 module.exports = {
   OFFICIAL_MOUNT_PATH,
   OFFICIAL_SERVICE_ID,
+  HOMOLOGATION_ENVIRONMENT,
   isRailwayEnvironment,
   resolveSqliteDatabasePath,
   resolvePrismaCli,
@@ -348,4 +361,5 @@ module.exports = {
   startApiServer,
   superviseServer,
   validateRailwayEnvironment,
+  resolveExpectedServiceId,
 };

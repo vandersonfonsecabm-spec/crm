@@ -75,6 +75,66 @@ function decryptCredentials(payload) {
   return JSON.parse(decrypted.toString("utf8"));
 }
 
+function encryptCredentialsWithContext(credentials, context) {
+  if (!credentials || typeof credentials !== "object" || Array.isArray(credentials)) {
+    return null;
+  }
+
+  const key = requireEncryptionKey();
+  const aad = contextAssociatedData(context);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  cipher.setAAD(Buffer.from(aad, "utf8"));
+  const plaintext = Buffer.from(JSON.stringify(credentials), "utf8");
+  const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return JSON.stringify({
+    version: FORMAT_VERSION,
+    alg: ALGORITHM,
+    aad,
+    iv: iv.toString("base64"),
+    tag: tag.toString("base64"),
+    data: encrypted.toString("base64"),
+  });
+}
+
+function decryptCredentialsWithContext(payload, context) {
+  if (!payload) return null;
+
+  const parsed = typeof payload === "string" ? JSON.parse(payload) : payload;
+  if (parsed.version !== FORMAT_VERSION || parsed.alg !== ALGORITHM) {
+    throw integrationCryptoError("INTEGRATION_CREDENTIALS_INVALID", "Formato de credenciais invalido.");
+  }
+
+  const aad = contextAssociatedData(context);
+  if (parsed.aad !== aad) {
+    throw integrationCryptoError("INTEGRATION_CREDENTIALS_CONTEXT_INVALID", "Contexto de credenciais invalido.");
+  }
+  const key = requireEncryptionKey();
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(parsed.iv, "base64"));
+  decipher.setAAD(Buffer.from(aad, "utf8"));
+  decipher.setAuthTag(Buffer.from(parsed.tag, "base64"));
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(parsed.data, "base64")),
+    decipher.final(),
+  ]);
+
+  return JSON.parse(decrypted.toString("utf8"));
+}
+
+function contextAssociatedData(context) {
+  const empresaId = Number(context?.empresaId);
+  const canalIntegracaoId = Number(context?.canalIntegracaoId);
+  const revision = Number(context?.revision);
+  const provider = String(context?.provider || "").trim();
+  const reference = String(context?.reference || "").trim();
+  if (!Number.isSafeInteger(empresaId) || empresaId < 1 || !Number.isSafeInteger(canalIntegracaoId) || canalIntegracaoId < 1 || !Number.isSafeInteger(revision) || revision < 1 || !provider || !reference) {
+    throw integrationCryptoError("INTEGRATION_CREDENTIALS_CONTEXT_INVALID", "Contexto de credenciais invalido.");
+  }
+  return ["meta-credential", FORMAT_VERSION, empresaId, canalIntegracaoId, provider, reference, revision].join("|");
+}
+
 function hasEncryptedCredentials(value) {
   return Boolean(value);
 }
@@ -87,16 +147,19 @@ function assertIntegrationEncryptionReady({ prisma } = {}) {
     throw integrationCryptoError("ENCRYPTION_KEY_REQUIRED", "Chave de criptografia de integracoes obrigatoria em producao.");
   }
 
-  return prisma.integracao.count({
-    where: {
-      ativo: true,
-      status: "ATIVA",
-      credenciaisCriptografadas: {
-        not: null,
+  return Promise.all([
+    prisma.integracao.count({
+      where: {
+        ativo: true,
+        status: "ATIVA",
+        credenciaisCriptografadas: {
+          not: null,
+        },
       },
-    },
-  }).then((activeIntegrations) => {
-    if (activeIntegrations > 0) {
+    }),
+    prisma.metaCredential.count({ where: { status: "ATIVA" } }),
+  ]).then(([activeIntegrations, activeMetaCredentials]) => {
+    if (activeIntegrations > 0 || activeMetaCredentials > 0) {
       throw integrationCryptoError("ENCRYPTION_KEY_REQUIRED", "Chave de criptografia de integracoes obrigatoria em producao.");
     }
   });
@@ -122,7 +185,9 @@ function integrationCryptoError(code, message) {
 
 module.exports = {
   encryptCredentials,
+  encryptCredentialsWithContext,
   decryptCredentials,
+  decryptCredentialsWithContext,
   hasEncryptedCredentials,
   assertIntegrationEncryptionReady,
   sanitizeCredentials,

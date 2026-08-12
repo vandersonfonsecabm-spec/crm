@@ -7,9 +7,9 @@ const { relationSpecs } = require("./check-tenant-relation-integrity.cjs");
 const { classifyPolymorphicRows, POLYMORPHIC_ROWS_QUERY } = require("./tenant-isolation-verifier-utils.cjs");
 const { sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation-log-utils.cjs");
 
-const EXPECTED_RELATION_COUNT = 87;
+const EXPECTED_RELATION_COUNT = 89;
 const TENANT_RELATION_MANIFEST_VERSION = 1;
-const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "1d0a06953fcc75873ab7b6f07b3949e8f7bf17d48386557e3c1c48cb679928f9";
+const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "4043f4369693a41b2636c1aa4e56c22da1997fb83689c6008aa26a879763c82b";
 const DEFAULT_MIGRATION_NAME = "20260801123000_enforce_tenant_safe_relations";
 const DEFAULT_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma", "migrations");
 const DEFAULT_POSTGRES_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma-postgres", "migrations");
@@ -18,6 +18,7 @@ const CASCADE_RELATIONS = new Set([
   "Nota.clienteId->Cliente",
   "HistoricoAcompanhamento.acompanhamentoId->Acompanhamento",
   "IntegracaoOAuthState.usuarioId->Usuario",
+  "IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao",
   "SincronizacaoIntegracao.integracaoId->Integracao",
   "ErroIntegracao.integracaoId->Integracao",
   "ProdutoExterno.integracaoId->Integracao",
@@ -30,6 +31,7 @@ const CASCADE_RELATIONS = new Set([
   "ContatoCanal.canalIntegracaoId->CanalIntegracao",
   "ConversaCanal.canalIntegracaoId->CanalIntegracao",
   "ConversaCanal.contatoCanalId->ContatoCanal",
+  "MetaCredential.canalIntegracaoId->CanalIntegracao",
   "MensagemCanal.canalIntegracaoId->CanalIntegracao",
   "MensagemCanal.conversaCanalId->ConversaCanal",
   "EmailMessageMetadata.mensagemCanalId->MensagemCanal",
@@ -55,6 +57,12 @@ const GLOBAL_RELATION_EXCEPTIONS = Object.freeze({
     scope: "platform",
     reason: "PlatformTenantAudit.actorUserId representa o operador de plataforma global.",
   }),
+  "CanalIntegracao.id->MetaCredential": Object.freeze({
+    fromFields: ["empresaId", "id", "accessTokenRef"],
+    toFields: ["empresaId", "canalIntegracaoId", "reference"],
+    scope: "integration",
+    reason: "CanalIntegracao aponta para a credencial Meta atual por chave composta opcional e tenant-scoped.",
+  }),
 });
 
 const MIGRATION_REGISTRY = Object.freeze({
@@ -69,6 +77,18 @@ const MIGRATION_REGISTRY = Object.freeze({
     relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
     sqliteSha256: "b34acdfebadf0ae3badc55af5ca86a64a1627c3aece46edb414463a3c48dbca7",
     postgresSha256: "176b4502032affd3d779bd968b13094aadc71128681ed937bfffcd0e03776174",
+  }),
+  "20260811120000_add_meta_credential_store": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: "41e080170602b2ea9adbd2659829d12ba7637bc989263dfaf1bff21910e924af",
+    postgresSha256: "c5efb656d5483d53ac48eabb33753fad93107362ebc74b91ca0ca036985ab1ff",
+  }),
+  "20260811130000_add_meta_oauth_state_binding": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: "4043f4369693a41b2636c1aa4e56c22da1997fb83689c6008aa26a879763c82b",
+    sqliteSha256: "08f76dce5d9b4c1b0d44990d116dfb60dd373bb8b988438e1037a9fc9571c34c",
+    postgresSha256: "403951c8fe5fba9e8bc57d739fafab2ad6216c6052ee48380bd270a3586935f4",
   }),
 });
 
@@ -375,6 +395,79 @@ function createdTablesFromMigrationSql(sql) {
   return created;
 }
 
+function createdTablesThroughMigrations(directory, migrationName) {
+  if (!directory || !fs.existsSync(directory)) return new Set();
+  const names = migrationDirectories(directory);
+  const selected = migrationName ? names.filter((name) => name <= migrationName) : names;
+  const created = new Set();
+  for (const name of selected) {
+    const file = path.join(directory, name, "migration.sql");
+    if (!fs.existsSync(file)) continue;
+    for (const table of createdTablesFromMigrationSql(fs.readFileSync(file, "utf8"))) created.add(table);
+  }
+  return created;
+}
+
+async function pendingMigrationNames({ url, directory, migrationName }) {
+  const canonical = migrationDirectories(directory);
+  if (canonical.length === 0) throw new GateFailure("TENANT_GATE_MIGRATION_HISTORY_UNKNOWN");
+  const expectedLatest = canonical.at(-1);
+  if (migrationName && migrationName !== expectedLatest) throw new GateFailure("TENANT_GATE_MIGRATION_LATEST_MISMATCH");
+  const kind = databaseKind(url);
+  let rows = [];
+  let appTableCount = 0;
+  if (kind === "postgresql") {
+    const client = new Client({ connectionString: url, statement_timeout: 30000 });
+    await client.connect();
+    try {
+      const tables = await client.query("SELECT tablename AS name FROM pg_tables WHERE schemaname = current_schema()");
+      appTableCount = tables.rows.filter((row) => String(row.name) !== "_prisma_migrations").length;
+      if (tables.rows.some((row) => row.name === "_prisma_migrations")) {
+        rows = (await client.query('SELECT migration_name, finished_at, rolled_back_at FROM "_prisma_migrations" ORDER BY started_at, id')).rows;
+      }
+    } finally { await client.end(); }
+  } else {
+    const prisma = new PrismaClient({ datasourceUrl: url });
+    try {
+      const tables = await prisma.$queryRawUnsafe("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'");
+      appTableCount = tables.filter((row) => String(row.name) !== "_prisma_migrations").length;
+      if (tables.some((row) => row.name === "_prisma_migrations")) {
+        rows = await prisma.$queryRawUnsafe('SELECT migration_name, finished_at, rolled_back_at FROM "_prisma_migrations" ORDER BY started_at, id');
+      }
+    } finally { await prisma.$disconnect(); }
+  }
+  if (rows.length === 0 && appTableCount > 0) throw new GateFailure("TENANT_GATE_MIGRATION_HISTORY_MISSING");
+  const uniqueApplied = validateMigrationHistory(canonical, rows, appTableCount);
+  return canonical.slice(uniqueApplied.length);
+}
+
+function validateMigrationHistory(canonical, rows, appTableCount = 0) {
+  if (rows.length === 0 && appTableCount > 0) throw new GateFailure("TENANT_GATE_MIGRATION_HISTORY_MISSING");
+  const applied = [];
+  for (const row of rows) {
+    const name = String(row.migration_name || "");
+    if (!canonical.includes(name)) throw new GateFailure("TENANT_GATE_MIGRATION_HISTORY_UNKNOWN");
+    if (!row.finished_at || row.rolled_back_at) throw new GateFailure("TENANT_GATE_MIGRATION_HISTORY_DIRTY");
+    applied.push(name);
+  }
+  const uniqueApplied = [...new Set(applied)];
+  if (uniqueApplied.length !== applied.length) throw new GateFailure("TENANT_GATE_MIGRATION_HISTORY_DUPLICATE");
+  for (let index = 0; index < uniqueApplied.length; index += 1) {
+    if (uniqueApplied[index] !== canonical[index]) throw new GateFailure("TENANT_GATE_MIGRATION_HISTORY_OUT_OF_ORDER");
+  }
+  return uniqueApplied;
+}
+
+async function createdTablesForPendingMigrations({ url, directory, migrationName }) {
+  const pending = await pendingMigrationNames({ url, directory, migrationName });
+  const created = new Set();
+  for (const name of pending) {
+    const file = path.join(directory, name, "migration.sql");
+    for (const table of createdTablesFromMigrationSql(fs.readFileSync(file, "utf8"))) created.add(table);
+  }
+  return created;
+}
+
 function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
@@ -646,6 +739,12 @@ async function inspectConstraints(client, kind, architecture) {
     const key = expectedConstraintKey(child, [tenantKey, childField], parent, ["empresaId", "id"]);
     if (!actualKeys.has(key)) throw new GateFailure("TENANT_GATE_CONSTRAINT_MISSING");
   }
+  for (const [relation, exception] of Object.entries(GLOBAL_RELATION_EXCEPTIONS)) {
+    const [left, parent] = relation.split("->");
+    const [child, childField] = left.split(".");
+    const key = expectedConstraintKey(child, exception.fromFields, parent, exception.toFields);
+    if (!actualKeys.has(key)) throw new GateFailure("TENANT_GATE_EXCEPTION_CONSTRAINT_MISSING");
+  }
   for (const [, , , parent] of relationSpecs) {
     const found = uniques.some((row) => row.table === parent && JSON.stringify(row.columns) === JSON.stringify(["empresaId", "id"]));
     if (!found) throw new GateFailure("TENANT_GATE_PARENT_UNIQUE_MISSING");
@@ -720,7 +819,10 @@ async function runGate({
 
   const url = databaseUrl(env);
   const kind = databaseKind(url);
-  const allowedMissingTables = mode === "pre-migration" ? migration.createdTables : new Set();
+  const migrationDirectory = sqliteMigrationDir || postgresMigrationDir || migrationDir;
+  const allowedMissingTables = mode === "pre-migration"
+    ? await createdTablesForPendingMigrations({ url: databaseUrl(env), directory: migrationDirectory, migrationName: migration.migrationName })
+    : new Set();
   const database = kind === "postgresql"
     ? await inspectPostgres({ mode, env, architecture, allowEmpty: mode === "pre-migration", allowedMissingTables })
     : await inspectSqlite({ mode, env, architecture, allowEmpty: mode === "pre-migration", allowedMissingTables });
@@ -782,6 +884,8 @@ module.exports = {
   GateFailure,
   canonicalRelationManifest,
   createdTablesFromMigrationSql,
+  createdTablesThroughMigrations,
+  validateMigrationHistory,
   failureIfUnsafe,
   inspectArchitecture,
   migrationTouchesTenantRelations,

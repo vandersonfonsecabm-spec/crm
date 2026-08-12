@@ -416,7 +416,6 @@ async function resolveMessage(tx, event, normalized, conversation) {
     enviadaEm: new Date(normalized.receivedAt),
     simulada: false,
     emailMetadata: { create: {
-      empresaId: event.empresaId,
       messageId: normalized.messageId,
       providerMessageId: normalized.providerMessageId,
       providerThreadId: normalized.providerThreadId,

@@ -155,7 +155,9 @@ test("H6A registra movimentos, calcula tempos e deriva a proxima acao da Agenda"
   assert.equal(closed.body.negocioParado, false);
 
   const finalSnapshot = await commercialSnapshot(adminA.empresaId, clientA.id, leadA.id, businessA.id);
-  assert.deepEqual(finalSnapshot.cliente, baseline.cliente);
+  assert.deepEqual(withoutFollowUpProjection(finalSnapshot.cliente), withoutFollowUpProjection(baseline.cliente));
+  assert.notEqual(finalSnapshot.cliente.proximoFollowUp, baseline.cliente.proximoFollowUp);
+  assert.equal(finalSnapshot.cliente.revisao, baseline.cliente.revisao + 2);
   assert.deepEqual(finalSnapshot.lead, baseline.lead);
   assert.equal(finalSnapshot.messages, baseline.messages);
   assert.equal(finalSnapshot.negocios, baseline.negocios);
@@ -191,6 +193,13 @@ async function commercialSnapshot(empresaId, clienteId, leadId, negocioId) {
     prisma.acompanhamento.count({ where: { empresaId, negocioId } }),
   ]);
   return { cliente, lead, messages, negocios, acompanhamentos };
+}
+
+function withoutFollowUpProjection(client) {
+  const stable = { ...client };
+  delete stable.proximoFollowUp;
+  delete stable.revisao;
+  return stable;
 }
 
 async function registerAndLogin(empresaNome, adminNome, email, enableKanban) {

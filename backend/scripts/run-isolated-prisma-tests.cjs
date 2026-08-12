@@ -19,9 +19,10 @@ const testDb = path.join(sandboxAPrisma, "test.db");
 const upgradeDb = path.join(sandboxBPrisma, "test.db");
 const historicalTestDb = path.join(historicalPrisma, "test.db");
 const command = process.argv.slice(2);
-const expectedHash = "cb62b4b2584162c9f66ff8e722319b96cf2697ebe9ea0a745a388d7ca572c26a";
-const expectedSize = 532480;
-const expectedMigrationCount = 30;
+const metaSandboxOnly = command[0] === "meta-suite";
+const expectedHash = "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533";
+const expectedSize = 1282048;
+const expectedMigrationCount = 32;
 const historicalMigrationCount = 9;
 const prismaCli = resolvePrismaCli();
 const prismaConfigModule = require.resolve("prisma/config", { paths: [backendDir] });
@@ -33,7 +34,7 @@ main().catch((error) => {
   process.exitCode = 1;
   console.error(JSON.stringify({ event: "isolated_prisma", safe: false, error: sanitizeFailure(error, "isolated-prisma") }));
 }).finally(async () => {
-  try { assertProtectedDatabases(); } catch (error) {
+  try { if (!metaSandboxOnly) assertProtectedDatabases(); } catch (error) {
     process.exitCode = 1;
     console.error(JSON.stringify({ event: "isolated_prisma", safe: false, error: sanitizeFailure(error, "isolated-prisma") }));
   }
@@ -43,16 +44,18 @@ main().catch((error) => {
   } else console.error(JSON.stringify({ event: "isolated_prisma", safe: false, cleanup: "preservado" }));
 });
 
-process.once("SIGINT", () => { process.exitCode = 130; assertProtectedDatabases(); process.exit(); });
-process.once("SIGTERM", () => { process.exitCode = 143; assertProtectedDatabases(); process.exit(); });
+process.once("SIGINT", () => { process.exitCode = 130; if (!metaSandboxOnly) assertProtectedDatabases(); process.exit(); });
+process.once("SIGTERM", () => { process.exitCode = 143; if (!metaSandboxOnly) assertProtectedDatabases(); process.exit(); });
 
 async function main() {
   if (command.length === 0) throw new Error("Informe o comando de teste a executar.");
-  officialBaseline = fingerprint(officialDb);
-  historicalBaseline = fingerprint(historicalDb);
-  assertHistoricalBaseline(officialBaseline);
-  assertNoSidecars(officialDb);
-  assertNoSidecars(historicalDb);
+  if (!metaSandboxOnly) {
+    officialBaseline = fingerprint(officialDb);
+    historicalBaseline = fingerprint(historicalDb);
+    assertHistoricalBaseline(officialBaseline);
+    assertNoSidecars(officialDb);
+    assertNoSidecars(historicalDb);
+  }
 
   const sourceSchema = path.join(backendDir, "prisma", "schema.prisma");
   const sourceMigrations = path.join(backendDir, "prisma", "migrations");
@@ -66,6 +69,25 @@ async function main() {
     sourceMigrations,
     migrationNames,
   });
+  if (metaSandboxOnly) {
+    const env = {
+      ...process.env,
+      NODE_ENV: "test",
+      DATABASE_URL: databaseUrl(testDb),
+      CRM_TEST_DATABASE_URL: databaseUrl(testDb),
+      CRM_PRISMA_TEST_RUN_DIR: runDir,
+      CRM_TEST_BASE_DATABASE_PATH: testDb,
+      CRM_PRISMA_SENTINEL_ACTIVE: "false",
+    };
+    runPrisma(["validate", "--schema", sandboxA.schema, "--config", sandboxA.config], runDir, env);
+    await runTenantGate("pre-migration", env, sourceSchema, sourceMigrations, migrationNames.at(-1));
+    runPrisma(["migrate", "deploy", "--schema", sandboxA.schema, "--config", sandboxA.config], runDir, env);
+    await runTenantGate("post-migration", env, sourceSchema, sourceMigrations, migrationNames.at(-1));
+    runRequestedCommand(command, env);
+    completed = true;
+    return;
+  }
+
   const historical = prepareSandbox({
     targetPrisma: historicalPrisma,
     sourceSchema,
@@ -201,6 +223,23 @@ function runRequestedCommand(args, env) {
         CRM_TEST_BASE_DATABASE_PATH: isolatedDb,
       };
       runNode(["--test", path.join(testsDir, name)], backendDir, isolatedEnv, `Teste Node ${name}`);
+    }
+    return;
+  }
+  if (mode === "meta-suite") {
+    if (modeArgs.length !== 0) throw new Error("meta-suite nao aceita argumentos adicionais.");
+    const tests = ["meta-oauth-local-wiring.test.js", "meta-credential-store.test.js", "meta-oauth-state.test.js"];
+    for (const name of tests) {
+      const isolatedDb = path.join(runDir, "meta-suite", `${name}.db`);
+      fs.mkdirSync(path.dirname(isolatedDb), { recursive: true });
+      fs.copyFileSync(testDb, isolatedDb, fs.constants.COPYFILE_EXCL);
+      const isolatedEnv = {
+        ...env,
+        DATABASE_URL: databaseUrl(isolatedDb),
+        CRM_TEST_DATABASE_URL: databaseUrl(isolatedDb),
+        CRM_TEST_BASE_DATABASE_PATH: testDb,
+      };
+      runNode(["--test", path.join(backendDir, "tests", name)], backendDir, isolatedEnv, `Teste Meta ${name}`);
     }
     return;
   }

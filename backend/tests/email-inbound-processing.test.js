@@ -279,8 +279,10 @@ test("concorrencia e isolamento multi-tenant produzem uma cadeia por canal", asy
 
   const mismatchedTenant = await seedActiveMailbox("email-corrupt-route");
   const inconsistentAddress = `mismatch-${suffix}@tenant.example.test`;
-  await prisma.emailMailboxAddress.create({ data: { empresaId: mismatchedTenant.tenant.id, canalIntegracaoId: firstTenant.channel.id, addressNormalized: inconsistentAddress, kind: "ALIAS" } });
-  await assert.rejects(simulatorFor(firstTenant.env).deliver({ mailboxAddress: inconsistentAddress, fromAddress: sharedSender, messageId: `<mismatch-${suffix}@events.example.test>`, text: "Must fail closed" }), (error) => error.code === "EMAIL_MAILBOX_INACTIVE");
+  await assert.rejects(
+    prisma.emailMailboxAddress.create({ data: { empresaId: mismatchedTenant.tenant.id, canalIntegracaoId: firstTenant.channel.id, addressNormalized: inconsistentAddress, kind: "ALIAS" } }),
+    (error) => error.code === "P2003",
+  );
   assert.equal((await commercialCounts(mismatchedTenant.tenant.id)).events, 0);
 });
 

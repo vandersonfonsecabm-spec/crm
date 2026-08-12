@@ -53,7 +53,7 @@ test("H7 usa apenas endpoints internos explicitos de automacao", async () => {
     "/reprocessar",
   ]) assert.match(api, new RegExp(endpoint.replaceAll("/", "\\/")));
 
-  assert.doesNotMatch(api, /graph\.facebook|api\.whatsapp|oauth|localStorage\.setItem\([^)]*autom/i);
+  assert.doesNotMatch(api, /graph\.facebook|api\.whatsapp|localStorage\.setItem\([^)]*autom/i);
 });
 
 test("H7 reconhece capability e feature flag sem habilitar por padrao", async () => {

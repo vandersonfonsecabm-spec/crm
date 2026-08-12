@@ -231,7 +231,7 @@ async function mapImportacao({ prisma, importacao, empresaId, body }) {
   validateMapping(config.mapping);
   const validation = validateRows(cache.rows, config, { maxErrors: getImportLimits().maxErrors, collectErrors: false });
   const updated = await prisma.importacaoDados.update({
-    where: { empresaId_id: { empresaId, id: importacao.id } },
+    where: { id: importacao.id },
     data: {
       status: "VALIDANDO",
       mapeamentoJson: JSON.stringify(config),
@@ -272,7 +272,7 @@ async function validateImportacao({ prisma, importacao, empresaId }) {
 
   const status = validation.validRows.length ? "PRONTO" : "FALHOU";
   const updated = await prisma.importacaoDados.update({
-    where: { empresaId_id: { empresaId, id: importacao.id } },
+    where: { id: importacao.id },
     data: {
       status,
       totalLinhas: cache.rows.length,
@@ -313,7 +313,7 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
   const processingErrors = [];
 
   await prisma.importacaoDados.update({
-    where: { empresaId_id: { empresaId, id: importacao.id } },
+    where: { id: importacao.id },
     data: { status: "PROCESSANDO", iniciadaEm: now, integracaoId: integration.id },
   });
 
@@ -370,7 +370,7 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
 
   const finalStatus = importacao.linhasComErro > 0 || processingErrors.length ? "CONCLUIDO_COM_ERROS" : "CONCLUIDO";
   const finished = await prisma.importacaoDados.update({
-    where: { empresaId_id: { empresaId, id: importacao.id } },
+    where: { id: importacao.id },
     data: {
       status: finalStatus,
       finalizadaEm: new Date(),
@@ -408,7 +408,7 @@ async function cancelImportacao({ prisma, importacao, empresaId }) {
   if (FINAL_IMPORT_STATUSES.has(importacao.status)) throw httpError(409, "Importação concluída não pode ser cancelada.", "IMPORT_INVALID_STATUS");
   if (importacao.status === "PROCESSANDO") throw httpError(409, "Importação em processamento não pode ser cancelada.", "IMPORT_INVALID_STATUS");
   const updated = await prisma.importacaoDados.update({
-    where: { empresaId_id: { empresaId, id: importacao.id } },
+    where: { id: importacao.id },
     data: { status: "CANCELADO", finalizadaEm: new Date() },
   });
   await removeImportCache(importacao.id);

@@ -4,6 +4,7 @@ const { createBlingService } = require("./blingService");
 const { createCanonicalService } = require("./canonicalService");
 const { createCommercialCatalogService } = require("./commercialCatalogService");
 const { createWhatsAppFoundationService } = require("./whatsappFoundation");
+const { createMetaOAuthService } = require("./metaOAuthService");
 const { FEATURE_KEYS, createTenantFeatureMiddleware } = require("../tenant-features/service");
 const {
   createUploadMiddleware,
@@ -28,6 +29,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const canonicalService = createCanonicalService({ prisma });
   const commercialCatalogService = createCommercialCatalogService({ prisma });
   const blingService = createBlingService({ prisma });
+  const metaOAuthService = createMetaOAuthService({ prisma });
   const whatsappFoundationService = createWhatsAppFoundationService({ prisma });
   const whatsappIntegrationGate = createTenantFeatureMiddleware({
     prisma,
@@ -66,6 +68,33 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     } catch (error) {
       const reason = encodeURIComponent(blingCallbackReason(error.code));
       return res.redirect(`${frontendUrl}/?bling=erro&motivo=${reason}`);
+    }
+  });
+
+  app.post("/integracoes/instagram/oauth/iniciar", ...requireAdmin, async (req, res) => {
+    try {
+      const result = await metaOAuthService.iniciarOAuth({ auth: req.auth, canalIntegracaoId: req.body?.canalIntegracaoId });
+      return res.json(result);
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível iniciar a conexão com o Instagram.");
+    }
+  });
+
+  app.get("/integracoes/instagram/oauth/callback", async (req, res) => {
+    const frontendUrl = String(process.env.FRONTEND_URL || "https://crm-murex-six-83.vercel.app").split(",")[0].trim();
+    res.set("Cache-Control", "no-store");
+    res.set("Referrer-Policy", "no-referrer");
+    try {
+      await metaOAuthService.concluirOAuth({
+        code: req.query.code,
+        state: req.query.state,
+        error: req.query.error,
+        errorDescription: req.query.error_description,
+      });
+      return res.redirect(`${frontendUrl}/?instagram=conectado`);
+    } catch (error) {
+      const reason = encodeURIComponent(metaCallbackReason(error.code));
+      return res.redirect(`${frontendUrl}/?instagram=erro&motivo=${reason}`);
     }
   });
 
@@ -749,6 +778,10 @@ function statusFromCode(code) {
   if (code === "INTEGRATION_ACCESS_DENIED") return 403;
   if (code === "INTEGRATION_INVALID_TYPE" || code === "VALIDATION_ERROR" || code?.startsWith("IMPORT_")) return 400;
   if (code === "ENCRYPTION_KEY_REQUIRED") return 500;
+  if (["META_CHANNEL_INVALID", "META_CALLBACK_INVALID", "META_AUTH_DENIED", "META_AUTH_CODE_REQUIRED", "META_INVALID_STATE", "META_CONFIG_INVALID", "META_REDIRECT_URI_INVALID", "META_CREDENTIAL_PROVIDER_UNSUPPORTED"].includes(code)) return 400;
+  if (["META_CHANNEL_NOT_FOUND", "META_CREDENTIAL_NOT_FOUND"].includes(code)) return 404;
+  if (code === "META_OAUTH_FORBIDDEN") return 403;
+  if (["META_EXTERNAL_NETWORK_DISABLED", "META_RESPONSE_INVALID", "META_TOKEN_RESPONSE_INVALID", "META_SUBSCRIPTION_FAILED"].includes(code)) return 503;
   return null;
 }
 
@@ -757,6 +790,15 @@ function blingCallbackReason(code) {
   if (code === "BLING_AUTH_DENIED" || code === "BLING_AUTH_CODE_REQUIRED") return "autorizacao";
   if (code === "BLING_INVALID_STATE") return "state";
   if (code === "BLING_TOKEN_ERROR") return "token";
+  return "conexao";
+}
+
+function metaCallbackReason(code) {
+  if (code === "META_AUTH_DENIED") return "autorizacao";
+  if (code === "META_AUTH_CODE_REQUIRED") return "codigo";
+  if (code === "META_INVALID_STATE") return "state";
+  if (code === "META_EXTERNAL_NETWORK_DISABLED") return "transporte_desativado";
+  if (code === "META_CONFIG_INVALID") return "configuracao";
   return "conexao";
 }
 

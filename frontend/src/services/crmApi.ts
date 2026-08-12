@@ -1082,6 +1082,16 @@ export type MovimentacaoQueryParams = {
 
 export type HubIntegrationStatus = "PENDENTE" | "ATIVA" | "INATIVA" | "ERRO";
 export type HubIntegrationType = "BLING" | "OMIE" | "CONTA_AZUL" | "TINY" | "ALTERDATA" | "CSV" | "XLSX" | "XML" | "JSON" | "CUSTOM";
+export type ApiChannelSummary = {
+  id: number;
+  nome: string;
+  tipo: string;
+  status: string;
+  modoTeste: boolean;
+  ativo: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 export type HubImportStatus = "ENVIADO" | "MAPEAMENTO_PENDENTE" | "VALIDANDO" | "PRONTO" | "PROCESSANDO" | "CONCLUIDO" | "CONCLUIDO_COM_ERROS" | "FALHOU" | "CANCELADO";
 export type HubImportFormat = "CSV" | "XLSX" | "XML" | "JSON";
 export type HubUpdateStrategy = "CRIAR_E_ATUALIZAR" | "APENAS_CRIAR" | "APENAS_ATUALIZAR";
@@ -1836,6 +1846,10 @@ export async function fetchIntegracoes(params: { page?: number; limit?: number; 
   return normalizePaginatedResponse(response, { page: params.page, limit: params.limit });
 }
 
+export async function fetchCanais() {
+  return requestApiGetAuthenticated<{ data: ApiChannelSummary[] }>("/canais");
+}
+
 export async function fetchWhatsappOperationalStatus() {
   return requestApiGetAuthenticated<WhatsappOperationalStatusResponse>("/integracoes/whatsapp/status");
 }
@@ -1846,6 +1860,17 @@ export async function createIntegracao(payload: { nome: string; tipo: HubIntegra
 
 export async function iniciarConexaoBling() {
   return requestApiPost<HubBlingStartResponse>("/integracoes/bling/iniciar", {});
+}
+
+export type MetaInstagramOAuthStartResponse = {
+  authorizationUrl: string;
+  expiresAt: string;
+  provider: string;
+  flow: string;
+};
+
+export async function iniciarConexaoInstagram(canalIntegracaoId: number) {
+  return requestApiPost<MetaInstagramOAuthStartResponse>("/integracoes/instagram/oauth/iniciar", { canalIntegracaoId });
 }
 
 export async function testarConexaoBling(id: number) {

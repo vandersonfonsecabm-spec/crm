@@ -24,6 +24,7 @@ import {
   fetchErrosImportacao,
   fetchImportacao,
   fetchImportacoes,
+  fetchCanais,
   fetchIntegracoes,
   fetchQualidadeDados,
   canAccessIntegrations,
@@ -53,6 +54,7 @@ import {
   type WhatsappSimulationCallResult,
 } from "../../services/crmApi";
 import DashboardMetricStrip from "./DashboardMetricStrip";
+import DashboardIntegrationReadinessPanel from "./DashboardIntegrationReadinessPanel";
 import {
   Button as UiButton,
   EmptyState as UiEmptyState,
@@ -175,6 +177,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
   const [catalogFilters, setCatalogFilters] = useState({ q: "", sku: "", codigoBarras: "", categoria: "", marca: "", local: "", somenteDisponiveis: false });
   const [quality, setQuality] = useState<HubQualidadeDados | null>(null);
   const [blingIntegrations, setBlingIntegrations] = useState<HubIntegracao[]>([]);
+  const [instagramChannelId, setInstagramChannelId] = useState<number | null>(null);
   const [blingBusy, setBlingBusy] = useState<"connect" | "test" | "sync" | "disconnect" | null>(null);
   const [blingMessage, setBlingMessage] = useState("");
   const [lastBlingSync, setLastBlingSync] = useState<HubBlingSyncResponse | null>(null);
@@ -225,11 +228,12 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
 
   async function loadAll() {
     try {
-      const [importList, catalogList, qualityData, blingList] = await Promise.all([
+      const [importList, catalogList, qualityData, blingList, channelList] = await Promise.all([
         fetchImportacoes({ page: importsPage, limit: IMPORT_LIMIT }),
         consultarCatalogoComercial({ ...catalogFilters, pagina: catalogPage, limite: CATALOG_LIMIT }),
         fetchQualidadeDados(),
         fetchIntegracoes({ tipo: "BLING", limit: 10 }),
+        fetchCanais(),
       ]);
       setImports(importList.data);
       setImportsTotal(importList.pagination.total);
@@ -237,6 +241,8 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
       setCatalogTotal(catalogList.pagination.total);
       setQuality(qualityData);
       setBlingIntegrations(blingList.data);
+      const instagramChannel = channelList.data.find((channel) => channel.tipo === "INSTAGRAM_META" && channel.ativo && !channel.modoTeste && channel.status === "ATIVO");
+      setInstagramChannelId(instagramChannel?.id ?? null);
       setState("success");
       setMessage("");
     } catch (error) {
@@ -649,6 +655,8 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
           <QualitySection quality={quality} />
         </div>
       )}
+
+      {state === "success" && activeView === "overview" && <DashboardIntegrationReadinessPanel canalIntegracaoId={instagramChannelId} />}
 
       {state === "success" && activeView === "simulator" && (
         <WhatsappSimulationSection

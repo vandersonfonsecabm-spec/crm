@@ -20,6 +20,8 @@ const relationSpecs = Object.freeze([
   ["commercial", "HistoricoAcompanhamento", "responsavelAnteriorId", "Usuario"],
   ["commercial", "HistoricoAcompanhamento", "responsavelNovoId", "Usuario"],
   ["integration", "IntegracaoOAuthState", "usuarioId", "Usuario"],
+  ["integration", "IntegracaoOAuthState", "canalIntegracaoId", "CanalIntegracao"],
+  ["integration", "MetaCredential", "canalIntegracaoId", "CanalIntegracao"],
   ["integration", "SincronizacaoIntegracao", "integracaoId", "Integracao"],
   ["integration", "ErroIntegracao", "integracaoId", "Integracao"],
   ["integration", "ErroIntegracao", "sincronizacaoId", "SincronizacaoIntegracao"],

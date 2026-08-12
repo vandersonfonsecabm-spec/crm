@@ -67,5 +67,5 @@ test("H1 preserva lease, timeline e ausencia de chamadas externas", async () => 
   assert.match(inbox, /Nenhuma conversa na fila/);
   assert.match(inbox, /isNearMessageEnd/);
   assert.match(inbox, /fetchLatestCommunicationMessages/);
-  assert.doesNotMatch(`${inbox}\n${api}`, /graph\.facebook|api\.whatsapp|oauth|axios/i);
+  assert.doesNotMatch(`${inbox}\n${api}`, /graph\.facebook|api\.whatsapp|axios/i);
 });

@@ -207,6 +207,7 @@ model Empresa {
   importacoesDados           ImportacaoDados[]
   oauthStatesIntegracao      IntegracaoOAuthState[]
   canaisIntegracao           CanalIntegracao[]
+  metaCredentials            MetaCredential[]
   enderecosCaixaEmail        EmailMailboxAddress[]
   contatosCanal              ContatoCanal[]
   conversasCanal             ConversaCanal[]
@@ -387,19 +388,23 @@ model AuditoriaSeguranca {
 }
 
 model IntegracaoOAuthState {
-  id        Int       @id @default(autoincrement())
-  empresaId Int
-  empresa   Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  usuarioId Int
-  usuario   Usuario   @relation(fields: [empresaId, usuarioId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
-  provedor  String
-  stateHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  id                  Int               @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarioId           Int
+  usuario             Usuario           @relation(fields: [empresaId, usuarioId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  canalIntegracaoId   Int?
+  canalIntegracao     CanalIntegracao?  @relation(fields: [empresaId, canalIntegracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  provedor            String
+  fluxo               String?
+  stateHash           String            @unique
+  expiresAt           DateTime
+  usedAt              DateTime?
+  createdAt           DateTime          @default(now())
 
   @@index([empresaId])
   @@index([usuarioId])
+  @@index([empresaId, canalIntegracaoId, fluxo])
   @@index([provedor])
   @@index([expiresAt])
 }
@@ -433,6 +438,30 @@ model Integracao {
   @@index([empresaId, status])
   @@index([empresaId, tipo])
   @@index([ativo])
+}
+
+model MetaCredential {
+  id                Int                  @id @default(autoincrement())
+  empresaId         Int
+  empresa           Empresa              @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  canalIntegracaoId Int
+  canalIntegracao   CanalIntegracao      @relation("MetaCredentialChannel", fields: [empresaId, canalIntegracaoId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  currentChannels   CanalIntegracao[]    @relation("MetaCredentialCurrent")
+  provider          String
+  reference         String               @unique
+  ciphertext        String
+  status            StatusCredencialMeta @default(ATIVA)
+  revision          Int                  @default(1)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  removedAt         DateTime?
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, reference])
+  @@unique([empresaId, canalIntegracaoId, reference])
+  @@unique([empresaId, canalIntegracaoId, provider, reference])
+  @@index([empresaId, canalIntegracaoId, provider, status])
+  @@index([empresaId, reference])
 }
 
 model SincronizacaoIntegracao {
@@ -634,6 +663,7 @@ model CanalIntegracao {
   id                  Int                       @id @default(autoincrement())
   empresaId           Int
   empresa             Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  oauthStates         IntegracaoOAuthState[]
   tipo                TipoCanal
   nome                String
   chaveInterna        String
@@ -660,6 +690,7 @@ model CanalIntegracao {
   graphApiVersion     String?
   onboardingMethod    MetodoOnboardingWhatsApp?
   accessTokenRef      String?
+  metaCredential      MetaCredential?            @relation("MetaCredentialCurrent", fields: [empresaId, id, accessTokenRef], references: [empresaId, canalIntegracaoId, reference], onDelete: Restrict, onUpdate: Restrict)
   credentialStatus    StatusCredencialWhatsApp?
   connectedAt         DateTime?
   verifiedAt          DateTime?
@@ -673,6 +704,7 @@ model CanalIntegracao {
   mensagens           MensagemCanal[]
   eventosWebhook      EventoWebhook[]
   enderecosEmail      EmailMailboxAddress[]
+  metaCredentials     MetaCredential[]           @relation("MetaCredentialChannel")
 
   @@unique([empresaId, chaveInterna])
   @@unique([empresaId, id])
@@ -1385,6 +1417,13 @@ enum StatusCredencialWhatsApp {
   ATIVA
   ROTACAO_PENDENTE
   REVOGADA
+  ERRO
+}
+
+enum StatusCredencialMeta {
+  ATIVA
+  ROTACAO_PENDENTE
+  REMOVIDA
   ERRO
 }
 

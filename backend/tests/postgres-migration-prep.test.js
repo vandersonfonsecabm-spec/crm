@@ -87,12 +87,15 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260731120000_add_messenger_direct_schema_foundation",
       "20260731190000_add_email_inbound_foundation",
       "20260801123000_enforce_tenant_safe_relations",
+      "20260801150000_add_user_security_foundation",
+      "20260811120000_add_meta_credential_store",
+      "20260811130000_add_meta_oauth_state_binding",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
-        workspace.migrationsDir,
-        "20260801123000_enforce_tenant_safe_relations",
+      workspace.migrationsDir,
+        "20260811130000_add_meta_oauth_state_binding",
         "migration.sql",
       ),
     );
@@ -138,6 +141,28 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(tenantIsolationIncremental, /__tenant_relation_preflight/);
     assert.match(tenantIsolationIncremental, /FOREIGN KEY \("empresaId", "clienteId"\)/);
     assert.match(tenantIsolationIncremental, /REFERENCES "Cliente"\("empresaId", "id"\)/);
+    const metaCredentialMigration = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260811120000_add_meta_credential_store",
+      "migration.sql",
+    ), "utf8");
+    assert.match(metaCredentialMigration, /^BEGIN;\s*$/m);
+    assert.match(metaCredentialMigration, /COMMIT;\s*$/m);
+    assert.match(metaCredentialMigration, /CREATE TYPE "StatusCredencialMeta"/);
+    assert.match(metaCredentialMigration, /META_PERSISTENCE_PRECHECK_FAILED/);
+    assert.match(metaCredentialMigration, /CanalIntegracao_empresaId_id_accessTokenRef_fkey/);
+    assert.doesNotMatch(metaCredentialMigration, /\b(?:PRAGMA|AUTOINCREMENT)\b/i);
+    assert.doesNotMatch(metaCredentialMigration, /^\s*(?:INSERT|UPDATE|DELETE|DROP)\b/im);
+    const metaOAuthStateMigration = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260811130000_add_meta_oauth_state_binding",
+      "migration.sql",
+    ), "utf8");
+    assert.match(metaOAuthStateMigration, /ADD COLUMN "canalIntegracaoId" INTEGER/);
+    assert.match(metaOAuthStateMigration, /ADD COLUMN "fluxo" TEXT/);
+    assert.match(metaOAuthStateMigration, /IntegracaoOAuthState_empresaId_canalIntegracaoId_fkey/);
+    assert.match(metaOAuthStateMigration, /IntegracaoOAuthState_empresaId_canalIntegracaoId_fluxo_idx/);
+    assert.doesNotMatch(metaOAuthStateMigration, /^\s*(?:DROP|DELETE|UPDATE|TRUNCATE)\b/im);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

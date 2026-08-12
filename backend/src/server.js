@@ -51,7 +51,7 @@ const allowedOrigins = getAllowedOrigins();
 
 app.use(createMaintenanceReadOnlyMiddleware({
   env: process.env,
-  mutatingGetPaths: ["/integracoes/bling/callback"],
+  mutatingGetPaths: ["/integracoes/bling/callback", "/integracoes/instagram/oauth/callback"],
 }));
 mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookOrchestrator({ prisma }) });
 mountInstagramWebhookRoutes({ app, processWebhook: createInstagramWebhookOrchestrator({ prisma }) });

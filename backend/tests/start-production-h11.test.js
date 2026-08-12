@@ -7,6 +7,7 @@ const { test } = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
 const {
   resolvePrismaCli,
+  resolveExpectedServiceId,
   runPrismaMigration,
   runStartup,
 } = require("../scripts/start-production.cjs");
@@ -17,6 +18,15 @@ const pendingMigrationName = "20990101000000_gate_startup_fixture";
 const currentMigrationCount = fs.readdirSync(path.join(sourcePrismaDirectory, "migrations"), { withFileTypes: true })
   .filter((entry) => entry.isDirectory()).length;
 const testServiceId = "railway-service-test";
+
+test("contrato de servico: producao aceita somente o ID oficial e homolog exige ID explicito", () => {
+  assert.equal(resolveExpectedServiceId({}), "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92");
+  assert.equal(resolveExpectedServiceId({ CRM_RAILWAY_ENVIRONMENT: "homolog", CRM_RAILWAY_HOMOLOG_SERVICE_ID: testServiceId }), testServiceId);
+  assert.throws(
+    () => resolveExpectedServiceId({ CRM_RAILWAY_ENVIRONMENT: "homolog" }),
+    { code: "RAILWAY_HOMOLOG_SERVICE_ID_MISSING" },
+  );
+});
 
 test("cenario 1: fora do Railway inicia servidor sem executar migration", async () => {
   let migrationCalls = 0;

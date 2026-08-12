@@ -29,15 +29,16 @@ const currentMigration = "20260801123000_enforce_tenant_safe_relations";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 
-test("arquitetura atual cobre as 87 relacoes e as excecoes documentadas", () => {
+test("arquitetura atual cobre as 89 relacoes e as excecoes documentadas", () => {
   const result = inspectArchitecture();
   assert.deepEqual(result.failures, []);
-  assert.equal(result.relationCount, 87);
+  assert.equal(result.relationCount, 89);
   assert.equal(result.relationManifestHash, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(tenantRelationManifestHash(), EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(MIGRATION_REGISTRY[currentMigration].relationManifestSha256, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.deepEqual(Object.keys(GLOBAL_RELATION_EXCEPTIONS).sort(), [
     "AuditoriaFuncionalidade.usuarioId->Usuario",
+    "CanalIntegracao.id->MetaCredential",
     "PlatformTenantAudit.actorUserId->Usuario",
   ]);
 });
@@ -163,7 +164,7 @@ test("pre-migration aceita somente tabelas novas da migration registrada", () =>
   existingTables.add("AutomacaoExecucao");
   existingTables.add("Lead");
   existingTables.add("Negocio");
-  assert.equal(relationSpecsForExistingSchema(existingTables, createdTables).length, 83);
+  assert.equal(relationSpecsForExistingSchema(existingTables, createdTables).length, 85);
 
   existingTables.delete("Cliente");
   assert.throws(

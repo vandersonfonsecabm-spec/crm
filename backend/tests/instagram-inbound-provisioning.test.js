@@ -24,6 +24,10 @@ Object.assign(process.env, {
   CRM_TEST_DATABASE_URL: postgres ? requiredEnv("CRM_TEST_DATABASE_URL") : databaseUrl(databasePath),
   INSTAGRAM_META_APP_ID: "000GLOBAL_INSTAGRAM_APP",
   INSTAGRAM_PROVIDER_ENVIRONMENT: "INSTAGRAM_TEST",
+  INSTAGRAM_INTEGRATION_ENABLED: "true",
+  INSTAGRAM_INBOUND_ENABLED: "true",
+  INSTAGRAM_APP_SECRET: "test-instagram-app-secret",
+  INSTAGRAM_WEBHOOK_VERIFY_TOKEN: "test-instagram-verify-token",
 });
 delete process.env.PLATFORM_ADMIN_EMAILS;
 
