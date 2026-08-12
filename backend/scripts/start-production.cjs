@@ -195,6 +195,13 @@ async function runPrismaMigration(runtime, { spawnImpl = spawn } = {}) {
 }
 
 function hasPendingMigrations(runtime) {
+  if (runtime.provider === "sqlite" && runtime.databasePath) {
+    try {
+      if (!fs.existsSync(runtime.databasePath) || fs.statSync(runtime.databasePath).size === 0) return true;
+    } catch (error) {
+      throw startupError("DATABASE_PATH_UNREADABLE");
+    }
+  }
   const result = spawnSync(
     process.execPath,
     [runtime.prismaCliPath, "migrate", "status", "--schema", runtime.schemaPath],
