@@ -58,7 +58,7 @@ async function runStartup(options = {}) {
       try {
         await (options.runMigration || runPrismaMigration)(runtime, { spawnImpl });
       } catch (error) {
-        logger.error("Migration falhou; API nao iniciada.");
+        logger.error("Migration falhou; API nao iniciada.", { code: error?.code || "UNKNOWN" });
         throw error;
       }
 
