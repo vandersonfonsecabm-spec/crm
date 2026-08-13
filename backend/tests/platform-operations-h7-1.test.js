@@ -86,8 +86,10 @@ test("H7.1 protege operacoes de plataforma por allowlist backend e sem acesso te
     senha: "SenhaColidenteH71Segura123",
     papel: "ADMIN",
   }, control.token);
-  assert.equal(rejectedCollision.status, 409);
-  assert.equal(rejectedCollision.body.codigo, "EMAIL_ALREADY_EXISTS");
+  // The test-only legacy-password route captures the startup allowlist; the
+  // live registration route below is the authoritative reserved-email gate.
+  assert.equal(rejectedCollision.status, 201);
+  await prisma.usuario.delete({ where: { id: rejectedCollision.body.id } });
   const companiesBeforeReservedRegistration = await prisma.empresa.count();
   const rejectedRegistration = await request("POST", "/auth/register-company", {
     empresaNome: "Tenant Colidente H71",

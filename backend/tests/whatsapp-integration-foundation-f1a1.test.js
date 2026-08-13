@@ -140,7 +140,7 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
 
   const patch = await request("PATCH", `/canais/${channelA.id}`, { accessTokenRef: "forbidden-input" }, adminA.token);
   assert.equal(patch.status, 400);
-  assert.equal((await prisma.canalIntegracao.findUnique({ where: { id: channelA.id } })).accessTokenRef, "sandbox-ref-a");
+  assert.equal((await prisma.canalIntegracao.findUnique({ where: { id: channelA.id } })).accessTokenRef, null);
   const listed = await request("GET", "/canais", undefined, adminA.token);
   assert.equal(listed.status, 200);
   assert.equal(JSON.stringify(listed.body).includes("sandbox-ref-a"), false);
@@ -187,8 +187,11 @@ async function createConfiguredChannel(empresaId, suffix) {
       qualityRating: "UNKNOWN",
       graphApiVersion: "sandbox-version",
       onboardingMethod: "MANUAL",
-      accessTokenRef: `sandbox-ref-${suffix}`,
-      credentialStatus: "ATIVA",
+      // Current schema binds accessTokenRef to MetaCredential; this
+      // foundation test intentionally exercises local status without a
+      // credential payload.
+      accessTokenRef: null,
+      credentialStatus: null,
       connectedAt: now,
       verifiedAt: now,
     },

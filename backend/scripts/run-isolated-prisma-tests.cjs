@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { PrismaClient } = require("@prisma/client");
+let PrismaClient;
 const { createPrismaFailure, sanitizeFailure } = require("./tenant-isolation-log-utils.cjs");
 
 const backendDir = path.resolve(__dirname, "..");
@@ -18,6 +18,7 @@ const historicalPrisma = path.join(runDir, "historical-9", "prisma");
 const testDb = path.join(sandboxAPrisma, "test.db");
 const upgradeDb = path.join(sandboxBPrisma, "test.db");
 const historicalTestDb = path.join(historicalPrisma, "test.db");
+const prismaDatasourceShim = path.join(runDir, "prisma-datasource-shim.cjs");
 const command = process.argv.slice(2);
 const metaSandboxOnly = command[0] === "meta-suite";
 const expectedHash = "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533";
@@ -26,37 +27,43 @@ const expectedMigrationCount = 32;
 const historicalMigrationCount = 9;
 const prismaCli = resolvePrismaCli();
 const prismaConfigModule = require.resolve("prisma/config", { paths: [backendDir] });
+let completed = false;
+let interrupted = false;
 let officialBaseline;
 let historicalBaseline;
-let completed = false;
 
 main().catch((error) => {
-  process.exitCode = 1;
+  if (!interrupted) process.exitCode = 1;
   console.error(JSON.stringify({ event: "isolated_prisma", safe: false, error: sanitizeFailure(error, "isolated-prisma") }));
 }).finally(async () => {
-  try { if (!metaSandboxOnly) assertProtectedDatabases(); } catch (error) {
+  let guardFailure = null;
+  try {
+  assertProtectedDatabases();
+  } catch (error) {
     process.exitCode = 1;
+    guardFailure = error;
     console.error(JSON.stringify({ event: "isolated_prisma", safe: false, error: sanitizeFailure(error, "isolated-prisma") }));
   }
-  if (completed && process.exitCode !== 1) {
+  try {
     await removeRunDirectory(runDir);
-    console.log(`[isolated-prisma] OK ${runId} (cleanup concluido)`);
-  } else console.error(JSON.stringify({ event: "isolated_prisma", safe: false, cleanup: "preservado" }));
+    console.log(`[isolated-prisma] ${completed && !guardFailure ? "OK" : "STOP"} ${runId} (cleanup concluido)`);
+  } catch (error) {
+    process.exitCode = 1;
+    console.error(JSON.stringify({ event: "isolated_prisma", safe: false, cleanup: "failed", error: sanitizeFailure(error, "isolated-prisma") }));
+  }
 });
 
-process.once("SIGINT", () => { process.exitCode = 130; if (!metaSandboxOnly) assertProtectedDatabases(); process.exit(); });
-process.once("SIGTERM", () => { process.exitCode = 143; if (!metaSandboxOnly) assertProtectedDatabases(); process.exit(); });
+process.once("SIGINT", () => { interrupted = true; process.exitCode = 130; });
+process.once("SIGTERM", () => { interrupted = true; process.exitCode = 143; });
 
 async function main() {
   if (command.length === 0) throw new Error("Informe o comando de teste a executar.");
-  if (!metaSandboxOnly) {
-    officialBaseline = fingerprint(officialDb);
-    historicalBaseline = fingerprint(historicalDb);
-    assertHistoricalBaseline(officialBaseline);
-    assertNoSidecars(officialDb);
-    assertNoSidecars(historicalDb);
-  }
-
+  assertSafeTempPath(runDir, "CRM_PRISMA_TEST_RUN_DIR");
+  officialBaseline = fingerprintProtected(officialDb);
+  historicalBaseline = fingerprintProtected(historicalDb);
+  assertHistoricalBaseline(officialBaseline);
+  assertNoSidecars(officialDb);
+  assertNoSidecars(historicalDb);
   const sourceSchema = path.join(backendDir, "prisma", "schema.prisma");
   const sourceMigrations = path.join(backendDir, "prisma", "migrations");
   const migrationNames = migrationDirectories(sourceMigrations);
@@ -69,16 +76,9 @@ async function main() {
     sourceMigrations,
     migrationNames,
   });
+  writePrismaDatasourceShim();
   if (metaSandboxOnly) {
-    const env = {
-      ...process.env,
-      NODE_ENV: "test",
-      DATABASE_URL: databaseUrl(testDb),
-      CRM_TEST_DATABASE_URL: databaseUrl(testDb),
-      CRM_PRISMA_TEST_RUN_DIR: runDir,
-      CRM_TEST_BASE_DATABASE_PATH: testDb,
-      CRM_PRISMA_SENTINEL_ACTIVE: "false",
-    };
+    const env = sandboxEnv(testDb);
     runPrisma(["validate", "--schema", sandboxA.schema, "--config", sandboxA.config], runDir, env);
     await runTenantGate("pre-migration", env, sourceSchema, sourceMigrations, migrationNames.at(-1));
     runPrisma(["migrate", "deploy", "--schema", sandboxA.schema, "--config", sandboxA.config], runDir, env);
@@ -101,19 +101,10 @@ async function main() {
     migrationNames: migrationNames.slice(0, historicalMigrationCount),
   });
 
-  const env = {
-    ...process.env,
-    NODE_ENV: "test",
-    DATABASE_URL: databaseUrl(testDb),
-    CRM_TEST_DATABASE_URL: databaseUrl(testDb),
-    CRM_PRISMA_TEST_RUN_DIR: runDir,
-    CRM_TEST_BASE_DATABASE_PATH: testDb,
-    CRM_TEST_SOURCE_DATABASE_PATH: historicalTestDb,
-    CRM_PRISMA_SENTINEL_ACTIVE: "false",
-    CRM_OFFICIAL_DATABASE_PATH: officialDb,
-  };
+  const env = sandboxEnv(testDb, { CRM_TEST_SOURCE_DATABASE_PATH: historicalTestDb });
   runPrisma(["validate", "--schema", sandboxA.schema, "--config", sandboxA.config], runDir, env);
-  runPrisma(["generate", "--schema", sourceSchema], backendDir, env);
+  runPrisma(["generate", "--schema", sandboxA.schema], backendDir, env);
+  PrismaClient = require("@prisma/client").PrismaClient;
   await runTenantGate("architecture", env, sourceSchema, sourceMigrations, migrationNames.at(-1));
 
   await runTenantGate("pre-migration", env, sourceSchema, sourceMigrations, migrationNames.at(-1));
@@ -134,9 +125,7 @@ async function main() {
   await assertDatabase(upgradeDb, migrationCount);
   await runTenantGate("post-migration", { ...env, DATABASE_URL: databaseUrl(upgradeDb), CRM_TEST_DATABASE_URL: databaseUrl(upgradeDb) }, sourceSchema, sourceMigrations, migrationNames.at(-1));
 
-  assertProtectedDatabases();
   runRequestedCommand(command, env);
-  assertProtectedDatabases();
   completed = true;
 }
 
@@ -148,11 +137,11 @@ function prepareSandbox({ targetPrisma, sourceSchema, sourceMigrations, migratio
   const targetMigrations = path.join(targetPrisma, "migrations");
   fs.mkdirSync(targetMigrations, { recursive: true });
   const originalSchema = fs.readFileSync(sourceSchema, "utf8");
-  const sandboxSchemaText = originalSchema.replace(/url\s*=\s*env\("DATABASE_URL"\)/, 'url      = "file:.\/test.db"');
-  if (sandboxSchemaText === originalSchema) throw new Error("Datasource DATABASE_URL nao encontrada no schema.");
-  if (sandboxSchemaText.replace('url      = "file:./test.db"', 'url      = env("DATABASE_URL")') !== originalSchema) {
-    throw new Error("Sandbox alteraria mais do que a URL do datasource.");
-  }
+  const generatedClient = path.join(backendDir, "node_modules", ".prisma", "client").replace(/\\/g, "/");
+  const schemaWithOutput = originalSchema.replace(/generator client \{\s*provider\s*=\s*"prisma-client-js"\s*\}/, `generator client {\n  provider = "prisma-client-js"\n  output   = "${generatedClient}"\n}`);
+  const datasourceMatches = schemaWithOutput.match(/url\s*=\s*env\("DATABASE_URL"\)/g) || [];
+  if (datasourceMatches.length !== 1) throw new Error("Sandbox exige exatamente um datasource DATABASE_URL.");
+  const sandboxSchemaText = schemaWithOutput.replace(/url\s*=\s*env\("DATABASE_URL"\)/, 'url      = "file:.\\/test.db"');
   fs.writeFileSync(targetSchema, sandboxSchemaText);
   fs.writeFileSync(targetDatabase, "");
   fs.writeFileSync(targetConfig, [
@@ -202,7 +191,7 @@ function runRequestedCommand(args, env) {
     if (!isPathInside(testFile, testsDir) || !fs.existsSync(testFile) || !fs.statSync(testFile).isFile()) {
       throw new Error("Arquivo de teste deve existir dentro de backend/tests.");
     }
-    runNode(["--test", testFile], backendDir, env, "Teste Node");
+    runNode(["--test", testFile], backendDir, runtimeTestEnv(env), "Teste Node");
     return;
   }
   if (mode === "node-suite") {
@@ -212,16 +201,17 @@ function runRequestedCommand(args, env) {
     fs.mkdirSync(suiteDir, { recursive: true });
     const testFiles = fs.readdirSync(testsDir)
       .filter((name) => name.endsWith(".test.js"))
+      // The canonical runner is SQLite-only. PostgreSQL relations run only in
+      // the separately isolated disposable-Postgres gate; never coerce that
+      // test into the SQLite sandbox or consume an ambient URL implicitly.
+      .filter((name) => !name.endsWith("-postgres.test.js"))
       .sort();
     for (const name of testFiles) {
       const isolatedDb = path.join(suiteDir, `${name}.db`);
       fs.copyFileSync(testDb, isolatedDb, fs.constants.COPYFILE_EXCL);
-      const isolatedEnv = {
-        ...env,
-        DATABASE_URL: databaseUrl(isolatedDb),
-        CRM_TEST_DATABASE_URL: databaseUrl(isolatedDb),
-        CRM_TEST_BASE_DATABASE_PATH: isolatedDb,
-      };
+      const isolatedEnv = runtimeTestEnv(sandboxEnv(isolatedDb, {
+        CRM_TEST_SOURCE_DATABASE_PATH: env.CRM_TEST_SOURCE_DATABASE_PATH || "",
+      }));
       runNode(["--test", path.join(testsDir, name)], backendDir, isolatedEnv, `Teste Node ${name}`);
     }
     return;
@@ -233,17 +223,36 @@ function runRequestedCommand(args, env) {
       const isolatedDb = path.join(runDir, "meta-suite", `${name}.db`);
       fs.mkdirSync(path.dirname(isolatedDb), { recursive: true });
       fs.copyFileSync(testDb, isolatedDb, fs.constants.COPYFILE_EXCL);
-      const isolatedEnv = {
-        ...env,
-        DATABASE_URL: databaseUrl(isolatedDb),
-        CRM_TEST_DATABASE_URL: databaseUrl(isolatedDb),
-        CRM_TEST_BASE_DATABASE_PATH: testDb,
-      };
+      const isolatedEnv = runtimeTestEnv(sandboxEnv(isolatedDb, { CRM_TEST_BASE_DATABASE_PATH: testDb }));
       runNode(["--test", path.join(backendDir, "tests", name)], backendDir, isolatedEnv, `Teste Meta ${name}`);
     }
     return;
   }
   throw new Error("Comando logico permitido: prisma, node-test ou node-suite.");
+}
+
+function writePrismaDatasourceShim() {
+  fs.writeFileSync(prismaDatasourceShim, [
+    "const Module = require('node:module');",
+    "const originalLoad = Module._load;",
+    "Module._load = function(request, parent, isMain) {",
+    "  const loaded = originalLoad.call(this, request, parent, isMain);",
+    "  if (request !== '@prisma/client' || !loaded || typeof loaded.PrismaClient !== 'function') return loaded;",
+    "  class TestDatasourcePrismaClient extends loaded.PrismaClient {",
+    "    constructor(options = {}) { super(options.datasourceUrl || options.datasources ? options : { ...options, datasourceUrl: process.env.DATABASE_URL }); }",
+    "  }",
+    "  return { ...loaded, PrismaClient: TestDatasourcePrismaClient };",
+    "};",
+    "",
+  ].join("\n"));
+}
+
+function runtimeTestEnv(env) {
+  const option = `--require=${prismaDatasourceShim}`;
+  return {
+    ...env,
+    NODE_OPTIONS: [env.NODE_OPTIONS, option].filter(Boolean).join(" "),
+  };
 }
 
 function runPrisma(args, cwd, env) {
@@ -258,15 +267,19 @@ async function runTenantGate(mode, env, schemaPath, migrationsDir, migrationName
 
 function runNode(args, cwd, env, logicalCommand) {
   const capturePrisma = logicalCommand.startsWith("Prisma");
-  const result = spawnSync(process.execPath, args, {
-    cwd,
-    env,
-    stdio: capturePrisma ? ["ignore", "pipe", "pipe"] : "inherit",
-    encoding: capturePrisma ? "utf8" : undefined,
-    windowsHide: true,
-    shell: false,
-  });
-  assertProtectedDatabases();
+  let result;
+  try {
+    result = spawnSync(process.execPath, args, {
+      cwd,
+      env,
+      stdio: capturePrisma ? ["ignore", "pipe", "pipe"] : "inherit",
+      encoding: capturePrisma ? "utf8" : undefined,
+      windowsHide: true,
+      shell: false,
+    });
+  } finally {
+    assertProtectedDatabases();
+  }
   if (result.error) {
     if (capturePrisma) throw createPrismaFailure(logicalCommand, result.error.message);
     throw new Error(`${logicalCommand} nao iniciou.`);
@@ -278,6 +291,7 @@ function runNode(args, cwd, env, logicalCommand) {
     if (capturePrisma) throw createPrismaFailure(logicalCommand, `${result.stderr || ""}\n${result.stdout || ""}`);
     throw new Error(`${logicalCommand} falhou com codigo ${result.status}.`);
   }
+  if (interrupted) throw new Error("Execucao interrompida antes da conclusao segura.");
 }
 
 function resolvePrismaCli() {
@@ -299,6 +313,58 @@ function isPathInside(candidate, parent) {
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
+function assertSafeTempPath(candidate, label) {
+  const resolved = path.resolve(candidate);
+  const tempRoot = path.resolve(os.tmpdir());
+  if (!isPathInside(resolved, tempRoot)) throw new Error(`${label} deve permanecer na sandbox TEMP.`);
+  let current = resolved;
+  while (current && current !== path.dirname(current)) {
+    if (fs.existsSync(current)) {
+      const stat = fs.lstatSync(current);
+      if (stat.isSymbolicLink() || path.resolve(fs.realpathSync.native(current)).toLowerCase() !== current.toLowerCase()) {
+        throw new Error(`${label} nao pode resolver por symlink/junction.`);
+      }
+    }
+    current = path.dirname(current);
+  }
+}
+
+function sandboxEnv(databasePath, extra = {}) {
+  const blocked = new Set([
+    "DATABASE_URL",
+    "CRM_TEST_DATABASE_URL",
+    "CRM_TEST_BASE_DATABASE_PATH",
+    "CRM_TEST_SOURCE_DATABASE_PATH",
+    "CRM_OFFICIAL_DATABASE_PATH",
+    "POSTGRES_DATABASE_URL",
+    "POSTGRES_TEST_DATABASE_URL",
+    "POSTGRES_TARGET_URL",
+    "POSTGRES_URL",
+    "POSTGRES_MIGRATION_DATABASE_URL",
+    "CRM_TEST_DATABASE_PROVIDER",
+    "CRM_TEST_POSTGRES_ALLOW",
+    "CRM_POSTGRES_MIGRATE_CONFIRM",
+    "CRM_POSTGRES_IMPORT_CONFIRM",
+    "POSTGRES_IMPORT_MODE",
+    "CRM_DATABASE_PROVIDER",
+  ]);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !blocked.has(key)));
+  return {
+    ...env,
+    NODE_ENV: "test",
+    CRM_DATABASE_PROVIDER: "sqlite",
+    CRM_TEST_DATABASE_PROVIDER: "",
+    CRM_TEST_POSTGRES_ALLOW: "",
+    POSTGRES_TARGET_URL: "",
+    DATABASE_URL: databaseUrl(databasePath),
+    CRM_TEST_DATABASE_URL: databaseUrl(databasePath),
+    CRM_PRISMA_TEST_RUN_DIR: runDir,
+    CRM_TEST_BASE_DATABASE_PATH: databasePath,
+    CRM_PRISMA_SENTINEL_ACTIVE: "false",
+    ...extra,
+  };
+}
+
 async function assertDatabase(databasePath, expectedMigrations, required = ["Negocio", "EmpresaFuncionalidade", "Lead", "Cliente"]) {
   const prisma = new PrismaClient({ datasourceUrl: databaseUrl(databasePath) });
   try {
@@ -309,13 +375,15 @@ async function assertDatabase(databasePath, expectedMigrations, required = ["Neg
     if (quick[0]?.quick_check !== "ok" || foreignKeys.length !== 0) throw new Error("Banco temporario falhou na integridade.");
     if (Number(migrations[0]?.total) !== expectedMigrations) throw new Error("Quantidade incorreta de migrations no banco temporario.");
     for (const name of required) if (!tables.some((table) => table.name === name)) throw new Error(`Tabela ausente: ${name}`);
+  } catch (error) {
+    throw error;
   } finally { await prisma.$disconnect(); }
 }
 
 function assertProtectedDatabases() {
   if (!officialBaseline || !historicalBaseline) return;
-  const officialCurrent = fingerprint(officialDb);
-  const historicalCurrent = fingerprint(historicalDb);
+  const officialCurrent = fingerprintProtected(officialDb);
+  const historicalCurrent = fingerprintProtected(historicalDb);
   if (officialCurrent.size !== officialBaseline.size || officialCurrent.hash !== officialBaseline.hash) {
     throw new Error("backend/prisma/dev.db foi alterado.");
   }
@@ -326,19 +394,29 @@ function assertProtectedDatabases() {
   assertNoSidecars(historicalDb);
 }
 
+function fingerprintProtected(file) {
+  assertRegularCanonicalFile(file, "Banco protegido");
+  return fingerprint(file);
+}
+
+function assertRegularCanonicalFile(file, label) {
+  const resolved = path.resolve(file);
+  const stat = fs.lstatSync(resolved);
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`${label} deve ser arquivo regular.`);
+  const real = path.resolve(fs.realpathSync.native(resolved));
+  if (real.toLowerCase() !== resolved.toLowerCase()) throw new Error(`${label} nao pode resolver por alias.`);
+}
+
 function assertNoSidecars(databasePath) {
-  for (const suffix of ["-wal", "-shm"]) {
+  for (const suffix of ["-wal", "-shm", "-journal"]) {
     if (fs.existsSync(`${databasePath}${suffix}`)) throw new Error(`Sidecar inesperado: ${databasePath}${suffix}`);
   }
 }
 
 function assertHistoricalBaseline(value) {
-  if (value.size !== expectedSize || value.hash !== expectedHash) throw new Error(`dev.db fora do baseline historico: ${JSON.stringify(value)}`);
-}
-
-function fingerprint(file) {
-  const data = fs.readFileSync(file);
-  return { size: data.length, hash: crypto.createHash("sha256").update(data).digest("hex") };
+  if (value.size !== expectedSize || value.hash !== expectedHash) {
+    throw new Error(`dev.db fora do baseline historico: ${JSON.stringify(value)}`);
+  }
 }
 
 function assertTreeEqual(source, copy) {
@@ -361,9 +439,15 @@ function treeManifest(root) {
   }
 }
 
+function fingerprint(file) {
+  const data = fs.readFileSync(file);
+  return { size: data.length, hash: crypto.createHash("sha256").update(data).digest("hex") };
+}
+
 function databaseUrl(file) { return `file:${path.resolve(file).replace(/\\/g, "/")}`; }
 
 async function removeRunDirectory(directory) {
+  assertSafeTempPath(directory, "CRM_PRISMA_TEST_RUN_DIR");
   let lastError;
   for (let attempt = 1; attempt <= 5; attempt += 1) {
     try {

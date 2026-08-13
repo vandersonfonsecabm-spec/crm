@@ -26,6 +26,8 @@ Object.assign(process.env, {
   WHATSAPP_INTEGRATION_ENABLED: "true",
   WHATSAPP_INBOUND_ENABLED: "true",
   WHATSAPP_APP_SECRET: appSecret,
+  WHATSAPP_META_APP_ID: "app-f1b3",
+  WHATSAPP_PROVIDER_ENVIRONMENT: "sandbox-f1b3",
 });
 
 let prisma;
@@ -394,9 +396,9 @@ async function createWhatsAppIntegration(empresaId) {
       empresaId,
       tipo: "WHATSAPP_META",
       nome: "WhatsApp F1B3",
-      chaveInterna: "whatsapp-f1b3",
+      chaveInterna: "whatsapp-meta-inbound-real",
       status: "ATIVO",
-      modoTeste: true,
+      modoTeste: false,
       ativo: true,
       providerEnvironment: "sandbox-f1b3",
       metaAppId: "app-f1b3",

@@ -27,6 +27,8 @@ Object.assign(process.env, {
   CRM_TEST_DATABASE_URL: databaseUrl(databasePath),
   WHATSAPP_INTEGRATION_ENABLED: "true",
   WHATSAPP_INBOUND_ENABLED: "true",
+  WHATSAPP_META_APP_ID: "app-f1b2-a",
+  WHATSAPP_PROVIDER_ENVIRONMENT: "sandbox-f1b2-a",
 });
 
 let prisma;
@@ -505,9 +507,9 @@ async function createWhatsAppIntegration(empresaId, suffix, integrationWabaId, i
       empresaId,
       tipo: "WHATSAPP_META",
       nome: `WhatsApp F1B2 ${suffix}`,
-      chaveInterna: `whatsapp-f1b2-${suffix}`,
+      chaveInterna: "whatsapp-meta-inbound-real",
       status: "ATIVO",
-      modoTeste: true,
+      modoTeste: false,
       ativo: true,
       providerEnvironment: `sandbox-f1b2-${suffix}`,
       metaAppId: `app-f1b2-${suffix}`,

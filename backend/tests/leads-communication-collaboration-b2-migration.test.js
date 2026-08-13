@@ -5,28 +5,25 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
+const { createEmptyTestDatabase, createTestDatabase, requiredBaseDatabase, removeDatabase: removeSandboxDatabase } = require("./test-database-fixture");
 
 const backendDir = path.resolve(__dirname, "..");
-const auditDir = path.join(os.tmpdir(), "crm-leads-collaboration-b2");
-const emptyDatabase = path.join(auditDir, `migration-empty-${process.pid}.db`);
-const copiedDatabase = path.join(auditDir, `migration-copy-${process.pid}.db`);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+const emptyDatabase = createEmptyTestDatabase(`migration-empty-${process.pid}.db`);
+const copiedDatabase = createTestDatabase(`migration-copy-${process.pid}.db`);
+const sourceDatabase = requiredBaseDatabase();
 const prismaCli = path.join(backendDir, "node_modules", "prisma", "build", "index.js");
 
 let sourceCounts;
 
 before(async () => {
-  fs.mkdirSync(auditDir, { recursive: true });
-  fs.writeFileSync(emptyDatabase, "");
-  fs.copyFileSync(sourceDatabase, copiedDatabase);
   sourceCounts = await legacyCounts(sourceDatabase);
   migrate(emptyDatabase);
   migrate(copiedDatabase);
 });
 
 after(() => {
-  removeDatabase(emptyDatabase);
-  removeDatabase(copiedDatabase);
+  removeSandboxDatabase(emptyDatabase);
+  removeSandboxDatabase(copiedDatabase);
 });
 
 test("migration B2 e aditiva, preserva dados e cria controles colaborativos opcionais", async () => {

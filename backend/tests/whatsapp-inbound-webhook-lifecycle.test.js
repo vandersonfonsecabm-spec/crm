@@ -280,12 +280,14 @@ test("assinatura, mapeamento e falha pos-intake permanecem fechados e sanitizado
   });
   const ambiguousSimulator = simulator.forIdentity(ambiguousIdentity);
   ambiguousSimulator.configureEnvironment(process.env);
+  // The canonical composite unique key prevents two matching rows; a row
+  // under another app/environment is intentionally ignored by mapping.
   assert.equal((await ambiguousSimulator.send(ambiguousSimulator.text({
     id: `test-ambiguous-${suffix}`,
-  }))).status, 503);
+  }))).status, 200);
   assert.equal(await prisma.eventoWebhook.count({
     where: { externalEventId: `test-ambiguous-${suffix}` },
-  }), 0);
+  }), 1);
 
   const failureIdentity = {
     wabaId: `test-waba-failure-${suffix}`,

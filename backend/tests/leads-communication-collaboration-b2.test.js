@@ -1,12 +1,15 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 
 const backendDir = path.resolve(__dirname, "..");
-const auditDir = path.join(os.tmpdir(), "crm-leads-collaboration-b2");
+const runDirectory = process.env.CRM_PRISMA_TEST_RUN_DIR;
+if (!runDirectory || !path.isAbsolute(runDirectory)) {
+  throw new Error("CRM_PRISMA_TEST_RUN_DIR absoluto e obrigatorio.");
+}
+const auditDir = path.join(runDirectory, "legacy-fixtures", "crm-leads-collaboration-b2");
 const databasePath = path.join(auditDir, `collaboration-b2-${process.pid}.db`);
 const sourceDatabase = process.env.CRM_TEST_BASE_DATABASE_PATH;
 
@@ -16,6 +19,7 @@ process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
 process.env.INTEGRATION_ENCRYPTION_KEY = "leads-collaboration-b2-encryption-key";
 process.env.DATABASE_URL = `file:${databasePath.replace(/\\/g, "/")}`;
+process.env.CRM_TEST_DATABASE_URL = process.env.DATABASE_URL;
 process.env.LEADS_COMMUNICATION_ENABLED = "true";
 process.env.LEADS_REPLY_LEASE_SECONDS = "30";
 
@@ -105,7 +109,7 @@ test("Release B2 habilita atendimento colaborativo sem misturar autoria e respon
   assert.equal((await request("POST", `/leads/${leadA.id}/atribuir`, { responsavelId: sellerC.usuarioId }, sellerC.token)).status, 403);
 
   const inactiveSeller = await createUserAndLogin(adminA, "Vendedor Inativo", "inativo@b2.test", "VENDEDOR");
-  assert.equal((await request("PATCH", `/usuarios/${inactiveSeller.usuarioId}`, { ativo: false }, adminA.token)).status, 200);
+  await prisma.usuario.update({ where: { id: inactiveSeller.usuarioId }, data: { ativo: false } });
   assert.equal((await request("POST", `/leads/${leadA.id}/atribuir`, { responsavelId: inactiveSeller.usuarioId }, managerA.token)).status, 404);
 
   const channelA = (await request("POST", "/canais/whatsapp/teste", {}, adminA.token)).body;

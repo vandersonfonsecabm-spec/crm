@@ -4,11 +4,10 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 const { decryptCredentials } = require("../src/integrations/crypto");
+const { createTestDatabase, databaseUrl, removeDatabase } = require("./test-database-fixture");
 
 const backendDir = path.resolve(__dirname, "..");
-const databaseName = `bling-test-${process.pid}.db`;
-const databasePath = path.join(backendDir, "prisma", databaseName);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+const databasePath = createTestDatabase(`bling-test-${process.pid}.db`);
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "bling-test-secret-with-sufficient-entropy";
@@ -21,7 +20,8 @@ process.env.BLING_REDIRECT_URI = "https://api.test/integracoes/bling/callback";
 process.env.BLING_TIMEOUT_MS = "200";
 process.env.BLING_MAX_PAGES = "2";
 process.env.BLING_PAGE_SIZE = "2";
-process.env.DATABASE_URL = `file:./${databaseName}`;
+process.env.DATABASE_URL = databaseUrl(databasePath);
+process.env.CRM_TEST_DATABASE_URL = process.env.DATABASE_URL;
 
 let api;
 let prisma;
@@ -31,7 +31,6 @@ let originalFetch;
 let fetchCalls = [];
 
 before(async () => {
-  fs.copyFileSync(sourceDatabase, databasePath);
   execFileSync(process.execPath, [path.join(backendDir, "node_modules", "prisma", "build", "index.js"), "migrate", "deploy"], {
     cwd: backendDir,
     env: process.env,
@@ -51,10 +50,7 @@ after(async () => {
   global.fetch = originalFetch;
   if (prisma) await prisma.$disconnect();
   if (server) await new Promise((resolve) => server.close(resolve));
-  for (const suffix of ["", "-wal", "-shm", "-journal"]) {
-    const file = `${databasePath}${suffix}`;
-    if (fs.existsSync(file)) fs.rmSync(file, { force: true });
-  }
+  removeDatabase(databasePath);
 });
 
 test("Bling OAuth bloqueia perfis, usa state persistente e criptografa tokens", async () => {

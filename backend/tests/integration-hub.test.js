@@ -3,18 +3,18 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
+const { createTestDatabase, databaseUrl, removeDatabase } = require("./test-database-fixture");
 
 const backendDir = path.resolve(__dirname, "..");
-const databaseName = `hub-test-${process.pid}.db`;
-const databasePath = path.join(backendDir, "prisma", databaseName);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+const databasePath = createTestDatabase(`hub-test-${process.pid}.db`);
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "integration-hub-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
 process.env.INTEGRATION_ENCRYPTION_KEY = "hub-test-encryption-key-with-32-bytes-minimum";
-process.env.DATABASE_URL = `file:./${databaseName}`;
+process.env.DATABASE_URL = databaseUrl(databasePath);
+process.env.CRM_TEST_DATABASE_URL = process.env.DATABASE_URL;
 
 let api;
 let prisma;
@@ -22,7 +22,6 @@ let server;
 let baseUrl;
 
 before(async () => {
-  fs.copyFileSync(sourceDatabase, databasePath);
   execFileSync(process.execPath, [path.join(backendDir, "node_modules", "prisma", "build", "index.js"), "migrate", "deploy"], {
     cwd: backendDir,
     env: process.env,
@@ -40,10 +39,7 @@ before(async () => {
 after(async () => {
   if (prisma) await prisma.$disconnect();
   if (server) await new Promise((resolve) => server.close(resolve));
-  for (const suffix of ["", "-wal", "-shm", "-journal"]) {
-    const file = `${databasePath}${suffix}`;
-    if (fs.existsSync(file)) fs.rmSync(file, { force: true });
-  }
+  removeDatabase(databasePath);
 });
 
 test("Hub de integracoes isola empresas, criptografa credenciais e consulta dados canonicos", async () => {

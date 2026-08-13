@@ -4,18 +4,17 @@ const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
 const bcrypt = require("bcryptjs");
+const { createTestDatabase, databaseUrl, removeDatabase } = require("./test-database-fixture");
 
 const backendDir = path.resolve(__dirname, "..");
-const databaseName = `bootstrap-test-${process.pid}.db`;
-const databasePath = path.join(backendDir, "prisma", databaseName);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+const databasePath = createTestDatabase(`bootstrap-test-${process.pid}.db`);
 
-process.env.DATABASE_URL = `file:./${databaseName}`;
+process.env.DATABASE_URL = databaseUrl(databasePath);
+process.env.CRM_TEST_DATABASE_URL = process.env.DATABASE_URL;
 
 let prisma;
 
 before(async () => {
-  fs.copyFileSync(sourceDatabase, databasePath);
   execFileSync(
     process.execPath,
     [path.join(backendDir, "node_modules", "prisma", "build", "index.js"), "migrate", "deploy"],
@@ -27,10 +26,7 @@ before(async () => {
 
 after(async () => {
   if (prisma) await prisma.$disconnect();
-  for (const suffix of ["", "-wal", "-shm", "-journal"]) {
-    const file = `${databasePath}${suffix}`;
-    if (fs.existsSync(file)) fs.rmSync(file, { force: true });
-  }
+  removeDatabase(databasePath);
 });
 
 test("bootstrap cria Empresa e ADMIN com hash e recusa repeticao sem alterar dados", async () => {

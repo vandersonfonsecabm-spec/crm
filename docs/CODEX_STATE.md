@@ -2,32 +2,38 @@
 
 Data da verificacao: 12/08/2026.
 
-## Checkpoint operacional atual — V37 pre-convergencia Meta/Instagram
+## Checkpoint operacional atual — V40 safe runner/release gate
 
 - Branch real: `feature/postgres-migration-prep`.
-- HEAD local e `origin/feature/postgres-migration-prep`: `177d2e192fcc31e0f89542a5c03e8700d9532431`.
-- `origin/master`: `6e39e2a5b9dbb2bba1cf4c0376ef2e09a367db62`; relacao
-  `origin/master...HEAD`: `0 3` (feature 3 commits a frente, 0 atras).
-- No preflight, o indice Git estava vazio, sem untracked nem conflitos, e o
-  worktree continha somente `docs/CODEX_STATE.md` modificado preexistente; esta
-  reconciliacao altera exclusivamente esse mesmo arquivo.
+- RC funcional permanece em `177d2e192fcc31e0f89542a5c03e8700d9532431`.
+- HEAD da feature antes do commit documental/test-only V40:
+  `20c0d52f3cecc1c82944787931ab0f5ff82c08ae`; `origin/master` permanece
+  `6e39e2a5b9dbb2bba1cf4c0376ef2e09a367db62`, com relacao
+  `origin/master...HEAD`: `0 5`.
+- O preflight V40 encontrou somente o delta de infraestrutura/testes seguro
+  desta missao e este arquivo documental; nao houve delta de produto, schema,
+  migration, package ou lockfile. O indice permaneceu vazio antes do stage e
+  conflitos foram zero.
+- O runner backend canonico final passou uma vez em sandbox TEMP com
+  `CRM_TEST_DATABASE_URL` absoluto, sem usar/copiar/conectar o `dev.db` como
+  fixture; o supervisor apenas verificou seu hash/sidecars antes e depois,
+  mantendo limpeza do run-id. A suite SQLite de relacoes
+  confirmou 89 relacoes, 133 FKs verificadas, 17 paises unique, zero orfaos e
+  zero vinculos cruzados.
+- Os gates PostgreSQL TEST_ONLY, frontend e Meta focais da V38 foram
+  reutilizados sem mudanca causal; o relationCount atual e 89. V39 foi fechado
+  pelo runner seguro V40. O resultado e `V40_FINAL_RELEASE_GATE_SHIP`.
 - O codigo Meta/Instagram esta presente na feature e no HOMOLOG; o master
-  oficial em `6e39e2a` permanece sem essa preparacao.
-- O deploy/QA read-only do HOMOLOG Vercel/Railway foi comprovado no SHA
-  `177d2e1`; health 200 e 32 migrations sao evidencias do checkpoint V20 e a
-  sessao V35 confirmou a UI. O oficial permanece em `6e39e2a`; producao ainda
-  nao deve ser promovida.
+  oficial em `6e39e2a` permanece sem essa preparacao. Producao e master ainda
+  nao foram convergidos, promovidos ou publicados.
 - QA V35 no HOMOLOG confirmou card Instagram/Meta visivel, estado
   `NOT_CONFIGURED` e CTA honesto desabilitado por falta de canal real.
-- V36 classificou o estado como `DIVERGED_WITH_UNIQUE_CHANGES` e `FIX_FIRST`.
-- O contrato oficial Meta foi pesquisado; OAuth/E2E real nao foi executado e
-  nenhuma conta Meta foi conectada.
+- Nenhuma conta Meta foi conectada; nao houve OAuth/E2E real, Graph API,
+  webhook externo, outbound, mutacao de producao/master ou alteracao de env.
 - `backend/prisma/dev.db` permanece imutavel, SHA-256
   `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
-- Nenhum segredo, login Meta, token, Graph API autenticada, webhook externo ou
-  conta foi usado nesta preparacao. Nao houve mutacao de producao/master.
-- O bloco Git abaixo preserva historico anterior; suas afirmacoes de worktree
-  limpo e HEAD antigo nao descrevem este checkpoint atual.
+- Convergencia continua obrigatoriamente como missao separada e autorizada;
+  este checkpoint nao inicia release/deploy.
 
 ## Estrutura ativa
 
@@ -68,9 +74,10 @@ Data da verificacao: 12/08/2026.
   concluido, o frontend canonico responde HTTP 200 e o bundle publicado contem
   a nova estrutura do Painel Comercial.
 - A migration aditiva `20260801150000_add_user_security_foundation` foi
-  aplicada pelo startup oficial, sem drop, rename ou backfill. O gate
-  `production-readonly` reconhece 87 relacoes, zero orfaos e zero vinculos
-  cruzados.
+  aplicada pelo startup oficial, sem drop, rename ou backfill. No estado
+  oficial historico em `6e39e2a` (antes das migrations Meta exclusivas da
+  feature), o gate `production-readonly` reconhece 87 relacoes, zero orfaos e
+  zero vinculos cruzados; o RC da feature atual usa o manifesto de 89.
 - H2, H3, H4, H5 e H6 estao publicadas. A qualificacao comercial, as propostas,
   a Agenda e Acompanhamentos, o Cliente 360 graus e o tempo de etapa com
   proxima acao estao disponiveis em producao.
@@ -1458,8 +1465,10 @@ integracoes autorizadas.
   o frontend publicou novos assets. O smoke read-only confirmou `/health = 200`,
   rotas protegidas sem autenticacao em 401 e paginas publicas de login,
   recuperacao, redefinicao e convite em 200.
-- O verifier produtivo aprovou 87 relacoes tenant-scoped, 134 foreign keys e
-  17 parents unique, com zero orfaos e zero vinculos cruzados.
+- No checkpoint publicado antes da feature Meta, o verifier produtivo aprovou
+  87 relacoes tenant-scoped, 134 foreign keys e 17 parents unique, com zero
+  orfaos e zero vinculos cruzados; esse numero e historico do oficial em
+  `6e39e2a`, nao a contagem do RC atual (89).
 - A entrega real de e-mail permanece pendente de provider. Nenhum SMTP, Gmail
   ou Microsoft Graph foi integrado e nenhum e-mail real foi enviado.
 

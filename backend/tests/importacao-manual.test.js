@@ -4,12 +4,11 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
+const { createTestDatabase, databaseUrl, removeDatabase } = require("./test-database-fixture");
 
 const backendDir = path.resolve(__dirname, "..");
 const fixturesDir = path.join(__dirname, "fixtures", "importacoes");
-const databaseName = `hub-import-test-${process.pid}.db`;
-const databasePath = path.join(backendDir, "prisma", databaseName);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+const databasePath = createTestDatabase(`hub-import-test-${process.pid}.db`);
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "manual-import-test-secret-with-sufficient-entropy";
@@ -21,7 +20,8 @@ process.env.IMPORT_MAX_ROWS = "500";
 process.env.IMPORT_MAX_COLUMNS = "50";
 process.env.IMPORT_MAX_ERRORS = "100";
 process.env.IMPORT_BATCH_SIZE = "2";
-process.env.DATABASE_URL = `file:./${databaseName}`;
+process.env.DATABASE_URL = databaseUrl(databasePath);
+process.env.CRM_TEST_DATABASE_URL = process.env.DATABASE_URL;
 
 let api;
 let prisma;
@@ -29,7 +29,6 @@ let server;
 let baseUrl;
 
 before(async () => {
-  fs.copyFileSync(sourceDatabase, databasePath);
   execFileSync(process.execPath, [path.join(backendDir, "node_modules", "prisma", "build", "index.js"), "migrate", "deploy"], {
     cwd: backendDir,
     env: process.env,
@@ -47,10 +46,7 @@ before(async () => {
 after(async () => {
   if (prisma) await prisma.$disconnect();
   if (server) await new Promise((resolve) => server.close(resolve));
-  for (const suffix of ["", "-wal", "-shm", "-journal"]) {
-    const file = `${databasePath}${suffix}`;
-    if (fs.existsSync(file)) fs.rmSync(file, { force: true });
-  }
+  removeDatabase(databasePath);
 });
 
 test("importacao manual CSV e XLSX valida, processa, isola empresas e evita duplicidade", async () => {

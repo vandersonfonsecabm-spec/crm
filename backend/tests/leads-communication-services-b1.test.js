@@ -5,18 +5,18 @@ const path = require("node:path");
 const jwt = require("jsonwebtoken");
 const { execFileSync } = require("node:child_process");
 const { after, before, test } = require("node:test");
+const { createTestDatabase, databaseUrl } = require("./test-database-fixture");
 
 const backendDir = path.resolve(__dirname, "..");
-const auditDir = path.join(os.tmpdir(), "crm-leads-services-b1");
-const databasePath = path.join(auditDir, `services-b1-${process.pid}.db`);
-const sourceDatabase = path.join(backendDir, "prisma", "dev.db");
+const databasePath = createTestDatabase(`services-b1-${process.pid}.db`);
 
 process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "leads-services-b1-test-secret-with-sufficient-entropy";
 process.env.JWT_EXPIRES_IN = "1h";
 process.env.ALLOW_COMPANY_REGISTRATION = "true";
 process.env.INTEGRATION_ENCRYPTION_KEY = "leads-services-b1-test-encryption-key";
-process.env.DATABASE_URL = `file:${databasePath.replace(/\\/g, "/")}`;
+process.env.DATABASE_URL = databaseUrl(databasePath);
+process.env.CRM_TEST_DATABASE_URL = process.env.DATABASE_URL;
 process.env.LEADS_COMMUNICATION_ENABLED = "true";
 
 let api;
@@ -25,8 +25,6 @@ let server;
 let baseUrl;
 
 before(async () => {
-  fs.mkdirSync(auditDir, { recursive: true });
-  fs.copyFileSync(sourceDatabase, databasePath);
   migrate();
   api = require("../src/server");
   prisma = api.prisma;

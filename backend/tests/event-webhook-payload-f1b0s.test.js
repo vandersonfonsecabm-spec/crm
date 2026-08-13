@@ -149,6 +149,8 @@ function prepareSchemas() {
   fs.mkdirSync(targetPrismaDir, { recursive: true });
   fs.copyFileSync(path.join(backendDir, "prisma", "schema.prisma"), previousSchema);
   fs.copyFileSync(path.join(backendDir, "prisma", "schema.prisma"), targetSchema);
+  writePrismaConfig(previousPrismaDir, previousSchema);
+  writePrismaConfig(targetPrismaDir, targetSchema);
   copyMigrationsBefore({
     backendDir,
     migrationsDir: path.join(previousPrismaDir, "migrations"),
@@ -255,9 +257,9 @@ function migrate(databasePath, schemaPath) {
     prismaCli,
     "migrate",
     "deploy",
-    ...(schemaPath ? ["--schema", schemaPath] : []),
+    ...(schemaPath ? ["--config", path.join(path.dirname(schemaPath), "prisma.config.cjs")] : []),
   ], {
-    cwd: backendDir,
+    cwd: path.dirname(schemaPath),
     env: {
       ...process.env,
       NODE_ENV: "test",
@@ -268,6 +270,19 @@ function migrate(databasePath, schemaPath) {
     windowsHide: true,
     shell: false,
   });
+}
+
+function writePrismaConfig(prismaDir, schemaPath) {
+  fs.writeFileSync(path.join(prismaDir, "prisma.config.cjs"), [
+    `const { defineConfig } = require(${JSON.stringify(require.resolve("prisma/config", { paths: [backendDir] }))});`,
+    "",
+    "module.exports = defineConfig({",
+    `  schema: ${JSON.stringify(schemaPath)},`,
+    `  migrations: { path: ${JSON.stringify(path.join(prismaDir, "migrations"))} },`,
+    "  datasource: { url: process.env.DATABASE_URL },",
+    "});",
+    "",
+  ].join("\n"));
 }
 
 function clientFor(databasePath) {
