@@ -2,44 +2,47 @@
 
 Data da verificacao: 12/08/2026.
 
-## Checkpoint operacional atual — V40 safe runner/release gate
+## Checkpoint de release pre-V45 — consultar Git para o SHA atual
 
-- Branch real: `feature/postgres-migration-prep`.
-- RC funcional permanece em `177d2e192fcc31e0f89542a5c03e8700d9532431`.
-- HEAD da feature apos o commit test-only/documental V40:
-  `43bb1651c6c9b74d1cde471294ff17819bd458a8`; o HEAD pre-V40 era
-  `20c0d52f3cecc1c82944787931ab0f5ff82c08ae`. `origin/master` permanece
-  `6e39e2a5b9dbb2bba1cf4c0376ef2e09a367db62`, com relacao
-  `origin/master...HEAD`: `0 5`.
-- O preflight V40 encontrou somente o delta de infraestrutura/testes seguro
-  desta missao e este arquivo documental; nao houve delta de produto, schema,
-  migration, package ou lockfile. O indice permaneceu vazio antes do stage e
-  conflitos foram zero.
-- O runner backend canonico final passou uma vez em sandbox TEMP com
-  `CRM_TEST_DATABASE_URL` absoluto, sem usar/copiar/conectar o `dev.db` como
-  fixture; o supervisor apenas verificou seu hash/sidecars antes e depois,
-  mantendo limpeza do run-id. A suite SQLite de relacoes
-  confirmou 89 relacoes, 133 FKs verificadas, 17 paises unique, zero orfaos e
-  zero vinculos cruzados.
-- Os gates PostgreSQL TEST_ONLY, frontend e Meta focais da V38 foram
-  reutilizados sem mudanca causal; o relationCount atual e 89. V39 foi fechado
-  pelo runner seguro V40. O resultado e `V40_FINAL_RELEASE_GATE_SHIP`.
-- O codigo Meta/Instagram esta presente na feature e no HOMOLOG; o master
-  oficial em `6e39e2a` permanece sem essa preparacao. Producao e master ainda
-  nao foram convergidos, promovidos ou publicados.
+- Branch candidata: `feature/postgres-migration-prep`. O SHA exato corrente
+  deve ser obtido com `git rev-parse HEAD` e `git ls-remote origin`; este
+  documento nao fixa o HEAD criado pelo proprio commit documental.
+- O RC funcional historico Meta permanece em
+  `177d2e192fcc31e0f89542a5c03e8700d9532431`. O baseline de codigo da release
+  V45, depois dos commits test-only, documentais e de seguranca aprovados, e
+  `f47543e5281a8a0c771116878c3d29c324419f79`.
+- No Gate Zero pre-V45, `origin/master` ainda estava em
+  `6e39e2a5b9dbb2bba1cf4c0376ef2e09a367db62` e a feature era sua descendente
+  linear, na relacao `origin/master...f47543e`: `0 7`. Esses valores sao o
+  baseline historico anterior a convergencia, nao uma afirmacao sobre os refs
+  depois da V45.
+- Entre o RC funcional e o baseline V45, os commits posteriores preservaram o
+  produto aprovado e trataram testes, runner seguro e documentacao. Qualquer
+  agente futuro deve confirmar o diff real antes de reutilizar essa evidencia.
+- V40 concluiu `SAFE_BACKEND_RUNNER`, bateria backend canonica, relacoes
+  SQLite, guard do `dev.db`, gates PostgreSQL V38, frontend e testes Meta com
+  PASS; o relationCount do candidato e 89. O resultado registrado foi
+  `V40_FINAL_RELEASE_GATE_SHIP`.
+- V43 confirmou Vercel e Railway oficiais ainda no baseline pre-V45
+  `6e39e2a`, PostgreSQL oficial saudavel e duas migrations Meta pendentes, mas
+  parou antes de qualquer mutacao porque nao existia backup/snapshot oficial
+  recuperavel comprovado.
+- V45 e a missao autorizada para persistir a regra de entrega do projeto,
+  provar backup e restore, aplicar as migrations esperadas e convergir a
+  feature somente se todos os gates de producao forem aprovados. Este texto
+  nao antecipa o resultado da missao.
 - QA V35 no HOMOLOG confirmou card Instagram/Meta visivel, estado
   `NOT_CONFIGURED` e CTA honesto desabilitado por falta de canal real.
-- Nenhuma conta Meta foi conectada; nao houve OAuth/E2E real, Graph API,
-  webhook externo, outbound, mutacao de producao/master ou alteracao de env.
+- Nenhuma conta Meta foi conectada; Meta Developer, OAuth/E2E real, Graph API,
+  token, subscription e outbound continuam fora deste checkpoint.
 - `backend/prisma/dev.db` permanece imutavel, SHA-256
   `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
-- Convergencia continua obrigatoriamente como missao separada e autorizada;
-  este checkpoint nao inicia release/deploy.
 
 ## Estrutura ativa
 
 - Frontend React, Vite e TypeScript em `frontend`.
-- Backend Express, Prisma e SQLite em `backend`.
+- Backend Express e Prisma em `backend`; SQLite permanece como schema-fonte e
+  banco local protegido, enquanto o runtime oficial usa PostgreSQL.
 - Estruturas antigas da raiz `src` e `prisma` estao congeladas; nao remove-las
   nem utiliza-las sem auditoria especifica.
 
@@ -49,8 +52,9 @@ Data da verificacao: 12/08/2026.
   `9b14b0587fd4a5f223589440f7d4b186e2d91b0e`.
 - Historico: o baseline Git do candidato RC1 validado foi o commit exclusivamente documental
   `6e76d9695744da7c2edfa1e4481dfdeb9c750fa4`, posterior ao ultimo commit
-  funcional e sem alteracao de produto. O checkpoint atual avancou para a
-  feature Meta acima; `origin/master` continua em `6e39e2a`.
+  funcional e sem alteracao de produto. A feature Meta avancou depois desse
+  checkpoint; imediatamente antes da V45, `origin/master` estava em
+  `6e39e2a`. Consultar Git para os refs atuais.
 - Branch de trabalho ativa: `feature/postgres-migration-prep`.
 - Historico: naquele checkpoint, o candidato RC1 possuia 102 paths explicitamente
   staged para publicacao controlada e o worktree coincidia com o index.
@@ -90,17 +94,16 @@ Data da verificacao: 12/08/2026.
   `769fba0f-d9b5-4076-bbd9-810059f05912` e a Vercel publicou o deployment
   `Ai35r8GaNCQUGLSEoV5nUhSmprbe`, ambos a partir do commit exato; Railway ficou
   `Active`, Vercel ficou `Ready` e o health permaneceu HTTP 200.
-- `backend/scripts/start-production.cjs` executa migrations no processo
-  principal, depois da montagem do volume e antes da API. Nao utiliza
-  Pre-Deploy e nao executa migration durante o build.
-- O entrypoint valida o servico Railway, o volume `/app/data`, a
-  `DATABASE_URL` SQLite dentro do volume, o schema e a Prisma CLI. Fora do
-  Railway, inicia somente o servidor e nao migra automaticamente o banco local.
-- Falha de validacao ou migration impede a API de iniciar. O SQLite operacional
-  exige uma unica replica, e o processo encaminha sinais ao servidor filho.
-- O deployment confirmou uma replica, Prisma CLI no runtime, volume
-  `/app/data` e a ordem validacao -> `prisma migrate deploy` -> 18 migrations
-  sem pendencias -> API. `prisma migrate status` confirmou o schema atualizado.
+- Na release SQLite historica H1.1, `backend/scripts/start-production.cjs`
+  executava migrations no processo principal, depois da montagem do volume e
+  antes da API; nao usava Pre-Deploy nem executava migration durante o build.
+- Naquele runtime SQLite, o entrypoint validava o servico Railway, o volume
+  `/app/data`, a `DATABASE_URL` dentro do volume, o schema e a Prisma CLI; uma
+  replica era obrigatoria. O startup atual seleciona e valida o provider real,
+  e a producao oficial pre-V45 usa PostgreSQL.
+- Falha de validacao ou migration continua impedindo a API de iniciar. O
+  deployment historico H1.1 confirmou a ordem validacao ->
+  `prisma migrate deploy` -> 18 migrations sem pendencias -> API.
 - O banco permaneceu com 770.048 bytes, SHA-256 fisico
   `0be2e7280ee4e907d79717c55dfca25c89b8f25ea83afc34225cd007ce2ad30f`,
   `quick_check` `ok`, zero violacao de foreign key, contagens preservadas e

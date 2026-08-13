@@ -704,3 +704,56 @@ Não desperdiçar tokens.
 
 Executar a menor sequência segura capaz de atingir integralmente o objetivo
 autorizado pelo usuário.
+
+============================================================
+23. ENTREGA AUTOMÁTICA NA CONVERSA PRINCIPAL DO SAAS
+============================================================
+
+Esta seção constitui autorização permanente do usuário, limitada ao projeto
+SaaS, para enviar automaticamente a entrega final de cada tarefa à conversa
+principal do SaaS no ChatGPT. Ela não autoriza publicação, deploy, push,
+alteração de produção, compartilhamento com terceiros ou envio de segredos.
+
+Ao concluir qualquer tarefa, correção, implementação, auditoria, análise ou
+lote de trabalho:
+
+1. localizar todos os artefatos relevantes produzidos, como relatórios,
+   auditorias, diagnósticos, manifestos, logs sanitizados, resultados de
+   testes, evidências e demais documentos;
+2. enviar esses arquivos reais na própria conversa principal do SaaS, e não
+   deixá-los apenas no repositório ou na pasta local;
+3. confirmar que os anexos foram adicionados antes de enviar o relatório em
+   texto;
+4. publicar na mesma entrega um relatório textual com:
+   - resumo do trabalho;
+   - alterações implementadas;
+   - problemas encontrados e corrigidos;
+   - arquivos criados, modificados ou removidos;
+   - testes, builds e verificações executados;
+   - resultado final das validações;
+   - pendências, limitações e riscos restantes.
+
+Se o upload normal falhar:
+
+1. tentar o seletor de arquivos disponível;
+2. tentar copiar os arquivos reais pelo sistema e colá-los na caixa de
+   mensagem do ChatGPT, sem substituir o arquivo pelo seu conteúdo textual;
+3. quando houver muitos artefatos, reuni-los em um ZIP sanitizado e tentar
+   enviar o ZIP;
+4. tentar outra superfície de navegador já autorizada e disponível quando a
+   primeira não oferecer a capacidade necessária;
+5. confirmar visualmente, por estado da interface, que o envio foi publicado.
+
+Não considerar a entrega encerrada antes de tentar enviar os arquivos e o
+relatório textual. Não esperar uma solicitação adicional do usuário.
+
+Se nenhum meio disponível conseguir enviar um arquivo, informar claramente:
+
+- o caminho e o nome do arquivo não enviado;
+- o motivo da falha;
+- cada método de envio tentado;
+- onde o arquivo permanece salvo para recuperação.
+
+Antes do envio, remover ou excluir do pacote segredos, tokens, cookies,
+credenciais, dumps com dados reais e qualquer conteúdo sensível proibido pelas
+regras de segurança deste projeto.
