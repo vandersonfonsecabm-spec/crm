@@ -11,6 +11,9 @@ export type WhatsAppConnectionState =
 
 export type WhatsAppConnectionStatus = {
   state: WhatsAppConnectionState;
+  canalIntegracaoId: number | null;
+  credentialConfigured: boolean;
+  credentialRevision: number | null;
   connectedAt: string | null;
   verifiedAt: string | null;
   lastWebhookAt: string | null;
@@ -33,11 +36,18 @@ export function mapWhatsAppConnectionStatus(
   const state = normalizeState(payload);
   return {
     state,
+    canalIntegracaoId: positiveId(payload?.canalIntegracaoId),
+    credentialConfigured: payload?.credentialConfigured === true,
+    credentialRevision: Number.isSafeInteger(payload?.credentialRevision) && (payload?.credentialRevision || 0) > 0 ? payload!.credentialRevision! : null,
     connectedAt: optionalDate(payload?.connectedAt),
     verifiedAt: optionalDate(payload?.verifiedAt),
     lastWebhookAt: optionalDate(payload?.lastWebhookAt),
     lastFailureAt: optionalDate(payload?.lastFailureAt),
   };
+}
+
+function positiveId(value: unknown) {
+  return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : null;
 }
 
 function normalizeState(payload: WhatsappOperationalStatusResponse | null | undefined): WhatsAppConnectionState {

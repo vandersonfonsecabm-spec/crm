@@ -16,6 +16,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import { removeWhatsAppCredential, replaceWhatsAppCredential, storeWhatsAppCredential } from "../../services/crmApi";
 import { CommunicationModal } from "../leads-communication/CommunicationOverlay";
 import {
   Button,
@@ -130,6 +131,10 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
   const { loadState, refresh, status } = useWhatsAppConnectionStatus(onUnauthorized);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [credentialBusy, setCredentialBusy] = useState(false);
+  const [credentialError, setCredentialError] = useState("");
+  const [credentialMode, setCredentialMode] = useState<"create" | "replace">("create");
   const connectButtonRef = useRef<HTMLButtonElement>(null);
   const presentation = STATE_PRESENTATION[status.state];
   const details = useMemo(() => statusDetails(status), [status]);
@@ -142,6 +147,49 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
       setCopyFeedback("Não foi possível copiar a URL");
     }
     window.setTimeout(() => setCopyFeedback(""), 2400);
+  }
+
+  async function storeCredential() {
+    const replaceAllowed = credentialMode === "replace"
+      && status.credentialConfigured === true
+      && Boolean(status.credentialRevision)
+      && ["WAITING_META_AUTH", "CONNECTED"].includes(status.state);
+    const createAllowed = credentialMode === "create"
+      && status.credentialConfigured !== true
+      && ["WAITING_META_AUTH", "CONNECTED"].includes(status.state);
+    if (!status.canalIntegracaoId || (!replaceAllowed && !createAllowed) || !accessToken.trim() || credentialBusy) return;
+    setCredentialBusy(true);
+    setCredentialError("");
+    try {
+      if (credentialMode === "replace") {
+        if (!status.credentialRevision) throw new Error("A revisão atual da credencial não está disponível.");
+        await replaceWhatsAppCredential({ canalIntegracaoId: status.canalIntegracaoId, expectedRevision: status.credentialRevision }, accessToken.trim());
+      } else {
+        await storeWhatsAppCredential(status.canalIntegracaoId, accessToken.trim());
+      }
+      setAccessToken("");
+      setConnectModalOpen(false);
+      await refresh();
+    } catch (error) {
+      setCredentialError(error instanceof Error ? error.message : "Não foi possível armazenar a credencial com segurança.");
+    } finally {
+      setCredentialBusy(false);
+    }
+  }
+
+  async function removeCredential() {
+    if (!status.canalIntegracaoId || !status.credentialRevision || credentialBusy) return;
+    if (!window.confirm("Remover a credencial TEST_ONLY deste canal?")) return;
+    setCredentialBusy(true);
+    setCredentialError("");
+    try {
+      await removeWhatsAppCredential({ canalIntegracaoId: status.canalIntegracaoId, expectedRevision: status.credentialRevision });
+      await refresh();
+    } catch (error) {
+      setCredentialError(error instanceof Error ? error.message : "Não foi possível remover a credencial com segurança.");
+    } finally {
+      setCredentialBusy(false);
+    }
   }
 
   if (loadState === "loading") {
@@ -210,11 +258,12 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
             </div>
             <Button
               leftIcon={<MessageCircle className="text-[var(--text-inverse)]" size={15} />}
-              onClick={() => setConnectModalOpen(true)}
+              disabled={status.credentialConfigured && !status.credentialRevision}
+              onClick={() => { setCredentialMode(status.credentialConfigured ? "replace" : "create"); setCredentialError(""); setConnectModalOpen(true); }}
               ref={connectButtonRef}
               variant="primary"
             >
-              <span className="text-[var(--text-inverse)]">Conectar WhatsApp</span>
+              <span className="text-[var(--text-inverse)]">{status.credentialConfigured ? "Trocar credencial" : "Conectar WhatsApp"}</span>
             </Button>
           </div>
         </div>
@@ -271,6 +320,8 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
               <UnavailableAction icon={<PauseCircle size={14} />} label="Pausar recebimento" />
               <UnavailableAction icon={<RefreshCw size={14} />} label="Reativar" />
               <UnavailableAction icon={<CloudCog size={14} />} label="Desconectar" />
+              {status.credentialConfigured && <Button className="col-span-2" disabled={credentialBusy || !status.credentialRevision} onClick={() => void removeCredential()} size="sm" variant="secondary">Remover credencial TEST_ONLY</Button>}
+              {credentialError && <p className="col-span-2 text-[11px] font-medium text-[var(--danger)]" role="alert">{credentialError}</p>}
             </div>
           </Surface>
 
@@ -296,30 +347,44 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
       </div>
 
       <CommunicationModal
-        description="A autorização ainda não está disponível neste painel."
+        description="O token é enviado somente por HTTPS para o armazenamento cifrado do CRM. Nenhuma chamada Graph é feita por esta ação."
         footer={(
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button onClick={() => setConnectModalOpen(false)} variant="secondary">Fechar</Button>
-            <Button disabled leftIcon={<Send size={14} />} variant="primary">Continuar na Meta</Button>
+            <Button onClick={() => { setAccessToken(""); setCredentialError(""); setConnectModalOpen(false); }} variant="secondary">Fechar</Button>
+            <Button disabled={!status.canalIntegracaoId || !accessToken.trim() || credentialBusy || (credentialMode === "replace" ? !status.credentialRevision || !status.credentialConfigured || !["WAITING_META_AUTH", "CONNECTED"].includes(status.state) : status.credentialConfigured || !["WAITING_META_AUTH", "CONNECTED"].includes(status.state))} leftIcon={<Send size={14} />} onClick={() => void storeCredential()} variant="primary">
+              {credentialBusy ? "Armazenando…" : credentialMode === "replace" ? "Substituir token TEST_ONLY" : "Armazenar token TEST_ONLY"}
+            </Button>
           </div>
         )}
-        onClose={() => setConnectModalOpen(false)}
+        onClose={() => { setAccessToken(""); setCredentialError(""); setConnectModalOpen(false); }}
         open={connectModalOpen}
-        title="Antes de conectar"
+        title={credentialMode === "replace" ? "Trocar credencial TEST_ONLY" : "Antes de conectar"}
         triggerRef={connectButtonRef}
       >
         <div className="space-y-3 text-[12px] leading-5 text-[var(--text-secondary)]">
           <div className="flex items-start gap-3 rounded-md border border-sky-200 bg-sky-50 p-3 text-sky-900">
             <ShieldCheck className="mt-0.5 shrink-0" size={17} />
-            <p>Para continuar, será necessário acessar uma conta administradora da Meta. O login e a confirmação de segurança são feitos diretamente pela Meta e nunca ficam armazenados no CRM.</p>
+            <p>Para continuar, um operador deve obter um token TEST_ONLY no provider configurado e entregá-lo somente neste campo seguro. O CRM não inicia login Meta nem chama o Graph nesta etapa.</p>
           </div>
           <ul className="space-y-2">
-            <ModalPoint>O CRM não solicita a senha do Facebook.</ModalPoint>
+            <ModalPoint>O CRM não solicita senha, App Secret ou Page Secret no navegador.</ModalPoint>
             <ModalPoint>O App Secret não é exibido no frontend.</ModalPoint>
             <ModalPoint>Após a autorização, a conta e o número serão vinculados.</ModalPoint>
             <ModalPoint>A ativação será feita de maneira controlada.</ModalPoint>
           </ul>
-          <p className="text-[11px] text-[var(--text-muted)]">Disponível quando a autenticação da Meta puder ser realizada.</p>
+          <label className="grid gap-1 text-[12px] font-medium text-[var(--text-secondary)]" htmlFor="whatsapp-access-token">
+            User/System Access Token TEST_ONLY
+            <input
+              autoComplete="off"
+              className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] px-3 py-2 text-[12px] text-[var(--text-primary)] outline-none focus:border-[var(--focus-ring)]"
+              id="whatsapp-access-token"
+              onChange={(event) => setAccessToken(event.target.value)}
+              type="password"
+              value={accessToken}
+            />
+          </label>
+          {credentialError && <p className="text-[11px] font-medium text-[var(--danger)]" role="alert">{credentialError}</p>}
+          <p className="text-[11px] text-[var(--text-muted)]">O App Secret nunca deve ser colado aqui. O provider e o número devem ser TEST_ONLY; nenhum envio real é executado nesta missão.</p>
         </div>
       </CommunicationModal>
     </div>

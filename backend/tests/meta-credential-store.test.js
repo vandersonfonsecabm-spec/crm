@@ -25,6 +25,8 @@ let tenantA;
 let tenantB;
 let channelA;
 let channelB;
+let channelMessenger;
+let channelWhatsapp;
 
 before(async () => {
   fs.mkdirSync(sandboxDir, { recursive: true });
@@ -43,6 +45,8 @@ before(async () => {
   tenantB = await prisma.empresa.create({ data: { nome: "Meta Store B", slug: `meta-store-b-${process.pid}` } });
   channelA = await createChannel(tenantA.id, "meta-store-a-channel");
   channelB = await createChannel(tenantA.id, "meta-store-b-channel");
+  channelWhatsapp = await createChannel(tenantA.id, "meta-store-whatsapp-channel", "WHATSAPP_META");
+  channelMessenger = await createChannel(tenantA.id, "meta-store-messenger-channel", "MESSENGER_META");
 });
 
 after(async () => {
@@ -146,13 +150,36 @@ test("MetaCredentialStore preserva CAS sob replace concorrente e faz rollback do
 
 test("MetaCredentialStore falha fechado em tenant/canal/provider divergentes", async () => {
   await assert.rejects(
-    () => store.createLocalCredential({ empresaId: tenantA.id, canalIntegracaoId: channelB.id, provider: "META_MESSENGER", credentials: { accessToken: "not-supported" } }),
+    () => store.createLocalCredential({ empresaId: tenantA.id, canalIntegracaoId: channelB.id, provider: "META_UNKNOWN", credentials: { accessToken: "not-supported" } }),
     (error) => error.codigo === "META_CREDENTIAL_PROVIDER_UNSUPPORTED",
   );
   await assert.rejects(
     () => store.resolveCurrentCredential({ empresaId: tenantB.id, canalIntegracaoId: channelA.id, provider: "META_INSTAGRAM" }),
     (error) => error.codigo === "META_CREDENTIAL_NOT_FOUND",
   );
+});
+
+test("MetaCredentialStore suporta WhatsApp e Messenger sem expor credenciais", async () => {
+  const whatsapp = await store.createLocalCredential({
+    empresaId: tenantA.id,
+    canalIntegracaoId: channelWhatsapp.id,
+    provider: "META_WHATSAPP",
+    credentials: { accessToken: "whatsapp-test-token", tokenType: "Bearer" },
+  });
+  const messenger = await store.createLocalCredential({
+    empresaId: tenantA.id,
+    canalIntegracaoId: channelMessenger.id,
+    provider: "META_MESSENGER",
+    credentials: { accessToken: "messenger-test-token", scopes: ["pages_messaging"] },
+  });
+  assert.equal(whatsapp.provider, "META_WHATSAPP");
+  assert.equal(messenger.provider, "META_MESSENGER");
+  assert.equal(JSON.stringify(whatsapp).includes("whatsapp-test-token"), false);
+  assert.equal(JSON.stringify(messenger).includes("messenger-test-token"), false);
+  assert.equal((await store.resolveCurrentCredential({ empresaId: tenantA.id, canalIntegracaoId: channelWhatsapp.id, provider: "META_WHATSAPP" })).credentials.accessToken, "whatsapp-test-token");
+  assert.equal((await store.resolveCurrentCredential({ empresaId: tenantA.id, canalIntegracaoId: channelMessenger.id, provider: "META_MESSENGER" })).credentials.accessToken, "messenger-test-token");
+  await store.removeLocalCredential({ empresaId: tenantA.id, canalIntegracaoId: channelWhatsapp.id, provider: "META_WHATSAPP", expectedRevision: whatsapp.revision });
+  await store.removeLocalCredential({ empresaId: tenantA.id, canalIntegracaoId: channelMessenger.id, provider: "META_MESSENGER", expectedRevision: messenger.revision });
 });
 
 test("MetaCredentialStore valida contexto dentro da transacao antes de criar ponte", async () => {
@@ -170,6 +197,6 @@ test("MetaCredentialStore valida contexto dentro da transacao antes de criar pon
   assert.equal((await prisma.canalIntegracao.findUnique({ where: { id: channelB.id } })).accessTokenRef, null);
 });
 
-async function createChannel(empresaId, chaveInterna) {
-  return prisma.canalIntegracao.create({ data: { empresaId, tipo: "INSTAGRAM_META", nome: chaveInterna, chaveInterna } });
+async function createChannel(empresaId, chaveInterna, tipo = "INSTAGRAM_META") {
+  return prisma.canalIntegracao.create({ data: { empresaId, tipo, nome: chaveInterna, chaveInterna } });
 }

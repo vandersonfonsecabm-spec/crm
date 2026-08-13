@@ -242,6 +242,8 @@ function presentStatus(context) {
   const channel = context.channel;
   const state = deriveState(context);
   return {
+    canalIntegracaoId: channel?.id || null,
+    credentialConfigured: Boolean(channel?.accessTokenRef),
     publicId: channel?.publicId || null,
     state,
     status: channel?.status || null,
@@ -274,6 +276,8 @@ function presentStatus(context) {
 
 function unavailableStatus() {
   return {
+    canalIntegracaoId: null,
+    credentialConfigured: false,
     publicId: null,
     state: WHATSAPP_OPERATIONAL_STATUS.UNAVAILABLE,
     status: null,

@@ -1432,12 +1432,30 @@ export type WhatsappSimulationCallResult = {
 };
 
 export type WhatsappOperationalStatusResponse = {
+  canalIntegracaoId?: number | null;
+  credentialConfigured?: boolean;
+  credentialRevision?: number | null;
   status?: string;
   ready?: boolean;
   connectedAt?: string | null;
   verifiedAt?: string | null;
   lastWebhookAt?: string | null;
   lastFailureAt?: string | null;
+};
+
+export type MessengerOperationalStatusResponse = {
+  canalIntegracaoId?: number | null;
+  credentialConfigured?: boolean;
+  credentialRevision?: number | null;
+  state?: string;
+  configured?: boolean;
+  ativo?: boolean;
+  status?: string | null;
+  connectedAt?: string | null;
+  verifiedAt?: string | null;
+  lastWebhookAt?: string | null;
+  lastFailureAt?: string | null;
+  nextRequirement?: string | null;
 };
 
 export function getAuthToken() {
@@ -1852,6 +1870,54 @@ export async function fetchCanais() {
 
 export async function fetchWhatsappOperationalStatus() {
   return requestApiGetAuthenticated<WhatsappOperationalStatusResponse>("/integracoes/whatsapp/status");
+}
+
+export async function fetchMessengerOperationalStatus() {
+  return requestApiGetAuthenticated<MessengerOperationalStatusResponse>("/integracoes/messenger/status");
+}
+
+export type MetaCredentialHandoffResponse = {
+  stored: boolean;
+  credential: { provider: string; revision: number; status: string };
+  nextRequirement: string;
+};
+
+type MetaCredentialContext = { canalIntegracaoId: number; expectedRevision: number };
+
+export async function storeWhatsAppCredential(canalIntegracaoId: number, accessToken: string) {
+  return requestApiPost<MetaCredentialHandoffResponse>("/integracoes/whatsapp/credentials", {
+    canalIntegracaoId,
+    credentials: { accessToken, tokenType: "Bearer" },
+  });
+}
+
+export async function replaceWhatsAppCredential(context: MetaCredentialContext, accessToken: string) {
+  return requestApiWrite<MetaCredentialHandoffResponse>("PUT", "/integracoes/whatsapp/credentials", {
+    ...context,
+    credentials: { accessToken, tokenType: "Bearer" },
+  });
+}
+
+export async function removeWhatsAppCredential(context: MetaCredentialContext) {
+  return requestApiWrite<{ removed: boolean }>("DELETE", "/integracoes/whatsapp/credentials", context);
+}
+
+export async function storeMessengerCredential(canalIntegracaoId: number, accessToken: string) {
+  return requestApiPost<MetaCredentialHandoffResponse>("/integracoes/messenger/credentials", {
+    canalIntegracaoId,
+    credentials: { accessToken, tokenType: "Bearer" },
+  });
+}
+
+export async function replaceMessengerCredential(context: MetaCredentialContext, accessToken: string) {
+  return requestApiWrite<MetaCredentialHandoffResponse>("PUT", "/integracoes/messenger/credentials", {
+    ...context,
+    credentials: { accessToken, tokenType: "Bearer" },
+  });
+}
+
+export async function removeMessengerCredential(context: MetaCredentialContext) {
+  return requestApiWrite<{ removed: boolean }>("DELETE", "/integracoes/messenger/credentials", context);
 }
 
 export async function createIntegracao(payload: { nome: string; tipo: HubIntegrationType; status?: HubIntegrationStatus; ativo?: boolean; configuracao?: Record<string, unknown> }) {
@@ -2489,7 +2555,7 @@ async function requestApiPublicPost<T>(path: string, payload: Record<string, unk
   return (await response.json()) as T;
 }
 
-async function requestApiWrite<T>(method: "POST" | "PATCH" | "DELETE", path: string, payload?: Record<string, unknown>): Promise<T> {
+async function requestApiWrite<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, payload?: Record<string, unknown>): Promise<T> {
   if (!hasRemoteApi()) {
     throw new Error("Nao foi possivel concluir a acao agora.");
   }

@@ -2,7 +2,11 @@ const crypto = require("node:crypto");
 const { encryptCredentialsWithContext, decryptCredentialsWithContext } = require("./crypto");
 const { domainError } = require("../leads-communication/policy");
 
-const SUPPORTED_PROVIDERS = new Map([["META_INSTAGRAM", "INSTAGRAM_META"]]);
+const SUPPORTED_PROVIDERS = new Map([
+  ["META_INSTAGRAM", "INSTAGRAM_META"],
+  ["META_WHATSAPP", "WHATSAPP_META"],
+  ["META_MESSENGER", "MESSENGER_META"],
+]);
 const ACTIVE_STATUS = "ATIVA";
 const CREDENTIAL_FIELDS = new Set(["accessToken", "expiresAt", "userId", "scopes", "tokenType"]);
 
@@ -104,12 +108,16 @@ function createMetaCredentialStore({ prisma, encrypt = encryptCredentialsWithCon
     const provider = normalizeProvider(input?.provider);
     const expectedRevision = requiredRevision(input?.expectedRevision);
     const credentials = credentialPayload(input?.credentials);
+    const validateContext = typeof input?.validateContext === "function" ? input.validateContext : null;
     const nextReference = opaqueReference(referenceFactory());
     const ciphertext = encrypt(credentials, { ...context, provider, reference: nextReference, revision: expectedRevision + 1 });
     if (!ciphertext) throw metaError(422, "META_CREDENTIAL_ENCRYPTION_FAILED", "Nao foi possivel proteger a credencial.");
 
     return runCredentialTransaction(prisma, async (tx) => {
       const channel = await loadChannel(tx, context, provider);
+      if (validateContext && (await validateContext(tx, { ...context, provider, channel })) === false) {
+        throw metaError(409, "META_OAUTH_CONTEXT_INVALID", "O contexto autorizado nao esta mais ativo.");
+      }
       if (!channel.accessTokenRef) throw notFound();
       const current = await loadCurrent(tx, context, provider, channel.accessTokenRef);
       if (current.revision !== expectedRevision) throw casConflict();
@@ -142,9 +150,13 @@ function createMetaCredentialStore({ prisma, encrypt = encryptCredentialsWithCon
     const context = normalizeContext(input);
     const provider = normalizeProvider(input?.provider);
     const expectedRevision = requiredRevision(input?.expectedRevision);
+    const validateContext = typeof input?.validateContext === "function" ? input.validateContext : null;
 
     await runCredentialTransaction(prisma, async (tx) => {
       const channel = await loadChannel(tx, context, provider);
+      if (validateContext && (await validateContext(tx, { ...context, provider, channel })) === false) {
+        throw metaError(409, "META_OAUTH_CONTEXT_INVALID", "O contexto autorizado nao esta mais ativo.");
+      }
       if (!channel.accessTokenRef) throw notFound();
       const current = await loadCurrent(tx, context, provider, channel.accessTokenRef);
       if (current.revision !== expectedRevision) throw casConflict();
@@ -192,6 +204,10 @@ async function loadChannel(db, context, provider) {
       modoTeste: true,
       ativo: true,
       status: true,
+      chaveInterna: true,
+      wabaId: true,
+      phoneNumberId: true,
+      messengerPageId: true,
       instagramBusinessAccountId: true,
       metaAppId: true,
       providerEnvironment: true,

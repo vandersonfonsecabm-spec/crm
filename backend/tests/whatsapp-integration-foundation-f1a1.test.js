@@ -23,6 +23,7 @@ Object.assign(process.env, {
   WHATSAPP_PROVIDER_ENVIRONMENT: "F1C2B_TEST",
   WHATSAPP_APP_SECRET: "test-only-app-secret",
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-only-verify-token",
+  INTEGRATION_ENCRYPTION_KEY: "whatsapp-foundation-encryption-key",
 });
 
 let api;
@@ -106,7 +107,7 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
 
   const channelB = await createConfiguredChannel(adminB.empresaId, "b");
   const injected = await request("GET", `/integracoes/whatsapp/status?empresaId=${adminB.empresaId}`, undefined, adminA.token);
-  assert.deepEqual(injected.body, { status: "NOT_CONFIGURED", ready: false });
+  assert.deepEqual(injected.body, { canalIntegracaoId: null, credentialRevision: null, status: "NOT_CONFIGURED", ready: false });
   assert.equal((await request("GET", "/integracoes/whatsapp/status", undefined, adminB.token)).body.status, "CONNECTED");
   assert.equal((await request("GET", "/integracoes/whatsapp/status", undefined, gerenteA.token)).status, 403);
   assert.equal((await request("GET", "/integracoes/whatsapp/status", undefined, vendedorA.token)).status, 403);
@@ -117,7 +118,10 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
   assert.equal(configured.body.status, "CONNECTED");
   assert.equal(configured.body.ready, true);
   assert.deepEqual(Object.keys(configured.body).sort(), [
+    "canalIntegracaoId",
     "connectedAt",
+    "credentialConfigured",
+    "credentialRevision",
     "lastFailureAt",
     "lastWebhookAt",
     "ready",
@@ -155,7 +159,42 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
     whatsappIntegration: true,
     whatsappInbound: true,
     whatsappOutbound: false,
+    messengerIntegration: false,
+    messengerInbound: false,
   });
+
+  const adminC = await registerAndLogin("Empresa WhatsApp Credencial", "Admin WhatsApp Credencial", "admin-c@whatsapp-f1a1.test");
+  await prisma.empresaFuncionalidade.createMany({
+    data: [
+      { empresaId: adminC.empresaId, chave: FEATURE_KEYS.WHATSAPP_INTEGRATION, habilitada: true },
+      { empresaId: adminC.empresaId, chave: FEATURE_KEYS.WHATSAPP_INBOUND, habilitada: true },
+    ],
+  });
+  const credentialChannel = await createConfiguredChannel(adminC.empresaId, "credential");
+  await prisma.canalIntegracao.update({ where: { id: credentialChannel.id }, data: { connectedAt: null, verifiedAt: null } });
+  let handoff = await request("POST", "/integracoes/whatsapp/credentials", {
+    canalIntegracaoId: credentialChannel.id,
+    credentials: { accessToken: "synthetic-whatsapp-token" },
+  }, adminC.token);
+  assert.equal(handoff.status, 201);
+  assert.equal(handoff.body.stored, true);
+  assert.equal(JSON.stringify(handoff.body).includes("synthetic-whatsapp-token"), false);
+  let handoffStatus = await request("GET", "/integracoes/whatsapp/status", undefined, adminC.token);
+  assert.equal(handoffStatus.body.credentialConfigured, true);
+  assert.equal(handoffStatus.body.credentialRevision, 1);
+  handoff = await request("PUT", "/integracoes/whatsapp/credentials", {
+    canalIntegracaoId: credentialChannel.id,
+    expectedRevision: 1,
+    credentials: { accessToken: "synthetic-whatsapp-token-2" },
+  }, adminC.token);
+  assert.equal(handoff.status, 200);
+  assert.equal(handoff.body.credential.revision, 2);
+  handoff = await request("DELETE", "/integracoes/whatsapp/credentials", {
+    canalIntegracaoId: credentialChannel.id,
+    expectedRevision: 2,
+  }, adminC.token);
+  assert.deepEqual(handoff, { status: 200, body: { removed: true } });
+  assert.equal(await prisma.metaCredential.count({ where: { empresaId: adminC.empresaId, canalIntegracaoId: credentialChannel.id } }), 0);
 });
 
 test("fundacao nao importa cliente de rede nem cria fluxo de credencial", () => {

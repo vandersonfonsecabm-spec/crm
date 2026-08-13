@@ -28,6 +28,7 @@ Object.assign(process.env, {
   MESSENGER_INBOUND_ENABLED: "true",
   MESSENGER_APP_SECRET: "test-only-messenger-app-secret",
   MESSENGER_WEBHOOK_VERIFY_TOKEN: "test-only-messenger-verify-token",
+  INTEGRATION_ENCRYPTION_KEY: "messenger-lifecycle-encryption-key",
 });
 delete process.env.PLATFORM_ADMIN_EMAILS;
 
@@ -53,6 +54,8 @@ after(async () => {
       const where = { empresaId: { in: createdTenantIds } };
       await prisma.auditoriaFuncionalidade.deleteMany({ where });
       await prisma.empresaFuncionalidade.deleteMany({ where });
+      await prisma.canalIntegracao.updateMany({ where, data: { accessTokenRef: null } });
+      await prisma.metaCredential.deleteMany({ where });
       await prisma.canalIntegracao.deleteMany({ where });
       await prisma.usuario.deleteMany({ where });
       await prisma.empresa.deleteMany({ where: { id: { in: createdTenantIds } } });
@@ -200,6 +203,87 @@ test("lifecycle Messenger protege RBAC, allowlist, configuracao e canais nao can
     assert.equal(response.status, 422, field);
     assert.equal(response.body.codigo, "MESSENGER_LIFECYCLE_INVALID", field);
   }
+});
+
+test("hub Messenger exige ADMIN e capability do proprio tenant", async () => {
+  const target = await register(
+    "Tenant Hub Messenger",
+    "Admin Hub",
+    uniqueEmail("hub-target"),
+  );
+  const control = await register(
+    "Tenant Hub Controle",
+    "Admin Controle Hub",
+    uniqueEmail("hub-control"),
+  );
+  const manager = await createUser(target, "Gerente Hub", uniqueEmail("hub-manager"), "GERENTE");
+
+  assert.equal((await hubStatus()).status, 401);
+  assert.equal((await hubStatus(target.token)).status, 404);
+  await createFeature(target.empresaId, "MESSENGER_INTEGRATION", true);
+
+  const configured = await hubStatus(target.token);
+  assert.equal(configured.status, 200);
+  assert.equal(configured.body.state, "NOT_CONFIGURED");
+  assert.equal(configured.body.nextRequirement, "PROVISION_MESSENGER_INBOUND");
+  assert.equal((await hubStatus(control.token)).status, 404);
+  assert.equal((await hubStatus(manager.token)).status, 403);
+
+  await createFeature(target.empresaId, "MESSENGER_INBOUND", true);
+  const channel = await createRealChannel(target.empresaId, { ativo: true, status: "ATIVO" });
+  const stored = await request("POST", "/integracoes/messenger/credentials", {
+    canalIntegracaoId: channel.id,
+    credentials: { accessToken: "synthetic-page-token-only-in-memory" },
+  }, target.token);
+  assert.equal(stored.status, 201);
+  assert.equal(stored.body.stored, true);
+  assert.equal(JSON.stringify(stored.body).includes("synthetic-page-token"), false);
+
+  const afterStored = await hubStatus(target.token);
+  assert.equal(afterStored.status, 200);
+  assert.equal(afterStored.body.credentialConfigured, true);
+  assert.equal(afterStored.body.credentialRevision, 1);
+  const duplicate = await request("POST", "/integracoes/messenger/credentials", {
+    canalIntegracaoId: channel.id,
+    credentials: { accessToken: "another-synthetic-token" },
+  }, target.token);
+  assert.equal(duplicate.status, 409);
+  assert.equal(duplicate.body.codigo, "META_CREDENTIAL_ALREADY_ACTIVE");
+
+  const staleReplace = await request("PUT", "/integracoes/messenger/credentials", {
+    canalIntegracaoId: channel.id,
+    expectedRevision: 99,
+    credentials: { accessToken: "replacement-synthetic-token" },
+  }, target.token);
+  assert.equal(staleReplace.status, 409);
+  assert.equal(staleReplace.body.codigo, "META_CREDENTIAL_REVISION_CONFLICT");
+
+  const replaced = await request("PUT", "/integracoes/messenger/credentials", {
+    canalIntegracaoId: channel.id,
+    expectedRevision: 1,
+    credentials: { accessToken: "replacement-synthetic-token" },
+  }, target.token);
+  assert.equal(replaced.status, 200);
+  assert.equal(replaced.body.replaced, true);
+  assert.equal(replaced.body.credential.revision, 2);
+  assert.equal(JSON.stringify(replaced.body).includes("replacement-synthetic-token"), false);
+
+  await prisma.canalIntegracao.update({ where: { id: channel.id }, data: { ativo: false, status: "INATIVO" } });
+  await prisma.empresaFuncionalidade.updateMany({ where: { empresaId: target.empresaId, chave: "MESSENGER_INBOUND" }, data: { habilitada: false } });
+
+  const staleRemove = await request("DELETE", "/integracoes/messenger/credentials", {
+    canalIntegracaoId: channel.id,
+    expectedRevision: 1,
+  }, target.token);
+  assert.equal(staleRemove.status, 409);
+  assert.equal(staleRemove.body.codigo, "META_CREDENTIAL_REVISION_CONFLICT");
+  const removed = await request("DELETE", "/integracoes/messenger/credentials", {
+    canalIntegracaoId: channel.id,
+    expectedRevision: 2,
+  }, target.token);
+  assert.deepEqual(removed, { status: 200, body: { removed: true } });
+  assert.equal(await prisma.metaCredential.count({ where: { empresaId: target.empresaId, canalIntegracaoId: channel.id } }), 0);
+  assert.equal((await prisma.canalIntegracao.findUnique({ where: { id: channel.id }, select: { accessTokenRef: true } })).accessTokenRef, null);
 });
 
 test("lifecycle Messenger ativa, pausa e reativa com CAS, idempotencia e auditoria atomicos", async () => {
@@ -664,6 +748,10 @@ async function status(tenantId, token) {
     undefined,
     token,
   );
+}
+
+async function hubStatus(token) {
+  return request("GET", "/integracoes/messenger/status", undefined, token);
 }
 
 async function action(name, tenantId, body, token, headers) {

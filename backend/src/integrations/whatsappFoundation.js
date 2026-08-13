@@ -9,9 +9,11 @@ function createWhatsAppFoundationService({ prisma, env = process.env }) {
   async function getOperationalStatus({ empresaId }) {
     const result = await lifecycle.getStatus({ tenantId: empresaId });
     if (result.state === WHATSAPP_OPERATIONAL_STATUS.NOT_CONFIGURED) {
-      return { status: result.state, ready: false };
+      return { canalIntegracaoId: result.canalIntegracaoId || null, status: result.state, ready: false };
     }
     return {
+      canalIntegracaoId: result.canalIntegracaoId,
+      credentialConfigured: result.credentialConfigured,
       status: result.state,
       ready: result.ready,
       connectedAt: result.connectedAt,

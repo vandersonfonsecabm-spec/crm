@@ -251,6 +251,8 @@ function presentStatus(context) {
   const channel = context.channel;
   const state = deriveState(context);
   return {
+    canalIntegracaoId: channel?.id || null,
+    credentialConfigured: Boolean(channel?.accessTokenRef),
     state,
     configured: hasEssentialIdentity(channel),
     ativo: channel?.ativo === true,
@@ -283,6 +285,8 @@ function presentStatus(context) {
 
 function unavailableStatus() {
   return {
+    canalIntegracaoId: null,
+    credentialConfigured: false,
     state: MESSENGER_OPERATIONAL_STATUS.UNAVAILABLE,
     configured: false,
     ativo: false,

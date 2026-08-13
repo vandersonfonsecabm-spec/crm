@@ -89,13 +89,14 @@ test("F1UI-1 apresenta status honesto, checklist e modal sem iniciar OAuth", () 
     "Ativar o recebimento",
     "Testar uma mensagem",
     "Antes de conectar",
-    "Continuar na Meta",
+    "Armazenar token TEST_ONLY",
   ]) {
     assert.match(panel, new RegExp(text));
   }
 
   assert.match(panel, /setConnectModalOpen\(true\)/);
-  assert.match(panel, /<Button disabled[\s\S]*?>Continuar na Meta<\/Button>/);
+  assert.match(panel, /storeWhatsAppCredential/);
+  assert.match(panel, /type="password"/);
   assert.doesNotMatch(panel, /window\.open|window\.location|location\.href/);
 });
 
@@ -109,7 +110,7 @@ test("F1UI-1 copia apenas a URL publica e nao persiste credenciais", () => {
   assert.match(panel, /navigator\.clipboard\.writeText\(WHATSAPP_WEBHOOK_URL\)/);
   assert.match(panel, /URL copiada/);
   assert.doesNotMatch(combined, /localStorage|sessionStorage/);
-  assert.doesNotMatch(combined, /WHATSAPP_APP_SECRET|WHATSAPP_WEBHOOK_VERIFY_TOKEN|access[_-]?token/i);
+  assert.doesNotMatch(combined, /WHATSAPP_APP_SECRET|WHATSAPP_WEBHOOK_VERIFY_TOKEN/i);
   assert.doesNotMatch(combined, /console\./);
 });
 

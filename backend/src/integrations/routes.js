@@ -4,6 +4,10 @@ const { createBlingService } = require("./blingService");
 const { createCanonicalService } = require("./canonicalService");
 const { createCommercialCatalogService } = require("./commercialCatalogService");
 const { createWhatsAppFoundationService } = require("./whatsappFoundation");
+const { REAL_WHATSAPP_INBOUND_KEY, readGlobalWhatsappConfiguration } = require("../platform/whatsappInboundProvisioning");
+const { createMessengerInboundLifecycleService } = require("./messengerInboundLifecycle");
+const { REAL_MESSENGER_INBOUND_KEY, readGlobalMessengerConfiguration } = require("../platform/messengerInboundProvisioning");
+const { createMetaCredentialStore } = require("./metaCredentialStore");
 const { createMetaOAuthService } = require("./metaOAuthService");
 const { FEATURE_KEYS, createTenantFeatureMiddleware } = require("../tenant-features/service");
 const {
@@ -31,6 +35,12 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const blingService = createBlingService({ prisma });
   const metaOAuthService = createMetaOAuthService({ prisma });
   const whatsappFoundationService = createWhatsAppFoundationService({ prisma });
+  const messengerInboundLifecycle = createMessengerInboundLifecycleService({ prisma });
+  const metaCredentialStore = createMetaCredentialStore({ prisma });
+  const messengerIntegrationGate = createTenantFeatureMiddleware({
+    prisma,
+    featureKey: FEATURE_KEYS.MESSENGER_INTEGRATION,
+  });
   const whatsappIntegrationGate = createTenantFeatureMiddleware({
     prisma,
     featureKey: FEATURE_KEYS.WHATSAPP_INTEGRATION,
@@ -40,7 +50,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   app.get("/integracoes/whatsapp/status", ...requireAdmin, whatsappIntegrationGate, async (req, res) => {
     try {
       const status = await whatsappFoundationService.getOperationalStatus({ empresaId: req.auth.empresaId });
-      return res.json(status);
+      return res.json(await withCredentialRevision(prisma, req.auth.empresaId, status, "META_WHATSAPP"));
     } catch (error) {
       return integrationError(res, error, "Não foi possível consultar o estado do WhatsApp.");
     }
@@ -68,6 +78,107 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     } catch (error) {
       const reason = encodeURIComponent(blingCallbackReason(error.code));
       return res.redirect(`${frontendUrl}/?bling=erro&motivo=${reason}`);
+    }
+  });
+
+  app.get("/integracoes/messenger/status", ...requireAdmin, messengerIntegrationGate, async (req, res) => {
+    try {
+      const status = await messengerInboundLifecycle.getStatus({ tenantId: req.auth.empresaId });
+      return res.json(await withCredentialRevision(prisma, req.auth.empresaId, status, "META_MESSENGER"));
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível consultar o estado do Messenger.");
+    }
+  });
+
+  app.post("/integracoes/whatsapp/credentials", ...requireAdmin, whatsappIntegrationGate, async (req, res) => {
+    try {
+      const credential = await metaCredentialStore.createLocalCredential({
+        empresaId: req.auth.empresaId,
+        canalIntegracaoId: req.body?.canalIntegracaoId,
+        provider: "META_WHATSAPP",
+        credentials: req.body?.credentials,
+        validateContext: (tx, input) => validateCredentialContext(tx, input, "WHATSAPP", { requireRuntime: true }),
+      });
+      return res.status(201).json({ stored: true, credential: credentialSummary(credential), nextRequirement: "VALIDATE_WHATSAPP_WEBHOOK" });
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível armazenar a credencial do WhatsApp com segurança.");
+    }
+  });
+
+  app.post("/integracoes/messenger/credentials", ...requireAdmin, messengerIntegrationGate, async (req, res) => {
+    try {
+      const credential = await metaCredentialStore.createLocalCredential({
+        empresaId: req.auth.empresaId,
+        canalIntegracaoId: req.body?.canalIntegracaoId,
+        provider: "META_MESSENGER",
+        credentials: req.body?.credentials,
+        validateContext: (tx, input) => validateCredentialContext(tx, input, "MESSENGER", { requireRuntime: true }),
+      });
+      return res.status(201).json({ stored: true, credential: credentialSummary(credential), nextRequirement: "VALIDATE_MESSENGER_WEBHOOK" });
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível armazenar a credencial do Messenger com segurança.");
+    }
+  });
+
+  app.put("/integracoes/whatsapp/credentials", ...requireAdmin, whatsappIntegrationGate, async (req, res) => {
+    try {
+      const credential = await metaCredentialStore.replaceLocalCredential({
+        empresaId: req.auth.empresaId,
+        canalIntegracaoId: req.body?.canalIntegracaoId,
+        provider: "META_WHATSAPP",
+        expectedRevision: req.body?.expectedRevision,
+        credentials: req.body?.credentials,
+        validateContext: (tx, input) => validateCredentialContext(tx, input, "WHATSAPP", { requireRuntime: true }),
+      });
+      return res.json({ stored: true, replaced: true, credential: credentialSummary(credential), nextRequirement: "VALIDATE_WHATSAPP_WEBHOOK" });
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível substituir a credencial do WhatsApp com segurança.");
+    }
+  });
+
+  app.delete("/integracoes/whatsapp/credentials", ...requireAdmin, async (req, res) => {
+    try {
+      const result = await metaCredentialStore.removeLocalCredential({
+        empresaId: req.auth.empresaId,
+        canalIntegracaoId: req.body?.canalIntegracaoId,
+        provider: "META_WHATSAPP",
+        expectedRevision: req.body?.expectedRevision,
+        validateContext: (tx, input) => validateCredentialContext(tx, input, "WHATSAPP", { requireRuntime: false }),
+      });
+      return res.json(result);
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível remover a credencial do WhatsApp com segurança.");
+    }
+  });
+
+  app.put("/integracoes/messenger/credentials", ...requireAdmin, messengerIntegrationGate, async (req, res) => {
+    try {
+      const credential = await metaCredentialStore.replaceLocalCredential({
+        empresaId: req.auth.empresaId,
+        canalIntegracaoId: req.body?.canalIntegracaoId,
+        provider: "META_MESSENGER",
+        expectedRevision: req.body?.expectedRevision,
+        credentials: req.body?.credentials,
+        validateContext: (tx, input) => validateCredentialContext(tx, input, "MESSENGER", { requireRuntime: true }),
+      });
+      return res.json({ stored: true, replaced: true, credential: credentialSummary(credential), nextRequirement: "VALIDATE_MESSENGER_WEBHOOK" });
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível substituir a credencial do Messenger com segurança.");
+    }
+  });
+
+  app.delete("/integracoes/messenger/credentials", ...requireAdmin, async (req, res) => {
+    try {
+      const result = await metaCredentialStore.removeLocalCredential({
+        empresaId: req.auth.empresaId,
+        canalIntegracaoId: req.body?.canalIntegracaoId,
+        provider: "META_MESSENGER",
+        expectedRevision: req.body?.expectedRevision,
+        validateContext: (tx, input) => validateCredentialContext(tx, input, "MESSENGER", { requireRuntime: false }),
+      });
+      return res.json(result);
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível remover a credencial do Messenger com segurança.");
     }
   });
 
@@ -754,17 +865,18 @@ function partialHash(hash) {
 
 
 function integrationError(res, error, fallbackMessage) {
-  const status = error.status || statusFromCode(error.code) || 500;
+  const code = error?.code || error?.codigo;
+  const status = error.status || statusFromCode(code) || 500;
   if (status >= 500) console.error(fallbackMessage, sanitizedError(error));
   return res.status(status).json({
     erro: status >= 500 ? fallbackMessage : error.message || fallbackMessage,
-    codigo: status >= 500 ? "INTEGRATION_ERROR" : error.code || "INTEGRATION_ERROR",
+    codigo: status >= 500 ? "INTEGRATION_ERROR" : code || "INTEGRATION_ERROR",
   });
 }
 
 function sanitizedError(error) {
   if (!error) return null;
-  return { name: error.name, code: error.code };
+  return { name: error.name, code: error.code || error.codigo };
 }
 
 function statusFromCode(code) {
@@ -783,6 +895,84 @@ function statusFromCode(code) {
   if (code === "META_OAUTH_FORBIDDEN") return 403;
   if (["META_EXTERNAL_NETWORK_DISABLED", "META_RESPONSE_INVALID", "META_TOKEN_RESPONSE_INVALID", "META_SUBSCRIPTION_FAILED"].includes(code)) return 503;
   return null;
+}
+
+async function validateCredentialContext(tx, { empresaId, canalIntegracaoId, channel }, provider, { requireRuntime = true } = {}) {
+  const isWhatsapp = provider === "WHATSAPP";
+  const expected = isWhatsapp
+    ? {
+        type: "WHATSAPP_META",
+        key: REAL_WHATSAPP_INBOUND_KEY,
+        flags: ["WHATSAPP_INTEGRATION", "WHATSAPP_INBOUND"],
+        identity: () => typeof channel.wabaId === "string" && channel.wabaId.length > 0 && typeof channel.phoneNumberId === "string" && channel.phoneNumberId.length > 0,
+        configuration: readGlobalWhatsappConfiguration,
+      }
+    : {
+        type: "MESSENGER_META",
+        key: REAL_MESSENGER_INBOUND_KEY,
+        flags: ["MESSENGER_INTEGRATION", "MESSENGER_INBOUND"],
+        identity: () => typeof channel.messengerPageId === "string" && channel.messengerPageId.length > 0,
+        configuration: readGlobalMessengerConfiguration,
+      };
+  if (!requireRuntime) {
+    if (channel.tipo !== expected.type || channel.chaveInterna !== expected.key || channel.modoTeste !== false) {
+      throw httpError(409, "O canal nao corresponde ao provider autorizado.", "META_CREDENTIAL_CHANNEL_MISMATCH");
+    }
+    return true;
+  }
+  if (channel.tipo !== expected.type || channel.chaveInterna !== expected.key || channel.modoTeste !== false || channel.ativo !== true || channel.status !== "ATIVO" || !expected.identity()) {
+    throw httpError(409, "O canal nao esta em estado seguro para receber credencial.", "META_CREDENTIAL_CHANNEL_NOT_READY");
+  }
+  if (requireRuntime) {
+    let global;
+    try { global = expected.configuration(process.env); } catch { throw httpError(503, "A configuracao server-side do provider esta incompleta.", "META_PROVIDER_CONFIGURATION_REQUIRED"); }
+    const integrationFlag = isWhatsapp ? "WHATSAPP_INTEGRATION_ENABLED" : "MESSENGER_INTEGRATION_ENABLED";
+    const inboundFlag = isWhatsapp ? "WHATSAPP_INBOUND_ENABLED" : "MESSENGER_INBOUND_ENABLED";
+    const appSecret = isWhatsapp ? process.env.WHATSAPP_APP_SECRET : process.env.MESSENGER_APP_SECRET;
+    const verifyToken = isWhatsapp ? process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN : process.env.MESSENGER_WEBHOOK_VERIFY_TOKEN;
+    if (process.env[integrationFlag] !== "true" || process.env[inboundFlag] !== "true" || !hasConfiguredSecret(appSecret) || !hasConfiguredSecret(verifyToken)) {
+      throw httpError(503, "O provider ainda nao possui configuracao server-side completa.", "META_PROVIDER_CONFIGURATION_REQUIRED");
+    }
+    if (channel.metaAppId !== global.metaAppId || channel.providerEnvironment !== global.providerEnvironment) {
+      throw httpError(409, "A identidade do canal nao corresponde a configuracao server-side.", "META_CREDENTIAL_CONFIGURATION_MISMATCH");
+    }
+  }
+  const features = await tx.empresaFuncionalidade.findMany({
+    where: { empresaId, chave: { in: expected.flags }, habilitada: true },
+    select: { chave: true },
+  });
+  if (new Set(features.map((row) => row.chave)).size !== expected.flags.length) {
+    throw httpError(403, "A capacidade do provider ainda nao esta habilitada para este tenant.", "META_CREDENTIAL_CAPABILITY_REQUIRED");
+  }
+  return true;
+}
+
+async function withCredentialRevision(prisma, empresaId, status, provider) {
+  if (!status?.credentialConfigured || !status.canalIntegracaoId || !empresaId) {
+    return { ...status, credentialRevision: null };
+  }
+  const channel = await prisma.canalIntegracao.findFirst({
+    where: { id: status.canalIntegracaoId, empresaId },
+    select: { accessTokenRef: true },
+  });
+  if (!channel?.accessTokenRef) return { ...status, credentialRevision: null };
+  const credential = await prisma.metaCredential.findFirst({
+    where: { empresaId, canalIntegracaoId: status.canalIntegracaoId, provider, reference: channel.accessTokenRef, status: "ATIVA" },
+    select: { revision: true },
+  });
+  return { ...status, credentialRevision: credential?.revision || null };
+}
+
+function credentialSummary(credential) {
+  return {
+    provider: credential?.provider || null,
+    status: credential?.status || null,
+    revision: credential?.revision || null,
+  };
+}
+
+function hasConfiguredSecret(value) {
+  return typeof value === "string" && value.trim().length >= 8;
 }
 
 function blingCallbackReason(code) {

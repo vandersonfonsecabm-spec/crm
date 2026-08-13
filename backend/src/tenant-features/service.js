@@ -6,6 +6,8 @@ const FEATURE_KEYS = Object.freeze({
   WHATSAPP_INTEGRATION: "WHATSAPP_INTEGRATION",
   WHATSAPP_INBOUND: "WHATSAPP_INBOUND",
   WHATSAPP_OUTBOUND: "WHATSAPP_OUTBOUND",
+  MESSENGER_INTEGRATION: "MESSENGER_INTEGRATION",
+  MESSENGER_INBOUND: "MESSENGER_INBOUND",
 });
 
 const FEATURE_ENV_KEYS = Object.freeze({
@@ -16,12 +18,15 @@ const FEATURE_ENV_KEYS = Object.freeze({
   [FEATURE_KEYS.WHATSAPP_INTEGRATION]: "WHATSAPP_INTEGRATION_ENABLED",
   [FEATURE_KEYS.WHATSAPP_INBOUND]: "WHATSAPP_INBOUND_ENABLED",
   [FEATURE_KEYS.WHATSAPP_OUTBOUND]: "WHATSAPP_OUTBOUND_ENABLED",
+  [FEATURE_KEYS.MESSENGER_INTEGRATION]: "MESSENGER_INTEGRATION_ENABLED",
+  [FEATURE_KEYS.MESSENGER_INBOUND]: "MESSENGER_INBOUND_ENABLED",
 });
 
 const WHATSAPP_DEPENDENT_FEATURES = new Set([
   FEATURE_KEYS.WHATSAPP_INBOUND,
   FEATURE_KEYS.WHATSAPP_OUTBOUND,
 ]);
+const MESSENGER_DEPENDENT_FEATURES = new Set([FEATURE_KEYS.MESSENGER_INBOUND]);
 
 function isGlobalFeatureEnabled(featureKey, env = process.env) {
   if (featureKey === FEATURE_KEYS.SITE_LEAD_CAPTURE) {
@@ -30,6 +35,10 @@ function isGlobalFeatureEnabled(featureKey, env = process.env) {
   if (WHATSAPP_DEPENDENT_FEATURES.has(featureKey)) {
     const envKey = FEATURE_ENV_KEYS[featureKey];
     return env.WHATSAPP_INTEGRATION_ENABLED === "true" && env[envKey] === "true";
+  }
+  if (MESSENGER_DEPENDENT_FEATURES.has(featureKey)) {
+    const envKey = FEATURE_ENV_KEYS[featureKey];
+    return env.MESSENGER_INTEGRATION_ENABLED === "true" && env[envKey] === "true";
   }
   const envKey = FEATURE_ENV_KEYS[featureKey];
   return Boolean(envKey) && env[envKey] === "true";
@@ -44,10 +53,13 @@ async function isFeatureEnabledForTenant({ prisma, empresaId, featureKey, env = 
       select: { habilitada: true },
     });
     if (feature?.habilitada !== true) return false;
-    if (!WHATSAPP_DEPENDENT_FEATURES.has(featureKey)) return true;
+    if (!WHATSAPP_DEPENDENT_FEATURES.has(featureKey) && !MESSENGER_DEPENDENT_FEATURES.has(featureKey)) return true;
 
+    const integrationKey = MESSENGER_DEPENDENT_FEATURES.has(featureKey)
+      ? FEATURE_KEYS.MESSENGER_INTEGRATION
+      : FEATURE_KEYS.WHATSAPP_INTEGRATION;
     const integration = await prisma.empresaFuncionalidade.findUnique({
-      where: { empresaId_chave: { empresaId, chave: FEATURE_KEYS.WHATSAPP_INTEGRATION } },
+      where: { empresaId_chave: { empresaId, chave: integrationKey } },
       select: { habilitada: true },
     });
     return integration?.habilitada === true;
@@ -67,6 +79,8 @@ async function capabilitiesForTenant({ prisma, empresaId, env = process.env }) {
     whatsappIntegration: false,
     whatsappInbound: false,
     whatsappOutbound: false,
+    messengerIntegration: false,
+    messengerInbound: false,
   };
   if (!Number.isInteger(empresaId) || empresaId < 1 || globallyEnabled.length === 0) return disabled;
 
@@ -77,6 +91,7 @@ async function capabilitiesForTenant({ prisma, empresaId, env = process.env }) {
     });
     const enabled = new Set(features.map((item) => item.chave));
     const whatsappIntegration = enabled.has(FEATURE_KEYS.WHATSAPP_INTEGRATION);
+    const messengerIntegration = enabled.has(FEATURE_KEYS.MESSENGER_INTEGRATION);
     return {
       leadsCommunication: enabled.has(FEATURE_KEYS.LEADS_COMMUNICATION),
       siteLeadCapture: enabled.has(FEATURE_KEYS.SITE_LEAD_CAPTURE),
@@ -85,6 +100,8 @@ async function capabilitiesForTenant({ prisma, empresaId, env = process.env }) {
       whatsappIntegration,
       whatsappInbound: whatsappIntegration && enabled.has(FEATURE_KEYS.WHATSAPP_INBOUND),
       whatsappOutbound: whatsappIntegration && enabled.has(FEATURE_KEYS.WHATSAPP_OUTBOUND),
+      messengerIntegration,
+      messengerInbound: messengerIntegration && enabled.has(FEATURE_KEYS.MESSENGER_INBOUND),
     };
   } catch (error) {
     console.error("Falha ao carregar funcionalidades do tenant.", safeFeatureError(error));
