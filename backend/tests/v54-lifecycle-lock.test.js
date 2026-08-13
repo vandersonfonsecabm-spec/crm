@@ -31,6 +31,11 @@ test("V54 lifecycle lock is shared, tenant-scoped and ordered", () => {
     const source = fs.readFileSync(path.join(root, relative), "utf8");
     assert.match(source, /clientLifecycleLock/, `${relative} must import the lifecycle helper`);
   }
+  const automationSource = fs.readFileSync(path.join(root, "src", "automations", "service.js"), "utf8");
+  assert.match(automationSource, /prisma\.\$transaction\(async \(tx\) => \{[\s\S]{0,1200}lockActiveClienteRow\(tx, empresaId/,
+    "temporal lead enqueue must lock the client inside its final transaction");
+  assert.match(automationSource, /currentBusiness[\s\S]{0,500}lockActiveClienteRow\(tx, empresaId/,
+    "temporal business enqueue must lock the client inside its final transaction");
 });
 
 test("V54 PostgreSQL concurrency proof runs only with an explicit disposable URL", { skip: !/^postgres(?:ql)?:/i.test(String(process.env.CRM_TEST_DATABASE_URL || "")) || process.env.CRM_TEST_POSTGRES_ALLOW !== "true" }, async () => {

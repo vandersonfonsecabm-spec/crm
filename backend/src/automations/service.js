@@ -250,19 +250,26 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         take: limit,
       });
       for (const lead of leads) {
-        const existing = await prisma.acompanhamento.count({ where: { empresaId, leadId: lead.id, createdAt: { gte: lead.createdAt } } });
-        if (existing === 0) {
-          count += (await enqueueOccurrence(prisma, {
+        count += await prisma.$transaction(async (tx) => {
+          const currentLead = await tx.lead.findFirst({
+            where: { id: lead.id, empresaId },
+            select: { id: true, clienteId: true, createdAt: true },
+          });
+          if (!currentLead) return 0;
+          await lockActiveClienteRow(tx, empresaId, currentLead.clienteId);
+          const existing = await tx.acompanhamento.count({ where: { empresaId, leadId: currentLead.id, createdAt: { gte: currentLead.createdAt } } });
+          if (existing !== 0) return 0;
+          return (await enqueueOccurrence(tx, {
             empresaId,
             trigger: rule.gatilho,
             entityType: "LEAD",
-            entityId: lead.id,
-            leadId: lead.id,
-            occurredAt: lead.createdAt,
-            elapsedMinutes: Math.floor((now.getTime() - lead.createdAt.getTime()) / 60000),
+            entityId: currentLead.id,
+            leadId: currentLead.id,
+            occurredAt: currentLead.createdAt,
+            elapsedMinutes: Math.floor((now.getTime() - currentLead.createdAt.getTime()) / 60000),
             onlyRuleId: rule.id,
           })).created;
-        }
+        });
       }
     }
     return count;
@@ -281,16 +288,24 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         take: limit,
       });
       for (const negocio of negocios) {
-        count += (await enqueueOccurrence(prisma, {
-          empresaId,
-          trigger: rule.gatilho,
-          entityType: "NEGOCIO",
-          entityId: negocio.id,
-          negocioId: negocio.id,
-          occurredAt: negocio.etapaEntrouEm,
-          elapsedMinutes: Math.floor((now.getTime() - negocio.etapaEntrouEm.getTime()) / 60000),
-          onlyRuleId: rule.id,
-        })).created;
+        count += await prisma.$transaction(async (tx) => {
+          const currentBusiness = await tx.negocio.findFirst({
+            where: { id: negocio.id, empresaId },
+            select: { id: true, clienteId: true, etapaEntrouEm: true },
+          });
+          if (!currentBusiness) return 0;
+          await lockActiveClienteRow(tx, empresaId, currentBusiness.clienteId);
+          return (await enqueueOccurrence(tx, {
+            empresaId,
+            trigger: rule.gatilho,
+            entityType: "NEGOCIO",
+            entityId: currentBusiness.id,
+            negocioId: currentBusiness.id,
+            occurredAt: currentBusiness.etapaEntrouEm,
+            elapsedMinutes: Math.floor((now.getTime() - currentBusiness.etapaEntrouEm.getTime()) / 60000),
+            onlyRuleId: rule.id,
+          })).created;
+        });
       }
     }
     return count;
