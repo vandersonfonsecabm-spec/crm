@@ -1,0 +1,14 @@
+V54_V52_REDESIGN_RELEASE_COMPLETE
+
+Runtime SHA: 7e6d5f0544cf53f105ab7623e91bcc0405dd1270 (feature and master parity).
+The V52 redesign was preserved and the V54 lifecycle hardening added one shared tenant-scoped row-lock helper across audited operational writers, archive/delete safety, canonical migrations and regression coverage.
+
+Gates: frontend 157/157 PASS; TypeScript/Vite build PASS; backend isolated node-suite PASS; tenant gate 30/30 PASS; PostgreSQL 18.4 restore/migration rehearsal PASS; real two-session lifecycle lock proof PASS; production migration 9 completed/0 unfinished; post-migration invariants PASS; official Railway API/worker deploys SUCCESS; official GitHub/Vercel production deployments SUCCESS on the same SHA; public frontend HTTP 200; API health HTTP 200; worker RUNNING; post-release backup verified.
+
+Visual/accessibility evidence is sanitized RC fixture evidence at 1440x900, 1366x768 and 390x844 with zero measured horizontal overflow and zero browser console errors in the available harness. The browser axe package was unavailable and no safe authenticated browser session was present, so production smoke intentionally used non-mutating official health/frontend checks plus the private synthetic TEST_ONLY restore/concurrency smoke; no provider or outbound operation was invoked.
+
+Production identities: Railway project `glistening-playfulness`, production environment `e18f76b1-e38f-468e-91fe-1eff6db9a5f8`, API service `api` (`16de1b91-7dcb-46b4-9231-1c3e2c3e5a92`), worker `crm` (`4eef3b96-e33f-42ea-9fb8-86c17b077ab8`), PostgreSQL service `Postgres-u_yI` (18.4). API deployment `400229f7-ca7c-4913-b408-02dd2e29b7d6`; worker deployment `5716ce61-4d8c-4276-95cb-64708e6bf3f5`; GitHub production deployment IDs `5897606366` (frontend), `5897608997` (crm), Railway integration `5897603083`.
+
+Private backups are retained outside the repository: pre-release SHA-256 `38c7b7fb186d0ee566181b8d0ac155eddb921b4dc345dafeb6265cc9b31a6093`; post-release SHA-256 `66090e5cc66f594224141a8030fe1674bd29557cbb8eddbfc4703fe171267927`.
+
+No rollback was executed. Synthetic/test databases and temporary helpers were removed; `dev.db` SHA remained `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
