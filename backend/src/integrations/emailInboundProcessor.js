@@ -16,8 +16,9 @@ const PROCESSABLE = "RECEBIDO";
 const PROCESSING = "PROCESSANDO";
 const PROCESSED = "PROCESSADO";
 const ACTIVE_LEAD_STATUSES = ["NOVO", "EM_ATENDIMENTO", "QUALIFICADO"];
+const EMAIL_TRANSACTION_OPTIONS = Object.freeze({ maxWait: 5000, timeout: 15000 });
 
-function createEmailInboundProcessor({ prisma, env = process.env, clock = () => new Date() } = {}) {
+function createEmailInboundProcessor({ prisma, env = process.env, logger = console, clock = () => new Date() } = {}) {
   if (!prisma) throw new Error("Prisma obrigatorio para intake de E-mail.");
 
   async function ingestRawEmail(input) {
@@ -37,7 +38,15 @@ function createEmailInboundProcessor({ prisma, env = process.env, clock = () => 
         state: processing.state,
       };
     } catch (error) {
-      await recordProcessingFailure(prisma, intake.event.id, error, clock());
+      try {
+        await recordProcessingFailure(prisma, intake.event.id, error, clock());
+      } catch (failureError) {
+        emitFailureDiagnostic(logger, failureError);
+        throw emailProcessingError(
+          "EMAIL_FAILURE_RECORD_UNAVAILABLE",
+          "Nao foi possivel concluir o registro sanitizado da falha de E-mail.",
+        );
+      }
       throw isEmailProcessingError(error)
         ? error
         : emailProcessingError("EMAIL_PROCESSING_FAILED", "Nao foi possivel processar o E-mail.");
@@ -126,7 +135,7 @@ async function persistIntake(prisma, integration, normalized, receivedAt, allowR
         data: { lastWebhookAt: receivedAt },
       });
       return { event, idempotent: false };
-    });
+    }, EMAIL_TRANSACTION_OPTIONS);
   } catch (error) {
     if (allowRetry && isUniqueConflict(error)) {
       const existing = await prisma.eventoWebhook.findUnique({
@@ -153,7 +162,7 @@ async function processWithRecovery(prisma, eventId, clock, env) {
     try {
       return await prisma.$transaction(
         (tx) => processTransaction(tx, eventId, clock, env),
-        { isolationLevel: "Serializable" },
+        { isolationLevel: "Serializable", ...EMAIL_TRANSACTION_OPTIONS },
       );
     } catch (error) {
       if (!isRetryableConflict(error) || attempt === 2) throw error;
@@ -501,15 +510,29 @@ async function markChannelConnected(tx, event, completedAt) {
 
 async function recordProcessingFailure(prisma, eventId, error, failedAt) {
   const code = sanitizeFailureCode(error?.code || error?.message);
+  return prisma.$transaction(async (tx) => {
+    const event = await tx.eventoWebhook.findUnique({ where: { id: eventId }, select: { id: true, empresaId: true, canalIntegracaoId: true, statusProcessamento: true } });
+    if (!event || event.statusProcessamento === PROCESSED) return { recorded: false };
+    const failed = await tx.eventoWebhook.updateMany({ where: { id: event.id, statusProcessamento: { not: PROCESSED } }, data: { statusProcessamento: "FALHOU", erroCodigo: code, erroResumo: "Falha sanitizada no processamento de E-mail." } });
+    if (failed.count !== 1) return { recorded: false };
+    await tx.canalIntegracao.updateMany({ where: { id: event.canalIntegracaoId, empresaId: event.empresaId, ativo: true, status: "ATIVO" }, data: { lastFailureAt: failedAt, lastFailureCode: code } });
+    return { recorded: true };
+  }, EMAIL_TRANSACTION_OPTIONS);
+}
+
+function emitFailureDiagnostic(logger, error) {
+  const output = typeof logger?.error === "function" ? logger.error.bind(logger) : null;
+  if (!output) return false;
   try {
-    await prisma.$transaction(async (tx) => {
-      const event = await tx.eventoWebhook.findUnique({ where: { id: eventId }, select: { id: true, empresaId: true, canalIntegracaoId: true, statusProcessamento: true } });
-      if (!event || event.statusProcessamento === PROCESSED) return;
-      const failed = await tx.eventoWebhook.updateMany({ where: { id: event.id, statusProcessamento: { not: PROCESSED } }, data: { statusProcessamento: "FALHOU", erroCodigo: code, erroResumo: "Falha sanitizada no processamento de E-mail." } });
-      if (failed.count !== 1) return;
-      await tx.canalIntegracao.updateMany({ where: { id: event.canalIntegracaoId, empresaId: event.empresaId, ativo: true, status: "ATIVO" }, data: { lastFailureAt: failedAt, lastFailureCode: code } });
-    });
-  } catch {}
+    output(JSON.stringify({
+      event: "email_failure_record_unavailable",
+      code: sanitizeFailureCode(error?.code),
+    }));
+    return true;
+  } catch (diagnosticError) {
+    void diagnosticError;
+    return false;
+  }
 }
 
 function deriveThreadKey(channelId, normalized) {

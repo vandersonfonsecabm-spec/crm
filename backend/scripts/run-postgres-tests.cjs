@@ -28,6 +28,7 @@ function main(options = {}) {
   try {
     runCommand("node", ["scripts/postgres-prisma.cjs", "validate"], env);
     runCommand("node", ["scripts/postgres-prisma.cjs", "generate"], env);
+    runCommand("node", ["--test", "tests/tenant-isolation-pending-migrations-postgres.test.js"], env);
     runCommand("node", ["scripts/postgres-prisma.cjs", "migrate-empty"], {
       ...env,
       CRM_POSTGRES_MIGRATE_CONFIRM: "apply-empty-postgres",

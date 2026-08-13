@@ -14,7 +14,7 @@ const {
 
 const backendDirectory = path.resolve(__dirname, "..");
 const sourcePrismaDirectory = path.join(backendDirectory, "prisma");
-const pendingMigrationName = "20990101000000_gate_startup_fixture";
+const pendingMigrationName = "20260811130000_add_meta_oauth_state_binding";
 const currentMigrationCount = fs.readdirSync(path.join(sourcePrismaDirectory, "migrations"), { withFileTypes: true })
   .filter((entry) => entry.isDirectory()).length;
 const testServiceId = "railway-service-test";
@@ -72,7 +72,7 @@ test("cenario 2: Railway aplica migration pendente antes do servidor", async () 
 
   assert.equal(code, 0);
   assert.deepEqual(order, ["migration:start", "migration:end", "server"]);
-  assertDatabase(fixture.databasePath, { migrations: currentMigrationCount + 1, history: 1 });
+  assertDatabase(fixture.databasePath, { migrations: currentMigrationCount, history: 1 });
   const database = new DatabaseSync(fixture.databasePath, { readOnly: true });
   const history = database.prepare('SELECT "motivo", "acaoAtendimento", "estadoAnterior", "estadoNovo" FROM "HistoricoAtribuicao"').get();
   database.close();
@@ -316,6 +316,10 @@ function createPrismaFixture(name, { pendingTarget = false, legacyHistory = fals
   fs.copyFileSync(path.join(sourcePrismaDirectory, "schema.prisma"), schemaPath);
   fs.cpSync(path.join(sourcePrismaDirectory, "migrations"), migrationsDirectory, { recursive: true });
 
+  if (pendingTarget) {
+    fs.rmSync(path.join(migrationsDirectory, pendingMigrationName), { recursive: true, force: true });
+  }
+
   fs.writeFileSync(databasePath, "");
   runPrisma(schemaPath, databasePath, ["migrate", "deploy"]);
 
@@ -329,11 +333,10 @@ function createPrismaFixture(name, { pendingTarget = false, legacyHistory = fals
   }
 
   if (pendingTarget) {
-    const pendingDirectory = path.join(migrationsDirectory, pendingMigrationName);
-    fs.mkdirSync(pendingDirectory, { recursive: true });
-    fs.writeFileSync(
-      path.join(pendingDirectory, "migration.sql"),
-      'CREATE TABLE "GateStartupFixture" ("id" TEXT NOT NULL PRIMARY KEY);\n',
+    fs.cpSync(
+      path.join(sourcePrismaDirectory, "migrations", pendingMigrationName),
+      path.join(migrationsDirectory, pendingMigrationName),
+      { recursive: true },
     );
   }
 

@@ -286,7 +286,7 @@ test("concorrencia e isolamento multi-tenant produzem uma cadeia por canal", asy
   assert.equal((await commercialCounts(mismatchedTenant.tenant.id)).events, 0);
 });
 
-test("gates, limites, identidade e simulador falham fechado sem efeitos", async () => {
+test("gates e limites falham fechado e timeout transacional vira falha sanitizada", async () => {
   const fixture = await seedActiveMailbox("email-fail-closed");
   const disabledEnv = { ...fixture.env, EMAIL_INBOUND_ENABLED: "false" };
   const disabled = createEmailInboundProcessor({ prisma, env: disabledEnv });
@@ -309,6 +309,91 @@ test("gates, limites, identidade e simulador falham fechado sem efeitos", async 
   await assert.rejects(simulatorFor(fixture.env).deliver({ mailboxAddress: "not-reserved@example.com" }), (error) => error.code === "EMAIL_SIMULATOR_IDENTITY_INVALID");
   assert.throws(() => createEmailTestSimulator({ processor: createEmailInboundProcessor({ prisma, env: fixture.env }), env: { ...fixture.env, NODE_ENV: "production" } }), (error) => error.code === "EMAIL_SIMULATOR_UNAVAILABLE");
   assert.equal((await commercialCounts(fixture.tenant.id)).events, 0);
+
+  let transactionCall = 0;
+  const transactionOptions = [];
+  const timeoutClient = new Proxy(prisma, {
+    get(target, property) {
+      if (property === "$transaction") {
+        return (...args) => {
+          transactionCall += 1;
+          transactionOptions.push(args[1]);
+          if (transactionCall === 2) {
+            const timeout = new Error("synthetic private transaction detail");
+            timeout.code = "P2028";
+            return Promise.reject(timeout);
+          }
+          return target.$transaction(...args);
+        };
+      }
+      const value = target[property];
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const failureProcessor = createEmailInboundProcessor({ prisma: timeoutClient, env: fixture.env });
+  await assert.rejects(
+    failureProcessor.ingestRawEmail({
+      raw: buildRawEmailFixture({ mailboxAddress: fixture.mailbox, messageId: `<failure-${suffix}@events.example.test>` }),
+      mailboxAddress: fixture.mailbox,
+      providerType: "GENERIC",
+    }),
+    (error) => error.code === "EMAIL_PROCESSING_FAILED" && !error.message.includes("private"),
+  );
+  const failedEvent = await prisma.eventoWebhook.findFirstOrThrow({
+    where: { empresaId: fixture.tenant.id, provedor: "EMAIL", statusProcessamento: "FALHOU" },
+  });
+  const failedChannel = await prisma.canalIntegracao.findUniqueOrThrow({ where: { id: fixture.channel.id } });
+  assert.equal(failedEvent.statusProcessamento, "FALHOU");
+  assert.equal(failedEvent.erroCodigo, "P2028");
+  assert.equal(failedEvent.erroResumo, "Falha sanitizada no processamento de E-mail.");
+  assert.equal(failedChannel.lastFailureCode, "P2028");
+  assert.ok(failedChannel.lastFailureAt);
+  assert.equal(transactionCall, 3);
+  assert.deepEqual(transactionOptions, [
+    { maxWait: 5000, timeout: 15000 },
+    { isolationLevel: "Serializable", maxWait: 5000, timeout: 15000 },
+    { maxWait: 5000, timeout: 15000 },
+  ]);
+
+  let failedRecordCall = 0;
+  const failedRecordClient = new Proxy(prisma, {
+    get(target, property) {
+      if (property === "$transaction") {
+        return (...args) => {
+          failedRecordCall += 1;
+          if (failedRecordCall === 2) {
+            const processingTimeout = new Error("processing private detail");
+            processingTimeout.code = "P2028";
+            return Promise.reject(processingTimeout);
+          }
+          if (failedRecordCall === 3) {
+            const recordTimeout = new Error("record private detail");
+            recordTimeout.code = "P2028";
+            return Promise.reject(recordTimeout);
+          }
+          return target.$transaction(...args);
+        };
+      }
+      const value = target[property];
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const unavailableFailureProcessor = createEmailInboundProcessor({
+    prisma: failedRecordClient,
+    env: fixture.env,
+    logger: { error() { throw new Error("logger private detail"); } },
+  });
+  await assert.rejects(
+    unavailableFailureProcessor.ingestRawEmail({
+      raw: buildRawEmailFixture({ mailboxAddress: fixture.mailbox, messageId: `<record-failure-${suffix}@events.example.test>` }),
+      mailboxAddress: fixture.mailbox,
+      providerType: "GENERIC",
+    }),
+    (error) => error.code === "EMAIL_FAILURE_RECORD_UNAVAILABLE"
+      && !error.message.includes("private")
+      && !error.message.includes("P2028"),
+  );
+  assert.equal(failedRecordCall, 3);
 });
 
 function simulatorFor(env, client = prisma) {

@@ -7,11 +7,13 @@ same fail-closed verifier used by the production read-only integrity check.
 The gate protects the relation contract before and after DDL; it does not
 replace application RBAC, tenant-scoped queries, backups, or release review.
 
-The current contract contains 87 tenant-scoped relations. The following
+The current contract contains 89 tenant-scoped relations. The following
 relations are explicit exceptions and must remain documented:
 
 - `AuditoriaFuncionalidade.usuarioId -> Usuario`: global actor history;
 - `PlatformTenantAudit.actorUserId -> Usuario`: platform actor history.
+- `CanalIntegracao.id -> MetaCredential`: optional tenant-scoped pointer to
+  the current integration credential through its composite key.
 
 An exception is not a silent exclusion. It must have a scope and a reason in
 `backend/scripts/tenant-isolation-gate.cjs`.
@@ -23,7 +25,7 @@ Run commands from the repository root with Windows CMD.
 Architecture-only validation:
 
 ```cmd
-node backend\scripts\tenant-isolation-gate.cjs architecture --schema backend\prisma\schema.prisma --migration-dir backend\prisma\migrations --migration-name 20260801123000_enforce_tenant_safe_relations
+node backend\scripts\tenant-isolation-gate.cjs architecture --schema backend\prisma\schema.prisma --migration-dir backend\prisma\migrations --migration-name 20260811130000_add_meta_oauth_state_binding
 ```
 
 The official manual migration entrypoint is:
@@ -68,10 +70,13 @@ compatibility command and delegates to the same central gate.
 Uses the generated Prisma DMMF and the canonical relation inventory. It checks
 tenant model relations, composite tenant keys, relation actions, documented
 exceptions, the migration registry, and relation-affecting SQL. It also emits
-and validates a deterministic SHA-256 over manifest version 1, the ordered 87
+and validates a deterministic SHA-256 over manifest version 1, the ordered 89
 relation entries, and the sorted documented exceptions. The current manifest
-hash is `1d0a06953fcc75873ab7b6f07b3949e8f7bf17d48386557e3c1c48cb679928f9`.
+hash is `4043f4369693a41b2636c1aa4e56c22da1997fb83689c6008aa26a879763c82b`.
 It fails when the schema, inventory, registry, or migration hashes disagree.
+Without provider flags, it validates both canonical SQLite and PostgreSQL
+migration packages. A generic migration directory whose provider cannot be
+identified is rejected before its SQL or hash can be trusted.
 
 ### `pre-migration`
 
@@ -81,10 +86,16 @@ invalid structured `PILOT_SYNTHETIC` metadata, and unsupported
 database/provider state. `PILOT_SYNTHETIC` is recognized only when its JSON
 object contains the required source identifiers, `synthetic: true`, and the
 validated payload shape. An empty database is accepted for an empty migration
-flow. During an incremental upgrade, missing tables are accepted only when the
-registered and hash-validated migration creates them; all existing relations
-remain read-only checked before DDL. Any other incomplete non-empty schema
-fails closed.
+flow. During an incremental upgrade, missing tables are accepted only when a
+provider-hash-pinned pending migration creates them. Current PostgreSQL and
+post-boundary SQLite migrations must also be registered; the finite historical
+SQLite prefix is grandfathered only by its literal canonical hash. A missing
+relation field on an existing table is accepted only by an exact registry key
+bound to a confirmed pending migration, and only while that DMMF field is
+optional and absent. If the field already exists, it is inspected normally;
+after the migration is applied, its absence fails closed. Applied checksums,
+order and status are validated before any boundary is trusted. All other
+existing relations remain read-only checked before DDL.
 
 ### `post-migration`
 
@@ -100,10 +111,12 @@ creates, updates, deletes, migrates, or repairs data.
 
 ## Migration Registration
 
-Relation-affecting migrations must be registered with their exact SQLite and
-PostgreSQL SHA-256 hashes and expected relation count. A future migration that
-adds or changes a tenant relation fails with `TENANT_GATE_MIGRATION_UNREGISTERED`
-until its contract is reviewed and registered.
+Every PostgreSQL migration and every SQLite migration at or after the tenant
+boundary must be registered with its exact provider SHA-256 hash and expected
+relation count. The finite earlier SQLite prefix is accepted only when the
+complete directory set and every literal canonical hash match. A future
+unregistered migration fails with `TENANT_GATE_MIGRATION_UNREGISTERED` until
+its contract is reviewed and registered.
 
 The detector is structured: it combines Prisma DMMF inspection with tokenized
 SQL statement inspection for foreign keys, references, relation constraints,
@@ -175,9 +188,10 @@ codes, relation names, and masked identifiers only.
 
 ## Current Evidence
 
-- 87 tenant relations pass the architecture and data checks;
+- 89 tenant relations pass the architecture and data checks;
 - SQLite isolated migrations and upgrades pass the gate;
-- PostgreSQL 16 discardable `migrate-empty` passes pre/post gate checks;
+- PostgreSQL 18.4 TEST_ONLY proves the canonical 6+2, 7+1, and 8/8
+  boundaries with 87, 88, and 89 inspected relations respectively;
 - negative fixtures reject missing relations, undocumented exceptions, action
   drift, unregistered relation migrations, registry hash drift, orphaned data,
   manifest hash drift, malformed pilot JSON, and unsanitized Prisma output;
