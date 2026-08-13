@@ -1,36 +1,34 @@
 # Estado atual do CRM
 
-Data da verificacao: 12/08/2026.
+Data da verificacao: 13/08/2026.
 
-## Checkpoint de release pre-V45 — consultar Git para o SHA atual
+## Checkpoint V48 pre-producao — consultar Git para os refs atuais
 
 - Branch candidata: `feature/postgres-migration-prep`. O SHA exato corrente
   deve ser obtido com `git rev-parse HEAD` e `git ls-remote origin`; este
   documento nao fixa o HEAD criado pelo proprio commit documental.
-- O RC funcional historico Meta permanece em
-  `177d2e192fcc31e0f89542a5c03e8700d9532431`. O baseline de codigo da release
-  V45, depois dos commits test-only, documentais e de seguranca aprovados, e
-  `f47543e5281a8a0c771116878c3d29c324419f79`.
-- No Gate Zero pre-V45, `origin/master` ainda estava em
-  `6e39e2a5b9dbb2bba1cf4c0376ef2e09a367db62` e a feature era sua descendente
-  linear, na relacao `origin/master...f47543e`: `0 7`. Esses valores sao o
-  baseline historico anterior a convergencia, nao uma afirmacao sobre os refs
-  depois da V45.
-- Entre o RC funcional e o baseline V45, os commits posteriores preservaram o
-  produto aprovado e trataram testes, runner seguro e documentacao. Qualquer
-  agente futuro deve confirmar o diff real antes de reutilizar essa evidencia.
-- V40 concluiu `SAFE_BACKEND_RUNNER`, bateria backend canonica, relacoes
-  SQLite, guard do `dev.db`, gates PostgreSQL V38, frontend e testes Meta com
-  PASS; o relationCount do candidato e 89. O resultado registrado foi
-  `V40_FINAL_RELEASE_GATE_SHIP`.
-- V43 confirmou Vercel e Railway oficiais ainda no baseline pre-V45
-  `6e39e2a`, PostgreSQL oficial saudavel e duas migrations Meta pendentes, mas
-  parou antes de qualquer mutacao porque nao existia backup/snapshot oficial
-  recuperavel comprovado.
-- V45 e a missao autorizada para persistir a regra de entrega do projeto,
-  provar backup e restore, aplicar as migrations esperadas e convergir a
-  feature somente se todos os gates de producao forem aprovados. Este texto
-  nao antecipa o resultado da missao.
+- O novo RC funcional aprovado nos gates locais e TEST_ONLY da V48 e
+  `3271a3de1111edf1a488f7d71f1e989c799d8736`. Ele contem a remediation
+  migration-boundary-aware do tenant verifier e o timeout finito das
+  transacoes de Email inbound PostgreSQL. Imediatamente antes deste checkpoint,
+  a feature estava em `6d9db084a971a79bee9d2828e8ebb937467b3c8c`, com somente
+  um commit complementar de teste e runbook depois do RC funcional.
+- O RC Meta historico `177d2e192fcc31e0f89542a5c03e8700d9532431`
+  permanece na ancestralidade. O baseline V40
+  `f47543e5281a8a0c771116878c3d29c324419f79` acrescentou apenas seguranca,
+  testes e documentacao sobre o produto aprovado daquela fase.
+- No preflight V48, `origin/master` ainda estava em
+  `6e39e2a5b9dbb2bba1cf4c0376ef2e09a367db62`; a feature era descendente
+  linear e fast-forwardable. Esse e o baseline pre-producao, nao uma afirmacao
+  sobre os refs depois da convergencia.
+- V48 aprovou antes deste checkpoint: Email inbound PostgreSQL 10/10, bateria
+  PostgreSQL completa 74/74, verifier 6/8 -> 7/8 -> 8/8, runner backend
+  canonico SQLite, WhatsApp sem provider/outbound real, Meta fail-closed sem
+  network real e o `RC_PRECOMMIT_SHIP` do Sol Extra High.
+- A producao continuava no SHA antigo `6e39e2a`, PostgreSQL 18.4 com seis
+  migrations aplicadas e exatamente duas Meta pendentes, frontend e `/health`
+  HTTP 200. Backup logico, restore drill, migrations oficiais, master, deploy
+  e smoke de producao ainda nao haviam sido executados neste checkpoint.
 - QA V35 no HOMOLOG confirmou card Instagram/Meta visivel, estado
   `NOT_CONFIGURED` e CTA honesto desabilitado por falta de canal real.
 - Nenhuma conta Meta foi conectada; Meta Developer, OAuth/E2E real, Graph API,
