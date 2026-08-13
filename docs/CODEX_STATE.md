@@ -6,8 +6,9 @@ Data da verificacao: 12/08/2026.
 
 - Branch real: `feature/postgres-migration-prep`.
 - RC funcional permanece em `177d2e192fcc31e0f89542a5c03e8700d9532431`.
-- HEAD da feature antes do commit documental/test-only V40:
-  `20c0d52f3cecc1c82944787931ab0f5ff82c08ae`; `origin/master` permanece
+- HEAD da feature apos o commit test-only/documental V40:
+  `43bb1651c6c9b74d1cde471294ff17819bd458a8`; o HEAD pre-V40 era
+  `20c0d52f3cecc1c82944787931ab0f5ff82c08ae`. `origin/master` permanece
   `6e39e2a5b9dbb2bba1cf4c0376ef2e09a367db62`, com relacao
   `origin/master...HEAD`: `0 5`.
 - O preflight V40 encontrou somente o delta de infraestrutura/testes seguro
