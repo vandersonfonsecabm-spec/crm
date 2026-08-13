@@ -1568,3 +1568,29 @@ integracoes autorizadas.
   observado exigia publicacao de backend.
 - A producao permanece intacta quanto a banco, backend, ambiente, dependencias
   e dados; nenhum outbound ou alteracao de dados reais ocorreu.
+
+## V54 — release do redesign V52 (2026-08-13)
+
+- O runtime funcional publicado permanece no SHA
+  `7e6d5f0544cf53f105ab7623e91bcc0405dd1270`; os refs finais foram conferidos
+  novamente com Git. Os commits posteriores documentais nao alteram o produto.
+- A producao oficial e o projeto Railway `glistening-playfulness`, ambiente
+  `e18f76b1-e38f-468e-91fe-1eff6db9a5f8`, com API `api` e worker `crm`; os IDs
+  dos deployments e a paridade frontend/backend estao registrados nos
+  relatorios V54. PostgreSQL 18.4 terminou com 9 migrations aplicadas.
+- As invariantes pos-migration passaram: campos de lifecycle presentes, zero
+  status invalido, zero inconsistencia de arquivamento, zero orfao, zero
+  vinculo cross-tenant, FK Nota→Cliente em RESTRICT e zero lock residual.
+- Os backups pre e pos-release foram criados fora do repositorio, tiveram hash
+  SHA-256 e `pg_restore --list` verificados; o restore privado e o ensaio de
+  migration foram concluídos sem expor linhas ou dados reais.
+- O redesign teve gates funcionais, visuais desktop/mobile e evidencias
+  sanitizadas. Nao houve provider real, Meta/Graph/OAuth, outbound ou dado
+  sintetico persistente em producao. Nao havia sessao autenticada segura nem
+  pacote axe disponivel para um smoke autenticado/axe completo; essa limitacao
+  permanece explicitamente registrada nos relatorios, sem mascarar o resultado.
+- Limite de rollback: Mark A/V50 so pode ser usado como fallback temporario com
+  escrita pausada e prova de zero estados de lifecycle; depois da primeira
+  gravacao real de arquivamento, somente recovery/forward-fix compativel com
+  V54 e seguro.
+- Evidencia consolidada: `artifacts/v54/META_V54_REPORT_AND_DOCUMENTS.zip`.
