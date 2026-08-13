@@ -5,3 +5,5 @@ Verdict: V54_V52_REDESIGN_RELEASE_COMPLETE.
 Evidence reviewed: shared lifecycle lock and automation enqueue guard; isolated canonical backend suite PASS; frontend 157/157 and Vite/TypeScript build PASS; PostgreSQL 18.4 private restore/migration rehearsal PASS; real two-session lock proof PASS; official legacy preflight and post-migration invariants PASS; private pre/post backups hashed and restore-listed; Railway API/worker and GitHub/Vercel production deployments SUCCESS on SHA 7e6d5f0; health/frontend HTTP 200; worker RUNNING; sanitized visual fixtures PASS; cleanup and dev.db hash PASS.
 
 Known evidence limitation retained honestly: no safe authenticated browser session or axe package was available in the desktop context, so production smoke was non-mutating and no real/provider operation was attempted. This does not mask any failed gate or permit outbound integration traffic.
+
+Evidence correction: the padded Overview capture was excluded from the bundle, all retained visual fixtures were normalized to honest `.jpg` filenames, and the migration report makes no engine-level transaction guarantee claim.
