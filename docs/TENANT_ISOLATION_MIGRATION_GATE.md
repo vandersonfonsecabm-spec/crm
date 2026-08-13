@@ -25,8 +25,10 @@ Run commands from the repository root with Windows CMD.
 Architecture-only validation:
 
 ```cmd
-node backend\scripts\tenant-isolation-gate.cjs architecture --schema backend\prisma\schema.prisma --migration-dir backend\prisma\migrations --migration-name 20260811130000_add_meta_oauth_state_binding
+node backend\scripts\tenant-isolation-gate.cjs architecture
 ```
+
+With no provider flags, this command validates both canonical migration trees.
 
 The official manual migration entrypoint is:
 

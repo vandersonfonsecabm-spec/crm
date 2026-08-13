@@ -478,6 +478,10 @@ test("architecture sem flags valida os dois pacotes canonicos", async () => {
   assert.equal(result.safe, true);
   assert.equal(result.migration.migrationName, latestMigration);
   assert.equal(result.migration.relationAffecting, true);
+  assert.equal(result.migration.providers.sqlite.migrationName, latestMigration);
+  assert.equal(result.migration.providers.sqlite.relationAffecting, true);
+  assert.equal(result.migration.providers.postgresql.migrationName, latestMigration);
+  assert.equal(result.migration.providers.postgresql.relationAffecting, true);
 });
 
 test("architecture rejeita migration-dir sem provider antes de confiar no hash", async () => {
