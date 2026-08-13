@@ -1,6 +1,6 @@
 V54_V52_REDESIGN_RELEASE_COMPLETE
 
-Runtime SHA: 7e6d5f0544cf53f105ab7623e91bcc0405dd1270 (the RC code deployed to API, worker and CRM frontend). Documentation head: 197b5ed1b3d8bb1ca2e43d68501c1a40c5703e99.
+Runtime SHA: 7e6d5f0544cf53f105ab7623e91bcc0405dd1270 (the RC code deployed to API, worker and CRM frontend). Later commits contain release evidence only and do not change runtime code.
 The V52 redesign was preserved and the V54 lifecycle hardening added one shared tenant-scoped row-lock helper across audited operational writers, archive/delete safety, canonical migrations and regression coverage.
 
 Gates: frontend 157/157 PASS; TypeScript/Vite build PASS; backend isolated node-suite PASS; tenant gate 30/30 PASS; PostgreSQL 18.4 restore/migration rehearsal PASS; real two-session lifecycle lock proof PASS; production migration 9 completed/0 unfinished; post-migration invariants PASS; official Railway API/worker deploys SUCCESS on runtime SHA; public frontend HTTP 200; API health HTTP 200; worker RUNNING; post-release backup verified. A later docs-only frontend deployment (`5897830880`) succeeded on the documentation head without changing runtime code; CRM/API/worker runtime deployments remain the 7e6d5f0 deployments recorded below.

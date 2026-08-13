@@ -2,7 +2,7 @@
 
 Status: `V54_V52_REDESIGN_RELEASE_COMPLETE`
 
-- Worktree V52 reconciliation and runtime SHA `7e6d5f0544cf53f105ab7623e91bcc0405dd1270` verified on the deployed code; documentation head is `197b5ed1b3d8bb1ca2e43d68501c1a40c5703e99`.
+- Worktree V52 reconciliation and runtime SHA `7e6d5f0544cf53f105ab7623e91bcc0405dd1270` verified on the deployed code; subsequent commits are documentation-only.
 - All audited operational writers use the shared lifecycle lock or are explicitly read-only; automation enqueue was included in the final causal fix.
 - PostgreSQL 18.4 TEST_ONLY restore, migration rehearsal, tenant gate, Nota `RESTRICT`, archive invariants and two-session lock proof passed.
 - Official production migration is complete (9 finished, 0 unfinished); `v52_columns=2`, invalid/archive invariant/orphan/lock counts are all zero, and Nota FK delete action is `r`.
