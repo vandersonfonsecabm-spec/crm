@@ -138,6 +138,37 @@ test("H2 qualifica, cria ou vincula Negocio com tenant, permissao e concorrencia
   assert.equal((await prisma.negocio.findUnique({ where: { id: existingBusiness.id } })).leadId, linkedFixture.lead.id);
   assert.equal(await prisma.historicoQualificacaoConversa.count({ where: { conversaCanalId: linkedFixture.conversation.id, acao: "VINCULAR_NEGOCIO" } }), 1);
 
+  const unlinkedContact = await channelService.createOrFindChannelContact({
+    empresaId: adminA.empresaId,
+    canalIntegracaoId: channelA.id,
+    externalId: "h2-sem-contexto",
+    nome: "Contato sem contexto",
+  });
+  const unlinkedConversation = await communication.createOrFindConversation(
+    { usuarioId: adminA.usuarioId, empresaId: adminA.empresaId, papel: "ADMIN" },
+    { canalIntegracaoId: channelA.id, contatoCanalId: unlinkedContact.id },
+  );
+  const unlinkedContext = await request("GET", `/conversas/${unlinkedConversation.id}/contexto-comercial`, undefined, sellerA.token);
+  assert.equal(unlinkedContext.status, 200);
+  assert.equal(unlinkedContext.body.estado, "SEM_CONTEXTO");
+  assert.equal(unlinkedContext.body.cliente, null);
+  assert.equal(unlinkedContext.body.lead, null);
+
+  const archivedFixture = await createConversationFixture({
+    admin: adminA,
+    channel: channelA,
+    channelService,
+    communication,
+    name: "Cliente Arquivado H2",
+    key: "archived-qualification",
+  });
+  const archiveResponse = await request("POST", `/clientes/${archivedFixture.client.id}/arquivar`, { revisao: archivedFixture.client.revisao }, adminA.token);
+  assert.equal(archiveResponse.status, 200);
+  assert.ok(archiveResponse.body.arquivadoEm);
+  const archivedQualification = await request("PATCH", `/conversas/${archivedFixture.conversation.id}/qualificacao-comercial`, validQualification(), sellerA.token);
+  assert.equal(archivedQualification.status, 404);
+  assert.equal(await prisma.historicoQualificacaoConversa.count({ where: { conversaCanalId: archivedFixture.conversation.id } }), 0);
+
   const tenantBFixture = await createConversationFixture({
     admin: adminB,
     channel: channelB,
@@ -180,8 +211,8 @@ test("H2 qualifica, cria ou vincula Negocio com tenant, permissao e concorrencia
   assert.ok(concurrent.some(({ status }) => status === 201));
   assert.ok(concurrent.some(({ status }) => status === 409));
 
-  assert.equal((await invariantCounts()).cliente, initialCounts.cliente + 5);
-  assert.equal((await invariantCounts()).lead, initialCounts.lead + 5);
+  assert.equal((await invariantCounts()).cliente, initialCounts.cliente + 6);
+  assert.equal((await invariantCounts()).lead, initialCounts.lead + 6);
   assert.equal(await prisma.conversaCanal.count({ where: { id: primary.conversation.id } }), 1);
   assert.equal(await prisma.mensagemCanal.count({ where: { conversaCanalId: primary.conversation.id } }), 1);
   assert.equal(await prisma.negocio.count({ where: { clienteId: tenantBFixture.client.id } }), 1);

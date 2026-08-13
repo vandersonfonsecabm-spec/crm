@@ -1,6 +1,7 @@
 const { Prisma } = require("@prisma/client");
 const { domainError, isManager, notFound } = require("../leads-communication/policy");
 const { generateProposalPdf } = require("./pdf");
+const { lockActiveClienteRows } = require("../shared/clientLifecycleLock");
 
 const STATUSES = ["RASCUNHO", "PRONTA", "ENVIADA", "ACEITA", "RECUSADA", "VENCIDA", "CANCELADA"];
 const EDITABLE_STATUSES = new Set(["RASCUNHO"]);
@@ -25,6 +26,7 @@ function createCommercialProposalService({ prisma }) {
     if (negocioId) await loadBusiness(prisma, context, negocioId, false);
     const where = {
       empresaId: context.empresaId,
+      cliente: { arquivadoEm: null },
       ...(negocioId ? { negocioId } : {}),
       ...(status ? { status } : {}),
       ...(q ? { OR: [{ codigo: { contains: q } }, { titulo: { contains: q } }, { cliente: { nome: { contains: q } } }] } : {}),
@@ -47,6 +49,7 @@ function createCommercialProposalService({ prisma }) {
     let created;
     try {
       created = await prisma.$transaction(async (tx) => {
+        await lockActiveClienteRows(tx, context.empresaId, [business.clienteId]);
         const sequence = await tx.propostaComercial.count({ where: { empresaId: context.empresaId } }) + 1;
         const codigo = `PROP-${new Date().getUTCFullYear()}-${String(sequence).padStart(5, "0")}`;
         const totals = calculateTotals(body.itens, body.descontoGeralCentavos);
@@ -88,8 +91,9 @@ function createCommercialProposalService({ prisma }) {
     if (body.revisao !== current.revisao) throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
     const totals = calculateTotals(body.itens, body.descontoGeralCentavos);
     await prisma.$transaction(async (tx) => {
+      await lockActiveClienteRows(tx, context.empresaId, [current.clienteId, current.negocio?.clienteId]);
       const updated = await tx.propostaComercial.updateMany({
-        where: { id, empresaId: context.empresaId, revisao: body.revisao, status: "RASCUNHO" },
+        where: { id, empresaId: context.empresaId, revisao: body.revisao, status: "RASCUNHO", cliente: { arquivadoEm: null }, negocio: { cliente: { arquivadoEm: null } } },
         data: {
           titulo: body.titulo,
           descricao: body.descricao,
@@ -123,8 +127,9 @@ function createCommercialProposalService({ prisma }) {
     if (current.status === nextStatus) return getProposal(context, id);
     if (!TRANSITIONS[current.status]?.has(nextStatus)) throw invalid("Transicao de status invalida.", "PROPOSAL_STATUS_INVALID");
     const result = await prisma.$transaction(async (tx) => {
+      await lockActiveClienteRows(tx, context.empresaId, [current.clienteId, current.negocio?.clienteId]);
       const updated = await tx.propostaComercial.updateMany({
-        where: { id, empresaId: context.empresaId, revisao, status: current.status },
+        where: { id, empresaId: context.empresaId, revisao, status: current.status, cliente: { arquivadoEm: null }, negocio: { cliente: { arquivadoEm: null } } },
         data: { status: nextStatus, revisao: { increment: 1 } },
       });
       if (updated.count !== 1) throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
@@ -146,6 +151,7 @@ function createCommercialProposalService({ prisma }) {
     let created;
     try {
       created = await prisma.$transaction(async (tx) => {
+        await lockActiveClienteRows(tx, context.empresaId, [source.clienteId, source.negocio?.clienteId]);
         const latest = await tx.propostaComercial.findFirst({ where: { empresaId: context.empresaId, OR: [{ id: rootId }, { propostaOrigemId: rootId }] }, orderBy: [{ versao: "desc" }, { id: "desc" }] });
         const version = (latest?.versao ?? source.versao) + 1;
         const root = source.codigo.replace(/-V\d+$/, "");
@@ -225,8 +231,8 @@ async function loadProposal(client, context, id, withDetails) {
 function proposalIncludes(withDetails) {
   return {
     empresa: { select: { id: true, nome: true } },
-    cliente: { select: { id: true, empresaId: true, nome: true, empresa: true, email: true, telefone: true } },
-    negocio: { select: { id: true, empresaId: true, titulo: true, etapa: true, responsavelId: true } },
+    cliente: { select: { id: true, empresaId: true, nome: true, empresa: true, email: true, telefone: true, arquivadoEm: true } },
+    negocio: { select: { id: true, empresaId: true, titulo: true, etapa: true, responsavelId: true, cliente: { select: { arquivadoEm: true } } } },
     lead: { select: { id: true, empresaId: true, status: true, interesse: true } },
     responsavel: { select: { id: true, empresaId: true, nome: true } },
     autor: { select: { id: true, empresaId: true, nome: true } },
@@ -245,6 +251,7 @@ function assertProposalTenantContext(empresaId, proposal) {
 }
 
 function requireProposalWrite(context, business) {
+  if (business?.cliente?.arquivadoEm || business?.negocio?.cliente?.arquivadoEm) throw domainError(409, "CLIENT_ARCHIVED_READ_ONLY", "Restaure o cliente antes de operar propostas.");
   if (!isManager(context) && business.responsavelId !== context.usuarioId) throw domainError(403, "PROPOSAL_FORBIDDEN", "Acesso negado.");
 }
 

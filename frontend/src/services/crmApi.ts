@@ -216,6 +216,8 @@ type ApiCliente = {
   tags?: string[] | string | null;
   createdAt?: string;
   updatedAt?: string;
+  arquivadoEm?: string | null;
+  statusAntesDeArquivar?: string | null;
   notas?: ApiNota[];
 };
 
@@ -293,6 +295,7 @@ export type ClientListQuery = {
   quente?: boolean;
   risco?: boolean;
   silencioso?: boolean;
+  arquivado?: boolean;
   sortBy?: "score" | "value" | "name" | "status";
 };
 
@@ -2100,7 +2103,19 @@ export async function updateClienteOnBackend(client: Client) {
 
 export async function deleteClienteOnBackend(client: Client) {
   if (!client.backendId || !hasRemoteApi()) throw new Error("Cliente não sincronizado.");
-  await requestCliente("DELETE", `/clientes/${client.backendId}`);
+  await requestCliente("DELETE", `/clientes/${client.backendId}`, { revisao: client.revision });
+}
+
+export async function archiveClienteOnBackend(client: Client) {
+  if (!client.backendId || !hasRemoteApi()) throw new Error("Cliente não sincronizado.");
+  const response = await requestApiWrite<ApiCliente>("POST", `/clientes/${client.backendId}/arquivar`, { revisao: client.revision });
+  return mapApiClienteToClient(response, client);
+}
+
+export async function restoreClienteOnBackend(client: Client) {
+  if (!client.backendId || !hasRemoteApi()) throw new Error("Cliente não sincronizado.");
+  const response = await requestApiWrite<ApiCliente>("POST", `/clientes/${client.backendId}/restaurar`, { revisao: client.revision });
+  return mapApiClienteToClient(response, client);
 }
 
 export async function createNotaOnBackend(client: Client, text: string) {
@@ -2261,6 +2276,16 @@ export async function fetchCommunicationLeadHistory(id: number) {
 
 export async function fetchCommunicationConversations(params: ConversationQuery = {}) {
   return requestApiGetAuthenticated<ApiPaginatedResponse<CommunicationConversation>>(`/conversas${toQueryString(params)}`);
+}
+
+export type CommunicationAttentionSummary = {
+  pendentes: number;
+  semContarMensagens: true;
+  criterio: string;
+};
+
+export async function fetchCommunicationAttentionSummary() {
+  return requestApiGetAuthenticated<CommunicationAttentionSummary>("/conversas/resumo");
 }
 
 export async function fetchCommunicationConversation(id: number) {
@@ -2451,8 +2476,8 @@ export function getApiBaseUrl() {
 }
 
 async function requestCliente(method: "POST" | "PATCH" | "PUT", path: string, payload: ClientePayload): Promise<ApiCliente>;
-async function requestCliente(method: "DELETE", path: string): Promise<null>;
-async function requestCliente(method: "POST" | "PATCH" | "PUT" | "DELETE", path: string, payload?: ClientePayload) {
+async function requestCliente(method: "DELETE", path: string, payload?: Pick<ClientePayload, "revisao">): Promise<null>;
+async function requestCliente(method: "POST" | "PATCH" | "PUT" | "DELETE", path: string, payload?: ClientePayload | Pick<ClientePayload, "revisao">) {
   const response = await fetchAuthenticated(path, {
     method,
     headers: {
@@ -2713,7 +2738,10 @@ function readStorageJson<T>(key: string): T | null {
 function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
   const backendId = String(cliente.id);
   const id = fallback?.id ?? backendIdToNumericId(backendId);
-  const status = fallback?.status ?? mapClienteStatus(cliente.status);
+  const hasAuthoritativeStatus = typeof cliente.status === "string" && cliente.status !== "Arquivado";
+  const status = hasAuthoritativeStatus
+    ? mapClienteStatus(cliente.status)
+    : fallback?.status ?? mapClienteStatus(cliente.statusAntesDeArquivar ?? cliente.status);
   const value = fallback?.value ?? cliente.valor ?? estimateValue(cliente);
   const company =
     fallback?.company || cliente.empresa || cliente.fazenda || cliente.cidade || extractCompany(cliente) || "Cliente agro";
@@ -2739,6 +2767,8 @@ function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
     tags: fallback?.tags?.length ? fallback.tags : parseTags(cliente.tags),
     notes: fallback?.notes ?? buildNotes(cliente),
     revision: cliente.revisao ?? fallback?.revision,
+    archived: cliente.arquivadoEm !== undefined ? cliente.arquivadoEm !== null : fallback?.archived === true,
+    archivedAt: cliente.arquivadoEm !== undefined ? cliente.arquivadoEm : fallback?.archivedAt ?? null,
   };
 }
 

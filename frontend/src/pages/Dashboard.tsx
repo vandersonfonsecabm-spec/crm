@@ -51,7 +51,7 @@ import WhatsappExternalConfirmDialog from "../components/dashboard/WhatsappExter
 import type { WhatsappExternalRequest } from "../components/dashboard/WhatsappExternalConfirmDialog";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
-import { ApiHttpError, canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchDashboardSummaryFromBackend, getAuthSession, shouldInvalidateAuthSession } from "../services/crmApi";
+import { ApiHttpError, canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchCommunicationAttentionSummary, fetchDashboardSummaryFromBackend, getAuthSession, shouldInvalidateAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
 import { resolveTenantFeatureAccess } from "../config/featureFlags";
 import { EmptyState, ErrorState } from "../components/ui";
@@ -111,6 +111,16 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [tagText, setTagText] = useState("");
   const [page, setPage] = useState(1);
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem("crm-sidebar-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [inboxAttentionCount, setInboxAttentionCount] = useState<number | null>(null);
+  const [showArchivedClients, setShowArchivedClients] = useState(false);
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
   const [isBooting, setIsBooting] = useState(true);
@@ -128,6 +138,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const kanbanStageRequest = { group: "pipeline" as const, key: 0 };
   const [leadsCreateRequestKey, setLeadsCreateRequestKey] = useState(0);
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
+  const [pendingSearchClientId, setPendingSearchClientId] = useState<number | null>(null);
   const [kanbanBusinessId, setKanbanBusinessId] = useState<number | null>(null);
   const canManageIntegrations = canAccessIntegrations(authSession);
   const canManageUsers = (authSession?.papel ?? authSession?.usuario.papel) === "ADMIN";
@@ -164,6 +175,37 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   );
 
   const pageSize = 8;
+
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("crm-sidebar-collapsed", String(sidebarCollapsed));
+    } catch {
+      // Layout remains usable if storage is unavailable.
+    }
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (!leadsCommunicationEnabled || !authSession) {
+      setInboxAttentionCount(null);
+      return;
+    }
+    let ignore = false;
+    const loadAttention = async () => {
+      try {
+        const summary = await fetchCommunicationAttentionSummary();
+        if (!ignore) setInboxAttentionCount(summary.pendentes);
+      } catch {
+        // Preserve the last known count; an unavailable summary must not be rendered as a confirmed zero.
+      }
+    };
+    void loadAttention();
+    const interval = window.setInterval(loadAttention, 20000);
+    return () => {
+      ignore = true;
+      window.clearInterval(interval);
+    };
+  }, [authSession, leadsCommunicationEnabled]);
 
   const handleSelectClient = useCallback((clientId: number | null, origin: HTMLElement | null = null, fallback: HTMLElement | null = null) => {
     setSelectedId(clientId);
@@ -242,7 +284,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           return;
         }
         setDashboardSummaryLoadState("error");
-        setBackendLoadError("Nao foi possivel carregar os dados agora. Sua sessao foi preservada.");
+        setBackendLoadError("Não foi possível carregar os dados agora. Sua sessão foi preservada.");
       }
     }
 
@@ -263,6 +305,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           limit: pageSize,
           search: search.trim() || undefined,
           status: statusFilter === "Todos" ? undefined : statusFilter,
+          arquivado: activePage === "clientes" ? showArchivedClients : false,
           favorito: onlyFavorites || undefined,
           quente: onlyHot || undefined,
           risco: onlyRisk || undefined,
@@ -289,7 +332,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           return;
         }
         setClientsLoadState("error");
-        setBackendLoadError("Nao foi possivel carregar os dados agora. Sua sessao foi preservada.");
+        setBackendLoadError("Não foi possível carregar os dados agora. Sua sessão foi preservada.");
       }
     }, 250);
 
@@ -299,6 +342,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     };
   }, [
     backendLoadRequest,
+    activePage,
     onLogout,
     onlyFavorites,
     onlyHot,
@@ -309,6 +353,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     search,
     sortBy,
     statusFilter,
+    showArchivedClients,
   ]);
 
   useEffect(() => {
@@ -384,13 +429,15 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     toast,
     setToast,
     copyText,
-    clearFilters,
+    clearFilters: clearDashboardFilters,
     toggleFavorite,
     toggleHot,
     changeStatus,
     saveEdit,
     createClient,
     deleteClient,
+    archiveClient,
+    restoreClient,
     addNote,
     addTagToSelected,
     removeTagFromSelected,
@@ -423,6 +470,24 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setPage,
   });
 
+  const clearFilters = useCallback(() => {
+    clearDashboardFilters();
+    setShowArchivedClients(false);
+  }, [clearDashboardFilters]);
+
+  const handleShowArchivedClients = useCallback((archived: boolean) => {
+    handleClearSelectedClient();
+    setShowArchivedClients(archived);
+    if (archived) {
+      setStatusFilter("Todos");
+      setOnlyFavorites(() => false);
+      setOnlyHot(() => false);
+      setOnlyRisk(false);
+      setOnlySilent(false);
+      setPage(1);
+    }
+  }, [handleClearSelectedClient]);
+
   const handleSetActivePage = useCallback((page: ActivePage) => {
     invalidateCustomerDrawerFocusSession();
     setIsCustomerDrawerOpen(false);
@@ -451,6 +516,24 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       navigate(pathname);
     }
   }, [canManageIntegrations, canManageUsers, invalidateCustomerDrawerFocusSession, isPlatformOperator, leadsCommunicationEnabled, location.pathname, navigate, setToast]);
+
+  const handleSearchSelectClient = useCallback((clientId: number | null) => {
+    if (clientId === null) return;
+    if (activePage === "clientes") {
+      handleSelectClient(clientId);
+      return;
+    }
+    setPendingSearchClientId(clientId);
+    handleSetActivePage("clientes");
+  }, [activePage, handleSelectClient, handleSetActivePage]);
+
+  useEffect(() => {
+    if (activePage !== "clientes" || pendingSearchClientId === null) return;
+    const clientId = pendingSearchClientId;
+    setPendingSearchClientId(null);
+    const main = document.getElementById("crm-main-content");
+    handleSelectClient(clientId, main, main);
+  }, [activePage, handleSelectClient, pendingSearchClientId]);
 
   const openInboxConversation = useCallback((conversationId: number) => {
     setInboxConversationId(conversationId);
@@ -540,9 +623,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       ],
       clientes: [
         { label: "Exportar página atual", onClick: exportCsv },
-        riskAction,
-        { label: "Propostas abertas", onClick: () => applySmartFilter("proposal") },
-        silentAction,
+        ...(showArchivedClients ? [] : [riskAction, { label: "Propostas abertas", onClick: () => applySmartFilter("proposal") }, silentAction]),
         resetAction,
       ],
       kanban: [
@@ -562,7 +643,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     };
 
     return actionsByPage[activePage] ?? [];
-  }, [activePage, applySmartFilter, clearFilters, exportCsv, smartAlerts]);
+  }, [activePage, applySmartFilter, clearFilters, exportCsv, showArchivedClients, smartAlerts]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -637,13 +718,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       onRequestWhatsapp={requestExternalWhatsapp}
       onNavigateContext={openCustomerContext}
       onUnauthorized={onLogout}
+      canRestoreArchivedClients={canManageLeads}
       onApplySmartFilter={applySmartFilter}
       focusSession={customerDrawerFocusSession}
       isFocusSessionActive={isCustomerDrawerFocusSessionActive}
       onRequestFocusSessionClose={handleCloseCustomerDrawer}
       onFocusSessionSettled={settleCustomerDrawerFocusClose}
       overlay={["dashboard", "comercial", "clientes", "kanban", "agenda"].includes(activePage)}
-      open={isCustomerDrawerOpen}
+      open={isCustomerDrawerOpen && selectedClient !== null}
     />
   );
 
@@ -711,6 +793,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   return (
     <div className="crm-workspace premium-shell min-h-screen select-none">
+      <a className="skip-link" href="#crm-main-content">Pular para o conteúdo</a>
       <div className="crm-shell-layout flex min-h-screen">
         <DashboardSidebar
           activePage={activePage}
@@ -720,13 +803,16 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           canManageUsers={canManageUsers}
           isPlatformOperator={isPlatformOperator}
           leadsCommunicationEnabled={leadsCommunicationEnabled}
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((current) => !current)}
+          attentionCount={inboxAttentionCount}
         />
 
         <div className="crm-main min-w-0 flex-1 overflow-x-hidden">
           <DashboardTopbar
             showQuickActions={showQuickActions}
             emptyClient={emptyClient}
-            setSelectedId={handleSelectClient}
+            setSelectedId={handleSearchSelectClient}
             setActivePage={handleSetActivePage}
             setShowQuickActions={setShowQuickActions}
             setCreating={setCreating}
@@ -738,13 +824,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             leadsCommunicationEnabled={leadsCommunicationEnabled}
           />
 
-          <main ref={contentRef} className="crm-content mx-auto w-full max-w-[1680px] px-4 pb-24 pt-5 sm:px-5 lg:px-7 lg:pb-8">
+          <main ref={contentRef} tabIndex={-1} className="crm-content mx-auto w-full max-w-[1680px] px-4 pb-24 pt-5 sm:px-5 lg:px-7 lg:pb-8" id="crm-main-content">
           {backendLoadError && clients.length === 0 && activePage !== "dashboard" && activePage !== "comercial" && (
             <ErrorState
               className="mb-4 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)]"
               description={backendLoadError}
               onRetry={() => setBackendLoadRequest((current) => current + 1)}
-              title="Dados temporariamente indisponiveis"
+              title="Dados temporariamente indisponíveis"
             />
           )}
           {activePage !== "dashboard" && activePage !== "comercial" && (
@@ -770,7 +856,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               isAuthorized={authSession !== null}
               money={money}
               onOpenCommercial={() => handleSetActivePage("comercial")}
+              onOpenInbox={() => handleSetActivePage("inbox")}
               onRetry={() => setBackendLoadRequest((current) => current + 1)}
+              attentionCount={inboxAttentionCount}
             />
           )}
 
@@ -804,6 +892,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               setOnlyHot={setOnlyHot}
               exportCsv={exportCsv}
               clearFilters={clearFilters}
+              showArchived={showArchivedClients}
+              setShowArchived={handleShowArchivedClients}
               pageActions={activePage === "clientes" ? pageActions : []}
             />
           )}
@@ -965,7 +1055,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       </div>
 
       {editing && (
-        <ClientModal title="Editar cliente" client={editing} setClient={setEditing} onClose={() => setEditing(null)} onSave={saveEdit} onDelete={() => deleteClient(editing.id)} saveLabel="Salvar alterações" showDelete />
+        <ClientModal title={editing.archived ? "Cliente arquivado" : "Editar cliente"} client={editing} setClient={setEditing} onClose={() => setEditing(null)} onSave={saveEdit} onArchive={canManageLeads && !editing.archived ? () => archiveClient(editing.id) : undefined} onRestore={canManageLeads && editing.archived ? async () => { await restoreClient(editing); setBackendLoadRequest((current) => current + 1); } : undefined} onDelete={canManageLeads && editing.archived ? () => deleteClient(editing.id) : undefined} saveLabel="Salvar alterações" showDelete={canManageLeads && Boolean(editing.archived)} />
       )}
 
       {creating && (

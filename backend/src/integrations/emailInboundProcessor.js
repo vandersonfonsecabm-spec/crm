@@ -10,6 +10,7 @@ const {
 } = require("./emailFoundation");
 const { readGlobalEmailConfiguration } = require("../platform/emailInboundProvisioning");
 const { createAutomationService } = require("../automations/service");
+const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
 
 const PROVIDER = "EMAIL";
 const PROCESSABLE = "RECEBIDO";
@@ -298,6 +299,8 @@ async function resolveClient(tx, event, contact, normalized) {
   if (contact.clienteId !== null) {
     const client = await tx.cliente.findFirst({ where: { id: contact.clienteId, empresaId: event.empresaId } });
     if (!client) throw emailProcessingError("EMAIL_CLIENT_INTEGRITY", "Cliente de E-mail inconsistente.");
+    if (client.arquivadoEm !== null) throw emailProcessingError("EMAIL_CLIENT_ARCHIVED_READ_ONLY", "O cliente arquivado precisa ser restaurado antes de receber novos e-mails.");
+    await lockActiveClienteRow(tx, event.empresaId, client.id);
     return client;
   }
   return tx.cliente.create({ data: {

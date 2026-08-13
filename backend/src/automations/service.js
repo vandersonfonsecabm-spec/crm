@@ -3,6 +3,7 @@ const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/
 const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES, unavailableActionTypes } = require("./actions");
 const { createWorkerEventEnvelope, sanitizeError } = require("./worker-observability");
 const { withPostgresEnqueueDiagnostics } = require("./postgres-enqueue-diagnostics");
+const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
 const { presentRule, safeJson, snapshotRule, validatePilotEventPayload, validateRulePayload } = require("./validation");
 const {
   assertProjectionReconciled,
@@ -244,7 +245,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
       if (!threshold || !rule.activatedAt) continue;
       const cutoff = new Date(now.getTime() - threshold * 60000);
       const leads = await prisma.lead.findMany({
-        where: { empresaId, createdAt: { gte: rule.activatedAt, lte: cutoff }, status: { in: ["NOVO", "EM_ATENDIMENTO", "QUALIFICADO"] } },
+        where: { empresaId, cliente: { arquivadoEm: null }, createdAt: { gte: rule.activatedAt, lte: cutoff }, status: { in: ["NOVO", "EM_ATENDIMENTO", "QUALIFICADO"] } },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         take: limit,
       });
@@ -275,7 +276,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
       if (!threshold || !rule.activatedAt) continue;
       const cutoff = new Date(now.getTime() - threshold * 60000);
       const negocios = await prisma.negocio.findMany({
-        where: { empresaId, etapa: { notIn: ["FECHADO", "PERDIDO"] }, etapaEntrouEm: { gte: rule.activatedAt, lte: cutoff } },
+        where: { empresaId, cliente: { arquivadoEm: null }, etapa: { notIn: ["FECHADO", "PERDIDO"] }, etapaEntrouEm: { gte: rule.activatedAt, lte: cutoff } },
         orderBy: [{ etapaEntrouEm: "asc" }, { id: "asc" }],
         take: limit,
       });
@@ -747,6 +748,9 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         return await prisma.$transaction(async (tx) => {
           const entity = await loadExecutionEntity(tx, job);
           if (!entity) throw notFound("Entidade da automacao nao encontrada.", { permanent: true });
+          if (Number.isSafeInteger(Number(entity.clienteId)) && entity.clienteId > 0) {
+            await lockActiveClienteRow(tx, job.empresaId, entity.clienteId);
+          }
           if (action.tipo === "ASSIGN_OWNER") return assignOwner(tx, job, entity, action.usuarioId);
           if (action.tipo === "ASSIGN_ROUND_ROBIN") return assignRoundRobin(tx, job, entity, action.usuarioIds);
           if (action.tipo === "CREATE_FOLLOW_UP") return createFollowUp(tx, job, entity, action);
@@ -767,7 +771,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     if (entity.responsavelId === usuarioId) return entity;
     if (entity.responsavelId !== null) return entity;
     const model = job.execucao.entidadeTipo === "LEAD" ? "lead" : "negocio";
-    const updated = await tx[model].updateMany({ where: { id: entity.id, empresaId: job.empresaId, responsavelId: null }, data: { responsavelId: usuarioId } });
+    const updated = await tx[model].updateMany({ where: { id: entity.id, empresaId: job.empresaId, responsavelId: null, cliente: { arquivadoEm: null } }, data: { responsavelId: usuarioId } });
     if (updated.count !== 1) return entity;
     await tx.historicoAtribuicao.create({ data: historyData(job, entity, null, usuarioId, "ATRIBUIR") });
     return { ...entity, responsavelId: usuarioId };
@@ -1015,8 +1019,8 @@ function createAutomationService({ prisma, env = process.env, logger = console }
 }
 
 async function loadEntity(client, empresaId, entityType, entityId) {
-  if (entityType === "LEAD") return client.lead.findFirst({ where: { id: entityId, empresaId } });
-  if (entityType === "NEGOCIO") return client.negocio.findFirst({ where: { id: entityId, empresaId } });
+  if (entityType === "LEAD") return client.lead.findFirst({ where: { id: entityId, empresaId, cliente: { arquivadoEm: null } } });
+  if (entityType === "NEGOCIO") return client.negocio.findFirst({ where: { id: entityId, empresaId, cliente: { arquivadoEm: null } } });
   return null;
 }
 
@@ -1139,7 +1143,7 @@ async function validateFollowUpClient(tx, empresaId, clienteId) {
     throw domainError(404, "AUTOMATION_CLIENT_NOT_FOUND", "Cliente da automacao nao encontrado.", { permanent: true });
   }
   const client = await tx.cliente.findFirst({
-    where: { id: clienteId, empresaId },
+    where: { id: clienteId, empresaId, arquivadoEm: null },
     select: { id: true },
   });
   if (!client) {

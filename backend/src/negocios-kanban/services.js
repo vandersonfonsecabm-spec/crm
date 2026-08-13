@@ -7,6 +7,7 @@ const {
   rejectEmpresaId,
   rejectUnknown,
 } = require("../leads-communication/validation");
+const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
 
 const BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA", "FECHADO", "PERDIDO"];
 const ACTIVE_BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA"];
@@ -25,6 +26,7 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
     rejectUnknown(query, ["page", "limit", "etapa", "responsavelId", "q", "filtroOperacional"]);
     const pageData = pagination(query);
     const where = { empresaId: context.empresaId, AND: [] };
+    where.AND.push({ cliente: { arquivadoEm: null } });
     const etapa = enumValue(query.etapa, "etapa", BUSINESS_STAGES, { optional: true });
     if (etapa) where.etapa = etapa;
     const responsavelId = optionalInteger(query.responsavelId, "responsavelId", { min: 1 });
@@ -60,7 +62,7 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
         take: pageData.limit,
       }),
       prisma.negocio.count({ where }),
-      prisma.negocio.groupBy({ by: ["etapa"], where: { empresaId: context.empresaId }, _count: { _all: true } }),
+      prisma.negocio.groupBy({ by: ["etapa"], where: { empresaId: context.empresaId, cliente: { arquivadoEm: null } }, _count: { _all: true } }),
     ]);
 
     return {
@@ -77,7 +79,7 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
 
   async function getBusiness(context, id) {
     const business = await prisma.negocio.findFirst({
-      where: { id, empresaId: context.empresaId },
+      where: { id, empresaId: context.empresaId, cliente: { arquivadoEm: null } },
       include: detailIncludes(context.empresaId),
     });
     if (!business) throw notFound("Negocio nao encontrado.");
@@ -89,7 +91,7 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
     rejectUnknown(query, ["page", "limit"]);
     const pageData = pagination(query);
     const business = await prisma.negocio.findFirst({
-      where: { id, empresaId: context.empresaId },
+      where: { id, empresaId: context.empresaId, cliente: { arquivadoEm: null } },
       select: { id: true },
     });
     if (!business) throw notFound("Negocio nao encontrado.");
@@ -137,7 +139,7 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
     const etapa = enumValue(body.etapa, "etapa", BUSINESS_STAGES);
     const etapaAnterior = enumValue(body.etapaAnterior, "etapaAnterior", BUSINESS_STAGES);
     await prisma.$transaction(async (tx) => {
-      const current = await tx.negocio.findFirst({ where: { id, empresaId: context.empresaId } });
+      const current = await tx.negocio.findFirst({ where: { id, empresaId: context.empresaId, cliente: { arquivadoEm: null } } });
       if (!current) throw notFound("Negocio nao encontrado.");
       if (!isManager(context) && current.responsavelId !== context.usuarioId) {
         throw domainError(403, "NEGOCIO_FORBIDDEN", "Acesso negado.");
@@ -147,12 +149,14 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
       }
       if (current.etapa === etapa) return;
 
+      await lockActiveClienteRow(tx, context.empresaId, current.clienteId);
+
       const now = clock();
       const persistedEntry = current.etapaEntrouEm;
       const effectiveEntry = persistedEntry || current.updatedAt || current.createdAt;
       const duration = elapsedSeconds(effectiveEntry, now);
       const result = await tx.negocio.updateMany({
-        where: { id, empresaId: context.empresaId, etapa: etapaAnterior },
+        where: { id, empresaId: context.empresaId, etapa: etapaAnterior, cliente: { arquivadoEm: null } },
         data: {
           etapa,
           etapaEntrouEm: now,

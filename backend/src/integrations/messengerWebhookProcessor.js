@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { createAutomationService } = require("../automations/service");
+const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
 const { readGlobalMessengerConfiguration } = require("../platform/messengerInboundProvisioning");
 const {
   EVENT_TYPES,
@@ -371,6 +372,8 @@ async function resolveClient(tx, event, contact) {
       where: { id: contact.clienteId, empresaId: event.empresaId },
     });
     if (!linked) throw processingError("MESSENGER_CLIENT_INTEGRITY_CONFLICT");
+    if (linked.arquivadoEm !== null) throw processingError("MESSENGER_CLIENT_ARCHIVED_READ_ONLY");
+    await lockActiveClienteRow(tx, event.empresaId, linked.id);
     return linked;
   }
   return tx.cliente.create({

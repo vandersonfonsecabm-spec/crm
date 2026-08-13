@@ -4,6 +4,7 @@ const {
   reconcileClientProjections,
   withProjectionRetry,
 } = require("../follow-up-projection");
+const { lockActiveClienteRows } = require("../shared/clientLifecycleLock");
 
 const ACTIVE_STATUSES = ACTIVE_FOLLOW_UP_STATUSES;
 const STATUSES = new Set([...ACTIVE_STATUSES, "CONCLUIDO", "CANCELADO"]);
@@ -29,7 +30,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
     const now = clock();
     const { start, end } = dayRange(now);
     const access = visibilityWhere(context);
-    const base = { empresaId: context.empresaId, ...access };
+    const base = { empresaId: context.empresaId, ...access, AND: [activeCustomerScope()] };
     const from = optionalDate(query.dataInicial, "dataInicial");
     const to = optionalDate(query.dataFinal, "dataFinal");
     const period = from || to ? { dataHora: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {};
@@ -85,11 +86,11 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
     const responsible = context.usuarioId;
     const [usuarios, clientes, leads, negocios, conversas, propostas] = await prisma.$transaction([
       prisma.usuario.findMany({ where: { empresaId: context.empresaId, ativo: true, ...(manager ? {} : { id: responsible }) }, select: { id: true, nome: true, papel: true }, orderBy: [{ nome: "asc" }, { id: "asc" }] }),
-      prisma.cliente.findMany({ where: { empresaId: context.empresaId, ...(manager ? {} : { OR: [{ leads: { some: { responsavelId: responsible } } }, { negocios: { some: { responsavelId: responsible } } }] }) }, select: { id: true, nome: true, empresa: true }, orderBy: [{ nome: "asc" }, { id: "asc" }], take: 200 }),
-      prisma.lead.findMany({ where: { empresaId: context.empresaId, ...(manager ? {} : { responsavelId: responsible }) }, select: { id: true, interesse: true, status: true, cliente: { select: { nome: true } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
-      prisma.negocio.findMany({ where: { empresaId: context.empresaId, ...(manager ? {} : { responsavelId: responsible }) }, select: { id: true, titulo: true, etapa: true, cliente: { select: { nome: true } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
-      prisma.conversaCanal.findMany({ where: { empresaId: context.empresaId, ...(manager ? {} : { responsavelId: responsible }) }, select: { id: true, status: true, contatoCanal: { select: { nome: true, cliente: { select: { nome: true } } } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
-      prisma.propostaComercial.findMany({ where: { empresaId: context.empresaId, ...(manager ? {} : { negocio: { responsavelId: responsible } }) }, select: { id: true, codigo: true, titulo: true, status: true }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
+      prisma.cliente.findMany({ where: { empresaId: context.empresaId, arquivadoEm: null, ...(manager ? {} : { OR: [{ leads: { some: { responsavelId: responsible } } }, { negocios: { some: { responsavelId: responsible } } }] }) }, select: { id: true, nome: true, empresa: true }, orderBy: [{ nome: "asc" }, { id: "asc" }], take: 200 }),
+      prisma.lead.findMany({ where: { empresaId: context.empresaId, cliente: { arquivadoEm: null }, ...(manager ? {} : { responsavelId: responsible }) }, select: { id: true, interesse: true, status: true, cliente: { select: { nome: true } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
+      prisma.negocio.findMany({ where: { empresaId: context.empresaId, cliente: { arquivadoEm: null }, ...(manager ? {} : { responsavelId: responsible }) }, select: { id: true, titulo: true, etapa: true, cliente: { select: { nome: true } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
+      prisma.conversaCanal.findMany({ where: { empresaId: context.empresaId, AND: [{ contatoCanal: { OR: [{ clienteId: null }, { cliente: { arquivadoEm: null } }] } }, { OR: [{ leadId: null }, { lead: { cliente: { arquivadoEm: null } } }] }], ...(manager ? {} : { responsavelId: responsible }) }, select: { id: true, status: true, contatoCanal: { select: { nome: true, cliente: { select: { nome: true } } } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
+      prisma.propostaComercial.findMany({ where: { empresaId: context.empresaId, cliente: { arquivadoEm: null }, ...(manager ? {} : { negocio: { responsavelId: responsible } }) }, select: { id: true, codigo: true, titulo: true, status: true }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
     ]);
     return { usuarios, clientes, leads, negocios, conversas, propostas, podeVerEquipe: manager };
   }
@@ -115,6 +116,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
     };
     const observacao = optionalText(body.observacao, "observacao", 500);
     const created = await withProjectionRetry(prisma, async (tx) => {
+      await lockActiveClienteRows(tx, context.empresaId, [data.clienteId]);
       const item = await tx.acompanhamento.create({ data });
       await writeHistory(tx, context, item.id, "CRIAR", { statusNovo: "PENDENTE", responsavelNovoId: responsavel.id, dataHoraNova: data.dataHora, observacao });
       await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds: [item.clienteId] });
@@ -154,7 +156,8 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
     };
     const observacao = optionalText(body.observacao, "observacao", 500);
     await withProjectionRetry(prisma, async (tx) => {
-      const result = await tx.acompanhamento.updateMany({ where: { id: current.id, empresaId: context.empresaId, revisao: revision }, data });
+    await lockActiveClienteRows(tx, context.empresaId, [current.clienteId, links.clienteId]);
+    const result = await tx.acompanhamento.updateMany({ where: { id: current.id, empresaId: context.empresaId, revisao: revision, ...activeCustomerScope() }, data });
       if (result.count !== 1) conflict();
       const events = [];
       if (current.responsavelId !== responsavel.id) events.push(["ALTERAR_RESPONSAVEL", { responsavelAnteriorId: current.responsavelId, responsavelNovoId: responsavel.id, observacao }]);
@@ -205,7 +208,8 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
     };
     const observacao = optionalText(body.observacao, "observacao", 500);
     await withProjectionRetry(prisma, async (tx) => {
-      const result = await tx.acompanhamento.updateMany({ where: { id: current.id, empresaId: context.empresaId, revisao: revision, status: current.status }, data });
+      await lockActiveClienteRows(tx, context.empresaId, [current.clienteId]);
+      const result = await tx.acompanhamento.updateMany({ where: { id: current.id, empresaId: context.empresaId, revisao: revision, status: current.status, ...activeCustomerScope() }, data });
       if (result.count !== 1) conflict();
       await writeHistory(tx, context, current.id, action, { statusAnterior: current.status, statusNovo: nextStatus, observacao });
       await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds: [current.clienteId] });
@@ -215,6 +219,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
 
   async function listWhere(context, query) {
     const where = { empresaId: context.empresaId, AND: [] };
+    where.AND.push(activeCustomerScope());
     const visibility = visibilityWhere(context);
     if (visibility.OR) where.AND.push({ OR: visibility.OR });
     const view = enumValue(query.visao ?? "TODOS", "visao", VIEWS);
@@ -260,7 +265,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
 
   async function loadItem(context, id) {
     const parsedId = integer(id, "id", { max: Number.MAX_SAFE_INTEGER });
-    const row = await prisma.acompanhamento.findFirst({ where: { id: parsedId, empresaId: context.empresaId }, include: itemInclude() });
+    const row = await prisma.acompanhamento.findFirst({ where: { id: parsedId, empresaId: context.empresaId, AND: [activeCustomerScope()] }, include: itemInclude() });
     if (!row) throw notFound("Acompanhamento nao encontrado.");
     if (!isManager(context) && !sellerCanAccess(context, row)) throw notFound("Acompanhamento nao encontrado.");
     return row;
@@ -288,11 +293,11 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
     const ids = {};
     for (const field of ["clienteId", "leadId", "negocioId", "conversaCanalId", "propostaComercialId"]) ids[field] = nullableId(input[field], field);
     const [cliente, lead, negocio, conversa, proposta] = await Promise.all([
-      ids.clienteId ? prisma.cliente.findFirst({ where: { id: ids.clienteId, empresaId: context.empresaId }, select: { id: true } }) : null,
-      ids.leadId ? prisma.lead.findFirst({ where: { id: ids.leadId, empresaId: context.empresaId }, select: { id: true, clienteId: true } }) : null,
-      ids.negocioId ? prisma.negocio.findFirst({ where: { id: ids.negocioId, empresaId: context.empresaId }, select: { id: true, clienteId: true, leadId: true } }) : null,
-      ids.conversaCanalId ? prisma.conversaCanal.findFirst({ where: { id: ids.conversaCanalId, empresaId: context.empresaId }, select: { id: true, leadId: true, contatoCanal: { select: { clienteId: true } } } }) : null,
-      ids.propostaComercialId ? prisma.propostaComercial.findFirst({ where: { id: ids.propostaComercialId, empresaId: context.empresaId }, select: { id: true, clienteId: true, leadId: true, negocioId: true } }) : null,
+      ids.clienteId ? prisma.cliente.findFirst({ where: { id: ids.clienteId, empresaId: context.empresaId, arquivadoEm: null }, select: { id: true } }) : null,
+      ids.leadId ? prisma.lead.findFirst({ where: { id: ids.leadId, empresaId: context.empresaId, cliente: { arquivadoEm: null } }, select: { id: true, clienteId: true } }) : null,
+      ids.negocioId ? prisma.negocio.findFirst({ where: { id: ids.negocioId, empresaId: context.empresaId, cliente: { arquivadoEm: null } }, select: { id: true, clienteId: true, leadId: true } }) : null,
+      ids.conversaCanalId ? prisma.conversaCanal.findFirst({ where: { id: ids.conversaCanalId, empresaId: context.empresaId, AND: [{ contatoCanal: { OR: [{ clienteId: null }, { cliente: { arquivadoEm: null } }] } }, { OR: [{ leadId: null }, { lead: { cliente: { arquivadoEm: null } } }] }] }, select: { id: true, leadId: true, contatoCanal: { select: { clienteId: true } } } }) : null,
+      ids.propostaComercialId ? prisma.propostaComercial.findFirst({ where: { id: ids.propostaComercialId, empresaId: context.empresaId, cliente: { arquivadoEm: null } }, select: { id: true, clienteId: true, leadId: true, negocioId: true } }) : null,
     ]);
     if (ids.clienteId && !cliente) throw notFound("Cliente nao encontrado.");
     if (ids.leadId && !lead) throw notFound("Lead nao encontrado.");
@@ -347,6 +352,19 @@ function present(context, row, now) {
 function visibilityWhere(context) {
   if (isManager(context)) return {};
   return { OR: [{ responsavelId: context.usuarioId }, { autorId: context.usuarioId }, { lead: { responsavelId: context.usuarioId } }, { negocio: { responsavelId: context.usuarioId } }, { conversaCanal: { responsavelId: context.usuarioId } }] };
+}
+
+function activeCustomerScope() {
+  return {
+    OR: [
+      { cliente: { arquivadoEm: null } },
+      { clienteId: null, leadId: null, negocioId: null, conversaCanalId: null, propostaComercialId: null },
+      { clienteId: null, lead: { cliente: { arquivadoEm: null } } },
+      { clienteId: null, negocio: { cliente: { arquivadoEm: null } } },
+      { clienteId: null, conversaCanal: { AND: [{ contatoCanal: { OR: [{ clienteId: null }, { cliente: { arquivadoEm: null } }] } }, { OR: [{ leadId: null }, { lead: { cliente: { arquivadoEm: null } } }] }] } },
+      { clienteId: null, propostaComercial: { cliente: { arquivadoEm: null } } },
+    ],
+  };
 }
 
 function sellerCanAccess(context, row) {

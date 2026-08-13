@@ -22,6 +22,7 @@ function dashboardScoreQuery(empresaId) {
         AS score
       FROM "Cliente"
       WHERE "empresaId" = ${empresaId}
+        AND "arquivadoEm" IS NULL
     ) AS scored
   `;
 }

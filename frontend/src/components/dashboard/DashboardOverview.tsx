@@ -13,7 +13,9 @@ type DashboardOverviewProps = {
   isAuthorized: boolean;
   money: (value: number) => string;
   onOpenCommercial: () => void;
+  onOpenInbox?: () => void;
   onRetry: () => void;
+  attentionCount?: number | null;
 };
 
 export default function DashboardOverview({
@@ -22,7 +24,9 @@ export default function DashboardOverview({
   isAuthorized,
   money,
   onOpenCommercial,
+  onOpenInbox = onOpenCommercial,
   onRetry,
+  attentionCount = null,
 }: DashboardOverviewProps) {
   const model = buildDashboardOverviewModel({
     summary,
@@ -38,7 +42,7 @@ export default function DashboardOverview({
       {model.state === "loading" && <OverviewLoading />}
       {model.state === "error" && <OverviewState onRetry={onRetry} state="error" />}
       {model.state === "fail-closed" && <OverviewState state="fail-closed" />}
-      {isDataState(model.state) && <OverviewData model={model} money={money} />}
+      {isDataState(model.state) && <OverviewData model={model} money={money} attentionCount={attentionCount} onOpenInbox={onOpenInbox} />}
     </section>
   );
 }
@@ -100,9 +104,13 @@ function OverviewState({
 function OverviewData({
   model,
   money,
+  attentionCount,
+  onOpenInbox,
 }: {
   model: ReturnType<typeof buildDashboardOverviewModel>;
   money: (value: number) => string;
+  attentionCount: number | null;
+  onOpenInbox: () => void;
 }) {
   return (
     <>
@@ -114,7 +122,7 @@ function OverviewData({
 
       <div className="crm-overview-main-grid">
         <OverviewDistribution model={model} money={money} />
-        <OverviewAttention model={model} />
+        <OverviewAttention model={model} attentionCount={attentionCount} onOpenInbox={onOpenInbox} />
       </div>
     </>
   );
@@ -162,11 +170,12 @@ function OverviewDistribution({
   );
 }
 
-function OverviewAttention({ model }: { model: ReturnType<typeof buildDashboardOverviewModel> }) {
+function OverviewAttention({ model, attentionCount, onOpenInbox }: { model: ReturnType<typeof buildDashboardOverviewModel>; attentionCount: number | null; onOpenInbox: () => void }) {
   return (
     <Surface className="crm-overview-attention" aria-labelledby="crm-overview-attention-title">
       <header className="crm-overview-section-heading">
         <h2 id="crm-overview-attention-title">Atenção</h2>
+        {attentionCount !== null && attentionCount > 0 ? <Button onClick={onOpenInbox} size="sm" variant="ghost">Abrir Caixa de Entrada ({attentionCount})</Button> : null}
       </header>
 
       {model.attentionSignals.length > 0 ? (
@@ -180,7 +189,11 @@ function OverviewAttention({ model }: { model: ReturnType<typeof buildDashboardO
         </ul>
       ) : (
         <p className="crm-overview-inline-state" role="status">
-          {model.attentionKnown ? "Nenhum sinal de atenção no resumo atual." : "Dados de atenção indisponíveis."}
+          {attentionCount === null || !model.attentionKnown
+            ? "Dados de atenção indisponíveis."
+            : attentionCount > 0
+              ? `${attentionCount} conversa${attentionCount === 1 ? "" : "s"} aguarda${attentionCount === 1 ? "" : "m"} atenção na Caixa de Entrada.`
+              : "Nenhum sinal de atenção no resumo atual."}
         </p>
       )}
     </Surface>

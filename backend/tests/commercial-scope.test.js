@@ -129,6 +129,11 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   assert.equal(updatedClientA.body.telefone, clientA.body.telefone);
   assert.equal(updatedClientA.body.email, clientA.body.email);
 
+  const missingArchiveRevision = await request("POST", `/clientes/${clientA.body.id}/arquivar`, {}, tokenA);
+  assert.equal(missingArchiveRevision.status, 422);
+  const sellerArchive = await request("POST", `/clientes/${clientA.body.id}/arquivar`, { revisao: updatedClientA.body.revisao }, sellerLogin.body.access_token);
+  assert.equal(sellerArchive.status, 403);
+
   const invalidPatch = await request("PATCH", `/clientes/${clientA.body.id}`, { email: "invalido" }, tokenA);
   assert.equal(invalidPatch.status, 400);
   assert.equal(invalidPatch.body.codigo, "CLIENT_VALIDATION_ERROR");
@@ -393,41 +398,79 @@ test("clientes usam paginação global, detalhe sob demanda e exclusão protegid
   console.log(`[audit-dashboard] calls_before=2 calls_after=2 legacy_bytes=${legacyBytes} optimized_bytes=${optimizedBytes} legacy_records=150 page_records=20`);
 
   const freeClient = await createClient(token, "Cliente Excluivel", "Novo", 10);
-  assert.equal((await request("DELETE", `/clientes/${freeClient.body.id}`, undefined, token)).status, 200);
+  const bypassCreate = await createClient(token, "Cliente status arquivado", "Arquivado", 11);
+  assert.ok([400, 422].includes(bypassCreate.status));
+  const bypassPatch = await request("PATCH", `/clientes/${freeClient.body.id}`, { status: "Arquivado" }, token);
+  assert.ok([400, 422].includes(bypassPatch.status));
+  const archivedFreeClient = await request("POST", `/clientes/${freeClient.body.id}/arquivar`, { revisao: freeClient.body.revisao }, token);
+  assert.equal(archivedFreeClient.status, 200);
+  assert.equal(archivedFreeClient.body.status, "Arquivado");
+  assert.ok(archivedFreeClient.body.arquivadoEm);
+  const archivedList = await request("GET", "/clientes?arquivado=true&limit=20", undefined, token);
+  assert.equal(archivedList.status, 200);
+  assert.ok(archivedList.body.data.some((client) => client.id === freeClient.body.id));
+  const restoredFreeClient = await request("POST", `/clientes/${freeClient.body.id}/restaurar`, { revisao: archivedFreeClient.body.revisao }, token);
+  assert.equal(restoredFreeClient.status, 200);
+  assert.equal(restoredFreeClient.body.status, "Novo");
+  assert.equal(restoredFreeClient.body.arquivadoEm, null);
+  const archivedAgain = await request("POST", `/clientes/${freeClient.body.id}/arquivar`, { revisao: restoredFreeClient.body.revisao }, token);
+  assert.equal(archivedAgain.status, 200);
+  assert.equal((await request("DELETE", `/clientes/${freeClient.body.id}`, { revisao: archivedAgain.body.revisao }, token)).status, 200);
   assert.equal(await prisma.cliente.count({ where: { id: freeClient.body.id } }), 0);
+
+  const noteOnlyClient = await createClient(token, "Cliente com historico de nota", "Novo", 12);
+  await prisma.nota.create({ data: { empresaId, clienteId: noteOnlyClient.body.id, texto: "Historico que deve permanecer preservado.", tipo: "nota" } });
+  const archivedNoteOnly = await request("POST", `/clientes/${noteOnlyClient.body.id}/arquivar`, { revisao: noteOnlyClient.body.revisao }, token);
+  assert.equal(archivedNoteOnly.status, 200);
+  const noteOnlyDelete = await request("DELETE", `/clientes/${noteOnlyClient.body.id}`, { revisao: archivedNoteOnly.body.revisao }, token);
+  assert.equal(noteOnlyDelete.status, 409);
+  assert.equal(noteOnlyDelete.body.codigo, "CLIENT_HAS_RELATIONS");
+  assert.equal(await prisma.cliente.count({ where: { id: noteOnlyClient.body.id, arquivadoEm: { not: null } } }), 1);
+  assert.equal(await prisma.nota.count({ where: { empresaId, clienteId: noteOnlyClient.body.id } }), 1);
 
   const leadClient = await createClient(token, "Cliente com Lead", "Novo", 20);
   await prisma.lead.create({ data: { empresaId, clienteId: leadClient.body.id, origem: "Teste" } });
-  const leadConflict = await request("DELETE", `/clientes/${leadClient.body.id}`, undefined, token);
+  const archivedLead = await request("POST", `/clientes/${leadClient.body.id}/arquivar`, { revisao: leadClient.body.revisao }, token);
+  assert.equal(archivedLead.status, 200);
+  const leadConflict = await request("DELETE", `/clientes/${leadClient.body.id}`, { revisao: archivedLead.body.revisao }, token);
   assert.equal(leadConflict.status, 409);
   assert.equal(leadConflict.body.codigo, "CLIENT_HAS_RELATIONS");
 
   const businessClient = await createClient(token, "Cliente com Negocio", "Novo", 30);
   await prisma.negocio.create({ data: { empresaId, clienteId: businessClient.body.id, titulo: "Negocio protegido" } });
-  const businessConflict = await request("DELETE", `/clientes/${businessClient.body.id}`, undefined, token);
+  const archivedBusiness = await request("POST", `/clientes/${businessClient.body.id}/arquivar`, { revisao: businessClient.body.revisao }, token);
+  assert.equal(archivedBusiness.status, 200);
+  const businessConflict = await request("DELETE", `/clientes/${businessClient.body.id}`, { revisao: archivedBusiness.body.revisao }, token);
   assert.equal(businessConflict.status, 409);
 
   const bothClient = await createClient(token, "Cliente com ambos", "Novo", 40);
   const linkedLead = await prisma.lead.create({ data: { empresaId, clienteId: bothClient.body.id, origem: "Teste" } });
   await prisma.negocio.create({ data: { empresaId, clienteId: bothClient.body.id, leadId: linkedLead.id, titulo: "Negocio e Lead" } });
-  assert.equal((await request("DELETE", `/clientes/${bothClient.body.id}`, undefined, token)).status, 409);
+  const archivedBoth = await request("POST", `/clientes/${bothClient.body.id}/arquivar`, { revisao: bothClient.body.revisao }, token);
+  assert.equal(archivedBoth.status, 200);
+  assert.equal((await request("DELETE", `/clientes/${bothClient.body.id}`, { revisao: archivedBoth.body.revisao }, token)).status, 409);
 
   const otherCompany = await registerCompany("Empresa Exclusao Audit", "admin-exclusao@comercial.test");
-  assert.equal((await request("DELETE", `/clientes/${leadClient.body.id}`, undefined, otherCompany.token)).status, 404);
+  assert.equal((await request("DELETE", `/clientes/${leadClient.body.id}`, { revisao: archivedLead.body.revisao }, otherCompany.token)).status, 404);
   assert.equal((await request("DELETE", "/clientes/2147483647", undefined, token)).status, 404);
 
-  const originalDelete = prisma.cliente.delete;
-  prisma.cliente.delete = async () => {
+  const originalDeleteMany = prisma.cliente.deleteMany;
+  const originalTransaction = prisma.$transaction;
+  prisma.cliente.deleteMany = async () => {
     throw new Error("SQLITE_INTERNAL at C:\\secret\\database.db");
   };
+  prisma.$transaction = async (callback) => callback(prisma);
   try {
     const unexpectedClient = await createClient(token, "Cliente erro inesperado", "Novo", 50);
-    const unexpected = await request("DELETE", `/clientes/${unexpectedClient.body.id}`, undefined, token);
+    const archivedUnexpected = await request("POST", `/clientes/${unexpectedClient.body.id}/arquivar`, { revisao: unexpectedClient.body.revisao }, token);
+    assert.equal(archivedUnexpected.status, 200);
+    const unexpected = await request("DELETE", `/clientes/${unexpectedClient.body.id}`, { revisao: archivedUnexpected.body.revisao }, token);
     assert.equal(unexpected.status, 500);
     assert.equal(unexpected.body.codigo, "CLIENT_DELETE_ERROR");
     assert.doesNotMatch(JSON.stringify(unexpected.body), /SQLITE|secret|database\.db/);
   } finally {
-    prisma.cliente.delete = originalDelete;
+    prisma.cliente.deleteMany = originalDeleteMany;
+    prisma.$transaction = originalTransaction;
   }
 });
 

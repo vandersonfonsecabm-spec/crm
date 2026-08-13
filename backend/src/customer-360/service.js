@@ -1,4 +1,5 @@
 const { domainError, notFound } = require("../leads-communication/policy");
+const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
 
 const TIMELINE_TYPES = new Set([
   "TODOS",
@@ -209,17 +210,24 @@ function createCustomer360Service({ prisma }) {
     const unknown = Object.keys(input).filter((field) => !REGISTRATION_FIELDS.has(field));
     if (unknown.length) throw domainError(422, "CUSTOMER_REGISTRATION_FIELDS_INVALID", "Campos cadastrais invalidos.", { campos: unknown });
     const existing = await assertClient(context, clienteId);
+    if (existing.arquivadoEm) {
+      throw domainError(409, "CLIENT_ARCHIVED_READ_ONLY", "Restaure o cliente antes de alterar o cadastro.");
+    }
     const revisao = requiredRevision(input.revisao);
     const data = registrationPayload(input);
     if (!Object.keys(data).length) throw validationError("Nenhum dado cadastral foi informado.");
 
-    const result = await prisma.cliente.updateMany({
-      where: { id: clienteId, empresaId: context.empresaId, revisao },
-      data: { ...data, revisao: { increment: 1 } },
+    const result = await prisma.$transaction(async (tx) => {
+      await lockActiveClienteRow(tx, context.empresaId, clienteId);
+      return tx.cliente.updateMany({
+        where: { id: clienteId, empresaId: context.empresaId, revisao, arquivadoEm: null },
+        data: { ...data, revisao: { increment: 1 } },
+      });
     });
     if (result.count !== 1) {
-      const current = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId: context.empresaId }, select: { revisao: true } });
+      const current = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId: context.empresaId }, select: { revisao: true, arquivadoEm: true } });
       if (!current) throw notFound("Cliente nao encontrado.");
+      if (current.arquivadoEm) throw domainError(409, "CLIENT_ARCHIVED_READ_ONLY", "Restaure o cliente antes de alterar o cadastro.");
       throw domainError(409, "CUSTOMER_REGISTRATION_CONFLICT", "O cadastro foi alterado por outra pessoa. Atualize os dados e tente novamente.", { revisaoAtual: current.revisao });
     }
     return prisma.cliente.findFirst({ where: { id: existing.id, empresaId: context.empresaId }, include: { notas: { orderBy: { createdAt: "desc" } } } });

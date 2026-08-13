@@ -47,16 +47,16 @@ export default function DashboardCommercialDecisionCenter({
 
   return (
     <div className="saas-panel decision-drawer rounded-2xl">
-      <div className="border-b border-slate-700/40 bg-slate-950/18 p-3">
+      <div className="border-b border-slate-200 bg-slate-50 p-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-300/18 bg-teal-300/[0.07] text-teal-100">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-200 bg-teal-50 text-teal-700">
               <Sparkles size={15} />
             </div>
 
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-slate-100">Central comercial</p>
-              <p className="text-[10px] text-slate-500">Decisão, risco e ação imediata</p>
+              <p className="truncate text-sm font-semibold text-slate-900">Central comercial</p>
+              <p className="text-[10px] text-slate-600">Decisão, risco e ação imediata</p>
             </div>
           </div>
 
@@ -69,7 +69,7 @@ export default function DashboardCommercialDecisionCenter({
           <div className="saas-card rounded-2xl p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-100">{selectedClient.name}</p>
+                <p className="truncate text-sm font-semibold text-slate-900">{selectedClient.name}</p>
                 <p className="mt-0.5 truncate text-[10px] text-slate-500">{selectedClient.company}</p>
               </div>
 
@@ -80,28 +80,28 @@ export default function DashboardCommercialDecisionCenter({
 
             <div className="mt-3 grid grid-cols-[minmax(0,1fr)_78px] gap-2">
               <div className="metric-card metric-pipeline rounded-xl p-2.5">
-                <p className="text-[9px] uppercase tracking-[0.14em] text-teal-100/55">Ticket em foco</p>
-                <p className="mt-1 truncate text-sm font-semibold text-teal-100">{money(selectedClient.value)}</p>
+                <p className="text-[9px] uppercase tracking-[0.14em] text-teal-700">Ticket em foco</p>
+                <p className="mt-1 truncate text-sm font-semibold text-teal-800">{money(selectedClient.value)}</p>
               </div>
 
               <div className="metric-card rounded-xl p-2.5 text-center">
                 <p className="text-[9px] text-slate-500">Score</p>
-                <p className="mt-0.5 text-xl font-semibold leading-none text-slate-100">{leadScore}</p>
+                <p className="mt-0.5 text-xl font-semibold leading-none text-slate-900">{leadScore}</p>
               </div>
             </div>
 
             <div className="saas-tile mt-3 rounded-xl p-3">
               <div className="mb-2 flex items-center justify-between gap-2 text-[10px]">
-                <span className="font-semibold text-slate-100">Ação recomendada</span>
+                <span className="font-semibold text-slate-900">Ação recomendada</span>
                 <span className="saas-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]">
                   <ShieldCheck size={10} />
                   agora
                 </span>
               </div>
-              <p className="text-[10px] leading-relaxed text-slate-400">{nextActionLabel(selectedClient)}</p>
+              <p className="text-[10px] leading-relaxed text-slate-700">{nextActionLabel(selectedClient)}</p>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-slate-400">
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-slate-700">
               <DecisionMini label="Prioridade" value={priorityLabel(selectedClient)} />
               <DecisionMini label="Saúde" value={slaLabel(selectedClient)} />
             </div>
@@ -111,9 +111,9 @@ export default function DashboardCommercialDecisionCenter({
                 <span>Força comercial</span>
                 <span>{leadScore}%</span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
                 <div
-                  className={`h-full rounded-full ${leadScore >= 80 ? "bg-emerald-300" : leadScore >= 60 ? "bg-amber-300" : "bg-slate-400"}`}
+                  className={`h-full rounded-full ${leadScore >= 80 ? "bg-emerald-600" : leadScore >= 60 ? "bg-amber-500" : "bg-slate-500"}`}
                   style={{ width: `${leadScore}%` }}
                 />
               </div>
@@ -122,7 +122,7 @@ export default function DashboardCommercialDecisionCenter({
             <div className="mt-3 grid grid-cols-3 gap-2">
               <button
                 onClick={() => onRequestWhatsapp(selectedClient)}
-                className="rounded-xl bg-slate-100 px-2 py-2 text-left text-slate-950 transition hover:bg-white"
+                className="min-h-11 rounded-xl bg-slate-100 px-2 py-2 text-left text-slate-900 transition hover:bg-white"
                 type="button"
               >
                 <MessageCircle size={14} className="mb-1" />
@@ -130,13 +130,13 @@ export default function DashboardCommercialDecisionCenter({
               </button>
 
               <ActionButton
-                icon={<Phone size={13} className="mb-1 text-emerald-300" />}
+                icon={<Phone size={13} className="mb-1 text-emerald-700" />}
                 label="Telefone"
                 onClick={() => onCopyText(selectedClient.phone, "Telefone copiado.")}
               />
 
               <ActionButton
-                icon={<Edit3 size={13} className="mb-1 text-sky-300" />}
+                icon={<Edit3 size={13} className="mb-1 text-sky-700" />}
                 label="Editar"
                 onClick={() => onEditClient(selectedClient)}
               />
@@ -148,10 +148,10 @@ export default function DashboardCommercialDecisionCenter({
 
         {mode !== "kanban" && (
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <RadarMetric label="Risco alto" value={`${highRiskClients.length} oportunidades`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
-            <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
-            <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
-            <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-slate-300" />} />
+            <RadarMetric label="Risco alto" value={`${highRiskClients.length} oportunidades`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-700" />} />
+            <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-700" />} />
+            <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-700" />} />
+            <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-violet-700" />} />
           </div>
         )}
 

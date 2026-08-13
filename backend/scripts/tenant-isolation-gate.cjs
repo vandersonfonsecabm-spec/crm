@@ -9,7 +9,7 @@ const { sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation
 
 const EXPECTED_RELATION_COUNT = 89;
 const TENANT_RELATION_MANIFEST_VERSION = 1;
-const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "4043f4369693a41b2636c1aa4e56c22da1997fb83689c6008aa26a879763c82b";
+const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "35d8887a16dd96aa841c39cd9475f1564a428383af9490f46b9b00e9ca5454ec";
 const DEFAULT_MIGRATION_NAME = "20260801123000_enforce_tenant_safe_relations";
 const DEFAULT_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma", "migrations");
 const DEFAULT_POSTGRES_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma-postgres", "migrations");
@@ -47,6 +47,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260801150000_add_user_security_foundation": "b34acdfebadf0ae3badc55af5ca86a64a1627c3aece46edb414463a3c48dbca7",
     "20260811120000_add_meta_credential_store": "41e080170602b2ea9adbd2659829d12ba7637bc989263dfaf1bff21910e924af",
     "20260811130000_add_meta_oauth_state_binding": "08f76dce5d9b4c1b0d44990d116dfb60dd373bb8b988438e1037a9fc9571c34c",
+    "20260813150000_add_customer_archive": "5846035e8e1805da9398d6da844d30ae73fa1893b017b7aea8a118bcdf6ec38e",
   }),
   postgresql: Object.freeze({
     "20260728090000_postgres_baseline": "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
@@ -57,11 +58,11 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260801150000_add_user_security_foundation": "176b4502032affd3d779bd968b13094aadc71128681ed937bfffcd0e03776174",
     "20260811120000_add_meta_credential_store": "c5efb656d5483d53ac48eabb33753fad93107362ebc74b91ca0ca036985ab1ff",
     "20260811130000_add_meta_oauth_state_binding": "403951c8fe5fba9e8bc57d739fafab2ad6216c6052ee48380bd270a3586935f4",
+    "20260813150000_add_customer_archive": "f473f5f5b0e846b88570860d045027cfd1174c4d5e1d69d6d9008ea4cbd660a7",
   }),
 });
 
 const CASCADE_RELATIONS = new Set([
-  "Nota.clienteId->Cliente",
   "HistoricoAcompanhamento.acompanhamentoId->Acompanhamento",
   "IntegracaoOAuthState.usuarioId->Usuario",
   "IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao",
@@ -189,12 +190,18 @@ const MIGRATION_REGISTRY = Object.freeze({
   }),
   "20260811130000_add_meta_oauth_state_binding": Object.freeze({
     relationCount: EXPECTED_RELATION_COUNT,
-    relationManifestSha256: "4043f4369693a41b2636c1aa4e56c22da1997fb83689c6008aa26a879763c82b",
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
     sqliteSha256: "08f76dce5d9b4c1b0d44990d116dfb60dd373bb8b988438e1037a9fc9571c34c",
     postgresSha256: "403951c8fe5fba9e8bc57d739fafab2ad6216c6052ee48380bd270a3586935f4",
     preMigrationUnavailableRelations: Object.freeze([
       "IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao",
     ]),
+  }),
+  "20260813150000_add_customer_archive": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: "5846035e8e1805da9398d6da844d30ae73fa1893b017b7aea8a118bcdf6ec38e",
+    postgresSha256: "f473f5f5b0e846b88570860d045027cfd1174c4d5e1d69d6d9008ea4cbd660a7",
   }),
 });
 

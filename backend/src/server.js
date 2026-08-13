@@ -36,6 +36,7 @@ const { mountInstagramWebhookRoutes } = require("./integrations/instagramWebhook
 const { createInstagramWebhookOrchestrator } = require("./integrations/instagramWebhookOrchestrator");
 const { mountMessengerWebhookRoutes } = require("./integrations/messengerWebhook");
 const { createMessengerWebhookOrchestrator } = require("./integrations/messengerWebhookOrchestrator");
+const { CANONICAL_CLIENT_STATUSES: CLIENT_LIFECYCLE_STATUSES, isPostgresRuntime, lockClienteRow } = require("./shared/clientLifecycleLock");
 
 const prisma = createPrismaClient();
 
@@ -48,7 +49,6 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://crm-murex-six-83.vercel.app",
 ];
 const allowedOrigins = getAllowedOrigins();
-
 app.use(createMaintenanceReadOnlyMiddleware({
   env: process.env,
   mutatingGetPaths: ["/integracoes/bling/callback", "/integracoes/instagram/oauth/callback"],
@@ -83,6 +83,7 @@ const auth = createAuth({ prisma, allowedOrigins, ...(testSecurityDelivery ? { s
 const requireAuth = auth.authenticate;
 const requireRole = auth.requireRole;
 const commercialAuth = [requireAuth, requireCommercialTenant];
+const customerLifecycleAuth = [requireAuth, requireCommercialTenant, requireRole("ADMIN", "GERENTE")];
 const agendaService = createAgendaService({ prisma });
 
 auth.mountRoutes(app);
@@ -121,41 +122,42 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
       scoreRows,
     ] = await Promise.all([
       prisma.cliente.aggregate({
-        where: { empresaId },
+        where: { empresaId, arquivadoEm: null },
         _count: { _all: true },
         _sum: { valor: true },
       }),
       prisma.cliente.groupBy({
         by: ["status"],
-        where: { empresaId },
+        where: { empresaId, arquivadoEm: null },
         _count: { _all: true },
         _sum: { valor: true },
       }),
-      prisma.cliente.count({ where: { empresaId, quente: true } }),
-      prisma.cliente.count({ where: { empresaId, OR: [{ status: "Perdido" }, { ultimoContato: { gte: 10 } }] } }),
-      prisma.cliente.count({ where: { empresaId, ultimoContato: { gte: 7 } } }),
-      prisma.acompanhamento.groupBy({
+      prisma.cliente.count({ where: { empresaId, arquivadoEm: null, quente: true } }),
+      prisma.cliente.count({ where: { empresaId, arquivadoEm: null, OR: [{ status: "Perdido" }, { ultimoContato: { gte: 10 } }] } }),
+      prisma.cliente.count({ where: { empresaId, arquivadoEm: null, ultimoContato: { gte: 7 } } }),
+          prisma.acompanhamento.groupBy({
         by: ["clienteId"],
         where: {
           empresaId,
           clienteId: { not: null },
+          cliente: { arquivadoEm: null },
           status: { in: ACTIVE_FOLLOW_UP_STATUSES },
           dataHora: { gte: todayStart, lt: todayEnd },
         },
       }),
-      prisma.cliente.count({ where: { empresaId, status: "Proposta", quente: true } }),
+      prisma.cliente.count({ where: { empresaId, arquivadoEm: null, status: "Proposta", quente: true } }),
       prisma.cliente.findMany({
-        where: { empresaId, status: "Proposta" },
+        where: { empresaId, arquivadoEm: null, status: "Proposta" },
         orderBy: [{ id: "desc" }],
         take: 5,
       }),
       prisma.cliente.findMany({
-        where: { empresaId, ultimoContato: { gte: 7 } },
+        where: { empresaId, arquivadoEm: null, ultimoContato: { gte: 7 } },
         orderBy: [{ ultimoContato: "desc" }, { id: "desc" }],
         take: 10,
       }),
       prisma.nota.findMany({
-        where: { empresaId },
+        where: { empresaId, cliente: { arquivadoEm: null } },
         include: { cliente: { select: { id: true, nome: true } } },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: 5,
@@ -303,6 +305,14 @@ app.patch("/clientes/:id", ...commercialAuth, async (req, res) => {
   return updateCliente(req, res);
 });
 
+app.post("/clientes/:id/arquivar", ...customerLifecycleAuth, async (req, res) => {
+  return archiveCliente(req, res);
+});
+
+app.post("/clientes/:id/restaurar", ...customerLifecycleAuth, async (req, res) => {
+  return restoreCliente(req, res);
+});
+
 async function updateCliente(req, res) {
   try {
     const { id } = req.params;
@@ -312,9 +322,10 @@ async function updateCliente(req, res) {
     if (!clienteId) return res.status(400).json({ erro: "ID invalido." });
     const existing = await prisma.cliente.findFirst({
       where: { id: clienteId, empresaId },
-      select: { id: true, proximoFollowUp: true, revisao: true },
+      select: { id: true, proximoFollowUp: true, revisao: true, arquivadoEm: true },
     });
     if (!existing) return res.status(404).json({ erro: "Cliente nao encontrado." });
+    if (existing.arquivadoEm) return res.status(409).json({ erro: "Restaure o cliente antes de editar seus dados.", codigo: "CLIENT_ARCHIVED_READ_ONLY" });
     if (
       Object.prototype.hasOwnProperty.call(req.body || {}, "proximoFollowUp")
       && String(req.body.proximoFollowUp ?? "").trim() !== existing.proximoFollowUp
@@ -335,21 +346,22 @@ async function updateCliente(req, res) {
       return res.json(unchanged);
     }
     const hasRevision = Object.prototype.hasOwnProperty.call(req.body || {}, "revisao");
-    if (hasRevision) {
-      const revisao = Number(req.body.revisao);
-      if (!Number.isInteger(revisao) || revisao < 1) return clienteValidationError(res, { revisao: "Revisao invalida." }, 422);
-      const updated = await prisma.cliente.updateMany({ where: { id: clienteId, empresaId, revisao }, data: { ...data, revisao: { increment: 1 } } });
-      if (updated.count !== 1) {
-        const current = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { revisao: true } });
-        return res.status(409).json({
-          erro: "O cadastro foi alterado por outra pessoa. Atualize os dados e tente novamente.",
-          codigo: "CUSTOMER_REGISTRATION_CONFLICT",
-          revisaoAtual: current?.revisao || existing.revisao,
-        });
-      }
-    } else {
-      await prisma.cliente.update({ where: { id: clienteId }, data: { ...data, revisao: { increment: 1 } } });
-    }
+    const revisao = hasRevision ? Number(req.body.revisao) : null;
+    if (hasRevision && (!Number.isInteger(revisao) || revisao < 1)) return clienteValidationError(res, { revisao: "Revisao invalida." }, 422);
+    const lifecycleResult = await prisma.$transaction(async (tx) => {
+      const locked = await lockClienteRow(tx, empresaId, clienteId);
+      if (!locked) return { kind: "not-found" };
+      if (locked.arquivadoEm) return { kind: "archived" };
+      if (revisao !== null && locked.revisao !== revisao) return { kind: "conflict", revisaoAtual: locked.revisao };
+      const updated = await tx.cliente.updateMany({
+        where: { id: clienteId, empresaId, arquivadoEm: null, ...(revisao === null ? {} : { revisao }) },
+        data: { ...data, revisao: { increment: 1 } },
+      });
+      return updated.count === 1 ? { kind: "updated" } : { kind: "conflict", revisaoAtual: locked.revisao };
+    });
+    if (lifecycleResult.kind === "archived") return res.status(409).json({ erro: "Restaure o cliente antes de editar seus dados.", codigo: "CLIENT_ARCHIVED_READ_ONLY" });
+    if (lifecycleResult.kind === "not-found") return res.status(404).json({ erro: "Cliente nao encontrado.", codigo: "CLIENT_NOT_FOUND" });
+    if (lifecycleResult.kind === "conflict") return res.status(409).json({ erro: "O cadastro foi alterado por outra pessoa. Atualize os dados e tente novamente.", codigo: "CUSTOMER_REGISTRATION_CONFLICT", revisaoAtual: lifecycleResult.revisaoAtual || existing.revisao });
 
     const clienteAtualizado = await prisma.cliente.findFirst({
       where: { id: clienteId, empresaId },
@@ -367,21 +379,63 @@ async function updateCliente(req, res) {
   }
 }
 
-app.delete("/clientes/:id", ...commercialAuth, async (req, res) => {
+app.delete("/clientes/:id", ...customerLifecycleAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    const invalidFields = unknownFields(req.body, ["revisao"]);
+    if (invalidFields.length > 0) return clienteValidationError(res, { campos: `Campos não permitidos: ${invalidFields.join(", ")}.` }, 422);
+    if (hasEmpresaIdInput(req.body)) return tenantInputError(res);
     if (hasEmpresaIdInput(req.query)) return tenantInputError(res);
     const empresaId = req.commercialEmpresaId;
     const clienteId = parsePositiveId(id);
     if (!clienteId) return res.status(400).json({ erro: "ID invalido." });
-    const existing = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true } });
+    const existing = await prisma.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true, arquivadoEm: true, revisao: true } });
     if (!existing) return res.status(404).json({ erro: "Cliente nao encontrado." });
-
-    await prisma.cliente.delete({
-      where: {
-        id: clienteId,
-      },
-    });
+    if (!existing.arquivadoEm) return res.status(409).json({ erro: "Arquive o cliente antes da exclusão permanente.", codigo: "CLIENT_ARCHIVE_REQUIRED" });
+    const revisao = Number(req.body?.revisao);
+    if (!Number.isInteger(revisao) || revisao < 1) return clienteValidationError(res, { revisao: "Revisao invalida." }, 422);
+    const deleteOperation = async (tx) => {
+      const current = await lockClienteRow(tx, empresaId, clienteId);
+      if (!current) {
+        const error = new Error("Cliente nao encontrado.");
+        error.status = 404;
+        error.codigo = "CLIENT_NOT_FOUND";
+        throw error;
+      }
+      if (!current.arquivadoEm) {
+        const error = new Error("Arquive o cliente antes da exclusao permanente.");
+        error.status = 409;
+        error.codigo = "CLIENT_ARCHIVE_REQUIRED";
+        throw error;
+      }
+      const relationCounts = await Promise.all([
+        tx.nota.count({ where: { empresaId, clienteId } }),
+        tx.acompanhamento.count({ where: { empresaId, clienteId } }),
+        tx.lead.count({ where: { empresaId, clienteId } }),
+        tx.negocio.count({ where: { empresaId, clienteId } }),
+        tx.negocio.count({ where: { empresaId, legacyClienteId: clienteId } }),
+        tx.contatoCanal.count({ where: { empresaId, clienteId } }),
+        tx.historicoQualificacaoConversa.count({ where: { empresaId, clienteId } }),
+        tx.propostaComercial.count({ where: { empresaId, clienteId } }),
+      ]);
+      if (relationCounts.some((count) => count > 0)) {
+        const error = new Error("Este cliente possui historico ou registros vinculados e nao pode ser excluido permanentemente.");
+        error.status = 409;
+        error.codigo = "CLIENT_HAS_RELATIONS";
+        throw error;
+      }
+      const deleted = await tx.cliente.deleteMany({ where: { id: clienteId, empresaId, arquivadoEm: { not: null }, revisao } });
+      if (deleted.count !== 1) {
+        const error = new Error("O cadastro foi alterado por outra pessoa. Atualize os dados e tente novamente.");
+        error.status = 409;
+        error.codigo = "CUSTOMER_REGISTRATION_CONFLICT";
+        error.revisaoAtual = current.revisao;
+        throw error;
+      }
+      return deleted;
+    };
+    const transactionOptions = isPostgresRuntime() ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined;
+    await prisma.$transaction(deleteOperation, transactionOptions);
 
     res.json({
       sucesso: true,
@@ -389,6 +443,9 @@ app.delete("/clientes/:id", ...commercialAuth, async (req, res) => {
   } catch (error) {
     console.error("Falha ao excluir cliente.", { name: error?.name, code: error?.code });
 
+    if (error?.status && error?.codigo) {
+      return res.status(error.status).json({ erro: error.message, codigo: error.codigo, ...(error.revisaoAtual ? { revisaoAtual: error.revisaoAtual } : {}) });
+    }
     if (error?.code === "P2003") {
       return res.status(409).json({
         erro: "Este cliente possui Leads, Negocios ou outros registros vinculados e nao pode ser excluido.",
@@ -402,6 +459,103 @@ app.delete("/clientes/:id", ...commercialAuth, async (req, res) => {
     });
   }
 });
+
+async function archiveCliente(req, res) {
+  try {
+    const invalidFields = unknownFields(req.body, ["revisao"]);
+    if (invalidFields.length > 0) return clienteValidationError(res, { campos: `Campos não permitidos: ${invalidFields.join(", ")}.` }, 422);
+    if (hasEmpresaIdInput(req.body)) return tenantInputError(res);
+    const clienteId = parsePositiveId(req.params.id);
+    if (!clienteId) return res.status(400).json({ erro: "ID invalido.", codigo: "CLIENT_INVALID_ID" });
+    const empresaId = req.commercialEmpresaId;
+    const revisaoInput = req.body && req.body.revisao !== undefined ? Number(req.body.revisao) : null;
+    if (revisaoInput === null || !Number.isInteger(revisaoInput) || revisaoInput < 1) {
+      return clienteValidationError(res, { revisao: "Revisao invalida." }, 422);
+    }
+    const archiveOperation = async (tx) => {
+      const current = await lockClienteRow(tx, empresaId, clienteId);
+      if (!current) {
+        const error = new Error("Cliente nao encontrado.");
+        error.status = 404;
+        error.codigo = "CLIENT_NOT_FOUND";
+        throw error;
+      }
+      if (current.arquivadoEm) return current;
+      if (!CLIENT_LIFECYCLE_STATUSES.has(current.status)) {
+        const error = new Error("O cliente possui um status legado que precisa ser revisado antes do arquivamento.");
+        error.status = 409;
+        error.codigo = "CLIENT_ARCHIVE_STATE_INVALID";
+        throw error;
+      }
+      const updated = await tx.cliente.updateMany({
+        where: { id: clienteId, empresaId, revisao: revisaoInput, arquivadoEm: null },
+        data: { arquivadoEm: new Date(), statusAntesDeArquivar: current.status, status: "Arquivado", revisao: { increment: 1 } },
+      });
+      if (updated.count !== 1) {
+        const error = new Error("O cadastro foi alterado por outra pessoa. Atualize os dados e tente novamente.");
+        error.status = 409;
+        error.codigo = "CUSTOMER_REGISTRATION_CONFLICT";
+        throw error;
+      }
+      return tx.cliente.findFirst({ where: { id: clienteId, empresaId }, include: { notas: { where: { empresaId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] } } });
+    };
+    const transactionOptions = isPostgresRuntime() ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined;
+    return res.json(await prisma.$transaction(archiveOperation, transactionOptions));
+  } catch (error) {
+    if (error?.status && error?.codigo) return res.status(error.status).json({ erro: error.message, codigo: error.codigo });
+    console.error("Falha ao arquivar cliente.", { name: error?.name, code: error?.code });
+    return res.status(500).json({ erro: "Erro ao arquivar cliente", codigo: "CLIENT_ARCHIVE_ERROR" });
+  }
+}
+
+async function restoreCliente(req, res) {
+  try {
+    const invalidFields = unknownFields(req.body, ["revisao"]);
+    if (invalidFields.length > 0) return clienteValidationError(res, { campos: `Campos não permitidos: ${invalidFields.join(", ")}.` }, 422);
+    if (hasEmpresaIdInput(req.body)) return tenantInputError(res);
+    const clienteId = parsePositiveId(req.params.id);
+    if (!clienteId) return res.status(400).json({ erro: "ID invalido.", codigo: "CLIENT_INVALID_ID" });
+    const empresaId = req.commercialEmpresaId;
+    const revisaoInput = req.body && req.body.revisao !== undefined ? Number(req.body.revisao) : null;
+    if (revisaoInput === null || !Number.isInteger(revisaoInput) || revisaoInput < 1) {
+      return clienteValidationError(res, { revisao: "Revisao invalida." }, 422);
+    }
+    const restoreOperation = async (tx) => {
+      const current = await lockClienteRow(tx, empresaId, clienteId);
+      if (!current) {
+        const error = new Error("Cliente nao encontrado.");
+        error.status = 404;
+        error.codigo = "CLIENT_NOT_FOUND";
+        throw error;
+      }
+      if (!current.arquivadoEm) return current;
+      const restoredStatus = current.statusAntesDeArquivar;
+      if (!CLIENT_LIFECYCLE_STATUSES.has(restoredStatus)) {
+        const error = new Error("O status anterior do cliente nao pode ser restaurado com seguranca.");
+        error.status = 409;
+        error.codigo = "CLIENT_RESTORE_STATE_INVALID";
+        throw error;
+      }
+      const updated = await tx.cliente.updateMany({
+        where: { id: clienteId, empresaId, revisao: revisaoInput, arquivadoEm: { not: null } },
+        data: { arquivadoEm: null, statusAntesDeArquivar: null, status: restoredStatus, revisao: { increment: 1 } },
+      });
+      if (updated.count !== 1) {
+        const error = new Error("O cadastro foi alterado por outra pessoa. Atualize os dados e tente novamente.");
+        error.status = 409;
+        error.codigo = "CUSTOMER_REGISTRATION_CONFLICT";
+        throw error;
+      }
+      return tx.cliente.findFirst({ where: { id: clienteId, empresaId }, include: { notas: { where: { empresaId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] } } });
+    };
+    const transactionOptions = isPostgresRuntime() ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined;
+    return res.json(await prisma.$transaction(restoreOperation, transactionOptions));
+  } catch (error) {
+    if (error?.status && error?.codigo) return res.status(error.status).json({ erro: error.message, codigo: error.codigo });
+    console.error("Falha ao restaurar cliente.", { name: error?.name, code: error?.code });
+    return res.status(500).json({ erro: "Erro ao restaurar cliente", codigo: "CLIENT_RESTORE_ERROR" });
+  }
+}
 
 app.get("/clientes/:id/notas", ...commercialAuth, async (req, res) => {
   try {
@@ -449,10 +603,16 @@ app.post("/clientes/:id/notas", ...commercialAuth, async (req, res) => {
     }
 
     const nota = await prisma.$transaction(async (tx) => {
-      const cliente = await tx.cliente.findFirst({ where: { id: clienteId, empresaId }, select: { id: true } });
+      const cliente = await lockClienteRow(tx, empresaId, clienteId);
       if (!cliente) {
         const error = new Error("Cliente nao encontrado.");
         error.status = 404;
+        throw error;
+      }
+      if (cliente.arquivadoEm) {
+        const error = new Error("Restaure o cliente antes de alterar suas notas.");
+        error.status = 409;
+        error.codigo = "CLIENT_ARCHIVED_READ_ONLY";
         throw error;
       }
       return tx.nota.create({
@@ -463,12 +623,12 @@ app.post("/clientes/:id/notas", ...commercialAuth, async (req, res) => {
           tipo: tipo || "nota",
         },
       });
-    });
+    }, isPostgresRuntime() ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined);
 
     res.json(nota);
   } catch (error) {
     if (error && Number.isInteger(error.status) && error.status < 500) {
-      return res.status(error.status).json({ erro: error.message });
+      return res.status(error.status).json({ erro: error.message, ...(error.codigo ? { codigo: error.codigo } : {}) });
     }
 
     console.error("Falha ao criar nota.", { name: error?.name, code: error?.code });
@@ -491,50 +651,23 @@ app.delete("/clientes/:clienteId/notas/:notaId", ...commercialAuth, async (req, 
       });
     }
 
-    const cliente = await prisma.cliente.findFirst({
-      where: {
-        id: clienteId,
-        empresaId: req.commercialEmpresaId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!cliente) {
-      return res.status(404).json({
-        erro: "Cliente nao encontrado.",
-      });
-    }
-
-    const nota = await prisma.nota.findFirst({
-      where: {
-        id: notaId,
-        clienteId,
-        empresaId: req.commercialEmpresaId,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!nota) {
-      return res.status(404).json({
-        erro: "Nota nao encontrada.",
-      });
-    }
-
-    await prisma.nota.delete({
-      where: {
-        id: notaId,
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      const cliente = await lockClienteRow(tx, req.commercialEmpresaId, clienteId);
+      if (!cliente) return Promise.reject(Object.assign(new Error("Cliente nao encontrado."), { status: 404 }));
+      if (cliente.arquivadoEm) return Promise.reject(Object.assign(new Error("Restaure o cliente antes de alterar suas notas."), { status: 409, codigo: "CLIENT_ARCHIVED_READ_ONLY" }));
+      const nota = await tx.nota.findFirst({ where: { id: notaId, clienteId, empresaId: req.commercialEmpresaId }, select: { id: true } });
+      if (!nota) return Promise.reject(Object.assign(new Error("Nota nao encontrada."), { status: 404 }));
+      await tx.nota.delete({ where: { id: notaId } });
+    }, isPostgresRuntime() ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined);
 
     return res.json({
       ok: true,
       mensagem: "Nota removida com sucesso.",
     });
   } catch (error) {
+    if (error && Number.isInteger(error.status) && error.status < 500) {
+      return res.status(error.status).json({ erro: error.message, ...(error.codigo ? { codigo: error.codigo } : {}) });
+    }
     logServerError("NOTE_DELETE_FAILED", error);
 
     return res.status(500).json({
@@ -2093,8 +2226,13 @@ function clienteValidationErrors(body, { partial = false } = {}) {
   const email = String(source.email || "").trim();
   const estado = String(source.estado || "").trim().toUpperCase();
   const cpfCnpj = String(source.cpfCnpj || "").replace(/\D/g, "");
+  const status = String(source.status || "").trim();
+  const lifecycleStatuses = new Set(["Lead", "Novo", "Contato", "Proposta", "Fechado", "Perdido"]);
 
   if ((!partial || has("nome")) && !nome) errors.nome = "Nome do cliente e obrigatorio.";
+  if (has("status") && !lifecycleStatuses.has(status)) {
+    errors.status = "Status de arquivamento deve ser alterado pelo fluxo de arquivamento.";
+  }
   if (has("telefone") && telefone && telefone.replace(/\D/g, "").length < 10) {
     errors.telefone = "Telefone invalido.";
   }
@@ -2132,9 +2270,18 @@ function clienteListWhere(empresaId, query) {
   const where = { empresaId, AND: [] };
   const search = cleanOptionalString(query.search || query.busca);
   const status = cleanOptionalString(query.status);
-  const statuses = new Set(["Novo", "Contato", "Proposta", "Fechado", "Perdido"]);
+  const statuses = new Set(["Lead", "Novo", "Contato", "Proposta", "Fechado", "Perdido", "Arquivado"]);
   if (status && !statuses.has(status)) return validationError("Status invalido.", 422);
   if (status) where.status = status;
+  const archived = parseBooleanFilter(query, "arquivado");
+  if (!archived.valid) return validationError("Filtro arquivado deve ser verdadeiro ou falso.", 422);
+  if (archived.provided) {
+    where.arquivadoEm = archived.value ? { not: null } : null;
+  } else if (status === "Arquivado") {
+    where.arquivadoEm = { not: null };
+  } else {
+    where.arquivadoEm = null;
+  }
 
   for (const [queryField, databaseField] of [["favorito", "favorito"], ["quente", "quente"]]) {
     const parsed = parseBooleanFilter(query, queryField);

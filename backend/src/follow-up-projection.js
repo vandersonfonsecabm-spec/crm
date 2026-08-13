@@ -8,10 +8,12 @@ const PROJECTION_RESULTS = Object.freeze({
 });
 const PROJECTION_CONFLICT_CODE = "NEXT_FOLLOW_UP_REVISION_CONFLICT";
 const HTTP_PROJECTION_RETRY_LIMIT = 3;
+const { lockActiveClienteRow } = require("./shared/clientLifecycleLock");
 
 async function reconcileNextFollowUpProjection({ tx, empresaId, clienteId }) {
+  await lockActiveClienteRow(tx, empresaId, clienteId);
   const client = await tx.cliente.findFirst({
-    where: { id: clienteId, empresaId },
+    where: { id: clienteId, empresaId, arquivadoEm: null },
     select: { id: true, proximoFollowUp: true, revisao: true },
   });
   if (!client) return result(PROJECTION_RESULTS.CLIENT_NOT_FOUND, clienteId);
@@ -31,7 +33,7 @@ async function reconcileNextFollowUpProjection({ tx, empresaId, clienteId }) {
   }
 
   const updated = await tx.cliente.updateMany({
-    where: { id: clienteId, empresaId, revisao: client.revisao },
+    where: { id: clienteId, empresaId, arquivadoEm: null, revisao: client.revisao },
     data: { proximoFollowUp: value, revisao: { increment: 1 } },
   });
   if (updated.count !== 1) {

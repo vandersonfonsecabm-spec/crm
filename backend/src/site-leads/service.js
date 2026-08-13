@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const { normalizePhone } = require("../channels/phoneNormalizer");
 const { createAutomationService } = require("../automations/service");
 const { validateIntegrationCreate, validateIntegrationPatch, validateSubmission } = require("./validation");
+const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
 
 const PROVIDER = "SITE_FORM";
 
@@ -104,6 +105,8 @@ function createSiteLeadService({ prisma }) {
     const candidates = [...matches.values()];
     if (candidates.length === 1) {
       const client = candidates[0];
+      if (client.arquivadoEm !== null) throw siteCaptureRejectedError();
+      await lockActiveClienteRow(tx, integration.empresaId, client.id);
       const updates = {};
       if (!client.telefone && phone) updates.telefone = phone;
       if (!client.email && payload.email) updates.email = payload.email;
@@ -111,8 +114,12 @@ function createSiteLeadService({ prisma }) {
       if (!client.cidade && payload.cidade) updates.cidade = payload.cidade;
       if (!client.estado && payload.estado) updates.estado = payload.estado;
       if (!client.interesse && payload.produtoInteresse) updates.interesse = payload.produtoInteresse;
-      return { cliente: Object.keys(updates).length ? await tx.cliente.update({ where: { id: client.id }, data: { ...updates, revisao: { increment: 1 } } }) : client, ambiguous: false, phone };
+      if (!Object.keys(updates).length) return { cliente: client, ambiguous: false, phone };
+      const updated = await tx.cliente.updateMany({ where: { id: client.id, empresaId: integration.empresaId, arquivadoEm: null }, data: { ...updates, revisao: { increment: 1 } } });
+      if (updated.count !== 1) throw siteCaptureRejectedError();
+      return { cliente: await tx.cliente.findFirstOrThrow({ where: { id: client.id, empresaId: integration.empresaId } }), ambiguous: false, phone };
     }
+    if (candidates.some((client) => client.arquivadoEm !== null)) throw siteCaptureRejectedError();
     const cliente = await tx.cliente.create({ data: { empresaId: integration.empresaId, nome: payload.nome, telefone: phone || "", email: payload.email || "", empresa: payload.empresa || "", cidade: payload.cidade || null, estado: payload.estado || null, interesse: payload.produtoInteresse || "", origem: "Site" } });
     return { cliente, ambiguous: candidates.length > 1, phone };
   }
@@ -144,6 +151,7 @@ function pick(value, fields) { return Object.fromEntries(fields.filter((field) =
 function requireAdmin(context) { if (context.papel !== "ADMIN") { const error = new Error("Acesso negado."); error.status = 403; error.codigo = "SITE_INTEGRATION_FORBIDDEN"; throw error; } }
 function notFound() { const error = new Error("Integracao nao encontrada."); error.status = 404; error.codigo = "SITE_INTEGRATION_NOT_FOUND"; return error; }
 function validationError(message, campos) { const error = new Error(message); error.status = 400; error.codigo = "VALIDATION_ERROR"; error.campos = campos; return error; }
+function siteCaptureRejectedError() { const error = new Error("Nao foi possivel processar este contato agora."); error.status = 409; error.codigo = "SITE_CAPTURE_REJECTED"; return error; }
 function idempotencyConflictError() { const error = new Error("submissionId ja utilizado com dados diferentes."); error.status = 409; error.codigo = "IDEMPOTENCY_CONFLICT"; return error; }
 function isUuid(value) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "")); }
 

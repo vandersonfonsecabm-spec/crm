@@ -32,6 +32,8 @@ export type Client = {
   tags: string[];
   notes: Note[];
   revision?: number;
+  archived?: boolean;
+  archivedAt?: string | null;
 };
 
 export type Analytics = {

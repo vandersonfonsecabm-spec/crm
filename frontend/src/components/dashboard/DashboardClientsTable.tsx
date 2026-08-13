@@ -131,8 +131,8 @@ function ClientTableRow({
   const tags = client.tags.slice(0, 2);
   const hiddenTags = Math.max(0, client.tags.length - tags.length);
   const nextAction = formatNextFollowUp(client.nextFollowUp);
-  const isNextActionOverdue = classifyNextFollowUp(client.nextFollowUp) === "OVERDUE";
-  const isHighRisk = risk === "Alto";
+  const isNextActionOverdue = !client.archived && classifyNextFollowUp(client.nextFollowUp) === "OVERDUE";
+  const isHighRisk = !client.archived && risk === "Alto";
 
   return (
     <tr aria-selected={selected} className={`clientes-table-row ${selected ? "is-selected" : ""}`} data-client-risk={isHighRisk ? "high" : "normal"} data-client-timing={isNextActionOverdue ? "overdue" : "planned"}>
@@ -167,7 +167,9 @@ function ClientTableRow({
 
       <td className="px-3 py-3 align-middle">
         <div className="clientes-status-cell flex flex-wrap items-center gap-1.5">
-          <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] ${statusClass(client.status)}`}>{client.status}</span>
+          <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] ${client.archived ? "border-slate-300 bg-slate-100 text-slate-700" : statusClass(client.status)}`}>
+            {client.archived ? "Arquivado" : client.status}
+          </span>
           {isHighRisk && (
             <span className="clientes-risk-indicator inline-flex items-center gap-1" title="Risco alto informado no resumo atual">
               <AlertTriangle aria-hidden="true" size={11} />
@@ -178,9 +180,9 @@ function ClientTableRow({
       </td>
 
       <td className="px-3 py-3 align-middle">
-        <p className={`clientes-next-action flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium ${isNextActionOverdue ? "clientes-next-action--overdue" : ""}`} title={nextAction}>
+        <p className={`clientes-next-action flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium ${isNextActionOverdue ? "clientes-next-action--overdue" : ""}`} title={client.archived ? "Acompanhamentos disponíveis após restaurar" : nextAction}>
           <CalendarClock aria-hidden="true" className="shrink-0" size={12} />
-          {nextAction}
+          {client.archived ? "Somente leitura" : nextAction}
         </p>
         {isNextActionOverdue && <p className="mt-0.5 text-[10px] font-medium text-[var(--danger)]">Ação atrasada</p>}
       </td>
@@ -190,12 +192,16 @@ function ClientTableRow({
           <Button aria-label={`Abrir Cliente 360 de ${client.name}`} className="clientes-open-action" leftIcon={<Eye size={13} />} onClick={() => onSelectClient(client.id)} size="sm" variant="secondary">
             Abrir
           </Button>
-          <DashboardActionOverflow
-            actions={rowActions(client, onToggleFavorite, onToggleHot, onRequestWhatsapp)}
-            menuClassName="clientes-row-actions-menu"
-            pageTitle={client.name}
-            triggerClassName="clientes-row-overflow-trigger"
-          />
+          {client.archived ? (
+            <span className="px-2 text-[10px] text-[var(--text-muted)]">Somente leitura</span>
+          ) : (
+            <DashboardActionOverflow
+              actions={rowActions(client, onToggleFavorite, onToggleHot, onRequestWhatsapp)}
+              menuClassName="clientes-row-actions-menu"
+              pageTitle={client.name}
+              triggerClassName="clientes-row-overflow-trigger"
+            />
+          )}
         </div>
       </td>
     </tr>

@@ -12,6 +12,7 @@ const backendDir = path.resolve(__dirname, "..");
 const migrationName = "20260801123000_enforce_tenant_safe_relations";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const prismaCli = path.join(backendDir, "node_modules", "prisma", "build", "index.js");
+const clientBaseSelect = { id: true, empresaId: true, nome: true, telefone: true, email: true, empresa: true, interesse: true, status: true, valor: true, origem: true, createdAt: true, revisao: true };
 
 test("upgrade preserva fixture tenant valida e aplica constraints compostas", async () => {
   const sandbox = prepareSandbox("valid");
@@ -34,7 +35,7 @@ test("upgrade preserva fixture tenant valida e aplica constraints compostas", as
       await migrated.$disconnect();
     }
   } finally {
-    fs.rmSync(sandbox.root, { recursive: true, force: true });
+    await removeSandbox(sandbox.root);
   }
 });
 
@@ -64,7 +65,7 @@ test("preflight rejeita vinculo cruzado antes de qualquer rebuild", async () => 
     assert.equal(dataFingerprint(sandbox.databasePath), before.data);
     assert.equal(schemaFingerprint(sandbox.databasePath), before.schema);
   } finally {
-    fs.rmSync(sandbox.root, { recursive: true, force: true });
+    await removeSandbox(sandbox.root);
   }
 });
 
@@ -79,6 +80,24 @@ function prepareSandbox(label) {
   copyMigrationsBefore({ backendDir, migrationsDir, migrationName });
   fs.writeFileSync(databasePath, "");
   return { root, migrationsDir, schemaPath, databasePath };
+}
+
+async function removeSandbox(root) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    try {
+      fs.rmSync(root, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
+      return;
+    } catch (error) {
+      if (!['EPERM', 'EBUSY'].includes(error?.code)) throw error;
+      if (!fs.existsSync(root)) return;
+      if (attempt === 11) {
+        // O runner isolado remove o diretório-raiz no encerramento do processo;
+        // não falhe a asserção de migração por lock transitório do query engine.
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+  }
 }
 
 function runPrisma(sandbox, requireSuccess) {
@@ -99,8 +118,8 @@ async function seedRepresentativeFixture(prisma, crossTenant) {
   const tenantA = await prisma.empresa.create({ data: { nome: "Tenant migration A", slug: `tenant-migration-a-${process.pid}-${Date.now()}` } });
   const tenantB = await prisma.empresa.create({ data: { nome: "Tenant migration B", slug: `tenant-migration-b-${process.pid}-${Date.now()}` } });
   const userA = await prisma.usuario.create({ data: { empresaId: tenantA.id, nome: "User A", email: `migration-a-${Date.now()}@test.local`, senhaHash: "test" } });
-  const clientA = await prisma.cliente.create({ data: { empresaId: tenantA.id, nome: "Client A" } });
-  const clientB = await prisma.cliente.create({ data: { empresaId: tenantB.id, nome: "Client B" } });
+  const clientA = await prisma.cliente.create({ data: { empresaId: tenantA.id, nome: "Client A" }, select: clientBaseSelect });
+  const clientB = await prisma.cliente.create({ data: { empresaId: tenantB.id, nome: "Client B" }, select: clientBaseSelect });
   const lead = await prisma.lead.create({ data: { empresaId: tenantA.id, clienteId: crossTenant ? clientB.id : clientA.id, responsavelId: userA.id } });
   if (crossTenant) return { tenantA, tenantB, userA, clientA, clientB, lead };
 
@@ -118,7 +137,7 @@ async function fixtureFingerprint(prisma, fixture) {
   const rows = await Promise.all([
     prisma.empresa.findMany({ where: { id: { in: [fixture.tenantA.id, fixture.tenantB.id] } }, orderBy: { id: "asc" } }),
     prisma.usuario.findMany({ where: { id: fixture.userA.id } }),
-    prisma.cliente.findMany({ where: { id: { in: [fixture.clientA.id, fixture.clientB.id] } }, orderBy: { id: "asc" } }),
+    prisma.cliente.findMany({ where: { id: { in: [fixture.clientA.id, fixture.clientB.id] } }, orderBy: { id: "asc" }, select: clientBaseSelect }),
     prisma.lead.findMany({ where: { id: fixture.lead.id } }),
     prisma.negocio.findMany({ where: { id: fixture.business.id } }),
     prisma.integracao.findMany({ where: { id: fixture.integration.id } }),

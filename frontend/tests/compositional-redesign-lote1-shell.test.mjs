@@ -25,16 +25,17 @@ test("Lote 1 mantém o shell denso, acessível e ancorado em ações reais", asy
   assert.match(sidebar, /!route\.requiresLeadsCommunication \|\| leadsCommunicationEnabled/);
   assert.match(sidebar, /!route\.requiresPlatformOperator \|\| isPlatformOperator/);
   assert.match(sidebar, /event\.ctrlKey \|\| event\.metaKey \|\| event\.shiftKey \|\| event\.altKey/);
-  assert.match(sidebar, /aria-label=\{label\}/);
+  assert.match(sidebar, /aria-label=\{`\$\{label\}/);
+  assert.match(sidebar, /exigindo atenção/);
   assert.match(sidebar, /title=\{label\}/);
   assert.doesNotMatch(sidebar, /sidebar-account|sidebar-avatar/);
   assert.match(sidebarCss, /\.sidebar-nav-item\.is-active \{[\s\S]*?background: var\(--sidebar-active\);/);
   assert.match(sidebarCss, /\.sidebar-nav-item\.is-active::before[\s\S]*?background: var\(--selected-marker\);/);
   assert.match(sidebarCss, /\.sidebar-nav-item:focus-visible[\s\S]*?outline: 2px solid var\(--emphasis-focus-outline\);/);
 
-  assert.match(css, /--sidebar-width:\s*232px;/);
-  assert.match(css, /@media \(min-width: 1024px\) and \(max-width: 1199px\) \{[\s\S]*?--sidebar-width:\s*64px;/);
-  assert.match(css, /sidebar-nav-item > span:last-child \{ display: none; \}/);
+  assert.match(css, /--sidebar-expanded-width:\s*232px;/);
+  assert.match(css, /@media \(min-width: 1024px\) and \(max-width: 1199px\) \{[\s\S]*?--sidebar-width:\s*var\(--sidebar-collapsed-width\);/);
+  assert.match(css, /sidebar-nav-label \{ display: none; \}/);
   assert.match(css, /topbar-shell \{ height:\s*52px; flex:\s*0 0 52px;/);
 
   assert.match(topbar, /h-\[52px\]/);

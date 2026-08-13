@@ -13,6 +13,7 @@ type DashboardCommandSearchProps = {
 };
 
 type CommandResult = {
+  key: string;
   label: string;
   type: string;
   searchText: string;
@@ -31,6 +32,8 @@ export default function DashboardCommandSearch({
   const [showCommandResults, setShowCommandResults] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [clientResults, setClientResults] = useState<Client[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -80,15 +83,29 @@ export default function DashboardCommandSearch({
     if (readOnly) return;
 
     const term = normalizeCommandTerm(commandSearch);
-    if (term.length < 2) return;
+    if (term.length < 2) {
+      setClientResults([]);
+      setIsSearching(false);
+      setSearchError(false);
+      return;
+    }
     let ignore = false;
+    setIsSearching(true);
+    setSearchError(false);
     const timeout = window.setTimeout(() => {
       fetchClientesFromBackend({ search: commandSearch, page: 1, limit: 4, sortBy: "name" })
         .then((result) => {
-          if (!ignore) setClientResults(result?.data ?? []);
+          if (!ignore) {
+            setClientResults(result?.data ?? []);
+            setIsSearching(false);
+          }
         })
         .catch(() => {
-          if (!ignore) setClientResults([]);
+          if (!ignore) {
+            setClientResults([]);
+            setIsSearching(false);
+            setSearchError(true);
+          }
         });
     }, 250);
     return () => {
@@ -105,27 +122,28 @@ export default function DashboardCommandSearch({
     }
 
     const pages: CommandResult[] = [
-      { label: "Visão Geral", type: "Página", searchText: "visao geral dashboard inicio leitura transversal carteira", action: () => onSetActivePage("dashboard") },
-      { label: "Painel Comercial", type: "Página", searchText: "painel central comercial operacao", action: () => onSetActivePage("comercial") },
+      { key: "page-dashboard", label: "Visão Geral", type: "Página", searchText: "visao geral dashboard inicio leitura transversal carteira", action: () => onSetActivePage("dashboard") },
+      { key: "page-comercial", label: "Painel Comercial", type: "Página", searchText: "painel central comercial operacao", action: () => onSetActivePage("comercial") },
       ...(leadsCommunicationEnabled
         ? [
-            { label: "Caixa de Entrada", type: "Página", searchText: "caixa de entrada conversas mensagens inbox atendimento whatsapp instagram facebook omnichannel", action: () => onSetActivePage("inbox") },
-            { label: "Leads", type: "Página", searchText: "leads interesses qualificacao fila atendimento", action: () => onSetActivePage("leads") },
+            { key: "page-inbox", label: "Caixa de Entrada", type: "Página", searchText: "caixa de entrada conversas mensagens inbox atendimento whatsapp instagram facebook omnichannel", action: () => onSetActivePage("inbox") },
+            { key: "page-leads", label: "Leads", type: "Página", searchText: "leads interesses qualificacao fila atendimento", action: () => onSetActivePage("leads") },
           ]
         : []),
-      { label: "Clientes", type: "Página", searchText: "clientes carteira", action: () => onSetActivePage("clientes") },
-      { label: "Negócios", type: "Página", searchText: "negocios funil comercial kanban oportunidades", action: () => onSetActivePage("kanban") },
-      { label: "Agenda", type: "Página", searchText: "agenda acompanhamentos calendario", action: () => onSetActivePage("agenda") },
-      { label: "Estoque", type: "Página", searchText: "estoque produtos inventario", action: () => onSetActivePage("estoque") },
-      { label: "Automações", type: "Página", searchText: "automacoes automacao inteligencia regras", action: () => onSetActivePage("automacoes") },
+      { key: "page-clientes", label: "Clientes", type: "Página", searchText: "clientes carteira", action: () => onSetActivePage("clientes") },
+      { key: "page-kanban", label: "Negócios", type: "Página", searchText: "negocios funil comercial kanban oportunidades", action: () => onSetActivePage("kanban") },
+      { key: "page-agenda", label: "Agenda", type: "Página", searchText: "agenda acompanhamentos calendario", action: () => onSetActivePage("agenda") },
+      { key: "page-estoque", label: "Estoque", type: "Página", searchText: "estoque produtos inventario", action: () => onSetActivePage("estoque") },
+      { key: "page-automacoes", label: "Automações", type: "Página", searchText: "automacoes automacao inteligencia regras", action: () => onSetActivePage("automacoes") },
       ...(canManageIntegrations
-        ? [{ label: "Integrações", type: "Página administrativa", searchText: "integracoes integracao dados importacoes catalogo qualidade bling simulador whatsapp", action: () => onSetActivePage("integracoes") }]
+        ? [{ key: "page-integracoes", label: "Integrações", type: "Página administrativa", searchText: "integracoes integracao dados importacoes catalogo qualidade bling simulador whatsapp", action: () => onSetActivePage("integracoes") }]
         : []),
     ].filter((item) => matchesCommandSearch(term, item.label, item.searchText));
 
-    const matchingClients = clientResults
+    const matchingClients = (!isSearching && !searchError ? clientResults : [])
       .filter((client) => matchesCommandSearch(term, client.name, client.company, client.email, client.phone, ...(client.tags ?? [])))
       .map((client) => ({
+        key: `client-${client.id}`,
         label: client.name,
         type: client.company,
         searchText: `${client.name} ${client.company}`,
@@ -133,7 +151,7 @@ export default function DashboardCommandSearch({
       }));
 
     return [...pages, ...matchingClients].slice(0, 6);
-  }, [canManageIntegrations, clientResults, commandSearch, leadsCommunicationEnabled, onSelectClient, onSetActivePage]);
+  }, [canManageIntegrations, clientResults, commandSearch, isSearching, leadsCommunicationEnabled, onSelectClient, onSetActivePage, searchError]);
 
   const boundedSelectedIndex = Math.min(selectedIndex, Math.max(commandResults.length - 1, 0));
 
@@ -145,7 +163,7 @@ export default function DashboardCommandSearch({
   }
 
   return (
-    <div className="relative hidden min-w-0 flex-1 md:block md:max-w-xl" ref={searchRef}>
+    <div className="relative min-w-0 flex-1 md:max-w-xl" ref={searchRef}>
       <div className="command-search flex h-11 w-full items-center gap-2 rounded-md border px-3 transition">
         <Search size={13} className="text-slate-500" />
 
@@ -194,9 +212,10 @@ export default function DashboardCommandSearch({
           placeholder="Buscar páginas e clientes…"
           aria-label="Busca global"
           aria-autocomplete="list"
-          aria-controls="crm-command-results"
+          aria-controls={showCommandResults && commandSearch && commandResults.length > 0 ? "crm-command-results-listbox" : undefined}
           aria-expanded={!readOnly && showCommandResults && Boolean(commandSearch)}
-          aria-activedescendant={commandResults.length > 0 ? `crm-command-result-${boundedSelectedIndex}` : undefined}
+          aria-busy={isSearching}
+          aria-activedescendant={showCommandResults && commandSearch && commandResults.length > 0 ? `crm-command-result-${boundedSelectedIndex}` : undefined}
           className="w-full select-text bg-transparent text-xs outline-none"
           readOnly={readOnly}
           role="combobox"
@@ -205,10 +224,16 @@ export default function DashboardCommandSearch({
       </div>
 
       {showCommandResults && commandSearch && (
-        <div className="command-results absolute left-0 right-0 top-11 z-[130] rounded-lg border p-2 shadow-lg" id="crm-command-results" role="listbox">
-          {commandResults.length === 0 && (
-            <div className="rounded-md border px-3 py-3">
-              <p className="text-[11px] font-semibold text-slate-300">
+        <div className="command-results absolute left-0 right-0 top-11 z-[130] rounded-lg border p-2 shadow-lg" id="crm-command-results">
+          {isSearching && (
+            <div role="status" aria-live="polite" className="rounded-md border px-3 py-3 text-[11px] text-slate-600">Buscando…</div>
+          )}
+          {!isSearching && searchError && (
+            <div role="alert" className="rounded-md border px-3 py-3 text-[11px] text-rose-700">Não foi possível buscar agora. Tente novamente.</div>
+          )}
+          {!isSearching && !searchError && commandResults.length === 0 && (
+            <div role="status" aria-live="polite" className="rounded-md border px-3 py-3">
+              <p className="text-[11px] font-semibold text-slate-900">
                 Nenhum resultado encontrado
               </p>
               <p className="mt-1 text-[11px] leading-4 text-slate-500">
@@ -217,23 +242,28 @@ export default function DashboardCommandSearch({
             </div>
           )}
 
-          {commandResults.map((item, index) => (
-            <button
-              key={`${item.type}-${item.label}`}
-              id={`crm-command-result-${index}`}
-              aria-selected={index === boundedSelectedIndex}
-              onClick={() => runCommandResult(item)}
-              className={`command-result w-full rounded-md px-3 py-2 text-left transition ${index === boundedSelectedIndex ? "is-selected" : ""}`}
-              role="option"
-            >
-              <p className="text-xs font-medium text-slate-200">
-                {item.label}
-              </p>
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                {item.type}
-              </p>
-            </button>
-          ))}
+          {commandResults.length > 0 && (
+            <div id="crm-command-results-listbox" role="listbox" aria-label="Resultados da busca">
+              {commandResults.map((item, index) => (
+                <button
+                  key={item.key}
+                  id={`crm-command-result-${index}`}
+                  aria-selected={index === boundedSelectedIndex}
+                  onClick={() => runCommandResult(item)}
+                  className={`command-result w-full rounded-md px-3 py-2 text-left transition ${index === boundedSelectedIndex ? "is-selected" : ""}`}
+                  role="option"
+                  tabIndex={-1}
+                >
+                  <p className="text-xs font-medium text-slate-900">
+                    {item.label}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    {item.type}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,5 +1,5 @@
 import { Building2, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import DashboardCommandSearch from "./DashboardCommandSearch";
 import DashboardQuickActions from "./DashboardQuickActions";
 import type { AuthSession } from "../../services/crmApi";
@@ -38,17 +38,19 @@ export default function DashboardTopbar({
 }: DashboardTopbarProps) {
   return (
     <header className="topbar-shell sticky top-0 z-40 flex h-[52px] items-center border-b px-5 lg:px-7">
-      <div className="topbar-content mx-auto flex w-full max-w-[1680px] items-center justify-between gap-4">
-        <DashboardCommandSearch
-          onSelectClient={setSelectedId}
-          onSetActivePage={setActivePage}
-          onCloseQuickActions={() => setShowQuickActions(false)}
-          canManageIntegrations={canManageIntegrations}
-          leadsCommunicationEnabled={leadsCommunicationEnabled}
-          readOnly={readOnly}
-        />
+      <div className="topbar-content relative mx-auto flex w-full max-w-[1680px] items-center justify-between gap-4">
+        <div className="topbar-search-container flex min-w-0 flex-1 md:absolute md:left-1/2 md:w-[min(46vw,520px)] md:-translate-x-1/2">
+          <DashboardCommandSearch
+            onSelectClient={setSelectedId}
+            onSetActivePage={setActivePage}
+            onCloseQuickActions={() => setShowQuickActions(false)}
+            canManageIntegrations={canManageIntegrations}
+            leadsCommunicationEnabled={leadsCommunicationEnabled}
+            readOnly={readOnly}
+          />
+        </div>
 
-        <div className="flex min-w-0 items-center justify-end gap-1.5">
+        <div className="ml-auto flex min-w-0 items-center justify-end gap-1.5">
           {!readOnly && (
             <DashboardQuickActions
               isOpen={showQuickActions}
@@ -84,6 +86,7 @@ function UserMenu({ authSession, onLogout, onOpenProfile, readOnly = false }: { 
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuItemsRef = useRef<Array<HTMLButtonElement | null>>([]);
   const displayName = authSession?.usuario.nome || "Usuário";
   const userEmail = authSession?.usuario.email;
   const roleLabel = getRoleLabel(authSession?.papel ?? authSession?.usuario.papel);
@@ -107,6 +110,40 @@ function UserMenu({ authSession, onLogout, onOpenProfile, readOnly = false }: { 
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen) menuItemsRef.current[0]?.focus({ preventScroll: true });
+  }, [isOpen]);
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const items = menuItemsRef.current.filter(Boolean) as HTMLButtonElement[];
+    const current = document.activeElement as HTMLButtonElement | null;
+    const index = current ? items.indexOf(current) : -1;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsOpen(false);
+      buttonRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.key === "Tab") {
+      setIsOpen(false);
+      return;
+    }
+    if (!items.length) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const next = event.key === "ArrowDown"
+        ? (index + 1) % items.length
+        : (index - 1 + items.length) % items.length;
+      items[next]?.focus({ preventScroll: true });
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      items[0]?.focus({ preventScroll: true });
+    } else if (event.key === "End") {
+      event.preventDefault();
+      items[items.length - 1]?.focus({ preventScroll: true });
+    }
+  }
+
   return (
     <div ref={menuRef} className="relative">
       <button
@@ -127,7 +164,7 @@ function UserMenu({ authSession, onLogout, onOpenProfile, readOnly = false }: { 
       </button>
 
       {isOpen && !readOnly && (
-        <div className="user-menu absolute right-0 top-11 z-[240] w-64 rounded-lg border p-2 shadow-lg" role="menu">
+        <div id="crm-user-menu" className="user-menu absolute right-0 top-11 z-[240] w-64 rounded-lg border p-2 shadow-lg" onKeyDown={handleMenuKeyDown} role="menu" aria-label="Menu do usuário">
           <div className="border-b px-2.5 pb-3 pt-2">
             <p className="truncate text-[12px] font-semibold">{displayName}</p>
             {userEmail && <p className="mt-0.5 truncate text-[11px] text-slate-500">{userEmail}</p>}
@@ -143,11 +180,12 @@ function UserMenu({ authSession, onLogout, onOpenProfile, readOnly = false }: { 
           </div>
 
           <button
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+            className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[11px] font-medium text-slate-700 hover:bg-slate-50"
             onClick={() => {
               onOpenProfile();
               setIsOpen(false);
             }}
+            ref={(element) => { menuItemsRef.current[0] = element; }}
             role="menuitem"
             type="button"
           >
@@ -156,8 +194,12 @@ function UserMenu({ authSession, onLogout, onOpenProfile, readOnly = false }: { 
           </button>
 
           <button
-            className="user-menu-logout mt-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[11px] font-medium"
-            onClick={onLogout}
+            className="user-menu-logout mt-1 flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[11px] font-medium"
+            onClick={() => {
+              setIsOpen(false);
+              onLogout();
+            }}
+            ref={(element) => { menuItemsRef.current[1] = element; }}
             role="menuitem"
             type="button"
           >

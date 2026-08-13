@@ -4,6 +4,187 @@
   color: var(--sidebar-text);
 }
 
+.crm-workspace .sidebar-shell {
+  width: var(--sidebar-expanded-width, 232px);
+  transition: width 180ms ease;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed {
+  width: var(--sidebar-collapsed-width, 68px);
+}
+
+.crm-workspace .sidebar-shell .sidebar-brand {
+  overflow: hidden;
+  transition: padding 180ms ease;
+}
+
+.crm-workspace .sidebar-shell .sidebar-brand-copy {
+  min-width: 0;
+  opacity: 1;
+  transition: opacity 120ms ease;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-brand {
+  justify-content: center;
+  gap: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-brand-copy {
+  display: none;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-brand-mark {
+  display: none;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-collapse-toggle {
+  margin-left: 0;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-collapse-toggle {
+  margin-left: 0;
+}
+
+.crm-workspace .sidebar-collapse-toggle {
+  color: var(--sidebar-text-muted);
+}
+
+.crm-workspace .sidebar-collapse-toggle:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+
+.crm-workspace .sidebar-collapse-toggle:focus-visible {
+  outline: 2px solid var(--emphasis-focus-outline);
+  outline-offset: 2px;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-navigation {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-group-label {
+  display: none;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-nav-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sidebar-nav-badge,
+.mobile-navigation-badge {
+  display: inline-flex;
+  min-width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 4px;
+  background: #92400e;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mobile-more-menu {
+  position: absolute;
+  right: 8px;
+  bottom: calc(62px + env(safe-area-inset-bottom));
+  left: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgba(25,36,45,.16);
+}
+
+.mobile-more-menu a {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.mobile-more-menu a:hover,
+.mobile-more-menu a:focus-visible {
+  background: var(--bg-muted);
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .crm-workspace .sidebar-shell:not(.is-collapsed) {
+    width: var(--sidebar-expanded-width, 232px);
+  }
+
+  .crm-workspace .sidebar-shell:not(.is-collapsed) .sidebar-brand {
+    justify-content: flex-start;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .crm-workspace .sidebar-shell:not(.is-collapsed) .sidebar-brand-copy,
+  .crm-workspace .sidebar-shell:not(.is-collapsed) .sidebar-group-label,
+  .crm-workspace .sidebar-shell:not(.is-collapsed) .sidebar-nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
+  }
+
+  .crm-workspace .sidebar-shell:not(.is-collapsed) .sidebar-brand-copy,
+  .crm-workspace .sidebar-shell:not(.is-collapsed) .sidebar-group-label,
+  .crm-workspace .sidebar-shell:not(.is-collapsed) .sidebar-nav-label {
+    display: block;
+  }
+
+  .crm-workspace .sidebar-shell:not(.is-collapsed) .sidebar-nav-item {
+    justify-content: flex-start;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+.sidebar-nav-badge {
+  margin-left: auto;
+}
+
+.crm-workspace .sidebar-shell.is-collapsed .sidebar-nav-badge {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  margin-left: 0;
+}
+
+.mobile-navigation-badge {
+  position: absolute;
+  top: -8px;
+  right: -11px;
+}
+
 .crm-workspace .sidebar-shell .sidebar-brand,
 .crm-workspace .sidebar-shell .sidebar-account {
   border-color: var(--sidebar-border);
@@ -52,8 +233,7 @@
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-item {
-  height: 38px;
-  min-height: 38px;
+  min-height: 40px;
   border-color: transparent;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -65,6 +245,12 @@
     background-color 150ms ease,
     border-color 150ms ease,
     color 150ms ease;
+}
+
+@media (max-width: 1023px) {
+  .crm-workspace .sidebar-shell .sidebar-nav-item {
+    min-height: 44px;
+  }
 }
 
 .crm-workspace .sidebar-shell .sidebar-nav-item:hover {

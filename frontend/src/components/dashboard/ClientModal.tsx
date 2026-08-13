@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, FormEvent, SetStateAction } from "react";
-import { Trash2, X } from "lucide-react";
+import { Archive, RotateCcw, Trash2, X } from "lucide-react";
 import type { Client, Status } from "../../types/dashboard";
 import { ApiHttpError } from "../../services/crmApi";
 import { formatNextFollowUp } from "../../utils/followUpProjection";
@@ -14,6 +14,8 @@ type ClientModalProps = {
   onClose: () => void;
   onSave: (client: Client) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
+  onArchive?: () => void | Promise<void>;
+  onRestore?: () => void | Promise<void>;
   saveLabel: string;
   showDelete?: boolean;
 };
@@ -100,6 +102,8 @@ export default function ClientModal({
   onClose,
   onSave,
   onDelete,
+  onArchive,
+  onRestore,
   saveLabel,
   showDelete = false,
 }: ClientModalProps) {
@@ -107,6 +111,7 @@ export default function ClientModal({
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
   const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
@@ -115,12 +120,14 @@ export default function ClientModal({
   const documentRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLFormElement>(null);
   const deleteCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   const isBusyRef = useRef(false);
+  const isDeleteConfirmingRef = useRef(false);
 
   const fieldBaseClass =
-    "rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-sm outline-none transition-[border-color,background-color] duration-200 placeholder:text-slate-600 hover:border-slate-400/24 hover:bg-slate-900/55 focus:border-teal-300/28 focus:bg-slate-900/70";
-  const invalidFieldClass = "border-rose-300/45 bg-rose-950/10 focus:border-rose-200/70";
+    "rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-slate-400 hover:border-slate-400 hover:bg-slate-50 focus:border-teal-600 focus:bg-white focus:ring-2 focus:ring-teal-100";
+  const invalidFieldClass = "border-rose-400 bg-rose-50 focus:border-rose-600 focus:ring-2 focus:ring-rose-100";
 
   const fieldLabelClass =
     "mb-1.5 block text-[11px] font-semibold text-slate-500";
@@ -130,19 +137,35 @@ export default function ClientModal({
   }, [onClose]);
 
   useEffect(() => {
-    isBusyRef.current = isSubmitting || isDeleting;
-  }, [isDeleting, isSubmitting]);
+    isBusyRef.current = isSubmitting || isDeleting || isArchiving;
+  }, [isArchiving, isDeleting, isSubmitting]);
+
+  useEffect(() => {
+    isDeleteConfirmingRef.current = isDeleteConfirming;
+  }, [isDeleteConfirming]);
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const focusTimeout = window.setTimeout(() => nameRef.current?.focus(), 0);
+    const focusTimeout = window.setTimeout(() => {
+      if (client.archived === true) {
+        const restoreButton = document.querySelector<HTMLButtonElement>("[data-client-restore]");
+        (restoreButton ?? dialogRef.current)?.focus();
+      } else {
+        nameRef.current?.focus();
+      }
+    }, 0);
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape" && !isBusyRef.current) {
         event.preventDefault();
         event.stopPropagation();
+        if (isDeleteConfirmingRef.current) {
+          setIsDeleteConfirming(false);
+          window.setTimeout(() => deleteTriggerRef.current?.focus(), 0);
+          return;
+        }
         onCloseRef.current();
         return;
       }
@@ -171,7 +194,11 @@ export default function ClientModal({
       window.clearTimeout(focusTimeout);
       window.removeEventListener("keydown", handleKeyDown, true);
       document.body.style.overflow = previousOverflow;
-      previousFocus?.focus();
+      if (previousFocus && document.contains(previousFocus)) {
+        previousFocus.focus();
+      } else {
+        document.querySelector<HTMLElement>("#crm-main-content")?.focus();
+      }
     };
   }, []);
 
@@ -262,7 +289,28 @@ export default function ClientModal({
     }
   }
 
-  const isBusy = isSubmitting || isDeleting;
+  function cancelDeleteConfirmation() {
+    setIsDeleteConfirming(false);
+    window.setTimeout(() => deleteTriggerRef.current?.focus(), 0);
+  }
+
+  async function handleLifecycleAction(action: (() => void | Promise<void>) | undefined, message: string) {
+    if (!action || isBusyRef.current) return;
+    setIsArchiving(true);
+    setFormError("");
+    try {
+      await action();
+      setIsArchiving(false);
+      onCloseRef.current();
+    } catch {
+      setFormError(message);
+      setIsArchiving(false);
+    }
+  }
+
+  const isBusy = isSubmitting || isDeleting || isArchiving;
+  const isArchived = client.archived === true;
+  const formDisabled = isBusy || isArchived;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4">
@@ -280,13 +328,15 @@ export default function ClientModal({
             else onClose();
           }
         }}
-        className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-lg p-4 text-white shadow-2xl"
+        className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-lg p-4 text-slate-900 shadow-2xl"
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h2 id="client-modal-title" className="text-sm font-semibold">{title}</h2>
             <p id="client-modal-description" className="mt-1 text-[11px] text-slate-500">
-              Preencha os dados principais para manter o funil limpo e organizado.
+              {isArchived
+                ? "Este cliente está arquivado. Restaure-o para editar os dados."
+                : "Preencha os dados principais para manter o funil limpo e organizado."}
             </p>
           </div>
 
@@ -295,7 +345,7 @@ export default function ClientModal({
             type="button"
             onClick={onClose}
             disabled={isBusy}
-            className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
           >
             <X size={15} />
           </button>
@@ -312,10 +362,10 @@ export default function ClientModal({
               placeholder="Ex: Mariana Costa"
               aria-invalid={Boolean(errors.name)}
               aria-describedby={errors.name ? "client-name-error" : undefined}
-              disabled={isBusy}
+              disabled={formDisabled}
               className={`${fieldBaseClass} ${errors.name ? invalidFieldClass : ""} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
-            {errors.name ? <p id="client-name-error" className="mt-1 text-[11px] text-rose-200">{errors.name}</p> : null}
+            {errors.name ? <p id="client-name-error" className="mt-1 text-[11px] text-rose-700">{errors.name}</p> : null}
           </div>
 
           <div>
@@ -325,7 +375,7 @@ export default function ClientModal({
               value={client.company}
               onChange={(event) => updateField("company", event.target.value)}
               placeholder="Ex: Alpha Digital"
-              disabled={isBusy}
+              disabled={formDisabled}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
           </div>
@@ -340,10 +390,10 @@ export default function ClientModal({
               placeholder="Ex: 5535999990000"
               aria-invalid={Boolean(errors.phone)}
               aria-describedby={errors.phone ? "client-phone-error" : undefined}
-              disabled={isBusy}
+              disabled={formDisabled}
               className={`${fieldBaseClass} ${errors.phone ? invalidFieldClass : ""} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
-            {errors.phone ? <p id="client-phone-error" className="mt-1 text-[11px] text-rose-200">{errors.phone}</p> : null}
+            {errors.phone ? <p id="client-phone-error" className="mt-1 text-[11px] text-rose-700">{errors.phone}</p> : null}
           </div>
 
           <div>
@@ -356,10 +406,10 @@ export default function ClientModal({
               placeholder="Ex: cliente@email.com"
               aria-invalid={Boolean(errors.email)}
               aria-describedby={errors.email ? "client-email-error" : undefined}
-              disabled={isBusy}
+              disabled={formDisabled}
               className={`${fieldBaseClass} ${errors.email ? invalidFieldClass : ""} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
-            {errors.email ? <p id="client-email-error" className="mt-1 text-[11px] text-rose-200">{errors.email}</p> : null}
+            {errors.email ? <p id="client-email-error" className="mt-1 text-[11px] text-rose-700">{errors.email}</p> : null}
           </div>
 
           <div>
@@ -369,7 +419,7 @@ export default function ClientModal({
               value={client.city}
               onChange={(event) => updateField("city", event.target.value)}
               placeholder="Ex: Campinas"
-              disabled={isBusy}
+              disabled={formDisabled}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
           </div>
@@ -386,10 +436,10 @@ export default function ClientModal({
                 placeholder="SP"
                 aria-invalid={Boolean(errors.state)}
                 aria-describedby={errors.state ? "client-state-error" : undefined}
-                disabled={isBusy}
+                disabled={formDisabled}
                 className={`${fieldBaseClass} ${errors.state ? invalidFieldClass : ""} w-full select-text uppercase disabled:cursor-not-allowed disabled:opacity-70`}
               />
-              {errors.state ? <p id="client-state-error" className="mt-1 text-[11px] text-rose-200">{errors.state}</p> : null}
+              {errors.state ? <p id="client-state-error" className="mt-1 text-[11px] text-rose-700">{errors.state}</p> : null}
             </div>
             <div>
               <label htmlFor="client-document" className={fieldLabelClass}>CPF / CNPJ</label>
@@ -402,10 +452,10 @@ export default function ClientModal({
                 placeholder="Somente números"
                 aria-invalid={Boolean(errors.cpfCnpj)}
                 aria-describedby={errors.cpfCnpj ? "client-document-error" : undefined}
-                disabled={isBusy}
+                disabled={formDisabled}
                 className={`${fieldBaseClass} ${errors.cpfCnpj ? invalidFieldClass : ""} w-full select-text disabled:cursor-not-allowed disabled:opacity-70`}
               />
-              {errors.cpfCnpj ? <p id="client-document-error" className="mt-1 text-[11px] text-rose-200">{errors.cpfCnpj}</p> : null}
+              {errors.cpfCnpj ? <p id="client-document-error" className="mt-1 text-[11px] text-rose-700">{errors.cpfCnpj}</p> : null}
             </div>
           </div>
         </div>
@@ -419,7 +469,7 @@ export default function ClientModal({
               value={client.value}
               onChange={(event) => updateField("value", Number(event.target.value))}
               placeholder="Ex: 12000"
-              disabled={isBusy}
+              disabled={formDisabled}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
 
@@ -435,7 +485,7 @@ export default function ClientModal({
               value={client.source}
               onChange={(event) => updateField("source", event.target.value)}
               placeholder="Ex: Instagram, Site, WhatsApp"
-              disabled={isBusy}
+              disabled={formDisabled}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
 
@@ -451,7 +501,7 @@ export default function ClientModal({
               value={formatNextFollowUp(client.nextFollowUp)}
               readOnly
               aria-readonly="true"
-              className={`${fieldBaseClass} cursor-default select-text text-slate-400`}
+              className={`${fieldBaseClass} cursor-default select-text text-slate-700`}
             />
           </div>
 
@@ -461,8 +511,8 @@ export default function ClientModal({
               id="client-status"
               value={client.status}
               onChange={(event) => updateField("status", event.target.value as Status)}
-              disabled={isBusy}
-              className={`${fieldBaseClass} bg-slate-950 disabled:cursor-not-allowed disabled:opacity-70`}
+              disabled={formDisabled}
+              className={`${fieldBaseClass} bg-white disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {statusList.map((status) => (
                 <option key={status} value={status}>
@@ -487,7 +537,7 @@ export default function ClientModal({
                 )
               }
               placeholder="Ex: Quente, Alto valor, Urgente"
-              disabled={isBusy}
+              disabled={formDisabled}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}
             />
 
@@ -498,36 +548,51 @@ export default function ClientModal({
         </div>
 
         {formError ? (
-          <p className="mt-3 rounded-xl border border-rose-300/20 bg-rose-950/20 px-3 py-2 text-xs text-rose-100">
+          <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
             {formError}
           </p>
         ) : null}
 
-        <div className="mt-4 flex items-center justify-between gap-2">
-          {showDelete && onDelete && !isDeleteConfirming ? (
-            <button
-              type="button"
-              onClick={() => setIsDeleteConfirming(true)}
-              disabled={isBusy}
-              className="inline-flex items-center gap-2 rounded-xl border border-rose-300/20 bg-slate-950/25 px-3 py-2 text-xs text-rose-100 transition hover:bg-slate-900/70"
-            >
-              <Trash2 size={14} />
-              Excluir
-            </button>
-          ) : !isDeleteConfirming ? (
-            <div />
+        <div className="mt-4 flex flex-col items-stretch justify-between gap-2 sm:flex-row sm:items-center">
+          {!isDeleteConfirming ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {onArchive ? (
+                <button type="button" onClick={() => void handleLifecycleAction(onArchive, "Não foi possível arquivar o cliente agora.")} disabled={isBusy} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60">
+                  <Archive size={14} />
+                  {isArchiving ? "Arquivando..." : "Arquivar cliente"}
+                </button>
+              ) : null}
+              {onRestore ? (
+                <button data-client-restore type="button" onClick={() => void handleLifecycleAction(onRestore, "Não foi possível restaurar o cliente agora.")} disabled={isBusy} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-teal-300 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-800 transition hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-60">
+                  <RotateCcw size={14} />
+                  {isArchiving ? "Restaurando..." : "Restaurar cliente"}
+                </button>
+              ) : null}
+              {showDelete && onDelete ? (
+                <button
+                  ref={deleteTriggerRef}
+                  type="button"
+                  onClick={() => setIsDeleteConfirming(true)}
+                  disabled={isBusy}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                >
+                  <Trash2 size={14} />
+                  Exclusão permanente
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           {isDeleteConfirming ? (
-            <div className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-300/20 bg-rose-950/15 px-3 py-2">
-              <p className="text-xs text-rose-100">Excluir este cliente e o histórico relacionado?</p>
+            <div className="flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+              <p className="text-xs text-rose-700">A exclusão é irreversível e só pode ocorrer quando não há histórico ou relações protegidas.</p>
               <div className="flex gap-2">
                 <button
                   ref={deleteCancelRef}
                   type="button"
-                  onClick={() => setIsDeleteConfirming(false)}
+                  onClick={cancelDeleteConfirmation}
                   disabled={isBusy}
-                  className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300"
+                  className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700"
                 >
                   Cancelar exclusão
                 </button>
@@ -535,7 +600,7 @@ export default function ClientModal({
                   type="button"
                   onClick={handleDelete}
                   disabled={isBusy}
-                  className="rounded-xl border border-rose-300/30 bg-rose-950/30 px-3 py-2 text-xs font-semibold text-rose-100 disabled:opacity-60"
+                  className="min-h-11 rounded-xl border border-rose-300 bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                 >
                   {isDeleting ? "Excluindo..." : "Confirmar exclusão"}
                 </button>
@@ -543,24 +608,26 @@ export default function ClientModal({
             </div>
           ) : (
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
               disabled={isBusy}
-              className="rounded-xl border border-slate-500/16 bg-slate-950/25 px-3 py-2 text-xs text-slate-300 transition-[border-color,background-color] duration-200 hover:border-slate-400/24 hover:bg-slate-900/70 disabled:cursor-not-allowed disabled:opacity-45"
+              className="min-h-11 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 transition-[border-color,background-color] duration-200 hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
             >
               Cancelar
             </button>
 
-            <button
-              type="submit"
-              disabled={isBusy}
-              aria-disabled={isBusy}
-              className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-950 transition-colors duration-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting ? "Salvando..." : saveLabel}
-            </button>
+            {!isArchived ? (
+              <button
+                type="submit"
+                disabled={formDisabled}
+                aria-disabled={formDisabled}
+                className="min-h-11 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition-colors duration-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Salvando..." : saveLabel}
+              </button>
+            ) : null}
           </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const { normalizePhone } = require("../channels/phoneNormalizer");
 const { createAutomationService } = require("../automations/service");
+const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
 const {
   EVENT_TYPE,
@@ -367,6 +368,8 @@ async function resolveClient(tx, event, contact, atomic) {
       where: { id: contact.clienteId, empresaId: event.empresaId },
     });
     if (!linked) throw processingError("WHATSAPP_CLIENT_INTEGRITY_CONFLICT");
+    if (linked.arquivadoEm !== null) throw processingError("WHATSAPP_CLIENT_ARCHIVED_READ_ONLY");
+    await lockActiveClienteRow(tx, event.empresaId, linked.id);
     return linked;
   }
 
@@ -375,8 +378,14 @@ async function resolveClient(tx, event, contact, atomic) {
     orderBy: { id: "asc" },
   });
   const candidates = clients.filter((client) => normalizedClientPhone(client.telefone) === atomic.normalizedPhone);
+  if (candidates.some((client) => client.arquivadoEm !== null)) {
+    throw processingError("WHATSAPP_CLIENT_ARCHIVED_READ_ONLY");
+  }
   if (candidates.length > 1) throw processingError("WHATSAPP_CLIENT_AMBIGUOUS");
-  if (candidates.length === 1) return candidates[0];
+  if (candidates.length === 1) {
+    await lockActiveClienteRow(tx, event.empresaId, candidates[0].id);
+    return candidates[0];
+  }
 
   return tx.cliente.create({
     data: {

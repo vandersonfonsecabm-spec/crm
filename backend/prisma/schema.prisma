@@ -20,6 +20,8 @@ model Cliente {
   cpfCnpj         String?
   interesse       String           @default("")
   status          String           @default("Lead")
+  arquivadoEm     DateTime?
+  statusAntesDeArquivar String?
   valor           Int              @default(0)
   origem          String           @default("Manual")
   favorito        Boolean          @default(false)
@@ -43,6 +45,7 @@ model Cliente {
   @@index([empresaId, status])
   @@index([empresaId, quente])
   @@index([empresaId, createdAt])
+  @@index([empresaId, arquivadoEm])
 }
 
 model Nota {
@@ -53,7 +56,7 @@ model Nota {
   tipo      String   @default("nota")
   createdAt DateTime @default(now())
   clienteId Int
-  cliente   Cliente  @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  cliente   Cliente  @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([empresaId])
   @@index([clienteId])

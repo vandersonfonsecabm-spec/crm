@@ -31,7 +31,7 @@ const {
 const backendDir = path.resolve(__dirname, "..");
 const migrationDir = path.join(backendDir, "prisma", "migrations");
 const currentMigration = "20260801123000_enforce_tenant_safe_relations";
-const latestMigration = "20260811130000_add_meta_oauth_state_binding";
+const latestMigration = "20260813150000_add_customer_archive";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 const historicalSourceDatabase = requiredEnv("CRM_TEST_SOURCE_DATABASE_PATH");
@@ -137,8 +137,8 @@ test("relacao simples sem excecao explicita reprova o gate", () => {
 
 test("mudanca de onDelete em relacao conhecida reprova a arquitetura", () => {
   const datamodel = structuredClone(Prisma.dmmf.datamodel);
-  const nota = datamodel.models.find((model) => model.name === "Nota");
-  nota.fields.find((field) => field.name === "cliente").relationOnDelete = "Restrict";
+  const mensagem = datamodel.models.find((model) => model.name === "MensagemCanal");
+  mensagem.fields.find((field) => field.name === "conversaCanal").relationOnDelete = "Restrict";
   const result = inspectArchitecture({ datamodel });
   assert.ok(result.failures.includes("TENANT_RELATION_DELETE_ACTION_MISMATCH"));
 });

@@ -25,6 +25,8 @@ type DashboardOperationalSearchProps = {
   setOnlyHot: (callback: (value: boolean) => boolean) => void;
   exportCsv: () => void;
   clearFilters: () => void;
+  showArchived?: boolean;
+  setShowArchived?: (value: boolean) => void;
   pageActions?: PageAction[];
 };
 
@@ -49,6 +51,8 @@ export default function DashboardOperationalSearch({
   setOnlyHot,
   exportCsv,
   clearFilters,
+  showArchived = false,
+  setShowArchived,
   pageActions = [],
 }: DashboardOperationalSearchProps) {
   if (activePage === "automacoes") return null;
@@ -62,7 +66,7 @@ export default function DashboardOperationalSearch({
         className="compositional-local-toolbar border-0 bg-transparent px-3 py-1.5 shadow-none"
       >
         <div
-          className={`flex h-9 min-w-[280px] items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--control-bg)] px-3 transition-colors hover:border-[var(--control-border-hover)] focus-within:border-[var(--control-border-focus)] focus-within:ring-2 focus-within:ring-[var(--control-ring)] ${
+          className={`flex h-9 min-w-0 w-full basis-full items-center gap-2 rounded-md border border-[var(--control-border)] bg-[var(--control-bg)] px-3 transition-colors hover:border-[var(--control-border-hover)] focus-within:border-[var(--control-border-focus)] focus-within:ring-2 focus-within:ring-[var(--control-ring)] sm:min-w-[280px] sm:w-auto sm:basis-auto ${
             activePage === "kanban" ? "flex-[1_1_280px]" : "flex-[1_1_380px]"
           }`}
         >
@@ -87,6 +91,7 @@ export default function DashboardOperationalSearch({
               }}
               className="rounded-md p-1 text-[var(--icon-muted)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-primary)]"
               title="Limpar busca"
+              aria-label="Limpar busca"
               type="button"
             >
               <X size={13} />
@@ -110,6 +115,23 @@ export default function DashboardOperationalSearch({
             </option>
           ))}
         </Select>
+
+        {isClientsPage && setShowArchived ? (
+          <Select
+            className="min-w-[136px]"
+            value={showArchived ? "arquivados" : "ativos"}
+            onChange={(event) => {
+              const archived = event.target.value === "arquivados";
+              setShowArchived(archived);
+              if (archived) setStatusFilter("Todos");
+              setPage(1);
+            }}
+            aria-label="Exibição de clientes"
+          >
+            <option value="ativos">Clientes ativos</option>
+            <option value="arquivados">Clientes arquivados</option>
+          </Select>
+        ) : null}
 
         <Select
           className="min-w-[120px]"
@@ -145,7 +167,7 @@ export default function DashboardOperationalSearch({
           </Select>
         )}
 
-        <Button
+        {!showArchived && <Button
           aria-pressed={onlyFavorites}
           onClick={() => setOnlyFavorites((value) => !value)}
           className={onlyFavorites ? "border-[var(--filter-active-border)] bg-[var(--filter-active-bg)] text-[var(--filter-active-text)]" : ""}
@@ -154,9 +176,9 @@ export default function DashboardOperationalSearch({
           variant="secondary"
         >
           Favoritos
-        </Button>
+        </Button>}
 
-        <Button
+        {!showArchived && <Button
           aria-pressed={onlyHot}
           onClick={() => setOnlyHot((value) => !value)}
           className={onlyHot ? isClientsPage ? "clientes-filter-hot" : "border-amber-300 bg-amber-50 text-amber-800" : ""}
@@ -164,7 +186,7 @@ export default function DashboardOperationalSearch({
           variant="secondary"
         >
           Quentes
-        </Button>
+        </Button>}
 
         {isClientsPage && pageActions.length > 0 && (
           <DashboardActionOverflow

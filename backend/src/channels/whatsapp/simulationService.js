@@ -4,6 +4,7 @@ const { TEST_CHANNEL_KEY, TEST_CHANNEL_NAME } = require("../channelService");
 const { parseSimulationPayload } = require("./messageParser");
 const { detectIntent } = require("./intentService");
 const { buildPreparedResponse, summarizeProduct } = require("./responseService");
+const { lockActiveClienteRow } = require("../../shared/clientLifecycleLock");
 
 const OPEN_STATUSES = new Set(["Lead", "Novo", "Contato", "Proposta"]);
 const COMMERCIAL_INTENTS = new Set([
@@ -213,7 +214,16 @@ async function createOrFindConversation({ tx, empresaId, channel, contact }) {
 
 async function createOrFindClient({ tx, empresaId, payload, intent, product }) {
   const existing = await tx.cliente.findFirst({ where: { empresaId, telefone: payload.telefoneNormalizado }, orderBy: { id: "asc" } });
-  if (existing) return { cliente: existing, criado: false };
+  if (existing?.arquivadoEm) {
+    const error = new Error("O cliente precisa ser restaurado antes de usar a simulacao.");
+    error.status = 409;
+    error.codigo = "WHATSAPP_CLIENT_ARCHIVED_READ_ONLY";
+    throw error;
+  }
+  if (existing) {
+    await lockActiveClienteRow(tx, empresaId, existing.id);
+    return { cliente: existing, criado: false };
+  }
   const commercial = COMMERCIAL_INTENTS.has(intent.intencao);
   const name = payload.nome || `Contato WhatsApp ${maskPhone(payload.telefoneNormalizado)}`;
   const cliente = await tx.cliente.create({
@@ -252,8 +262,14 @@ async function updateFunnelIfNeeded({ tx, cliente, intent }) {
     return { etapaAnterior: previous, etapaAtual: previous, alterado: false };
   }
   if (previous !== "Lead") return { etapaAnterior: previous, etapaAtual: previous, alterado: false };
-  const updated = await tx.cliente.update({ where: { id: cliente.id }, data: { status: "Contato", ultimoContato: 0, revisao: { increment: 1 } } });
-  return { etapaAnterior: previous, etapaAtual: updated.status, alterado: true };
+  const updated = await tx.cliente.updateMany({ where: { id: cliente.id, empresaId: cliente.empresaId, arquivadoEm: null, status: "Lead" }, data: { status: "Contato", ultimoContato: 0, revisao: { increment: 1 } } });
+  if (updated.count !== 1) {
+    const error = new Error("O cliente precisa ser restaurado antes de atualizar o funil.");
+    error.status = 409;
+    error.codigo = "WHATSAPP_CLIENT_ARCHIVED_READ_ONLY";
+    throw error;
+  }
+  return { etapaAnterior: previous, etapaAtual: "Contato", alterado: true };
 }
 
 async function createOrReuseFollowUp({ tx, empresaId, cliente, reason, externalId }) {

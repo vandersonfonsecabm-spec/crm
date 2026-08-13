@@ -47,6 +47,9 @@ function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   app.get("/conversas", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.listConversations(context, req.query));
   }));
+  app.get("/conversas/resumo", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.conversationAttentionSummary(context));
+  }));
   app.get("/conversas/equipe", ...guarded, route(async (req, res, context, api) => {
     res.json({ data: await api.listConversationTeam(context) });
   }));

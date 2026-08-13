@@ -28,7 +28,9 @@ test("navegação canônica disponibiliza Visão Geral sem mover o Painel Comerc
   assert.doesNotMatch(navigation, /dashboardPageAliases|dashboard:\s*"comercial"/);
   assert.match(navigation, /page: "comercial" as const/);
   assert.match(sidebar, /<span>\{route\.label\}<\/span>/);
-  assert.match(sidebar, /const mobilePages: ActivePage\[\] = \["comercial", "clientes", "kanban", "agenda"\]/);
+  assert.match(sidebar, /const mobilePages: ActivePage\[\] = \["comercial", "clientes", leadsCommunicationEnabled \? "inbox" : "kanban", "agenda"\]/);
+  assert.match(sidebar, /aria-haspopup="menu"/);
+  assert.match(sidebar, /<span>Mais<\/span>/);
   assert.doesNotMatch(sidebar, /const mobilePages: ActivePage\[\] = \[[^\]]*"dashboard"/);
   assert.match(commandSearch, /label: "Visão Geral"/);
   assert.match(commandSearch, /label: "Painel Comercial"/);

@@ -35,6 +35,7 @@ type DashboardCustomerDrawerProps = {
   onRequestWhatsapp: (client: Client) => void;
   onNavigateContext: (destination: "INBOX" | "KANBAN" | "AGENDA", id: number) => void;
   onUnauthorized: () => void;
+  canRestoreArchivedClients?: boolean;
   onApplySmartFilter: (type: SmartFilterType) => void;
   focusSession: DrawerFocusSession | null;
   isFocusSessionActive: (token: number) => boolean;
@@ -86,6 +87,7 @@ export default function DashboardCustomerDrawer({
   onRequestWhatsapp,
   onNavigateContext,
   onUnauthorized,
+  canRestoreArchivedClients = false,
   onApplySmartFilter,
   focusSession,
   isFocusSessionActive,
@@ -190,6 +192,8 @@ export default function DashboardCustomerDrawer({
             onRequestWhatsapp={onRequestWhatsapp}
             onNavigateContext={onNavigateContext}
             onUnauthorized={onUnauthorized}
+            readOnly={selectedClient.archived === true}
+            canRestore={canRestoreArchivedClients}
           />
         </aside>
       </div>
@@ -223,17 +227,19 @@ export default function DashboardCustomerDrawer({
   return (
     <aside key={`${activePage}-${selectedClient?.id ?? "empty"}`} className={`${drawerShellClass(activePage)} decision-drawer-shell`}>
       <div className="saas-panel decision-drawer rounded-lg">
-        <div className="border-b border-slate-700/40 bg-slate-950/18 p-3">
+        <div className="border-b border-slate-200 bg-slate-50 p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold">Central de decisão</p>
-              <p className="mt-0.5 text-[11px] text-slate-500">Dados, ação e histórico do cliente em um só lugar.</p>
+              <p className="text-sm font-semibold text-slate-900">Central de decisão</p>
+              <p className="mt-0.5 text-[11px] text-slate-600">Dados, ação e histórico do cliente em um só lugar.</p>
             </div>
 
             {selectedClient && (
               <button
+                aria-label="Fechar detalhes do cliente"
+                type="button"
                 onClick={onClearSelectedClient}
-                className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800/70 hover:text-slate-200"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
               >
                 <X size={14} />
               </button>
@@ -260,6 +266,8 @@ export default function DashboardCustomerDrawer({
             onRequestWhatsapp={onRequestWhatsapp}
             onNavigateContext={onNavigateContext}
             onUnauthorized={onUnauthorized}
+            readOnly={selectedClient.archived === true}
+            canRestore={canRestoreArchivedClients}
           />
         ) : (
           <EmptyDecisionState />

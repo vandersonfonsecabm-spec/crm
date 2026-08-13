@@ -97,15 +97,16 @@ function createChannelService({ prisma }) {
     });
   }
 
-  async function createOrFindOpenConversation({ empresaId, canalIntegracaoId, contatoCanalId }) {
-    const channel = await getChannel({ empresaId, id: canalIntegracaoId });
-    const contact = await prisma.contatoCanal.findFirst({
+  async function createOrFindOpenConversation({ empresaId, canalIntegracaoId, contatoCanalId, client = prisma }) {
+    const channel = await client.canalIntegracao.findFirst({ where: { id: canalIntegracaoId, empresaId } });
+    if (!channel) throw notFound("Canal nao encontrado.", "CHANNEL_NOT_FOUND");
+    const contact = await client.contatoCanal.findFirst({
       where: { id: contatoCanalId, empresaId, canalIntegracaoId: channel.id },
     });
     if (!contact) throw notFound("Contato do canal nao encontrado.", "CHANNEL_CONTACT_NOT_FOUND");
     const chaveAberta = `canal:${channel.id}:contato:${contact.id}`;
     try {
-      return await prisma.conversaCanal.upsert({
+      return await client.conversaCanal.upsert({
         where: { chaveAberta },
         create: {
           empresaId,
@@ -118,7 +119,7 @@ function createChannelService({ prisma }) {
       });
     } catch (error) {
       if (error && error.code === "P2002") {
-        const existing = await prisma.conversaCanal.findUnique({ where: { chaveAberta } });
+        const existing = await client.conversaCanal.findUnique({ where: { chaveAberta } });
         if (existing && existing.empresaId === empresaId) return existing;
       }
       throw error;

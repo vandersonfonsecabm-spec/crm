@@ -3,6 +3,7 @@ const {
   reconcileClientProjections,
   withProjectionRetry,
 } = require("../follow-up-projection");
+const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
 
 const PRIORITIES = ["BAIXA", "MEDIA", "ALTA", "CRITICA"];
 const ACTIVE_BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA"];
@@ -20,6 +21,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
       const conversation = await loadConversation(tx, context, conversationId);
       requireCommercialWrite(context, conversation);
       const { cliente, lead } = requireCommercialEntities(conversation);
+      await lockActiveClienteRow(tx, context.empresaId, cliente.id);
       if (!QUALIFIABLE_CONVERSATION_STATES.includes(conversation.status)) {
         throw domainError(422, "COMMERCIAL_CONVERSATION_STATE_INVALID", "A conversa precisa estar em atendimento para ser qualificada.");
       }
@@ -42,9 +44,10 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
         ...(lead.responsavelId === null ? { responsavelId: responsibleId } : {}),
       };
 
-      await tx.lead.update({ where: { id: lead.id }, data: leadData });
-      await tx.cliente.update({
-        where: { id: cliente.id },
+      const leadUpdated = await tx.lead.updateMany({ where: { id: lead.id, empresaId: context.empresaId, cliente: { arquivadoEm: null } }, data: leadData });
+      if (leadUpdated.count !== 1) throw domainError(409, "CLIENT_ARCHIVED_READ_ONLY", "Restaure o cliente antes de qualificar a conversa.");
+      const clientUpdated = await tx.cliente.updateMany({
+        where: { id: cliente.id, empresaId: context.empresaId, arquivadoEm: null },
         data: {
           interesse: qualification.interesse,
           ...(qualification.valorEstimado === null ? {} : { valor: qualification.valorEstimado }),
@@ -66,6 +69,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
           responsavel: author.nome,
         },
       });
+      if (clientUpdated.count !== 1) throw domainError(409, "CLIENT_ARCHIVED_READ_ONLY", "Restaure o cliente antes de qualificar a conversa.");
       await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds: [cliente.id] });
       await createCommercialHistory(tx, context, conversation, {
         acao: "QUALIFICAR",
@@ -144,6 +148,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
       const conversation = await loadConversation(tx, context, conversationId);
       requireCommercialWrite(context, conversation);
       const { cliente, lead } = requireCommercialEntities(conversation);
+      await lockActiveClienteRow(tx, context.empresaId, cliente.id);
       const qualification = requireReadyQualification(conversation);
       const linked = lead.negocios[0];
       if (linked && linked.id !== businessId) {
@@ -167,7 +172,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
       if (business.leadId === lead.id && linked?.id === business.id) return;
 
       const updated = await tx.negocio.updateMany({
-        where: { id: business.id, empresaId: context.empresaId, leadId: null },
+        where: { id: business.id, empresaId: context.empresaId, leadId: null, cliente: { arquivadoEm: null } },
         data: {
           leadId: lead.id,
           convertidoPorId: context.usuarioId,
@@ -179,7 +184,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
         throw domainError(409, "COMMERCIAL_BUSINESS_LINK_CONFLICT", "Outro usuario alterou este Negocio.");
       }
       const leadUpdate = await tx.lead.updateMany({
-        where: { id: lead.id, empresaId: context.empresaId, status: { not: "CONVERTIDO" } },
+        where: { id: lead.id, empresaId: context.empresaId, status: { not: "CONVERTIDO" }, cliente: { arquivadoEm: null } },
         data: { status: "CONVERTIDO", convertidoEm: new Date() },
       });
       if (leadUpdate.count !== 1) {
@@ -205,7 +210,14 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
 
 async function loadConversation(client, context, conversationId) {
   const conversation = await client.conversaCanal.findFirst({
-    where: { id: conversationId, empresaId: context.empresaId },
+    where: {
+      id: conversationId,
+      empresaId: context.empresaId,
+      AND: [
+        { OR: [{ contatoCanal: { clienteId: null } }, { contatoCanal: { cliente: { arquivadoEm: null } } }] },
+        { OR: [{ leadId: null }, { lead: { cliente: { arquivadoEm: null } } }] },
+      ],
+    },
     include: {
       canalIntegracao: { select: { id: true, nome: true, tipo: true } },
       contatoCanal: { include: { cliente: true } },

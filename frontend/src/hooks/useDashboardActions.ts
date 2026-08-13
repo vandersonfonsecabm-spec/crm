@@ -2,9 +2,11 @@ import { useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   ApiHttpError,
+  archiveClienteOnBackend,
   createNotaOnBackend,
   createClienteOnBackend,
   deleteClienteOnBackend,
+  restoreClienteOnBackend,
   updateClienteOnBackend,
 } from "../services/crmApi";
 import { getLeadScore, getPriority, getRisk } from "../utils/dashboardHelpers";
@@ -240,6 +242,40 @@ export default function useDashboardActions({
     }
   }
 
+  async function archiveClient(id: number) {
+    const target = clients.find((client) => client.id === id) ?? (selectedClient?.id === id ? selectedClient : null);
+    if (!target) return;
+    try {
+      await archiveClienteOnBackend(target);
+      setClients((current) => current.filter((client) => client.id !== id));
+      if (selectedId === id) {
+        setSelectedId(null);
+        setSelectedClientDetail(null);
+      }
+      setEditing(null);
+      showToast("Cliente arquivado. O histórico foi preservado.");
+    } catch (error) {
+      showToast(error instanceof ApiHttpError && error.code === "CUSTOMER_REGISTRATION_CONFLICT"
+        ? "O cliente mudou em outra sessão. Atualize antes de arquivar."
+        : "Não foi possível arquivar o cliente.");
+      throw error;
+    }
+  }
+
+  async function restoreClient(client: Client) {
+    try {
+      const restored = await restoreClienteOnBackend(client);
+      setClients((current) => current.filter((item) => item.id !== restored.id));
+      showToast("Cliente restaurado.");
+      return restored;
+    } catch (error) {
+      showToast(error instanceof ApiHttpError && error.code === "CUSTOMER_REGISTRATION_CONFLICT"
+        ? "O cliente mudou em outra sessão. Atualize antes de restaurar."
+        : "Não foi possível restaurar o cliente.");
+      throw error;
+    }
+  }
+
   async function addNote() {
     if (!selectedClient || !noteText.trim()) return;
 
@@ -321,7 +357,7 @@ export default function useDashboardActions({
       client.phone,
       client.email,
       String(client.value),
-      client.status,
+      client.archived ? "Arquivado" : client.status,
       client.source,
       getPriority(client),
       getRisk(client),
@@ -370,6 +406,8 @@ export default function useDashboardActions({
     saveEdit,
     createClient,
     deleteClient,
+    archiveClient,
+    restoreClient,
     addNote,
     addTagToSelected,
     removeTagFromSelected,
