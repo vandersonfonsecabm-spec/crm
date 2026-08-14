@@ -1,0 +1,57 @@
+V58 — RELATÓRIO FINAL
+
+STATUS: V58_COMPACT_SIDEBAR_INBOX_FULL_WIDTH_SHIP
+
+1. Estado inicial
+V58 partiu do runtime V56/V57 com sidebar expandida de 224 px, rail de 68 px e Inbox com gutters efetivos de aproximadamente 34 px laterais e 40 px inferiores. O branch foi confirmado como feature/postgres-migration-prep; origin/master permaneceu no Mark A. O worktree funcional estava limpo antes dos captures. O backend, banco, schema, migrations e integrações ficaram fora do escopo.
+
+2. Implementação
+- Sidebar expandida reduzida para 208 px.
+- Rail reduzido para 64 px, com marca compacta, badge, tooltip/title, ARIA e foco interno.
+- Persistência de collapse validada por click, Enter, Space, reload e troca de rota.
+- Inbox recebeu frame específico full-workspace, com 10 px de respiro externo efetivo em desktop.
+- Grids passaram a 25/75 sem contexto e 25/50/25 com contexto; Chat permanece dominante.
+- Lista recebeu hierarquia mais densa; composer e scrolls internos foram preservados.
+- Contexto foi reorganizado em Identidade, Atendimento, Comercial, Origem e Histórico.
+- Drawer compacto recebeu ID real para `aria-controls`; valores longos quebram sem overflow.
+
+3. Arquivos
+Código alterado somente em:
+- `frontend/src/index.css`
+- `frontend/src/components/dashboard/DashboardSidebar.css`
+- `frontend/src/components/leads-communication/LeadsCommunication.css`
+- `frontend/src/components/leads-communication/DashboardInboxPanel.tsx`
+- `frontend/src/components/leads-communication/CommunicationOverlay.tsx`
+- testes frontend focais V58/shell/Inbox.
+
+Relatórios e evidências estão em `artifacts/v58/`; os captures `.jpg` são os anexos recomendados.
+
+4. Banco e backend
+Nenhuma alteração de backend, banco, Prisma, schema, migration, integração ou provider. `backend/prisma/dev.db` manteve SHA-256 `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+
+5. Testes
+- `npm test`: 159/159 PASS.
+- `npm run build`: PASS (1818 módulos; warning conhecido de chunk >500 kB).
+- `git diff --check`: PASS.
+- QA autenticado: 1440×900, 1366×768, 1280×800 compacto e sentinel 390×844.
+- Console: nenhum erro/aviso capturado.
+- Axe automatizado: não disponível; não foi declarado PASS falso. DOM/ARIA/teclado/foco/overflow foram validados manualmente.
+
+6. Commit, push e deploy
+Runtime V58: `c91976d6538608e527ceb3784e1e4ee0d4d6131f`.
+Commits funcionais V58: `5e36287`, `fc8d0a9`, `ceb1ebf`, `c91976d`.
+Vercel oficial: `dpl_6Qg8JXe6ncoay817CFYTo1fmKMBR`, READY, aliases oficiais ativos. Railway/backend reutilizado porque não houve mudança backend.
+
+7. Estado final
+Sidebar: 208/64. Inbox expandida em 1366: x=218, w=1138,4, h=644, gutters 10 px; em 1440: x=218, w=1212, h=776, gutters 10 px. Chat foi maior que lista/contexto, composer ficou dentro da viewport e o documento não ganhou overflow horizontal.
+
+8. Limitações
+O breakpoint 1023/1024 e o alinhamento histórico do topbar (32 px versus frame Inbox de 10 px) permanecem advisories fora do escopo desktop focal. Filtros continuam em drawer compacto conforme decisão de ocupação. Captures recebidos do navegador são JPEG reais, mesmo quando o nome `.png` foi solicitado.
+
+9. Entrega
+Os documentos e imagens reais devem ser anexados individualmente na conversa fixada “saas novo”; não usar ZIP como substituto do relatório ou das imagens.
+
+OTIMIZAÇÕES DE EXECUÇÃO
+- Reutilizadas as evidências V56/V58 já verdes onde o código relacionado não mudou.
+- Repetidos apenas `npm test`, build e checks finais exigidos antes da publicação.
+- Não repetidos backend, banco, migrations ou providers, pois nenhum path correspondente mudou.

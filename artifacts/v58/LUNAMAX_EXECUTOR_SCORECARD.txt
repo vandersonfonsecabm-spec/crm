@@ -1,0 +1,25 @@
+LUNAMAX EXECUTOR SCORECARD — V58
+
+OBJECTIVE=compact sidebar + full-width desktop Inbox
+RUNTIME_SHA=c91976d6538608e527ceb3784e1e4ee0d4d6131f
+VERCEL_DEPLOYMENT=dpl_6Qg8JXe6ncoay817CFYTo1fmKMBR
+
+IMPLEMENTED
+- Sidebar expanded 208px, rail 64px.
+- Collapse click/Enter/Space, ARIA, focus ring, persistence.
+- Inbox-specific 8/10/10 frame and full-height flex chain.
+- 25/75 no context and 25/50/25 with context.
+- Compact context dialog IDREF and long-value wrapping.
+- Context hierarchy: Identidade, Atendimento, Comercial, Origem, Histórico.
+
+VALIDATED
+- npm test: 159/159.
+- npm run build: PASS.
+- git diff --check: PASS.
+- authenticated production QA: PASS.
+- API health: PASS; backend unchanged.
+- dev.db SHA unchanged.
+
+NOT CLAIMED
+- Automated axe package was unavailable.
+- No backend/schema/migration/provider operation was performed.

@@ -1,0 +1,12 @@
+SOL EXTRA HIGH — V58 FINAL
+
+VERDICT=V58_COMPACT_SIDEBAR_INBOX_FULL_WIDTH_SHIP
+HIGH_CRITICAL_FINDINGS=0
+
+Confirmei o runtime c91976d e a publicação Vercel dpl_6Qg8JXe6ncoay817CFYTo1fmKMBR. A sidebar 208/64 é real, persistente e acessível; o rail devolve 156 px ao conteúdo comparado ao baseline V56. A Inbox ocupa 10 px de cada lado e 10 px da base, usa 25/50/25 com contexto e 25/75 sem contexto, mantém Chat dominante, scroll interno e composer na base.
+
+QA autenticado confirmou Enter/Space/reload/rota, aria-expanded, IDREF do drawer compacto, Escape/foco/scroll lock, overflow horizontal zero e console limpo em 1440/1366/1280/390. A hierarquia do contexto e a quebra de URLs longas estão conectadas ao painel real.
+
+AXE_AUTOMATED_RUN=NOT_AVAILABLE. A limitação está explicitamente registrada; a validação manual DOM/ARIA/teclado/overflow passou.
+
+Advisories aceitos: salto de breakpoint 1023/1024, topbar com padding histórico de 32 px e filtros desktop em drawer conforme decisão de ocupação da V58.

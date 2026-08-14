@@ -1594,3 +1594,27 @@ integracoes autorizadas.
   gravacao real de arquivamento, somente recovery/forward-fix compativel com
   V54 e seguro.
 - Evidencia consolidada: `artifacts/v54/META_V54_REPORT_AND_DOCUMENTS.zip`.
+
+## V58 — sidebar compacta e Inbox full-workspace (2026-08-14)
+
+- O runtime frontend V58 foi publicado no SHA funcional
+  `c91976d6538608e527ceb3784e1e4ee0d4d6131f`; os commits V58 foram
+  `5e36287`, `fc8d0a9`, `ceb1ebf` e `c91976d`. O backend, banco, schema,
+  migrations e integrações não mudaram.
+- A sidebar passou de 224/68 px para 208/64 px, com collapse persistente,
+  ARIA, foco e teclado. A Inbox usa frame específico com 10 px de respiro,
+  grids 25/75 ou 25/50/25, Chat dominante, scroll interno e composer ancorado.
+- A produção Vercel está no deployment
+  `dpl_6Qg8JXe6ncoay817CFYTo1fmKMBR`, com aliases oficiais e HTTP 200. O
+  Railway/backend foi reutilizado; `/health` permaneceu HTTP 200.
+- A suíte frontend terminou 159/159, o build TypeScript/Vite passou e o
+  `dev.db` protegido preservou SHA-256
+  `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- QA autenticado confirmou 1440×900, 1366×768, drawer compacto 1280×800 e
+  sentinel 390×844, sem overflow horizontal e sem erros/avisos no console.
+  A limitação explícita é `AXE_AUTOMATED_RUN=NOT_AVAILABLE`; DOM/ARIA,
+  teclado, foco e overflow foram verificados manualmente.
+- As evidências sanitizadas estão em `artifacts/v58/`. Captures anexáveis são
+  JPEG reais (`*.jpg`); os nomes `*.png` históricos não são usados como prova
+  MIME. O breakpoint 1023/1024 e o alinhamento topbar/Inbox permanecem
+  advisories fora do escopo desktop focal.
