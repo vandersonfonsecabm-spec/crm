@@ -188,6 +188,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }, [sidebarCollapsed]);
 
   useEffect(() => {
+    setInboxAttentionCountFresh(false);
     if (!leadsCommunicationEnabled || !authSession) {
       setInboxAttentionCount(null);
       setInboxAttentionCountFresh(false);

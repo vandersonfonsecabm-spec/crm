@@ -86,6 +86,7 @@ export default function DashboardOverview({
           model={model}
           money={money}
           attentionCount={attentionCount}
+          attentionCountFresh={attentionCountFresh}
           onOpenAgenda={onOpenAgenda}
           onOpenInbox={onOpenInbox}
           summary={summary}
@@ -181,6 +182,7 @@ function OverviewData({
   model,
   money,
   attentionCount,
+  attentionCountFresh,
   onOpenInbox,
   onOpenAgenda,
   summary,
@@ -190,15 +192,17 @@ function OverviewData({
   model: ReturnType<typeof buildDashboardOverviewModel>;
   money: (value: number) => string;
   attentionCount: number | null;
+  attentionCountFresh: boolean;
   onOpenInbox: () => void;
   onOpenAgenda: () => void;
   summary: ApiDashboardSummary | null;
   agendaSummary: ApiAcompanhamentoResumo | null;
   agendaLoadState: "loading" | "ready" | "error";
 }) {
+  const effectiveAttentionCount = attentionCountFresh ? attentionCount : null;
   const analytics = summary?.analytics;
   const kpis: DashboardOverviewMetric[] = [
-    { label: "Aguardando resposta", kind: "count", value: attentionCount },
+    { label: "Aguardando resposta", kind: "count", value: effectiveAttentionCount },
     { label: "Acompanhamentos hoje", kind: "count", value: agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.paraHoje) : null },
     { label: "Acompanhamentos atrasados", kind: "count", value: agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.atrasados) : null },
     { label: "Clientes em alto risco", kind: "count", value: readMetric(analytics?.highRiskCount) },
@@ -213,7 +217,7 @@ function OverviewData({
       </dl>
 
       <div className="crm-overview-action-grid">
-        <OverviewAttention agendaLoadState={agendaLoadState} agendaSummary={agendaSummary} model={model} attentionCount={attentionCount} onOpenInbox={onOpenInbox} onOpenAgenda={onOpenAgenda} />
+        <OverviewAttention agendaLoadState={agendaLoadState} agendaSummary={agendaSummary} model={model} attentionCount={effectiveAttentionCount} onOpenInbox={onOpenInbox} onOpenAgenda={onOpenAgenda} />
         <OverviewToday agendaLoadState={agendaLoadState} agendaSummary={agendaSummary} onOpenAgenda={onOpenAgenda} />
       </div>
 
