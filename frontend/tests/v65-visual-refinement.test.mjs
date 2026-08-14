@@ -10,6 +10,7 @@ const css = fs.readFileSync(path.join(root, "index.css"), "utf8");
 
 test("V65 keeps operational summary derived from already loaded state", () => {
   assert.match(overview, /buildOverviewOperationalSummary\(attentionCount, agendaSummary, agendaLoadState, model\.attentionSignals\.length > 0\)/);
+  assert.match(overview, /isDataState\(model\.state\) \? buildOverviewOperationalSummary/);
   assert.match(overview, /agendaLoadState === "ready" \? readMetric\(agendaSummary\?\.indicadores\.atrasados\)/);
   assert.match(overview, /if \(parts\.length > 0\) return/);
   assert.match(overview, /return null;/);

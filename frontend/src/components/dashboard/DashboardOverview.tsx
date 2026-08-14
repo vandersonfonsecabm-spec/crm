@@ -71,7 +71,7 @@ export default function DashboardOverview({
       <OverviewHeader
         onOpenCommercial={onOpenCommercial}
         showAction={model.state !== "fail-closed"}
-        summary={buildOverviewOperationalSummary(attentionCount, agendaSummary, agendaLoadState, model.attentionSignals.length > 0)}
+        summary={isDataState(model.state) ? buildOverviewOperationalSummary(attentionCount, agendaSummary, agendaLoadState, model.attentionSignals.length > 0) : null}
       />
 
       {model.state === "loading" && <OverviewLoading />}
