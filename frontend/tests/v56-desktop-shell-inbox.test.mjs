@@ -15,6 +15,8 @@ test("V58 entrega uma rail ainda mais compacta e expande o conteúdo sem perder 
   assert.match(css, /--sidebar-collapsed-width:\s*64px;/);
   assert.match(sidebarCss, /\.sidebar-shell\.is-collapsed\s*\{\s*width:\s*var\(--sidebar-collapsed-width, 64px\)/);
   assert.match(sidebarCss, /sidebar-shell\.is-collapsed \.sidebar-brand-mark[\s\S]*?display: inline-flex/);
+  assert.match(sidebarCss, /sidebar-shell\.is-collapsed \.sidebar-collapse-toggle[\s\S]*?width: 40px[\s\S]*?height: 40px/);
+  assert.match(sidebarCss, /sidebar-shell\.is-collapsed \.sidebar-collapse-toggle:focus-visible[\s\S]*?outline-offset: -2px/);
   assert.match(sidebarCss, /aria-label|sidebar-collapse-toggle/);
   assert.match(dashboard, /crm-sidebar-collapsed/);
   assert.match(dashboard, /isInboxPage \? " crm-content--inbox"/);
