@@ -41,8 +41,9 @@ test("Lote 4 torna a Inbox semântica, selecionável e neutra por canal", async 
   ]);
 
   assert.match(inbox, /function isSlaException/);
-  assert.match(inbox, /const primaryQueueBadge = slaException/);
-  assert.match(inbox, /\(slaException \|\| otherLease\).*inbox-conversation-status-text/);
+  assert.match(inbox, /const exceptionalIndicator = slaException/);
+  assert.match(inbox, /inbox-conversation-channel-meta/);
+  assert.match(inbox, /inbox-conversation-reminder is-overdue/);
   assert.match(inbox, /const selectedSlaException = isSlaException\(conversation\?\.sla \?\? null\)/);
   assert.match(inbox, /border-\[var\(--brand-border\)\] bg-\[var\(--brand-subtle\)\]/);
   assert.match(inbox, /border-\[var\(--info-border\)\] bg-\[var\(--info-subtle\)\]/);

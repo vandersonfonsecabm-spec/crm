@@ -143,7 +143,7 @@ test("gate Inbox devolve overlays compactos aos gatilhos persistentes", async ()
   assert.match(toolbar, /<Button[\s\S]*?className="inbox-filter-trigger"[\s\S]*?ref=\{filtersTriggerRef\}/);
   assert.match(panel, /compactInboxContext && <IconButton[\s\S]*?ref=\{contextTriggerRef\}/);
   assert.match(panel, /<summary[\s\S]*?aria-label="Mais ações da conversa"[\s\S]*?ref=\{actionModalTriggerRef\}/);
-  assert.match(panel, /description="Combine escopo, estado, SLA, canal e responsável\."[\s\S]*?triggerRef=\{filtersTriggerRef\}/);
+  assert.match(panel, /description="Refine por estado, SLA, canal, responsável ou Lead\."[\s\S]*?triggerRef=\{filtersTriggerRef\}/);
   assert.match(panel, /description="Dados e histórico da conversa selecionada\."[\s\S]*?triggerRef=\{contextTriggerRef\}/);
   assert.match(panel, /<CommunicationModal[\s\S]*?triggerRef=\{actionModalTriggerRef\}/);
   assert.match(overlay, /const previousFocus = triggerRef\?\.current \?\? \(document\.activeElement instanceof HTMLElement \? document\.activeElement : null\);/);

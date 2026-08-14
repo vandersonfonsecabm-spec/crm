@@ -43,9 +43,9 @@ test("Lote 8 aplica a composição Inbox aos contratos reais sem criar operaçõ
   assert.match(inbox, /if \(!selectedId \|\| !text \|\| sending \|\| isClosed \|\| !canReplyDirectly\) return/);
 
   const toolbar = between(inbox, "export function InboxQueueToolbar", "export function InboxContextContent");
-  const toolbarOrder = ["Conversas", "Buscar conversas", "Filtros", "Atualizar conversas"].map((token) => toolbar.indexOf(token));
+  const toolbarOrder = ["inbox-queue-selector", "Buscar conversas", "Filtros", "Atualizar conversas"].map((token) => toolbar.indexOf(token));
   assert.ok(toolbarOrder.every((index) => index >= 0), "toolbar deve expor fila, busca, filtros e atualização reais");
-  assert.ok(toolbarOrder.every((index, position) => position === 0 || index > toolbarOrder[position - 1]), "toolbar deve manter Conversas → Busca → Filtros → Atualizar");
+  assert.ok(toolbarOrder.every((index, position) => position === 0 || index > toolbarOrder[position - 1]), "toolbar deve manter fila → busca → filtros → atualizar");
   assert.doesNotMatch(toolbar, /Fila multicanal|Atendimentos inbound|Centralize conversas/);
 
   const header = between(inbox, 'className="inbox-conversation-header', 'className="inbox-conversation-actions');
@@ -54,7 +54,7 @@ test("Lote 8 aplica a composição Inbox aos contratos reais sem criar operaçõ
   }
 
   const actions = between(inbox, 'className="inbox-conversation-actions', '<div className="relative min-h-0 flex-1">');
-  for (const action of ["Transferir", "Aguardar cliente", "Marcar pendente", "Devolver à fila", "Encerrar conversa", "Reabrir conversa"]) {
+  for (const action of ["Transferir", "Aguardar cliente", "Pendente sem prazo", "Agendar lembrete", "Devolver à fila", "Encerrar conversa", "Reabrir conversa"]) {
     assert.match(actions, new RegExp(action));
   }
 

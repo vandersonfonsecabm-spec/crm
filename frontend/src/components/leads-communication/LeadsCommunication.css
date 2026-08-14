@@ -18,10 +18,17 @@
 
 .inbox-command-bar {
   display: grid;
-  grid-template-columns: auto minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(220px, auto) minmax(220px, 1fr) auto;
   align-items: center;
   gap: 12px;
   min-height: 52px;
+}
+
+.inbox-command-leading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
 }
 
 .inbox-command-title {
@@ -33,15 +40,13 @@
   line-height: 1.2;
 }
 
-.inbox-command-title-divider {
-  color: var(--text-muted);
-  font-weight: 400;
-}
-
-.inbox-command-title-context {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 550;
+.inbox-queue-select {
+  min-width: 190px;
+  max-width: 224px;
+  border-color: var(--border-default);
+  background: var(--surface-subtle);
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 
 .inbox-command-search {
@@ -64,13 +69,6 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-}
-
-.inbox-command-total {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .inbox-filter-trigger {
@@ -139,6 +137,18 @@
   font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1.2;
+}
+
+.inbox-conversation-channel-meta {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+}
+
+.inbox-conversation-reminder.is-overdue {
+  color: var(--danger);
+  font-weight: 700;
 }
 
 .communication-channel-badge {
@@ -352,6 +362,26 @@
 }
 
 @media (max-width: 1023px) {
+  .inbox-command-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "leading actions"
+      "search search";
+    row-gap: 8px;
+  }
+
+  .inbox-command-leading {
+    grid-area: leading;
+  }
+
+  .inbox-command-search {
+    grid-area: search;
+  }
+
+  .inbox-command-actions {
+    grid-area: actions;
+  }
+
   .inbox-workspace,
   .inbox-workspace.has-context {
     grid-template-columns: minmax(248px, 286px) minmax(0, 1fr);
@@ -365,16 +395,15 @@
 
   .inbox-command-bar {
     grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "leading actions"
+      "search search";
     align-items: center;
   }
 
   .inbox-command-search {
     grid-column: 1 / -1;
     grid-row: 2;
-  }
-
-  .inbox-command-total {
-    display: none;
   }
 
   .inbox-workspace,
@@ -438,14 +467,27 @@
 }
 
 @media (max-width: 419px) {
-  .inbox-command-bar > div:last-child {
+  .inbox-command-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .inbox-command-leading {
+    gap: 6px;
+  }
+
+  .inbox-queue-select {
+    min-width: 0;
+    max-width: none;
   }
 
   .inbox-conversation-actions > button {
     min-height: 40px;
   }
+}
+
+.inbox-filter-content button[aria-pressed] {
+  min-height: 40px;
 }
 
 @media (prefers-reduced-motion: reduce) {

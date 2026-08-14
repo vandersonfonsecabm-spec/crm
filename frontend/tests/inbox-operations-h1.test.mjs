@@ -64,7 +64,7 @@ test("H1 preserva lease, timeline e ausencia de chamadas externas", async () => 
   assert.match(inbox, /Falha ao carregar conversas/);
   assert.match(inbox, /<InboxQueueToolbar[\s\S]*onRefresh=\{\(\) => void loadList\(\)\}/);
   assert.match(inbox, /aria-label="Atualizar conversas"[^>]+onClick=\{onRefresh\}/);
-  assert.match(inbox, /Nenhuma conversa na fila/);
+  assert.match(inbox, /A fila está em dia/);
   assert.match(inbox, /isNearMessageEnd/);
   assert.match(inbox, /fetchLatestCommunicationMessages/);
   assert.doesNotMatch(`${inbox}\n${api}`, /graph\.facebook|api\.whatsapp|axios/i);

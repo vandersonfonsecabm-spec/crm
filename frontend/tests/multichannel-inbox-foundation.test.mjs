@@ -116,7 +116,7 @@ test("Inbox cobre estados operacionais sem esconder falhas", async () => {
 
   assert.match(inbox, /listLoading \? <LoadingState/);
   assert.match(inbox, /listError \? <ErrorState/);
-  assert.match(inbox, /Nenhuma conversa na fila/);
+  assert.match(inbox, /A fila está em dia/);
   assert.match(inbox, /Nenhuma conversa neste filtro/);
   assert.match(inbox, /Selecione uma conversa/);
   assert.match(inbox, /detailLoading \? <LoadingState/);
