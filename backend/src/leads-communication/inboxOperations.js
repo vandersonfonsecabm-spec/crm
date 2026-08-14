@@ -5,7 +5,7 @@ const SLA_STATUSES = {
   CRITICO: { label: "Critico", level: 3 },
 };
 
-const SLA_RESOLVED_STATES = new Set(["AGUARDANDO_CLIENTE", "ENCERRADA"]);
+const SLA_RESOLVED_STATES = new Set(["AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"]);
 
 function calculateConversationSla(conversation, now = new Date()) {
   if (!conversation?.aguardandoDesde || SLA_RESOLVED_STATES.has(conversation.status)) return null;
@@ -30,7 +30,7 @@ function calculateConversationSla(conversation, now = new Date()) {
 
 function slaFilterWhere(filter, now = new Date()) {
   if (!filter) return null;
-  const activeStates = { notIn: ["AGUARDANDO_CLIENTE", "ENCERRADA"] };
+  const activeStates = { notIn: ["AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"] };
   if (filter === "ATENCAO") {
     return {
       status: activeStates,

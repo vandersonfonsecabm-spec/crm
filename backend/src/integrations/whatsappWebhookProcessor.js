@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const { normalizePhone } = require("../channels/phoneNormalizer");
 const { createAutomationService } = require("../automations/service");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { applyInboundConversationActivity } = require("../leads-communication/inboundActivity");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
 const {
   EVENT_TYPE,
@@ -97,7 +98,7 @@ async function processTransaction(tx, eventoWebhookId) {
       atomic.messageTime,
     );
     const message = await resolveMessage(tx, event, linkedContact, conversation, atomic);
-    await updateConversationActivity(tx, conversation, message, atomic.messageTime);
+    await updateConversationActivity(tx, conversation, message, atomic.messageTime, event.recebidoEm);
   }
 
   await reserveActiveChannel(tx, event);
@@ -557,18 +558,9 @@ async function resolveMessage(tx, event, contact, conversation, atomic) {
   return { ...created, createdNow: true };
 }
 
-async function updateConversationActivity(tx, conversation, message, messageTime) {
+async function updateConversationActivity(tx, conversation, message, messageTime, receivedAt) {
   if (!message.createdNow) return;
-  const first = conversation.primeiraMensagemEm
-    ? new Date(Math.min(new Date(conversation.primeiraMensagemEm).getTime(), messageTime.getTime()))
-    : messageTime;
-  const last = conversation.ultimaMensagemEm
-    ? new Date(Math.max(new Date(conversation.ultimaMensagemEm).getTime(), messageTime.getTime()))
-    : messageTime;
-  await tx.conversaCanal.update({
-    where: { id: conversation.id },
-    data: { primeiraMensagemEm: first, ultimaMensagemEm: last },
-  });
+  await applyInboundConversationActivity(tx, conversation, messageTime, receivedAt);
 }
 
 async function verifyProcessedChain(tx, event, atomic) {

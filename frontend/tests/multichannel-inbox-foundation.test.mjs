@@ -66,7 +66,7 @@ test("Inbox bloqueia outbound real e mantém apenas notas internas", async () =>
   assert.match(inbox, /Nota interna — visível somente para a equipe/);
   assert.match(inbox, /Registrar simulação/);
   assert.match(inbox, /Simulação registrada por/);
-  assert.match(inbox, /Não enviada/);
+  assert.match(inbox, /não enviada/i);
   assert.doesNotMatch(inbox, />Enviar</);
   assert.doesNotMatch(inbox, /Graph API|accessTokenRef|api\.whatsapp|graph\.facebook/i);
 });

@@ -86,6 +86,9 @@ function mountLeadsCommunicationRoutes({ app, prisma, authenticate }) {
   app.post("/conversas/:id/marcar-pendente", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.markConversationPending(context, pathId(req), req.body));
   }));
+  app.post("/conversas/:id/lembrar-depois", ...guarded, route(async (req, res, context, api) => {
+    res.json(await api.snoozeConversation(context, pathId(req), req.body));
+  }));
   app.post("/conversas/:id/encerrar", ...guarded, route(async (req, res, context, api) => {
     res.json(await api.closeConversation(context, pathId(req), req.body));
   }));

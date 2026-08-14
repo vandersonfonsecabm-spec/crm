@@ -105,7 +105,11 @@ function useOverlayLifecycle(
       window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
-      previousFocus?.focus({ preventScroll: true });
+      if (previousFocus && document.contains(previousFocus)) {
+        previousFocus?.focus({ preventScroll: true });
+      } else {
+        document.querySelector<HTMLElement>("#crm-main-content, [data-page-heading], h1")?.focus({ preventScroll: true });
+      }
     };
   }, [dialogRef, open, triggerRef]);
 }

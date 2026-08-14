@@ -458,6 +458,7 @@ export type CommunicationMessage = {
     fromName: string | null;
     attachmentCount: number;
   } | null;
+  enviadaEm?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -509,6 +510,8 @@ export type CommunicationConversation = {
     elapsedMinutes: number;
     startedAt: string;
   } | null;
+  lembrarDepoisEm?: string | null;
+  lembrete?: { id: number; dataHora: string; status: string; titulo: string } | null;
 };
 
 export type Customer360TimelineType = "TODOS" | "MENSAGEM" | "LIGACAO" | "VISITA" | "PROPOSTA" | "NEGOCIO" | "ACOMPANHAMENTO" | "NOTA" | "QUALIFICACAO";
@@ -737,6 +740,7 @@ export type ConversationQuery = {
   page?: number;
   limit?: number;
   estado?: ConversationStatus;
+  fila?: "AGUARDANDO_RESPOSTA" | "PRIORIDADE" | "LEMBRAR_DEPOIS";
   responsavelId?: number;
   semResponsavel?: boolean;
   meus?: boolean;
@@ -2341,6 +2345,10 @@ export async function waitCommunicationConversationForCustomer(id: number, motiv
 
 export async function markCommunicationConversationPending(id: number, motivo?: string) {
   return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/marcar-pendente`, motivo ? { motivo } : {});
+}
+
+export async function snoozeCommunicationConversation(id: number, dataHora: string, motivo?: string) {
+  return requestApiWrite<CommunicationConversation & { lembrarDepoisEm?: string }>("POST", `/conversas/${id}/lembrar-depois`, { dataHora, ...(motivo ? { motivo } : {}) });
 }
 
 export async function closeCommunicationConversation(id: number, motivo?: string) {

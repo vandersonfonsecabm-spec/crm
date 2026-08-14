@@ -35,6 +35,27 @@ export function formatCommunicationTime(value?: string | null) {
   return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+export function formatCommunicationDateTime(value?: string | null) {
+  if (!value) return "Data não informada";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Data não informada";
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "long", timeStyle: "short" }).format(date);
+}
+
+export function formatCommunicationDayLabel(value?: string | null) {
+  if (!value) return "Data não informada";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Data não informada";
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${today.getMonth()}-${today.getDate()}`;
+  const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const yesterdayKey = `${yesterday.getFullYear()}-${yesterday.getMonth()}-${yesterday.getDate()}`;
+  if (dateKey === todayKey) return "Hoje";
+  if (dateKey === yesterdayKey) return "Ontem";
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+}
+
 export function channelLabel(type?: string | null, name?: string | null) {
   void name;
   return getChannelPresentation(type).label;

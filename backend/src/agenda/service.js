@@ -164,6 +164,12 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
       if (current.dataHora.getTime() !== nextDate.getTime()) events.push(["REAGENDAR", { dataHoraAnterior: current.dataHora, dataHoraNova: nextDate, observacao }]);
       if (events.length === 0 || changedBusinessFields(body)) events.push(["EDITAR", { statusAnterior: current.status, statusNovo: current.status, observacao }]);
       for (const [action, details] of events) await writeHistory(tx, context, current.id, action, details);
+      await syncInboxReminderEdit(tx, context, current, {
+        ...links,
+        titulo: data.titulo ?? current.titulo,
+        tipo: data.tipo ?? current.tipo,
+        status: current.status,
+      });
       await reconcileClientProjections({
         tx,
         empresaId: context.empresaId,
@@ -212,6 +218,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
       const result = await tx.acompanhamento.updateMany({ where: { id: current.id, empresaId: context.empresaId, revisao: revision, status: current.status, ...activeCustomerScope() }, data });
       if (result.count !== 1) conflict();
       await writeHistory(tx, context, current.id, action, { statusAnterior: current.status, statusNovo: nextStatus, observacao });
+      await syncInboxReminderConversation(tx, context, current, nextStatus);
       await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds: [current.clienteId] });
     });
     return get(context, current.id);
@@ -352,6 +359,44 @@ function present(context, row, now) {
 function visibilityWhere(context) {
   if (isManager(context)) return {};
   return { OR: [{ responsavelId: context.usuarioId }, { autorId: context.usuarioId }, { lead: { responsavelId: context.usuarioId } }, { negocio: { responsavelId: context.usuarioId } }, { conversaCanal: { responsavelId: context.usuarioId } }] };
+}
+
+async function syncInboxReminderConversation(tx, context, current, nextStatus) {
+  if (current.conversaCanalId === null || current.conversaCanalId === undefined) return;
+  if (current.titulo !== "Lembrar conversa" || current.tipo !== "RETORNO") return;
+  if (!["CONCLUIDO", "CANCELADO", "EM_ANDAMENTO"].includes(nextStatus)) return;
+  await transitionInboxConversation(tx, context, current.conversaCanalId);
+}
+
+async function syncInboxReminderEdit(tx, context, current, next) {
+  const oldReminder = current.titulo === "Lembrar conversa" && current.tipo === "RETORNO";
+  const nextReminder = next.titulo === "Lembrar conversa" && next.tipo === "RETORNO";
+  const oldConversationId = current.conversaCanalId;
+  const nextConversationId = next.conversaCanalId;
+  if (oldReminder && oldConversationId && (!nextReminder || nextConversationId !== oldConversationId)) {
+    await transitionInboxConversation(tx, context, oldConversationId);
+  }
+  if (nextReminder && nextConversationId && next.status === "PENDENTE" && (!oldReminder || nextConversationId !== oldConversationId)) {
+    await tx.conversaCanal.updateMany({
+      where: { id: nextConversationId, empresaId: context.empresaId, status: { not: "ENCERRADA" } },
+      data: { status: "PENDENTE", aguardandoDesde: null },
+    });
+  }
+}
+
+async function transitionInboxConversation(tx, context, conversationId) {
+  const conversation = await tx.conversaCanal.findFirst({
+    where: { id: conversationId, empresaId: context.empresaId, status: "PENDENTE" },
+    select: { id: true, responsavelId: true },
+  });
+  if (!conversation) return;
+  await tx.conversaCanal.updateMany({
+    where: { id: conversation.id, empresaId: context.empresaId, status: "PENDENTE" },
+    data: {
+      status: conversation.responsavelId === null ? "AGUARDANDO_ATENDIMENTO" : "EM_ATENDIMENTO",
+      aguardandoDesde: new Date(),
+    },
+  });
 }
 
 function activeCustomerScope() {

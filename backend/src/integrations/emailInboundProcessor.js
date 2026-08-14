@@ -11,6 +11,7 @@ const {
 const { readGlobalEmailConfiguration } = require("../platform/emailInboundProvisioning");
 const { createAutomationService } = require("../automations/service");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { applyInboundConversationActivity } = require("../leads-communication/inboundActivity");
 
 const PROVIDER = "EMAIL";
 const PROCESSABLE = "RECEBIDO";
@@ -205,7 +206,7 @@ async function processTransaction(tx, eventId, clock, env) {
     const lead = await resolveLead(tx, event, client, thread.conversation, env);
     const conversation = await attachLead(tx, event, thread.conversation, lead);
     const message = await resolveMessage(tx, event, normalized, conversation);
-    await updateConversationActivity(tx, conversation, message, new Date(normalized.receivedAt));
+    await updateConversationActivity(tx, conversation, message, new Date(normalized.receivedAt), event.recebidoEm);
   }
 
   await reserveActiveChannel(tx, event);
@@ -451,27 +452,15 @@ async function resolveMessage(tx, event, normalized, conversation) {
   return { ...created, createdNow: true };
 }
 
-async function updateConversationActivity(tx, conversation, message, messageTime) {
+async function updateConversationActivity(tx, conversation, message, messageTime, receivedAt) {
   if (!message.createdNow) return;
-  const first = conversation.primeiraMensagemEm ? new Date(Math.min(conversation.primeiraMensagemEm.getTime(), messageTime.getTime())) : messageTime;
-  const last = conversation.ultimaMensagemEm ? new Date(Math.max(conversation.ultimaMensagemEm.getTime(), messageTime.getTime())) : messageTime;
-  const nextStatus = inboundConversationStatus(conversation);
-  const updated = await tx.conversaCanal.updateMany({
-    where: {
-      id: conversation.id,
-      empresaId: conversation.empresaId,
-      canalIntegracaoId: conversation.canalIntegracaoId,
-      status: conversation.status,
-      responsavelId: conversation.responsavelId,
-    },
-    data: {
-      primeiraMensagemEm: first,
-      ultimaMensagemEm: last,
-      emailSubject: conversation.emailSubject || message.emailMetadata?.subject || null,
-      status: nextStatus,
-    },
-  });
-  if (updated.count !== 1) throw emailProcessingError("EMAIL_THREAD_CONFLICT", "Thread de E-mail alterada concorrentemente.");
+  await applyInboundConversationActivity(tx, conversation, messageTime, receivedAt);
+  if (message.emailMetadata?.subject && conversation.emailSubject !== message.emailMetadata.subject) {
+    await tx.conversaCanal.updateMany({
+      where: { id: conversation.id, empresaId: conversation.empresaId },
+      data: { emailSubject: conversation.emailSubject || message.emailMetadata.subject },
+    });
+  }
 }
 
 function inboundConversationStatus(conversation) {

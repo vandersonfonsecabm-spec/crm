@@ -6,6 +6,7 @@ const { calculateConversationSla, slaFilterWhere } = require("./inboxOperations"
 const { createInboxCommercialQualificationService } = require("./commercialQualification");
 const { assertTestSimulationChannel, isTestSimulationChannel } = require("../channels/simulationPolicy");
 const { lockActiveClienteRows } = require("../shared/clientLifecycleLock");
+const { reconcileClientProjections, withProjectionRetry } = require("../follow-up-projection");
 const {
   domainError,
   isManager,
@@ -29,6 +30,7 @@ const {
 const LEAD_STATUSES = ["NOVO", "EM_ATENDIMENTO", "QUALIFICADO", "DESQUALIFICADO", "CONVERTIDO"];
 const CONVERSATION_STATUSES = ["ABERTA", "NOVA", "AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO", "AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"];
 const SLA_FILTERS = ["ATENCAO", "CRITICO"];
+const CONVERSATION_QUEUE_FILTERS = ["AGUARDANDO_RESPOSTA", "PRIORIDADE", "LEMBRAR_DEPOIS"];
 const LEAD_TRANSITIONS = {
   NOVO: new Set(["EM_ATENDIMENTO", "QUALIFICADO", "DESQUALIFICADO"]),
   EM_ATENDIMENTO: new Set(["QUALIFICADO", "DESQUALIFICADO"]),
@@ -38,11 +40,11 @@ const LEAD_TRANSITIONS = {
 };
 const CONVERSATION_TRANSITIONS = {
   ABERTA: new Set(["NOVA", "AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO", "AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"]),
-  NOVA: new Set(["AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO", "ENCERRADA"]),
-  AGUARDANDO_ATENDIMENTO: new Set(["EM_ATENDIMENTO", "ENCERRADA"]),
+  NOVA: new Set(["AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO", "AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"]),
+  AGUARDANDO_ATENDIMENTO: new Set(["EM_ATENDIMENTO", "AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"]),
   EM_ATENDIMENTO: new Set(["AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"]),
   AGUARDANDO_CLIENTE: new Set(["EM_ATENDIMENTO", "PENDENTE", "ENCERRADA"]),
-  PENDENTE: new Set(["EM_ATENDIMENTO", "ENCERRADA"]),
+  PENDENTE: new Set(["AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO", "AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"]),
   ENCERRADA: new Set(["NOVA", "AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO"]),
 };
 const DEFAULT_REPLY_LEASE_SECONDS = 120;
@@ -348,17 +350,22 @@ function createLeadsCommunicationServices({ prisma }) {
 
   async function listConversations(context, query = {}) {
     rejectEmpresaId(query);
-    rejectUnknown(query, ["page", "limit", "estado", "responsavelId", "semResponsavel", "meus", "leadId", "canalIntegracaoId", "q", "sla"]);
+    rejectUnknown(query, ["page", "limit", "estado", "responsavelId", "semResponsavel", "meus", "fila", "leadId", "canalIntegracaoId", "q", "sla"]);
     const pageData = pagination(query);
+    const now = new Date();
     const where = {
       empresaId: context.empresaId,
-      ...activeConversationScope(),
+      AND: [...activeConversationScope().AND],
     };
+    const fila = enumValue(query.fila, "fila", CONVERSATION_QUEUE_FILTERS, { optional: true });
+    if (fila === "AGUARDANDO_RESPOSTA") where.AND.push(pendingConversationWhere(now));
+    if (fila === "PRIORIDADE") where.AND.push(priorityConversationWhere(now));
+    if (fila === "LEMBRAR_DEPOIS") where.AND.push(snoozedConversationWhere(now));
     const status = enumValue(query.estado, "estado", CONVERSATION_STATUSES, { optional: true });
     if (status) where.status = status;
     const slaFilter = enumValue(query.sla, "sla", SLA_FILTERS, { optional: true });
     const slaWhere = slaFilterWhere(slaFilter);
-    if (slaWhere) Object.assign(where, slaWhere);
+    if (slaWhere) where.AND.push(slaWhere);
     const semResponsavel = optionalBoolean(query.semResponsavel, "semResponsavel");
     const meus = optionalBoolean(query.meus, "meus");
     if (meus && semResponsavel) return emptyPage(pageData);
@@ -374,36 +381,40 @@ function createLeadsCommunicationServices({ prisma }) {
     }
     const q = optionalText(query.q, "q", 120);
     if (q) {
-      where.OR = [
+      where.AND.push({ OR: [
         { contatoCanal: { nome: { contains: q } } },
         { contatoCanal: { externalId: { contains: q } } },
         { lead: { interesse: { contains: q } } },
-      ];
+      ] });
     }
     for (const field of ["leadId", "canalIntegracaoId"]) {
       const value = optionalInteger(query[field], field, { min: 1 });
       if (value) where[field] = value;
     }
+    const orderBy = fila === "AGUARDANDO_RESPOSTA" || fila === "PRIORIDADE"
+      ? [{ aguardandoDesde: "asc" }, { ultimaMensagemEm: "asc" }, { id: "asc" }]
+      : fila === "LEMBRAR_DEPOIS"
+        ? [{ aguardandoDesde: "asc" }, { id: "asc" }]
+        : [{ ultimaMensagemEm: "desc" }, { id: "desc" }];
     const [data, total] = await prisma.$transaction([
-      prisma.conversaCanal.findMany({ where, include: conversationIncludes(), orderBy: [{ ultimaMensagemEm: "desc" }, { id: "desc" }], skip: pageData.skip, take: pageData.limit }),
+      prisma.conversaCanal.findMany({ where, include: conversationIncludes(), orderBy, skip: pageData.skip, take: pageData.limit }),
       prisma.conversaCanal.count({ where }),
     ]);
     return pageResult(data.map(presentConversation), total, pageData);
   }
 
   async function conversationAttentionSummary(context) {
+    const now = new Date();
     const pendentes = await prisma.conversaCanal.count({
       where: {
         empresaId: context.empresaId,
-        status: { in: ["NOVA", "AGUARDANDO_ATENDIMENTO"] },
-        encerradaEm: null,
-        ...activeConversationScope(),
+        AND: [...activeConversationScope().AND, pendingConversationWhere(now)],
       },
     });
     return {
       pendentes,
       semContarMensagens: true,
-      criterio: "CONVERSAS_NOVA_OU_AGUARDANDO_ATENDIMENTO",
+      criterio: "CONVERSAS_AGUARDANDO_RESPOSTA_COM_RETORNOS_VENCIDOS",
     };
   }
 
@@ -420,9 +431,10 @@ function createLeadsCommunicationServices({ prisma }) {
       await lockEntityClients(tx, context, "conversaCanal", current);
       if (current.status === "ENCERRADA") throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao pode ser assumida.");
       if (current.responsavelId !== null) throw domainError(409, "ASSIGNMENT_ALREADY_TAKEN", "Esta conversa acabou de ser assumida por outro atendente.");
+      if (current.status === "PENDENTE") await finishConversationReminders(tx, context, id, "CANCELAR");
       const result = await tx.conversaCanal.updateMany({
         where: { id, empresaId: context.empresaId, responsavelId: null, status: current.status, ...activeConversationScope() },
-        data: { responsavelId: context.usuarioId, status: "EM_ATENDIMENTO" },
+        data: { responsavelId: context.usuarioId, status: "EM_ATENDIMENTO", aguardandoDesde: current.status === "PENDENTE" ? new Date() : current.aguardandoDesde },
       });
       if (result.count !== 1) throw domainError(409, "ASSIGNMENT_CONFLICT", "Esta conversa acabou de ser assumida por outro atendente.");
       await createAssignmentHistory(tx, {
@@ -464,9 +476,10 @@ function createLeadsCommunicationServices({ prisma }) {
       if (current.responsavelId === responsibleId && current.status === "EM_ATENDIMENTO") {
         return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
       }
+      if (current.status === "PENDENTE") await finishConversationReminders(tx, context, id, "CANCELAR");
       const result = await tx.conversaCanal.updateMany({
         where: { id, empresaId: context.empresaId, responsavelId: current.responsavelId, status: current.status, ...activeConversationScope() },
-        data: { responsavelId: responsibleId, status: "EM_ATENDIMENTO" },
+        data: { responsavelId: responsibleId, status: "EM_ATENDIMENTO", aguardandoDesde: current.status === "PENDENTE" ? new Date() : current.aguardandoDesde },
       });
       if (result.count !== 1) throw domainError(409, "ASSIGNMENT_CONFLICT", "A conversa foi alterada por outro atendente.");
       const tipo = current.responsavelId === null ? "ATRIBUIR" : "TRANSFERIR";
@@ -500,9 +513,10 @@ function createLeadsCommunicationServices({ prisma }) {
       }
       if (current.status === "ENCERRADA") throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao pode ser devolvida a fila.");
       const now = new Date();
+      if (current.status === "PENDENTE") await finishConversationReminders(tx, context, id, "CANCELAR");
       const result = await tx.conversaCanal.updateMany({
         where: { id, empresaId: context.empresaId, responsavelId: current.responsavelId, status: current.status, ...activeConversationScope() },
-        data: { responsavelId: null, status: "AGUARDANDO_ATENDIMENTO", aguardandoDesde: current.aguardandoDesde || now },
+        data: { responsavelId: null, status: "AGUARDANDO_ATENDIMENTO", aguardandoDesde: current.status === "PENDENTE" ? now : current.aguardandoDesde || now },
       });
       if (result.count !== 1) throw domainError(409, "ASSIGNMENT_CONFLICT", "A conversa foi alterada por outro atendente.");
       await createAssignmentHistory(tx, {
@@ -538,6 +552,68 @@ function createLeadsCommunicationServices({ prisma }) {
     return transitionConversation(context, id, "PENDENTE", optionalText(body.motivo, "motivo", 240), "MARCAR_PENDENTE");
   }
 
+  async function snoozeConversation(context, id, input = {}) {
+    const body = rejectUnknown(input, ["dataHora", "motivo"]);
+    const dataHora = parseReminderDate(body.dataHora);
+    const motivo = optionalText(body.motivo, "motivo", 240);
+    return withProjectionRetry(prisma, async (tx) => {
+      const current = await tx.conversaCanal.findFirst({ where: { id, empresaId: context.empresaId, ...activeConversationScope() } });
+      if (!current) throw notFound("Conversa nao encontrada.");
+      await lockEntityClients(tx, context, "conversaCanal", current);
+      requireResponsibleOrManager(context, current);
+      if (current.status === "ENCERRADA") throw domainError(409, "CONVERSATION_CLOSED", "Conversa encerrada nao pode ser adiada.");
+      if (!CONVERSATION_TRANSITIONS[current.status]?.has("PENDENTE")) {
+        throw domainError(422, "CONVERSATION_TRANSITION_INVALID", "Esta conversa nao pode ser adiada agora.");
+      }
+      const links = await tx.conversaCanal.findUnique({
+        where: { id },
+        select: {
+          contatoCanal: { select: { clienteId: true } },
+          lead: { select: { clienteId: true } },
+        },
+      });
+      const clientIds = [...new Set([links?.contatoCanal?.clienteId, links?.lead?.clienteId].filter((value) => Number.isInteger(value)))];
+      if (clientIds.length > 1) throw domainError(409, "AGENDA_CONTEXT_CONFLICT", "Os vinculos comerciais da conversa nao pertencem ao mesmo cliente.");
+      await finishConversationReminders(tx, context, id, "CANCELAR");
+      const reminder = await tx.acompanhamento.create({
+        data: {
+          empresaId: context.empresaId,
+          clienteId: clientIds[0] ?? null,
+          leadId: current.leadId,
+          conversaCanalId: current.id,
+          autorId: context.usuarioId,
+          responsavelId: current.responsavelId,
+          titulo: "Lembrar conversa",
+          descricao: motivo,
+          dataHora,
+          prioridade: "MEDIA",
+          tipo: "RETORNO",
+          status: "PENDENTE",
+        },
+      });
+      await tx.historicoAcompanhamento.create({ data: { empresaId: context.empresaId, acompanhamentoId: reminder.id, autorId: context.usuarioId, acao: "CRIAR", statusNovo: "PENDENTE", dataHoraNova: dataHora, observacao: motivo } });
+      const updated = await tx.conversaCanal.updateMany({
+        where: { id, empresaId: context.empresaId, status: current.status, responsavelId: current.responsavelId, ...activeConversationScope() },
+        data: { status: "PENDENTE", aguardandoDesde: dataHora },
+      });
+      if (updated.count !== 1) throw domainError(409, "CONVERSATION_CONFLICT", "A conversa foi alterada por outro atendente.");
+      await createAssignmentHistory(tx, {
+        empresaId: context.empresaId,
+        conversaCanalId: id,
+        responsavelAnteriorId: current.responsavelId,
+        responsavelNovoId: current.responsavelId,
+        alteradoPorId: context.usuarioId,
+        tipo: "ATRIBUIR",
+        acaoAtendimento: "MARCAR_PENDENTE",
+        estadoAnterior: current.status,
+        estadoNovo: "PENDENTE",
+        motivo,
+      });
+      await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds: clientIds });
+      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+    });
+  }
+
   async function closeConversation(context, id, input = {}) {
     const body = rejectUnknown(input, ["motivo"]);
     return transitionConversation(context, id, "ENCERRADA", optionalText(body.motivo, "motivo", 240), "ENCERRAR");
@@ -565,7 +641,7 @@ function createLeadsCommunicationServices({ prisma }) {
       const now = new Date();
       const data = { status: next };
       if (["NOVA", "AGUARDANDO_ATENDIMENTO"].includes(next)) data.aguardandoDesde = current.aguardandoDesde || now;
-      if (next === "AGUARDANDO_CLIENTE") data.aguardandoDesde = null;
+      if (["AGUARDANDO_CLIENTE", "PENDENTE"].includes(next)) data.aguardandoDesde = null;
       if (next === "ENCERRADA") {
         data.encerradaEm = now;
         data.aguardandoDesde = null;
@@ -579,6 +655,7 @@ function createLeadsCommunicationServices({ prisma }) {
         data.aguardandoDesde = now;
         data.chaveAberta = current.emailThreadKey || `canal:${current.canalIntegracaoId}:contato:${current.contatoCanalId}`;
       }
+      if (next !== "PENDENTE") await finishConversationReminders(tx, context, id, "CANCELAR");
       const updated = await tx.conversaCanal.updateMany({
         where: { id, empresaId: context.empresaId, status: current.status, responsavelId: current.responsavelId, ...activeConversationScope() },
         data,
@@ -598,6 +675,58 @@ function createLeadsCommunicationServices({ prisma }) {
       });
       return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
     });
+  }
+
+  async function finishConversationReminders(tx, context, conversationId, action) {
+    const reminders = await tx.acompanhamento.findMany({
+      where: {
+        empresaId: context.empresaId,
+        conversaCanalId: conversationId,
+        titulo: "Lembrar conversa",
+        tipo: "RETORNO",
+        status: { in: ["PENDENTE", "EM_ANDAMENTO"] },
+      },
+      select: { id: true, clienteId: true, status: true, revisao: true },
+    });
+    if (reminders.length === 0) return;
+    const now = new Date();
+    const completing = action === "CONCLUIR";
+    const statusNovo = completing ? "CONCLUIDO" : "CANCELADO";
+    const data = completing
+      ? { status: statusNovo, concluidoEm: now, concluidoPorId: context.usuarioId, canceladoEm: null, canceladoPorId: null }
+      : { status: statusNovo, canceladoEm: now, canceladoPorId: context.usuarioId, concluidoEm: null, concluidoPorId: null };
+    const updatedReminders = [];
+    for (const reminder of reminders) {
+      const updated = await tx.acompanhamento.updateMany({
+        where: {
+          id: reminder.id,
+          empresaId: context.empresaId,
+          revisao: reminder.revisao,
+          conversaCanalId: conversationId,
+          titulo: "Lembrar conversa",
+          tipo: "RETORNO",
+          status: reminder.status,
+        },
+        data: { ...data, revisao: { increment: 1 } },
+      });
+      if (updated.count !== 1) continue;
+      updatedReminders.push(reminder);
+      await tx.historicoAcompanhamento.create({
+        data: {
+          empresaId: context.empresaId,
+          acompanhamentoId: reminder.id,
+          autorId: context.usuarioId,
+          acao: statusNovo === "CONCLUIDO" ? "CONCLUIR" : "CANCELAR",
+          statusAnterior: reminder.status,
+          statusNovo,
+          observacao: completing ? "Lembrete concluido pela atividade da conversa." : "Lembrete cancelado pela mudanca da conversa.",
+        },
+      });
+    }
+    const clienteIds = [...new Set(updatedReminders.map((reminder) => reminder.clienteId).filter((value) => Number.isSafeInteger(value)))];
+    if (clienteIds.length > 0) {
+      await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds });
+    }
   }
 
   async function conversationHistory(context, id) {
@@ -637,7 +766,7 @@ function createLeadsCommunicationServices({ prisma }) {
     rejectUnknown(query, ["page", "limit"]);
     const where = { empresaId: context.empresaId, conversaCanalId: conversationId };
     const [data, total] = await prisma.$transaction([
-      prisma.mensagemCanal.findMany({ where, include: messageIncludes(), orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip: pageData.skip, take: pageData.limit }),
+      prisma.mensagemCanal.findMany({ where, include: messageIncludes(), orderBy: [{ enviadaEm: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { id: "asc" }], skip: pageData.skip, take: pageData.limit }),
       prisma.mensagemCanal.count({ where }),
     ]);
     return pageResult(data.map(presentMessage), total, pageData);
@@ -702,6 +831,7 @@ function createLeadsCommunicationServices({ prisma }) {
             texto,
             status: direcao === "ENTRADA" ? "RECEBIDA" : "PREPARADA",
             statusEntrega: direcao === "ENTRADA" ? "RECEBIDA" : "PENDENTE_ENVIO",
+            enviadaEm: now,
             simulada: true,
           },
           include: messageIncludes(),
@@ -714,14 +844,17 @@ function createLeadsCommunicationServices({ prisma }) {
           conversationData.primeiraRespostaHumanaEm = conversation.primeiraRespostaHumanaEm || now;
           if (CONVERSATION_TRANSITIONS[conversation.status]?.has("AGUARDANDO_CLIENTE")) {
             conversationData.status = "AGUARDANDO_CLIENTE";
+            conversationData.aguardandoDesde = null;
           }
           if (conversation.respostaReservadaPorId === context.usuarioId || isLeaseExpired(conversation, now)) {
             conversationData.respostaReservadaPorId = null;
             conversationData.respostaReservadaAte = null;
           }
+          await finishConversationReminders(tx, context, conversation.id, "CONCLUIR");
         } else {
           conversationData.aguardandoDesde = now;
           conversationData.status = conversation.responsavelId === null ? "AGUARDANDO_ATENDIMENTO" : "EM_ATENDIMENTO";
+          await finishConversationReminders(tx, context, conversation.id, "CONCLUIR");
         }
         await tx.conversaCanal.update({ where: { id: conversation.id }, data: conversationData });
         return message;
@@ -1020,6 +1153,7 @@ function createLeadsCommunicationServices({ prisma }) {
     listMessages,
     listNotes,
     markConversationPending,
+    snoozeConversation,
     markConversationRead,
     closeConversation,
     reopenConversation,
@@ -1135,12 +1269,18 @@ function conversationIncludes() {
     responsavel: { select: { id: true, nome: true, papel: true } },
     respostaReservadaPor: { select: { id: true, nome: true } },
     mensagens: {
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy: [{ enviadaEm: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }, { id: "desc" }],
       take: 1,
       include: messageIncludes(),
     },
     _count: {
       select: { mensagens: { where: { direcao: "ENTRADA", lidaEm: null } } },
+    },
+    acompanhamentos: {
+      where: { titulo: "Lembrar conversa", tipo: "RETORNO", status: { in: ["PENDENTE", "EM_ANDAMENTO"] } },
+      orderBy: [{ dataHora: "asc" }, { id: "asc" }],
+      take: 1,
+      select: { id: true, dataHora: true, status: true, titulo: true },
     },
   };
 }
@@ -1168,7 +1308,7 @@ function messageIncludes() {
 }
 
 function presentConversation(conversation) {
-  const { mensagens, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte, _count, ...data } = conversation;
+  const { mensagens, acompanhamentos, respostaReservadaPor, respostaReservadaPorId, respostaReservadaAte, _count, ...data } = conversation;
   return {
     ...data,
     responsavelPrincipal: conversation.responsavel
@@ -1179,6 +1319,8 @@ function presentConversation(conversation) {
     tipoCanal: conversation.canalIntegracao?.tipo || null,
     ultimaMensagem: mensagens?.[0] ? presentMessage(mensagens[0]) : null,
     naoLidas: _count?.mensagens || 0,
+    lembrarDepoisEm: acompanhamentos?.[0]?.dataHora || null,
+    lembrete: acompanhamentos?.[0] || null,
     sla: calculateConversationSla(conversation),
   };
 }
@@ -1239,6 +1381,62 @@ function pageResult(data, total, { page, limit }) {
 
 function emptyPage(pageData) {
   return pageResult([], 0, pageData);
+}
+
+function pendingConversationWhere(now = new Date()) {
+  return {
+    OR: [
+      { status: { in: ["NOVA", "AGUARDANDO_ATENDIMENTO"] }, encerradaEm: null, ultimaMensagemEm: { not: null } },
+      { status: "EM_ATENDIMENTO", encerradaEm: null, aguardandoDesde: { not: null }, ultimaMensagemEm: { not: null } },
+      {
+        status: "PENDENTE",
+        acompanhamentos: {
+          some: {
+            status: { in: ["PENDENTE", "EM_ANDAMENTO"] },
+            titulo: "Lembrar conversa",
+            tipo: "RETORNO",
+            dataHora: { lte: now },
+          },
+        },
+      },
+    ],
+  };
+}
+
+function priorityConversationWhere(now = new Date()) {
+  return {
+    status: { in: ["NOVA", "AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO"] },
+    encerradaEm: null,
+    ultimaMensagemEm: { not: null },
+    aguardandoDesde: { lt: new Date(now.getTime() - 10 * 60000) },
+  };
+}
+
+function snoozedConversationWhere(now = new Date()) {
+  return {
+    status: "PENDENTE",
+    acompanhamentos: {
+      some: {
+        status: { in: ["PENDENTE", "EM_ANDAMENTO"] },
+        titulo: "Lembrar conversa",
+        tipo: "RETORNO",
+        dataHora: { gt: now },
+      },
+    },
+  };
+}
+
+function parseReminderDate(value) {
+  if (typeof value !== "string" || !value.trim()) throw invalid("dataHora e obrigatoria.");
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(value.trim())) {
+    throw invalid("dataHora deve usar ISO 8601 com fuso horario.");
+  }
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) throw invalid("dataHora invalida.");
+  const now = new Date();
+  if (parsed.getTime() <= now.getTime()) throw domainError(422, "REMINDER_DATE_IN_PAST", "Escolha um horario futuro para lembrar depois.");
+  if (parsed.getTime() > now.getTime() + 366 * 24 * 60 * 60 * 1000) throw invalid("dataHora excede o limite de um ano.");
+  return parsed;
 }
 
 module.exports = { createLeadsCommunicationServices, getReplyLeaseSeconds, validateAssignmentContext };
