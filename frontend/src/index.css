@@ -393,3 +393,88 @@ button:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* V64 — composição operacional da Visão Geral e do processo comercial. */
+.crm-overview { gap: 18px; padding-bottom: 28px; }
+.crm-overview-header { min-height: 60px; }
+.crm-overview-heading-copy { min-width: 0; }
+.crm-overview-context { margin: 5px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.35; text-transform: capitalize; }
+.crm-overview-action-grid { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.35fr) minmax(300px, .85fr); align-items: stretch; gap: 18px; }
+.crm-overview-support-grid { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); align-items: start; gap: 18px; }
+.crm-overview-attention, .crm-overview-today, .crm-overview-recent { min-width: 0; padding: 18px; }
+.crm-overview-section-subtitle { margin: 4px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.4; }
+.crm-overview-priority-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.crm-overview-priority-item { display: grid; min-width: 0; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 13px 0; border-bottom: 1px solid var(--border); color: var(--brand); }
+.crm-overview-priority-item:last-child { border-bottom: 0; }
+.crm-overview-priority-item > div { display: grid; min-width: 0; gap: 3px; }
+.crm-overview-priority-item strong { overflow: hidden; color: var(--text-strong); font-size: 12px; font-weight: 650; line-height: 1.35; text-overflow: ellipsis; }
+.crm-overview-priority-item span { overflow: hidden; color: var(--text-secondary); font-size: 11px; line-height: 1.35; text-overflow: ellipsis; }
+.crm-overview-priority-critical { color: var(--danger); }
+.crm-overview-priority-item button { min-height: 32px; }
+.crm-overview-today-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.crm-overview-today-summary > div { display: grid; gap: 5px; padding: 12px; border-radius: var(--radius-sm); background: var(--surface-subtle); }
+.crm-overview-today-summary span { color: var(--text-secondary); font-size: 11px; }
+.crm-overview-today-summary strong { color: var(--text-strong); font-size: 22px; font-weight: 650; line-height: 1; font-variant-numeric: tabular-nums; }
+.crm-overview-number-danger { color: var(--danger) !important; }
+.crm-overview-recent-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.crm-overview-recent-list li { display: grid; min-width: 0; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 9px; padding: 11px 0; border-bottom: 1px solid var(--border); color: var(--brand); }
+.crm-overview-recent-list li:last-child { border-bottom: 0; }
+.crm-overview-recent-list li > div { display: grid; min-width: 0; gap: 2px; }
+.crm-overview-recent-list strong { overflow: hidden; color: var(--text-strong); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.crm-overview-recent-list span { display: -webkit-box; overflow: hidden; color: var(--text-secondary); font-size: 11px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.crm-overview-recent-list time { color: var(--text-tertiary); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.commercial-workbench { gap: 18px; padding-bottom: 28px; }
+.commercial-process { display: grid; min-width: 0; gap: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); padding: 18px; }
+.commercial-process-heading { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.commercial-process-heading > div { min-width: 0; }
+.commercial-process-heading h2 { margin: 2px 0 0; color: var(--text-strong); font-size: 18px; font-weight: 650; line-height: 1.25; }
+.commercial-process-heading p { margin: 4px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.commercial-process-kicker { color: var(--brand) !important; font-size: 10px !important; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; }
+.commercial-process-metrics { display: grid; min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.commercial-process-metrics > div { min-width: 0; padding: 12px 14px; }
+.commercial-process-metrics > div + div { border-left: 1px solid var(--border); }
+.commercial-process-metrics dt { color: var(--text-secondary); font-size: 11px; line-height: 1.35; }
+.commercial-process-metrics dd { margin: 6px 0 0; color: var(--text-strong); font-size: 22px; font-weight: 650; line-height: 1; font-variant-numeric: tabular-nums; }
+.commercial-process-danger { color: var(--danger) !important; }
+.commercial-process-grid { display: grid; min-width: 0; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: 22px; }
+.commercial-process-subheading { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.commercial-process-subheading h3 { margin: 0; color: var(--text-strong); font-size: 13px; font-weight: 650; }
+.commercial-process-subheading span { color: var(--text-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.commercial-funnel ul, .commercial-bottlenecks ul { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.commercial-funnel li { display: grid; gap: 6px; padding: 8px 0; }
+.commercial-funnel li > div:first-child { display: flex; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 11px; }
+.commercial-funnel li strong { color: var(--text-strong); font-weight: 650; font-variant-numeric: tabular-nums; }
+.commercial-funnel-track { height: 6px; overflow: hidden; border-radius: 99px; background: var(--surface-subtle); }
+.commercial-funnel-track span { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--brand); }
+.commercial-bottlenecks li { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.commercial-bottlenecks li:last-child { border-bottom: 0; }
+.commercial-bottlenecks li > div { display: grid; min-width: 0; gap: 2px; }
+.commercial-bottlenecks strong { overflow: hidden; color: var(--text-strong); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.commercial-bottlenecks span { overflow: hidden; color: var(--text-secondary); font-size: 11px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.commercial-process-empty { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.commercial-process-error { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.commercial-process-error > div { display: grid; gap: 3px; }
+.commercial-process-error strong { color: var(--text-strong); font-size: 13px; }
+.commercial-process-error span { color: var(--text-secondary); font-size: 12px; }
+.commercial-process-skeleton { min-height: 44px; border-radius: var(--radius-sm); background: var(--surface-subtle); animation: crm-overview-pulse 1.2s ease-in-out infinite; }
+.commercial-process-skeleton + .commercial-process-skeleton { min-height: 140px; }
+
+@media (max-width: 1023px) {
+  .crm-overview-action-grid, .crm-overview-support-grid, .commercial-process-grid { grid-template-columns: minmax(0, 1fr); }
+  .commercial-process-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .commercial-process-metrics > div:nth-child(odd) { border-left: 0; }
+  .commercial-process-metrics > div:nth-child(n + 3) { border-top: 1px solid var(--border); }
+}
+@media (max-width: 640px) {
+  .crm-overview { gap: 14px; }
+  .crm-overview-header, .commercial-process-heading { align-items: stretch; flex-direction: column; gap: 10px; }
+  .crm-overview-cta, .commercial-process-heading .commercial-heading-link { width: 100%; justify-content: center; }
+  .crm-overview-action-grid, .crm-overview-support-grid { gap: 14px; }
+  .crm-overview-attention, .crm-overview-today, .crm-overview-recent, .commercial-process { padding: 14px; }
+  .crm-overview-priority-item { grid-template-columns: 18px minmax(0, 1fr); }
+  .crm-overview-priority-item button { grid-column: 2; justify-self: start; }
+  .commercial-process-metrics { grid-template-columns: minmax(0, 1fr); }
+  .commercial-process-metrics > div + div { border-left: 0; border-top: 1px solid var(--border); }
+  .commercial-process-heading .commercial-heading-link { min-height: 40px; }
+}

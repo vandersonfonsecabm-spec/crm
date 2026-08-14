@@ -858,6 +858,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               money={money}
               onOpenCommercial={() => handleSetActivePage("comercial")}
               onOpenInbox={() => handleSetActivePage("inbox")}
+              onOpenAgenda={() => handleSetActivePage("agenda")}
               onRetry={() => setBackendLoadRequest((current) => current + 1)}
               attentionCount={inboxAttentionCount}
             />
@@ -969,6 +970,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                     applySmartFilter("risk");
                     handleSetActivePage("clientes");
                   }}
+                  onOpenBusiness={openKanbanBusiness}
                   onOpenProposals={() => {
                     applySmartFilter("proposal");
                     handleSetActivePage("clientes");
