@@ -3,7 +3,11 @@
 Status: `INBOX_HEADER_COMPACT=PASS`, `INBOX_HORIZONTAL_USAGE=PASS`, `INBOX_VERTICAL_USAGE=PASS`, `INBOX_PANEL_PROPORTIONS=PASS` by route-specific CSS and focused source contracts.
 
 - Only `.crm-content--inbox` receives the full-workspace treatment; other routes retain their editorial frame.
-- Inbox content becomes a flex column with `min-height:0`, `overflow:hidden`, and a route-specific `8px 12px 12px` desktop inset.
+- Inbox content becomes a flex column with `min-height:0` and `overflow:hidden`.
+  In the live production cascade the effective outer inset was `34px` left,
+  `34px` right and `40px` bottom (the generic shell padding wins over the
+  narrower source-level route inset); this was accepted because the measured
+  workspace still fills the available canvas without structural dead space.
 - Header/command bar is fixed to a compact `48px` track with a `6px` workbench gap.
 - No-context state uses `24% / 76%`; selected-context state uses `24% / 52% / 24%`, keeping Chat dominant.
 - Conversation list, message viewport, and context pane retain independent minimum-height/overflow behavior; context values wrap long URLs with `overflow-wrap:anywhere` and `word-break:break-word`.

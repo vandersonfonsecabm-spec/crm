@@ -26,4 +26,6 @@ keyboard/focus, target-label, viewport, overflow and console checks were run
 instead; no critical finding was observed. Screenshots are the four
 `V56_AFTER_*` PNGs in this directory and use the sanitized/test Inbox records.
 
-The mobile surface was not redesigned per scope; only source-level preservation was checked.
+The mobile surface was not redesigned per scope. A live 390×844 sentinel was
+still run: the desktop rail was hidden, the existing mobile navigation was
+visible, the Inbox opened, and horizontal overflow remained zero.
