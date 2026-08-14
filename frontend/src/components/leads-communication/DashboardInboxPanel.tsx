@@ -698,6 +698,7 @@ export function InboxQueueToolbar({ activeFilterCount, filtersOpen, filtersTrigg
     <div className="inbox-command-bar" role="search">
       <div className="inbox-command-leading">
         <h1 className="inbox-command-title" ref={headingRef} tabIndex={-1}>Caixa de entrada</h1>
+        <span aria-live="polite" className="sr-only">{total === 0 ? `Nenhuma conversa em ${queueLabel(queueScope)}.` : `${total} ${total === 1 ? "conversa" : "conversas"} em ${queueLabel(queueScope)}.`}</span>
         <Select aria-label="Fila da caixa de entrada" className="inbox-queue-select" data-testid="inbox-queue-selector" onChange={(event) => onQueueScopeChange(event.target.value as QueueScope)} value={queueScope}>
           <optgroup label="Filas principais">
             <option value="aguardando">{queueOptionLabel("aguardando", queueScope, total)}</option>

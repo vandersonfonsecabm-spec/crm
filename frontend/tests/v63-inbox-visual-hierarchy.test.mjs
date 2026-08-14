@@ -14,6 +14,7 @@ test("V63 command bar separates the active queue from secondary filters", () => 
   assert.match(panel, /<optgroup label="Filas principais">/);
   assert.match(panel, /<option value="lembrar-depois">Lembrar depois<\/option>/);
   assert.match(panel, /Filtros ativos · \{activeFilterCount\}/);
+  assert.match(panel, /aria-live="polite" className="sr-only">\{total === 0 \? `Nenhuma conversa em/);
   assert.match(panel, /function resetSecondaryFilters\(\)/);
   assert.doesNotMatch(panel, /<h3[^>]*>Escopo<\/h3>/);
   assert.match(panel, /description="Refine por estado, SLA, canal, responsável ou Lead\."/);
