@@ -126,7 +126,7 @@ export default function DashboardAgendaPanel({
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [formError, setFormError] = useState("");
   const handledCreateRequest = useRef(createRequestKey);
-  const handledTodayRequest = useRef(todayRequestKey);
+  const handledTodayRequest = useRef<number | null>(null);
   const mutationInFlight = useRef(false);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -158,7 +158,7 @@ export default function DashboardAgendaPanel({
   }, [createRequestKey, options]);
 
   useEffect(() => {
-    if (handledTodayRequest.current === todayRequestKey) return;
+    if (todayRequestKey <= 0 || handledTodayRequest.current === todayRequestKey) return;
     handledTodayRequest.current = todayRequestKey;
     setWeekStart(startOfWeek(new Date()));
     setAgendaView("HOJE");

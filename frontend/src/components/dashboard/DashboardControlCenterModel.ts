@@ -305,8 +305,8 @@ function getPriorityReason<TClient extends CommercialClientRecord>(
 }
 
 function priorityReasonLabel(reason: CommercialPriorityReason, client: CommercialClientRecord) {
-  if (reason === "follow-up-overdue") return "Follow-up atrasado";
-  if (reason === "follow-up-today") return "Follow-up hoje";
+  if (reason === "follow-up-overdue") return "Acompanhamento atrasado";
+  if (reason === "follow-up-today") return "Acompanhamento hoje";
   if (reason === "high-risk") return "Risco alto";
   if (reason === "hot-proposal") return "Proposta quente";
   return `${safeLastContactDays(client.lastContactDays)} dias sem contato`;

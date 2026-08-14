@@ -134,7 +134,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [whatsappExternalRequest, setWhatsappExternalRequest] = useState<WhatsappExternalRequest | null>(null);
   const [blingReturnMessage, setBlingReturnMessage] = useState("");
   const [agendaCreateRequestKey, setAgendaCreateRequestKey] = useState(0);
-  const [agendaTodayRequestKey] = useState(0);
+  const [agendaTodayRequestKey, setAgendaTodayRequestKey] = useState(0);
   const kanbanStageRequest = { group: "pipeline" as const, key: 0 };
   const [leadsCreateRequestKey, setLeadsCreateRequestKey] = useState(0);
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
@@ -546,6 +546,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     handleSetActivePage("kanban");
   }, [handleSetActivePage]);
 
+  const openTodayAgenda = useCallback(() => {
+    setAgendaTodayRequestKey((current) => current + 1);
+    handleSetActivePage("agenda");
+  }, [handleSetActivePage]);
+
   const openCustomerContext = useCallback((destination: "INBOX" | "KANBAN" | "AGENDA", id: number) => {
     if (destination === "INBOX") {
       openInboxConversation(id);
@@ -858,7 +863,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               money={money}
               onOpenCommercial={() => handleSetActivePage("comercial")}
               onOpenInbox={() => handleSetActivePage("inbox")}
-              onOpenAgenda={() => handleSetActivePage("agenda")}
+              onOpenAgenda={openTodayAgenda}
               onRetry={() => setBackendLoadRequest((current) => current + 1)}
               attentionCount={inboxAttentionCount}
             />

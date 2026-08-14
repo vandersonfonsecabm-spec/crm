@@ -269,7 +269,7 @@ function OverviewAttention({ model, attentionCount, onOpenInbox, summary, onOpen
           </li>
         ))}
       </ul>
-      {attentionCount === null && !model.attentionKnown && <p className="crm-overview-inline-state" role="status">Dados de atenção indisponíveis.</p>}
+      {attentionCount === null && <p className="crm-overview-inline-state" role="status">A fila de atenção não pôde ser consultada agora.</p>}
       {attentionCount === 0 && todayFollowUps === 0 && model.attentionSignals.length === 0 && <p className="crm-overview-inline-state" role="status">Nenhum sinal de atenção no resumo atual.</p>}
     </Surface>
   );
@@ -289,7 +289,7 @@ function OverviewToday({ agendaSummary, agendaLoadState, summary, onOpenAgenda }
         <div><span>Atrasados</span><strong className={overdue && overdue > 0 ? "crm-overview-number-danger" : ""}>{agendaLoadState === "loading" ? "…" : overdue === null ? "Indisponível" : overdue}</strong></div>
       </div>
       <p className="crm-overview-inline-state" role="status">
-        {today === null ? "A agenda não pôde ser consultada agora." : today === 0 && (!overdue || overdue === 0) ? "Nenhum acompanhamento precisa de ação hoje." : "Use a Agenda para revisar os itens por prazo e responsável."}
+        {agendaLoadState === "loading" ? "Carregando a agenda…" : agendaLoadState === "error" || today === null || overdue === null ? "A agenda não pôde ser consultada agora." : today === 0 && overdue === 0 ? "Nenhum acompanhamento precisa de ação hoje." : "Use a Agenda para revisar os itens por prazo e responsável."}
       </p>
     </Surface>
   );
