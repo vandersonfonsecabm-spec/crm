@@ -22,6 +22,8 @@ test("V63 command bar separates the active queue from secondary filters", () => 
 test("V63 list and actions preserve operational semantics without badge duplication", () => {
   assert.match(panel, /inbox-conversation-channel-meta/);
   assert.match(panel, /inbox-conversation-reminder is-overdue/);
+  assert.match(panel, /const leaseIndicator = otherLease/);
+  assert.match(panel, /exceptionalIndicator \|\| leaseIndicator/);
   assert.match(panel, /aria-label="Abrir próxima pendência"/);
   assert.match(panel, />Próxima<\/Button>/);
   assert.match(panel, /Pendente sem prazo/);
@@ -36,6 +38,7 @@ test("V63 pagination is explicit and the empty Inbox does not announce a fake pa
   assert.match(panel, /nextLabel="Próxima página"/);
   assert.match(pagination, /previousLabel\?: string/);
   assert.match(pagination, /nextLabel\?: string/);
+  assert.match(pagination, /const currentPage = Math\.min\(Math\.max\(1, page\), safeTotalPages\)/);
 });
 
 test("V63 command bar has a tablet-safe two-row layout and compact queue control", () => {
