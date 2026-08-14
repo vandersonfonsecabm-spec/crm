@@ -1618,3 +1618,27 @@ integracoes autorizadas.
   JPEG reais (`*.jpg`); os nomes `*.png` históricos não são usados como prova
   MIME. O breakpoint 1023/1024 e o alinhamento topbar/Inbox permanecem
   advisories fora do escopo desktop focal.
+
+## V61 — Inbox operacional e timestamp de chat (2026-08-14)
+
+- O runtime funcional V61 está no SHA
+  `411c99c04147cb049dbbb7446c6be2e59669ad01`; origin/feature e
+  origin/master foram conferidos no mesmo SHA.
+- A fila usa status, responsável/lease e Acompanhamento existentes; não há
+  schema, migration, provider ou outbound real novo. Reagendamento do mesmo
+  lembrete sincroniza aguardandoDesde, CAS perdedor falha fechado e o ator
+  automático é o usuário interno Sistema. A identidade `sistema@crm.internal`
+  é reservada por tenant, oculta de listas/equipes e bloqueada contra login,
+  reset, reativação, edição e atribuição; o inbound repara metadados canônicos.
+- Frontend canonical 161/161 e build TypeScript/Vite passaram. Suites isoladas
+  de V61, WhatsApp, Messenger, Instagram e Email passaram; dev.db preservou
+  SHA-256 `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- A Vercel publicou `dpl_B3U4uJu2ybJQrnLpSR9F7qgtNpH2` em READY no SHA exato;
+  Railway API e worker também estão SUCCESS/RUNNING no SHA exato
+  `411c99c04147cb049dbbb7446c6be2e59669ad01`; a API oficial respondeu HTTP 200.
+- QA Chrome autenticado manual DOM/ARIA/teclado/overflow passou em 1440×900,
+  1366×768 e sentinel 390×844. Chat foi a maior coluna, composer ficou dentro
+  da viewport, rail 208/64 persistiu por reload/rota e o console não registrou
+  erros. axe automatizado não estava disponível.
+- Evidências individuais, sem ZIP, estão em `artifacts/v61/`; o relatório e
+  as imagens foram entregues na conversa fixada do SaaS.

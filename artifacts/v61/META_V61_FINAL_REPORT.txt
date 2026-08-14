@@ -1,0 +1,82 @@
+V61 — RELATÓRIO FINAL
+=====================
+
+Resultado: V61_INBOX_OPERATIONAL_SHIP (runtime publicado e smoke autenticado concluído).
+
+Escopo
+------
+A Caixa de Entrada foi convertida em fila operacional sem alterar integrações,
+providers, schema ou migrations. A V58 shell foi preservada.
+
+Implementado
+------------
+- Fila padrão Aguardando resposta, com semântica de uma pendência por conversa.
+- Filtros Todas, Minhas, Não atribuídas, Prioridade/SLA e Lembrar depois.
+- Ordenação por prioridade e espera mais antiga, com desempate estável.
+- Próxima pendência com preservação de tenant, filtro e estado de busy/erro.
+- Enviar e próxima permanece seguro para o fluxo simulado; não houve outbound real.
+- Responsável/lease, assumir, transferir e devolver preservados.
+- Lembrar depois server-side usando Acompanhamento existente, inclusive reagendamento.
+- Data separadora única por dia e hora HH:mm dentro do balão; notas Autor · HH:mm.
+- time/dateTime e aria-label com data/hora completa em pt-BR.
+- Ordenação de mensagens usa fallback cronológico COALESCE(enviadaEm, createdAt).
+- Auditoria automática de cancelamento usa ator interno Sistema, sem atribuição humana falsa.
+- A identidade sistema@crm.internal é reservada por tenant: não aparece em /usuarios,
+  equipes, opções de atribuição ou round-robin; login, refresh, reset, reativação,
+  edição e revogação de sessões falham fechado, e o inbound repara metadados canônicos.
+- CAS de lembrete falho aborta a transação; não há estado parcial silencioso.
+
+Confiabilidade
+--------------
+- Redatação do mesmo lembrete atualiza aguardandoDesde.
+- Webhooks não confundem horário do provider com horário de recebimento operacional.
+- Variações legadas sem enviadaEm mantêm ordem cronológica determinística.
+- Nenhuma migration/schema/backend de provider foi criado nesta etapa; as mudanças
+  de workflow usam o modelo existente.
+
+Evidência de código
+-------------------
+Runtime SHA: 411c99c04147cb049dbbb7446c6be2e59669ad01
+Branch: feature/postgres-migration-prep
+Origin feature/master: 411c99c04147cb049dbbb7446c6be2e59669ad01
+Vercel produção: dpl_B3U4uJu2ybJQrnLpSR9F7qgtNpH2, READY, SHA 411c99c
+Railway API e worker: SUCCESS/RUNNING, SHA 411c99c; /health HTTP 200, crm-agro-api.
+
+Gates
+-----
+- Frontend canonical: 161/161 PASS.
+- Frontend build TypeScript/Vite: PASS (1818 módulos; apenas aviso de chunk grande).
+- V61 backend sandbox isolado: 2/2 PASS.
+- Segurança de usuários isolada: 3/3 PASS; WhatsApp webhook F1B2: 11/11 PASS.
+- WhatsApp lifecycle: 6/6 PASS.
+- Messenger lifecycle: 9/9 PASS.
+- Instagram lifecycle: 8/8 PASS.
+- Email inbound: 9 PASS, 1 skipped, 0 fail.
+- diff-check e node --check: PASS.
+- Dev.db SHA preservado: 6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533.
+- Chrome autenticado: 1440x900, 1366x768 e sentinel 390x844 PASS.
+- Console de produção: 0 errors/warnings capturados.
+- axe automatizado: não disponível nesta sessão; revisão DOM/ARIA/teclado manual PASS.
+
+Métricas autenticadas
+---------------------
+1440 expandida: sidebar 208px; workspace x=218, width=1212, height=776;
+lista/chat/contexto = 302.6/605.2/302.6px; documento sem overflow.
+1440 recolhida: rail 64px; workspace x=74, width=1356; +144px de conteúdo.
+1366 expandida: workspace x=218, width=1138.4, height=644;
+lista/chat/contexto = 284.2/568.4/284.2px; composer dentro da viewport.
+1366 recolhida: rail 64px; workspace width=1282.4; documento sem overflow.
+390 sentinel: app abriu, rail desktop oculto, mobile nav presente, sem overflow horizontal.
+
+Limitações honestas
+-------------------
+Não houve provider real, outbound real, dados reais exportados ou ZIP criado. As
+imagens são capturas sanitizadas da sessão autenticada de QA. O axe automatizado não
+estava disponível; DOM/ARIA/teclado/overflow foram verificados manualmente.
+
+Arquivos
+--------
+Os documentos META_V61_*.md/txt e as imagens V61_AFTER_*.png desta pasta foram
+entregues individualmente na conversa fixada do SaaS, sem ZIP.
+
+Status final: V61_INBOX_OPERATIONAL_SHIP.
