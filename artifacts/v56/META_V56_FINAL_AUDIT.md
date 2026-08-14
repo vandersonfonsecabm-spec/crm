@@ -24,3 +24,5 @@ RC commit: `64bb567a6c9db44f158b80312ce104ab615f95c6`.
 | live authenticated visual/axe smoke | NOT RUN — no authorized session |
 
 The requested desktop work is complete in source and local gates. Final publication/production smoke remains dependent on authorized Vercel/browser access; it is not falsely asserted.
+
+SOL final: `SHIP_WITH_STATIC_EVIDENCE`; live visual/axe and authenticated production smoke remain `NOT_RUN`.

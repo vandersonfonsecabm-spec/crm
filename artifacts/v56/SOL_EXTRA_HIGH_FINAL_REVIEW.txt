@@ -1,7 +1,13 @@
-SOL EXTRA HIGH — V56 preliminary gate
+SOL EXTRA HIGH — V56 final read-only gate
 
-Source/layout direction: SHIP_WITH_STATIC_EVIDENCE.
+SOL_EXTRA_HIGH_FINAL_VERDICT=SHIP_WITH_STATIC_EVIDENCE
+HIGH_CRITICAL_FINDINGS=0
 
-Verified by read-only review: sidebar224/68, persistent collapse wiring, Inbox route-specific flex chain, no-context 2-column state, selected-context 24/52/24 state, context URL wrapping, stable overlay close callback, action-menu focus return, focused contracts and build.
+Functional RC: `64bb567a6c9db44f158b80312ce104ab615f95c6`.
+Source/layout verified: sidebar224/68, persistent collapse wiring, Inbox route-specific flex chain, no-context 2-column state, selected-context 24/52/24 state, context URL wrapping, stable overlay close callback, action-menu focus return, focused contracts and build.
 
-Residual gate: no authenticated browser session was available for real 1366/1440 DOM/axe/keyboard screenshots or production smoke. Therefore a full live-browser `V56_DESKTOP_SHELL_INBOX_SHIP` claim must wait for that authorized check.
+The canonical frontend suite is 159/159 and build is PASS; backend/DB/schema/integration paths are unchanged and `dev.db` is unchanged. The feature preview was READY/HTTP 200.
+
+LIVE_VISUAL_A11Y_GATE=NOT_RUN
+PRODUCTION_SMOKE=NOT_RUN
+No authenticated browser session was available for real 1366/1440 DOM/axe/keyboard/overflow evidence, so production promotion is intentionally not claimed.
