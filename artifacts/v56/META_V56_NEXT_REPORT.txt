@@ -54,7 +54,7 @@ Data: 2026-08-14
   de regra para mascará-los.
 - Runtime funcional: 64bb567a6c9db44f158b80312ce104ab615f95c6.
 - Runtime V56 publicado: `ea1c470abc60f2f31a665e73564c840d2165fe90`.
-- HEAD de documentação/evidências após o smoke: `7f7a324cf3c1318d41b0518eeb50d0bf8d8a4504`.
+- HEAD de documentação/evidências após o smoke: `0786638a7bf6364508e85e015411e29c1c8f93224`.
 - Worktree de código limpo; relatório individual desta execução permanece
   untracked até a entrega documental.
 
