@@ -94,7 +94,7 @@ export default function DashboardControlCenter({
 
   return (
     <section aria-labelledby="commercial-panel-title" className="commercial-workbench">
-      <CommercialHeader onCreateClient={onCreateClient} showAction={model.state !== "fail-closed"} />
+      <CommercialHeader onCreateClient={onCreateClient} showAction={model.state !== "fail-closed"} snapshot={snapshot} snapshotState={snapshotState} />
 
       {model.state === "loading" && <CommercialLoading />}
       {model.state === "error" && <CommercialState onRetry={onRetry} state="error" />}
@@ -119,10 +119,14 @@ export default function DashboardControlCenter({
   );
 }
 
-function CommercialHeader({ onCreateClient, showAction }: { onCreateClient: () => void; showAction: boolean }) {
+function CommercialHeader({ onCreateClient, showAction, snapshot, snapshotState }: { onCreateClient: () => void; showAction: boolean; snapshot: CommercialSnapshot | null; snapshotState: "loading" | "ready" | "error" }) {
+  const summary = buildCommercialOperationalSummary(snapshot, snapshotState);
   return (
     <header className="commercial-header">
-      <h1 className="commercial-title truncate" id="commercial-panel-title">Painel Comercial</h1>
+      <div className="commercial-heading-copy">
+        <h1 className="commercial-title truncate" id="commercial-panel-title">Painel Comercial</h1>
+        <p className="commercial-header-summary">{summary || "Acompanhe negócios, etapas e pontos que exigem ação."}</p>
+      </div>
 
       {showAction && (
         <Button className="commercial-create-client" leftIcon={<Plus aria-hidden="true" size={14} />} onClick={onCreateClient} variant="primary">
@@ -131,6 +135,16 @@ function CommercialHeader({ onCreateClient, showAction }: { onCreateClient: () =
       )}
     </header>
   );
+}
+
+function buildCommercialOperationalSummary(snapshot: CommercialSnapshot | null, state: "loading" | "ready" | "error") {
+  if (state !== "ready" || !snapshot) return null;
+  const { open, stalledTotal, overdue } = snapshot.process;
+  const parts: string[] = [];
+  if (open > 0) parts.push(`${open} negócio${open === 1 ? "" : "s"} aberto${open === 1 ? "" : "s"}`);
+  if (stalledTotal > 0) parts.push(`${stalledTotal} gargalo${stalledTotal === 1 ? "" : "s"}`);
+  if (overdue > 0) parts.push(`${overdue} acompanhamento${overdue === 1 ? "" : "s"} atrasado${overdue === 1 ? "" : "s"}`);
+  return parts.length > 0 ? parts.join(" · ") : "Nenhum gargalo identificado no processo atual.";
 }
 
 function CommercialData({
@@ -221,7 +235,7 @@ function CommercialProcessSection({
   return (
     <section aria-labelledby="commercial-process-title" className="commercial-process">
       <header className="commercial-process-heading">
-        <div><p className="commercial-process-kicker">Snapshot atual</p><h2 id="commercial-process-title">Processo comercial</h2><p>Funil de Negócios e gargalos que pedem ação.</p></div>
+        <div><h2 id="commercial-process-title">Processo comercial</h2><p>Funil de Negócios e gargalos que pedem ação.</p></div>
         <Link className="commercial-heading-link" to={getDashboardPath("kanban")}>Abrir Negócios <ChevronRight aria-hidden="true" size={14} /></Link>
       </header>
 

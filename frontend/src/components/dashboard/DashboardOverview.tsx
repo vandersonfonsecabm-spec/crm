@@ -68,7 +68,11 @@ export default function DashboardOverview({
 
   return (
     <section className="crm-overview" aria-labelledby="crm-overview-title">
-      <OverviewHeader onOpenCommercial={onOpenCommercial} showAction={model.state !== "fail-closed"} />
+      <OverviewHeader
+        onOpenCommercial={onOpenCommercial}
+        showAction={model.state !== "fail-closed"}
+        summary={buildOverviewOperationalSummary(attentionCount, agendaSummary, agendaLoadState)}
+      />
 
       {model.state === "loading" && <OverviewLoading />}
       {model.state === "error" && <OverviewState onRetry={onRetry} state="error" />}
@@ -89,12 +93,13 @@ export default function DashboardOverview({
   );
 }
 
-function OverviewHeader({ onOpenCommercial, showAction }: { onOpenCommercial: () => void; showAction: boolean }) {
+function OverviewHeader({ onOpenCommercial, showAction, summary }: { onOpenCommercial: () => void; showAction: boolean; summary: string | null }) {
   return (
     <header className="crm-overview-header">
       <div className="crm-overview-heading-copy">
         <h1 className="crm-overview-title truncate" id="crm-overview-title">Visão Geral</h1>
         <p className="crm-overview-context">Agora · {new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "numeric", month: "long" }).format(new Date())}</p>
+        {summary && <p className="crm-overview-summary">{summary}</p>}
       </div>
 
       {showAction && (
@@ -104,6 +109,24 @@ function OverviewHeader({ onOpenCommercial, showAction }: { onOpenCommercial: ()
       )}
     </header>
   );
+}
+
+function buildOverviewOperationalSummary(
+  attentionCount: number | null,
+  agendaSummary: ApiAcompanhamentoResumo | null,
+  agendaLoadState: "loading" | "ready" | "error",
+) {
+  const parts: string[] = [];
+  if (attentionCount !== null && attentionCount > 0) {
+    parts.push(`${attentionCount} conversa${attentionCount === 1 ? "" : "s"} aguard${attentionCount === 1 ? "a" : "am"} resposta`);
+  }
+  const overdue = agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.atrasados) : null;
+  if (overdue !== null && overdue > 0) {
+    parts.push(`${overdue} acompanhamento${overdue === 1 ? "" : "s"} atrasado${overdue === 1 ? "" : "s"}`);
+  }
+  if (parts.length > 0) return `${parts.join(" e ")}.`;
+  if (attentionCount === 0 && agendaLoadState === "ready" && overdue === 0) return "Sua operação está em dia.";
+  return null;
 }
 
 function OverviewLoading() {

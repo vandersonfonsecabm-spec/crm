@@ -490,6 +490,13 @@ button:disabled { cursor: not-allowed; }
 .commercial-workbench { gap: 20px; }
 .commercial-process { gap: 20px; padding: 20px; }
 .commercial-process-grid { grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); gap: 24px; }
+.crm-overview-header,
+.commercial-header { min-height: 0; padding-block: 4px 2px; }
+.crm-overview-heading-copy,
+.commercial-heading-copy { display: grid; min-width: 0; gap: 3px; }
+.crm-overview-summary,
+.commercial-header-summary { max-width: 62ch; margin: 2px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
+.commercial-process-kicker { display: none; }
 
 @media (max-width: 1023px) {
   .crm-overview-action-grid,
@@ -505,4 +512,10 @@ button:disabled { cursor: not-allowed; }
   .crm-overview-today,
   .crm-overview-recent,
   .commercial-process { padding: 14px; }
+  .commercial-process-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .commercial-process-metrics > div + div { border-left: 1px solid var(--border); border-top: 0; }
+  .commercial-process-metrics > div:nth-child(odd) { border-left: 0; }
+  .commercial-process-metrics > div:nth-child(n + 3) { border-top: 1px solid var(--border); }
+  .commercial-process-metrics dt { min-height: 2.7em; }
+  .commercial-process-metrics dd { font-size: 20px; }
 }
