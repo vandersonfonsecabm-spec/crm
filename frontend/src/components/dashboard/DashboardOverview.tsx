@@ -44,10 +44,12 @@ export default function DashboardOverview({
   useEffect(() => {
     let active = true;
     if (!isAuthorized || summaryLoadState !== "ready") {
+      setAgendaSummary(null);
       setAgendaLoadState(isAuthorized ? "loading" : "error");
       return () => { active = false; };
     }
 
+    setAgendaSummary(null);
     setAgendaLoadState("loading");
     void fetchAcompanhamentoResumo()
       .then((response) => {
@@ -57,6 +59,7 @@ export default function DashboardOverview({
       })
       .catch(() => {
         if (!active) return;
+        setAgendaSummary(null);
         setAgendaLoadState("error");
       });
 
@@ -165,8 +168,8 @@ function OverviewData({
   const analytics = summary?.analytics;
   const kpis: DashboardOverviewMetric[] = [
     { label: "Aguardando resposta", kind: "count", value: attentionCount },
-    { label: "Acompanhamentos hoje", kind: "count", value: readMetric(analytics?.todayFollowUps) },
-    { label: "Acompanhamentos atrasados", kind: "count", value: readMetric(agendaSummary?.indicadores.atrasados) },
+    { label: "Acompanhamentos hoje", kind: "count", value: agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.paraHoje) : null },
+    { label: "Acompanhamentos atrasados", kind: "count", value: agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.atrasados) : null },
     { label: "Clientes em alto risco", kind: "count", value: readMetric(analytics?.highRiskCount) },
   ];
 
@@ -179,8 +182,8 @@ function OverviewData({
       </dl>
 
       <div className="crm-overview-action-grid">
-        <OverviewAttention model={model} attentionCount={attentionCount} onOpenInbox={onOpenInbox} summary={summary} onOpenAgenda={onOpenAgenda} />
-        <OverviewToday agendaLoadState={agendaLoadState} agendaSummary={agendaSummary} onOpenAgenda={onOpenAgenda} summary={summary} />
+        <OverviewAttention agendaLoadState={agendaLoadState} agendaSummary={agendaSummary} model={model} attentionCount={attentionCount} onOpenInbox={onOpenInbox} onOpenAgenda={onOpenAgenda} />
+        <OverviewToday agendaLoadState={agendaLoadState} agendaSummary={agendaSummary} onOpenAgenda={onOpenAgenda} />
       </div>
 
       <div className="crm-overview-support-grid">
@@ -233,8 +236,8 @@ function OverviewDistribution({
   );
 }
 
-function OverviewAttention({ model, attentionCount, onOpenInbox, summary, onOpenAgenda }: { model: ReturnType<typeof buildDashboardOverviewModel>; attentionCount: number | null; onOpenInbox: () => void; summary: ApiDashboardSummary | null; onOpenAgenda: () => void }) {
-  const todayFollowUps = readMetric(summary?.analytics.todayFollowUps);
+function OverviewAttention({ model, attentionCount, onOpenInbox, agendaSummary, agendaLoadState, onOpenAgenda }: { model: ReturnType<typeof buildDashboardOverviewModel>; attentionCount: number | null; onOpenInbox: () => void; agendaSummary: ApiAcompanhamentoResumo | null; agendaLoadState: "loading" | "ready" | "error"; onOpenAgenda: () => void }) {
+  const todayFollowUps = agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.paraHoje) : null;
 
   return (
     <Surface className="crm-overview-attention" aria-labelledby="crm-overview-attention-title">
@@ -275,9 +278,9 @@ function OverviewAttention({ model, attentionCount, onOpenInbox, summary, onOpen
   );
 }
 
-function OverviewToday({ agendaSummary, agendaLoadState, summary, onOpenAgenda }: { agendaSummary: ApiAcompanhamentoResumo | null; agendaLoadState: "loading" | "ready" | "error"; summary: ApiDashboardSummary | null; onOpenAgenda: () => void }) {
-  const today = agendaSummary?.indicadores.paraHoje ?? summary?.analytics.todayFollowUps ?? null;
-  const overdue = agendaSummary?.indicadores.atrasados ?? null;
+function OverviewToday({ agendaSummary, agendaLoadState, onOpenAgenda }: { agendaSummary: ApiAcompanhamentoResumo | null; agendaLoadState: "loading" | "ready" | "error"; onOpenAgenda: () => void }) {
+  const today = agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.paraHoje) : null;
+  const overdue = agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.atrasados) : null;
   return (
     <Surface className="crm-overview-today" aria-labelledby="crm-overview-today-title">
       <header className="crm-overview-section-heading">

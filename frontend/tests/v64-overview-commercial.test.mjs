@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function processModel() {
@@ -39,4 +40,16 @@ test("V64 falha fechado para números inválidos sem inventar quantidade", async
   assert.equal(model.overdue, 0);
   assert.equal(model.stalledTotal, 0);
   assert.equal(model.stages[0].total, 0);
+});
+
+test("V64 usa a Agenda como autoridade dos acompanhamentos e limpa snapshot após erro", async () => {
+  const overview = await readFile(new URL("../src/components/dashboard/DashboardOverview.tsx", import.meta.url), "utf8");
+  const dashboard = await readFile(new URL("../src/pages/Dashboard.tsx", import.meta.url), "utf8");
+  const agenda = await readFile(new URL("../src/components/dashboard/DashboardAgendaPanel.tsx", import.meta.url), "utf8");
+
+  assert.match(overview, /Acompanhamentos hoje[\s\S]{0,180}agendaLoadState === "ready" \? readMetric\(agendaSummary\?\.indicadores\.paraHoje\)/);
+  assert.doesNotMatch(overview, /const today = agendaSummary\?\.indicadores\.paraHoje \?\? summary\?\.analytics\.todayFollowUps/);
+  assert.match(overview, /setAgendaSummary\(null\);\s*setAgendaLoadState\("error"\)/);
+  assert.match(dashboard, /setAgendaTodayRequestKey\(\(current\) => current \+ 1\)/);
+  assert.match(agenda, /onTodayRequestHandled\?\.\(\)/);
 });
