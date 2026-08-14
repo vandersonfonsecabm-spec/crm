@@ -1,7 +1,8 @@
 META V56 FINAL REPORT
 
 State: V56 desktop shell + Inbox published and smoke-verified.
-Runtime/docs head: `ea1c470abc60f2f31a665e73564c840d2165fe90`.
+Runtime V56: `ea1c470abc60f2f31a665e73564c840d2165fe90`.
+Documentation/evidence head: `7f7a324cf3c1318d41b0518eeb50d0bf8d8a4504`.
 
 Implemented compact/persistent desktop sidebar and Inbox-specific full-workspace layout. No backend, database, schema, migration, integration, or business-rule file changed.
 
