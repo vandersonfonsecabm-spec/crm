@@ -120,6 +120,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   });
   const [inboxAttentionCount, setInboxAttentionCount] = useState<number | null>(null);
+  const [inboxAttentionCountFresh, setInboxAttentionCountFresh] = useState(false);
   const [showArchivedClients, setShowArchivedClients] = useState(false);
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
@@ -189,15 +190,20 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => {
     if (!leadsCommunicationEnabled || !authSession) {
       setInboxAttentionCount(null);
+      setInboxAttentionCountFresh(false);
       return;
     }
     let ignore = false;
     const loadAttention = async () => {
       try {
         const summary = await fetchCommunicationAttentionSummary();
-        if (!ignore) setInboxAttentionCount(summary.pendentes);
+        if (!ignore) {
+          setInboxAttentionCount(summary.pendentes);
+          setInboxAttentionCountFresh(true);
+        }
       } catch {
-        // Preserve the last known count; an unavailable summary must not be rendered as a confirmed zero.
+        // Preserve the last known count for the rail, but do not promote it into fresh page copy.
+        if (!ignore) setInboxAttentionCountFresh(false);
       }
     };
     void loadAttention();
@@ -866,6 +872,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               onOpenAgenda={openTodayAgenda}
               onRetry={() => setBackendLoadRequest((current) => current + 1)}
               attentionCount={inboxAttentionCount}
+              attentionCountFresh={inboxAttentionCountFresh}
             />
           )}
 

@@ -19,6 +19,7 @@ type DashboardOverviewProps = {
   onOpenAgenda?: () => void;
   onRetry: () => void;
   attentionCount?: number | null;
+  attentionCountFresh?: boolean;
 };
 
 export default function DashboardOverview({
@@ -31,6 +32,7 @@ export default function DashboardOverview({
   onOpenAgenda = onOpenCommercial,
   onRetry,
   attentionCount = null,
+  attentionCountFresh = false,
 }: DashboardOverviewProps) {
   const model = buildDashboardOverviewModel({
     summary,
@@ -71,7 +73,7 @@ export default function DashboardOverview({
       <OverviewHeader
         onOpenCommercial={onOpenCommercial}
         showAction={model.state !== "fail-closed"}
-        summary={isDataState(model.state) ? buildOverviewOperationalSummary(attentionCount, agendaSummary, agendaLoadState, model.attentionSignals.length > 0) : null}
+        summary={isDataState(model.state) ? buildOverviewOperationalSummary(attentionCount, attentionCountFresh, agendaSummary, agendaLoadState, model.attentionSignals.length > 0) : null}
       />
 
       {model.state === "loading" && <OverviewLoading />}
@@ -113,20 +115,25 @@ function OverviewHeader({ onOpenCommercial, showAction, summary }: { onOpenComme
 
 function buildOverviewOperationalSummary(
   attentionCount: number | null,
+  attentionCountFresh: boolean,
   agendaSummary: ApiAcompanhamentoResumo | null,
   agendaLoadState: "loading" | "ready" | "error",
   hasAttentionSignals: boolean,
 ) {
   const parts: string[] = [];
-  if (attentionCount !== null && attentionCount > 0) {
+  if (attentionCountFresh && attentionCount !== null && attentionCount > 0) {
     parts.push(`${attentionCount} conversa${attentionCount === 1 ? "" : "s"} aguard${attentionCount === 1 ? "a" : "am"} resposta`);
+  }
+  const today = agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.paraHoje) : null;
+  if (today !== null && today > 0) {
+    parts.push(`${today} acompanhamento${today === 1 ? "" : "s"} hoje`);
   }
   const overdue = agendaLoadState === "ready" ? readMetric(agendaSummary?.indicadores.atrasados) : null;
   if (overdue !== null && overdue > 0) {
     parts.push(`${overdue} acompanhamento${overdue === 1 ? "" : "s"} atrasado${overdue === 1 ? "" : "s"}`);
   }
   if (parts.length > 0) return `${parts.join(" e ")}.`;
-  if (!hasAttentionSignals && attentionCount === 0 && agendaLoadState === "ready" && overdue === 0) return "Sua operação está em dia.";
+  if (!hasAttentionSignals && attentionCountFresh && attentionCount === 0 && agendaLoadState === "ready" && today === 0 && overdue === 0) return "Sua operação está em dia.";
   return null;
 }
 
