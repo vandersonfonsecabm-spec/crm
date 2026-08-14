@@ -94,7 +94,7 @@ export default function DashboardControlCenter({
 
   return (
     <section aria-labelledby="commercial-panel-title" className="commercial-workbench">
-      <CommercialHeader onCreateClient={onCreateClient} showAction={model.state !== "fail-closed"} snapshot={snapshot} snapshotState={snapshotState} />
+      <CommercialHeader onCreateClient={onCreateClient} showAction={model.state !== "fail-closed"} snapshot={snapshot} snapshotState={snapshotState} summaryAllowed={isDataState(model.state)} />
 
       {model.state === "loading" && <CommercialLoading />}
       {model.state === "error" && <CommercialState onRetry={onRetry} state="error" />}
@@ -119,8 +119,8 @@ export default function DashboardControlCenter({
   );
 }
 
-function CommercialHeader({ onCreateClient, showAction, snapshot, snapshotState }: { onCreateClient: () => void; showAction: boolean; snapshot: CommercialSnapshot | null; snapshotState: "loading" | "ready" | "error" }) {
-  const summary = buildCommercialOperationalSummary(snapshot, snapshotState);
+function CommercialHeader({ onCreateClient, showAction, snapshot, snapshotState, summaryAllowed }: { onCreateClient: () => void; showAction: boolean; snapshot: CommercialSnapshot | null; snapshotState: "loading" | "ready" | "error"; summaryAllowed: boolean }) {
+  const summary = summaryAllowed ? buildCommercialOperationalSummary(snapshot, snapshotState) : null;
   return (
     <header className="commercial-header">
       <div className="commercial-heading-copy">

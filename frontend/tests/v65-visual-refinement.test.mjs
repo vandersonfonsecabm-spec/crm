@@ -18,6 +18,8 @@ test("V65 keeps operational summary derived from already loaded state", () => {
 test("V65 removes the English snapshot kicker and keeps commercial summary state-safe", () => {
   assert.doesNotMatch(commercial, />Snapshot atual</i);
   assert.match(commercial, /buildCommercialOperationalSummary\(snapshot, snapshotState\)/);
+  assert.match(commercial, /summaryAllowed: boolean/);
+  assert.match(commercial, /summaryAllowed \? buildCommercialOperationalSummary/);
   assert.match(commercial, /state !== "ready" \|\| !snapshot/);
   assert.match(commercial, /commercial-header-summary/);
 });
