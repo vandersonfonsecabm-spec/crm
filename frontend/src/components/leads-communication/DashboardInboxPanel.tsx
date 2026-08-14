@@ -134,6 +134,11 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
     try {
       const response = await fetchCommunicationConversations(listQuery);
       if (sequence !== listRequest.current) return;
+      const lastAvailablePage = Math.max(1, response.pagination.totalPages);
+      if (listQuery.page > lastAvailablePage) {
+        setPage(lastAvailablePage);
+        return;
+      }
       setList(response);
       hasList.current = true;
     } catch (error) {
@@ -152,6 +157,11 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
       try {
         const response = await fetchCommunicationConversations(listQuery);
         if (!active || sequence !== listRequest.current) return;
+        const lastAvailablePage = Math.max(1, response.pagination.totalPages);
+        if (listQuery.page > lastAvailablePage) {
+          setPage(lastAvailablePage);
+          return;
+        }
         setList(response);
         hasList.current = true;
       } catch (error) {

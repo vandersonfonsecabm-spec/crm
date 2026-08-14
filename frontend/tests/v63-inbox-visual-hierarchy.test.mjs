@@ -39,6 +39,8 @@ test("V63 pagination is explicit and the empty Inbox does not announce a fake pa
   assert.match(pagination, /previousLabel\?: string/);
   assert.match(pagination, /nextLabel\?: string/);
   assert.match(pagination, /const currentPage = Math\.min\(Math\.max\(1, page\), safeTotalPages\)/);
+  assert.match(panel, /const lastAvailablePage = Math\.max\(1, response\.pagination\.totalPages\)/);
+  assert.match(panel, /if \(listQuery\.page > lastAvailablePage\) \{\s*setPage\(lastAvailablePage\);\s*return;/);
 });
 
 test("V63 command bar has a tablet-safe two-row layout and compact queue control", () => {
