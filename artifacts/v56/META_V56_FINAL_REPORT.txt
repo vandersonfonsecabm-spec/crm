@@ -1,0 +1,10 @@
+META V56 FINAL REPORT
+
+State: V56 frontend implementation complete with local gates green.
+RC commit: `64bb567a6c9db44f158b80312ce104ab615f95c6`.
+
+Implemented compact/persistent desktop sidebar and Inbox-specific full-workspace layout. No backend, database, schema, migration, integration, or business-rule file changed.
+
+Evidence: 159/159 frontend tests, focused V56 contracts, TypeScript/Vite build, diff check. Static desktop geometry is documented for 1366×768 and 1440×900. Live authenticated browser/axe/production smoke is not claimed because no authorized session was available.
+
+See the companion reports in this directory for the allowlist, measurements, rollback, regressions, and remaining limitation.

@@ -1,0 +1,10 @@
+LUNAMAX EXECUTOR SCORECARD — V56
+
+Scope discipline: PASS — frontend shell/Inbox only; no backend/database/integration edits.
+Sidebar compact/collapse implementation: PASS.
+Inbox full-workspace implementation: PASS by source/build contracts.
+Frontend regression: PASS — 159/159.
+Build: PASS.
+Lint: baseline errors documented, no new V56-specific finding proven.
+Visual live evidence: LIMITED — no authenticated browser session.
+Production deploy/smoke: NOT CLAIMED without authorized access.
