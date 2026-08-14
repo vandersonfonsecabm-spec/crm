@@ -169,6 +169,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
         titulo: data.titulo ?? current.titulo,
         tipo: data.tipo ?? current.tipo,
         status: current.status,
+        dataHora: nextDate,
       });
       await reconcileClientProjections({
         tx,
@@ -376,11 +377,12 @@ async function syncInboxReminderEdit(tx, context, current, next) {
   if (oldReminder && oldConversationId && (!nextReminder || nextConversationId !== oldConversationId)) {
     await transitionInboxConversation(tx, context, oldConversationId);
   }
-  if (nextReminder && nextConversationId && next.status === "PENDENTE" && (!oldReminder || nextConversationId !== oldConversationId)) {
-    await tx.conversaCanal.updateMany({
+  if (nextReminder && nextConversationId && next.status === "PENDENTE") {
+    const updated = await tx.conversaCanal.updateMany({
       where: { id: nextConversationId, empresaId: context.empresaId, status: { not: "ENCERRADA" } },
-      data: { status: "PENDENTE", aguardandoDesde: null },
+      data: { status: "PENDENTE", aguardandoDesde: next.dataHora },
     });
+    if (updated.count !== 1) throw domainError(409, "AGENDA_CONVERSATION_CONFLICT", "A conversa do lembrete foi alterada por outra operacao.");
   }
 }
 

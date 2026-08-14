@@ -69,9 +69,12 @@ test("V61 fila aguardando, lembrete server-side, EM_ATENDIMENTO e responder conc
   const inboundAssigned = await request("POST", `/conversas/${conversation.id}/mensagens/simuladas`, { externalId: "v61-inbound-2", direcao: "ENTRADA", texto: "Ainda aguardo" }, admin.token);
   assert.ok([200, 201].includes(inboundAssigned.status));
   assert.equal((await request("GET", "/conversas/resumo", undefined, admin.token)).body.pendentes, 1, "EM_ATENDIMENTO com aguardandoDesde continua elegivel");
-  const legacyNullMessage = await prisma.mensagemCanal.create({ data: { empresaId: admin.empresaId, canalIntegracaoId: channel.id, conversaCanalId: conversation.id, externalId: "v61-legacy-null-time", direcao: "ENTRADA", tipo: "TEXTO", texto: "Mensagem legada sem horario do provedor", status: "RECEBIDA", statusEntrega: "RECEBIDA", enviadaEm: null, simulada: false } });
+  const legacyNullMessage = await prisma.mensagemCanal.create({ data: { empresaId: admin.empresaId, canalIntegracaoId: channel.id, conversaCanalId: conversation.id, externalId: "v61-legacy-null-time", direcao: "ENTRADA", tipo: "TEXTO", texto: "Mensagem legada sem horario do provedor", status: "RECEBIDA", statusEntrega: "RECEBIDA", enviadaEm: null, createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000), simulada: false } });
+  const legacyLatestMessage = await prisma.mensagemCanal.create({ data: { empresaId: admin.empresaId, canalIntegracaoId: channel.id, conversaCanalId: conversation.id, externalId: "v61-legacy-null-latest", direcao: "ENTRADA", tipo: "TEXTO", texto: "Mensagem legada mais recente pelo fallback", status: "RECEBIDA", statusEntrega: "RECEBIDA", enviadaEm: null, createdAt: new Date(Date.now() + 1000), simulada: false } });
   const orderedMessages = await service.listMessages({ empresaId: admin.empresaId, usuarioId: admin.usuarioId, papel: "ADMIN" }, conversation.id, { page: 1, limit: 100 });
-  assert.equal(orderedMessages.data.at(-1).id, legacyNullMessage.id, "mensagens legadas sem enviadaEm ficam depois da cronologia provider-time em todos os engines");
+  assert.ok(orderedMessages.data.findIndex((message) => message.id === legacyNullMessage.id) < orderedMessages.data.findIndex((message) => message.id === legacyLatestMessage.id), "mensagens legadas usam createdAt como fallback na mesma cronologia");
+  const latestConversation = await service.getConversation({ empresaId: admin.empresaId, usuarioId: admin.usuarioId, papel: "ADMIN" }, conversation.id);
+  assert.equal(latestConversation.ultimaMensagem.id, legacyLatestMessage.id, "ultima mensagem usa a mesma cronologia COALESCE provider/createdAt");
 
   const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const snoozed = await request("POST", `/conversas/${conversation.id}/lembrar-depois`, { dataHora: future, motivo: "Retorno agendado" }, admin.token);
@@ -86,7 +89,14 @@ test("V61 fila aguardando, lembrete server-side, EM_ATENDIMENTO e responder conc
   assert.equal(resnoozedWhilePending.body.status, "PENDENTE");
 
   const agendaReminder = await prisma.acompanhamento.findFirst({ where: { empresaId: admin.empresaId, conversaCanalId: conversation.id, titulo: "Lembrar conversa", tipo: "RETORNO", status: "PENDENTE" } });
-  const editedReminder = await request("PATCH", `/acompanhamentos/${agendaReminder.id}`, { titulo: "Retorno manual", revisao: agendaReminder.revisao }, admin.token);
+  const redatedAt = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+  const redatedReminder = await request("PATCH", `/acompanhamentos/${agendaReminder.id}`, { dataHora: redatedAt, revisao: agendaReminder.revisao }, admin.token);
+  assert.equal(redatedReminder.status, 200, JSON.stringify(redatedReminder.body));
+  const afterRedateConversation = await prisma.conversaCanal.findUnique({ where: { id: conversation.id }, select: { status: true, aguardandoDesde: true } });
+  assert.equal(afterRedateConversation.status, "PENDENTE");
+  assert.equal(new Date(afterRedateConversation.aguardandoDesde).toISOString(), redatedAt, "reagendar o mesmo lembrete atualiza a espera operacional da conversa");
+  const redatedSnapshot = await prisma.acompanhamento.findUnique({ where: { id: agendaReminder.id } });
+  const editedReminder = await request("PATCH", `/acompanhamentos/${agendaReminder.id}`, { titulo: "Retorno manual", revisao: redatedSnapshot.revisao }, admin.token);
   assert.equal(editedReminder.status, 200, JSON.stringify(editedReminder.body));
   assert.equal((await request("GET", `/conversas/${conversation.id}`, undefined, admin.token)).body.status, "EM_ATENDIMENTO", "editar o lembrete para outro tipo retoma a conversa");
   const resnoozedAfterEdit = await request("POST", `/conversas/${conversation.id}/lembrar-depois`, { dataHora: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), motivo: "Retorno recriado apos edicao" }, admin.token);
@@ -125,6 +135,9 @@ test("V61 fila aguardando, lembrete server-side, EM_ATENDIMENTO e responder conc
   assert.equal(reminderAfterInbound.status, "CANCELADO");
   assert.equal(reminderAfterInbound.revisao, reminderBeforeInbound.revisao + 1, "cancelamento automatico usa revisao CAS");
   assert.equal(await prisma.historicoAcompanhamento.count({ where: { empresaId: admin.empresaId, acompanhamentoId: reminderBeforeInbound.id } }), reminderHistoryBeforeInbound + 1, "cancelamento automatico preserva historico");
+  const automaticHistory = await prisma.historicoAcompanhamento.findFirst({ where: { empresaId: admin.empresaId, acompanhamentoId: reminderBeforeInbound.id, acao: "CANCELAR" }, orderBy: [{ id: "desc" }], include: { autor: { select: { nome: true, ativo: true } } } });
+  assert.equal(automaticHistory.autor.nome, "Sistema", "cancelamento automatico nao e atribuido a um humano");
+  assert.equal(automaticHistory.autor.ativo, false, "o ator automatico e uma identidade interna inativa");
 
   await request("POST", `/conversas/${conversation.id}/devolver-fila`, { motivo: "Fila após inbound" }, admin.token);
   await request("POST", `/conversas/${conversation.id}/lembrar-depois`, { dataHora: new Date(Date.now() + 60 * 60 * 1000).toISOString(), motivo: "Retorno final" }, admin.token);
@@ -143,6 +156,29 @@ test("V61 fila aguardando, lembrete server-side, EM_ATENDIMENTO e responder conc
   assert.equal(afterReply.body.lembrete, null);
   assert.equal((await request("GET", "/conversas/resumo", undefined, admin.token)).body.pendentes, 0);
   assert.equal((await request("GET", "/conversas?fila=AGUARDANDO_RESPOSTA", undefined, admin.token)).body.pagination.total, 0);
+});
+
+test("V61 perdedor de CAS do lembrete aborta a mudanca da conversa", async () => {
+  const { applyInboundConversationActivity } = require("../src/leads-communication/inboundActivity");
+  let conversationUpdates = 0;
+  const tx = {
+    conversaCanal: {
+      findFirst: async () => ({ id: 901, empresaId: 77, status: "PENDENTE", responsavelId: null, primeiraMensagemEm: null, ultimaMensagemEm: null, encerradaEm: null }),
+      findUnique: async () => ({ contatoCanal: { clienteId: null }, lead: { clienteId: null } }),
+      updateMany: async () => { conversationUpdates += 1; return { count: 1 }; },
+    },
+    acompanhamento: {
+      findMany: async () => [{ id: 902, status: "PENDENTE", revisao: 4, clienteId: null }],
+      updateMany: async () => ({ count: 0 }),
+    },
+    usuario: { findFirst: async () => ({ id: 903 }) },
+    historicoAcompanhamento: { create: async () => { throw new Error("history must not be written after CAS loss"); } },
+  };
+  await assert.rejects(
+    applyInboundConversationActivity(tx, { id: 901, empresaId: 77 }, new Date("2026-08-14T11:00:00.000Z"), new Date("2026-08-14T11:01:00.000Z")),
+    (error) => error?.codigo === "REMINDER_CONFLICT",
+  );
+  assert.equal(conversationUpdates, 0, "a conversa nao muda quando o lembrete perdeu o CAS");
 });
 
 async function registerAndLogin(empresaNome, adminNome, email) {

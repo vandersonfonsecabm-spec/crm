@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const { Prisma } = require("@prisma/client");
 const { createChannelService } = require("../channels/channelService");
 const { normalizePhone } = require("../channels/phoneNormalizer");
 const { createAutomationService } = require("../automations/service");
@@ -400,7 +401,8 @@ function createLeadsCommunicationServices({ prisma }) {
       prisma.conversaCanal.findMany({ where, include: conversationIncludes(), orderBy, skip: pageData.skip, take: pageData.limit }),
       prisma.conversaCanal.count({ where }),
     ]);
-    return pageResult(data.map(presentConversation), total, pageData);
+    const latest = await latestMessagesByConversation(prisma, context.empresaId, data.map((conversation) => conversation.id));
+    return pageResult(data.map((conversation) => presentConversation({ ...conversation, mensagens: latest.has(conversation.id) ? [latest.get(conversation.id)] : [] })), total, pageData);
   }
 
   async function conversationAttentionSummary(context) {
@@ -421,7 +423,7 @@ function createLeadsCommunicationServices({ prisma }) {
   async function getConversation(context, id) {
     await findConversation(context, id);
     const conversation = await prisma.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() });
-    return presentConversation(conversation);
+    return presentConversationWithLatest(prisma, context.empresaId, conversation);
   }
 
   async function assumeConversation(context, id) {
@@ -447,7 +449,7 @@ function createLeadsCommunicationServices({ prisma }) {
         estadoAnterior: current.status,
         estadoNovo: "EM_ATENDIMENTO",
       });
-      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+      return presentConversationWithLatest(tx, context.empresaId, await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
     });
   }
 
@@ -474,7 +476,7 @@ function createLeadsCommunicationServices({ prisma }) {
       }
       await validateResponsible(tx, context.empresaId, responsibleId);
       if (current.responsavelId === responsibleId && current.status === "EM_ATENDIMENTO") {
-        return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+        return presentConversationWithLatest(tx, context.empresaId, await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
       }
       if (current.status === "PENDENTE") await finishConversationReminders(tx, context, id, "CANCELAR");
       const result = await tx.conversaCanal.updateMany({
@@ -495,7 +497,7 @@ function createLeadsCommunicationServices({ prisma }) {
         estadoNovo: "EM_ATENDIMENTO",
         motivo,
       });
-      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+      return presentConversationWithLatest(tx, context.empresaId, await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
     });
   }
 
@@ -531,7 +533,7 @@ function createLeadsCommunicationServices({ prisma }) {
         estadoNovo: "AGUARDANDO_ATENDIMENTO",
         motivo,
       });
-      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+      return presentConversationWithLatest(tx, context.empresaId, await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
     });
   }
 
@@ -610,7 +612,7 @@ function createLeadsCommunicationServices({ prisma }) {
         motivo,
       });
       await reconcileClientProjections({ tx, empresaId: context.empresaId, clienteIds: clientIds });
-      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+      return presentConversationWithLatest(tx, context.empresaId, await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
     });
   }
 
@@ -633,7 +635,7 @@ function createLeadsCommunicationServices({ prisma }) {
       await lockEntityClients(tx, context, "conversaCanal", current);
       requireResponsibleOrManager(context, current);
       if (next === current.status) {
-        return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+        return presentConversationWithLatest(tx, context.empresaId, await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
       }
       if (!CONVERSATION_TRANSITIONS[current.status]?.has(next)) {
         throw domainError(422, "CONVERSATION_TRANSITION_INVALID", "Esta mudanca de estado nao e permitida agora.");
@@ -673,7 +675,7 @@ function createLeadsCommunicationServices({ prisma }) {
         estadoNovo: next,
         motivo,
       });
-      return presentConversation(await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
+      return presentConversationWithLatest(tx, context.empresaId, await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
     });
   }
 
@@ -709,7 +711,9 @@ function createLeadsCommunicationServices({ prisma }) {
         },
         data: { ...data, revisao: { increment: 1 } },
       });
-      if (updated.count !== 1) continue;
+      if (updated.count !== 1) {
+        throw domainError(409, "REMINDER_CONFLICT", "O lembrete foi alterado por outra operacao. Atualize a conversa e tente novamente.");
+      }
       updatedReminders.push(reminder);
       await tx.historicoAcompanhamento.create({
         data: {
@@ -765,11 +769,22 @@ function createLeadsCommunicationServices({ prisma }) {
     const pageData = pagination(query);
     rejectUnknown(query, ["page", "limit"]);
     const where = { empresaId: context.empresaId, conversaCanalId: conversationId };
-    const [data, total] = await prisma.$transaction([
-      prisma.mensagemCanal.findMany({ where, include: messageIncludes(), orderBy: [{ enviadaEm: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }, { id: "asc" }], skip: pageData.skip, take: pageData.limit }),
+    const [orderedIds, total] = await prisma.$transaction([
+      prisma.$queryRaw`
+        SELECT "id"
+        FROM "MensagemCanal"
+        WHERE "empresaId" = ${context.empresaId}
+          AND "conversaCanalId" = ${conversationId}
+        ORDER BY COALESCE("enviadaEm", "createdAt") ASC, "id" ASC
+        LIMIT ${pageData.limit} OFFSET ${pageData.skip}
+      `,
       prisma.mensagemCanal.count({ where }),
     ]);
-    return pageResult(data.map(presentMessage), total, pageData);
+    const ids = orderedIds.map((row) => Number(row.id));
+    if (ids.length === 0) return pageResult([], total, pageData);
+    const messages = await prisma.mensagemCanal.findMany({ where: { empresaId: context.empresaId, id: { in: ids } }, include: messageIncludes() });
+    const byId = new Map(messages.map((message) => [message.id, message]));
+    return pageResult(ids.map((id) => byId.get(id)).filter(Boolean).map(presentMessage), total, pageData);
   }
 
   async function markConversationRead(context, conversationId) {
@@ -1268,11 +1283,6 @@ function conversationIncludes() {
     },
     responsavel: { select: { id: true, nome: true, papel: true } },
     respostaReservadaPor: { select: { id: true, nome: true } },
-    mensagens: {
-      orderBy: [{ enviadaEm: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }, { id: "desc" }],
-      take: 1,
-      include: messageIncludes(),
-    },
     _count: {
       select: { mensagens: { where: { direcao: "ENTRADA", lidaEm: null } } },
     },
@@ -1331,6 +1341,46 @@ function presentMessage(message) {
     ...data,
     autor: autorUsuario ? { id: autorUsuario.id, nome: autorUsuario.nome } : null,
   };
+}
+
+async function latestMessagesByConversation(client, empresaId, conversationIds) {
+  const ids = [...new Set(conversationIds.filter((id) => Number.isSafeInteger(id)))];
+  if (ids.length === 0) return new Map();
+  const idList = Prisma.join(ids);
+  const latestRows = await client.$queryRaw`
+    SELECT current."id", current."conversaCanalId"
+    FROM "MensagemCanal" AS current
+    WHERE current."empresaId" = ${empresaId}
+      AND current."conversaCanalId" IN (${idList})
+      AND NOT EXISTS (
+        SELECT 1
+        FROM "MensagemCanal" AS newer
+        WHERE newer."empresaId" = current."empresaId"
+          AND newer."conversaCanalId" = current."conversaCanalId"
+          AND (
+            COALESCE(newer."enviadaEm", newer."createdAt") > COALESCE(current."enviadaEm", current."createdAt")
+            OR (
+              COALESCE(newer."enviadaEm", newer."createdAt") = COALESCE(current."enviadaEm", current."createdAt")
+              AND newer."id" > current."id"
+            )
+          )
+      )
+  `;
+  if (latestRows.length === 0) return new Map();
+  const messageIds = latestRows.map((row) => Number(row.id));
+  const messages = await client.mensagemCanal.findMany({
+    where: { empresaId, id: { in: messageIds } },
+    include: messageIncludes(),
+  });
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  return new Map(latestRows.map((row) => [Number(row.conversaCanalId), byId.get(Number(row.id))]).filter(([, message]) => message));
+}
+
+async function presentConversationWithLatest(client, empresaId, conversation) {
+  if (!conversation) return conversation;
+  const latest = await latestMessagesByConversation(client, empresaId, [conversation.id]);
+  const message = latest.get(conversation.id);
+  return presentConversation({ ...conversation, mensagens: message ? [message] : [] });
 }
 
 function getReplyLeaseSeconds(env = process.env) {

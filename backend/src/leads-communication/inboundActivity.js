@@ -1,6 +1,8 @@
 const REMINDER_TITLE = "Lembrar conversa";
 const REMINDER_TYPE = "RETORNO";
 const { reconcileClientProjections } = require("../follow-up-projection");
+const { domainError } = require("./policy");
+const SYSTEM_ACTOR_EMAIL = "sistema@crm.internal";
 
 /**
  * Applies the shared operational meaning of a newly persisted inbound message.
@@ -57,15 +59,7 @@ async function applyInboundConversationActivity(tx, conversation, messageTime, r
       where: { empresaId: current.empresaId, conversaCanalId: current.id, titulo: REMINDER_TITLE, tipo: REMINDER_TYPE, status: { in: ["PENDENTE", "EM_ANDAMENTO"] } },
       select: { id: true, status: true, revisao: true, clienteId: true },
     });
-    let auditActorId = current.responsavelId;
-    if (reminders.length > 0 && auditActorId === null) {
-      const systemActor = await tx.usuario.findFirst({
-        where: { empresaId: current.empresaId, ativo: true },
-        orderBy: [{ papel: "asc" }, { id: "asc" }],
-        select: { id: true },
-      });
-      auditActorId = systemActor?.id ?? null;
-    }
+    const auditActorId = reminders.length > 0 ? await ensureSystemActor(tx, current.empresaId) : null;
     for (const reminder of reminders) {
       const canceled = await tx.acompanhamento.updateMany({
         where: {
@@ -79,19 +73,20 @@ async function applyInboundConversationActivity(tx, conversation, messageTime, r
         },
         data: { status: "CANCELADO", canceladoEm: receivedAt, canceladoPorId: auditActorId, concluidoEm: null, concluidoPorId: null, revisao: { increment: 1 } },
       });
-      if (canceled.count === 1 && auditActorId !== null) {
-        await tx.historicoAcompanhamento.create({
-          data: {
-            empresaId: current.empresaId,
-            acompanhamentoId: reminder.id,
-            autorId: auditActorId,
-            acao: "CANCELAR",
-            statusAnterior: reminder.status,
-            statusNovo: "CANCELADO",
-            observacao: "Lembrete cancelado automaticamente por nova mensagem recebida.",
-          },
-        });
+      if (canceled.count !== 1) {
+        throw domainError(409, "REMINDER_CONFLICT", "O lembrete foi alterado por outra operacao. O evento sera processado novamente.");
       }
+      await tx.historicoAcompanhamento.create({
+        data: {
+          empresaId: current.empresaId,
+          acompanhamentoId: reminder.id,
+          autorId: auditActorId,
+          acao: "CANCELAR",
+          statusAnterior: reminder.status,
+          statusNovo: "CANCELADO",
+          observacao: "Lembrete cancelado automaticamente pelo sistema por nova mensagem recebida.",
+        },
+      });
     }
   }
 
@@ -104,6 +99,26 @@ async function applyInboundConversationActivity(tx, conversation, messageTime, r
   if (clientIds.length > 0) {
     await reconcileClientProjections({ tx, empresaId: current.empresaId, clienteIds: clientIds });
   }
+}
+
+async function ensureSystemActor(tx, empresaId) {
+  const existing = await tx.usuario.findFirst({
+    where: { empresaId, email: SYSTEM_ACTOR_EMAIL, nome: "Sistema" },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const created = await tx.usuario.create({
+    data: {
+      empresaId,
+      nome: "Sistema",
+      email: SYSTEM_ACTOR_EMAIL,
+      senhaHash: "$system-disabled$",
+      papel: "ADMIN",
+      ativo: false,
+    },
+    select: { id: true },
+  });
+  return created.id;
 }
 
 module.exports = { REMINDER_TITLE, REMINDER_TYPE, applyInboundConversationActivity };
