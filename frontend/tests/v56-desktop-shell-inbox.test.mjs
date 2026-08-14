@@ -44,6 +44,7 @@ test("V58 mantém o modo full-workspace da Inbox e ancora as três colunas", () 
   assert.match(css, /\.crm-content--inbox \.inbox-workspace[\s\S]*?height: auto[\s\S]*?grid-template-columns: minmax\(248px, 25%\) minmax\(0, 75%\)/);
   assert.match(css, /\.crm-content--inbox \.inbox-workspace\.has-context[\s\S]*?grid-template-columns: minmax\(248px, 25%\) minmax\(0, 50%\) minmax\(248px, 25%\)/);
   assert.match(css, /\.inbox-conversation-item[\s\S]*?min-height: 96px/);
+  assert.match(css, /\.inbox-context-content dd[\s\S]*?overflow-wrap: anywhere[\s\S]*?word-break: break-word/);
   assert.match(css, /\.inbox-list-scroll,\s*\.inbox-message-viewport,\s*\.inbox-context-pane/);
   assert.match(css, /\.crm-content--inbox \.inbox-context-content dd[\s\S]*?overflow-wrap: anywhere/);
 });
