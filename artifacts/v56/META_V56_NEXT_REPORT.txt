@@ -1,0 +1,154 @@
+META V56 — RELATÓRIO DE FECHAMENTO VISUAL/OPERACIONAL
+
+Estado atual: V56_DESKTOP_SHELL_INBOX_SHIP
+Data: 2026-08-14
+
+1. O QUE FOI IMPLEMENTADO
+
+- Sidebar desktop compactada de 232px para 224px.
+- Rail recolhido real de 68px, com controle permanente, foco visível,
+  aria-label/aria-expanded/aria-controls, tooltip nativo e persistência em
+  localStorage (crm-sidebar-collapsed).
+- Marca de identidade preservada no rail recolhido.
+- Conteúdo recebe a largura liberada ao recolher a sidebar.
+- Inbox ganhou modo de workspace específico, sem alterar outras páginas.
+- Inbox passou a usar cadeia flex com min-height:0 e overflow interno.
+- Barra de comando/título compactada para 48px.
+- Estado sem contexto: 24% / 76%.
+- Estado com contexto: 24% / 52% / 24%, com Chat dominante.
+- Conversas, histórico e Contexto mantêm scroll próprio.
+- URLs/valores longos do Contexto quebram sem overflow horizontal.
+- Overlay preserva foco e scroll-lock durante re-renderizações.
+- Ações da Inbox restauram foco após fechamento.
+- Trigger de Contexto recebeu aria-controls.
+- Lógica de polling, lease, filtros, seleção, mensagens, composer,
+  permissões e bloqueio de outbound permaneceu intacta.
+
+2. ESCOPO PRESERVADO
+
+- Nenhum arquivo de backend, banco, schema, migration, integração ou regra
+  comercial foi alterado.
+- Mobile não foi redesenhado; somente preservação estrutural foi verificada.
+- dev.db permaneceu imutável.
+
+3. ARQUIVOS DE CÓDIGO V56
+
+- frontend/src/components/dashboard/DashboardSidebar.css
+- frontend/src/components/leads-communication/CommunicationOverlay.tsx
+- frontend/src/components/leads-communication/DashboardInboxPanel.tsx
+- frontend/src/components/leads-communication/LeadsCommunication.css
+- frontend/src/index.css
+- frontend/src/pages/Dashboard.tsx
+- frontend/tests/compositional-redesign-lote1-shell.test.mjs
+- frontend/tests/dashboard-scroll-behavior.test.mjs
+- frontend/tests/v56-desktop-shell-inbox.test.mjs
+
+4. EVIDÊNCIAS LOCAIS
+
+- Testes canônicos frontend: 159/159 PASS.
+- Contratos focados V56: PASS.
+- TypeScript/Vite build: PASS (1818 módulos; somente aviso conhecido de chunk
+  >500 kB).
+- git diff --check: PASS.
+- Lint: mantém avisos/erros preexistentes fora do lote V56; não houve alteração
+  de regra para mascará-los.
+- Runtime funcional: 64bb567a6c9db44f158b80312ce104ab615f95c6.
+- HEAD final da feature/documentação: ea1c470abc60f2f31a665e73564c840d2165fe90.
+- Worktree de código limpo; relatório individual desta execução permanece
+  untracked até a entrega documental.
+
+5. MEDIÇÕES ESTÁTICAS
+
+- Sidebar expandida: 224px.
+- Sidebar recolhida: 68px.
+- Ganho de conteúdo em desktop: 156px.
+- Header/command bar da Inbox: 48px.
+- Inbox sem conversa: 24% / 76%.
+- Inbox com conversa e Contexto: 24% / 52% / 24%.
+- A cadeia desktop específica da Inbox elimina o canvas vazio estrutural no
+  estado selecionado.
+
+6. RELEASE OFICIAL
+
+- Artefato Vercel READY promovido: `dpl_BEquhvhsfQiqhHrKDYp3D6g8iSzD`.
+- SHA runtime: `ea1c470abc60f2f31a665e73564c840d2165fe90`.
+- Alias oficial: https://crm-murex-six-83.vercel.app
+- Vercel oficial respondeu HTTP 200; deployment ficou READY/production.
+- API Railway oficial (`api-production-875f9.up.railway.app/health`)
+  respondeu HTTP 200; backend não sofreu alteração e não exigiu redeploy.
+- Railway não precisa de redeploy porque nenhum byte de backend mudou.
+
+7. QA VISUAL/OPERACIONAL AUTENTICADO
+
+- Chrome autenticado validou o domínio oficial em 1440x900 e 1366x768.
+- Sidebar expandida: 224px; recolhida: 68px; conteúdo ganhou 156px.
+- Collapse por clique, Space e Enter funcionou; `aria-label`,
+  `aria-expanded`, `aria-controls`, título/tooltip e foco visível presentes.
+- Reload preservou a preferência recolhida; troca para Inbox preservou o
+  estado.
+- Inbox selecionada: header/command bar 48px; workspace 1304x720 em 1440,
+  e 1230x588 em 1366; gutters externos 34px na área de conteúdo (sem
+  max-width editorial); body scrollWidth == clientWidth.
+- Painéis medidos: 24%/52%/24% (lista/chat/contexto), Chat sempre maior;
+  composer no bottom do Chat; histórico, lista e Contexto com scroll interno.
+- 1440: lista 312.6px, Chat 677.2px, Contexto 312.6px, composer bottom
+  859.2px.
+- 1366: lista 294.9px, Chat 639.0px, Contexto 294.9px, composer bottom
+  727.2px.
+- Nenhum espaço morto estrutural relevante e overflow horizontal = 0.
+- Visão Geral, Clientes e Integrações mantiveram overflow horizontal = 0;
+  mobile sentinel 390x844 abriu sem tela branca/overflow (rail desktop oculto,
+  navegação móvel presente).
+- Console de produção: zero erros/avisos capturados.
+- Não foram usados e-mail, senha, token, cookie, MFA ou credencial.
+
+8. SCREENSHOTS
+
+- Capturas AFTER reais, com dados de teste/sanitizados da Inbox, foram
+  geradas em:
+  - `V56_AFTER_1440x900_inbox_expanded.png`
+  - `V56_AFTER_1440x900_inbox_collapsed.png`
+  - `V56_AFTER_1366x768_inbox_expanded.png`
+  - `V56_AFTER_1366x768_inbox_collapsed.png`
+- As quatro imagens foram conferidas visualmente; não reutilizam os PNG/JPEG
+  históricos V54.
+- Axe automatizado não está instalado/exposto nesta sessão; a verificação
+  acessível executada foi DOM/ARIA + teclado/foco + console, sem finding
+  crítico. Essa limitação fica registrada, sem transformar evidência manual
+  em uma alegação de execução do axe.
+
+9. DOCUMENTOS INDIVIDUAIS DISPONÍVEIS
+
+- META_V56_FINAL_REPORT.txt
+- META_V56_MARK_A.md
+- META_V56_VISUAL_BASELINE.md
+- META_V56_SIDEBAR_REPORT.md
+- META_V56_INBOX_SPACE_USAGE_REPORT.md
+- META_V56_SHELL_REGRESSION_REPORT.md
+- META_V56_VISUAL_QA_REPORT.md
+- META_V56_REGRESSION_REPORT.md
+- META_V56_RELEASE_REPORT.md
+- META_V56_PRODUCTION_SMOKE.md
+- META_V56_ROLLBACK_MANIFEST.md
+- META_V56_FINAL_AUDIT.md
+- SOL_EXTRA_HIGH_FINAL_REVIEW.txt
+- LUNAMAX_EXECUTOR_SCORECARD.txt
+- META_V56_NEXT_REPORT.txt (este arquivo)
+- V56_AFTER_1440x900_inbox_expanded.png
+- V56_AFTER_1440x900_inbox_collapsed.png
+- V56_AFTER_1366x768_inbox_expanded.png
+- V56_AFTER_1366x768_inbox_collapsed.png
+
+Diretório: C:\Users\vande\crm-saas-frontend\artifacts\v56
+
+10. CONCLUSÃO
+
+O redesign frontend foi publicado no Vercel oficial e o smoke autenticado de
+desktop foi concluído. A sidebar possui recolhimento real, persistente e
+reversível; a Inbox ocupa o workspace com Chat dominante, composer na base,
+scroll interno e zero overflow estrutural. A única limitação explícita é a
+ausência do binário/runner axe nesta sessão; a cobertura manual DOM/ARIA,
+teclado, foco, viewport, overflow e console foi executada.
+
+Nenhum ZIP foi usado neste relatório. A entrega deve ser feita por este
+relatório textual e pelos documentos individuais acima.

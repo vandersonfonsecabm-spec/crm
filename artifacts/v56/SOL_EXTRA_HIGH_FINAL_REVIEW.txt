@@ -1,13 +1,24 @@
 SOL EXTRA HIGH — V56 final read-only gate
 
-SOL_EXTRA_HIGH_FINAL_VERDICT=SHIP_WITH_STATIC_EVIDENCE
+SOL_EXTRA_HIGH_FINAL_VERDICT=V56_DESKTOP_SHELL_INBOX_SHIP_PENDING_EXTERNAL_AXE_LIMITATION
 HIGH_CRITICAL_FINDINGS=0
 
-Functional RC: `64bb567a6c9db44f158b80312ce104ab615f95c6`.
+Functional RC/runtime head: `ea1c470abc60f2f31a665e73564c840d2165fe90`.
 Source/layout verified: sidebar224/68, persistent collapse wiring, Inbox route-specific flex chain, no-context 2-column state, selected-context 24/52/24 state, context URL wrapping, stable overlay close callback, action-menu focus return, focused contracts and build.
 
-The canonical frontend suite is 159/159 and build is PASS; backend/DB/schema/integration paths are unchanged and `dev.db` is unchanged. The feature preview was READY/HTTP 200.
+The canonical frontend suite is 159/159 and build is PASS; backend/DB/schema/integration paths are unchanged and `dev.db` is unchanged. The exact
+Vercel artifact was promoted as `dpl_BEquhvhsfQiqhHrKDYp3D6g8iSzD` and the
+official frontend/API returned HTTP 200.
 
-LIVE_VISUAL_A11Y_GATE=NOT_RUN
-PRODUCTION_SMOKE=NOT_RUN
-No authenticated browser session was available for real 1366/1440 DOM/axe/keyboard/overflow evidence, so production promotion is intentionally not claimed.
+LIVE_VISUAL_A11Y_GATE=PASS_MANUAL_DOM_ARIA_KEYBOARD_OVERFLOW
+PRODUCTION_SMOKE=PASS_AUTHENTICATED_DESKTOP
+Measured production evidence: 224px expanded / 68px collapsed sidebar,
+156px content gain, persistence after reload/route, 48px Inbox header,
+24/52/24 selected workspace, Chat dominant, bottom composer, internal scroll,
+zero horizontal overflow and clean console at 1440×900 and 1366×768. The
+390×844 sentinel retained mobile navigation and hid the desktop rail.
+
+AXE_AUTOMATED_RUN=NOT_AVAILABLE_IN_BROWSER_SURFACE
+This is explicitly not represented as an axe PASS; manual DOM/ARIA and
+keyboard/focus checks found no critical issue. Screenshots are the four
+sanitized `V56_AFTER_*` PNGs under `artifacts/v56/`.

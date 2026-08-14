@@ -10,4 +10,10 @@ Status: `INBOX_HEADER_COMPACT=PASS`, `INBOX_HORIZONTAL_USAGE=PASS`, `INBOX_VERTI
 - The existing composer and message-history components are preserved; no Inbox request, lease, polling, status, or outbound logic changed.
 - Existing filter drawer behavior is preserved (`.inbox-filters` remains unchanged) to avoid a scope expansion beyond the desktop shell.
 
-The static geometry yields a 52% Chat track when context is visible and no structural bottom ocean in the route flex chain. Browser-authenticated DOM measurement was unavailable and is explicitly not claimed here.
+The production Chrome DOM measurement confirmed the same geometry. At
+1440×900 (collapsed rail), the workspace is `1304×720` with tracks
+`312.6 / 677.2 / 312.6px`; the composer ends at `y=859.2px`. At 1366×768 it
+is `1230.4×588` with tracks `294.9 / 639.0 / 294.9px`; the composer ends at
+`y=727.2px`. Document horizontal overflow was `0` at both viewports and the
+console was clean. Screenshots are the four `V56_AFTER_*` PNGs in this
+directory.

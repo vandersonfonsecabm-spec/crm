@@ -9,5 +9,10 @@ Allowlist verified: frontend shell/sidebar, Inbox layout/overlay, focused fronte
 - Communication overlay close callback now uses a stable ref, preventing field edits from stealing focus or releasing body scroll-lock.
 - Action-menu close returns focus to its summary trigger.
 - Other routes retain their existing max-width and padding rules.
+- Production Chrome smoke at `/visao-geral`, `/clientes` and `/integracoes`
+  confirmed no document horizontal overflow; Inbox route returned to the
+  collapsed rail without losing the preference.
+- 390×844 sentinel hid the desktop rail and showed the existing mobile nav;
+  no blank screen or horizontal overflow was observed.
 
 Known non-blocking baseline lint findings are recorded in `META_V56_REGRESSION_REPORT`/final report; no new lint finding is attributed to V56.

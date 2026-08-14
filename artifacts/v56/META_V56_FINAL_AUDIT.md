@@ -1,6 +1,6 @@
 # META V56 — Final audit
 
-RC commit: `64bb567a6c9db44f158b80312ce104ab615f95c6`.
+RC/runtime head: `ea1c470abc60f2f31a665e73564c840d2165fe90`.
 
 ## Implemented
 
@@ -21,8 +21,19 @@ RC commit: `64bb567a6c9db44f158b80312ce104ab615f95c6`.
 | frontend canonical suite | PASS (159/159) |
 | TypeScript/Vite build | PASS |
 | backend/DB safety | PASS (no paths changed) |
-| live authenticated visual/axe smoke | NOT RUN — no authorized session |
+| live authenticated desktop visual smoke | PASS (Chrome, 1440×900 + 1366×768) |
+| sidebar collapse/persistence/keyboard | PASS (224↔68, click/Space/Enter/reload/route) |
+| Inbox DOM geometry/scroll/overflow | PASS (24/52/24, Chat dominant, composer bottom, overflow 0) |
+| shell route regression | PASS (Visão Geral/Clientes/Integrações overflow 0) |
+| mobile sentinel | PASS (390×844, mobile nav visible, desktop rail hidden) |
+| automated axe | NOT AVAILABLE in the exposed browser surface |
+| console errors/warnings | PASS (none captured) |
 
-The requested desktop work is complete in source and local gates. Final publication/production smoke remains dependent on authorized Vercel/browser access; it is not falsely asserted.
+The requested desktop work is complete in source, local gates and authenticated
+production smoke. The exact READY Vercel artifact was promoted as
+`dpl_BEquhvhsfQiqhHrKDYp3D6g8iSzD`; official frontend and Railway health both
+returned HTTP 200. No backend, DB, schema, migration or integration path was
+changed.
 
-SOL final: `SHIP_WITH_STATIC_EVIDENCE`; live visual/axe and authenticated production smoke remain `NOT_RUN`.
+SOL final: manual visual/ARIA/keyboard/overflow evidence is green; automated
+axe remains explicitly `NOT_AVAILABLE`, not silently reclassified as PASS.

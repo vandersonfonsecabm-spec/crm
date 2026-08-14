@@ -1,10 +1,20 @@
 META V56 FINAL REPORT
 
-State: V56 frontend implementation complete with local gates green.
-RC commit: `64bb567a6c9db44f158b80312ce104ab615f95c6`.
+State: V56 desktop shell + Inbox published and smoke-verified.
+Runtime/docs head: `ea1c470abc60f2f31a665e73564c840d2165fe90`.
 
 Implemented compact/persistent desktop sidebar and Inbox-specific full-workspace layout. No backend, database, schema, migration, integration, or business-rule file changed.
 
-Evidence: 159/159 frontend tests, focused V56 contracts, TypeScript/Vite build, diff check. Static desktop geometry is documented for 1366×768 and 1440×900. Live authenticated browser/axe/production smoke is not claimed because no authorized session was available.
+Evidence: 159/159 frontend tests, focused V56 contracts, TypeScript/Vite
+build, diff check, exact Vercel production deployment
+`dpl_BEquhvhsfQiqhHrKDYp3D6g8iSzD`, API health HTTP 200, and authenticated
+Chrome smoke at 1440×900/1366×768. Sidebar 224↔68 with 156px gain;
+Inbox 24/52/24, Chat dominant, composer bottom, internal scroll and zero
+document overflow. Console clean; mobile 390×844 sentinel passed.
+
+No backend, database, schema, migration, integration, or business-rule file
+changed. Automated axe is not available in the exposed browser surface; manual
+DOM/ARIA, keyboard/focus, tooltip, target-label, viewport, overflow and
+console checks are documented, with no critical finding.
 
 See the companion reports in this directory for the allowlist, measurements, rollback, regressions, and remaining limitation.
