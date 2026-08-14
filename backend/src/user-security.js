@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { createAuthRateLimiter, requestIp } = require("./auth-rate-limiter");
+const { SYSTEM_ACTOR_EMAIL, isSystemActor } = require("./system-actor");
 
 const MAX_REASON_LENGTH = 240;
 const MAX_USER_AGENT_LENGTH = 180;
@@ -32,6 +33,7 @@ function createUserSecurity({
   const sensitiveRateLimiter = createAuthRateLimiter({ identityLimit: 8, ipLimit: 40 });
 
   async function createLoginSession({ usuario, expectedPasswordHash = usuario?.senhaHash, req }) {
+    if (isSystemActor(usuario)) throw securityError("SYSTEM_ACTOR_RESERVED", 403);
     const now = new Date();
     const sessionId = crypto.randomUUID();
     const familyId = crypto.randomUUID();
@@ -121,6 +123,10 @@ function createUserSecurity({
     if (!usuario || !usuario.ativo || !usuario.empresa.ativo) {
       await revokeSession(current.sessao.empresaId, current.sessao.id, "ACCOUNT_INACTIVE");
       throw securityError("AUTH_REFRESH_INVALID", 401);
+    }
+    if (isSystemActor(usuario)) {
+      await revokeSession(current.sessao.empresaId, current.sessao.id, "SYSTEM_ACTOR_RESERVED");
+      throw securityError("SYSTEM_ACTOR_RESERVED", 403);
     }
 
     const nextRawToken = randomToken();
@@ -234,6 +240,7 @@ function createUserSecurity({
   }
 
   async function createPasswordReset({ usuario, req }) {
+    if (isSystemActor(usuario)) throw securityError("SYSTEM_ACTOR_RESERVED", 409);
     const rawToken = randomToken();
     const expiraEm = addMilliseconds(new Date(), resetMinutes * 60 * 1000);
     await prisma.$transaction(async (tx) => {
@@ -261,6 +268,7 @@ function createUserSecurity({
   async function startAdminReset({ empresaId, actorUsuarioId, targetUsuarioId, req }) {
     const usuario = await prisma.usuario.findFirst({ where: { id: targetUsuarioId, empresaId } });
     if (!usuario) return { kind: "not-found" };
+    if (isSystemActor(usuario)) return { kind: "reserved" };
     const result = await createPasswordReset({ usuario, req });
     await recordAudit({ empresaId, actorUsuarioId, targetUsuarioId, acao: "ADMIN_PASSWORD_RESET_STARTED", resultado: "SUCCESS", motivo: "Reset administrativo iniciado.", correlationId: correlationId(req) });
     return { kind: "started", ...result };
@@ -274,7 +282,8 @@ function createUserSecurity({
     if (!token || token.usadoEm || token.revogadoEm || token.expiraEm <= now) throw securityError("PASSWORD_RESET_INVALID", 400);
     const senhaHash = await bcrypt.hash(newPassword, 12);
     await prisma.$transaction(async (tx) => {
-      const target = await tx.usuario.findFirst({ where: { id: token.usuarioId, empresaId: token.empresaId }, select: { id: true, ativo: true } });
+      const target = await tx.usuario.findFirst({ where: { id: token.usuarioId, empresaId: token.empresaId }, select: { id: true, email: true, ativo: true } });
+      if (isSystemActor(target)) throw securityError("SYSTEM_ACTOR_RESERVED", 409);
       if (!target || !target.ativo) throw securityError("ACCOUNT_INACTIVE", 400);
       const consumed = await tx.tokenRecuperacaoSenha.updateMany({ where: { id: token.id, usadoEm: null, revogadoEm: null }, data: { usadoEm: now } });
       if (consumed.count !== 1) throw securityError("PASSWORD_RESET_INVALID", 400);
@@ -296,6 +305,7 @@ function createUserSecurity({
     const papel = normalizeRole(input.papel);
     if (!nome || nome.length > 120 || !isValidEmail(email) || !papel) throw securityError("VALIDATION_ERROR", 400);
     if (reservedPlatformEmails.has(email)) throw securityError("RESERVED_PLATFORM_EMAIL", 409);
+    if (email === SYSTEM_ACTOR_EMAIL) throw securityError("SYSTEM_ACTOR_RESERVED", 409);
     const existing = await prisma.usuario.findFirst({ where: { empresaId, email } });
     if (existing) throw securityError("USER_ALREADY_EXISTS", 409);
     const rawToken = randomToken();
@@ -493,7 +503,7 @@ function createUserSecurity({
       }
       if (!isValidEmail(email) || !empresaSlug) return res.json(generic);
       const usuario = await prisma.usuario.findFirst({
-        where: { email, ativo: true, empresa: { slug: empresaSlug, ativo: true } },
+        where: { email: { equals: email, not: SYSTEM_ACTOR_EMAIL }, ativo: true, empresa: { slug: empresaSlug, ativo: true } },
         include: { empresa: true },
       });
       if (!usuario || !usuario.empresa.ativo) return res.json(generic);
@@ -534,7 +544,7 @@ function createUserSecurity({
       const limit = Math.min(positiveInteger(req.query.limit, 20), 100);
       const search = String(req.query.busca || req.query.search || "").trim();
       const ativo = req.query.ativo === undefined ? undefined : String(req.query.ativo) === "true";
-      const where = { empresaId: req.auth.empresaId, ...(ativo === undefined ? {} : { ativo }), ...(search ? { OR: [{ nome: { contains: search } }, { email: { contains: search.toLowerCase() } }] } : {}) };
+      const where = { empresaId: req.auth.empresaId, email: { not: SYSTEM_ACTOR_EMAIL }, ...(ativo === undefined ? {} : { ativo }), ...(search ? { OR: [{ nome: { contains: search } }, { email: { contains: search.toLowerCase() } }] } : {}) };
       const [data, total] = await prisma.$transaction([
         prisma.usuario.findMany({ where, select: publicUserSelect, orderBy: [{ ativo: "desc" }, { nome: "asc" }], skip: (page - 1) * limit, take: limit }),
         prisma.usuario.count({ where }),
@@ -595,7 +605,7 @@ function createUserSecurity({
 
     app.get("/usuarios/:id", authenticate, requireRole("ADMIN"), async (req, res) => {
       const id = positiveInteger(req.params.id, null);
-      const usuario = id ? await prisma.usuario.findFirst({ where: { id, empresaId: req.auth.empresaId }, select: publicUserSelect }) : null;
+      const usuario = id ? await prisma.usuario.findFirst({ where: { id, empresaId: req.auth.empresaId, email: { not: SYSTEM_ACTOR_EMAIL } }, select: publicUserSelect }) : null;
       if (!usuario) return authError(res, 404, "Usuario nao encontrado.", "USER_NOT_FOUND");
       return res.json(usuario);
     });
@@ -608,8 +618,10 @@ function createUserSecurity({
       try {
         const before = await prisma.usuario.findFirst({ where: { id, empresaId: req.auth.empresaId } });
         if (!before) return authError(res, 404, "Usuario nao encontrado.", "USER_NOT_FOUND");
+        if (isSystemActor(before)) return authError(res, 409, "Identidade interna reservada.", "SYSTEM_ACTOR_RESERVED");
         const result = await updateUserWithLastAdminGuard({ prisma, id, empresaId: req.auth.empresaId, data: data.data });
         if (result.kind === "last-admin") return authError(res, 409, "A empresa precisa manter ao menos um ADMIN ativo.", "LAST_ADMIN_REQUIRED");
+        if (result.kind === "reserved") return authError(res, 409, "Identidade interna reservada.", "SYSTEM_ACTOR_RESERVED");
         await recordAudit({ empresaId: req.auth.empresaId, actorUsuarioId: req.auth.usuarioId, targetUsuarioId: id, acao: "USER_UPDATED", resultado: "SUCCESS", motivo: "Usuario atualizado.", correlationId: correlationId(req) });
         return res.json(result.usuario);
       } catch (error) {
@@ -625,6 +637,7 @@ function createUserSecurity({
         applySensitiveRateLimit(req, `admin-reset:${req.auth.usuarioId}:${positiveInteger(req.params.id, 0)}`);
         const result = await startAdminReset({ empresaId: req.auth.empresaId, actorUsuarioId: req.auth.usuarioId, targetUsuarioId: positiveInteger(req.params.id, 0), req });
         if (result.kind === "not-found") return authError(res, 404, "Usuario nao encontrado.", "USER_NOT_FOUND");
+        if (result.kind === "reserved") return authError(res, 409, "Identidade interna reservada.", "SYSTEM_ACTOR_RESERVED");
         return res.status(202).json({ ok: true, deliveryStatus: result.status, expiresAt: result.expiresAt });
       } catch (error) {
         if (error?.status) return authError(res, error.status, "Nao foi possivel iniciar o reset.", error.code);
@@ -634,14 +647,16 @@ function createUserSecurity({
     });
     app.get("/usuarios/:id/sessoes", authenticate, requireRole("ADMIN"), async (req, res) => {
       const id = positiveInteger(req.params.id, 0);
-      const target = await prisma.usuario.findFirst({ where: { id, empresaId: req.auth.empresaId }, select: { id: true } });
+      const target = await prisma.usuario.findFirst({ where: { id, empresaId: req.auth.empresaId }, select: { id: true, email: true } });
       if (!target) return authError(res, 404, "Usuario nao encontrado.", "USER_NOT_FOUND");
+      if (isSystemActor(target)) return authError(res, 409, "Identidade interna reservada.", "SYSTEM_ACTOR_RESERVED");
       return res.json({ data: await listSessions(req.auth.empresaId, id, null) });
     });
     app.post("/usuarios/:id/revogar-sessoes", authenticate, requireRole("ADMIN"), async (req, res) => {
       const id = positiveInteger(req.params.id, 0);
-      const target = await prisma.usuario.findFirst({ where: { id, empresaId: req.auth.empresaId }, select: { id: true } });
+      const target = await prisma.usuario.findFirst({ where: { id, empresaId: req.auth.empresaId }, select: { id: true, email: true } });
       if (!target) return authError(res, 404, "Usuario nao encontrado.", "USER_NOT_FOUND");
+      if (isSystemActor(target)) return authError(res, 409, "Identidade interna reservada.", "SYSTEM_ACTOR_RESERVED");
       const revoked = await revokeAllUserSessions(req.auth.empresaId, id, "ADMIN_REVOKE");
       await recordAudit({ empresaId: req.auth.empresaId, actorUsuarioId: req.auth.usuarioId, targetUsuarioId: id, acao: "USER_SESSIONS_REVOKED", resultado: "SUCCESS", motivo: "Sessoes revogadas pelo administrador.", correlationId: correlationId(req) });
       return res.json({ ok: true, revoked });
@@ -656,8 +671,10 @@ function createUserSecurity({
     try {
       const before = await prisma.usuario.findFirst({ where: { id, empresaId: req.auth.empresaId } });
       if (!before) return authError(res, 404, "Usuario nao encontrado.", "USER_NOT_FOUND");
+      if (isSystemActor(before)) return authError(res, 409, "Identidade interna reservada.", "SYSTEM_ACTOR_RESERVED");
       const result = await updateUserWithLastAdminGuard({ prisma, id, empresaId: req.auth.empresaId, data: { ativo } });
       if (result.kind === "last-admin") return authError(res, 409, "A empresa precisa manter ao menos um ADMIN ativo.", "LAST_ADMIN_REQUIRED");
+      if (result.kind === "reserved") return authError(res, 409, "Identidade interna reservada.", "SYSTEM_ACTOR_RESERVED");
       await recordAudit({ empresaId: req.auth.empresaId, actorUsuarioId: req.auth.usuarioId, targetUsuarioId: id, acao: ativo ? "USER_REACTIVATED" : "USER_DEACTIVATED", resultado: "SUCCESS", motivo: "Status do usuario alterado.", correlationId: correlationId(req) });
       return res.json(result.usuario);
     } catch (error) {
@@ -710,7 +727,7 @@ function createUserSecurity({
     const email = normalizeEmail(input?.email);
     const papel = normalizeRole(input?.papel);
     const senha = String(input?.senha || "");
-    if (!nome || nome.length > 120 || !isValidEmail(email) || reservedPlatformEmails.has(email) || !papel || senha.length < 8 || senha.length > 128) {
+    if (!nome || nome.length > 120 || !isValidEmail(email) || reservedPlatformEmails.has(email) || email === SYSTEM_ACTOR_EMAIL || !papel || senha.length < 8 || senha.length > 128) {
       throw securityError("VALIDATION_ERROR", 400);
     }
     try {
@@ -784,6 +801,7 @@ async function updateUserWithLastAdminGuard({ prisma, id, empresaId, data }) {
       return await prisma.$transaction(async (tx) => {
         const usuario = await tx.usuario.findFirst({ where: { id, empresaId } });
         if (!usuario) return { kind: "not-found" };
+        if (isSystemActor(usuario)) return { kind: "reserved" };
         const removesActiveAdmin = usuario.ativo && usuario.papel === "ADMIN" && (data.ativo === false || data.papel && data.papel !== "ADMIN");
         if (removesActiveAdmin && await tx.usuario.count({ where: { empresaId, papel: "ADMIN", ativo: true } }) <= 1) return { kind: "last-admin" };
         const changed = await tx.usuario.updateMany({ where: { id, empresaId }, data });

@@ -8,6 +8,7 @@ const { createInboxCommercialQualificationService } = require("./commercialQuali
 const { assertTestSimulationChannel, isTestSimulationChannel } = require("../channels/simulationPolicy");
 const { lockActiveClienteRows } = require("../shared/clientLifecycleLock");
 const { reconcileClientProjections, withProjectionRetry } = require("../follow-up-projection");
+const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 const {
   domainError,
   isManager,
@@ -87,7 +88,7 @@ function createLeadsCommunicationServices({ prisma }) {
 
   async function validateResponsible(client, empresaId, responsavelId) {
     if (responsavelId === null) return null;
-    const user = await client.usuario.findFirst({ where: { id: responsavelId, empresaId, ativo: true } });
+    const user = await client.usuario.findFirst({ where: { id: responsavelId, empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL } } });
     if (!user) throw notFound("Responsavel nao encontrado.");
     return user;
   }
@@ -455,7 +456,7 @@ function createLeadsCommunicationServices({ prisma }) {
 
   async function listConversationTeam(context) {
     return prisma.usuario.findMany({
-      where: { empresaId: context.empresaId, ativo: true },
+      where: { empresaId: context.empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL } },
       select: { id: true, nome: true, papel: true, ativo: true },
       orderBy: [{ nome: "asc" }, { id: "asc" }],
     });

@@ -3,6 +3,7 @@ const { normalizePhone } = require("../channels/phoneNormalizer");
 const { createAutomationService } = require("../automations/service");
 const { validateIntegrationCreate, validateIntegrationPatch, validateSubmission } = require("./validation");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 
 const PROVIDER = "SITE_FORM";
 
@@ -133,7 +134,7 @@ function createSiteLeadService({ prisma }) {
   }
 
   async function createAmbiguityNote(tx, empresaId, conversaCanalId) {
-    const admin = await tx.usuario.findFirst({ where: { empresaId, papel: "ADMIN", ativo: true }, orderBy: { id: "asc" } });
+    const admin = await tx.usuario.findFirst({ where: { empresaId, papel: "ADMIN", ativo: true, email: { not: SYSTEM_ACTOR_EMAIL } }, orderBy: { id: "asc" } });
     if (!admin) return;
     await tx.notaInternaConversa.create({ data: { empresaId, conversaCanalId, autorId: admin.id, sistema: true, conteudo: "Possivel duplicidade de cadastro identificada na captacao do Site. Revise os dados antes de consolidar o Cliente." } });
   }

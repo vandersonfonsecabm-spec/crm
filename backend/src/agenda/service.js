@@ -5,6 +5,7 @@ const {
   withProjectionRetry,
 } = require("../follow-up-projection");
 const { lockActiveClienteRows } = require("../shared/clientLifecycleLock");
+const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 
 const ACTIVE_STATUSES = ACTIVE_FOLLOW_UP_STATUSES;
 const STATUSES = new Set([...ACTIVE_STATUSES, "CONCLUIDO", "CANCELADO"]);
@@ -61,7 +62,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
   }
 
   async function team(context) {
-    const where = { empresaId: context.empresaId, ativo: true, ...(isManager(context) ? {} : { id: context.usuarioId }) };
+    const where = { empresaId: context.empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL }, ...(isManager(context) ? {} : { id: context.usuarioId }) };
     const rows = await prisma.usuario.findMany({ where, select: { id: true, nome: true, papel: true }, orderBy: [{ nome: "asc" }, { id: "asc" }] });
     return { data: rows, podeVerEquipe: isManager(context) };
   }
@@ -85,7 +86,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
     const manager = isManager(context);
     const responsible = context.usuarioId;
     const [usuarios, clientes, leads, negocios, conversas, propostas] = await prisma.$transaction([
-      prisma.usuario.findMany({ where: { empresaId: context.empresaId, ativo: true, ...(manager ? {} : { id: responsible }) }, select: { id: true, nome: true, papel: true }, orderBy: [{ nome: "asc" }, { id: "asc" }] }),
+      prisma.usuario.findMany({ where: { empresaId: context.empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL }, ...(manager ? {} : { id: responsible }) }, select: { id: true, nome: true, papel: true }, orderBy: [{ nome: "asc" }, { id: "asc" }] }),
       prisma.cliente.findMany({ where: { empresaId: context.empresaId, arquivadoEm: null, ...(manager ? {} : { OR: [{ leads: { some: { responsavelId: responsible } } }, { negocios: { some: { responsavelId: responsible } } }] }) }, select: { id: true, nome: true, empresa: true }, orderBy: [{ nome: "asc" }, { id: "asc" }], take: 200 }),
       prisma.lead.findMany({ where: { empresaId: context.empresaId, cliente: { arquivadoEm: null }, ...(manager ? {} : { responsavelId: responsible }) }, select: { id: true, interesse: true, status: true, cliente: { select: { nome: true } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
       prisma.negocio.findMany({ where: { empresaId: context.empresaId, cliente: { arquivadoEm: null }, ...(manager ? {} : { responsavelId: responsible }) }, select: { id: true, titulo: true, etapa: true, cliente: { select: { nome: true } } }, orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 200 }),
@@ -282,7 +283,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
   async function assignedUser(context, value) {
     const id = integer(value, "responsavelId", { max: Number.MAX_SAFE_INTEGER });
     if (!isManager(context) && id !== context.usuarioId) forbidden();
-    const user = await prisma.usuario.findFirst({ where: { id, empresaId: context.empresaId, ativo: true }, select: { id: true, nome: true, papel: true } });
+    const user = await prisma.usuario.findFirst({ where: { id, empresaId: context.empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL } }, select: { id: true, nome: true, papel: true } });
     if (!user) throw notFound("Responsavel nao encontrado.");
     return user;
   }
@@ -291,7 +292,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
     if (body.responsavelId !== undefined && body.responsavelId !== null && body.responsavelId !== "") return assignedUser(context, body.responsavelId);
     const legacyName = optionalText(body.responsavel, "responsavel", 120);
     if (legacyName && isManager(context)) {
-      const matches = await prisma.usuario.findMany({ where: { empresaId: context.empresaId, ativo: true, nome: legacyName }, select: { id: true }, take: 2 });
+      const matches = await prisma.usuario.findMany({ where: { empresaId: context.empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL }, nome: legacyName }, select: { id: true }, take: 2 });
       if (matches.length === 1) return assignedUser(context, matches[0].id);
     }
     return assignedUser(context, fallbackId);

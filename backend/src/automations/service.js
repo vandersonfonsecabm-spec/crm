@@ -4,6 +4,7 @@ const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES, unavailableActionTypes } = requ
 const { createWorkerEventEnvelope, sanitizeError } = require("./worker-observability");
 const { withPostgresEnqueueDiagnostics } = require("./postgres-enqueue-diagnostics");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 const { presentRule, safeJson, snapshotRule, validatePilotEventPayload, validateRulePayload } = require("./validation");
 const {
   assertProjectionReconciled,
@@ -796,7 +797,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     if (entity.responsavelId !== null) return entity;
     const configuredIds = normalizeRoundRobinUserIds(usuarioIds);
     const eligible = (await tx.usuario.findMany({
-      where: { id: { in: configuredIds }, empresaId: job.empresaId, ativo: true },
+      where: { id: { in: configuredIds }, empresaId: job.empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL } },
       orderBy: { id: "asc" },
       select: { id: true },
     })).map((user) => user.id);
@@ -959,7 +960,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     requireAutomationAdmin(context);
     await requireTenantFeature(context);
     const users = await prisma.usuario.findMany({
-      where: { empresaId: context.empresaId, ativo: true },
+      where: { empresaId: context.empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL } },
       select: { id: true, nome: true, papel: true },
       orderBy: [{ nome: "asc" }, { id: "asc" }],
     });
@@ -1149,7 +1150,7 @@ function minutesFromTime(value) {
 }
 
 async function validateResponsible(tx, empresaId, usuarioId) {
-  const user = await tx.usuario.findFirst({ where: { id: usuarioId, empresaId, ativo: true }, select: { id: true } });
+  const user = await tx.usuario.findFirst({ where: { id: usuarioId, empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL } }, select: { id: true } });
   if (!user) throw domainError(404, "USER_NOT_FOUND", "Usuario nao encontrado.");
 }
 
@@ -1170,8 +1171,8 @@ async function validateFollowUpClient(tx, empresaId, clienteId) {
 async function resolveFollowUpAuthor(tx, empresaId, responsavelId) {
   const user = await tx.usuario.findFirst({
     where: responsavelId
-      ? { id: responsavelId, empresaId, ativo: true }
-      : { empresaId, ativo: true, papel: "ADMIN" },
+      ? { id: responsavelId, empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL } }
+      : { empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL }, papel: "ADMIN" },
     orderBy: responsavelId ? undefined : { id: "asc" },
     select: { id: true },
   });

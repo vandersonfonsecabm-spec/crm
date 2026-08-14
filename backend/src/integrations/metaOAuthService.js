@@ -8,6 +8,7 @@ const {
 const { createMetaInstagramClient } = require("./metaInstagramClient");
 const { createMetaCredentialStore } = require("./metaCredentialStore");
 const { readGlobalInstagramConfiguration } = require("../platform/instagramInboundProvisioning");
+const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 
 function createMetaOAuthService({ prisma, client = createMetaInstagramClient({}), credentialStore = createMetaCredentialStore({ prisma }), now = () => new Date(), env = process.env } = {}) {
   if (!prisma) throw new Error("Prisma e obrigatorio para o MetaOAuthService.");
@@ -113,7 +114,7 @@ function assertAdminAuth(auth) {
 
 async function assertOAuthContextActive(prisma, state, env = process.env) {
   const [actor, channel] = await Promise.all([
-    prisma.usuario.findFirst({ where: { id: state.usuarioId, empresaId: state.empresaId, ativo: true, papel: "ADMIN", empresa: { ativo: true } }, select: { id: true } }),
+    prisma.usuario.findFirst({ where: { id: state.usuarioId, empresaId: state.empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL }, papel: "ADMIN", empresa: { ativo: true } }, select: { id: true } }),
     prisma.canalIntegracao.findFirst({ where: { id: state.canalIntegracaoId, empresaId: state.empresaId, tipo: "INSTAGRAM_META", modoTeste: false, ativo: true, status: "ATIVO" }, select: { id: true } }),
   ]);
   if (!actor || !channel) return false;
@@ -122,7 +123,7 @@ async function assertOAuthContextActive(prisma, state, env = process.env) {
 
 async function assertOAuthCredentialContext(prisma, state, env = process.env) {
   const actor = await prisma.usuario.findFirst({
-    where: { id: state.usuarioId, empresaId: state.empresaId, ativo: true, papel: "ADMIN", empresa: { ativo: true } },
+    where: { id: state.usuarioId, empresaId: state.empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL }, papel: "ADMIN", empresa: { ativo: true } },
     select: { id: true },
   });
   const channel = await prisma.canalIntegracao.findFirst({

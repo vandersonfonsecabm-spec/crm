@@ -5,6 +5,7 @@ const { after, before, test } = require("node:test");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { createUserSecurity, hashToken, refreshRequestOriginAllowed } = require("../src/user-security");
+const { SYSTEM_ACTOR_EMAIL, systemActorData } = require("../src/system-actor");
 
 test("refresh sem cookie responde barato e nao compartilha bucket global entre IPs", async () => {
   let refreshHandler;
@@ -441,6 +442,62 @@ test("gestao de usuarios, sessoes, senhas, convites e auditoria permanece tenant
   assert.equal(tokenRows.every((row) => ![resetMessage.token, adminResetMessage.token].includes(row.tokenHash)), true);
   assert.equal(await prisma.sessaoUsuario.count({ where: { empresaId: registration.body.empresa.id } }) > 0, true);
   assert.equal(await prisma.sessaoRefreshToken.count({ where: { empresaId: registration.body.empresa.id } }) > 0, true);
+});
+
+test("identidade interna de sistema permanece reservada, oculta e reparavel", async () => {
+  const suffix = Date.now();
+  const registration = await request("POST", "/auth/register-company", {
+    empresaNome: `Empresa Ator Sistema ${suffix}`,
+    adminNome: "Admin Ator Sistema",
+    email: `admin-ator-${suffix}@seguranca.example`,
+    senha: "SenhaAdminAtor123",
+  });
+  assert.equal(registration.status, 201);
+  const login = await request("POST", "/auth/login", {
+    email: `admin-ator-${suffix}@seguranca.example`,
+    senha: "SenhaAdminAtor123",
+  });
+  assert.equal(login.status, 200);
+  const token = login.body.access_token;
+  const empresaId = registration.body.empresa.id;
+  const actor = await prisma.usuario.create({ data: systemActorData(empresaId) });
+
+  const users = await request("GET", "/usuarios", undefined, token);
+  assert.equal(users.status, 200);
+  assert.equal(users.body.data.some((row) => row.email === SYSTEM_ACTOR_EMAIL), false);
+  assert.equal((await request("GET", `/usuarios/${actor.id}`, undefined, token)).status, 404);
+  for (const [method, pathname, body] of [
+    ["PATCH", `/usuarios/${actor.id}`, { nome: "Ator adulterado" }],
+    ["POST", `/usuarios/${actor.id}/reativar`],
+    ["POST", `/usuarios/${actor.id}/desativar`],
+    ["POST", `/usuarios/${actor.id}/iniciar-reset-senha`],
+    ["GET", `/usuarios/${actor.id}/sessoes`],
+    ["POST", `/usuarios/${actor.id}/revogar-sessoes`],
+  ]) {
+    const response = await request(method, pathname, body, token);
+    assert.equal(response.status, 409, `${method} ${pathname} deve preservar identidade reservada`);
+    assert.equal(response.body.codigo, "SYSTEM_ACTOR_RESERVED");
+  }
+  const beforeRecoveryMessages = capturedSecurityMessages.filter((message) => message.kind === "PASSWORD_RESET").length;
+  const recovery = await request("POST", "/auth/forgot-password", { email: SYSTEM_ACTOR_EMAIL, empresaSlug: registration.body.empresa.slug });
+  assert.equal(recovery.status, 200);
+  assert.equal(capturedSecurityMessages.filter((message) => message.kind === "PASSWORD_RESET").length, beforeRecoveryMessages);
+
+  await prisma.usuario.update({ where: { id: actor.id }, data: { nome: "Ator adulterado", papel: "VENDEDOR", ativo: true } });
+  const team = await request("GET", "/acompanhamentos/equipe", undefined, token);
+  assert.equal(team.status, 200);
+  assert.equal(team.body.data.some((row) => row.email === SYSTEM_ACTOR_EMAIL || row.id === actor.id), false);
+  const options = await request("GET", "/acompanhamentos/opcoes", undefined, token);
+  assert.equal(options.status, 200);
+  assert.equal(options.body.usuarios.some((row) => row.id === actor.id), false);
+
+  const { ensureSystemActor } = require("../src/leads-communication/inboundActivity");
+  await prisma.$transaction((tx) => ensureSystemActor(tx, empresaId));
+  const repaired = await prisma.usuario.findUnique({ where: { id: actor.id } });
+  assert.equal(repaired.email, SYSTEM_ACTOR_EMAIL);
+  assert.equal(repaired.nome, "Sistema");
+  assert.equal(repaired.papel, "ADMIN");
+  assert.equal(repaired.ativo, false);
 });
 
 function lastMessage(kind) {

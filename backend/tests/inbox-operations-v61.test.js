@@ -171,7 +171,7 @@ test("V61 perdedor de CAS do lembrete aborta a mudanca da conversa", async () =>
       findMany: async () => [{ id: 902, status: "PENDENTE", revisao: 4, clienteId: null }],
       updateMany: async () => ({ count: 0 }),
     },
-    usuario: { findFirst: async () => ({ id: 903 }) },
+    usuario: { findFirst: async () => ({ id: 903 }), upsert: async () => ({ id: 903 }) },
     historicoAcompanhamento: { create: async () => { throw new Error("history must not be written after CAS loss"); } },
   };
   await assert.rejects(

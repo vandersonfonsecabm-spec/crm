@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 const { Prisma } = require("@prisma/client");
 const { encryptCredentials, decryptCredentials } = require("./crypto");
 const {
@@ -640,6 +641,7 @@ async function assertOAuthActorActive(client, state) {
       id: state.usuarioId,
       empresaId: state.empresaId,
       ativo: true,
+      email: { not: SYSTEM_ACTOR_EMAIL },
       papel: "ADMIN",
       empresa: { ativo: true },
     },
