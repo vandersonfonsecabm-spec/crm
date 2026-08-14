@@ -1,7 +1,8 @@
 # META V56 — Final audit
 
 RC/runtime head: `ea1c470abc60f2f31a665e73564c840d2165fe90`.
-Documentation/evidence head: `0786638a7bf6364508e85e015411e29c1c8f93224`.
+Documentation/evidence commits follow the runtime head on the feature branch;
+the production runtime remains `ea1c470abc60f2f31a665e73564c840d2165fe90`.
 
 ## Implemented
 

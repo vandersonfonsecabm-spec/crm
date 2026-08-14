@@ -4,7 +4,8 @@ SOL_EXTRA_HIGH_FINAL_VERDICT=V56_DESKTOP_SHELL_INBOX_SHIP_PENDING_EXTERNAL_AXE_L
 HIGH_CRITICAL_FINDINGS=0
 
 Functional RC/runtime head: `ea1c470abc60f2f31a665e73564c840d2165fe90`.
-Documentation/evidence head: `0786638a7bf6364508e85e015411e29c1c8f93224`.
+Documentation/evidence commits follow the runtime head on the feature branch;
+the production runtime remains `ea1c470abc60f2f31a665e73564c840d2165fe90`.
 Source/layout verified: sidebar224/68, persistent collapse wiring, Inbox route-specific flex chain, no-context 2-column state, selected-context 24/52/24 state, context URL wrapping, stable overlay close callback, action-menu focus return, focused contracts and build.
 
 The canonical frontend suite is 159/159 and build is PASS; backend/DB/schema/integration paths are unchanged and `dev.db` is unchanged. The exact
