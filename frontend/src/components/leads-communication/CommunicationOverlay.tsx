@@ -7,13 +7,14 @@ type OverlayProps = {
   children: ReactNode;
   description?: string;
   footer?: ReactNode;
+  id?: string;
   onClose: () => void;
   open: boolean;
   title: string;
   triggerRef?: RefObject<HTMLElement | null>;
 };
 
-export function CommunicationDrawer({ children, description, footer, onClose, open, title, triggerRef }: OverlayProps) {
+export function CommunicationDrawer({ children, description, footer, id, onClose, open, title, triggerRef }: OverlayProps) {
   const dialogRef = useRef<HTMLElement>(null);
   useOverlayLifecycle(open, dialogRef, onClose, triggerRef);
   if (!open) return null;
@@ -21,7 +22,7 @@ export function CommunicationDrawer({ children, description, footer, onClose, op
   return (
     <div className="fixed inset-0 z-[220] flex justify-end" role="presentation">
       <button aria-label="Fechar painel" className="absolute inset-0 bg-slate-950/20" onClick={onClose} type="button" />
-      <aside aria-describedby={description ? "communication-drawer-description" : undefined} aria-labelledby="communication-drawer-title" aria-modal="true" className="communication-drawer relative flex h-full w-[min(480px,calc(100vw-16px))] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-2xl" ref={dialogRef} role="dialog">
+      <aside aria-describedby={description ? "communication-drawer-description" : undefined} aria-labelledby="communication-drawer-title" aria-modal="true" className="communication-drawer relative flex h-full w-[min(480px,calc(100vw-16px))] flex-col border-l border-[var(--border-default)] bg-[var(--bg-surface)] shadow-2xl" id={id} ref={dialogRef} role="dialog">
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--border-default)] px-4 py-3">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-[var(--text-primary)]" id="communication-drawer-title">{title}</h2>

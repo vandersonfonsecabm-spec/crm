@@ -576,7 +576,7 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
         />
       </CommunicationDrawer>
 
-      <CommunicationDrawer description="Dados e histórico da conversa selecionada." onClose={() => setContextOpen(false)} open={hasContextDrawer} title="Contexto do atendimento" triggerRef={contextTriggerRef}>
+      <CommunicationDrawer description="Dados e histórico da conversa selecionada." id="inbox-conversation-context" onClose={() => setContextOpen(false)} open={hasContextDrawer} title="Contexto do atendimento" triggerRef={contextTriggerRef}>
         {conversation && <InboxContextContent conversation={conversation} history={history} onOpenBusiness={onOpenBusiness} />}
       </CommunicationDrawer>
 
