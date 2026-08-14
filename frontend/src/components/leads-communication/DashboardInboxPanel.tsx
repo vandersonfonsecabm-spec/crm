@@ -441,10 +441,11 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
 
   function closeActionsMenu() {
     if (actionsMenu.current) actionsMenu.current.open = false;
+    actionModalTriggerRef.current?.focus({ preventScroll: true });
   }
 
   return (
-    <div className="inbox-page space-y-3" data-testid="inbox-page">
+    <div className="inbox-page" data-testid="inbox-page">
       {feedback && <div aria-live="polite" className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] px-3 py-2 text-xs text-[var(--text-secondary)]">{feedback}</div>}
       <InboxQueueToolbar
         activeFilterCount={activeFilterCount}
@@ -509,7 +510,7 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
                 </div>
                 <div className="inbox-conversation-actions flex flex-wrap items-center justify-end gap-1">
                   {conversation.responsavelId === null && !isClosed && <Button disabled={busy} leftIcon={<UserPlus size={13} />} onClick={() => void assumeConversation()} size="sm">Assumir atendimento</Button>}
-                  {compactInboxContext && <IconButton aria-expanded={hasContextDrawer} aria-label={hasContextDrawer ? "Ocultar contexto do Cliente, Lead e histórico" : "Abrir contexto do Cliente, Lead e histórico"} onClick={() => setContextOpen((open) => !open)} ref={contextTriggerRef}><PanelRightOpen size={15} /></IconButton>}
+                  {compactInboxContext && <IconButton aria-controls="inbox-conversation-context" aria-expanded={hasContextDrawer} aria-label={hasContextDrawer ? "Ocultar contexto do Cliente, Lead e histórico" : "Abrir contexto do Cliente, Lead e histórico"} onClick={() => setContextOpen((open) => !open)} ref={contextTriggerRef}><PanelRightOpen size={15} /></IconButton>}
                   {canChangeConversation && <details className="inbox-actions-menu relative" onKeyDown={(event) => { if (event.key === "Escape") { closeActionsMenu(); actionsMenu.current?.querySelector("summary")?.focus(); } }} ref={actionsMenu}>
                     <summary aria-label="Mais ações da conversa" className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md border border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]" ref={actionModalTriggerRef}><MoreHorizontal aria-hidden="true" size={16} /></summary>
                     <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-1 shadow-md">
@@ -598,7 +599,7 @@ type InboxQueueToolbarProps = {
 export function InboxQueueToolbar({ activeFilterCount, filtersTriggerRef, onOpenFilters, onRefresh, onSearchChange, refreshing, search, total }: InboxQueueToolbarProps) {
   return (
     <div className="inbox-command-bar" role="search">
-      <p className="inbox-command-title">Conversas</p>
+      <h1 className="inbox-command-title">Caixa de entrada <span aria-hidden="true" className="inbox-command-title-divider">·</span> <span className="inbox-command-title-context">Conversas</span></h1>
       <div className="inbox-command-search">
         <Search aria-hidden="true" className="inbox-command-search-icon" size={15} />
         <Input aria-label="Buscar conversas" className="pl-9" onChange={(event) => onSearchChange(event.target.value)} placeholder="Buscar contato ou interesse" value={search} />

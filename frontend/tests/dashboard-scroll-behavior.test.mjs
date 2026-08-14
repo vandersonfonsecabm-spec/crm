@@ -48,7 +48,7 @@ test("Dashboard mantém o contrato de scroll desktop no main estável", async ()
 
   assert.match(dashboard, /const contentRef = useRef<HTMLElement \| null>\(null\);/);
   assert.match(dashboard, /resetDashboardPageScroll\(contentRef\.current, window\);/);
-  assert.match(dashboard, /<main ref=\{contentRef\}[^>]*className="crm-content /);
+  assert.match(dashboard, /<main ref=\{contentRef\}[^>]*className=\{`crm-content /);
   assert.doesNotMatch(dashboard, /useEffect\(\(\) => \{\s*window\.scrollTo\(/);
   assert.match(css, /@media \(min-width: 1024px\) \{[\s\S]*?\.crm-content \{[^}]*overflow-y: auto;/);
 });

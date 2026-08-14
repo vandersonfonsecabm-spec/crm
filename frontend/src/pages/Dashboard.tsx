@@ -157,6 +157,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       : requestedActivePage === "usuarios" && !canManageUsers
         ? "comercial"
       : requestedActivePage;
+  const isInboxPage = activePage === "inbox";
   const isWhatsAppIntegrationDetail = activePage === "integracoes" && resolvedNavigation.detail === "whatsapp";
   const usingNegociosKanban = activePage === "kanban" && negociosKanbanEnabled;
   const customerDrawerPageKey = `${activePage}:${location.pathname}${location.search}${location.hash}`;
@@ -792,7 +793,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   }
 
   return (
-    <div className="crm-workspace premium-shell min-h-screen select-none">
+    <div className="crm-workspace premium-shell min-h-screen">
       <a className="skip-link" href="#crm-main-content">Pular para o conteúdo</a>
       <div className="crm-shell-layout flex min-h-screen">
         <DashboardSidebar
@@ -824,7 +825,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             leadsCommunicationEnabled={leadsCommunicationEnabled}
           />
 
-          <main ref={contentRef} tabIndex={-1} className="crm-content mx-auto w-full max-w-[1680px] px-4 pb-24 pt-5 sm:px-5 lg:px-7 lg:pb-8" id="crm-main-content">
+          <main ref={contentRef} tabIndex={-1} className={`crm-content mx-auto w-full max-w-[1680px] px-4 pb-24 pt-5 sm:px-5 lg:px-7 lg:pb-8${isInboxPage ? " crm-content--inbox" : ""}`} id="crm-main-content">
           {backendLoadError && clients.length === 0 && activePage !== "dashboard" && activePage !== "comercial" && (
             <ErrorState
               className="mb-4 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)]"
@@ -833,7 +834,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               title="Dados temporariamente indisponíveis"
             />
           )}
-          {activePage !== "dashboard" && activePage !== "comercial" && (
+          {activePage !== "dashboard" && activePage !== "comercial" && (!isInboxPage || !leadsCommunicationEnabled) && (
             <DashboardHeader
               key={activePage}
               activePage={activePage}
@@ -899,8 +900,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           )}
 
           {activePage !== "dashboard" && <section
-            className={`${activePage === "comercial" ? "" : activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" ? "mt-3" : "mt-4"} ${
-              activePage === "comercial" || activePage === "leads" || activePage === "inbox" || activePage === "usuarios" || activePage === "perfil"
+            className={`${isInboxPage ? "inbox-route-section" : activePage === "comercial" ? "" : activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" ? "mt-3" : "mt-4"} ${
+              isInboxPage
+                ? ""
+                : activePage === "comercial" || activePage === "leads" || activePage === "usuarios" || activePage === "perfil"
                 ? "block"
                 : activePage === "clientes" || activePage === "kanban"
                   ? "block"
@@ -913,7 +916,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 : "grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"
             }`}
           >
-            <div className={activePage === "comercial" || activePage === "leads" || activePage === "inbox" || activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" || activePage === "usuarios" || activePage === "perfil" ? "space-y-3" : "space-y-4"}>
+            <div className={isInboxPage ? "inbox-route-stack" : activePage === "comercial" || activePage === "leads" || activePage === "clientes" || activePage === "kanban" || activePage === "estoque" || activePage === "integracoes" || activePage === "automacoes" || activePage === "usuarios" || activePage === "perfil" ? "space-y-3" : "space-y-4"}>
               {(activePage === "leads" || activePage === "inbox") && !leadsCommunicationEnabled && (
                 <EmptyState description="Este recurso permanece indisponível enquanto a feature flag local estiver desligada." icon={<LockKeyhole size={18} />} state="unavailable" title="Recurso não habilitado" />
               )}

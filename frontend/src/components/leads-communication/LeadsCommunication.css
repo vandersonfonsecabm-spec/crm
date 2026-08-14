@@ -6,6 +6,14 @@
   --inbox-success-bg: var(--success-subtle);
   --inbox-success-border: var(--success-border);
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inbox-page,
+.inbox-page * {
+  user-select: text;
 }
 
 .inbox-command-bar {
@@ -23,6 +31,17 @@
   font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.2;
+}
+
+.inbox-command-title-divider {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.inbox-command-title-context {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 550;
 }
 
 .inbox-command-search {
@@ -432,5 +451,82 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* V56: the Inbox is a desktop workbench, so only this route consumes the
+   shell's remaining width and height. Other pages keep their editorial frame. */
+@media (min-width: 1360px) {
+  .crm-content.crm-content--inbox {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    max-width: none;
+    margin: 0;
+    overflow: hidden;
+    padding: 8px 12px 12px;
+  }
+
+  .crm-content--inbox .inbox-route-section {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    margin: 0;
+  }
+
+  .crm-content--inbox .inbox-route-stack {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .crm-content--inbox .inbox-page {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .crm-content--inbox .inbox-command-bar {
+    min-height: 48px;
+    flex: 0 0 48px;
+    gap: 10px;
+  }
+
+  .crm-content--inbox .inbox-workspace {
+    display: grid;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    grid-template-columns: minmax(280px, 24%) minmax(0, 76%);
+  }
+
+  .crm-content--inbox .inbox-workspace.has-context {
+    grid-template-columns: minmax(240px, 24%) minmax(0, 52%) minmax(260px, 24%);
+  }
+
+  .crm-content--inbox .inbox-conversation-list,
+  .crm-content--inbox .inbox-conversation,
+  .crm-content--inbox .inbox-context-pane {
+    min-height: 0;
+  }
+
+  .crm-content--inbox .inbox-conversation-header {
+    padding-block: 10px;
+  }
+
+  .crm-content--inbox .inbox-context-pane {
+    padding: 12px;
+  }
+
+  .crm-content--inbox .inbox-context-content dd {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }

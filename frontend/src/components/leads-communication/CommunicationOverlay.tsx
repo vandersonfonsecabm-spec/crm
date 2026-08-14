@@ -64,6 +64,12 @@ function useOverlayLifecycle(
   onClose: () => void,
   triggerRef?: RefObject<HTMLElement | null>,
 ) {
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
     const previousFocus = triggerRef?.current ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
@@ -76,7 +82,7 @@ function useOverlayLifecycle(
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -100,5 +106,5 @@ function useOverlayLifecycle(
       document.body.style.overflow = previousOverflow;
       previousFocus?.focus({ preventScroll: true });
     };
-  }, [dialogRef, onClose, open, triggerRef]);
+  }, [dialogRef, open, triggerRef]);
 }
