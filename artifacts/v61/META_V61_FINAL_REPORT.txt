@@ -76,7 +76,9 @@ estava disponível; DOM/ARIA/teclado/overflow foram verificados manualmente.
 
 Arquivos
 --------
-Os documentos META_V61_*.md/txt e as imagens V61_AFTER_*.png desta pasta foram
-entregues individualmente na conversa fixada do SaaS, sem ZIP.
+As imagens V61_AFTER_*.png desta pasta foram anexadas individualmente na conversa
+fixada do SaaS, sem ZIP. O upload dos documentos locais foi tentado pelo seletor
+do Chrome, mas o file chooser foi bloqueado; o relatório completo foi colado na
+conversa e os documentos META_V61_*.md/txt permanecem nesta pasta para recuperação.
 
 Status final: V61_INBOX_OPERATIONAL_SHIP.

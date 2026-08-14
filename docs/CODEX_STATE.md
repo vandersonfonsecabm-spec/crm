@@ -1640,5 +1640,7 @@ integracoes autorizadas.
   1366×768 e sentinel 390×844. Chat foi a maior coluna, composer ficou dentro
   da viewport, rail 208/64 persistiu por reload/rota e o console não registrou
   erros. axe automatizado não estava disponível.
-- Evidências individuais, sem ZIP, estão em `artifacts/v61/`; o relatório e
-  as imagens foram entregues na conversa fixada do SaaS.
+- Evidências individuais, sem ZIP, estão em `artifacts/v61/`; as imagens foram
+  anexadas e o relatório foi colado na conversa fixada do SaaS. O seletor do
+  Chrome bloqueou o upload dos documentos locais; eles permanecem disponíveis
+  no diretório para recuperação.
