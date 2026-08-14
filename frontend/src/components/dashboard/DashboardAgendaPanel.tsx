@@ -160,7 +160,11 @@ export default function DashboardAgendaPanel({
   }, [createRequestKey, options]);
 
   useEffect(() => {
-    if (todayRequestKey <= 0 || handledTodayRequest.current === todayRequestKey) return;
+    if (todayRequestKey <= 0) {
+      handledTodayRequest.current = null;
+      return;
+    }
+    if (handledTodayRequest.current === todayRequestKey) return;
     handledTodayRequest.current = todayRequestKey;
     setWeekStart(startOfWeek(new Date()));
     setAgendaView("HOJE");
