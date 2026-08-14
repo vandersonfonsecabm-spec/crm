@@ -500,9 +500,9 @@ button:disabled { cursor: not-allowed; }
 
 @media (max-width: 1023px) {
   .crm-overview-action-grid,
-  .crm-overview-support-grid { gap: 18px; }
+  .crm-overview-support-grid,
+  .commercial-process-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .commercial-process { gap: 18px; padding: 18px; }
-  .commercial-process-grid { gap: 18px; }
 }
 
 @media (max-width: 640px) {
