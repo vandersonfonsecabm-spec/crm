@@ -34,6 +34,7 @@ type DashboardAgendaPanelProps = {
   clients: Client[];
   createRequestKey: number;
   todayRequestKey: number;
+  onTodayRequestHandled?: () => void;
   onSelectClient: (clientId: number) => void;
 };
 
@@ -96,6 +97,7 @@ export default function DashboardAgendaPanel({
   clients,
   createRequestKey,
   todayRequestKey,
+  onTodayRequestHandled,
   onSelectClient,
 }: DashboardAgendaPanelProps) {
   const [items, setItems] = useState<ApiAcompanhamento[]>([]);
@@ -165,7 +167,8 @@ export default function DashboardAgendaPanel({
     setStatus("Todos");
     setPriority("Todas");
     setPage(1);
-  }, [todayRequestKey]);
+    onTodayRequestHandled?.();
+  }, [onTodayRequestHandled, todayRequestKey]);
 
   useEffect(() => {
     let ignore = false;

@@ -989,6 +989,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   clients={clients}
                   createRequestKey={agendaCreateRequestKey}
                   todayRequestKey={agendaTodayRequestKey}
+                  onTodayRequestHandled={() => setAgendaTodayRequestKey(0)}
                   onSelectClient={handleSelectClient}
                 />
               )}
