@@ -621,18 +621,18 @@ export function InboxContextContent({ conversation, history, onOpenBusiness, sho
   return (
     <div className="inbox-context-content">
       <section className="inbox-context-profile">
-        <h3>Contato</h3>
-        <dl><DetailRow label="Nome" value={conversation.contatoCanal.cliente?.nome ?? conversation.contatoCanal.nome ?? "Não informado"} /><DetailRow label="Telefone" value={conversation.contatoCanal.cliente?.telefone || "Não informado"} /><DetailRow label="E-mail" value={conversation.contatoCanal.cliente?.email || "Não informado"} /><DetailRow label="Interesse" value={conversation.lead?.interesse ?? "Não informado"} /></dl>
+        <h3>Identidade</h3>
+        <dl><DetailRow label="Nome" value={conversation.contatoCanal.cliente?.nome ?? conversation.contatoCanal.nome ?? "Não informado"} /><DetailRow label="Empresa" value={conversation.contatoCanal.cliente?.empresa || "Não informado"} /><DetailRow label="Telefone" value={conversation.contatoCanal.cliente?.telefone || "Não informado"} /><DetailRow label="E-mail" value={conversation.contatoCanal.cliente?.email || "Não informado"} /><DetailRow label="Interesse" value={conversation.lead?.interesse ?? "Não informado"} /></dl>
       </section>
       <details className="inbox-context-disclosure">
-        <summary>Campanha e origem</summary>
+        <summary>Origem</summary>
         <dl><DetailRow label="Origem" value={conversation.lead?.origem ?? "Não informado"} /><DetailRow label="Campanha" value={conversation.lead?.campanha ?? "Não informado"} /><DetailRow label="Página de origem" value={conversation.lead?.paginaOrigem ?? "Não informado"} /><DetailRow label="Responsável do lead" value={conversation.lead?.responsavel?.nome ?? "Sem responsável"} /></dl>
       </details>
       <details className="inbox-context-disclosure">
-        <summary>Detalhes do atendimento</summary>
-        <dl><DetailRow label="Empresa / propriedade" value={conversation.contatoCanal.cliente?.empresa || "Não informado"} /><DetailRow label="Canal" value={channelLabel(conversation.canalIntegracao.tipo, conversation.canalIntegracao.nome)} /><DetailRow label="Estado" value={<ConversationStatusBadge status={conversation.status} />} /><DetailRow label="SLA" value={<ConversationSlaBadge sla={conversation.sla} />} /><DetailRow label="Responsável" value={conversation.responsavelPrincipal?.nome ?? "Fila compartilhada"} /><DetailRow label="Criada em" value={formatCommunicationDate(conversation.createdAt)} /><DetailRow label="Última atividade" value={formatCommunicationDate(conversation.ultimaMensagemEm)} /></dl>
+        <summary>Atendimento</summary>
+        <dl><DetailRow label="Canal" value={channelLabel(conversation.canalIntegracao.tipo, conversation.canalIntegracao.nome)} /><DetailRow label="Estado" value={<ConversationStatusBadge status={conversation.status} />} /><DetailRow label="SLA" value={<ConversationSlaBadge sla={conversation.sla} />} /><DetailRow label="Responsável" value={conversation.responsavelPrincipal?.nome ?? "Fila compartilhada"} /><DetailRow label="Criada em" value={formatCommunicationDate(conversation.createdAt)} /><DetailRow label="Última atividade" value={formatCommunicationDate(conversation.ultimaMensagemEm)} /></dl>
       </details>
-      {showCommercialPanel && <details className="inbox-context-disclosure"><summary>Qualificação comercial</summary><div className="inbox-context-commercial"><InboxCommercialPanel conversationId={conversation.id} key={conversation.id} onOpenBusiness={onOpenBusiness} /></div></details>}
+      {showCommercialPanel && <details className="inbox-context-disclosure"><summary>Comercial</summary><div className="inbox-context-commercial"><InboxCommercialPanel conversationId={conversation.id} key={conversation.id} onOpenBusiness={onOpenBusiness} /></div></details>}
       <section className="inbox-context-section inbox-context-history">
         <div className="mb-2 flex items-center gap-2"><History size={13} /><h4>Histórico de atendimento</h4></div>
         {history.length ? <ol className="space-y-2">{history.map((entry) => <li className="inbox-context-history-item" key={entry.id}><p className="font-medium">{historyLabel(entry.acaoAtendimento ?? entry.tipo, entry.responsavelAnterior?.nome, entry.responsavelNovo?.nome, entry.estadoAnterior, entry.estadoNovo)}</p><p className="mt-0.5 text-[var(--text-muted)]">Por {entry.alteradoPor?.nome ?? "Usuário removido"} · {formatCommunicationDate(entry.createdAt)}</p>{entry.motivo && <p className="mt-1">{entry.motivo}</p>}</li>)}</ol> : <p className="text-xs text-[var(--text-muted)]">Nenhuma ação registrada.</p>}

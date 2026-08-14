@@ -6,14 +6,14 @@ import assert from "node:assert/strict";
 const root = path.resolve(import.meta.dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
-test("V56 entrega uma rail compacta e expande o conteúdo sem perder o estado", () => {
+test("V58 entrega uma rail ainda mais compacta e expande o conteúdo sem perder o estado", () => {
   const css = read("src/index.css");
   const sidebarCss = read("src/components/dashboard/DashboardSidebar.css");
   const dashboard = read("src/pages/Dashboard.tsx");
 
-  assert.match(css, /--sidebar-expanded-width:\s*224px;/);
-  assert.match(css, /--sidebar-collapsed-width:\s*68px;/);
-  assert.match(sidebarCss, /\.sidebar-shell\.is-collapsed\s*\{\s*width:\s*var\(--sidebar-collapsed-width, 68px\)/);
+  assert.match(css, /--sidebar-expanded-width:\s*208px;/);
+  assert.match(css, /--sidebar-collapsed-width:\s*64px;/);
+  assert.match(sidebarCss, /\.sidebar-shell\.is-collapsed\s*\{\s*width:\s*var\(--sidebar-collapsed-width, 64px\)/);
   assert.match(sidebarCss, /sidebar-shell\.is-collapsed \.sidebar-brand-mark[\s\S]*?display: inline-flex/);
   assert.match(sidebarCss, /aria-label|sidebar-collapse-toggle/);
   assert.match(dashboard, /crm-sidebar-collapsed/);
@@ -21,7 +21,7 @@ test("V56 entrega uma rail compacta e expande o conteúdo sem perder o estado", 
   assert.doesNotMatch(dashboard, /premium-shell min-h-screen select-none/);
 });
 
-test("V56 limita o modo full-workspace à Inbox e ancora as três colunas", () => {
+test("V58 mantém o modo full-workspace da Inbox e ancora as três colunas", () => {
   const dashboard = read("src/pages/Dashboard.tsx");
   const inbox = read("src/components/leads-communication/DashboardInboxPanel.tsx");
   const overlay = read("src/components/leads-communication/CommunicationOverlay.tsx");
@@ -37,10 +37,10 @@ test("V56 limita o modo full-workspace à Inbox e ancora as três colunas", () =
   assert.match(inbox, /actionModalTriggerRef\.current\?\.focus/);
   assert.match(overlay, /onCloseRef/);
   assert.match(css, /@media \(min-width: 1360px\)/);
-  assert.match(css, /\.crm-content\.crm-content--inbox[\s\S]*?max-width: none[\s\S]*?padding: 8px 12px 12px/);
-  assert.match(css, /\.crm-content--inbox \.inbox-workspace[\s\S]*?height: auto[\s\S]*?grid-template-columns: minmax\(280px, 24%\) minmax\(0, 76%\)/);
-  assert.match(css, /\.crm-content--inbox \.inbox-workspace\.has-context[\s\S]*?grid-template-columns: minmax\(240px, 24%\) minmax\(0, 52%\) minmax\(260px, 24%\)/);
-  assert.match(css, /\.crm-content--inbox \.inbox-workspace[\s\S]*?grid-template-columns: minmax\(280px, 24%\) minmax\(0, 76%\)/);
+  assert.match(css, /\.crm-workspace \.crm-main > \.crm-content\.crm-content--inbox[\s\S]*?max-width: none[\s\S]*?padding: 8px 10px 10px/);
+  assert.match(css, /\.crm-content--inbox \.inbox-workspace[\s\S]*?height: auto[\s\S]*?grid-template-columns: minmax\(248px, 25%\) minmax\(0, 75%\)/);
+  assert.match(css, /\.crm-content--inbox \.inbox-workspace\.has-context[\s\S]*?grid-template-columns: minmax\(248px, 25%\) minmax\(0, 50%\) minmax\(248px, 25%\)/);
+  assert.match(css, /\.inbox-conversation-item[\s\S]*?min-height: 96px/);
   assert.match(css, /\.inbox-list-scroll,\s*\.inbox-message-viewport,\s*\.inbox-context-pane/);
   assert.match(css, /\.crm-content--inbox \.inbox-context-content dd[\s\S]*?overflow-wrap: anywhere/);
 });

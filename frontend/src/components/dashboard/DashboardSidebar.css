@@ -5,12 +5,12 @@
 }
 
 .crm-workspace .sidebar-shell {
-  width: var(--sidebar-expanded-width, 224px);
+  width: var(--sidebar-expanded-width, 208px);
   transition: width 180ms ease;
 }
 
 .crm-workspace .sidebar-shell.is-collapsed {
-  width: var(--sidebar-collapsed-width, 68px);
+  width: var(--sidebar-collapsed-width, 64px);
 }
 
 .crm-workspace .sidebar-shell .sidebar-brand {
@@ -25,12 +25,12 @@
 }
 
 .crm-workspace .sidebar-shell.is-collapsed .sidebar-brand {
-  height: 72px;
-  flex-direction: column;
+  height: 64px;
+  flex-direction: row;
   justify-content: center;
-  gap: 4px;
-  padding-left: 4px;
-  padding-right: 4px;
+  gap: 2px;
+  padding-left: 2px;
+  padding-right: 2px;
 }
 
 .crm-workspace .sidebar-shell.is-collapsed .sidebar-brand-copy {
@@ -39,15 +39,13 @@
 
 .crm-workspace .sidebar-shell.is-collapsed .sidebar-brand-mark {
   display: inline-flex;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 
 .crm-workspace .sidebar-shell.is-collapsed .sidebar-collapse-toggle {
-  margin-left: 0;
-}
-
-.crm-workspace .sidebar-shell.is-collapsed .sidebar-collapse-toggle {
+  width: 36px;
+  height: 36px;
   margin-left: 0;
 }
 
@@ -139,7 +137,7 @@
 
 @media (min-width: 1024px) and (max-width: 1199px) {
   .crm-workspace .sidebar-shell:not(.is-collapsed) {
-    width: var(--sidebar-expanded-width, 224px);
+    width: var(--sidebar-expanded-width, 208px);
   }
 
   .crm-workspace .sidebar-shell:not(.is-collapsed) .sidebar-brand {

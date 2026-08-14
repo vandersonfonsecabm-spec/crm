@@ -59,9 +59,9 @@ test("Lote 8 aplica a composição Inbox aos contratos reais sem criar operaçõ
   }
 
   const context = between(inbox, "export function InboxContextContent", "function InboxFilters");
-  const orderedContext = ["Telefone", "E-mail", "Interesse", "Campanha e origem", "Página de origem", "Detalhes do atendimento", "Histórico de atendimento"];
+  const orderedContext = ["Telefone", "E-mail", "Interesse", "Origem", "Página de origem", "Atendimento", "Histórico de atendimento"];
   const contextIndexes = orderedContext.map((token) => context.indexOf(token));
-  assert.ok(contextIndexes.every((index) => index >= 0), "contexto deve expor contato, origem, detalhes e histórico");
+  assert.ok(contextIndexes.every((index) => index >= 0), "contexto deve expor identidade, origem, atendimento e histórico");
   assert.ok(contextIndexes.every((index, position) => position === 0 || index > contextIndexes[position - 1]), "telefone, e-mail e interesse precisam anteceder os detalhes secundários");
   assert.match(context, /showCommercialPanel = true/);
 
