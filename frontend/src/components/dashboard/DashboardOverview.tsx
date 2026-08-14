@@ -71,7 +71,7 @@ export default function DashboardOverview({
       <OverviewHeader
         onOpenCommercial={onOpenCommercial}
         showAction={model.state !== "fail-closed"}
-        summary={buildOverviewOperationalSummary(attentionCount, agendaSummary, agendaLoadState)}
+        summary={buildOverviewOperationalSummary(attentionCount, agendaSummary, agendaLoadState, model.attentionSignals.length > 0)}
       />
 
       {model.state === "loading" && <OverviewLoading />}
@@ -115,6 +115,7 @@ function buildOverviewOperationalSummary(
   attentionCount: number | null,
   agendaSummary: ApiAcompanhamentoResumo | null,
   agendaLoadState: "loading" | "ready" | "error",
+  hasAttentionSignals: boolean,
 ) {
   const parts: string[] = [];
   if (attentionCount !== null && attentionCount > 0) {
@@ -125,7 +126,7 @@ function buildOverviewOperationalSummary(
     parts.push(`${overdue} acompanhamento${overdue === 1 ? "" : "s"} atrasado${overdue === 1 ? "" : "s"}`);
   }
   if (parts.length > 0) return `${parts.join(" e ")}.`;
-  if (attentionCount === 0 && agendaLoadState === "ready" && overdue === 0) return "Sua operação está em dia.";
+  if (!hasAttentionSignals && attentionCount === 0 && agendaLoadState === "ready" && overdue === 0) return "Sua operação está em dia.";
   return null;
 }
 
