@@ -422,6 +422,7 @@ button:disabled { cursor: not-allowed; }
 .crm-overview-recent-list li > div { display: grid; min-width: 0; gap: 2px; }
 .crm-overview-recent-list strong { overflow: hidden; color: var(--text-strong); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .crm-overview-recent-list span { display: -webkit-box; overflow: hidden; color: var(--text-secondary); font-size: 11px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.crm-overview-recent-list small { overflow: hidden; color: var(--text-tertiary); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .crm-overview-recent-list time { color: var(--text-tertiary); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .commercial-workbench { gap: 18px; padding-bottom: 28px; }

@@ -8,6 +8,7 @@ import {
   type DashboardOverviewMetric,
   type DashboardOverviewState,
 } from "./DashboardOverviewModel";
+import { presentRecentActivity } from "./recentActivityPresenter";
 
 type DashboardOverviewProps = {
   summary: ApiDashboardSummary | null;
@@ -340,7 +341,11 @@ function OverviewRecent({ summary }: { summary: ApiDashboardSummary | null }) {
       <header className="crm-overview-section-heading"><div><h2 id="crm-overview-recent-title">Movimento recente</h2><p className="crm-overview-section-subtitle">Notas comerciais úteis para o contexto</p></div></header>
       {events.length > 0 ? (
         <ul className="crm-overview-recent-list">
-          {events.map((event) => <li key={event.id}><MessageSquareText aria-hidden="true" size={14} /><div><strong>{event.cliente}</strong><span>{event.texto}</span></div><time dateTime={event.createdAt}>{formatShortDate(event.createdAt)}</time></li>)}
+          {events.map((event) => {
+            const presentation = presentRecentActivity(event);
+            const context = [presentation.secondaryText, presentation.sourceLabel].filter(Boolean).join(" · ");
+            return <li key={event.id}><MessageSquareText aria-hidden="true" size={14} /><div><strong>{event.cliente}</strong><span>{presentation.primaryText}</span>{context ? <small>{context}</small> : null}</div><time dateTime={event.createdAt}>{formatShortDate(event.createdAt)}</time></li>;
+          })}
         </ul>
       ) : <p className="crm-overview-inline-state" role="status">Nenhuma nota recente no resumo.</p>}
     </Surface>
