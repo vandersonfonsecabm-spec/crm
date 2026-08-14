@@ -1,0 +1,26 @@
+SOL EXTRA HIGH — V63 FINAL REVIEW
+
+Verdict: V63_PRECOMMIT_SHIP / V63_FINAL_SOURCE_GATE_SHIP
+
+Reviewed runtime/source SHA: f57620e1e9ea91d395387ff48f12d3f3768653bb
+
+Accepted:
+- queue selector is separate from secondary filters;
+- default queue and trusted count remain V61 semantics;
+- clear filters preserves the selected queue;
+- reminder overdue state updates without remount;
+- lease remains visible alongside other operational indicators;
+- real page-state clamp prevents stale empty pages after polling/filter shrink;
+- zero-result live status restores the accessibility announcement;
+- pagination labels are unambiguous;
+- no backend/schema/migration/API/provider delta exists.
+
+Focused evidence: 16/16 PASS in the independent review; canonical frontend 165/165 and build PASS were supplied for the final source state. Authenticated browser evidence is recorded in META_V63_VISUAL_QA_REPORT.md and the five individual captures.
+
+Non-blocking advisories:
+- only the trusted Aguardando count is shown inline in the selector;
+- shared Pagination defaults can be made more natural for unrelated callers in a future focal cleanup;
+- a shared reminder clock could replace bounded per-row timers if scale requires it;
+- automated axe was not exposed.
+
+Final: V63_INBOX_VISUAL_HIERARCHY_SHIP.

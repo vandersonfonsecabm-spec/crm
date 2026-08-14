@@ -1,0 +1,28 @@
+V63 FINAL REPORT — INBOX VISUAL HIERARCHY
+
+Terminal: V63_INBOX_VISUAL_HIERARCHY_SHIP
+Runtime: f57620e1e9ea91d395387ff48f12d3f3768653bb
+Baseline: 411c99c04147cb049dbbb7446c6be2e59669ad01
+
+## What changed
+
+The Inbox now has one clear command-bar queue selector. Queue views and secondary filters are separated, the default Aguardando resposta view remains the V61 default, and only the trusted queue count is displayed. Conversation rows use a compact contact → metadata → preview hierarchy without a badge wall. Operational `Próxima` is distinct from `Próxima página`, while the existing composer and secondary actions remain intact.
+
+The implementation also closes the final source-level regressions found during review: reminder overdue state refreshes on a bounded clock, clearing secondary filters preserves the selected queue, lease visibility is not hidden by SLA/reminder state, page state clamps/refetches when polling shrinks the result set, and zero-result changes are announced accessibly.
+
+## Validation
+
+- Focused V63/accessibility contracts: PASS (16/16 independent final review).
+- Canonical frontend suite: PASS (165/165).
+- TypeScript/Vite build: PASS.
+- `git diff --check`: PASS.
+- Authenticated Chrome DOM/ARIA/keyboard smoke: PASS at 1440×900, 1366×768, and 390×844 CSS viewports.
+- Desktop document overflow: zero in both desktop captures; mobile horizontal overflow: zero.
+- Official frontend: HTTP 200 and final bundle markers present.
+- Automated axe: NOT AVAILABLE in this environment; manual DOM/ARIA evidence is included.
+
+## Preservation and release
+
+No backend, schema, migration, API, database, integration, provider, or outbound behavior changed. Railway was reused; no duplicate deploy was initiated. V61 remains the rollback target. The individual screenshot/report files are sanitized for attachment to the pinned SaaS ChatGPT conversation; no ZIP was created.
+
+See the companion reports for the exact contract, measurements, accessibility notes, regression matrix, release details, rollback, and Sol review.
