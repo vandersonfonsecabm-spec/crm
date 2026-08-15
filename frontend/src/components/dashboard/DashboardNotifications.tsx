@@ -40,6 +40,7 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
   const panelRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const firstItemRef = useRef<HTMLButtonElement>(null);
+  const panelHeadingRef = useRef<HTMLHeadingElement>(null);
   const settingsBackRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const requestRef = useRef<AbortController | null>(null);
@@ -105,8 +106,8 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
   useEffect(() => {
     if (!isOpen) return;
     window.requestAnimationFrame(() => {
-      if (showSettings) settingsBackRef.current?.focus({ preventScroll: true });
-      else firstItemRef.current?.focus({ preventScroll: true });
+      const focusTarget = showSettings ? settingsBackRef.current : firstItemRef.current;
+      (focusTarget ?? panelHeadingRef.current)?.focus({ preventScroll: true });
     });
     function handlePointerDown(event: MouseEvent) {
       if (!shellRef.current?.contains(event.target as Node)) setIsOpen(false);
@@ -258,7 +259,7 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
         <section ref={panelRef} id={titleId} className="notifications-panel" role="dialog" aria-modal="true" aria-labelledby={`${titleId}-heading`} onKeyDown={handlePanelKeyDown}>
           <div className="notifications-panel-header">
             <div>
-              <h2 id={`${titleId}-heading`} className="text-sm font-semibold">Notificações</h2>
+              <h2 ref={panelHeadingRef} id={`${titleId}-heading`} tabIndex={-1} className="text-sm font-semibold">Notificações</h2>
               <p className="mt-0.5 text-[11px] text-slate-500">{summary ? `${summary.unread} novas` : "Atualizando"}</p>
             </div>
             <div className="flex items-center gap-1">
@@ -273,7 +274,7 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
           </div>
 
           {tenantDisabled && canManage && !showSettings ? (
-            <div className="notification-state">
+            <div className="notification-state notification-state-disabled">
               <p>A Central de notificações está desativada para esta empresa.</p>
               <button type="button" onClick={() => { setShowSettings(true); void loadSettings(); }}>Abrir configurações</button>
             </div>

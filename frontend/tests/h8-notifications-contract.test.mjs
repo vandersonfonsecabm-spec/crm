@@ -39,6 +39,7 @@ test("H8 resolve destino exato e preserva query na navegação", () => {
 test("H8 painel informa estado e prioridade para tecnologias assistivas", () => {
   const notifications = read("src/components/dashboard/DashboardNotifications.tsx");
   assert.match(notifications, /aria-modal="true"/);
+  assert.match(notifications, /panelHeadingRef/);
   assert.match(notifications, /A Central de notificações está desativada/);
   assert.match(notifications, /Prioridade \$\{priorityLabel\(item\.prioridade\)\}/);
 });
