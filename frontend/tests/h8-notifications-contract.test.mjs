@@ -20,6 +20,7 @@ test("H8 mantém sino, badge de não lidas e painel sem outbound", () => {
 
 test("H8 resolve destino exato e preserva query na navegação", () => {
   const dashboard = read("src/pages/Dashboard.tsx");
+  const inbox = read("src/components/leads-communication/DashboardInboxPanel.tsx");
   const service = read("../backend/src/notifications/service.js");
   assert.match(dashboard, /conversationId/);
   assert.match(dashboard, /acompanhamentoId/);
@@ -27,6 +28,15 @@ test("H8 resolve destino exato e preserva query na navegação", () => {
   assert.match(service, /CONVERSATION.*conversationId/);
   assert.match(service, /FOLLOW_UP.*acompanhamentoId/);
   assert.match(service, /DEAL.*negocioId/);
+  assert.match(inbox, /initialConversationId, selectedId/);
+  assert.match(inbox, /setSelectedId\(initialConversationId\)/);
+});
+
+test("H8 painel informa estado e prioridade para tecnologias assistivas", () => {
+  const notifications = read("src/components/dashboard/DashboardNotifications.tsx");
+  assert.match(notifications, /aria-modal="true"/);
+  assert.match(notifications, /A Central de notificações está desativada/);
+  assert.match(notifications, /Prioridade \$\{priorityLabel\(item\.prioridade\)\}/);
 });
 
 test("H8 oferece preferências e configuração da empresa com defaults explícitos", () => {

@@ -12,12 +12,20 @@ const NOTIFICATION_TYPES = Object.freeze({
 const TARGET_KINDS = new Set(["CONVERSATION", "FOLLOW_UP", "DEAL"]);
 const SOURCE_KINDS = new Set(["CONVERSATION", "FOLLOW_UP"]);
 const MAX_LIMIT = 50;
+const MAX_LIST_ROWS = 1000;
+const MAX_SOURCE_ROWS = 1000;
 const DEFAULT_LIMIT = 20;
 const EFFECTIVE_TIME_ZONE = "America/Sao_Paulo";
 
 function createNotificationService({ prisma, env = process.env, clock = () => new Date() } = {}) {
+  let tenantCursor = 0;
   function globallyEnabled() {
     const raw = String(env.H8_NOTIFICATIONS_ENABLED || "").trim().toLowerCase();
+    return raw === "true" || raw === "1";
+  }
+
+  function workerEnabled() {
+    const raw = String(env.NOTIFICATIONS_WORKER_ENABLED || "").trim().toLowerCase();
     return raw === "true" || raw === "1";
   }
 
@@ -28,7 +36,7 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     return settings;
   }
 
-  async function projectForTenant(empresaId, { now = clock(), limit = 100 } = {}) {
+  async function projectForTenant(empresaId, { now = clock(), limit = MAX_SOURCE_ROWS } = {}) {
     if (!globallyEnabled()) return { created: 0, updated: 0, resolved: 0 };
     const settings = await prisma.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId } });
     if (!settings?.habilitada) return { created: 0, updated: 0, resolved: 0, disabled: true };
@@ -37,7 +45,7 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
         where: { empresaId, status: { in: ACTIVE_FOLLOW_UP_STATUSES }, dataHora: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) } },
         include: { responsavelUsuario: { select: { id: true, ativo: true, email: true } }, autor: { select: { id: true, ativo: true, email: true } }, negocio: { select: { id: true, responsavelId: true } }, conversaCanal: { select: { id: true, responsavelId: true } } },
         orderBy: [{ dataHora: "asc" }, { id: "asc" }],
-        take: Math.min(Math.max(Number(limit) || 100, 1), 200),
+        take: Math.min(Math.max(Number(limit) || MAX_SOURCE_ROWS, 1), MAX_SOURCE_ROWS),
       }),
       prisma.conversaCanal.findMany({
         where: { empresaId, ...pendingConversationWhere(now) },
@@ -51,7 +59,7 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
           contatoCanal: { select: { nome: true, cliente: { select: { nome: true } } } },
         },
         orderBy: [{ aguardandoDesde: "asc" }, { id: "asc" }],
-        take: Math.min(Math.max(Number(limit) || 100, 1), 200),
+        take: Math.min(Math.max(Number(limit) || MAX_SOURCE_ROWS, 1), MAX_SOURCE_ROWS),
       }),
     ]);
     const userIds = new Set();
@@ -130,48 +138,55 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
       }
     }
 
-    result.resolved += await resolveCompletedFollowUps(empresaId, now, prisma);
+    result.resolved += await resolveCompletedFollowUps(empresaId, now, prisma, userById, managers);
     result.resolved += await resolveCompletedConversations(empresaId, now, prisma);
     return result;
   }
 
   async function processDue({ now = clock(), limit = 20 } = {}) {
-    if (!globallyEnabled()) return { tenants: 0, created: 0, updated: 0, resolved: 0 };
-    const tenants = await prisma.configuracaoNotificacaoEmpresa.findMany({
-      where: { habilitada: true },
+    if (!globallyEnabled() || !workerEnabled()) return { tenants: 0, created: 0, updated: 0, resolved: 0 };
+    const batchLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    let tenants = await prisma.configuracaoNotificacaoEmpresa.findMany({
+      where: { habilitada: true, ...(tenantCursor > 0 ? { empresaId: { gt: tenantCursor } } : {}) },
       orderBy: { empresaId: "asc" },
-      take: Math.min(Math.max(Number(limit) || 20, 1), 100),
+      take: batchLimit,
       select: { empresaId: true },
     });
+    if (!tenants.length && tenantCursor > 0) {
+      tenantCursor = 0;
+      tenants = await prisma.configuracaoNotificacaoEmpresa.findMany({ where: { habilitada: true }, orderBy: { empresaId: "asc" }, take: batchLimit, select: { empresaId: true } });
+    }
     const total = { tenants: tenants.length, created: 0, updated: 0, resolved: 0 };
     for (const tenant of tenants) {
-      const result = await projectForTenant(tenant.empresaId, { now, limit: 100 });
+      const result = await projectForTenant(tenant.empresaId, { now, limit: MAX_SOURCE_ROWS });
       total.created += result.created || 0;
       total.updated += result.updated || 0;
       total.resolved += result.resolved || 0;
     }
+    if (tenants.length) tenantCursor = tenants[tenants.length - 1].empresaId;
     return total;
   }
 
   async function list(context, query = {}) {
     await assertEnabled(context.empresaId);
-    await projectForTenant(context.empresaId, { now: clock(), limit: 120 });
+    if (workerEnabled()) await projectForTenant(context.empresaId, { now: clock(), limit: 120 });
     const page = positiveInteger(query.page, 1);
     const limit = Math.min(positiveInteger(query.limit, DEFAULT_LIMIT), MAX_LIMIT);
     const now = clock();
     await resolveMissingTargets(prisma, context, now);
     const where = visibleWhere(context, now, { includeSnoozed: false });
-    const rows = await prisma.notificacao.findMany({ where, orderBy: [{ lidaEm: "asc" }, { ocorridoEm: "desc" }, { id: "desc" }], take: Math.min(page * limit, 200) });
+    const rows = await prisma.notificacao.findMany({ where, orderBy: [{ lidaEm: "asc" }, { ocorridoEm: "desc" }, { id: "desc" }], take: Math.min(Math.max(page * limit, limit), MAX_LIST_ROWS) });
     rows.sort(compareNotifications);
     const pageRows = rows.slice((page - 1) * limit, page * limit);
     const total = await prisma.notificacao.count({ where });
     const snoozed = await prisma.notificacao.findMany({ where: visibleWhere(context, now, { includeSnoozed: true, onlySnoozed: true }), orderBy: [{ ocorridoEm: "desc" }, { id: "desc" }], take: limit });
-    return { data: pageRows.map(presentNotification), snoozed: snoozed.map(presentNotification), pagination: { page, limit, total, totalPages: total ? Math.ceil(total / limit) : 0 } };
+    const boundedTotal = Math.min(total, MAX_LIST_ROWS);
+    return { data: pageRows.map(presentNotification), snoozed: snoozed.map(presentNotification), pagination: { page, limit, total: boundedTotal, totalPages: boundedTotal ? Math.ceil(boundedTotal / limit) : 0, truncated: total > MAX_LIST_ROWS } };
   }
 
   async function summary(context) {
     await assertEnabled(context.empresaId);
-    await projectForTenant(context.empresaId, { now: clock(), limit: 120 });
+    if (workerEnabled()) await projectForTenant(context.empresaId, { now: clock(), limit: 120 });
     const now = clock();
     await resolveMissingTargets(prisma, context, now);
     const where = visibleWhere(context, now, { includeSnoozed: false });
@@ -275,25 +290,47 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
 async function upsertProjection({ prisma, empresaId, destinatarioId, tipo, prioridade, origemTipo, origemId, occurrenceKey, dedupeKey, titulo, corpo, alvoTipo, alvoId, ocorridoEm, venceEm = null, now }) {
   assertSourceAndTarget({ origemTipo, alvoTipo, origemId, alvoId });
   if (!VALID_PRIORITIES.has(prioridade)) throw domainError(422, "NOTIFICATION_PRIORITY_INVALID", "Prioridade de notificacao invalida.");
-  const existing = await prisma.notificacao.findUnique({ where: { empresaId_destinatarioId_occurrenceKey: { empresaId, destinatarioId, occurrenceKey } } });
   const next = { tipo, prioridade, origemTipo, origemId, occurrenceKey, dedupeKey, titulo: boundedText(titulo, 120), corpo: boundedText(corpo, 280), alvoTipo, alvoId, ocorridoEm, venceEm };
+  let existing = await prisma.notificacao.findUnique({ where: { empresaId_destinatarioId_occurrenceKey: { empresaId, destinatarioId, occurrenceKey } } });
   if (!existing) {
-    await prisma.notificacao.create({ data: { empresaId, destinatarioId, ...next } });
-    return { created: 1, updated: 0 };
+    try {
+      await prisma.notificacao.create({ data: { empresaId, destinatarioId, ...next } });
+      return { created: 1, updated: 0 };
+    } catch (error) {
+      if (error?.code !== "P2002") throw error;
+      existing = await prisma.notificacao.findUnique({ where: { empresaId_destinatarioId_occurrenceKey: { empresaId, destinatarioId, occurrenceKey } } });
+      if (!existing) throw error;
+    }
   }
-  const materialChanged = existing.tipo !== tipo || existing.ocorridoEm.getTime() !== new Date(ocorridoEm).getTime() || existing.titulo !== next.titulo;
-  await prisma.notificacao.update({ where: { id: existing.id }, data: { ...next, ...(materialChanged && existing.resolvidaEm ? { resolvidaEm: null, lidaEm: null } : {}), ...(materialChanged && !existing.resolvidaEm && existing.lidaEm ? { lidaEm: null } : {}), versao: { increment: 1 } } });
+  const materialChanged = existing.tipo !== tipo
+    || existing.prioridade !== prioridade
+    || existing.ocorridoEm.getTime() !== new Date(ocorridoEm).getTime()
+    || existing.venceEm?.getTime?.() !== (venceEm ? new Date(venceEm).getTime() : undefined)
+    || existing.titulo !== next.titulo
+    || existing.corpo !== next.corpo;
+  if (!materialChanged) return { created: 0, updated: 0 };
+  await prisma.notificacao.update({ where: { id: existing.id }, data: { ...next, ...(existing.resolvidaEm ? { resolvidaEm: null, lidaEm: null } : existing.lidaEm ? { lidaEm: null } : {}), versao: { increment: 1 } } });
   return { created: 0, updated: 1 };
 }
 
-async function resolveCompletedFollowUps(empresaId, now, prismaArg) {
+async function resolveCompletedFollowUps(empresaId, now, prismaArg, userById = new Map(), managers = []) {
   if (!prismaArg) return 0;
-  const rows = await prismaArg.notificacao.findMany({ where: { empresaId, origemTipo: "FOLLOW_UP", resolvidaEm: null }, select: { id: true, origemId: true } });
+  const rows = await prismaArg.notificacao.findMany({ where: { empresaId, origemTipo: "FOLLOW_UP", resolvidaEm: null }, select: { id: true, origemId: true, destinatarioId: true, occurrenceKey: true } });
   if (!rows.length) return 0;
   const ids = rows.map((row) => row.origemId).filter(Number.isInteger);
-  const active = await prismaArg.acompanhamento.findMany({ where: { empresaId, id: { in: ids }, status: { in: ACTIVE_FOLLOW_UP_STATUSES } }, select: { id: true } });
-  const activeIds = new Set(active.map((row) => row.id));
-  const done = rows.filter((row) => !activeIds.has(row.origemId)).map((row) => row.id);
+  const active = await prismaArg.acompanhamento.findMany({
+    where: { empresaId, id: { in: ids }, status: { in: ACTIVE_FOLLOW_UP_STATUSES } },
+    include: { responsavelUsuario: { select: { id: true, ativo: true } }, autor: { select: { id: true, ativo: true } }, negocio: { select: { id: true, responsavelId: true } }, conversaCanal: { select: { id: true, responsavelId: true } } },
+  });
+  const activeById = new Map(active.map((item) => [item.id, item]));
+  const done = rows.filter((row) => {
+    const item = activeById.get(row.origemId);
+    if (!item) return true;
+    const dueAt = new Date(item.dataHora).toISOString();
+    const expectedOccurrence = `follow-up:${item.id}:${dueAt}`;
+    const recipients = recipientIdsForFollowUp(item, userById, managers);
+    return row.occurrenceKey !== expectedOccurrence || !recipients.includes(row.destinatarioId);
+  }).map((row) => row.id);
   if (!done.length) return 0;
   const result = await prismaArg.notificacao.updateMany({ where: { empresaId, id: { in: done }, resolvidaEm: null }, data: { resolvidaEm: now, versao: { increment: 1 } } });
   return result.count;
@@ -345,7 +382,7 @@ async function resolveMissingTargets(prisma, context, now) {
 }
 
 function recipientIdsForFollowUp(item, userById, managers) {
-  const direct = [item.responsavelId, item.autorId, item.negocio?.responsavelId, item.conversaCanal?.responsavelId].find((id) => Number.isInteger(id) && userById.get(id));
+  const direct = [item.responsavelId].find((id) => Number.isInteger(id) && userById.get(id));
   return direct ? [direct] : managers;
 }
 
@@ -358,7 +395,6 @@ function pendingConversationWhere(now) {
     OR: [
       { status: { in: ["NOVA", "AGUARDANDO_ATENDIMENTO"] }, encerradaEm: null, ultimaMensagemEm: { not: null } },
       { status: "EM_ATENDIMENTO", encerradaEm: null, aguardandoDesde: { not: null }, ultimaMensagemEm: { not: null } },
-      { status: "PENDENTE", acompanhamentos: { some: { status: { in: ACTIVE_FOLLOW_UP_STATUSES }, titulo: "Lembrar conversa", tipo: "RETORNO", dataHora: { lte: now } } } },
     ],
   };
 }

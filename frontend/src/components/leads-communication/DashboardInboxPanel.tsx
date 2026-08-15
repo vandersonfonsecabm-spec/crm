@@ -231,6 +231,20 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
     };
   }, [loadDetail, selectedId]);
 
+  // The dashboard can receive a new conversation target after this panel has
+  // already mounted (for example, a notification clicked while Inbox is open).
+  // Keep the local selection synchronized with that durable route intent.
+  useEffect(() => {
+    if (!initialConversationId || initialConversationId === selectedId) return;
+    setComposerText("");
+    setComposerError("");
+    idempotencyKey.current = null;
+    setLease(null);
+    setLeaseOwned(false);
+    setSelectedId(initialConversationId);
+    setMobileView("conversation");
+  }, [initialConversationId, selectedId]);
+
   useEffect(() => {
     const viewport = messageViewport.current;
     if (!viewport || !shouldScrollToLatest.current) return;

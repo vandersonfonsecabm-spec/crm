@@ -41,6 +41,26 @@ test("H8 permanece desligada por padrao e nao projeta nem lista", async () => {
   );
 });
 
+test("leitura nao materializa notificacoes quando o worker H8 esta desligado", async () => {
+  const tenant = await seedTenant("read-no-worker");
+  await prisma.acompanhamento.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      responsavelId: tenant.admin.id,
+      autorId: tenant.admin.id,
+      titulo: "Retornar para cliente",
+      descricao: "Acompanhamento de teste.",
+      dataHora: new Date(now.getTime() - 5 * 60000),
+      prioridade: "ALTA",
+      status: "PENDENTE",
+      tipo: "RETORNO",
+    },
+  });
+  await service.summary(tenant.context);
+  await service.list(tenant.context, { limit: 20 });
+  assert.equal(await prisma.notificacao.count({ where: { empresaId: tenant.empresa.id } }), 0);
+});
+
 test("projecao de acompanhamento e idempotente, acionavel e isolada", async () => {
   const tenant = await seedTenant("projection");
   const followUp = await prisma.acompanhamento.create({
@@ -117,6 +137,32 @@ test("preferencias validam limites e nunca atravessam tenant", async () => {
   );
   const foreignContext = { ...tenant.context, empresaId: other.empresa.id };
   assert.equal((await service.summary(foreignContext)).total, 0);
+});
+
+test("reagendamento e transferencia encerram a ocorrencia e o destinatario anteriores", async () => {
+  const tenant = await seedTenant("reconcile");
+  const manager = await prisma.usuario.create({ data: { empresaId: tenant.empresa.id, nome: "Gerente H8", email: `manager-${tenant.empresa.id}@h8.test`, senhaHash: "hash-test", papel: "GERENTE", ativo: true } });
+  const followUp = await prisma.acompanhamento.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      responsavelId: tenant.admin.id,
+      autorId: tenant.admin.id,
+      titulo: "Retornar para cliente",
+      descricao: "Acompanhamento de transferência.",
+      dataHora: new Date(now.getTime() - 5 * 60000),
+      prioridade: "ALTA",
+      status: "PENDENTE",
+      tipo: "RETORNO",
+    },
+  });
+  await service.projectForTenant(tenant.empresa.id);
+  await prisma.acompanhamento.update({ where: { id: followUp.id }, data: { responsavelId: manager.id, dataHora: new Date(now.getTime() + 5 * 60000) } });
+  await service.projectForTenant(tenant.empresa.id);
+  const rows = await prisma.notificacao.findMany({ where: { empresaId: tenant.empresa.id }, orderBy: { id: "asc" } });
+  assert.equal(rows.length, 2);
+  assert.equal(rows.filter((row) => row.resolvidaEm === null).length, 1);
+  assert.equal(rows.find((row) => row.responsavelId === undefined && row.destinatarioId === manager.id)?.resolvidaEm, null);
+  assert.equal(rows.find((row) => row.destinatarioId === tenant.admin.id)?.resolvidaEm !== null, true);
 });
 
 async function seedTenant(label, { enabled = true } = {}) {

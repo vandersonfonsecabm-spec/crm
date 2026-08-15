@@ -37,8 +37,10 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
   const [settingsError, setSettingsError] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const firstItemRef = useRef<HTMLButtonElement>(null);
+  const settingsBackRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
   const requestRef = useRef<AbortController | null>(null);
 
@@ -102,7 +104,10 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
 
   useEffect(() => {
     if (!isOpen) return;
-    firstItemRef.current?.focus({ preventScroll: true });
+    window.requestAnimationFrame(() => {
+      if (showSettings) settingsBackRef.current?.focus({ preventScroll: true });
+      else firstItemRef.current?.focus({ preventScroll: true });
+    });
     function handlePointerDown(event: MouseEvent) {
       if (!shellRef.current?.contains(event.target as Node)) setIsOpen(false);
     }
@@ -119,7 +124,7 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, showSettings]);
 
   const unread = summary?.unread ?? 0;
   const badge = unread > 99 ? "99+" : unread > 0 ? String(unread) : null;
@@ -215,6 +220,21 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
     buttons[next]?.focus({ preventScroll: true });
   }
 
+  function handlePanelKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(panelRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], select, input, textarea") ?? []);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   return (
     <div ref={shellRef} className="dashboard-notifications relative">
       <button
@@ -235,7 +255,7 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
       </button>
 
       {isOpen && (
-        <section id={titleId} className="notifications-panel" role="dialog" aria-labelledby={`${titleId}-heading`}>
+        <section ref={panelRef} id={titleId} className="notifications-panel" role="dialog" aria-modal="true" aria-labelledby={`${titleId}-heading`} onKeyDown={handlePanelKeyDown}>
           <div className="notifications-panel-header">
             <div>
               <h2 id={`${titleId}-heading`} className="text-sm font-semibold">Notificações</h2>
@@ -252,7 +272,12 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
             </div>
           </div>
 
-          {showSettings ? (
+          {tenantDisabled && canManage && !showSettings ? (
+            <div className="notification-state">
+              <p>A Central de notificações está desativada para esta empresa.</p>
+              <button type="button" onClick={() => { setShowSettings(true); void loadSettings(); }}>Abrir configurações</button>
+            </div>
+          ) : showSettings ? (
             <NotificationSettingsPanel
               settings={settings}
               canManage={canManage}
@@ -260,6 +285,7 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
               saving={settingsSaving}
               error={settingsError}
               onBack={() => setShowSettings(false)}
+              backRef={settingsBackRef}
               onChange={(next) => setSettings(next)}
               onSavePreferences={() => void savePreferences()}
               onSaveCompany={() => void saveCompanySettings()}
@@ -284,6 +310,7 @@ function NotificationSettingsPanel({
   saving,
   error,
   onBack,
+  backRef,
   onChange,
   onSavePreferences,
   onSaveCompany,
@@ -294,6 +321,7 @@ function NotificationSettingsPanel({
   saving: boolean;
   error: boolean;
   onBack: () => void;
+  backRef: RefObject<HTMLButtonElement | null>;
   onChange: (settings: NotificationSettings) => void;
   onSavePreferences: () => void;
   onSaveCompany: () => void;
@@ -303,7 +331,7 @@ function NotificationSettingsPanel({
   const company = settings.empresa;
   return (
     <div className="notifications-settings">
-      <button type="button" className="notification-settings-back" onClick={onBack}>← Voltar para notificações</button>
+      <button ref={backRef} type="button" className="notification-settings-back" onClick={onBack}>← Voltar para notificações</button>
       {error && <p className="notification-settings-error">Não foi possível salvar agora.</p>}
       <section aria-labelledby="notification-user-settings-title">
         <h3 id="notification-user-settings-title">Minhas preferências</h3>
@@ -340,9 +368,10 @@ function NotificationGroup({ title, items, firstItemRef, onOpen, onSnooze, onUns
       <ul>
         {items.map((item, index) => (
           <li key={item.id} className={`notification-item ${item.nova ? "notification-item-unread" : ""}`}>
-            <button ref={index === 0 ? firstItemRef : undefined} data-notification-item type="button" className="notification-item-main" onClick={() => void onOpen(item)}>
+            <button ref={index === 0 ? firstItemRef : undefined} data-notification-item type="button" className="notification-item-main" aria-label={`${item.nova ? "Nova" : "Lida"}. Prioridade ${priorityLabel(item.prioridade)}. ${item.titulo}${item.corpo ? `. ${item.corpo}` : ""}`} onClick={() => void onOpen(item)}>
               <span className={`notification-priority-dot notification-priority-${item.prioridade.toLowerCase()}`} aria-hidden="true" />
               <span className="min-w-0 flex-1">
+                <span className="sr-only">{item.nova ? "Nova. " : "Lida. "}Prioridade: {priorityLabel(item.prioridade)}. </span>
                 <strong>{item.titulo}</strong>
                 {item.corpo && <span>{item.corpo}</span>}
                 <small>{formatRelative(item.ocorridoEm)}{item.destino ? ` · ${targetLabel(item.destino.tipo)}` : ""}</small>
@@ -358,6 +387,12 @@ function NotificationGroup({ title, items, firstItemRef, onOpen, onSnooze, onUns
       </ul>
     </section>
   );
+}
+
+function priorityLabel(priority: NotificationItem["prioridade"]) {
+  if (priority === "CRITICA") return "crítica";
+  if (priority === "ATENCAO") return "atenção";
+  return "normal";
 }
 
 function targetLabel(kind: NotificationTargetKind) {

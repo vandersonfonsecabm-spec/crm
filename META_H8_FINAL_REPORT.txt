@@ -21,12 +21,13 @@ Implementado no codigo
 
 Evidencia local
 - Tenant gate: 30/30 no teste focal, 91 relacoes e 137 FKs verificadas.
-- Backend H8: 5/5 no sandbox Prisma isolado.
+- Backend H8: 7/7 no sandbox Prisma isolado (inclui bloqueio de escrita por GET,
+  reconciliação de reagendamento/transferência e destino exato).
 - Suíte backend canônica: 1 teste legado B1 falhou isoladamente (mensagens
   esperadas 2, observadas 0); o teste foi reproduzido sem alteração causal H8
   e não foi mascarado como verde.
-- Frontend canonical: 185/185.
-- Frontend H8 focal: 4/4.
+- Frontend canonical: 186/186.
+- Frontend H8 focal: 5/5.
 - TypeScript/Vite build: PASS; somente aviso existente de chunk >500 kB.
 - node --check em server, worker, rotas e servico: PASS.
 - dev.db SHA preservado: 6116CA72110D8C4A6B5BC214A476993AFDC155EC32B3B2431E4CE54254A42533.
