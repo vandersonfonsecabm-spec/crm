@@ -9,5 +9,7 @@
 - Integracoes/providers/outbound: sem delta funcional.
 - Banco local: dev.db SHA preservado.
 
-Revalidacao causal: frontend 185/185, tenant gate 30/30, H8 backend 4/4,
-TypeScript/Vite PASS.
+Revalidacao causal no SHA final local `8c5c389`: frontend 186/186, H8 focal
+5/5, tenant gate 30/30, backend H8 7/7, TypeScript/Vite PASS. A suíte
+backend canônica tem falha legada B1 reproduzida anteriormente; a reexecução
+posterior do harness excedeu o timeout operacional.

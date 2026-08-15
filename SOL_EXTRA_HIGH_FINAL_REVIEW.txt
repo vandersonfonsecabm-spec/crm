@@ -1,4 +1,7 @@
-SOL_EXTRA_HIGH_FINAL_REVIEW=AGUARDANDO_REAUDITORIA_EXATA
+SOL_EXTRA_HIGH_FINAL_REVIEW=H8_SOURCE_GATE_PASS
+SOL_EXTRA_HIGH_FINAL_SHA=8c5c389ea41eb079e45e8b90faba0497a2490ba1
+H8_SOURCE_GATE=PASS
+PRODUCTION_RELEASE_GATE=BLOCKED_EXTERNAL
 
 O checkpoint anterior identificou riscos materiais no scanner temporal H7,
 lease/retry e ativacao de producao. A implementacao H8 atual manteve a flag OFF,

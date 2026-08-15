@@ -11,7 +11,8 @@ deployment `dpl_HfpcS3EmUbxnSFtVxujZQWHzEPuZ`, SHA V66
 promover. A publicacao deve seguir backup/restore, DB_PRECHECK, migration gate,
 canario H8 OFF->tenant QA e smoke autenticado antes do alias oficial.
 
-Evidência de suíte: o focal H8 7/7 e frontend 186/186 passam; a suíte backend
+Evidência de suíte no SHA final local `8c5c389`: o focal H8 7/7, H8 frontend
+5/5 e frontend 186/186 passam; a suíte backend
 canônica foi executada e falhou somente no teste legado B1
 `leads-communication-services-b1.test.js` (mensagens esperadas 2, observadas 0),
 reproduzido isoladamente. Nenhuma alteração H8 toca o serviço coberto por esse

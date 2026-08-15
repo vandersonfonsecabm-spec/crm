@@ -26,8 +26,8 @@ Evidencia local
 - Suíte backend canônica: 1 teste legado B1 falhou isoladamente (mensagens
   esperadas 2, observadas 0); o teste foi reproduzido sem alteração causal H8
   e não foi mascarado como verde.
-- Frontend canonical: 186/186.
-- Frontend H8 focal: 5/5.
+- Frontend canonical: 186/186 no SHA final local.
+- Frontend H8 focal: 5/5 no SHA final local.
 - TypeScript/Vite build: PASS; somente aviso existente de chunk >500 kB.
 - node --check em server, worker, rotas e servico: PASS.
 - dev.db SHA preservado: 6116CA72110D8C4A6B5BC214A476993AFDC155EC32B3B2431E4CE54254A42533.
@@ -49,6 +49,8 @@ alterar Railway, banco de producao ou deploy enquanto os gates externos acima na
 forem comprovados.
 
 Checkpoint local
-- Commit: `2ceffec`.
+- Commits finais locais: `2ceffec`, `54cad1f`, `c405904`, `cd56e3d`,
+  `3446c65`, `8c5c389`.
+- SHA final local auditado: `8c5c389`.
 - Push, migration PostgreSQL, canário, ativação H8 e deploy oficial não foram
   executados.

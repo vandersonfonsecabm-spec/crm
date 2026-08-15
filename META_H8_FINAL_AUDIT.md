@@ -9,7 +9,9 @@
 - leitura, cutoff, snooze, unsnooze, resolucao e dedupe cobertos.
 - deep links estruturados para Conversa/Acompanhamento/Negocio.
 - no outbound, no provider, no payload cru.
-- frontend e backend focais verdes (H8 backend 7/7; frontend 186/186; build
+- SHA final local `8c5c389` fecha deep-link Inbox/Agenda e boundary de foco;
+  frontend e backend focais verdes (H8 backend 7/7; H8 frontend 5/5;
+  frontend 186/186; build
   PASS). A suíte backend canônica tem uma falha legada B1 reproduzida
   isoladamente e registrada no release report.
 
