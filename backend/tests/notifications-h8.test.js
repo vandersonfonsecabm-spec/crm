@@ -121,6 +121,7 @@ test("marcar todas usa cutoff e nao captura notificacao criada depois", async ()
 test("destino removido e resolvido sem permanecer acionavel", async () => {
   const tenant = await seedTenant("removed-target");
   const row = await createNotification(tenant, 999999, new Date(now.getTime() - 1000));
+  await service.projectForTenant(tenant.empresa.id);
   assert.equal((await service.summary(tenant.context)).total, 0);
   const stored = await prisma.notificacao.findUniqueOrThrow({ where: { id: row.id } });
   assert.equal(stored.resolvidaEm !== null, true);

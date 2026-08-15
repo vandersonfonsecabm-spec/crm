@@ -148,7 +148,8 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     }
 
     result.resolved += await resolveCompletedFollowUps(empresaId, now, prisma, userById, managers);
-    result.resolved += await resolveCompletedConversations(empresaId, now, prisma);
+    result.resolved += await resolveCompletedConversations(empresaId, now, prisma, userById, managers);
+    result.resolved += await resolveMissingTargets(prisma, { empresaId }, now);
     return result;
   }
 
@@ -167,10 +168,17 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     }
     const total = { tenants: tenants.length, created: 0, updated: 0, resolved: 0 };
     for (const tenant of tenants) {
-      const result = await projectForTenant(tenant.empresaId, { now, limit: MAX_SOURCE_ROWS });
-      total.created += result.created || 0;
-      total.updated += result.updated || 0;
-      total.resolved += result.resolved || 0;
+      try {
+        const result = await projectForTenant(tenant.empresaId, { now, limit: MAX_SOURCE_ROWS });
+        total.created += result.created || 0;
+        total.updated += result.updated || 0;
+        total.resolved += result.resolved || 0;
+      } catch (error) {
+        // One tenant must not prevent the bounded cursor from advancing to
+        // the remaining tenants in the same worker cycle.
+        total.failed = (total.failed || 0) + 1;
+        console.error("H8_NOTIFICATION_TENANT_FAILED", { empresaId: tenant.empresaId, code: error?.code || "UNKNOWN" });
+      }
     }
     if (tenants.length) tenantCursor = tenants[tenants.length - 1].empresaId;
     return total;
@@ -178,13 +186,11 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
 
   async function list(context, query = {}) {
     await assertEnabled(context.empresaId);
-    if (workerEnabled()) await projectForTenant(context.empresaId, { now: clock(), limit: 120 });
     const page = positiveInteger(query.page, 1);
     const limit = Math.min(positiveInteger(query.limit, DEFAULT_LIMIT), MAX_LIMIT);
     const now = clock();
-    await resolveMissingTargets(prisma, context, now);
     const where = visibleWhere(context, now, { includeSnoozed: false });
-    const rows = await prisma.notificacao.findMany({ where, orderBy: [{ lidaEm: "asc" }, { ocorridoEm: "desc" }, { id: "desc" }], take: Math.min(Math.max(page * limit, limit), MAX_LIST_ROWS) });
+    const rows = await prisma.notificacao.findMany({ where, orderBy: [{ lidaEm: "asc" }, { ocorridoEm: "desc" }, { id: "desc" }], take: MAX_LIST_ROWS });
     rows.sort(compareNotifications);
     const pageRows = rows.slice((page - 1) * limit, page * limit);
     const total = await prisma.notificacao.count({ where });
@@ -195,9 +201,7 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
 
   async function summary(context) {
     await assertEnabled(context.empresaId);
-    if (workerEnabled()) await projectForTenant(context.empresaId, { now: clock(), limit: 120 });
     const now = clock();
-    await resolveMissingTargets(prisma, context, now);
     const where = visibleWhere(context, now, { includeSnoozed: false });
     const [unread, total] = await prisma.$transaction([
       prisma.notificacao.count({ where: { ...where, lidaEm: null } }),
@@ -345,22 +349,28 @@ async function resolveCompletedFollowUps(empresaId, now, prismaArg, userById = n
   return result.count;
 }
 
-async function resolveCompletedConversations(empresaId, now, prismaArg) {
-  const rows = await prismaArg.notificacao.findMany({ where: { empresaId, origemTipo: "CONVERSATION", resolvidaEm: null }, select: { id: true, origemId: true } });
+async function resolveCompletedConversations(empresaId, now, prismaArg, userById = new Map(), managers = []) {
+  const rows = await prismaArg.notificacao.findMany({ where: { empresaId, origemTipo: "CONVERSATION", resolvidaEm: null }, select: { id: true, origemId: true, destinatarioId: true } });
   if (!rows.length) return 0;
   const ids = rows.map((row) => row.origemId).filter(Number.isInteger);
-  const active = await prismaArg.conversaCanal.findMany({ where: { empresaId, id: { in: ids }, ...pendingConversationWhere(now) }, select: { id: true } });
-  const activeIds = new Set(active.map((row) => row.id));
-  const done = rows.filter((row) => !activeIds.has(row.origemId)).map((row) => row.id);
+  const active = await prismaArg.conversaCanal.findMany({ where: { empresaId, id: { in: ids }, ...pendingConversationWhere(now) }, select: { id: true, responsavelId: true } });
+  const activeById = new Map(active.map((row) => [row.id, row]));
+  const done = rows.filter((row) => {
+    const item = activeById.get(row.origemId);
+    if (!item) return true;
+    return !recipientIdsForConversation(item, userById, managers).includes(row.destinatarioId);
+  }).map((row) => row.id);
   if (!done.length) return 0;
   const result = await prismaArg.notificacao.updateMany({ where: { empresaId, id: { in: done }, resolvidaEm: null }, data: { resolvidaEm: now, versao: { increment: 1 } } });
   return result.count;
 }
 
 async function resolveMissingTargets(prisma, context, now) {
+  const recipientFilter = Number.isInteger(context.usuarioId) ? { destinatarioId: context.usuarioId } : {};
   const rows = await prisma.notificacao.findMany({
-    where: { empresaId: context.empresaId, destinatarioId: context.usuarioId, resolvidaEm: null },
+    where: { empresaId: context.empresaId, ...recipientFilter, resolvidaEm: null },
     select: { id: true, alvoTipo: true, alvoId: true },
+    take: MAX_LIST_ROWS,
   });
   if (!rows.length) return 0;
   const idsByKind = new Map();
@@ -386,7 +396,7 @@ async function resolveMissingTargets(prisma, context, now) {
     ...rows.filter((row) => Number.isInteger(row.alvoId) && !existing.get(row.alvoTipo)?.has(row.alvoId)).map((row) => row.id),
   ];
   if (!missing.length) return 0;
-  const result = await prisma.notificacao.updateMany({ where: { empresaId: context.empresaId, destinatarioId: context.usuarioId, id: { in: missing }, resolvidaEm: null }, data: { resolvidaEm: now, adiadaAte: null, versao: { increment: 1 } } });
+  const result = await prisma.notificacao.updateMany({ where: { empresaId: context.empresaId, ...recipientFilter, id: { in: missing }, resolvidaEm: null }, data: { resolvidaEm: now, adiadaAte: null, versao: { increment: 1 } } });
   return result.count;
 }
 

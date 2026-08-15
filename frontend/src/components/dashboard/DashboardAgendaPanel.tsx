@@ -133,6 +133,7 @@ export default function DashboardAgendaPanel({
   const [formError, setFormError] = useState("");
   const handledCreateRequest = useRef(createRequestKey);
   const handledTodayRequest = useRef<number | null>(null);
+  const consumedInitialFollowUpId = useRef<number | null | undefined>(undefined);
   const mutationInFlight = useRef(false);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -186,9 +187,13 @@ export default function DashboardAgendaPanel({
       setError("");
 
       try {
-        if (initialFollowUpId) {
-          const exact = await fetchAcompanhamento(initialFollowUpId);
+        const targetFollowUpId = initialFollowUpId && consumedInitialFollowUpId.current !== initialFollowUpId
+          ? initialFollowUpId
+          : null;
+        if (targetFollowUpId) {
+          const exact = await fetchAcompanhamento(targetFollowUpId);
           if (ignore) return;
+          consumedInitialFollowUpId.current = targetFollowUpId;
           setItems([exact]);
           setTotal(1);
           setSelectedFollowUpId(exact.id);

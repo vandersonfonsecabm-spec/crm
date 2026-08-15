@@ -21,6 +21,7 @@ test("H8 mantém sino, badge de não lidas e painel sem outbound", () => {
 test("H8 resolve destino exato e preserva query na navegação", () => {
   const dashboard = read("src/pages/Dashboard.tsx");
   const inbox = read("src/components/leads-communication/DashboardInboxPanel.tsx");
+  const agenda = read("src/components/dashboard/DashboardAgendaPanel.tsx");
   const service = read("../backend/src/notifications/service.js");
   assert.match(dashboard, /conversationId/);
   assert.match(dashboard, /acompanhamentoId/);
@@ -28,8 +29,9 @@ test("H8 resolve destino exato e preserva query na navegação", () => {
   assert.match(service, /CONVERSATION.*conversationId/);
   assert.match(service, /FOLLOW_UP.*acompanhamentoId/);
   assert.match(service, /DEAL.*negocioId/);
-  assert.match(inbox, /initialConversationId, selectedId/);
+  assert.match(inbox, /syncedInitialConversationId/);
   assert.match(inbox, /setSelectedId\(initialConversationId\)/);
+  assert.match(agenda, /consumedInitialFollowUpId/);
 });
 
 test("H8 painel informa estado e prioridade para tecnologias assistivas", () => {

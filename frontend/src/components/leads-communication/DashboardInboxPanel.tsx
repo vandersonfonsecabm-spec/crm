@@ -88,6 +88,7 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
   const [teamUsers, setTeamUsers] = useState<LeadsCommunicationUser[]>([]);
   const listRequest = useRef(0);
   const detailRequest = useRef(0);
+  const syncedInitialConversationId = useRef<number | null | undefined>(undefined);
   const hasList = useRef(false);
   const idempotencyKey = useRef<string | null>(null);
   const messageViewport = useRef<HTMLDivElement>(null);
@@ -235,7 +236,9 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
   // already mounted (for example, a notification clicked while Inbox is open).
   // Keep the local selection synchronized with that durable route intent.
   useEffect(() => {
-    if (!initialConversationId || initialConversationId === selectedId) return;
+    if (syncedInitialConversationId.current === initialConversationId) return;
+    syncedInitialConversationId.current = initialConversationId;
+    if (!initialConversationId) return;
     setComposerText("");
     setComposerError("");
     idempotencyKey.current = null;
@@ -243,7 +246,7 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
     setLeaseOwned(false);
     setSelectedId(initialConversationId);
     setMobileView("conversation");
-  }, [initialConversationId, selectedId]);
+  }, [initialConversationId]);
 
   useEffect(() => {
     const viewport = messageViewport.current;
