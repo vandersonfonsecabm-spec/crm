@@ -19,6 +19,7 @@ const EFFECTIVE_TIME_ZONE = "America/Sao_Paulo";
 
 function createNotificationService({ prisma, env = process.env, clock = () => new Date() } = {}) {
   let tenantCursor = 0;
+  const sourceCursors = new Map();
   function globallyEnabled() {
     const raw = String(env.H8_NOTIFICATIONS_ENABLED || "").trim().toLowerCase();
     return raw === "true" || raw === "1";
@@ -40,12 +41,15 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     if (!globallyEnabled()) return { created: 0, updated: 0, resolved: 0 };
     const settings = await prisma.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId } });
     if (!settings?.habilitada) return { created: 0, updated: 0, resolved: 0, disabled: true };
+    const sourceLimit = Math.min(Math.max(Number(limit) || MAX_SOURCE_ROWS, 1), MAX_SOURCE_ROWS);
+    const sourceCursor = sourceCursors.get(empresaId) || { followUp: 0, conversation: 0 };
     const [followUps, conversations] = await Promise.all([
       prisma.acompanhamento.findMany({
         where: { empresaId, status: { in: ACTIVE_FOLLOW_UP_STATUSES }, dataHora: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) } },
         include: { responsavelUsuario: { select: { id: true, ativo: true, email: true } }, autor: { select: { id: true, ativo: true, email: true } }, negocio: { select: { id: true, responsavelId: true } }, conversaCanal: { select: { id: true, responsavelId: true } } },
         orderBy: [{ dataHora: "asc" }, { id: "asc" }],
-        take: Math.min(Math.max(Number(limit) || MAX_SOURCE_ROWS, 1), MAX_SOURCE_ROWS),
+        skip: sourceCursor.followUp,
+        take: sourceLimit,
       }),
       prisma.conversaCanal.findMany({
         where: { empresaId, ...pendingConversationWhere(now) },
@@ -59,9 +63,14 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
           contatoCanal: { select: { nome: true, cliente: { select: { nome: true } } } },
         },
         orderBy: [{ aguardandoDesde: "asc" }, { id: "asc" }],
-        take: Math.min(Math.max(Number(limit) || MAX_SOURCE_ROWS, 1), MAX_SOURCE_ROWS),
+        skip: sourceCursor.conversation,
+        take: sourceLimit,
       }),
     ]);
+    sourceCursors.set(empresaId, {
+      followUp: followUps.length === sourceLimit ? sourceCursor.followUp + followUps.length : 0,
+      conversation: conversations.length === sourceLimit ? sourceCursor.conversation + conversations.length : 0,
+    });
     const userIds = new Set();
     followUps.forEach((item) => { if (Number.isInteger(item.responsavelId)) userIds.add(item.responsavelId); if (Number.isInteger(item.autorId)) userIds.add(item.autorId); });
     conversations.forEach((item) => { if (Number.isInteger(item.responsavelId)) userIds.add(item.responsavelId); });
