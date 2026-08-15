@@ -36,6 +36,7 @@ type DashboardAgendaPanelProps = {
   createRequestKey: number;
   todayRequestKey: number;
   initialFollowUpId?: number | null;
+  onInitialFollowUpHandled?: () => void;
   onTodayRequestHandled?: () => void;
   onSelectClient: (clientId: number) => void;
 };
@@ -100,6 +101,7 @@ export default function DashboardAgendaPanel({
   createRequestKey,
   todayRequestKey,
   initialFollowUpId = null,
+  onInitialFollowUpHandled,
   onTodayRequestHandled,
   onSelectClient,
 }: DashboardAgendaPanelProps) {
@@ -180,16 +182,20 @@ export default function DashboardAgendaPanel({
   }, [onTodayRequestHandled, todayRequestKey]);
 
   useEffect(() => {
+    if (!initialFollowUpId) consumedInitialFollowUpId.current = null;
+  }, [initialFollowUpId]);
+
+  useEffect(() => {
     let ignore = false;
 
     async function loadAgenda() {
       setIsLoading(true);
       setError("");
+      const targetFollowUpId = initialFollowUpId && consumedInitialFollowUpId.current !== initialFollowUpId
+        ? initialFollowUpId
+        : null;
 
       try {
-        const targetFollowUpId = initialFollowUpId && consumedInitialFollowUpId.current !== initialFollowUpId
-          ? initialFollowUpId
-          : null;
         if (targetFollowUpId) {
           const exact = await fetchAcompanhamento(targetFollowUpId);
           if (ignore) return;
@@ -224,6 +230,7 @@ export default function DashboardAgendaPanel({
         console.error("AGENDA_LOAD_FAILED");
         setError("Não foi possível carregar os acompanhamentos.");
       } finally {
+        if (targetFollowUpId && !ignore) onInitialFollowUpHandled?.();
         if (!ignore) setIsLoading(false);
       }
     }
@@ -233,7 +240,7 @@ export default function DashboardAgendaPanel({
     return () => {
       ignore = true;
     };
-  }, [agendaView, clientFilter, debouncedSearch, initialFollowUpId, page, periodQuery, priority, refreshKey, responsibleFilter, status, type, viewMode]);
+  }, [agendaView, clientFilter, debouncedSearch, initialFollowUpId, onInitialFollowUpHandled, page, periodQuery, priority, refreshKey, responsibleFilter, status, type, viewMode]);
 
   useEffect(() => {
     if (!selectedFollowUpId || isLoading) return;

@@ -559,6 +559,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     handleSetActivePage("inbox");
   }, [handleSetActivePage]);
 
+  const consumeInboxConversationTarget = useCallback(() => {
+    setInboxConversationId(null);
+  }, []);
+
+  const consumeAgendaFollowUpTarget = useCallback(() => {
+    setAgendaFollowUpId(null);
+  }, []);
+
   const openKanbanBusiness = useCallback((businessId: number) => {
     setKanbanBusinessId(businessId);
     handleSetActivePage("kanban");
@@ -970,7 +978,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
               )}
 
               {activePage === "inbox" && leadsCommunicationEnabled && authSession && (
-                <DashboardInboxPanel authSession={authSession} initialConversationId={inboxConversationId} onOpenBusiness={openKanbanBusiness} />
+                <DashboardInboxPanel authSession={authSession} initialConversationId={inboxConversationId} onInitialConversationHandled={consumeInboxConversationTarget} onOpenBusiness={openKanbanBusiness} />
               )}
               {activePage === "usuarios" && authSession && (
                 <DashboardUserSecurityPanel mode="users" authSession={authSession} onToast={setToast} />
@@ -1028,6 +1036,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   createRequestKey={agendaCreateRequestKey}
                   todayRequestKey={agendaTodayRequestKey}
                   initialFollowUpId={agendaFollowUpId}
+                  onInitialFollowUpHandled={consumeAgendaFollowUpTarget}
                   onTodayRequestHandled={() => setAgendaTodayRequestKey(0)}
                   onSelectClient={handleSelectClient}
                 />

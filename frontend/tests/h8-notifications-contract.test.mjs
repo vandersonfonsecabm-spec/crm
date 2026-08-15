@@ -31,7 +31,9 @@ test("H8 resolve destino exato e preserva query na navegação", () => {
   assert.match(service, /DEAL.*negocioId/);
   assert.match(inbox, /syncedInitialConversationId/);
   assert.match(inbox, /setSelectedId\(initialConversationId\)/);
+  assert.match(inbox, /onInitialConversationHandled/);
   assert.match(agenda, /consumedInitialFollowUpId/);
+  assert.match(agenda, /onInitialFollowUpHandled/);
 });
 
 test("H8 painel informa estado e prioridade para tecnologias assistivas", () => {

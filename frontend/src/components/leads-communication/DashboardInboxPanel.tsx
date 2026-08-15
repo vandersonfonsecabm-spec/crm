@@ -37,6 +37,7 @@ import "./LeadsCommunication.css";
 type InboxPanelProps = {
   authSession: AuthSession;
   initialConversationId?: number | null;
+  onInitialConversationHandled?: () => void;
   onOpenBusiness: (businessId: number) => void;
 };
 
@@ -48,7 +49,7 @@ type ComposerMode = "reply" | "note";
 
 const conversationStates: ConversationStatus[] = ["NOVA", "AGUARDANDO_ATENDIMENTO", "EM_ATENDIMENTO", "AGUARDANDO_CLIENTE", "PENDENTE", "ENCERRADA"];
 
-export default function DashboardInboxPanel({ authSession, initialConversationId, onOpenBusiness }: InboxPanelProps) {
+export default function DashboardInboxPanel({ authSession, initialConversationId, onInitialConversationHandled, onOpenBusiness }: InboxPanelProps) {
   const [queueScope, setQueueScope] = useState<QueueScope>("aguardando");
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | "">("");
   const [slaFilter, setSlaFilter] = useState<SlaFilter>("");
@@ -246,7 +247,8 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
     setLeaseOwned(false);
     setSelectedId(initialConversationId);
     setMobileView("conversation");
-  }, [initialConversationId]);
+    onInitialConversationHandled?.();
+  }, [initialConversationId, onInitialConversationHandled]);
 
   useEffect(() => {
     const viewport = messageViewport.current;
