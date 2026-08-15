@@ -514,6 +514,50 @@ export type CommunicationConversation = {
   lembrete?: { id: number; dataHora: string; status: string; titulo: string } | null;
 };
 
+export type NotificationTargetKind = "CONVERSATION" | "FOLLOW_UP" | "DEAL";
+
+export type NotificationItem = {
+  id: number;
+  tipo: string;
+  prioridade: "NORMAL" | "ATENCAO" | "CRITICA" | string;
+  titulo: string;
+  corpo: string | null;
+  ocorridoEm: string;
+  venceEm: string | null;
+  lidaEm: string | null;
+  resolvidaEm: string | null;
+  adiadaAte: string | null;
+  nova: boolean;
+  adiada: boolean;
+  destino: { tipo: NotificationTargetKind; id: number; rota: string } | null;
+};
+
+export type NotificationListResponse = {
+  data: NotificationItem[];
+  snoozed: NotificationItem[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+
+export type NotificationSummary = {
+  unread: number;
+  total: number;
+  loadedAt: string;
+};
+
+export type NotificationSettings = {
+  empresa: {
+    antecedenciaPadraoMinutos: number;
+    diasSemContato: number;
+    diasProdutoDesatualizado: number;
+    diasAntesVencimento: number;
+    habilitada: boolean;
+  } | null;
+  usuario: {
+    antecedenciaPadraoMinutos: number;
+    habilitada: boolean;
+  };
+};
+
 export type Customer360TimelineType = "TODOS" | "MENSAGEM" | "LIGACAO" | "VISITA" | "PROPOSTA" | "NEGOCIO" | "ACOMPANHAMENTO" | "NOTA" | "QUALIFICACAO";
 
 export type Customer360Person = { id: number; nome: string };
@@ -2110,6 +2154,10 @@ export async function deleteClienteOnBackend(client: Client) {
   await requestCliente("DELETE", `/clientes/${client.backendId}`, { revisao: client.revision });
 }
 
+export async function fetchAcompanhamento(id: number) {
+  return requestApiGetAuthenticated<ApiAcompanhamento>(`/acompanhamentos/${id}`);
+}
+
 export async function archiveClienteOnBackend(client: Client) {
   if (!client.backendId || !hasRemoteApi()) throw new Error("Cliente não sincronizado.");
   const response = await requestApiWrite<ApiCliente>("POST", `/clientes/${client.backendId}/arquivar`, { revisao: client.revision });
@@ -2457,6 +2505,46 @@ export async function fetchAutomationFailures(params: { page?: number; limit?: n
 
 export async function retryAutomationJob(id: number) {
   return requestApiWrite<AutomationExecution["jobs"][number]>("POST", `/automacoes/jobs/${id}/reprocessar`, {});
+}
+
+export async function fetchNotificationSummary(options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<NotificationSummary>("/notificacoes/resumo", options);
+}
+
+export async function fetchNotifications(params: { page?: number; limit?: number } = {}, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<NotificationListResponse>(`/notificacoes${toQueryString(params)}`, options);
+}
+
+export async function markNotificationRead(id: number) {
+  return requestApiWrite<NotificationItem>("POST", `/notificacoes/${id}/read`, {});
+}
+
+export async function markAllNotificationsRead(cutoffAt?: string) {
+  return requestApiWrite<{ marked: number; cutoffAt: string }>("POST", "/notificacoes/read-all", cutoffAt ? { cutoffAt } : {});
+}
+
+export async function snoozeNotification(id: number, payload: { minutes?: 30 | 60 | 1440; snoozedUntil?: string }) {
+  return requestApiWrite<NotificationItem>("POST", `/notificacoes/${id}/snooze`, payload as Record<string, unknown>);
+}
+
+export async function unsnoozeNotification(id: number) {
+  return requestApiWrite<NotificationItem>("POST", `/notificacoes/${id}/unsnooze`, {});
+}
+
+export async function fetchNotificationSettings() {
+  return requestApiGetAuthenticated<NotificationSettings>("/notificacao-configuracao");
+}
+
+export async function updateNotificationSettings(payload: Partial<NonNullable<NotificationSettings["empresa"]>>) {
+  return requestApiWrite<{ empresa: NonNullable<NotificationSettings["empresa"]> }>("PATCH", "/notificacao-configuracao", payload as Record<string, unknown>);
+}
+
+export async function fetchNotificationPreferences() {
+  return requestApiGetAuthenticated<{ usuario: NotificationSettings["usuario"] }>("/notificacao-preferencias");
+}
+
+export async function updateNotificationPreferences(payload: Partial<NotificationSettings["usuario"]>) {
+  return requestApiWrite<{ usuario: NotificationSettings["usuario"] }>("PATCH", "/notificacao-preferencias", payload as Record<string, unknown>);
 }
 
 export async function fetchPlatformTenants(params: { page?: number; limit?: number; busca?: string } = {}, options: { signal?: AbortSignal } = {}) {

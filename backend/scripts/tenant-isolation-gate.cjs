@@ -7,9 +7,9 @@ const { relationSpecs } = require("./check-tenant-relation-integrity.cjs");
 const { classifyPolymorphicRows, POLYMORPHIC_ROWS_QUERY } = require("./tenant-isolation-verifier-utils.cjs");
 const { sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation-log-utils.cjs");
 
-const EXPECTED_RELATION_COUNT = 89;
+const EXPECTED_RELATION_COUNT = 91;
 const TENANT_RELATION_MANIFEST_VERSION = 1;
-const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "35d8887a16dd96aa841c39cd9475f1564a428383af9490f46b9b00e9ca5454ec";
+const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "9ad363cbdacb86137ba6c512146e6a5ff78e3a6357e7fa07ea4de9612793e15a";
 const DEFAULT_MIGRATION_NAME = "20260801123000_enforce_tenant_safe_relations";
 const DEFAULT_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma", "migrations");
 const DEFAULT_POSTGRES_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma-postgres", "migrations");
@@ -48,6 +48,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260811120000_add_meta_credential_store": "41e080170602b2ea9adbd2659829d12ba7637bc989263dfaf1bff21910e924af",
     "20260811130000_add_meta_oauth_state_binding": "08f76dce5d9b4c1b0d44990d116dfb60dd373bb8b988438e1037a9fc9571c34c",
     "20260813150000_add_customer_archive": "5846035e8e1805da9398d6da844d30ae73fa1893b017b7aea8a118bcdf6ec38e",
+    "20260815120000_add_h8_notifications": "d9e251b64eed2f4f8c44581437ad64d92c7319bf17482f58a066256cf5a80119",
   }),
   postgresql: Object.freeze({
     "20260728090000_postgres_baseline": "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
@@ -59,6 +60,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260811120000_add_meta_credential_store": "c5efb656d5483d53ac48eabb33753fad93107362ebc74b91ca0ca036985ab1ff",
     "20260811130000_add_meta_oauth_state_binding": "403951c8fe5fba9e8bc57d739fafab2ad6216c6052ee48380bd270a3586935f4",
     "20260813150000_add_customer_archive": "f473f5f5b0e846b88570860d045027cfd1174c4d5e1d69d6d9008ea4cbd660a7",
+    "20260815120000_add_h8_notifications": "eb3876bffe95149f0ba7e556b00ea2fe11b7e05690cf9bb98db8612dab2360b5",
   }),
 });
 
@@ -89,6 +91,8 @@ const CASCADE_RELATIONS = new Set([
   "AutomacaoExecucao.regraId->AutomacaoRegra",
   "AutomacaoAcaoJob.execucaoId->AutomacaoExecucao",
   "AutomacaoRoundRobinEstado.regraId->AutomacaoRegra",
+  "Notificacao.destinatarioId->Usuario",
+  "PreferenciaNotificacaoUsuario.usuarioId->Usuario",
 ]);
 
 const GLOBAL_RELATION_EXCEPTIONS = Object.freeze({
@@ -202,6 +206,12 @@ const MIGRATION_REGISTRY = Object.freeze({
     relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
     sqliteSha256: "5846035e8e1805da9398d6da844d30ae73fa1893b017b7aea8a118bcdf6ec38e",
     postgresSha256: "f473f5f5b0e846b88570860d045027cfd1174c4d5e1d69d6d9008ea4cbd660a7",
+  }),
+  "20260815120000_add_h8_notifications": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: "d9e251b64eed2f4f8c44581437ad64d92c7319bf17482f58a066256cf5a80119",
+    postgresSha256: "eb3876bffe95149f0ba7e556b00ea2fe11b7e05690cf9bb98db8612dab2360b5",
   }),
 });
 

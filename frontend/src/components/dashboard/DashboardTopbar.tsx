@@ -1,6 +1,7 @@
 import { Building2, ChevronDown, LogOut, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import DashboardCommandSearch from "./DashboardCommandSearch";
+import DashboardNotifications from "./DashboardNotifications";
 import DashboardQuickActions from "./DashboardQuickActions";
 import type { AuthSession } from "../../services/crmApi";
 import type { ActivePage, Client } from "../../types/dashboard";
@@ -18,6 +19,8 @@ type DashboardTopbarProps = {
   authSession: AuthSession | null;
   canManageIntegrations: boolean;
   leadsCommunicationEnabled: boolean;
+  onOpenNotificationTarget: (target: { tipo: "CONVERSATION" | "FOLLOW_UP" | "DEAL"; id: number; rota: string }) => void;
+  canManageNotifications: boolean;
   readOnly?: boolean;
 };
 
@@ -34,6 +37,8 @@ export default function DashboardTopbar({
   authSession,
   canManageIntegrations,
   leadsCommunicationEnabled,
+  onOpenNotificationTarget,
+  canManageNotifications,
   readOnly = false,
 }: DashboardTopbarProps) {
   return (
@@ -74,6 +79,8 @@ export default function DashboardTopbar({
               }}
             />
           )}
+
+          {!readOnly && <DashboardNotifications canManage={canManageNotifications} onOpenTarget={onOpenNotificationTarget} />}
 
           <UserMenu authSession={authSession} onLogout={onLogout} onOpenProfile={onOpenProfile} readOnly={readOnly} />
         </div>

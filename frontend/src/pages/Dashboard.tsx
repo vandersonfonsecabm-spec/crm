@@ -136,6 +136,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [blingReturnMessage, setBlingReturnMessage] = useState("");
   const [agendaCreateRequestKey, setAgendaCreateRequestKey] = useState(0);
   const [agendaTodayRequestKey, setAgendaTodayRequestKey] = useState(0);
+  const [agendaFollowUpId, setAgendaFollowUpId] = useState<number | null>(null);
   const kanbanStageRequest = { group: "pipeline" as const, key: 0 };
   const [leadsCreateRequestKey, setLeadsCreateRequestKey] = useState(0);
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
@@ -158,6 +159,16 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       : requestedActivePage === "usuarios" && !canManageUsers
         ? "comercial"
       : requestedActivePage;
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const conversationId = Number(params.get("conversationId"));
+    const followUpId = Number(params.get("acompanhamentoId"));
+    const businessId = Number(params.get("negocioId"));
+    setInboxConversationId(activePage === "inbox" && Number.isInteger(conversationId) && conversationId > 0 ? conversationId : null);
+    setAgendaFollowUpId(activePage === "agenda" && Number.isInteger(followUpId) && followUpId > 0 ? followUpId : null);
+    setKanbanBusinessId(activePage === "kanban" && Number.isInteger(businessId) && businessId > 0 ? businessId : null);
+  }, [activePage, location.search]);
   const isInboxPage = activePage === "inbox";
   const isWhatsAppIntegrationDetail = activePage === "integracoes" && resolvedNavigation.detail === "whatsapp";
   const usingNegociosKanban = activePage === "kanban" && negociosKanbanEnabled;
@@ -558,6 +569,23 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     handleSetActivePage("agenda");
   }, [handleSetActivePage]);
 
+  const openNotificationTarget = useCallback((target: { tipo: "CONVERSATION" | "FOLLOW_UP" | "DEAL"; id: number; rota: string }) => {
+    invalidateCustomerDrawerFocusSession();
+    setIsCustomerDrawerOpen(false);
+    if (target.tipo === "CONVERSATION") {
+      setInboxConversationId(target.id);
+      navigate({ pathname: getDashboardPath("inbox"), search: `?conversationId=${encodeURIComponent(target.id)}` });
+      return;
+    }
+    if (target.tipo === "FOLLOW_UP") {
+      setAgendaFollowUpId(target.id);
+      navigate({ pathname: getDashboardPath("agenda"), search: `?acompanhamentoId=${encodeURIComponent(target.id)}` });
+      return;
+    }
+    setKanbanBusinessId(target.id);
+    navigate({ pathname: getDashboardPath("kanban"), search: `?negocioId=${encodeURIComponent(target.id)}` });
+  }, [invalidateCustomerDrawerFocusSession, navigate]);
+
   const openCustomerContext = useCallback((destination: "INBOX" | "KANBAN" | "AGENDA", id: number) => {
     if (destination === "INBOX") {
       openInboxConversation(id);
@@ -835,6 +863,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             authSession={authSession}
             canManageIntegrations={canManageIntegrations}
             leadsCommunicationEnabled={leadsCommunicationEnabled}
+            onOpenNotificationTarget={openNotificationTarget}
+            canManageNotifications={authSession?.papel === "ADMIN" || authSession?.papel === "GERENTE"}
           />
 
           <main ref={contentRef} tabIndex={-1} className={`crm-content mx-auto w-full max-w-[1680px] px-4 pb-24 pt-5 sm:px-5 lg:px-7 lg:pb-8${isInboxPage ? " crm-content--inbox" : ""}`} id="crm-main-content">
@@ -997,6 +1027,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   clients={clients}
                   createRequestKey={agendaCreateRequestKey}
                   todayRequestKey={agendaTodayRequestKey}
+                  initialFollowUpId={agendaFollowUpId}
                   onTodayRequestHandled={() => setAgendaTodayRequestKey(0)}
                   onSelectClient={handleSelectClient}
                 />

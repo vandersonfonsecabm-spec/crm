@@ -148,6 +148,7 @@ model Acompanhamento {
   updatedAt       DateTime                 @updatedAt
   historico       HistoricoAcompanhamento[]
   automacaoEventosInternos AutomacaoEventoInterno[]
+  notificacaoAntecedenciaMinutos Int?
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -238,6 +239,9 @@ model Empresa {
   tokensRecuperacaoSenha     TokenRecuperacaoSenha[]
   convitesUsuario            ConviteUsuario[]
   auditoriasSeguranca        AuditoriaSeguranca[]
+  notificacoes               Notificacao[]
+  configuracaoNotificacao    ConfiguracaoNotificacaoEmpresa?
+  preferenciasNotificacao    PreferenciaNotificacaoUsuario[]
 }
 
 model Usuario {
@@ -286,6 +290,8 @@ model Usuario {
   sessoes                     SessaoUsuario[]
   tokensRecuperacaoSenha      TokenRecuperacaoSenha[]
   convitesCriados             ConviteUsuario[]
+  notificacoesRecebidas       Notificacao[] @relation("NotificacaoDestinatario")
+  preferenciasNotificacao    PreferenciaNotificacaoUsuario[]
 
   @@unique([empresaId, email])
   @@unique([empresaId, id])
@@ -1279,6 +1285,69 @@ model AutomacaoEventoInterno {
   @@index([empresaId, leadId])
   @@index([empresaId, negocioId])
   @@index([empresaId, acompanhamentoId])
+}
+
+model Notificacao {
+  id                  Int       @id @default(autoincrement())
+  empresaId           Int
+  empresa             Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  destinatarioId      Int
+  destinatario        Usuario   @relation("NotificacaoDestinatario", fields: [empresaId, destinatarioId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  tipo                String
+  prioridade          String    @default("NORMAL")
+  origemTipo          String
+  origemId            Int?
+  occurrenceKey       String
+  dedupeKey           String
+  titulo              String
+  corpo               String?
+  alvoTipo            String
+  alvoId              Int?
+  alvoSubId           Int?
+  ocorridoEm          DateTime
+  venceEm             DateTime?
+  lidaEm              DateTime?
+  resolvidaEm         DateTime?
+  adiadaAte           DateTime?
+  presentationVersion Int       @default(1)
+  versao              Int       @default(1)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([empresaId, destinatarioId, occurrenceKey])
+  @@unique([empresaId, destinatarioId, dedupeKey])
+  @@index([empresaId, destinatarioId, resolvidaEm, lidaEm])
+  @@index([empresaId, destinatarioId, adiadaAte])
+  @@index([empresaId, ocorridoEm])
+  @@index([empresaId, origemTipo, origemId])
+}
+
+model ConfiguracaoNotificacaoEmpresa {
+  id                         Int      @id @default(autoincrement())
+  empresaId                  Int      @unique
+  empresa                    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  diasSemContato             Int      @default(7)
+  diasProdutoDesatualizado   Int      @default(30)
+  diasAntesVencimento        Int      @default(7)
+  antecedenciaPadraoMinutos  Int      @default(30)
+  habilitada                 Boolean  @default(false)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model PreferenciaNotificacaoUsuario {
+  id                        Int      @id @default(autoincrement())
+  empresaId                 Int
+  usuarioId                 Int
+  empresa                   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuario                   Usuario  @relation(fields: [empresaId, usuarioId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  antecedenciaPadraoMinutos Int      @default(30)
+  habilitada                Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@unique([empresaId, usuarioId])
+  @@index([empresaId, usuarioId])
 }
 
 model EmpresaFuncionalidade {

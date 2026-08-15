@@ -15,6 +15,8 @@ const relationSpecs = Object.freeze([
   ["commercial", "Acompanhamento", "autorId", "Usuario"],
   ["commercial", "Acompanhamento", "concluidoPorId", "Usuario"],
   ["commercial", "Acompanhamento", "canceladoPorId", "Usuario"],
+  ["notifications", "Notificacao", "destinatarioId", "Usuario"],
+  ["notifications", "PreferenciaNotificacaoUsuario", "usuarioId", "Usuario"],
   ["commercial", "HistoricoAcompanhamento", "acompanhamentoId", "Acompanhamento"],
   ["commercial", "HistoricoAcompanhamento", "autorId", "Usuario"],
   ["commercial", "HistoricoAcompanhamento", "responsavelAnteriorId", "Usuario"],

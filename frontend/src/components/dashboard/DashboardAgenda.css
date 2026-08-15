@@ -331,3 +331,4 @@
     transition: none;
   }
 }
+.agenda-row--notification-target { background: color-mix(in srgb, var(--brand-subtle) 55%, transparent); border-left-color: var(--brand); }

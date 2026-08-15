@@ -7,6 +7,7 @@ import {
   concluirAcompanhamento,
   createAcompanhamento,
   fetchAgendaDashboardContext,
+  fetchAcompanhamento,
   fetchAcompanhamentoHistorico,
   fetchAcompanhamentos,
   fetchAgendaOptions,
@@ -34,6 +35,7 @@ type DashboardAgendaPanelProps = {
   clients: Client[];
   createRequestKey: number;
   todayRequestKey: number;
+  initialFollowUpId?: number | null;
   onTodayRequestHandled?: () => void;
   onSelectClient: (clientId: number) => void;
 };
@@ -97,10 +99,12 @@ export default function DashboardAgendaPanel({
   clients,
   createRequestKey,
   todayRequestKey,
+  initialFollowUpId = null,
   onTodayRequestHandled,
   onSelectClient,
 }: DashboardAgendaPanelProps) {
   const [items, setItems] = useState<ApiAcompanhamento[]>([]);
+  const [selectedFollowUpId, setSelectedFollowUpId] = useState<number | null>(initialFollowUpId);
   const [nextCommitment, setNextCommitment] = useState<ApiAcompanhamento | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -182,6 +186,15 @@ export default function DashboardAgendaPanel({
       setError("");
 
       try {
+        if (initialFollowUpId) {
+          const exact = await fetchAcompanhamento(initialFollowUpId);
+          if (ignore) return;
+          setItems([exact]);
+          setTotal(1);
+          setSelectedFollowUpId(exact.id);
+          setIsLoading(false);
+          return;
+        }
         const params: AcompanhamentoQueryParams = {
           busca: debouncedSearch,
           clienteId: clientFilter === "Todos" ? undefined : Number(clientFilter),
@@ -215,7 +228,13 @@ export default function DashboardAgendaPanel({
     return () => {
       ignore = true;
     };
-  }, [agendaView, clientFilter, debouncedSearch, page, periodQuery, priority, refreshKey, responsibleFilter, status, type, viewMode]);
+  }, [agendaView, clientFilter, debouncedSearch, initialFollowUpId, page, periodQuery, priority, refreshKey, responsibleFilter, status, type, viewMode]);
+
+  useEffect(() => {
+    if (!selectedFollowUpId || isLoading) return;
+    const element = document.querySelector<HTMLElement>(`[data-follow-up-id="${selectedFollowUpId}"]`);
+    element?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [isLoading, selectedFollowUpId, items]);
 
   useEffect(() => {
     let ignore = false;
@@ -467,6 +486,7 @@ export default function DashboardAgendaPanel({
               onHistory={openHistory}
               onReschedule={openReschedule}
               onSelectClient={onSelectClient}
+              selectedFollowUpId={selectedFollowUpId}
             />}
             {!isLoading && viewMode === "week" && items.length > 0 && (
               <AgendaWeekView
@@ -633,6 +653,7 @@ export function AgendaTemporalList({
   onHistory,
   onReschedule,
   onSelectClient,
+  selectedFollowUpId,
 }: {
   disabled: boolean;
   groups: AgendaTemporalGroup[];
@@ -641,6 +662,7 @@ export function AgendaTemporalList({
   onHistory: (item: ApiAcompanhamento) => void;
   onReschedule: (item: ApiAcompanhamento) => void;
   onSelectClient: (clientId: number) => void;
+  selectedFollowUpId?: number | null;
 }) {
   return (
     <div className="agenda-temporal-list">
@@ -662,6 +684,7 @@ export function AgendaTemporalList({
                 onHistory={onHistory}
                 onReschedule={onReschedule}
                 onSelectClient={onSelectClient}
+                selectedFollowUpId={selectedFollowUpId}
                 temporalGroup={group.key}
               />
             ))}
@@ -734,6 +757,7 @@ function AgendaRow({
   onReschedule,
   onAction,
   temporalGroup,
+  selectedFollowUpId,
 }: {
   item: ApiAcompanhamento;
   disabled: boolean;
@@ -743,6 +767,7 @@ function AgendaRow({
   onReschedule: (item: ApiAcompanhamento) => void;
   onAction: (item: ApiAcompanhamento, action: "iniciar" | "concluir" | "reabrir" | "cancelar") => void;
   temporalGroup?: AgendaTemporalGroupKey;
+  selectedFollowUpId?: number | null;
 }) {
   const isNeutral = item.status === "CONCLUIDO" || item.status === "CANCELADO";
   const temporalEmphasis = temporalGroup
@@ -771,7 +796,7 @@ function AgendaRow({
     ...(!isNeutral ? [{ label: "Cancelar", disabled: disabled || !item.permissoes?.cancelar, onClick: () => onAction(item, "cancelar") }] : []),
   ];
   return (
-    <article className={`agenda-row ${temporalRowClass} px-4 py-3 transition-colors hover:bg-[var(--bg-muted)] ${isNeutral ? "bg-[var(--bg-muted)]" : ""}`} data-temporal-emphasis={temporalEmphasis}>
+    <article className={`agenda-row ${temporalRowClass} px-4 py-3 transition-colors hover:bg-[var(--bg-muted)] ${isNeutral ? "bg-[var(--bg-muted)]" : ""} ${selectedFollowUpId === item.id ? "agenda-row--notification-target" : ""}`} data-follow-up-id={item.id} data-temporal-emphasis={temporalEmphasis}>
       <div className="grid min-w-0 gap-3 lg:grid-cols-[112px_minmax(0,1fr)_120px_112px] lg:items-center">
         <div className="min-w-0">
           <p className={`text-sm font-semibold tabular-nums ${timeTone}`}>{formatTime(item.dataHora)}</p>

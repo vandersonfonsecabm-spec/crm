@@ -25,6 +25,12 @@ function shouldStartAutomationWorker(env = process.env) {
   return env.NODE_ENV !== "test" && (flag === "true" || flag === "1");
 }
 
+function shouldStartNotificationWorker(env = process.env) {
+  if (maintenanceReadOnlyEnabled(env)) return false;
+  const flag = String(env.NOTIFICATIONS_WORKER_ENABLED || "").trim().toLowerCase();
+  return env.NODE_ENV !== "test" && (flag === "true" || flag === "1");
+}
+
 function readAutomationWorkerConfig(env = process.env) {
   return {
     batchSize: boundedInteger(env.AUTOMATION_WORKER_BATCH_SIZE, WORKER_DEFAULTS.batchSize, ...WORKER_LIMITS.batchSize),
@@ -45,6 +51,7 @@ function readAutomationWorkerConfig(env = process.env) {
 
 function startAutomationWorker({
   service,
+  notificationService = null,
   env = process.env,
   logger = console,
   workerId = `automation-worker-${process.pid}-${crypto.randomUUID()}`,
@@ -56,7 +63,9 @@ function startAutomationWorker({
     workerInstanceId: workerId,
     provider: automationProvider(env),
   });
-  if (!service || !shouldStartAutomationWorker(env)) {
+  const automationEnabled = shouldStartAutomationWorker(env);
+  const notificationsEnabled = shouldStartNotificationWorker(env);
+  if ((!service && !notificationService) || (!automationEnabled && !notificationsEnabled)) {
     eventLogger.info("worker_disabled", { status: "disabled" });
     return { started: false, async stop() {} };
   }
@@ -69,6 +78,8 @@ function startAutomationWorker({
 
   eventLogger.info("worker_started", {
     status: "started",
+    automationEnabled,
+    notificationsEnabled,
     pollIntervalMs: config.pollIntervalMs,
     batchSize: config.batchSize,
     leaseMs: config.leaseMs,
@@ -81,16 +92,22 @@ function startAutomationWorker({
     running = true;
     const startedAt = Date.now();
     try {
-      await service.processDueJobs({
-        now: new Date(),
-        limit: config.batchSize,
-        leaseOwner: workerId,
-        leaseMs: config.leaseMs,
-        executionTimeoutMs: config.executionTimeoutMs,
-        maxAttempts: config.maxAttempts,
-        supportedActions: WORKER_ACTION_TYPES,
-        onEvent: eventLogger.event,
-      });
+      const now = new Date();
+      if (automationEnabled && service) {
+        await service.processDueJobs({
+          now,
+          limit: config.batchSize,
+          leaseOwner: workerId,
+          leaseMs: config.leaseMs,
+          executionTimeoutMs: config.executionTimeoutMs,
+          maxAttempts: config.maxAttempts,
+          supportedActions: WORKER_ACTION_TYPES,
+          onEvent: eventLogger.event,
+        });
+      }
+      if (notificationsEnabled && notificationService?.processDue) {
+        await notificationService.processDue({ now, limit: config.batchSize });
+      }
     } catch (error) {
       eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt) });
     } finally {
@@ -125,9 +142,11 @@ async function runAutomationWorkerProcess({ env = process.env, logger = console 
   require("dotenv").config();
   const { createPrismaClient } = require("../database/prisma-client");
   const { createAutomationService } = require("./service");
+  const { createNotificationService } = require("../notifications/service");
   const prisma = createPrismaClient({ env });
   const service = createAutomationService({ prisma, env });
-  const worker = startAutomationWorker({ service, env, logger });
+  const notificationService = createNotificationService({ prisma, env });
+  const worker = startAutomationWorker({ service, notificationService, env, logger });
   if (!worker.started) {
     await prisma.$disconnect();
     return 0;
@@ -187,5 +206,6 @@ module.exports = {
   readAutomationWorkerConfig,
   runAutomationWorkerProcess,
   shouldStartAutomationWorker,
+  shouldStartNotificationWorker,
   startAutomationWorker,
 };

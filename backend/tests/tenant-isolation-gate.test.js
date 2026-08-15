@@ -31,15 +31,15 @@ const {
 const backendDir = path.resolve(__dirname, "..");
 const migrationDir = path.join(backendDir, "prisma", "migrations");
 const currentMigration = "20260801123000_enforce_tenant_safe_relations";
-const latestMigration = "20260813150000_add_customer_archive";
+const latestMigration = "20260815120000_add_h8_notifications";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 const historicalSourceDatabase = requiredEnv("CRM_TEST_SOURCE_DATABASE_PATH");
 
-test("arquitetura atual cobre as 89 relacoes e as excecoes documentadas", () => {
+test("arquitetura atual cobre as 91 relacoes e as excecoes documentadas", () => {
   const result = inspectArchitecture();
   assert.deepEqual(result.failures, []);
-  assert.equal(result.relationCount, 89);
+  assert.equal(result.relationCount, 91);
   assert.equal(result.relationManifestHash, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(tenantRelationManifestHash(), EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(MIGRATION_REGISTRY[currentMigration].relationManifestSha256, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
@@ -171,7 +171,7 @@ test("pre-migration aceita somente tabelas novas da migration registrada", () =>
   existingTables.add("AutomacaoExecucao");
   existingTables.add("Lead");
   existingTables.add("Negocio");
-  assert.equal(relationSpecsForExistingSchema(existingTables, { allowedMissingTables: createdTables }).length, 85);
+  assert.equal(relationSpecsForExistingSchema(existingTables, { allowedMissingTables: createdTables }).length, 87);
 
   existingTables.delete("Cliente");
   assert.throws(
@@ -211,8 +211,8 @@ test("pre-migration preserva o upgrade canonico SQLite de 9 para 32 migrations",
       migrationName: latestMigration,
     });
     assert.equal(result.safe, true);
-    assert.equal(result.relationCount, 89);
-    assert.ok(result.checkedRelationCount > 0 && result.checkedRelationCount < 89);
+    assert.equal(result.relationCount, 91);
+    assert.ok(result.checkedRelationCount > 0 && result.checkedRelationCount < 91);
   } finally {
     removeDatabase(databasePath);
   }
@@ -236,7 +236,7 @@ test("pre-migration admite somente a relacao exata ligada a migration Meta pende
     columnsByTable,
     unavailableRelationKeys: new Set(["IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao"]),
   };
-  assert.equal(relationSpecsForExistingSchema(tables, options).length, 87);
+  assert.equal(relationSpecsForExistingSchema(tables, options).length, 89);
   assert.throws(
     () => relationSpecsForExistingSchema(tables, { ...options, unavailableRelationKeys: new Set() }),
     { code: "TENANT_GATE_SCHEMA_INCOMPLETE" },
@@ -262,7 +262,7 @@ test("pre-migration inspeciona a relacao quando a coluna pendente ja existe", ()
   assert.equal(relationSpecsForExistingSchema(tables, {
     columnsByTable,
     unavailableRelationKeys: new Set(["IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao"]),
-  }).length, 89);
+  }).length, 91);
 
   columnsByTable.get("IntegracaoOAuthState").delete("usuarioId");
   assert.throws(

@@ -22,7 +22,7 @@ after(async () => {
   await Promise.all([prisma.$disconnect(), concurrentPrisma.$disconnect()]);
 });
 
-test("PostgreSQL possui as 89 FKs compostas tenant-scoped", async () => {
+test("PostgreSQL possui as 91 FKs compostas tenant-scoped", async () => {
   const constraints = await prisma.$queryRawUnsafe(`
     SELECT child.relname AS "childTable",
            parent.relname AS "parentTable",
@@ -33,7 +33,7 @@ test("PostgreSQL possui as 89 FKs compostas tenant-scoped", async () => {
      WHERE constraint_row.contype = 'f'
        AND child.relnamespace = current_schema()::regnamespace`);
 
-  assert.equal(relationSpecs.length, 89);
+  assert.equal(relationSpecs.length, 91);
   for (const [, childTable, childField, parentTable, tenantField = "empresaId"] of relationSpecs) {
     const expectedForeign = normalizeConstraint(`FOREIGN KEY (${tenantField}, ${childField})`);
     const expectedReference = normalizeConstraint(`REFERENCES ${parentTable}(empresaId, id)`);

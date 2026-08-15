@@ -21,6 +21,7 @@ const { mountCommercialProposalRoutes } = require("./commercial-proposals/routes
 const { mountCustomer360Routes } = require("./customer-360/routes");
 const { mountAutomationRoutes } = require("./automations/routes");
 const { mountPlatformRoutes } = require("./platform/routes");
+const { mountNotificationRoutes } = require("./notifications/routes");
 const { isValidCpfCnpj } = require("./customer-360/service");
 const { createAgendaService } = require("./agenda/service");
 const {
@@ -97,6 +98,7 @@ mountCommercialProposalRoutes({ app, prisma, authenticate: requireAuth });
 mountCustomer360Routes({ app, prisma, authenticate: requireAuth });
 mountAutomationRoutes({ app, prisma, authenticate: requireAuth });
 mountPlatformRoutes({ app, prisma, authenticate: requireAuth });
+mountNotificationRoutes({ app, prisma, authenticate: requireAuth });
 
 app.use(
   ["/categorias-produtos", "/produtos", "/estoque"],

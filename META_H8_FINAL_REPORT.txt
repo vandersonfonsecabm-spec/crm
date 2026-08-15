@@ -1,0 +1,48 @@
+H8_NOTIFICATION_CENTER_SHIP = NAO DECLARADO
+TERMINAL_STATE = H8_SOURCE_READY_RELEASE_BLOCKED
+
+Objetivo
+Implementar a primeira entrega in-app da Central de Notificacoes e Lembretes,
+reutilizando a infraestrutura duravel da H7 e mantendo a ativacao desligada por
+padrao.
+
+Implementado no codigo
+- Modelo aditivo Notificacao, configuracao da empresa, preferencia do usuario e
+  antecedencia opcional no Acompanhamento.
+- Migration SQLite e migration PostgreSQL equivalentes, deny-by-default.
+- Servico bounded e tenant-scoped para projecao de Conversa e Acompanhamento,
+  leitura, leitura em massa com cutoff, adiamento, reativacao e resolucao.
+- Badge/painel in-app no shell, polling moderado, estados de erro sem zerar o
+  ultimo valor e configuracoes de usuario/empresa.
+- Destinos estruturados para Conversa, Acompanhamento e Negocio, convertidos por
+  allowlist em rotas internas.
+- Worker H8 separado por flag NOTIFICATIONS_WORKER_ENABLED, no mesmo processo e
+  primitives do worker H7; nenhum canal externo foi adicionado.
+
+Evidencia local
+- Tenant gate: 30/30 no teste focal, 91 relacoes e 137 FKs verificadas.
+- Backend H8: 5/5 no sandbox Prisma isolado.
+- Suíte backend canônica: 1 teste legado B1 falhou isoladamente (mensagens
+  esperadas 2, observadas 0); o teste foi reproduzido sem alteração causal H8
+  e não foi mascarado como verde.
+- Frontend canonical: 185/185.
+- Frontend H8 focal: 4/4.
+- TypeScript/Vite build: PASS; somente aviso existente de chunk >500 kB.
+- node --check em server, worker, rotas e servico: PASS.
+- dev.db SHA preservado: 6116CA72110D8C4A6B5BC214A476993AFDC155EC32B3B2431E4CE54254A42533.
+
+Limites honestos
+- Produção PostgreSQL nao foi migrada: DATABASE_URL/POSTGRES_DATABASE_URL nao
+  estao disponiveis neste ambiente de trabalho.
+- Vercel oficial permanece READY no SHA V66 `44f270d8af5eab514d0c73bdc5f15137359bd525`;
+  não existe deployment oficial H8 para este checkpoint.
+- Backup/restore de producao nao foi executado; portanto migration oficial,
+  canario e smoke autenticado de producao permanecem bloqueados.
+- Tipos sem fonte canonica (cliente sem contato, produto, proposta vencida e
+  deal stalled H7) ficam NOT_SUPPORTED nesta primeira entrega.
+- A flag global e a configuracao por tenant permanecem desligadas por padrao.
+
+Decisao final
+H8_SOURCE_READY_RELEASE_BLOCKED. Nao declarar H8_NOTIFICATION_CENTER_SHIP e nao
+alterar Railway, banco de producao ou deploy enquanto os gates externos acima nao
+forem comprovados.

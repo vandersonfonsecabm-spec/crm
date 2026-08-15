@@ -1,0 +1,152 @@
+const assert = require("node:assert/strict");
+const { after, afterEach, before, test } = require("node:test");
+const { PrismaClient } = require("@prisma/client");
+const { createNotificationService } = require("../src/notifications/service");
+
+process.env.NODE_ENV = "test";
+
+const prisma = new PrismaClient();
+const now = new Date("2030-06-15T12:00:00.000Z");
+const env = { H8_NOTIFICATIONS_ENABLED: "true", NODE_ENV: "test" };
+const service = createNotificationService({ prisma, env, clock: () => now });
+const tenantIds = new Set();
+let sequence = 0;
+
+before(async () => {
+  await prisma.$connect();
+});
+
+afterEach(async () => {
+  for (const empresaId of tenantIds) {
+    await prisma.notificacao.deleteMany({ where: { empresaId } });
+    await prisma.preferenciaNotificacaoUsuario.deleteMany({ where: { empresaId } });
+    await prisma.configuracaoNotificacaoEmpresa.deleteMany({ where: { empresaId } });
+    await prisma.acompanhamento.deleteMany({ where: { empresaId } });
+    await prisma.usuario.deleteMany({ where: { empresaId } });
+    await prisma.empresa.deleteMany({ where: { id: empresaId } });
+  }
+  tenantIds.clear();
+});
+
+after(() => prisma.$disconnect());
+
+test("H8 permanece desligada por padrao e nao projeta nem lista", async () => {
+  const tenant = await seedTenant("disabled", { enabled: false });
+  const disabled = createNotificationService({ prisma, env, clock: () => now });
+  const result = await disabled.projectForTenant(tenant.empresa.id);
+  assert.equal(result.disabled, true);
+  await assert.rejects(
+    disabled.summary(tenant.context),
+    (error) => error?.codigo === "NOTIFICATIONS_DISABLED" && error?.status === 404,
+  );
+});
+
+test("projecao de acompanhamento e idempotente, acionavel e isolada", async () => {
+  const tenant = await seedTenant("projection");
+  const followUp = await prisma.acompanhamento.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      responsavelId: tenant.admin.id,
+      autorId: tenant.admin.id,
+      titulo: "Retornar para cliente",
+      descricao: "Confirmar disponibilidade.",
+      dataHora: new Date(now.getTime() - 5 * 60000),
+      prioridade: "ALTA",
+      status: "PENDENTE",
+      tipo: "RETORNO",
+    },
+  });
+  await service.projectForTenant(tenant.empresa.id);
+  await service.projectForTenant(tenant.empresa.id);
+
+  assert.equal(await prisma.notificacao.count({ where: { empresaId: tenant.empresa.id } }), 1);
+  const listed = await service.list(tenant.context, { limit: 20 });
+  assert.equal(listed.pagination.total, 1);
+  assert.equal(listed.data[0].destino.tipo, "FOLLOW_UP");
+  assert.equal(listed.data[0].destino.id, followUp.id);
+  assert.equal(listed.data[0].titulo, "Acompanhamento atrasado");
+  assert.equal(listed.data[0].nova, true);
+  assert.match(listed.data[0].destino.rota, new RegExp(`acompanhamentoId=${followUp.id}`));
+
+  const read = await service.markRead(tenant.context, listed.data[0].id);
+  assert.equal(read.nova, false);
+  assert.equal(read.resolvidaEm, null);
+
+  const beforeSnooze = await prisma.notificacao.findUniqueOrThrow({ where: { id: listed.data[0].id } });
+  await service.snooze(tenant.context, listed.data[0].id, { minutes: 60 });
+  const afterSnooze = await prisma.notificacao.findUniqueOrThrow({ where: { id: listed.data[0].id } });
+  assert.equal(afterSnooze.venceEm.getTime(), beforeSnooze.venceEm.getTime());
+  assert.equal(afterSnooze.lidaEm !== null, true);
+  assert.equal((await service.list(tenant.context, { limit: 20 })).pagination.total, 0);
+  assert.equal((await service.list(tenant.context, { limit: 20 })).snoozed.length, 1);
+
+  await service.unsnooze(tenant.context, listed.data[0].id);
+  assert.equal((await service.list(tenant.context, { limit: 20 })).pagination.total, 1);
+  await service.resolve(tenant.context, listed.data[0].id);
+  assert.equal((await service.summary(tenant.context)).total, 0);
+});
+
+test("marcar todas usa cutoff e nao captura notificacao criada depois", async () => {
+  const tenant = await seedTenant("cutoff");
+  const first = await createNotification(tenant, 1, new Date(now.getTime() - 1000), new Date(now.getTime() - 1000));
+  const cutoff = now.toISOString();
+  const second = await createNotification(tenant, 2, new Date(now.getTime() + 1000), new Date(now.getTime() + 1000));
+  const result = await service.markAllRead(tenant.context, { cutoffAt: cutoff });
+  assert.equal(result.marked, 1);
+  const rows = await prisma.notificacao.findMany({ where: { empresaId: tenant.empresa.id }, orderBy: { id: "asc" } });
+  assert.equal(rows.find((row) => row.id === first.id).lidaEm !== null, true);
+  assert.equal(rows.find((row) => row.id === second.id).lidaEm, null);
+});
+
+test("destino removido e resolvido sem permanecer acionavel", async () => {
+  const tenant = await seedTenant("removed-target");
+  const row = await createNotification(tenant, 999999, new Date(now.getTime() - 1000));
+  assert.equal((await service.summary(tenant.context)).total, 0);
+  const stored = await prisma.notificacao.findUniqueOrThrow({ where: { id: row.id } });
+  assert.equal(stored.resolvidaEm !== null, true);
+});
+
+test("preferencias validam limites e nunca atravessam tenant", async () => {
+  const tenant = await seedTenant("preferences");
+  const other = await seedTenant("preferences-other");
+  await service.updatePreferences(tenant.context, { antecedenciaPadraoMinutos: 120 });
+  assert.equal((await service.getPreferences(tenant.context)).usuario.antecedenciaPadraoMinutos, 120);
+  await assert.rejects(
+    service.updatePreferences(tenant.context, { antecedenciaPadraoMinutos: -1 }),
+    (error) => error?.codigo === "VALIDATION_ERROR",
+  );
+  const foreignContext = { ...tenant.context, empresaId: other.empresa.id };
+  assert.equal((await service.summary(foreignContext)).total, 0);
+});
+
+async function seedTenant(label, { enabled = true } = {}) {
+  const slug = `h8-${label}-${process.pid}-${++sequence}`;
+  const empresa = await prisma.empresa.create({ data: { nome: `Empresa ${slug}`, slug } });
+  const admin = await prisma.usuario.create({
+    data: { empresaId: empresa.id, nome: "Admin H8", email: `${slug}@h8.test`, senhaHash: "hash-test", papel: "ADMIN", ativo: true },
+  });
+  await prisma.configuracaoNotificacaoEmpresa.create({ data: { empresaId: empresa.id, habilitada: enabled } });
+  tenantIds.add(empresa.id);
+  return { empresa, admin, context: { empresaId: empresa.id, usuarioId: admin.id, papel: "ADMIN" } };
+}
+
+async function createNotification(tenant, idSuffix, occurredAt, createdAt = occurredAt) {
+  return prisma.notificacao.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      destinatarioId: tenant.admin.id,
+      tipo: "NOVA_MENSAGEM",
+      prioridade: "NORMAL",
+      origemTipo: "CONVERSATION",
+      origemId: idSuffix,
+      occurrenceKey: `cutoff:${idSuffix}`,
+      dedupeKey: `cutoff:${idSuffix}`,
+      titulo: "Nova mensagem",
+      corpo: "Uma conversa aguarda resposta.",
+      alvoTipo: "CONVERSATION",
+      alvoId: idSuffix,
+      ocorridoEm: occurredAt,
+      createdAt,
+    },
+  });
+}

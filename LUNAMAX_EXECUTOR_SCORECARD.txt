@@ -1,0 +1,11 @@
+H8_EXECUTOR_SCORECARD
+
+OBJETIVO=Central in-app de notificacoes, lembretes e alertas acionaveis
+ESCOPO=Implementacao source-ready com ativacao deny-by-default
+BACKEND_DELTA=Sim, aditivo; sem provider/outbound
+FRONTEND_DELTA=Sim, sino/painel/configuracoes/deep links
+MIGRATION=SQLite + PostgreSQL presentes; producao nao aplicada
+TESTES=tenant 30/30; H8 backend 4/4; frontend 185/185; build PASS
+DEV_DB_SHA_PRESERVED=PASS
+PRODUCTION=BLOCKED_EXTERNAL_DATABASE_ACCESS
+TERMINAL_STATE=H8_SOURCE_READY_RELEASE_BLOCKED
