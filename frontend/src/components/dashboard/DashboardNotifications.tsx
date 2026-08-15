@@ -223,11 +223,11 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
 
   function handlePanelKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
     if (event.key !== "Tab") return;
-    const focusable = Array.from(panelRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], select, input, textarea") ?? []);
+    const focusable = Array.from(panelRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], select, input, textarea, [tabindex=\"-1\"]") ?? []);
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === panelHeadingRef.current)) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && document.activeElement === last) {
