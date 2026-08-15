@@ -46,3 +46,8 @@ Decisao final
 H8_SOURCE_READY_RELEASE_BLOCKED. Nao declarar H8_NOTIFICATION_CENTER_SHIP e nao
 alterar Railway, banco de producao ou deploy enquanto os gates externos acima nao
 forem comprovados.
+
+Checkpoint local
+- Commit: `2ceffec`.
+- Push, migration PostgreSQL, canário, ativação H8 e deploy oficial não foram
+  executados.

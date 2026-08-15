@@ -4,6 +4,9 @@
 - Checkpoint de schema/gate: migration aditiva + registro tenant.
 - Checkpoint de backend: servico/rotas/worker com flag OFF.
 - Checkpoint de frontend: sino, painel, configuracoes e deep links.
-- Checkpoint de testes: tenant 30/30, backend H8 4/4, frontend 185/185.
+- Checkpoint de testes: tenant 30/30, backend H8 5/5, frontend 185/185.
+- Commit local do checkpoint: `2ceffec` (`feat(h8): add gated in-app notification center`).
+- O commit ainda não foi promovido a `master` nem publicado; o alias oficial
+  permanece no runtime V66.
 
 Nenhum reset, rebase, force push ou alteracao em master foi executado.
