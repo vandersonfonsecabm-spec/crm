@@ -36,7 +36,7 @@ type DashboardAgendaPanelProps = {
   createRequestKey: number;
   todayRequestKey: number;
   initialFollowUpId?: number | null;
-  onInitialFollowUpHandled?: () => void;
+  initialFollowUpRequestKey?: number;
   onTodayRequestHandled?: () => void;
   onSelectClient: (clientId: number) => void;
 };
@@ -101,7 +101,7 @@ export default function DashboardAgendaPanel({
   createRequestKey,
   todayRequestKey,
   initialFollowUpId = null,
-  onInitialFollowUpHandled,
+  initialFollowUpRequestKey = 0,
   onTodayRequestHandled,
   onSelectClient,
 }: DashboardAgendaPanelProps) {
@@ -136,6 +136,7 @@ export default function DashboardAgendaPanel({
   const handledCreateRequest = useRef(createRequestKey);
   const handledTodayRequest = useRef<number | null>(null);
   const consumedInitialFollowUpId = useRef<number | null | undefined>(undefined);
+  const consumedInitialFollowUpRequestKey = useRef<number | null>(null);
   const mutationInFlight = useRef(false);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -182,7 +183,10 @@ export default function DashboardAgendaPanel({
   }, [onTodayRequestHandled, todayRequestKey]);
 
   useEffect(() => {
-    if (!initialFollowUpId) consumedInitialFollowUpId.current = null;
+    if (!initialFollowUpId) {
+      consumedInitialFollowUpId.current = null;
+      consumedInitialFollowUpRequestKey.current = null;
+    }
   }, [initialFollowUpId]);
 
   useEffect(() => {
@@ -191,7 +195,9 @@ export default function DashboardAgendaPanel({
     async function loadAgenda() {
       setIsLoading(true);
       setError("");
-      const targetFollowUpId = initialFollowUpId && consumedInitialFollowUpId.current !== initialFollowUpId
+      const targetFollowUpId = initialFollowUpId
+        && (consumedInitialFollowUpId.current !== initialFollowUpId
+          || consumedInitialFollowUpRequestKey.current !== initialFollowUpRequestKey)
         ? initialFollowUpId
         : null;
 
@@ -200,6 +206,7 @@ export default function DashboardAgendaPanel({
           const exact = await fetchAcompanhamento(targetFollowUpId);
           if (ignore) return;
           consumedInitialFollowUpId.current = targetFollowUpId;
+          consumedInitialFollowUpRequestKey.current = initialFollowUpRequestKey;
           setItems([exact]);
           setTotal(1);
           setSelectedFollowUpId(exact.id);
@@ -230,7 +237,10 @@ export default function DashboardAgendaPanel({
         console.error("AGENDA_LOAD_FAILED");
         setError("Não foi possível carregar os acompanhamentos.");
       } finally {
-        if (targetFollowUpId && !ignore) onInitialFollowUpHandled?.();
+        if (targetFollowUpId && !ignore) {
+          consumedInitialFollowUpId.current = targetFollowUpId;
+          consumedInitialFollowUpRequestKey.current = initialFollowUpRequestKey;
+        }
         if (!ignore) setIsLoading(false);
       }
     }
@@ -240,7 +250,7 @@ export default function DashboardAgendaPanel({
     return () => {
       ignore = true;
     };
-  }, [agendaView, clientFilter, debouncedSearch, initialFollowUpId, onInitialFollowUpHandled, page, periodQuery, priority, refreshKey, responsibleFilter, status, type, viewMode]);
+  }, [agendaView, clientFilter, debouncedSearch, initialFollowUpId, initialFollowUpRequestKey, page, periodQuery, priority, refreshKey, responsibleFilter, status, type, viewMode]);
 
   useEffect(() => {
     if (!selectedFollowUpId || isLoading) return;

@@ -137,6 +137,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [agendaCreateRequestKey, setAgendaCreateRequestKey] = useState(0);
   const [agendaTodayRequestKey, setAgendaTodayRequestKey] = useState(0);
   const [agendaFollowUpId, setAgendaFollowUpId] = useState<number | null>(null);
+  const [agendaFollowUpRequestKey, setAgendaFollowUpRequestKey] = useState(0);
   const kanbanStageRequest = { group: "pipeline" as const, key: 0 };
   const [leadsCreateRequestKey, setLeadsCreateRequestKey] = useState(0);
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
@@ -563,10 +564,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     setInboxConversationId(null);
   }, []);
 
-  const consumeAgendaFollowUpTarget = useCallback(() => {
-    setAgendaFollowUpId(null);
-  }, []);
-
   const openKanbanBusiness = useCallback((businessId: number) => {
     setKanbanBusinessId(businessId);
     handleSetActivePage("kanban");
@@ -587,6 +584,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
     if (target.tipo === "FOLLOW_UP") {
       setAgendaFollowUpId(target.id);
+      setAgendaFollowUpRequestKey((current) => current + 1);
       navigate({ pathname: getDashboardPath("agenda"), search: `?acompanhamentoId=${encodeURIComponent(target.id)}` });
       return;
     }
@@ -1036,7 +1034,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   createRequestKey={agendaCreateRequestKey}
                   todayRequestKey={agendaTodayRequestKey}
                   initialFollowUpId={agendaFollowUpId}
-                  onInitialFollowUpHandled={consumeAgendaFollowUpTarget}
+                  initialFollowUpRequestKey={agendaFollowUpRequestKey}
                   onTodayRequestHandled={() => setAgendaTodayRequestKey(0)}
                   onSelectClient={handleSelectClient}
                 />
