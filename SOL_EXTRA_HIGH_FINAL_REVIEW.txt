@@ -6,9 +6,9 @@ PRODUCTION_RELEASE_GATE=BLOCKED_EXTERNAL
 O checkpoint anterior identificou riscos materiais no scanner temporal H7,
 lease/retry e ativacao de producao. A implementacao H8 atual manteve a flag OFF,
 adicionou migration PostgreSQL, fechou o tenant gate em 91 relacoes e criou
-testes focais. O gate final depende da reauditoria read-only do SHA/working tree
-atual e dos gates de backup/restore/canario que nao estao disponiveis neste
-ambiente.
+testes focais. A reauditoria read-only do SHA funcional `8c5c389` passou sem
+HIGH/P1; somente os gates externos de backup/restore/canário continuam
+indisponíveis neste ambiente.
 
 Produção Vercel foi consultada somente em leitura e permanece no SHA V66
 `44f270d8af5eab514d0c73bdc5f15137359bd525`; nenhuma publicação H8 foi iniciada.
