@@ -1,3 +1,5 @@
+BEGIN;
+
 ALTER TABLE "Acompanhamento" ADD COLUMN "notificacaoAntecedenciaMinutos" INTEGER;
 
 CREATE TABLE "Notificacao" (
@@ -65,3 +67,5 @@ CREATE TABLE "PreferenciaNotificacaoUsuario" (
 );
 CREATE UNIQUE INDEX "PreferenciaNotificacaoUsuario_empresaId_usuarioId_key" ON "PreferenciaNotificacaoUsuario"("empresaId", "usuarioId");
 CREATE INDEX "PreferenciaNotificacaoUsuario_empresaId_usuarioId_idx" ON "PreferenciaNotificacaoUsuario"("empresaId", "usuarioId");
+
+COMMIT;
