@@ -22,4 +22,6 @@ O source H8 anterior não restringia a abertura de settings ao tenant QA durante
 
 `SOURCE_DELTA_REQUIRED=YES`
 
-O SHA efetivo final será registrado após revisão Sol do diff e commit explícito somente dos arquivos H8R3 causais. O restante do worktree continua sendo preservado.
+`H8_SOURCE_SHA_EFFECTIVE=40ae4bb7d9e2df418cf9944a23bd8b1fc07a1fc0`
+
+Este é o commit funcional que contém o delta causal aprovado. O restante do worktree continua sendo preservado.
