@@ -3,32 +3,56 @@ const crypto = require("node:crypto");
 const FORMAT_VERSION = "v1";
 const ALGORITHM = "aes-256-gcm";
 
-function getEncryptionKey() {
-  const value = String(process.env.INTEGRATION_ENCRYPTION_KEY || "").trim();
+function parseEncryptionKey(value, { required = false } = {}) {
+  const normalized = String(value || "").trim();
 
-  if (!value) {
+  if (!normalized) {
+    if (required) {
+      throw integrationCryptoError("ENCRYPTION_KEY_REQUIRED", "Chave de criptografia de integracoes obrigatoria.");
+    }
     return null;
   }
 
-  const base64 = Buffer.from(value, "base64");
+  const base64 = Buffer.from(normalized, "base64");
+  // Keep the exact legacy decoder semantics. Node accepts padded, unpadded,
+  // base64url-compatible and non-canonical base64 input here; changing that
+  // behavior could make existing ciphertext unreadable during rotation.
   if (base64.length === 32) {
     return base64;
   }
 
-  const hex = Buffer.from(value, "hex");
+  const hex = Buffer.from(normalized, "hex");
   if (hex.length === 32) {
     return hex;
   }
 
-  if (value.length >= 32) {
-    return crypto.createHash("sha256").update(value).digest();
+  if (normalized.length >= 32) {
+    return crypto.createHash("sha256").update(normalized).digest();
   }
 
-  throw integrationCryptoError("ENCRYPTION_KEY_REQUIRED", "Chave de criptografia de integracoes invalida.");
+  throw integrationCryptoError("ENCRYPTION_KEY_INVALID", "Chave de criptografia de integracoes invalida.");
+}
+
+function getEncryptionKeys({ requireCurrent = false } = {}) {
+  const current = parseEncryptionKey(process.env.INTEGRATION_ENCRYPTION_KEY, { required: requireCurrent });
+  const previousValue = String(process.env.INTEGRATION_ENCRYPTION_KEY_PREVIOUS || "").trim();
+  const previous = previousValue ? parseEncryptionKey(previousValue) : null;
+
+  if (previous && !current) {
+    throw integrationCryptoError("ENCRYPTION_KEY_REQUIRED", "A chave atual e obrigatoria quando existe uma chave anterior.");
+  }
+  if (current && previous && crypto.timingSafeEqual(current, previous)) {
+    throw integrationCryptoError("ENCRYPTION_KEY_ROTATION_INVALID", "As chaves atual e anterior devem ser diferentes.");
+  }
+  return { current, previous };
+}
+
+function getEncryptionKey() {
+  return getEncryptionKeys({ requireCurrent: false }).current;
 }
 
 function requireEncryptionKey() {
-  const key = getEncryptionKey();
+  const key = getEncryptionKeys({ requireCurrent: true }).current;
   if (!key) {
     throw integrationCryptoError("ENCRYPTION_KEY_REQUIRED", "Chave de criptografia de integracoes obrigatoria.");
   }
@@ -56,23 +80,8 @@ function encryptCredentials(credentials) {
   });
 }
 
-function decryptCredentials(payload) {
-  if (!payload) return null;
-
-  const parsed = typeof payload === "string" ? JSON.parse(payload) : payload;
-  if (parsed.version !== FORMAT_VERSION || parsed.alg !== ALGORITHM) {
-    throw integrationCryptoError("INTEGRATION_CREDENTIALS_INVALID", "Formato de credenciais invalido.");
-  }
-
-  const key = requireEncryptionKey();
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(parsed.iv, "base64"));
-  decipher.setAuthTag(Buffer.from(parsed.tag, "base64"));
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(parsed.data, "base64")),
-    decipher.final(),
-  ]);
-
-  return JSON.parse(decrypted.toString("utf8"));
+function decryptCredentials(payload, options = {}) {
+  return decryptPayload(payload, { detailed: options?.detailed === true, allowPrevious: options?.allowPrevious !== false });
 }
 
 function encryptCredentialsWithContext(credentials, context) {
@@ -99,28 +108,77 @@ function encryptCredentialsWithContext(credentials, context) {
   });
 }
 
-function decryptCredentialsWithContext(payload, context) {
-  if (!payload) return null;
-
-  const parsed = typeof payload === "string" ? JSON.parse(payload) : payload;
-  if (parsed.version !== FORMAT_VERSION || parsed.alg !== ALGORITHM) {
-    throw integrationCryptoError("INTEGRATION_CREDENTIALS_INVALID", "Formato de credenciais invalido.");
-  }
-
+function decryptCredentialsWithContext(payload, context, options = {}) {
   const aad = contextAssociatedData(context);
-  if (parsed.aad !== aad) {
+  return decryptPayload(payload, {
+    aad,
+    detailed: options?.detailed === true,
+    allowPrevious: options?.allowPrevious !== false,
+  });
+}
+
+function decryptCredentialsDetailed(payload, options = {}) {
+  return decryptCredentials(payload, { ...options, detailed: true });
+}
+
+function decryptCredentialsWithContextDetailed(payload, context, options = {}) {
+  return decryptCredentialsWithContext(payload, context, { ...options, detailed: true });
+}
+
+function decryptPayload(payload, { aad = null, detailed = false, allowPrevious = true } = {}) {
+  if (payload === null || payload === undefined) return null;
+
+  const parsed = parsePayload(payload);
+  if (aad !== null && parsed.aad !== aad) {
     throw integrationCryptoError("INTEGRATION_CREDENTIALS_CONTEXT_INVALID", "Contexto de credenciais invalido.");
   }
-  const key = requireEncryptionKey();
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(parsed.iv, "base64"));
-  decipher.setAAD(Buffer.from(aad, "utf8"));
-  decipher.setAuthTag(Buffer.from(parsed.tag, "base64"));
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(parsed.data, "base64")),
-    decipher.final(),
-  ]);
 
-  return JSON.parse(decrypted.toString("utf8"));
+  const { current, previous } = getEncryptionKeys({ requireCurrent: true });
+  const primary = decryptWithKey(parsed, current, aad);
+  if (primary.ok) return detailed ? { credentials: primary.credentials, keySource: "current" } : primary.credentials;
+  if (!allowPrevious || !previous || !primary.authenticationFailure) {
+    throw integrationCryptoError("INTEGRATION_CREDENTIALS_DECRYPTION_FAILED", "Credenciais de integracao nao puderam ser lidas com seguranca.");
+  }
+
+  const fallback = decryptWithKey(parsed, previous, aad);
+  if (!fallback.ok) {
+    throw integrationCryptoError("INTEGRATION_CREDENTIALS_DECRYPTION_FAILED", "Credenciais de integracao nao puderam ser lidas com seguranca.");
+  }
+  return detailed ? { credentials: fallback.credentials, keySource: "previous" } : fallback.credentials;
+}
+
+function parsePayload(payload) {
+  let parsed;
+  try {
+    parsed = typeof payload === "string" ? JSON.parse(payload) : payload;
+  } catch {
+    throw integrationCryptoError("INTEGRATION_CREDENTIALS_INVALID", "Formato de credenciais invalido.");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || parsed.version !== FORMAT_VERSION || parsed.alg !== ALGORITHM || typeof parsed.iv !== "string" || typeof parsed.tag !== "string" || typeof parsed.data !== "string") {
+    throw integrationCryptoError("INTEGRATION_CREDENTIALS_INVALID", "Formato de credenciais invalido.");
+  }
+  return parsed;
+}
+
+function decryptWithKey(parsed, key, aad) {
+  try {
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(parsed.iv, "base64"));
+    if (aad !== null) decipher.setAAD(Buffer.from(aad, "utf8"));
+    decipher.setAuthTag(Buffer.from(parsed.tag, "base64"));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(parsed.data, "base64")),
+      decipher.final(),
+    ]);
+    return { ok: true, credentials: JSON.parse(decrypted.toString("utf8")) };
+  } catch (error) {
+    return { ok: false, authenticationFailure: isAuthenticationFailure(error) };
+  }
+}
+
+function isAuthenticationFailure(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
+  return code === "ERR_OSSL_BAD_DECRYPT" || message.includes("authenticate") || message.includes("bad decrypt") || message.includes("unable to authenticate");
 }
 
 function contextAssociatedData(context) {
@@ -142,7 +200,8 @@ function hasEncryptedCredentials(value) {
 function assertIntegrationEncryptionReady({ prisma } = {}) {
   if (process.env.NODE_ENV !== "production") return;
 
-  if (getEncryptionKey()) return;
+  const keys = getEncryptionKeys({ requireCurrent: false });
+  if (keys.current) return;
   if (!prisma) {
     throw integrationCryptoError("ENCRYPTION_KEY_REQUIRED", "Chave de criptografia de integracoes obrigatoria em producao.");
   }
@@ -188,6 +247,8 @@ module.exports = {
   encryptCredentialsWithContext,
   decryptCredentials,
   decryptCredentialsWithContext,
+  decryptCredentialsDetailed,
+  decryptCredentialsWithContextDetailed,
   hasEncryptedCredentials,
   assertIntegrationEncryptionReady,
   sanitizeCredentials,
