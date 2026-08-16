@@ -1,3 +1,4 @@
+const crypto = require("node:crypto");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 
 const ACTIVE_FOLLOW_UP_STATUSES = ["PENDENTE", "EM_ANDAMENTO"];
@@ -16,6 +17,7 @@ const MAX_LIST_ROWS = 1000;
 const MAX_SOURCE_ROWS = 1000;
 const DEFAULT_LIMIT = 20;
 const EFFECTIVE_TIME_ZONE = "America/Sao_Paulo";
+const TENANT_ALLOWLIST_ENV = "H8_NOTIFICATION_TENANT_ALLOWLIST";
 
 function createNotificationService({ prisma, env = process.env, clock = () => new Date() } = {}) {
   let tenantCursor = 0;
@@ -30,15 +32,19 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     return raw === "true" || raw === "1";
   }
 
+  function tenantAllowlisted(empresaId) {
+    return parseTenantAllowlist(env[TENANT_ALLOWLIST_ENV]).includes(empresaId);
+  }
+
   async function assertEnabled(empresaId) {
-    if (!globallyEnabled()) throw domainError(404, "NOTIFICATIONS_DISABLED", "Recurso nao encontrado.");
+    if (!globallyEnabled() || !tenantAllowlisted(empresaId)) throw domainError(404, "NOTIFICATIONS_DISABLED", "Recurso nao encontrado.");
     const settings = await prisma.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId } });
     if (!settings?.habilitada) throw domainError(404, "NOTIFICATIONS_DISABLED", "Notificacoes desativadas para esta empresa.");
     return settings;
   }
 
   async function projectForTenant(empresaId, { now = clock(), limit = MAX_SOURCE_ROWS } = {}) {
-    if (!globallyEnabled()) return { created: 0, updated: 0, resolved: 0 };
+    if (!globallyEnabled() || !tenantAllowlisted(empresaId)) return { created: 0, updated: 0, resolved: 0, disabled: true };
     const settings = await prisma.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId } });
     if (!settings?.habilitada) return { created: 0, updated: 0, resolved: 0, disabled: true };
     const sourceLimit = Math.min(Math.max(Number(limit) || MAX_SOURCE_ROWS, 1), MAX_SOURCE_ROWS);
@@ -154,17 +160,19 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
   }
 
   async function processDue({ now = clock(), limit = 20 } = {}) {
-    if (!globallyEnabled() || !workerEnabled()) return { tenants: 0, created: 0, updated: 0, resolved: 0 };
+    const allowedTenantIds = parseTenantAllowlist(env[TENANT_ALLOWLIST_ENV]);
+    if (!globallyEnabled() || !workerEnabled() || !allowedTenantIds.length) return { tenants: 0, created: 0, updated: 0, resolved: 0 };
     const batchLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const tenantWhere = { habilitada: true, empresaId: { in: allowedTenantIds } };
     let tenants = await prisma.configuracaoNotificacaoEmpresa.findMany({
-      where: { habilitada: true, ...(tenantCursor > 0 ? { empresaId: { gt: tenantCursor } } : {}) },
+      where: tenantCursor > 0 ? { ...tenantWhere, empresaId: { in: allowedTenantIds, gt: tenantCursor } } : tenantWhere,
       orderBy: { empresaId: "asc" },
       take: batchLimit,
       select: { empresaId: true },
     });
     if (!tenants.length && tenantCursor > 0) {
       tenantCursor = 0;
-      tenants = await prisma.configuracaoNotificacaoEmpresa.findMany({ where: { habilitada: true }, orderBy: { empresaId: "asc" }, take: batchLimit, select: { empresaId: true } });
+      tenants = await prisma.configuracaoNotificacaoEmpresa.findMany({ where: tenantWhere, orderBy: { empresaId: "asc" }, take: batchLimit, select: { empresaId: true } });
     }
     const total = { tenants: tenants.length, created: 0, updated: 0, resolved: 0 };
     for (const tenant of tenants) {
@@ -256,7 +264,7 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
   }
 
   async function getSettings(context) {
-    if (!globallyEnabled()) throw domainError(404, "NOTIFICATIONS_DISABLED", "Recurso nao encontrado.");
+    if (!globallyEnabled() || !tenantAllowlisted(context.empresaId)) throw domainError(404, "NOTIFICATIONS_DISABLED", "Recurso nao encontrado.");
     const [empresa, usuario] = await prisma.$transaction([
       prisma.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId: context.empresaId } }),
       prisma.preferenciaNotificacaoUsuario.findUnique({ where: { empresaId_usuarioId: { empresaId: context.empresaId, usuarioId: context.usuarioId } } }),
@@ -276,12 +284,29 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
 
   async function updateSettings(context, input = {}) {
     await assertManager(context);
-    if (!globallyEnabled()) throw domainError(404, "NOTIFICATIONS_DISABLED", "Recurso nao encontrado.");
+    if (!globallyEnabled() || !tenantAllowlisted(context.empresaId)) throw domainError(404, "NOTIFICATIONS_DISABLED", "Recurso nao encontrado.");
     const values = validateSettings(input);
-    const empresa = await prisma.configuracaoNotificacaoEmpresa.upsert({
-      where: { empresaId: context.empresaId },
-      create: { empresaId: context.empresaId, ...values },
-      update: values,
+    const correlationId = crypto.randomUUID();
+    const empresa = await prisma.$transaction(async (tx) => {
+      const actor = await tx.usuario.findFirst({ where: { id: context.usuarioId, empresaId: context.empresaId, ativo: true }, select: { id: true } });
+      if (!actor) throw domainError(401, "AUTH_CONTEXT_INVALID", "Sessao invalida.");
+      const current = await tx.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId: context.empresaId } });
+      const next = await tx.configuracaoNotificacaoEmpresa.upsert({
+        where: { empresaId: context.empresaId },
+        create: { empresaId: context.empresaId, ...values },
+        update: values,
+      });
+      await tx.auditoriaSeguranca.create({
+        data: {
+          empresaId: context.empresaId,
+          actorUsuarioId: actor.id,
+          acao: "H8_NOTIFICATION_SETTINGS",
+          resultado: "APLICADA",
+          correlationId,
+          motivo: `habilitada=${current?.habilitada ?? false}->${next.habilitada}; campos=${Object.keys(values).sort().join(",")}`.slice(0, 500),
+        },
+      });
+      return next;
     });
     return { empresa };
   }
@@ -545,6 +570,15 @@ function parseId(value) {
   return parsed;
 }
 
+function parseTenantAllowlist(raw) {
+  const value = String(raw || "").trim();
+  if (!value) return [];
+  const tokens = value.split(",").map((token) => token.trim());
+  const ids = tokens.map(Number);
+  if (tokens.some((token, index) => !/^\d+$/.test(token) || !Number.isSafeInteger(ids[index]) || ids[index] < 1 || ids[index] > 2147483647)) return [];
+  return [...new Set(ids)];
+}
+
 async function assertManager(context) {
   if (!MANAGER_ROLES.includes(context.papel)) throw domainError(403, "NOTIFICATION_SETTINGS_FORBIDDEN", "Acesso negado.");
 }
@@ -561,6 +595,7 @@ module.exports = {
   NOTIFICATION_TYPES,
   createNotificationService,
   pendingConversationWhere,
+  parseTenantAllowlist,
   presentNotification,
   routeForTarget,
 };

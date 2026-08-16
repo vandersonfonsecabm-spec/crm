@@ -1,13 +1,13 @@
 const assert = require("node:assert/strict");
 const { after, afterEach, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
-const { createNotificationService } = require("../src/notifications/service");
+const { createNotificationService, parseTenantAllowlist } = require("../src/notifications/service");
 
 process.env.NODE_ENV = "test";
 
 const prisma = new PrismaClient();
 const now = new Date("2030-06-15T12:00:00.000Z");
-const env = { H8_NOTIFICATIONS_ENABLED: "true", NODE_ENV: "test" };
+const env = { H8_NOTIFICATIONS_ENABLED: "true", H8_NOTIFICATION_TENANT_ALLOWLIST: "", NODE_ENV: "test" };
 const service = createNotificationService({ prisma, env, clock: () => now });
 const tenantIds = new Set();
 let sequence = 0;
@@ -19,6 +19,7 @@ before(async () => {
 afterEach(async () => {
   for (const empresaId of tenantIds) {
     await prisma.notificacao.deleteMany({ where: { empresaId } });
+    await prisma.auditoriaSeguranca.deleteMany({ where: { empresaId } });
     await prisma.preferenciaNotificacaoUsuario.deleteMany({ where: { empresaId } });
     await prisma.configuracaoNotificacaoEmpresa.deleteMany({ where: { empresaId } });
     await prisma.acompanhamento.deleteMany({ where: { empresaId } });
@@ -26,9 +27,19 @@ afterEach(async () => {
     await prisma.empresa.deleteMany({ where: { id: empresaId } });
   }
   tenantIds.clear();
+  env.H8_NOTIFICATION_TENANT_ALLOWLIST = "";
 });
 
 after(() => prisma.$disconnect());
+
+test("allowlist de tenants valida vazio, tokens invalidos, limite INT32 e duplicatas", () => {
+  assert.deepEqual(parseTenantAllowlist(""), []);
+  assert.deepEqual(parseTenantAllowlist("1,abc"), []);
+  assert.deepEqual(parseTenantAllowlist("0"), []);
+  assert.deepEqual(parseTenantAllowlist("1,,2"), []);
+  assert.deepEqual(parseTenantAllowlist("1,2147483648"), []);
+  assert.deepEqual(parseTenantAllowlist("2,1,2"), [2, 1]);
+});
 
 test("H8 permanece desligada por padrao e nao projeta nem lista", async () => {
   const tenant = await seedTenant("disabled", { enabled: false });
@@ -140,6 +151,50 @@ test("preferencias validam limites e nunca atravessam tenant", async () => {
   assert.equal((await service.summary(foreignContext)).total, 0);
 });
 
+test("allowlist fail-closed impede outro tenant e audita habilitacao e reversao", async () => {
+  const tenant = await seedTenant("activation-audit", { enabled: false });
+  const other = await seedTenant("activation-other", { enabled: false, allowlist: false });
+
+  await assert.rejects(
+    service.updateSettings(other.context, { habilitada: true }),
+    (error) => error?.codigo === "NOTIFICATIONS_DISABLED" && error?.status === 404,
+  );
+  assert.equal((await prisma.configuracaoNotificacaoEmpresa.findUniqueOrThrow({ where: { empresaId: other.empresa.id } })).habilitada, false);
+
+  await service.updateSettings(tenant.context, { habilitada: true });
+  await service.updateSettings(tenant.context, { habilitada: false });
+  const audits = await prisma.auditoriaSeguranca.findMany({ where: { empresaId: tenant.empresa.id, acao: "H8_NOTIFICATION_SETTINGS" }, orderBy: { id: "asc" } });
+  assert.equal(audits.length, 2);
+  assert.equal(audits.every((audit) => audit.actorUsuarioId === tenant.admin.id && audit.resultado === "APLICADA" && typeof audit.correlationId === "string"), true);
+  assert.match(audits[0].motivo, /habilitada=false->true/);
+  assert.match(audits[1].motivo, /habilitada=true->false/);
+});
+
+test("worker H8 processa somente tenants presentes na allowlist", async () => {
+  const tenant = await seedTenant("worker-allowlisted", { enabled: true });
+  const other = await seedTenant("worker-unallowlisted", { enabled: true, allowlist: false });
+  for (const current of [tenant, other]) {
+    await prisma.acompanhamento.create({
+      data: {
+        empresaId: current.empresa.id,
+        responsavelId: current.admin.id,
+        autorId: current.admin.id,
+        titulo: "Retornar para QA",
+        descricao: "Acompanhamento sintético.",
+        dataHora: new Date(now.getTime() - 5 * 60000),
+        prioridade: "ALTA",
+        status: "PENDENTE",
+        tipo: "RETORNO",
+      },
+    });
+  }
+  const workerService = createNotificationService({ prisma, env: { ...env, NOTIFICATIONS_WORKER_ENABLED: "true" }, clock: () => now });
+  const result = await workerService.processDue({ limit: 20 });
+  assert.equal(result.tenants, 1);
+  assert.equal(await prisma.notificacao.count({ where: { empresaId: tenant.empresa.id } }), 1);
+  assert.equal(await prisma.notificacao.count({ where: { empresaId: other.empresa.id } }), 0);
+});
+
 test("reagendamento e transferencia encerram a ocorrencia e o destinatario anteriores", async () => {
   const tenant = await seedTenant("reconcile");
   const manager = await prisma.usuario.create({ data: { empresaId: tenant.empresa.id, nome: "Gerente H8", email: `manager-${tenant.empresa.id}@h8.test`, senhaHash: "hash-test", papel: "GERENTE", ativo: true } });
@@ -166,13 +221,16 @@ test("reagendamento e transferencia encerram a ocorrencia e o destinatario anter
   assert.equal(rows.find((row) => row.destinatarioId === tenant.admin.id)?.resolvidaEm !== null, true);
 });
 
-async function seedTenant(label, { enabled = true } = {}) {
+async function seedTenant(label, { enabled = true, allowlist = true } = {}) {
   const slug = `h8-${label}-${process.pid}-${++sequence}`;
   const empresa = await prisma.empresa.create({ data: { nome: `Empresa ${slug}`, slug } });
   const admin = await prisma.usuario.create({
     data: { empresaId: empresa.id, nome: "Admin H8", email: `${slug}@h8.test`, senhaHash: "hash-test", papel: "ADMIN", ativo: true },
   });
   await prisma.configuracaoNotificacaoEmpresa.create({ data: { empresaId: empresa.id, habilitada: enabled } });
+  if (allowlist) {
+    env.H8_NOTIFICATION_TENANT_ALLOWLIST = [env.H8_NOTIFICATION_TENANT_ALLOWLIST, String(empresa.id)].filter(Boolean).join(",");
+  }
   tenantIds.add(empresa.id);
   return { empresa, admin, context: { empresaId: empresa.id, usuarioId: admin.id, papel: "ADMIN" } };
 }

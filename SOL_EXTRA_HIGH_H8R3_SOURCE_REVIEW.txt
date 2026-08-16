@@ -1,0 +1,16 @@
+SOL_EXTRA_HIGH_H8R3_SOURCE_REVIEW=APPROVED
+
+Escopo revisado: somente backend/src/notifications/service.js e backend/tests/notifications-h8.test.js.
+
+PASS:
+- allowlist H8_NOTIFICATION_TENANT_ALLOWLIST aplicada uniformemente em assert/get/update/project/processDue;
+- parser fail-closed para vazio, alpha, zero, token vazio, >INT32 e duplicatas;
+- worker consulta somente tenants allowlisted;
+- ator é validado como usuário ativo do mesmo tenant;
+- upsert e AuditoriaSeguranca são atômicos;
+- correlationId usa UUID CSPRNG server-side;
+- H7, schema/migration, frontend, tipos H8 e outbound permanecem intocados;
+- teste focal isolado 10/10 PASS;
+- tenant gate 91/91 e node --check PASS.
+
+Não há finding HIGH/CRITICAL no delta. A aprovação libera commit explícito do delta e posterior deploy operacional compatível, mantendo os flags H8 OFF até a revisão de ativação.
