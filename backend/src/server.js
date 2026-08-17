@@ -47,6 +47,9 @@ let readinessCache = null;
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : false);
+app.locals.railwayTargetVerified = process.env.RAILWAY_SERVICE_ID === "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92"
+  && process.env.RAILWAY_PROJECT_ID === "ddfbf66c-e274-47b1-9493-286232d2f426"
+  && process.env.RAILWAY_ENVIRONMENT_ID === "e18f76b1-e38f-468e-91fe-1eff6db9a5f8";
 app.use((req, res, next) => {
   res.set("X-Content-Type-Options", "nosniff");
   res.set("X-Frame-Options", "DENY");

@@ -220,20 +220,7 @@ async function runAutomationWorkerProcess({ env = process.env, logger = console 
   const { createPrismaClient } = require("../database/prisma-client");
   const { createAutomationService } = require("./service");
   const { createNotificationService } = require("../notifications/service");
-  if (isRailwayEnvironment(env) && env.NODE_ENV !== "production") {
-    throw new Error("NODE_ENV_PRODUCTION_REQUIRED");
-  }
-  if (!isRailwayEnvironment(env)) {
-    throw new Error("RAILWAY_WORKER_REQUIRED");
-  }
-  if (isRailwayEnvironment(env) && env.RAILWAY_SERVICE_ID !== resolveExpectedWorkerServiceId(env)) {
-    throw new Error("RAILWAY_WORKER_SERVICE_MISMATCH");
-  }
-  assertWorkerTargetIdentity(env);
-  const provider = databaseProviderFromEnv(env);
-  if (isRailwayEnvironment(env) && provider !== "postgresql") {
-    throw new Error("RAILWAY_WORKER_POSTGRES_REQUIRED");
-  }
+  const provider = validateWorkerRuntimeTarget(env);
   const prisma = createPrismaClient({ env });
   try {
     await Promise.race([
@@ -273,6 +260,16 @@ function assertWorkerTargetIdentity(env = process.env) {
   const expectedEnvironmentId = homolog ? String(env.CRM_RAILWAY_HOMOLOG_ENVIRONMENT_ID || "").trim() : OFFICIAL_RAILWAY_ENVIRONMENT_ID;
   if (!expectedProjectId || env.RAILWAY_PROJECT_ID !== expectedProjectId) throw new Error("RAILWAY_PROJECT_MISMATCH");
   if (!expectedEnvironmentId || env.RAILWAY_ENVIRONMENT_ID !== expectedEnvironmentId) throw new Error("RAILWAY_ENVIRONMENT_MISMATCH");
+}
+
+function validateWorkerRuntimeTarget(env = process.env) {
+  if (!isRailwayEnvironment(env)) throw new Error("RAILWAY_WORKER_REQUIRED");
+  if (env.NODE_ENV !== "production") throw new Error("NODE_ENV_PRODUCTION_REQUIRED");
+  if (env.RAILWAY_SERVICE_ID !== resolveExpectedWorkerServiceId(env)) throw new Error("RAILWAY_WORKER_SERVICE_MISMATCH");
+  assertWorkerTargetIdentity(env);
+  const provider = databaseProviderFromEnv(env);
+  if (provider !== "postgresql") throw new Error("RAILWAY_WORKER_POSTGRES_REQUIRED");
+  return provider;
 }
 
 function waitForShutdown(worker, prisma) {
@@ -331,5 +328,6 @@ module.exports = {
   shouldStartAutomationWorker,
   shouldStartNotificationWorker,
   shouldStartTemporalScanWorker,
+  validateWorkerRuntimeTarget,
   startAutomationWorker,
 };

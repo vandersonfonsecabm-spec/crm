@@ -45,3 +45,14 @@ test("normaliza IPv4 mapeado e ignora X-Forwarded-For nao confiavel", () => {
     socket: { remoteAddress: "::ffff:192.0.2.5" },
   }), "192.0.2.5");
 });
+
+test("usa somente X-Real-IP valido quando o alvo Railway foi atestado", () => {
+  const base = {
+    app: { locals: { railwayTargetVerified: true } },
+    headers: { "x-forwarded-for": "198.51.100.99", "x-real-ip": "203.0.113.10" },
+    socket: { remoteAddress: "192.0.2.5" },
+  };
+  assert.equal(requestIp(base), "203.0.113.10");
+  assert.equal(requestIp({ ...base, headers: { ...base.headers, "x-real-ip": "203.0.113.10, 198.51.100.99" } }), "192.0.2.5");
+  assert.equal(requestIp({ ...base, app: { locals: { railwayTargetVerified: false } } }), "192.0.2.5");
+});

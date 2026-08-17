@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const net = require("node:net");
 
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
 const DEFAULT_IDENTITY_LIMIT = 8;
@@ -63,8 +64,9 @@ function authIdentity(email, slug) {
 }
 
 function requestIp(req) {
-  const trustsProxy = req?.app?.get?.("trust proxy") === 1 || req?.app?.get?.("trust proxy") === true;
-  const forwarded = trustsProxy ? (req?.ip || req?.headers?.["x-real-ip"]) : null;
+  const trustedRailwayTarget = req?.app?.locals?.railwayTargetVerified === true;
+  const realIp = trustedRailwayTarget ? String(req?.headers?.["x-real-ip"] || "").trim() : "";
+  const forwarded = realIp && net.isIP(realIp) ? realIp : null;
   return normalizeIp(forwarded || req?.socket?.remoteAddress);
 }
 

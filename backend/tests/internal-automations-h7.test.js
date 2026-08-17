@@ -4,7 +4,7 @@ const { after, afterEach, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES } = require("../src/automations/actions");
 const { createAutomationService } = require("../src/automations/service");
-const { readAutomationWorkerConfig, shouldStartAutomationWorker, shouldStartNotificationWorker, shouldStartTemporalScanWorker, startAutomationWorker } = require("../src/automations/worker");
+const { readAutomationWorkerConfig, shouldStartAutomationWorker, shouldStartNotificationWorker, shouldStartTemporalScanWorker, startAutomationWorker, validateWorkerRuntimeTarget } = require("../src/automations/worker");
 
 process.env.NODE_ENV = "test";
 
@@ -923,6 +923,20 @@ test("H8.1 interpreta gate e configuracao do worker com defaults seguros", async
   assert.equal(shouldStartNotificationWorker({ NODE_ENV: "development", NOTIFICATIONS_WORKER_ENABLED: "true" }), false);
   assert.equal(shouldStartTemporalScanWorker({ NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: "true" }), false);
   assert.equal(shouldStartTemporalScanWorker({ NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: "true", AUTOMATION_TEMPORAL_SCAN_ENABLED: "true" }), true);
+  const officialWorkerEnv = {
+    NODE_ENV: "production",
+    RAILWAY_SERVICE_ID: "4eef3b96-e33f-42ea-9fb8-86c17b077ab8",
+    RAILWAY_PROJECT_ID: "ddfbf66c-e274-47b1-9493-286232d2f426",
+    RAILWAY_ENVIRONMENT_ID: "e18f76b1-e38f-468e-91fe-1eff6db9a5f8",
+    CRM_DATABASE_PROVIDER: "postgresql",
+    POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm",
+  };
+  assert.equal(validateWorkerRuntimeTarget(officialWorkerEnv), "postgresql");
+  assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, NODE_ENV: "development" }), /NODE_ENV_PRODUCTION_REQUIRED/);
+  assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, RAILWAY_SERVICE_ID: "wrong" }), /RAILWAY_WORKER_SERVICE_MISMATCH/);
+  assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, RAILWAY_PROJECT_ID: "wrong" }), /RAILWAY_PROJECT_MISMATCH/);
+  assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, RAILWAY_ENVIRONMENT_ID: "wrong" }), /RAILWAY_ENVIRONMENT_MISMATCH/);
+  assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, CRM_DATABASE_PROVIDER: "sqlite", DATABASE_URL: "file:/app/data/crm.db" }), /RAILWAY_WORKER_POSTGRES_REQUIRED/);
 
   const config = readAutomationWorkerConfig({
     AUTOMATION_WORKER_BATCH_SIZE: "999",
