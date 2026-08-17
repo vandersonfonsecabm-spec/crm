@@ -4,7 +4,7 @@ const { after, afterEach, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES } = require("../src/automations/actions");
 const { createAutomationService } = require("../src/automations/service");
-const { readAutomationWorkerConfig, shouldStartAutomationWorker, startAutomationWorker } = require("../src/automations/worker");
+const { readAutomationWorkerConfig, shouldStartAutomationWorker, shouldStartNotificationWorker, shouldStartTemporalScanWorker, startAutomationWorker } = require("../src/automations/worker");
 
 process.env.NODE_ENV = "test";
 
@@ -247,6 +247,37 @@ test("H8.3 cancelamento nao altera job ou execucao ja concluidos", async () => {
   );
 });
 
+test("retry da primeira acao reabre downstream cancelado por predecessor", async () => {
+  const tenant = await seedTenant("h7-multi-action-retry");
+  const context = adminContext(tenant);
+  const rule = await service.createRule(context, {
+    nome: "Duas acoes ordenadas",
+    prioridade: 20,
+    gatilho: "LEAD_CREATED",
+    timezone: "America/Sao_Paulo",
+    condicoes: [],
+    acoes: [
+      { tipo: "CREATE_INTERNAL_EVENT", eventoTipo: "FIRST_ACTION", resumo: "Primeira acao." },
+      { tipo: "CREATE_INTERNAL_EVENT", eventoTipo: "SECOND_ACTION", resumo: "Segunda acao." },
+    ],
+  });
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  await service.enqueueLeadCreated({ tx: prisma, empresaId: tenant.empresa.id, leadId: lead.id, originalEventId: "multi-action-retry", occurredAt: new Date() });
+  const jobs = await prisma.automacaoAcaoJob.findMany({ where: { empresaId: tenant.empresa.id }, orderBy: { indice: "asc" } });
+  assert.equal(jobs.length, 2);
+  await prisma.automacaoExecucao.update({ where: { id: jobs[0].execucaoId }, data: { status: "FALHA_DEFINITIVA", erroCodigo: "SYNTHETIC_FAILURE" } });
+  await prisma.automacaoAcaoJob.update({ where: { id: jobs[0].id }, data: { status: "FALHA_DEFINITIVA", nextAttemptAt: new Date() } });
+  await service.processDueJobs({ now: new Date(Date.now() + 1000), limit: 2, leaseOwner: "multi-action-cancel" });
+  assert.equal((await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: jobs[1].id } })).erroCodigo, "PREDECESSOR_TERMINAL");
+
+  await service.retryJob(context, jobs[0].id);
+  await service.processDueJobs({ now: new Date(Date.now() + 2000), limit: 2, leaseOwner: "multi-action-retry" });
+  const finalJobs = await prisma.automacaoAcaoJob.findMany({ where: { empresaId: tenant.empresa.id }, orderBy: { indice: "asc" } });
+  assert.deepEqual(finalJobs.map((job) => job.status), ["CONCLUIDO", "CONCLUIDO"]);
+  assert.equal((await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: jobs[0].execucaoId } })).status, "CONCLUIDA");
+});
+
 test("H8.1 processa CREATE_INTERNAL_EVENT com idempotencia e reprocessamento controlado", async () => {
   const tenant = await seedTenant("h7-idempotency");
   const context = adminContext(tenant);
@@ -279,6 +310,26 @@ test("H8.1 processa CREATE_INTERNAL_EVENT com idempotencia e reprocessamento con
   assert.equal(retried.status, "PENDENTE");
   assert.equal(retried.tentativas, 0);
   assert.equal(retried.erroCodigo, null);
+});
+
+test("retry reabre execucao terminal antes de reprocessar o job", async () => {
+  const tenant = await seedTenant("h7-terminal-retry");
+  const context = adminContext(tenant);
+  const rule = await internalEventRule(context, "Retry terminal controlado");
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  await service.enqueueLeadCreated({ tx: prisma, empresaId: tenant.empresa.id, leadId: lead.id, originalEventId: "terminal-retry-1", occurredAt: lead.createdAt });
+  const job = await prisma.automacaoAcaoJob.findFirstOrThrow({ where: { empresaId: tenant.empresa.id } });
+  await prisma.$transaction([
+    prisma.automacaoAcaoJob.update({ where: { id: job.id }, data: { status: "FALHA_DEFINITIVA", erroCodigo: "TEST_TERMINAL" } }),
+    prisma.automacaoExecucao.update({ where: { id: job.execucaoId }, data: { status: "FALHA_DEFINITIVA", concluidaEm: new Date(), erroCodigo: "TEST_TERMINAL" } }),
+  ]);
+  const retried = await service.retryJob(context, job.id);
+  assert.equal(retried.status, "PENDENTE");
+  assert.equal((await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: job.execucaoId } })).status, "PENDENTE");
+  const processed = await service.processDueJobs({ now: new Date(), limit: 1, leaseOwner: "terminal-retry-worker" });
+  assert.equal(processed.results[0].status, "CONCLUIDO");
+  assert.equal((await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: job.execucaoId } })).status, "CONCLUIDA");
 });
 
 test("H8.3 usa allowlists canonicas e bloqueia acoes indisponiveis", async () => {
@@ -801,6 +852,65 @@ test("H7 varre gatilhos temporais e o worker permanece desligado por padrao em t
   assert.equal(shouldStartAutomationWorker({ NODE_ENV: "production" }), false);
 });
 
+test("H7 varre todos os tenants em paginas sem repetir a primeira pagina", async () => {
+  const tenants = [];
+  for (const label of ["h7-temporal-page-a", "h7-temporal-page-b", "h7-temporal-page-c"]) {
+    const tenant = await seedTenant(label);
+    const context = adminContext(tenant);
+    const lead = await seedLead(tenant, { createdAt: new Date(Date.now() - 90 * 60000) });
+    const rule = await service.createRule(context, {
+      nome: `Lead sem acompanhamento ${label}`,
+      prioridade: 30,
+      gatilho: "LEAD_WITHOUT_FOLLOW_UP",
+      timezone: "America/Sao_Paulo",
+      condicoes: [{ campo: "tempoSemAcompanhamentoMinutos", operador: "GTE", valor: 60 }],
+      acoes: [{ tipo: "CREATE_INTERNAL_EVENT", eventoTipo: "FOLLOW_UP_MISSING", resumo: "Sem acompanhamento humano." }],
+    });
+    await prisma.automacaoRegra.update({ where: { id: rule.id }, data: { ativa: true, activatedAt: new Date(Date.now() - 120 * 60000) } });
+    tenants.push({ tenant, lead });
+  }
+
+  for (let index = 0; index < tenants.length; index += 1) await service.scanTemporalTriggers({ now: new Date(), limit: 1 });
+
+  for (const { tenant, lead } of tenants) {
+    assert.equal(await prisma.automacaoExecucao.count({ where: { empresaId: tenant.empresa.id, leadId: lead.id } }), 1);
+  }
+});
+
+test("H7 isola item temporal defeituoso e continua no proximo candidato", async () => {
+  const tenant = await seedTenant("h7-temporal-item-failure");
+  const context = adminContext(tenant);
+  const firstLead = await seedLead(tenant, { createdAt: new Date(Date.now() - 120 * 60000) });
+  const secondLead = await seedLead(tenant, { createdAt: new Date(Date.now() - 90 * 60000) });
+  const rule = await service.createRule(context, {
+    nome: "Lead temporal com item defeituoso",
+    prioridade: 30,
+    gatilho: "LEAD_WITHOUT_FOLLOW_UP",
+    timezone: "America/Sao_Paulo",
+    condicoes: [{ campo: "tempoSemAcompanhamentoMinutos", operador: "GTE", valor: 60 }],
+    acoes: [{ tipo: "CREATE_INTERNAL_EVENT", eventoTipo: "FOLLOW_UP_MISSING", resumo: "Sem acompanhamento humano." }],
+  });
+  await prisma.automacaoRegra.update({ where: { id: rule.id }, data: { ativa: true, activatedAt: new Date(Date.now() - 180 * 60000) } });
+
+  let transactionCalls = 0;
+  const faultPrisma = new Proxy(prisma, {
+    get(target, property, receiver) {
+      if (property === "$transaction") {
+        return async (...args) => {
+          if (transactionCalls++ === 0) throw new Error("synthetic temporal item failure");
+          return target.$transaction(...args);
+        };
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  const result = await createAutomationService({ prisma: faultPrisma, env }).scanTemporalTriggers({ now: new Date(), limit: 10 });
+  assert.equal(result.created, 1);
+  assert.equal(result.scanErrors, 1);
+  assert.equal(await prisma.automacaoExecucao.count({ where: { empresaId: tenant.empresa.id, leadId: firstLead.id } }), 0);
+  assert.equal(await prisma.automacaoExecucao.count({ where: { empresaId: tenant.empresa.id, leadId: secondLead.id } }), 1);
+});
+
 test("H8.1 interpreta gate e configuracao do worker com defaults seguros", async () => {
   assert.equal(shouldStartAutomationWorker({ NODE_ENV: "production" }), false);
   assert.equal(shouldStartAutomationWorker({ NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: "false" }), false);
@@ -808,6 +918,11 @@ test("H8.1 interpreta gate e configuracao do worker com defaults seguros", async
   assert.equal(shouldStartAutomationWorker({ NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: " true " }), true);
   assert.equal(shouldStartAutomationWorker({ NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: "1" }), true);
   assert.equal(shouldStartAutomationWorker({ NODE_ENV: "test", AUTOMATION_WORKER_ENABLED: "1" }), false);
+  assert.equal(shouldStartAutomationWorker({ NODE_ENV: "development", AUTOMATION_WORKER_ENABLED: "true" }), false);
+  assert.equal(shouldStartAutomationWorker({ AUTOMATION_WORKER_ENABLED: "true" }), false);
+  assert.equal(shouldStartNotificationWorker({ NODE_ENV: "development", NOTIFICATIONS_WORKER_ENABLED: "true" }), false);
+  assert.equal(shouldStartTemporalScanWorker({ NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: "true" }), false);
+  assert.equal(shouldStartTemporalScanWorker({ NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: "true", AUTOMATION_TEMPORAL_SCAN_ENABLED: "true" }), true);
 
   const config = readAutomationWorkerConfig({
     AUTOMATION_WORKER_BATCH_SIZE: "999",
@@ -821,6 +936,11 @@ test("H8.1 interpreta gate e configuracao do worker com defaults seguros", async
   assert.equal(config.leaseMs, 60000);
   assert.equal(config.executionTimeoutMs, 30000);
   assert.equal(config.maxAttempts, 3);
+  const boundedLease = readAutomationWorkerConfig({
+    AUTOMATION_WORKER_LEASE_MS: "5000",
+    AUTOMATION_WORKER_EXECUTION_TIMEOUT_MS: "120000",
+  });
+  assert.equal(boundedLease.leaseMs, 130000);
 
   const logs = [];
   const disabled = startAutomationWorker({
@@ -830,6 +950,68 @@ test("H8.1 interpreta gate e configuracao do worker com defaults seguros", async
   });
   assert.equal(disabled.started, false);
   assert.match(logs.join("\n"), /worker_disabled/);
+});
+
+test("worker isola falha de H7 e continua processando H8", async () => {
+  const scheduled = [];
+  let notifications = 0;
+  const worker = startAutomationWorker({
+    service: {
+      async scanTemporalTriggers() { throw new Error("H7 temporal failure"); },
+      async processDueJobs() { throw new Error("H7 job failure"); },
+    },
+    notificationService: {
+      async processDue() { notifications += 1; },
+    },
+    env: { NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: "true", AUTOMATION_TEMPORAL_SCAN_ENABLED: "true", NOTIFICATIONS_WORKER_ENABLED: "true" },
+    logger: { log() {}, error() {} },
+    setTimeoutImpl: (callback) => { scheduled.push(callback); return callback; },
+    clearTimeoutImpl() {},
+  });
+  scheduled[0]();
+  await new Promise((resolve) => setImmediate(resolve));
+  await worker.stop();
+  assert.equal(notifications, 1);
+});
+
+test("worker continua os jobs H7 quando a varredura temporal falha", async () => {
+  const scheduled = [];
+  let jobs = 0;
+  const worker = startAutomationWorker({
+    service: {
+      async scanTemporalTriggers() { throw new Error("H7 temporal failure"); },
+      async processDueJobs() { jobs += 1; },
+    },
+    env: { NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: "true", AUTOMATION_TEMPORAL_SCAN_ENABLED: "true" },
+    logger: { log() {}, error() {} },
+    setTimeoutImpl: (callback) => { scheduled.push(callback); return callback; },
+    clearTimeoutImpl() {},
+  });
+  scheduled[0]();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(jobs, 1);
+  await worker.stop();
+});
+
+test("worker encerra o processo apos falhas persistentes de um subsistema", async () => {
+  const scheduled = [];
+  const logs = [];
+  const worker = startAutomationWorker({
+    service: {
+      async scanTemporalTriggers() { throw new Error("H7 temporal failure"); },
+      async processDueJobs() {},
+    },
+    env: { NODE_ENV: "production", AUTOMATION_WORKER_ENABLED: "true", AUTOMATION_TEMPORAL_SCAN_ENABLED: "true" },
+    logger: { log() {}, error: (line) => logs.push(line) },
+    setTimeoutImpl: (callback) => { scheduled.push(callback); return callback; },
+    clearTimeoutImpl() {},
+  });
+  for (let index = 0; index < 5; index += 1) {
+    scheduled[index]();
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  await worker.waitForStop();
+  assert.match(logs.join("\n"), /worker_unhealthy/);
 });
 
 test("H8.1 dois workers logicos nao processam o mesmo job", async () => {
@@ -848,6 +1030,26 @@ test("H8.1 dois workers logicos nao processam o mesmo job", async () => {
   assert.equal(left.processed + right.processed, 1);
   assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: tenant.empresa.id, leadId: lead.id } }), 1);
   assert.equal(await prisma.automacaoAcaoJob.count({ where: { empresaId: tenant.empresa.id, status: "CONCLUIDO" } }), 1);
+});
+
+test("H8.1 reconcilia job preso na ultima tentativa apos crash do worker", async () => {
+  const tenant = await seedTenant("h8-exhausted-lease");
+  const context = adminContext(tenant);
+  const rule = await internalEventRule(context, "Lease esgotado");
+  const lead = await seedLead(tenant);
+  const job = await seedActionJob({
+    tenant,
+    rule: await prisma.automacaoRegra.findUniqueOrThrow({ where: { id: rule.id } }),
+    entityType: "LEAD",
+    entity: lead,
+    marker: "exhausted-lease",
+  });
+  const now = new Date();
+  await prisma.automacaoExecucao.update({ where: { id: job.execucaoId }, data: { status: "PROCESSANDO" } });
+  await prisma.automacaoAcaoJob.update({ where: { id: job.id }, data: { status: "PROCESSANDO", tentativas: 3, leaseOwner: "crashed-worker", leaseExpiresAt: new Date(now.getTime() - 1000) } });
+  await service.processDueJobs({ now, limit: 1, leaseOwner: "recovery-worker", maxAttempts: 3 });
+  assert.equal((await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: job.id } })).status, "FALHA_DEFINITIVA");
+  assert.equal((await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: job.execucaoId } })).status, "FALHA_DEFINITIVA");
 });
 
 test("H8.1 lease valido nao e roubado e lease expirado e recuperado", async () => {

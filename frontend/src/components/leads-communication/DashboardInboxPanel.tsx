@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- URL/deep-link and polling effects synchronize external inbox state. */
 import { AlertTriangle, ArrowLeft, ArrowRight, CalendarClock, CheckCircle2, Clock3, Filter, History, Inbox, MessageCircle, MoreHorizontal, PanelRightOpen, Paperclip, RefreshCw, Search, Send, StickyNote, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
@@ -616,7 +617,7 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
                 <div className="inbox-conversation-actions flex flex-wrap items-center justify-end gap-1">
                   {conversation.responsavelId === null && !isClosed && <Button disabled={busy} leftIcon={<UserPlus size={13} />} onClick={() => void assumeConversation()} size="sm">Assumir atendimento</Button>}
                   {queueScope === "aguardando" && <Button aria-label="Abrir próxima pendência" disabled={busy || sending} leftIcon={<ArrowRight size={13} />} onClick={() => void openNextPending()} size="sm" variant="secondary">Próxima</Button>}
-                  {compactInboxContext && <IconButton aria-controls="inbox-conversation-context" aria-expanded={hasContextDrawer} aria-label={hasContextDrawer ? "Ocultar contexto do Cliente, Lead e histórico" : "Abrir contexto do Cliente, Lead e histórico"} onClick={() => setContextOpen((open) => !open)} ref={contextTriggerRef}><PanelRightOpen size={15} /></IconButton>}
+                  {compactInboxContext && <IconButton aria-controls={hasContextDrawer ? "inbox-conversation-context" : undefined} aria-expanded={hasContextDrawer} aria-label={hasContextDrawer ? "Ocultar contexto do Cliente, Lead e histórico" : "Abrir contexto do Cliente, Lead e histórico"} onClick={() => setContextOpen((open) => !open)} ref={contextTriggerRef}><PanelRightOpen size={15} /></IconButton>}
                   {canChangeConversation && <details className="inbox-actions-menu relative" onKeyDown={(event) => { if (event.key === "Escape") { closeActionsMenu(); actionsMenu.current?.querySelector("summary")?.focus(); } }} ref={actionsMenu}>
                     <summary aria-label="Mais ações da conversa" className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-md border border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]" ref={actionModalTriggerRef}><MoreHorizontal aria-hidden="true" size={16} /></summary>
                     <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-1 shadow-md">
@@ -736,7 +737,7 @@ export function InboxQueueToolbar({ activeFilterCount, filtersOpen, filtersTrigg
         <Input aria-label="Buscar conversas" className="pl-9" onChange={(event) => onSearchChange(event.target.value)} placeholder="Buscar contato ou interesse" value={search} />
       </div>
       <div className="inbox-command-actions">
-        <Button aria-controls="inbox-filters-drawer" aria-expanded={filtersOpen} className="inbox-filter-trigger" leftIcon={<Filter size={14} />} onClick={onOpenFilters} ref={filtersTriggerRef} size="md" variant="secondary">
+        <Button aria-controls={filtersOpen ? "inbox-filters-drawer" : undefined} aria-expanded={filtersOpen} className="inbox-filter-trigger" leftIcon={<Filter size={14} />} onClick={onOpenFilters} ref={filtersTriggerRef} size="md" variant="secondary">
           Filtros{activeFilterCount ? ` (${activeFilterCount})` : ""}
         </Button>
         <IconButton aria-label="Atualizar conversas" disabled={refreshing} onClick={onRefresh} size="md">

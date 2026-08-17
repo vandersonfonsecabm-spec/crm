@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- notification polling is an abortable external subscription. */
 import { Bell, Check, Clock3, ExternalLink, Loader2, Settings, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import {
@@ -244,7 +245,7 @@ export default function DashboardNotifications({ onOpenTarget, canManage = false
         className="topbar-icon-button relative flex h-11 w-11 items-center justify-center rounded-md"
         aria-label={badge ? `Notificações, ${badge} novas` : "Notificações"}
         aria-expanded={isOpen}
-        aria-controls={titleId}
+        aria-controls={isOpen ? titleId : undefined}
         aria-haspopup="dialog"
         onClick={() => {
           setIsOpen((current) => !current);

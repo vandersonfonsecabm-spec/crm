@@ -84,6 +84,7 @@ const SAFE_EVENTS = new Set([
   "job_succeeded",
   "worker_disabled",
   "worker_failed",
+  "worker_unhealthy",
   "worker_poll_error",
   "worker_started",
   "worker_stopped",
@@ -109,6 +110,7 @@ const SAFE_STATUSES = new Set([
 ]);
 const SAFE_LIFECYCLE_STATUSES = new Set(["disabled", "started", "stopped", "stopping"]);
 const SAFE_PROVIDERS = new Set(["postgresql", "sqlite", "unknown"]);
+const SAFE_SUBSYSTEMS = new Set(["automation", "automation_temporal", "automation_jobs", "notifications"]);
 
 const NUMERIC_FIELDS = new Set([
   "tenantId",
@@ -119,6 +121,7 @@ const NUMERIC_FIELDS = new Set([
   "attempt",
   "maxAttempts",
   "durationMs",
+  "consecutiveFailures",
   "pollIntervalMs",
 ]);
 
@@ -196,6 +199,10 @@ function sanitizeLogFields(fields = {}) {
     if (key === "provider") {
       const provider = String(value || "").trim().toLowerCase();
       safe.provider = SAFE_PROVIDERS.has(provider) ? provider : "unknown";
+      continue;
+    }
+    if (key === "subsystem") {
+      safe.subsystem = SAFE_SUBSYSTEMS.has(String(value || "").trim()) ? String(value).trim() : "unknown";
       continue;
     }
     if (key === "errorCode") {

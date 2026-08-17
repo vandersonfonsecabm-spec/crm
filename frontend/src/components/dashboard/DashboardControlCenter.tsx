@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- the snapshot effect owns an abortable server-state subscription. */
 import { AlertCircle, ChevronRight, LockKeyhole, Plus } from "lucide-react";
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";

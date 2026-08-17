@@ -202,7 +202,9 @@ test("Release B1 protege tenant, RBAC, fila, atribuicoes, mensagens e idempotenc
   assert.equal((await request("GET", "/conversas?semResponsavel=true", undefined, managerA.token)).body.pagination.total, 2);
   assert.equal((await request("GET", "/conversas?semResponsavel=true", undefined, sellerA.token)).body.pagination.total, 2);
   assert.equal((await request("GET", `/conversas/${conversationA.id}`, undefined, sellerA.token)).status, 200);
-  assert.equal((await request("GET", "/conversas/resumo", undefined, adminA.token)).body.pendentes, 2);
+  // Empty NOVA conversations are not attention-pending until an inbound/latest
+  // message exists; the summary contract intentionally requires ultimaMensagemEm.
+  assert.equal((await request("GET", "/conversas/resumo", undefined, adminA.token)).body.pendentes, 0);
   assert.equal((await request("GET", "/conversas/resumo", undefined, adminB.token)).body.pendentes, 0);
   assert.equal((await request("GET", "/conversas/resumo")).status, 401);
 
@@ -254,7 +256,7 @@ test("Release B1 protege tenant, RBAC, fila, atribuicoes, mensagens e idempotenc
   assert.equal(new Set(concurrentMessages.map((item) => item.id)).size, 1);
   assert.equal(await prisma.mensagemCanal.count({ where: { canalIntegracaoId: channelA.id, externalId: "msg-b1-concurrent" } }), 1);
   assert.equal((await request("PATCH", `/conversas/${conversationA.id}/estado`, { estado: "ENCERRADA" }, sellerA.token)).status, 200);
-  assert.equal((await request("GET", "/conversas/resumo", undefined, adminA.token)).body.pendentes, 1);
+  assert.equal((await request("GET", "/conversas/resumo", undefined, adminA.token)).body.pendentes, 0);
   assert.equal((await request("POST", `/conversas/${conversationA.id}/mensagens/simuladas`, {
     externalId: "msg-after-close",
     direcao: "ENTRADA",
@@ -274,7 +276,7 @@ test("Release B1 protege tenant, RBAC, fila, atribuicoes, mensagens e idempotenc
     contatoCanalId: contactB.id,
     leadId: leadB.body.id,
   });
-  assert.equal((await request("GET", "/conversas/resumo", undefined, adminB.token)).body.pendentes, 1);
+  assert.equal((await request("GET", "/conversas/resumo", undefined, adminB.token)).body.pendentes, 0);
   assert.equal((await request("GET", `/conversas/${conversationB.id}`, undefined, adminA.token)).status, 404);
   const messageB = await service.createSimulatedMessage(contexts.adminB, conversationB.id, {
     externalId: "msg-b1-in-1",

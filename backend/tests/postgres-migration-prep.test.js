@@ -73,7 +73,7 @@ test("workspace PostgreSQL padrao permanece sob o package root do backend", () =
   assert.equal(packageRoot, backendDirectory);
 });
 
-test("workspace PostgreSQL preserva baseline congelada e inclui migrations incrementais", () => {
+test("workspace PostgreSQL preserva baseline congelada e inclui migrations incrementais atuais", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-pg-versioned-migrations-"));
   try {
     const workspace = preparePostgresWorkspace({ root });
@@ -91,12 +91,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260811120000_add_meta_credential_store",
       "20260811130000_add_meta_oauth_state_binding",
       "20260813150000_add_customer_archive",
+      "20260815120000_add_h8_notifications",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260813150000_add_customer_archive",
+        "20260815120000_add_h8_notifications",
         "migration.sql",
       ),
     );
@@ -164,6 +165,15 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(metaOAuthStateMigration, /IntegracaoOAuthState_empresaId_canalIntegracaoId_fkey/);
     assert.match(metaOAuthStateMigration, /IntegracaoOAuthState_empresaId_canalIntegracaoId_fluxo_idx/);
     assert.doesNotMatch(metaOAuthStateMigration, /^\s*(?:DROP|DELETE|UPDATE|TRUNCATE)\b/im);
+    const h8Migration = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260815120000_add_h8_notifications",
+      "migration.sql",
+    ), "utf8");
+    assert.match(h8Migration, /^BEGIN;\s*$/m);
+    assert.match(h8Migration, /COMMIT;\s*$/m);
+    assert.match(h8Migration, /ConfiguracaoNotificacaoEmpresa/);
+    assert.doesNotMatch(h8Migration, /^\s*(?:DROP|DELETE|UPDATE|TRUNCATE)\b/im);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

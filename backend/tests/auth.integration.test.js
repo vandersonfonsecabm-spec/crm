@@ -260,6 +260,7 @@ test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", 
   assert.equal(otherIdentity.status, 401);
 
   const health = await request("GET", "/health");
+  const ready = await request("GET", "/ready");
   const dashboard = await request("GET", "/dashboard", undefined, adminToken);
   const categorias = await request("GET", "/categorias-produtos");
   const produtos = await request("GET", "/produtos");
@@ -270,6 +271,11 @@ test("fundacao SaaS autentica, autoriza e bloqueia acessos publicos inseguros", 
   const movimentacoesAuthenticated = await request("GET", "/estoque/movimentacoes", undefined, adminToken);
   const estoqueResumoAuthenticated = await request("GET", "/estoque/resumo", undefined, adminToken);
   assert.equal(health.status, 200);
+  assert.equal(health.headers.get("x-powered-by"), null);
+  assert.equal(health.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(ready.status, 200);
+  assert.equal(ready.body.status, "ready");
+  assert.equal(ready.body.database, "ok");
   assert.equal(dashboard.status, 200);
   assert.equal(categorias.status, 401);
   assert.equal(produtos.status, 401);

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- network search state is synchronized from the active command effect. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { fetchClientesFromBackend } from "../../services/crmApi";

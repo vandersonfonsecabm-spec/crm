@@ -132,8 +132,8 @@ function UsersPanel({ authSession, onToast }: PanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="users-title">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="min-w-0 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="users-title">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -180,7 +180,7 @@ function UsersPanel({ authSession, onToast }: PanelProps) {
           )}
         </section>
 
-        <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="invite-title">
+        <section className="min-w-0 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="invite-title">
           <div className="flex items-center gap-2">
             <UserRoundPlus size={18} className="text-[var(--accent-primary)]" />
             <h2 id="invite-title" className="text-sm font-semibold text-[var(--text-primary)]">Convidar usuário</h2>
@@ -345,9 +345,9 @@ function ProfilePanel({ authSession, onToast, onLogout }: PanelProps) {
 
   const activeSessions = useMemo(() => sessions.filter((session) => session.active), [sessions]);
 
-  return <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-    <div className="space-y-4">
-      <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="profile-title">
+  return <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="min-w-0 space-y-4">
+      <section className="min-w-0 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="profile-title">
         <div className="flex items-center gap-2"><UserRound size={18} className="text-[var(--accent-primary)]" /><h2 id="profile-title" className="text-sm font-semibold text-[var(--text-primary)]">Perfil</h2></div>
         <p className="mt-1 text-xs text-[var(--text-muted)]">Atualize apenas os dados pessoais permitidos pela sua conta.</p>
         {loading ? <PanelLoading label="Carregando perfil..." /> : <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={saveProfile}>
@@ -359,7 +359,7 @@ function ProfilePanel({ authSession, onToast, onLogout }: PanelProps) {
         </form>}
       </section>
 
-      <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="password-title">
+      <section className="min-w-0 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="password-title">
         <div className="flex items-center gap-2"><KeyRound size={18} className="text-[var(--accent-primary)]" /><h2 id="password-title" className="text-sm font-semibold text-[var(--text-primary)]">Trocar senha</h2></div>
         <p className="mt-1 text-xs text-[var(--text-muted)]">Use uma frase-senha com pelo menos 12 caracteres. As demais sessões serão revogadas.</p>
         <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={savePassword}>
@@ -372,8 +372,8 @@ function ProfilePanel({ authSession, onToast, onLogout }: PanelProps) {
       </section>
     </div>
 
-    <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="sessions-title">
-      <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><MonitorSmartphone size={18} className="text-[var(--accent-primary)]" /><h2 id="sessions-title" className="text-sm font-semibold text-[var(--text-primary)]">Sessões ativas</h2></div><p className="mt-1 text-xs text-[var(--text-muted)]">{activeSessions.length} sessão(ões) válida(s). Tokens não são exibidos.</p></div><ShieldCheck size={17} className="text-emerald-600" /></div>
+    <section className="min-w-0 rounded-xl border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-sm sm:p-5" aria-labelledby="sessions-title">
+      <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><MonitorSmartphone size={18} className="text-[var(--accent-primary)]" /><h2 id="sessions-title" className="text-sm font-semibold text-[var(--text-primary)]">Sessões ativas</h2></div><p className="mt-1 whitespace-nowrap text-[10px] text-[var(--text-muted)]">{loading ? "Carregando sessões..." : `${activeSessions.length} sessão(ões) válida(s). Tokens não são exibidos.`}</p></div><ShieldCheck size={17} className="text-emerald-600" /></div>
       {loading ? <PanelLoading label="Carregando sessões..." /> : <div className="mt-4 space-y-2">{sessions.length === 0 ? <EmptyPanel icon={<LockKeyhole size={17} />} title="Nenhuma sessão" description="Faça login novamente para criar uma sessão ativa." /> : sessions.map((session) => <article className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-base)] p-3" key={session.id}><div className="flex items-start gap-3"><MonitorSmartphone size={16} className="mt-0.5 shrink-0 text-[var(--text-muted)]" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-xs font-medium text-[var(--text-primary)]">{session.current ? "Este dispositivo" : "Outro dispositivo"}</p><StatusPill active={session.active} label={session.active ? "Ativa" : "Encerrada"} /></div><p className="mt-1 truncate text-[11px] text-[var(--text-muted)]">{session.userAgent}</p><p className="mt-1 text-[11px] text-[var(--text-muted)]">Último uso: {formatDate(session.lastUsedAt)}</p></div>{session.active && !session.current && <button aria-label="Revogar sessão" className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border-default)] text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]" disabled={sessionBusy === session.id} onClick={() => void revokeSession(session.id)} title="Revogar sessão" type="button"><LogOut size={14} /></button>}</div></article>)}</div>}
       <button className="mt-4 inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-rose-200 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60" disabled={sessionBusy === "all" || activeSessions.length === 0} onClick={() => void logoutAll()} type="button">{sessionBusy === "all" && <LoaderCircle className="animate-spin" size={14} />} Sair de todos os dispositivos</button>
     </section>

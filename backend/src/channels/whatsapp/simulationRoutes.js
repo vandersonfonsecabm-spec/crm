@@ -2,7 +2,7 @@ const { createWhatsappSimulationService } = require("./simulationService");
 
 function mountWhatsappSimulationRoutes({ app, prisma, authenticate, requireRole }) {
   const service = createWhatsappSimulationService({ prisma });
-  const adminOnly = [authenticate, requireRole("ADMIN")];
+  const adminOnly = [authenticate, requireRole("ADMIN"), simulationEnvironmentOnly];
 
   app.post("/whatsapp/simular-mensagem", ...adminOnly, async (req, res) => {
     try {
@@ -16,6 +16,14 @@ function mountWhatsappSimulationRoutes({ app, prisma, authenticate, requireRole 
       return handleError(res, error);
     }
   });
+}
+
+function simulationEnvironmentOnly(req, res, next) {
+  const environment = String(process.env.NODE_ENV || "").trim().toLowerCase();
+  const enabled = environment === "test"
+    || (environment === "development" && process.env.WHATSAPP_META_SIMULATOR_ENABLED === "true");
+  if (!enabled) return res.status(404).json({ erro: "Recurso nao encontrado.", codigo: "NOT_FOUND" });
+  return next();
 }
 
 function handleError(res, error) {
@@ -32,4 +40,4 @@ function sanitizeError(error) {
   return { name: error.name, code: error.code };
 }
 
-module.exports = { mountWhatsappSimulationRoutes, _private: { handleError } };
+module.exports = { mountWhatsappSimulationRoutes, _private: { handleError, simulationEnvironmentOnly } };

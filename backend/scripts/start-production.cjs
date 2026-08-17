@@ -16,6 +16,8 @@ const SCHEMA_PATH = path.join(BACKEND_DIRECTORY, "prisma", "schema.prisma");
 const VALIDATE_RUNTIME_PATH = path.join(BACKEND_DIRECTORY, "scripts", "validate-runtime.js");
 const SERVER_PATH = path.join(BACKEND_DIRECTORY, "src", "server.js");
 const OFFICIAL_SERVICE_ID = "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92";
+const OFFICIAL_PROJECT_ID = "ddfbf66c-e274-47b1-9493-286232d2f426";
+const OFFICIAL_ENVIRONMENT_ID = "e18f76b1-e38f-468e-91fe-1eff6db9a5f8";
 const HOMOLOGATION_ENVIRONMENT = "homolog";
 const OFFICIAL_MOUNT_PATH = path.resolve("/app/data");
 
@@ -26,6 +28,9 @@ async function runStartup(options = {}) {
   const signalSource = options.signalSource || process;
   const railway = isRailwayEnvironment(env);
   const maintenanceReadOnly = maintenanceReadOnlyEnabled(env);
+  if (railway && env.NODE_ENV !== "production" && options.allowNonProductionRailway !== true) {
+    throw startupError("NODE_ENV_PRODUCTION_REQUIRED");
+  }
   let runtime = {
     backendDirectory: options.backendDirectory || BACKEND_DIRECTORY,
     schemaPath: options.schemaPath || SCHEMA_PATH,
@@ -64,6 +69,13 @@ async function runStartup(options = {}) {
 
       logger.log("Migrations concluidas");
     }
+
+    try {
+      await (options.runRuntimeGate || runRuntimeGate)(runtime, { allowPending: maintenanceReadOnly });
+    } catch (error) {
+      logger.error("Preflight final do banco falhou; API nao iniciada.");
+      throw error;
+    }
   }
 
   logger.log("Iniciando API");
@@ -96,6 +108,7 @@ function validateRailwayEnvironment({
   if (!env.RAILWAY_DEPLOYMENT_ID) {
     throw startupError("RAILWAY_DEPLOYMENT_MISSING");
   }
+  if (env.NODE_ENV === "production") assertRailwayTargetIdentity({ env, expectedServiceId });
 
   const provider = databaseProviderFromEnv(env);
   const databaseUrl = databaseUrlForProvider(env, provider);
@@ -106,6 +119,9 @@ function validateRailwayEnvironment({
   }
   if (engine !== provider) {
     throw startupError("DATABASE_PROVIDER_MISMATCH");
+  }
+  if (expectedServiceId === OFFICIAL_SERVICE_ID && provider !== "postgresql") {
+    throw startupError("RAILWAY_PRODUCTION_POSTGRES_REQUIRED");
   }
 
   let databasePath = null;
@@ -156,6 +172,31 @@ function validateRailwayEnvironment({
     prismaCliPath: resolvedPrismaCli,
     schemaPath: runtimeSchemaPath,
   };
+}
+
+function assertRailwayTargetIdentity({ env, expectedServiceId }) {
+  const expectedProjectId = expectedServiceId === OFFICIAL_SERVICE_ID
+    ? OFFICIAL_PROJECT_ID
+    : String(env.CRM_RAILWAY_HOMOLOG_PROJECT_ID || "").trim();
+  const expectedEnvironmentId = expectedServiceId === OFFICIAL_SERVICE_ID
+    ? OFFICIAL_ENVIRONMENT_ID
+    : String(env.CRM_RAILWAY_HOMOLOG_ENVIRONMENT_ID || "").trim();
+  if (!expectedProjectId || env.RAILWAY_PROJECT_ID !== expectedProjectId) throw startupError("RAILWAY_PROJECT_MISMATCH");
+  if (!expectedEnvironmentId || env.RAILWAY_ENVIRONMENT_ID !== expectedEnvironmentId) throw startupError("RAILWAY_ENVIRONMENT_MISMATCH");
+}
+
+async function runRuntimeGate(runtime, { allowPending = false } = {}) {
+  const migrationDirectory = path.join(path.dirname(runtime.schemaPath), "migrations");
+  const migrationName = latestMigrationName(migrationDirectory);
+  const mode = allowPending ? "pre-migration" : runtime.provider === "postgresql" ? "production-readonly" : "post-migration";
+  return runGate({
+    mode,
+    env: runtime.env,
+    migrationName,
+    ...(runtime.provider === "postgresql"
+      ? { postgresMigrationDir: migrationDirectory }
+      : { sqliteMigrationDir: migrationDirectory }),
+  });
 }
 
 function resolveExpectedServiceId(env = process.env) {
@@ -364,9 +405,11 @@ module.exports = {
   hasPendingMigrations,
   latestMigrationName,
   runPrismaMigration,
+  runRuntimeGate,
   runStartup,
   startApiServer,
   superviseServer,
   validateRailwayEnvironment,
+  assertRailwayTargetIdentity,
   resolveExpectedServiceId,
 };

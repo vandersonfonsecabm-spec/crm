@@ -6,7 +6,18 @@ const {
 } = require("./prisma-runtime.cjs");
 require("dotenv").config();
 
-if (process.env.NODE_ENV !== "production") {
+const railwayEnvironment = Boolean(
+  process.env.RAILWAY_SERVICE_ID
+    || process.env.RAILWAY_DEPLOYMENT_ID
+    || process.env.RAILWAY_PROJECT_ID
+    || process.env.RAILWAY_VOLUME_MOUNT_PATH,
+);
+
+if (railwayEnvironment && process.env.NODE_ENV !== "production") {
+  fail("NODE_ENV=production e obrigatorio no Railway.");
+}
+
+if (!railwayEnvironment && process.env.NODE_ENV !== "production") {
   process.exit(0);
 }
 

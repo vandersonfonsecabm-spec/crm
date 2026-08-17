@@ -22,6 +22,11 @@ const ROUND_ROBIN_TRANSACTION_BACKOFF_MS = 5;
 const RETRYABLE_JOB_STATUSES = Object.freeze(["PENDENTE", "FALHOU"]);
 
 function createAutomationService({ prisma, env = process.env, logger = console }) {
+  const temporalScanState = {
+    tenantId: null,
+    leads: new Map(),
+    deals: new Map(),
+  };
   const isPostgresRuntime = () => {
     const mergedEnv = { ...process.env, ...env };
     if (String(mergedEnv.CRM_TEST_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql") return true;
@@ -78,14 +83,24 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     requireAutomationAdmin(context);
     await requireTenantFeature(context);
     const rule = await findRule(context, id);
-    const data = validateRulePayload(input, { partial: true });
-    if (!Object.keys(data).length) throw domainError(422, "VALIDATION_ERROR", "Informe ao menos um campo para atualizar.");
-    if (Object.hasOwn(data, "acoes")) requireAvailableActions(data.acoes);
+    if (!input || typeof input !== "object" || !Object.keys(input).length) throw domainError(422, "VALIDATION_ERROR", "Informe ao menos um campo para atualizar.");
+    const data = validateRulePayload({
+      nome: rule.nome,
+      descricao: rule.descricao,
+      prioridade: rule.prioridade,
+      gatilho: rule.gatilho,
+      timezone: rule.timezone,
+      condicoes: safeJson(rule.condicoesJson, []),
+      acoes: safeJson(rule.acoesJson, []),
+      janela: rule.janelaJson ? safeJson(rule.janelaJson, null) : null,
+      ...input,
+    });
+    requireAvailableActions(data.acoes);
     const update = { updatedById: context.usuarioId, versao: { increment: 1 } };
-    for (const field of ["nome", "descricao", "prioridade", "gatilho", "timezone"]) if (Object.hasOwn(data, field)) update[field] = data[field];
-    if (Object.hasOwn(data, "condicoes")) update.condicoesJson = JSON.stringify(data.condicoes);
-    if (Object.hasOwn(data, "acoes")) update.acoesJson = JSON.stringify(data.acoes);
-    if (Object.hasOwn(data, "janela")) update.janelaJson = data.janela ? JSON.stringify(data.janela) : null;
+    for (const field of ["nome", "descricao", "prioridade", "gatilho", "timezone"]) update[field] = data[field];
+    update.condicoesJson = JSON.stringify(data.condicoes);
+    update.acoesJson = JSON.stringify(data.acoes);
+    update.janelaJson = data.janela ? JSON.stringify(data.janela) : null;
     const row = await prisma.automacaoRegra.update({ where: { id: rule.id }, data: update });
     return presentRule(row);
   }
@@ -224,92 +239,169 @@ function createAutomationService({ prisma, env = process.env, logger = console }
   }
 
   async function scanTemporalTriggers({ now = new Date(), limit = 50 } = {}) {
+    const pageSize = Math.max(1, Math.min(Number.isInteger(limit) ? limit : 50, 100));
+    const tenantWhere = { chave: FEATURE_KEYS.AUTOMATIONS, habilitada: true };
+    if (temporalScanState.tenantId !== null) tenantWhere.empresaId = { gt: temporalScanState.tenantId };
     const tenants = await prisma.empresaFuncionalidade.findMany({
-      where: { chave: FEATURE_KEYS.AUTOMATIONS, habilitada: true },
+      where: tenantWhere,
       select: { empresaId: true },
-      take: Math.min(limit, 100),
+      orderBy: { empresaId: "asc" },
+      take: pageSize,
     });
     let created = 0;
+    let scanErrors = 0;
     for (const tenant of tenants) {
-      if (!(await isFeatureEnabledForTenant({ prisma, empresaId: tenant.empresaId, featureKey: FEATURE_KEYS.AUTOMATIONS, env }))) continue;
-      created += await scanLeadWithoutFollowUp(tenant.empresaId, now, limit);
-      created += await scanDealStalled(tenant.empresaId, now, limit);
+      try {
+        if (!(await isFeatureEnabledForTenant({ prisma, empresaId: tenant.empresaId, featureKey: FEATURE_KEYS.AUTOMATIONS, env }))) continue;
+        try {
+          const leadScan = await scanLeadWithoutFollowUp(tenant.empresaId, now, pageSize);
+          created += leadScan.created;
+          scanErrors += leadScan.errors;
+        } catch (error) {
+          scanErrors += 1;
+          logTemporalScanFailure("LEAD_WITHOUT_FOLLOW_UP", tenant.empresaId, error);
+        }
+        try {
+          const dealScan = await scanDealStalled(tenant.empresaId, now, pageSize);
+          created += dealScan.created;
+          scanErrors += dealScan.errors;
+        } catch (error) {
+          scanErrors += 1;
+          logTemporalScanFailure("DEAL_STALLED", tenant.empresaId, error);
+        }
+      } catch (error) {
+        scanErrors += 1;
+        logTemporalScanFailure("TENANT", tenant.empresaId, error);
+      }
     }
-    return { created };
+    temporalScanState.tenantId = tenants.length === pageSize ? tenants.at(-1).empresaId : null;
+    return { created, scanErrors };
   }
 
   async function scanLeadWithoutFollowUp(empresaId, now, limit) {
     const rules = await activeRules(empresaId, "LEAD_WITHOUT_FOLLOW_UP");
     let count = 0;
+    let errors = 0;
     for (const rule of rules) {
-      const threshold = thresholdMinutes(rule, "tempoSemAcompanhamentoMinutos");
-      if (!threshold || !rule.activatedAt) continue;
-      const cutoff = new Date(now.getTime() - threshold * 60000);
-      const leads = await prisma.lead.findMany({
-        where: { empresaId, cliente: { arquivadoEm: null }, createdAt: { gte: rule.activatedAt, lte: cutoff }, status: { in: ["NOVO", "EM_ATENDIMENTO", "QUALIFICADO"] } },
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-        take: limit,
-      });
-      for (const lead of leads) {
-        count += await prisma.$transaction(async (tx) => {
-          const currentLead = await tx.lead.findFirst({
-            where: { id: lead.id, empresaId },
-            select: { id: true, clienteId: true, createdAt: true },
-          });
-          if (!currentLead) return 0;
-          await lockActiveClienteRow(tx, empresaId, currentLead.clienteId);
-          const existing = await tx.acompanhamento.count({ where: { empresaId, leadId: currentLead.id, createdAt: { gte: currentLead.createdAt } } });
-          if (existing !== 0) return 0;
-          return (await enqueueOccurrence(tx, {
-            empresaId,
-            trigger: rule.gatilho,
-            entityType: "LEAD",
-            entityId: currentLead.id,
-            leadId: currentLead.id,
-            occurredAt: currentLead.createdAt,
-            elapsedMinutes: Math.floor((now.getTime() - currentLead.createdAt.getTime()) / 60000),
-            onlyRuleId: rule.id,
-          })).created;
-        });
+      let leads = null;
+      let cursorKey = null;
+      try {
+        const threshold = thresholdMinutes(rule, "tempoSemAcompanhamentoMinutos");
+        if (!threshold || !rule.activatedAt) continue;
+        const cutoff = new Date(now.getTime() - threshold * 60000);
+        cursorKey = `${empresaId}:${rule.id}`;
+        const cursor = temporalScanState.leads.get(cursorKey);
+        const where = { empresaId, cliente: { arquivadoEm: null }, createdAt: { gte: rule.activatedAt, lte: cutoff }, status: { in: ["NOVO", "EM_ATENDIMENTO", "QUALIFICADO"] } };
+        if (cursor) where.OR = [{ createdAt: { gt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { gt: cursor.id } }];
+        leads = await prisma.lead.findMany({ where, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: limit });
+        for (const lead of leads) {
+          try {
+            count += await prisma.$transaction(async (tx) => {
+              const currentLeadRef = await tx.lead.findFirst({
+                where: { id: lead.id, empresaId },
+                select: { id: true, clienteId: true },
+              });
+              if (!currentLeadRef) return 0;
+              await lockActiveClienteRow(tx, empresaId, currentLeadRef.clienteId);
+              const currentLead = await tx.lead.findFirst({
+                where: { id: lead.id, empresaId, cliente: { arquivadoEm: null }, status: { in: ["NOVO", "EM_ATENDIMENTO", "QUALIFICADO"] }, createdAt: { gte: rule.activatedAt, lte: cutoff } },
+                select: { id: true, clienteId: true, createdAt: true },
+              });
+              if (!currentLead) return 0;
+              if (currentLead.createdAt < rule.activatedAt || currentLead.createdAt > cutoff) return 0;
+              const existing = await tx.acompanhamento.count({ where: { empresaId, leadId: currentLead.id, createdAt: { gte: currentLead.createdAt } } });
+              if (existing !== 0) return 0;
+              return (await enqueueOccurrence(tx, {
+                empresaId,
+                trigger: rule.gatilho,
+                entityType: "LEAD",
+                entityId: currentLead.id,
+                leadId: currentLead.id,
+                occurredAt: currentLead.createdAt,
+                elapsedMinutes: Math.floor((now.getTime() - currentLead.createdAt.getTime()) / 60000),
+                onlyRuleId: rule.id,
+              })).created;
+            });
+          } catch (error) {
+            errors += 1;
+            logTemporalScanFailure("LEAD_WITHOUT_FOLLOW_UP_ITEM", empresaId, error, rule.id);
+          }
+        }
+        if (leads.length === limit) temporalScanState.leads.set(cursorKey, { createdAt: leads.at(-1).createdAt, id: leads.at(-1).id });
+        else temporalScanState.leads.delete(cursorKey);
+      } catch (error) {
+        errors += 1;
+        if (leads?.length === limit) temporalScanState.leads.set(cursorKey, { createdAt: leads.at(-1).createdAt, id: leads.at(-1).id });
+        else if (cursorKey) temporalScanState.leads.delete(cursorKey);
+        logTemporalScanFailure("LEAD_WITHOUT_FOLLOW_UP", empresaId, error, rule.id);
       }
     }
-    return count;
+    return { created: count, errors };
   }
 
   async function scanDealStalled(empresaId, now, limit) {
     const rules = await activeRules(empresaId, "DEAL_STALLED");
     let count = 0;
+    let errors = 0;
     for (const rule of rules) {
-      const threshold = thresholdMinutes(rule, "tempoParadoMinutos");
-      if (!threshold || !rule.activatedAt) continue;
-      const cutoff = new Date(now.getTime() - threshold * 60000);
-      const negocios = await prisma.negocio.findMany({
-        where: { empresaId, cliente: { arquivadoEm: null }, etapa: { notIn: ["FECHADO", "PERDIDO"] }, etapaEntrouEm: { gte: rule.activatedAt, lte: cutoff } },
-        orderBy: [{ etapaEntrouEm: "asc" }, { id: "asc" }],
-        take: limit,
-      });
-      for (const negocio of negocios) {
-        count += await prisma.$transaction(async (tx) => {
-          const currentBusiness = await tx.negocio.findFirst({
-            where: { id: negocio.id, empresaId },
-            select: { id: true, clienteId: true, etapaEntrouEm: true },
-          });
-          if (!currentBusiness) return 0;
-          await lockActiveClienteRow(tx, empresaId, currentBusiness.clienteId);
-          return (await enqueueOccurrence(tx, {
-            empresaId,
-            trigger: rule.gatilho,
-            entityType: "NEGOCIO",
-            entityId: currentBusiness.id,
-            negocioId: currentBusiness.id,
-            occurredAt: currentBusiness.etapaEntrouEm,
-            elapsedMinutes: Math.floor((now.getTime() - currentBusiness.etapaEntrouEm.getTime()) / 60000),
-            onlyRuleId: rule.id,
-          })).created;
-        });
+      let negocios = null;
+      let cursorKey = null;
+      try {
+        const threshold = thresholdMinutes(rule, "tempoParadoMinutos");
+        if (!threshold || !rule.activatedAt) continue;
+        const cutoff = new Date(now.getTime() - threshold * 60000);
+        cursorKey = `${empresaId}:${rule.id}`;
+        const cursor = temporalScanState.deals.get(cursorKey);
+        const where = { empresaId, cliente: { arquivadoEm: null }, etapa: { notIn: ["FECHADO", "PERDIDO"] }, etapaEntrouEm: { gte: rule.activatedAt, lte: cutoff } };
+        if (cursor) where.OR = [{ etapaEntrouEm: { gt: cursor.etapaEntrouEm } }, { etapaEntrouEm: cursor.etapaEntrouEm, id: { gt: cursor.id } }];
+        negocios = await prisma.negocio.findMany({ where, orderBy: [{ etapaEntrouEm: "asc" }, { id: "asc" }], take: limit });
+        for (const negocio of negocios) {
+          try {
+            count += await prisma.$transaction(async (tx) => {
+              const currentBusinessRef = await tx.negocio.findFirst({
+                where: { id: negocio.id, empresaId },
+                select: { id: true, clienteId: true },
+              });
+              if (!currentBusinessRef) return 0;
+              await lockActiveClienteRow(tx, empresaId, currentBusinessRef.clienteId);
+              const currentBusiness = await tx.negocio.findFirst({
+                where: { id: negocio.id, empresaId, cliente: { arquivadoEm: null }, etapa: { notIn: ["FECHADO", "PERDIDO"] }, etapaEntrouEm: { gte: rule.activatedAt, lte: cutoff } },
+                select: { id: true, clienteId: true, etapaEntrouEm: true },
+              });
+              if (!currentBusiness) return 0;
+              if (!currentBusiness.etapaEntrouEm || currentBusiness.etapaEntrouEm < rule.activatedAt || currentBusiness.etapaEntrouEm > cutoff) return 0;
+              return (await enqueueOccurrence(tx, {
+                empresaId,
+                trigger: rule.gatilho,
+                entityType: "NEGOCIO",
+                entityId: currentBusiness.id,
+                negocioId: currentBusiness.id,
+                occurredAt: currentBusiness.etapaEntrouEm,
+                elapsedMinutes: Math.floor((now.getTime() - currentBusiness.etapaEntrouEm.getTime()) / 60000),
+                onlyRuleId: rule.id,
+              })).created;
+            });
+          } catch (error) {
+            errors += 1;
+            logTemporalScanFailure("DEAL_STALLED_ITEM", empresaId, error, rule.id);
+          }
+        }
+        if (negocios.length === limit) temporalScanState.deals.set(cursorKey, { etapaEntrouEm: negocios.at(-1).etapaEntrouEm, id: negocios.at(-1).id });
+        else temporalScanState.deals.delete(cursorKey);
+      } catch (error) {
+        errors += 1;
+        if (negocios?.length === limit) temporalScanState.deals.set(cursorKey, { etapaEntrouEm: negocios.at(-1).etapaEntrouEm, id: negocios.at(-1).id });
+        else if (cursorKey) temporalScanState.deals.delete(cursorKey);
+        logTemporalScanFailure("DEAL_STALLED", empresaId, error, rule.id);
       }
     }
-    return count;
+    return { created: count, errors };
+  }
+
+  function logTemporalScanFailure(source, empresaId, error, ruleId = null) {
+    if (typeof logger?.error !== "function") return;
+    const code = String(error?.code || error?.codigo || "TEMPORAL_SCAN_ERROR").replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 64);
+    logger.error("Falha isolada na varredura temporal.", { source, tenantId: empresaId, ruleId, code });
   }
 
   async function enqueueOccurrence(client, occurrence) {
@@ -322,7 +414,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     if (!featureEnabled) return { created: 0, createdJobs: 0, duplicates: 0, evaluatedRules: 0 };
 
     const rules = occurrence.onlyRuleId
-      ? await client.automacaoRegra.findMany({ where: { id: occurrence.onlyRuleId, empresaId: occurrence.empresaId, ativa: true } })
+      ? await client.automacaoRegra.findMany({ where: { id: occurrence.onlyRuleId, empresaId: occurrence.empresaId, gatilho: occurrence.trigger, ativa: true } })
       : await client.automacaoRegra.findMany({ where: { empresaId: occurrence.empresaId, gatilho: occurrence.trigger, ativa: true }, orderBy: [{ prioridade: "asc" }, { id: "asc" }] });
     let created = 0;
     let createdJobs = 0;
@@ -563,15 +655,18 @@ function createAutomationService({ prisma, env = process.env, logger = console }
   } = {}) {
     const config = workerConfig({ limit, leaseMs, executionTimeoutMs, maxAttempts, retryDelayMs, supportedActions });
     const results = [];
+    const batchStartedAt = Date.now();
     for (let index = 0; index < config.limit; index += 1) {
-      const job = await claimDueJob({ now, leaseOwner, config, onEvent });
+      const jobNow = new Date(now.getTime() + Math.max(0, Date.now() - batchStartedAt));
+      const job = await claimDueJob({ now: jobNow, leaseOwner, config, onEvent });
       if (!job) break;
-      results.push(await processJob(job, { now, leaseOwner, config, onEvent }));
+      results.push(await processJob(job, { now: jobNow, leaseOwner, config, onEvent }));
     }
     return { processed: results.length, results };
   }
 
   async function claimDueJob({ now, leaseOwner, config, onEvent }) {
+    await reconcileExhaustedJobs(now, config.maxAttempts);
     const candidates = await prisma.automacaoAcaoJob.findMany({
       where: dueJobWhere(now, config.maxAttempts),
       orderBy: [{ nextAttemptAt: "asc" }, { id: "asc" }],
@@ -618,11 +713,70 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     return null;
   }
 
+  async function reconcileExhaustedJobs(now, maxAttempts) {
+    const stuckJobs = await prisma.automacaoAcaoJob.findMany({
+      where: {
+        tentativas: { gte: maxAttempts },
+        OR: [
+          { status: "FALHOU" },
+          { status: "PROCESSANDO", leaseExpiresAt: { lte: now } },
+        ],
+      },
+      select: { id: true, empresaId: true, execucaoId: true },
+      take: 100,
+    });
+    for (const stuckJob of stuckJobs) {
+      const updated = await prisma.automacaoAcaoJob.updateMany({
+        where: {
+          id: stuckJob.id,
+          empresaId: stuckJob.empresaId,
+          tentativas: { gte: maxAttempts },
+          OR: [
+            { status: "FALHOU" },
+            { status: "PROCESSANDO", leaseExpiresAt: { lte: now } },
+          ],
+        },
+        data: {
+          status: "FALHA_DEFINITIVA",
+          nextAttemptAt: null,
+          leaseOwner: null,
+          leaseExpiresAt: null,
+          erroCodigo: "ATTEMPTS_EXHAUSTED",
+          erroResumo: "Tentativas esgotadas apos recuperacao de lease.",
+        },
+      });
+      if (updated.count === 1) await refreshExecutionStatus(prisma, stuckJob.empresaId, stuckJob.execucaoId);
+    }
+  }
+
   async function processJob(job, { now, leaseOwner, config, onEvent }) {
     const attempt = job.tentativas;
     const snapshot = safeJson(job.execucao.regraSnapshotJson, null);
     const baseFields = jobLogFields(job, { attempt, maxAttempts: config.maxAttempts });
     const jobStartedAt = Date.now();
+    if (job.indice > 0) {
+      const predecessors = await prisma.automacaoAcaoJob.findMany({
+        where: { id: { not: job.id }, empresaId: job.empresaId, execucaoId: job.execucaoId, indice: { lt: job.indice } },
+        select: { status: true },
+      });
+      if (predecessors.some((predecessor) => ["CANCELADO", "FALHA_DEFINITIVA"].includes(predecessor.status))) {
+        const canceled = await prisma.automacaoAcaoJob.updateMany({
+          where: { id: job.id, empresaId: job.empresaId, leaseOwner, status: "PROCESSANDO" },
+          data: { status: "CANCELADO", leaseOwner: null, leaseExpiresAt: null, erroCodigo: "PREDECESSOR_TERMINAL", erroResumo: "Acao anterior nao foi concluida." },
+        });
+        if (canceled.count !== 1) throw domainError(409, "JOB_PREDECESSOR_CONFLICT", "O job mudou durante a reconciliacao da ordem.");
+        await refreshExecutionStatus(prisma, job.empresaId, job.execucaoId);
+        return { id: job.id, status: "CANCELADO" };
+      }
+      if (predecessors.some((predecessor) => predecessor.status !== "CONCLUIDO")) {
+        const released = await prisma.automacaoAcaoJob.updateMany({
+          where: { id: job.id, empresaId: job.empresaId, leaseOwner, status: "PROCESSANDO", tentativas: { gt: 0 } },
+          data: { status: "PENDENTE", tentativas: { decrement: 1 }, nextAttemptAt: new Date(now.getTime() + 1000), leaseOwner: null, leaseExpiresAt: null },
+        });
+        if (released.count !== 1) throw domainError(409, "JOB_PREDECESSOR_CONFLICT", "O job mudou antes de aguardar a acao anterior.");
+        return { id: job.id, status: "AGUARDANDO_PREDECESSOR" };
+      }
+    }
     if (snapshot?.janela && !isWithinWindow(now, snapshot.timezone, snapshot.janela)) {
       const retryAt = new Date(now.getTime() + 15 * 60000);
       const deferred = await prisma.automacaoAcaoJob.updateMany({
@@ -653,6 +807,28 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         where: { id: job.execucaoId, empresaId: job.empresaId, status: { in: ["PENDENTE", "PROCESSANDO", "FALHOU"] } },
         data: { status: "PROCESSANDO", iniciadaEm: job.execucao.iniciadaEm || now, tentativas: { increment: 1 } },
       });
+      if (executionStarted.count !== 1) {
+        const execution = await prisma.automacaoExecucao.findFirst({
+          where: { id: job.execucaoId, empresaId: job.empresaId },
+          select: { status: true },
+        });
+        if (execution?.status === "CONCLUIDA") {
+          const reconciled = await prisma.automacaoAcaoJob.updateMany({
+            where: { id: job.id, empresaId: job.empresaId, leaseOwner, status: "PROCESSANDO" },
+            data: { status: "CONCLUIDO", leaseOwner: null, leaseExpiresAt: null, erroCodigo: null, erroResumo: null },
+          });
+          if (reconciled.count !== 1) throw domainError(409, "JOB_RECONCILIATION_CONFLICT", "Nao foi possivel reconciliar o job com a execucao concluida.");
+          return { id: job.id, status: "CONCLUIDO" };
+        }
+        if (execution && ["FALHA_DEFINITIVA", "CANCELADA", "SIMULADA"].includes(execution.status)) {
+          await prisma.automacaoAcaoJob.updateMany({
+            where: { id: job.id, empresaId: job.empresaId, leaseOwner, status: "PROCESSANDO" },
+            data: { status: "CANCELADO", leaseOwner: null, leaseExpiresAt: null, erroCodigo: "EXECUTION_TERMINAL", erroResumo: "Execucao terminal nao permite nova acao sem retry explicito." },
+          });
+          return { id: job.id, status: "CANCELADO" };
+        }
+        throw domainError(409, "EXECUTION_START_CONFLICT", "Execucao nao pode ser iniciada com o estado atual.");
+      }
       if (executionStarted.count === 1) {
         notifyWorkerEvent(onEvent, "execution_started", {
           ...baseFields,
@@ -666,7 +842,10 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         durationMs: 0,
         status: "PROCESSANDO",
       });
-      const actionResult = await withTimeout(executeAction(job, { supportedActions: config.supportedActions }), config.executionTimeoutMs);
+      const actionResult = await executeAction(job, {
+        supportedActions: config.supportedActions,
+        transactionTimeoutMs: config.executionTimeoutMs,
+      });
       const eventId = baseFields.actionType === "CREATE_INTERNAL_EVENT" ? actionResult?.id : undefined;
       notifyWorkerEvent(onEvent, "action_succeeded", {
         ...baseFields,
@@ -678,15 +857,16 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         where: { id: job.id, empresaId: job.empresaId, leaseOwner, status: "PROCESSANDO" },
         data: { status: "CONCLUIDO", leaseOwner: null, leaseExpiresAt: null, erroCodigo: null, erroResumo: null },
       });
-      await refreshExecutionStatus(prisma, job.empresaId, job.execucaoId);
-      if (succeeded.count === 1) {
-        notifyWorkerEvent(onEvent, "job_succeeded", {
-          ...baseFields,
-          eventId,
-          durationMs: elapsedMs(jobStartedAt),
-          status: "CONCLUIDO",
-        });
+      if (succeeded.count !== 1) {
+        throw domainError(409, "JOB_LEASE_LOST", "O lease do job expirou antes da confirmacao da acao.");
       }
+      await refreshExecutionStatus(prisma, job.empresaId, job.execucaoId);
+      notifyWorkerEvent(onEvent, "job_succeeded", {
+        ...baseFields,
+        eventId,
+        durationMs: elapsedMs(jobStartedAt),
+        status: "CONCLUIDO",
+      });
       return { id: job.id, status: "CONCLUIDO" };
     } catch (error) {
       const safeError = sanitizeError(error);
@@ -746,7 +926,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     }
   }
 
-  async function executeAction(job, { supportedActions = WORKER_ACTION_TYPES } = {}) {
+  async function executeAction(job, { supportedActions = WORKER_ACTION_TYPES, transactionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS } = {}) {
     if (job.execucao.empresaId !== job.empresaId || job.execucao.regra.empresaId !== job.empresaId) {
       throw domainError(409, "AUTOMATION_TENANT_CONFLICT", "Contexto da automacao inconsistente.", { permanent: true });
     }
@@ -773,8 +953,14 @@ function createAutomationService({ prisma, env = process.env, logger = console }
           if (action.tipo === "CREATE_INTERNAL_EVENT") return createInternalEvent(tx, job, entity, action);
           if (action.tipo === "UPDATE_NEXT_FOLLOW_UP_PROJECTION") return updateNextFollowUpProjection(tx, entity);
           throw domainError(409, "ACTION_NOT_SUPPORTED", "Acao nao suportada pelo worker.", { permanent: true });
+        }, {
+          maxWait: Math.min(5000, transactionTimeoutMs),
+          timeout: transactionTimeoutMs,
         });
       } catch (error) {
+        if (error?.code === "P2028" || /transaction.*timed out|transaction.*timeout/i.test(String(error?.message || ""))) {
+          throw domainError(408, "ACTION_TIMEOUT", "Tempo limite da acao excedido.");
+        }
         if (transactionAttempt >= transactionAttempts || !isRoundRobinTransactionConflict(action.tipo, error)) throw error;
         await wait(ROUND_ROBIN_TRANSACTION_BACKOFF_MS * transactionAttempt);
       }
@@ -927,15 +1113,36 @@ function createAutomationService({ prisma, env = process.env, logger = console }
   async function retryJob(context, jobId) {
     requireAutomationAdmin(context);
     await requireTenantFeature(context);
-    const job = await prisma.automacaoAcaoJob.findFirst({ where: { id: jobId, empresaId: context.empresaId }, include: { execucao: true } });
-    if (!job) throw notFound("Acao nao encontrada.");
-    if (!["FALHOU", "FALHA_DEFINITIVA"].includes(job.status)) throw domainError(409, "JOB_RETRY_UNAVAILABLE", "Acao nao esta elegivel para reprocessamento.");
-    const updated = await prisma.automacaoAcaoJob.updateMany({
-      where: { id: job.id, empresaId: context.empresaId, status: { in: ["FALHOU", "FALHA_DEFINITIVA"] } },
-      data: { status: "PENDENTE", tentativas: 0, nextAttemptAt: new Date(), leaseOwner: null, leaseExpiresAt: null, erroCodigo: null, erroResumo: null },
+    return prisma.$transaction(async (tx) => {
+      const job = await tx.automacaoAcaoJob.findFirst({ where: { id: jobId, empresaId: context.empresaId }, include: { execucao: true } });
+      if (!job) throw notFound("Acao nao encontrada.");
+      if (!["FALHOU", "FALHA_DEFINITIVA"].includes(job.status)) throw domainError(409, "JOB_RETRY_UNAVAILABLE", "Acao nao esta elegivel para reprocessamento.");
+      if (["FALHA_DEFINITIVA", "CONCLUIDA"].includes(job.execucao.status)) {
+        const reopened = await tx.automacaoExecucao.updateMany({
+          where: { id: job.execucaoId, empresaId: context.empresaId, status: { in: ["FALHA_DEFINITIVA", "CONCLUIDA"] } },
+          data: { status: "PENDENTE", concluidaEm: null, erroCodigo: null, erroResumo: null },
+        });
+        if (reopened.count !== 1) throw domainError(409, "EXECUTION_RETRY_CONFLICT", "A execucao mudou durante o reprocessamento.");
+      } else if (TERMINAL_EXECUTION_STATUSES.includes(job.execucao.status)) {
+        throw domainError(409, "EXECUTION_RETRY_UNAVAILABLE", "A execucao terminal nao pode ser reaberta por esta acao.");
+      }
+      const updated = await tx.automacaoAcaoJob.updateMany({
+        where: { id: job.id, empresaId: context.empresaId, status: { in: ["FALHOU", "FALHA_DEFINITIVA"] } },
+        data: { status: "PENDENTE", tentativas: 0, nextAttemptAt: new Date(), leaseOwner: null, leaseExpiresAt: null, erroCodigo: null, erroResumo: null },
+      });
+      if (updated.count !== 1) throw domainError(409, "JOB_RETRY_CONFLICT", "A acao mudou durante o reprocessamento.");
+      await tx.automacaoAcaoJob.updateMany({
+        where: {
+          empresaId: context.empresaId,
+          execucaoId: job.execucaoId,
+          indice: { gt: job.indice },
+          status: "CANCELADO",
+          erroCodigo: "PREDECESSOR_TERMINAL",
+        },
+        data: { status: "PENDENTE", tentativas: 0, nextAttemptAt: new Date(), leaseOwner: null, leaseExpiresAt: null, erroCodigo: null, erroResumo: null },
+      });
+      return tx.automacaoAcaoJob.findFirstOrThrow({ where: { id: job.id, empresaId: context.empresaId } });
     });
-    if (updated.count !== 1) throw domainError(409, "JOB_RETRY_CONFLICT", "A acao mudou durante o reprocessamento.");
-    return prisma.automacaoAcaoJob.findFirstOrThrow({ where: { id: job.id, empresaId: context.empresaId } });
   }
 
   async function summary(context) {
@@ -1289,10 +1496,12 @@ function wait(delayMs) {
 }
 
 function workerConfig({ limit, leaseMs, executionTimeoutMs, maxAttempts, retryDelayMs, supportedActions }) {
+  const timeout = boundedInteger(executionTimeoutMs, DEFAULT_EXECUTION_TIMEOUT_MS, 1000, 2 * 60 * 1000);
+  const requestedLease = boundedInteger(leaseMs, DEFAULT_LEASE_MS, 5000, 10 * 60 * 1000);
   return {
     limit: boundedInteger(limit, 5, 1, 50),
-    leaseMs: boundedInteger(leaseMs, DEFAULT_LEASE_MS, 5000, 10 * 60 * 1000),
-    executionTimeoutMs: boundedInteger(executionTimeoutMs, DEFAULT_EXECUTION_TIMEOUT_MS, 1000, 2 * 60 * 1000),
+    leaseMs: Math.min(10 * 60 * 1000, Math.max(requestedLease, timeout + 10000)),
+    executionTimeoutMs: timeout,
     maxAttempts: boundedInteger(maxAttempts, MAX_ATTEMPTS, 1, 10),
     retryDelayMs: boundedInteger(retryDelayMs, DEFAULT_RETRY_DELAY_MS, 1000, 60 * 60 * 1000),
     supportedActions: Array.isArray(supportedActions) && supportedActions.length ? supportedActions : WORKER_ACTION_TYPES,
@@ -1323,18 +1532,6 @@ function dueJobWhere(now, maxAttempts) {
       },
     ],
   };
-}
-
-async function withTimeout(promise, timeoutMs) {
-  let timer = null;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(domainError(408, "ACTION_TIMEOUT", "Tempo limite da acao excedido.")), timeoutMs);
-  });
-  try {
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
 }
 
 module.exports = { createAutomationService, MAX_ATTEMPTS };

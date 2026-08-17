@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- agenda summary state follows the authenticated server snapshot. */
 import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, LockKeyhole, MessageSquareText, Target } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ApiAcompanhamentoResumo, ApiDashboardSummary } from "../../services/crmApi";

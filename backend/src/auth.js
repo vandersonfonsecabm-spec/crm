@@ -16,7 +16,17 @@ const LOCAL_JWT_SECRET = "local-development-only-change-me";
 
 function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securityDelivery = createSecurityDelivery({ env: process.env }), allowedOrigins = [] }) {
   const production = process.env.NODE_ENV === "production";
+  const railwayRuntime = Boolean(
+    process.env.RAILWAY_SERVICE_ID
+      || process.env.RAILWAY_DEPLOYMENT_ID
+      || process.env.RAILWAY_PROJECT_ID
+      || process.env.RAILWAY_VOLUME_MOUNT_PATH,
+  );
   const jwtSecret = String(process.env.JWT_SECRET || "").trim();
+
+  if (railwayRuntime && !production) {
+    throw new Error("NODE_ENV=production e obrigatorio no Railway.");
+  }
 
   if (production && !jwtSecret) {
     throw new Error("JWT_SECRET e obrigatorio em producao.");

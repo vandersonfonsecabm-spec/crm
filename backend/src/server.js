@@ -40,8 +40,21 @@ const { createMessengerWebhookOrchestrator } = require("./integrations/messenger
 const { CANONICAL_CLIENT_STATUSES: CLIENT_LIFECYCLE_STATUSES, isPostgresRuntime, lockClienteRow } = require("./shared/clientLifecycleLock");
 
 const prisma = createPrismaClient();
+const READINESS_CACHE_MS = 1000;
+let readinessProbeInFlight = null;
+let readinessCache = null;
 
 const app = express();
+app.disable("x-powered-by");
+app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : false);
+app.use((req, res, next) => {
+  res.set("X-Content-Type-Options", "nosniff");
+  res.set("X-Frame-Options", "DENY");
+  res.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  next();
+});
 const PORT = process.env.PORT || 3001;
 const HOST = "0.0.0.0";
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -2335,11 +2348,50 @@ function parsePositiveId(value) {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    service: "crm-agro-api",
-  });
+async function probeDatabase({ allowMaintenanceBypass = false } = {}) {
+  if (allowMaintenanceBypass && maintenanceReadOnlyEnabled(process.env)) return true;
+  const now = Date.now();
+  if (readinessCache && readinessCache.expiresAt > now) {
+    if (readinessCache.ok) return true;
+    throw new Error("READINESS_DATABASE_UNAVAILABLE");
+  }
+  if (readinessProbeInFlight) return readinessProbeInFlight;
+  readinessProbeInFlight = (async () => {
+    let timer = null;
+    try {
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("READINESS_DATABASE_TIMEOUT")), 3000); }),
+      ]);
+      readinessCache = { ok: true, expiresAt: Date.now() + READINESS_CACHE_MS };
+      return true;
+    } catch (error) {
+      readinessCache = { ok: false, expiresAt: Date.now() + 250 };
+      throw error;
+    } finally {
+      if (timer) clearTimeout(timer);
+      readinessProbeInFlight = null;
+    }
+  })();
+  return readinessProbeInFlight;
+}
+
+app.get("/health", async (req, res) => {
+  try {
+    await probeDatabase({ allowMaintenanceBypass: true });
+    return res.json({ status: "ok", service: "crm-agro-api" });
+  } catch {
+    return res.status(503).json({ status: "not_ready", service: "crm-agro-api" });
+  }
+});
+
+app.get("/ready", async (req, res) => {
+  try {
+    await probeDatabase();
+    return res.json({ status: "ready", service: "crm-agro-api", database: "ok" });
+  } catch {
+    return res.status(503).json({ status: "not_ready", service: "crm-agro-api", database: "unavailable" });
+  }
 });
 
 app.use((error, req, res, next) => {

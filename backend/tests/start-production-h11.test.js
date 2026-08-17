@@ -14,10 +14,56 @@ const {
 
 const backendDirectory = path.resolve(__dirname, "..");
 const sourcePrismaDirectory = path.join(backendDirectory, "prisma");
-const pendingMigrationName = "20260813150000_add_customer_archive";
+const pendingMigrationName = "20260815120000_add_h8_notifications";
 const currentMigrationCount = fs.readdirSync(path.join(sourcePrismaDirectory, "migrations"), { withFileTypes: true })
   .filter((entry) => entry.isDirectory()).length;
 const testServiceId = "railway-service-test";
+
+test("validate-runtime falha fechado quando Railway nao declara production", () => {
+  const result = spawnSync(process.execPath, [path.join(backendDirectory, "scripts", "validate-runtime.js")], {
+    cwd: backendDirectory,
+    env: { ...process.env, NODE_ENV: "test", RAILWAY_SERVICE_ID: testServiceId },
+    encoding: "utf8",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stdout}\n${result.stderr}`, /NODE_ENV=production/);
+});
+
+test("startup Railway recusa NODE_ENV invalido antes de migration", async () => {
+  let migrationCalls = 0;
+  await assert.rejects(
+    runStartup({
+      env: { NODE_ENV: "development", RAILWAY_SERVICE_ID: testServiceId, RAILWAY_DEPLOYMENT_ID: "deployment-invalid-env" },
+      runMigration: async () => { migrationCalls += 1; },
+      startServer: async () => closingChild(0),
+      logger: quietLogger(),
+    }),
+    { code: "NODE_ENV_PRODUCTION_REQUIRED" },
+  );
+  assert.equal(migrationCalls, 0);
+});
+
+test("API oficial Railway recusa SQLite antes de migration", async () => {
+  let migrationCalls = 0;
+  await assert.rejects(
+    runStartup({
+      env: {
+        NODE_ENV: "production",
+        RAILWAY_SERVICE_ID: "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92",
+        RAILWAY_DEPLOYMENT_ID: "deployment-official-sqlite",
+        RAILWAY_PROJECT_ID: "ddfbf66c-e274-47b1-9493-286232d2f426",
+        RAILWAY_ENVIRONMENT_ID: "e18f76b1-e38f-468e-91fe-1eff6db9a5f8",
+        RAILWAY_VOLUME_MOUNT_PATH: "/app/data",
+        DATABASE_URL: "file:/app/data/crm.db",
+      },
+      runMigration: async () => { migrationCalls += 1; },
+      startServer: async () => closingChild(0),
+      logger: quietLogger(),
+    }),
+    { code: "RAILWAY_PRODUCTION_POSTGRES_REQUIRED" },
+  );
+  assert.equal(migrationCalls, 0);
+});
 
 test("contrato de servico: producao aceita somente o ID oficial e homolog exige ID explicito", () => {
   assert.equal(resolveExpectedServiceId({}), "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92");
@@ -225,7 +271,9 @@ test("cenario 6b: provider PostgreSQL usa schema PostgreSQL e nao exige volume S
       RAILWAY_SERVICE_ID: testServiceId,
       RAILWAY_VOLUME_MOUNT_PATH: "/app/data",
     },
+    allowNonProductionRailway: true,
     expectedServiceId: testServiceId,
+    runRuntimeGate: async () => ({ safe: true }),
     logger: quietLogger(),
     preparePrismaRuntime: ({ env, provider }) => ({
       env,
@@ -261,6 +309,7 @@ test("cenario 6c: provider divergente falha antes de migration e servidor", asyn
       RAILWAY_SERVICE_ID: testServiceId,
       RAILWAY_VOLUME_MOUNT_PATH: "/app/data",
     },
+    allowNonProductionRailway: true,
     expectedMountPath: "/app/data",
     expectedServiceId: testServiceId,
     logger: quietLogger(),
@@ -345,6 +394,7 @@ function createPrismaFixture(name, { pendingTarget = false, legacyHistory = fals
     mountPath,
     startupOptions: {
       backendDirectory,
+      allowNonProductionRailway: true,
       env: {
         ...process.env,
         DATABASE_URL: databaseUrl(databasePath),

@@ -63,7 +63,9 @@ function authIdentity(email, slug) {
 }
 
 function requestIp(req) {
-  return normalizeIp(req?.socket?.remoteAddress);
+  const trustsProxy = req?.app?.get?.("trust proxy") === 1 || req?.app?.get?.("trust proxy") === true;
+  const forwarded = trustsProxy ? (req?.ip || req?.headers?.["x-real-ip"]) : null;
+  return normalizeIp(forwarded || req?.socket?.remoteAddress);
 }
 
 function normalizeIp(value) {

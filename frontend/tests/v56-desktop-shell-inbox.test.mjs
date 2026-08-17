@@ -35,7 +35,7 @@ test("V58 mantém o modo full-workspace da Inbox e ancora as três colunas", () 
   assert.match(dashboard, /inbox-route-stack/);
   assert.match(inbox, /className="inbox-page"/);
   assert.match(inbox, /Caixa de entrada/);
-  assert.match(inbox, /aria-controls="inbox-conversation-context"/);
+  assert.match(inbox, /aria-controls=\{hasContextDrawer \? "inbox-conversation-context" : undefined\}/);
   assert.match(inbox, /CommunicationDrawer[\s\S]*id="inbox-conversation-context"/);
   assert.match(inbox, /actionModalTriggerRef\.current\?\.focus/);
   assert.match(overlay, /onCloseRef/);

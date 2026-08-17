@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- route, polling and focus effects synchronize external dashboard state. */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -1001,6 +1002,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                     onRequestWhatsapp={requestExternalWhatsapp}
                     onPreviousPage={() => setPage((current) => Math.max(1, current - 1))}
                     onNextPage={() => setPage((current) => Math.min(totalPages, current + 1))}
+                    loadState={clientsLoadState}
+                    onRetry={() => setBackendLoadRequest((current) => current + 1)}
                   />
                 </>
               )}

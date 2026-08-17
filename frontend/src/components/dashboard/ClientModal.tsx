@@ -200,7 +200,7 @@ export default function ClientModal({
         document.querySelector<HTMLElement>("#crm-main-content")?.focus();
       }
     };
-  }, []);
+  }, [client.archived]);
 
   useEffect(() => {
     if (isDeleteConfirming) deleteCancelRef.current?.focus();

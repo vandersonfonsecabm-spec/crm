@@ -48,6 +48,11 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
   const gerente = await createUserAndLogin(adminA.token, "Gerente WhatsApp", "gerente@whatsapp.test", "GERENTE");
   const vendedor = await createUserAndLogin(adminA.token, "Vendedor WhatsApp", "vendedor@whatsapp.test", "VENDEDOR");
 
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  assert.equal((await request("POST", "/whatsapp/simular-mensagem", validPayload("production-block"), adminA.token)).status, 404);
+  process.env.NODE_ENV = previousNodeEnv;
+
   await seedCatalog(adminA.empresaId, "Simulador A", [
     { externalId: "prod-disponivel", sku: "SKU-HID-20", codigoBarras: "7890000000011", nome: "Semente de Milho Hibrido 20 kg", preco: 25990, quantidade: 35, disponivel: 35, local: "Deposito Central" },
     { externalId: "prod-sem-estoque", sku: "SKU-SEM-00", codigoBarras: "7890000000012", nome: "Oleo Hidraulico Teste 20 L", preco: 12000, quantidade: 0, disponivel: 0, local: "Deposito Central" },

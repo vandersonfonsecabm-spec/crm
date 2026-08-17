@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { Client, Status } from "../../types/dashboard";
 import { classifyNextFollowUp, formatNextFollowUp } from "../../utils/followUpProjection";
-import { Button, EmptyState, Pagination, Surface } from "../ui";
+import { Button, EmptyState, ErrorState, LoadingState, Pagination, Surface } from "../ui";
 import DashboardActionOverflow from "./DashboardActionOverflow";
 import type { PageAction } from "./DashboardActionOverflow";
 import "./DashboardClientes.css";
@@ -28,6 +28,8 @@ type DashboardClientsTableProps = {
   onRequestWhatsapp: (client: Client) => void;
   onPreviousPage: () => void;
   onNextPage: () => void;
+  loadState?: "loading" | "ready" | "error";
+  onRetry?: () => void;
 };
 
 export default function DashboardClientsTable({
@@ -45,6 +47,8 @@ export default function DashboardClientsTable({
   onRequestWhatsapp,
   onPreviousPage,
   onNextPage,
+  loadState = "ready",
+  onRetry,
 }: DashboardClientsTableProps) {
   return (
     <Surface className="clientes-table-surface overflow-hidden">
@@ -55,8 +59,8 @@ export default function DashboardClientsTable({
         <span>Página {page}/{totalPages}</span>
       </div>
 
-      <div className="clientes-table-scroll overflow-x-auto">
-        <table aria-label="Tabela de clientes" className="clientes-table w-full min-w-[1024px] table-fixed border-collapse text-left" data-clientes-table>
+      <div aria-busy={loadState === "loading" ? "true" : undefined} className="clientes-table-scroll overflow-x-auto">
+        {loadState === "loading" ? <LoadingState className="px-4 py-4" label="Carregando clientes..." rows={4} /> : loadState === "error" ? <ErrorState description="Não foi possível carregar a carteira de clientes." onRetry={onRetry} title="Falha ao carregar clientes" /> : <table aria-label="Tabela de clientes" className="clientes-table w-full min-w-[1024px] table-fixed border-collapse text-left" data-clientes-table>
           <thead>
             <tr>
               <th className="w-[25%] px-4 py-2.5 font-medium" data-clientes-sticky="client">Cliente</th>
@@ -84,9 +88,9 @@ export default function DashboardClientsTable({
               />
             ))}
           </tbody>
-        </table>
+        </table>}
 
-        {paginatedClients.length === 0 && (
+        {loadState === "ready" && paginatedClients.length === 0 && (
           <EmptyState
             description="Ajuste a busca, limpe os filtros ou crie um novo cliente para alimentar a carteira."
             icon={<UserCheck size={16} />}

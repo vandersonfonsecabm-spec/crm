@@ -197,7 +197,7 @@ export default function DashboardSidebar({
           </Link>
         );
       })}
-      <button ref={mobileMoreButtonRef} type="button" className={mobileMoreOpen || moreActive ? "is-active" : undefined} aria-haspopup="menu" aria-expanded={mobileMoreOpen} aria-controls="mobile-more-menu" onClick={() => setMobileMoreOpen((current) => !current)}>
+      <button ref={mobileMoreButtonRef} type="button" className={mobileMoreOpen || moreActive ? "is-active" : undefined} aria-haspopup="menu" aria-expanded={mobileMoreOpen} aria-controls={mobileMoreOpen ? "mobile-more-menu" : undefined} onClick={() => setMobileMoreOpen((current) => !current)}>
         <MoreHorizontal size={16} />
         <span>Mais</span>
       </button>
