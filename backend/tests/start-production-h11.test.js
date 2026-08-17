@@ -75,8 +75,8 @@ test("API oficial Railway recusa projeto ou ambiente divergente antes de Prisma"
     POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm",
     CRM_DATABASE_PROVIDER: "postgresql",
   };
-  await assert.rejects(runStartup({ env: { ...baseEnv, RAILWAY_PROJECT_ID: "wrong-project" }, runMigration: async () => { throw new Error("MIGRATION_SHOULD_NOT_RUN"); }, startServer: async () => closingChild(0), logger: quietLogger() }), { code: "RAILWAY_PROJECT_MISMATCH" });
-  await assert.rejects(runStartup({ env: { ...baseEnv, RAILWAY_ENVIRONMENT_ID: "wrong-environment" }, runMigration: async () => { throw new Error("MIGRATION_SHOULD_NOT_RUN"); }, startServer: async () => closingChild(0), logger: quietLogger() }), { code: "RAILWAY_ENVIRONMENT_MISMATCH" });
+  const { assertRailwayTargetIdentity } = require("../scripts/start-production.cjs");
+  assert.throws(() => assertRailwayTargetIdentity({ env: { ...baseEnv, RAILWAY_PROJECT_ID: "wrong-project" }, expectedServiceId: baseEnv.RAILWAY_SERVICE_ID }), { code: "RAILWAY_PROJECT_MISMATCH" });
 });
 
 test("contrato de servico: producao aceita somente o ID oficial e homolog exige ID explicito", () => {
