@@ -31,15 +31,15 @@ const {
 const backendDir = path.resolve(__dirname, "..");
 const migrationDir = path.join(backendDir, "prisma", "migrations");
 const currentMigration = "20260801123000_enforce_tenant_safe_relations";
-const latestMigration = "20260823152000_add_distributed_rate_limit";
+const latestMigration = "20260823180000_add_stock_core_e2";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 const historicalSourceDatabase = requiredEnv("CRM_TEST_SOURCE_DATABASE_PATH");
 
-test("arquitetura atual cobre as 91 relacoes e as excecoes documentadas", () => {
+test("arquitetura atual cobre as 113 relacoes e as excecoes documentadas", () => {
   const result = inspectArchitecture();
   assert.deepEqual(result.failures, []);
-  assert.equal(result.relationCount, 91);
+  assert.equal(result.relationCount, 113);
   assert.equal(result.relationManifestHash, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(tenantRelationManifestHash(), EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(MIGRATION_REGISTRY[currentMigration].relationManifestSha256, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
@@ -211,8 +211,8 @@ test("pre-migration preserva o upgrade canonico SQLite de 9 para 32 migrations",
       migrationName: latestMigration,
     });
     assert.equal(result.safe, true);
-    assert.equal(result.relationCount, 91);
-    assert.ok(result.checkedRelationCount > 0 && result.checkedRelationCount < 91);
+    assert.equal(result.relationCount, 113);
+    assert.ok(result.checkedRelationCount > 0 && result.checkedRelationCount < 113);
   } finally {
     removeDatabase(databasePath);
   }
@@ -236,7 +236,7 @@ test("pre-migration admite somente a relacao exata ligada a migration Meta pende
     columnsByTable,
     unavailableRelationKeys: new Set(["IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao"]),
   };
-  assert.equal(relationSpecsForExistingSchema(tables, options).length, 89);
+  assert.equal(relationSpecsForExistingSchema(tables, options).length, 111);
   assert.throws(
     () => relationSpecsForExistingSchema(tables, { ...options, unavailableRelationKeys: new Set() }),
     { code: "TENANT_GATE_SCHEMA_INCOMPLETE" },
@@ -262,7 +262,7 @@ test("pre-migration inspeciona a relacao quando a coluna pendente ja existe", ()
   assert.equal(relationSpecsForExistingSchema(tables, {
     columnsByTable,
     unavailableRelationKeys: new Set(["IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao"]),
-  }).length, 91);
+  }).length, 113);
 
   columnsByTable.get("IntegracaoOAuthState").delete("usuarioId");
   assert.throws(
@@ -477,11 +477,11 @@ test("architecture sem flags valida os dois pacotes canonicos", async () => {
   const result = await runGate({ mode: "architecture" });
   assert.equal(result.safe, true);
   assert.equal(result.migration.migrationName, latestMigration);
-  assert.equal(result.migration.relationAffecting, false);
+  assert.equal(result.migration.relationAffecting, true);
   assert.equal(result.migration.providers.sqlite.migrationName, latestMigration);
-  assert.equal(result.migration.providers.sqlite.relationAffecting, false);
+  assert.equal(result.migration.providers.sqlite.relationAffecting, true);
   assert.equal(result.migration.providers.postgresql.migrationName, latestMigration);
-  assert.equal(result.migration.providers.postgresql.relationAffecting, false);
+  assert.equal(result.migration.providers.postgresql.relationAffecting, true);
 });
 
 test("architecture rejeita migration-dir sem provider antes de confiar no hash", async () => {

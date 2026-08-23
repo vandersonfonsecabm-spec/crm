@@ -7,9 +7,9 @@ const { relationSpecs } = require("./check-tenant-relation-integrity.cjs");
 const { classifyPolymorphicRows, POLYMORPHIC_ROWS_QUERY } = require("./tenant-isolation-verifier-utils.cjs");
 const { sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation-log-utils.cjs");
 
-const EXPECTED_RELATION_COUNT = 91;
+const EXPECTED_RELATION_COUNT = 113;
 const TENANT_RELATION_MANIFEST_VERSION = 1;
-const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "9ad363cbdacb86137ba6c512146e6a5ff78e3a6357e7fa07ea4de9612793e15a";
+const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "2d95403925a2d9bde097751e0ec02bbff6200bffaa254b8f5e132f4da9f25277";
 const DEFAULT_MIGRATION_NAME = "20260801123000_enforce_tenant_safe_relations";
 const DEFAULT_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma", "migrations");
 const DEFAULT_POSTGRES_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma-postgres", "migrations");
@@ -50,6 +50,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260813150000_add_customer_archive": "5846035e8e1805da9398d6da844d30ae73fa1893b017b7aea8a118bcdf6ec38e",
     "20260815120000_add_h8_notifications": "d9e251b64eed2f4f8c44581437ad64d92c7319bf17482f58a066256cf5a80119",
     "20260823152000_add_distributed_rate_limit": "f61541e812b474efb193e3c92d2c52b757d13b13213ed45abb8771f11e22a443",
+    "20260823180000_add_stock_core_e2": "c873cf5bc388fc82a41c41bb3c3f18a448edbadd346389d827a0122fc76d6749",
   }),
   postgresql: Object.freeze({
     "20260728090000_postgres_baseline": "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
@@ -63,6 +64,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260813150000_add_customer_archive": "f473f5f5b0e846b88570860d045027cfd1174c4d5e1d69d6d9008ea4cbd660a7",
     "20260815120000_add_h8_notifications": "7d4c655c4f15b47066229645b761331a9b94deb7b63264ec7e3d81f493eaf3c5",
     "20260823152000_add_distributed_rate_limit": "42428c27f70749c8f923d2580bf5b8291abcd64eb8ba0ebbe0dd11ea0f7cd013",
+    "20260823180000_add_stock_core_e2": "768a8ed3132425e7f33473d10ed688d4238fe28bf947149cb48fc42950b7cb4c",
   }),
 });
 
@@ -220,6 +222,12 @@ const MIGRATION_REGISTRY = Object.freeze({
     relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
     sqliteSha256: "f61541e812b474efb193e3c92d2c52b757d13b13213ed45abb8771f11e22a443",
     postgresSha256: "42428c27f70749c8f923d2580bf5b8291abcd64eb8ba0ebbe0dd11ea0f7cd013",
+  }),
+  "20260823180000_add_stock_core_e2": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: "c873cf5bc388fc82a41c41bb3c3f18a448edbadd346389d827a0122fc76d6749",
+    postgresSha256: "768a8ed3132425e7f33473d10ed688d4238fe28bf947149cb48fc42950b7cb4c",
   }),
 });
 
@@ -598,7 +606,7 @@ function validateAppliedMigrationChecksums(directory, rows) {
     const file = path.join(directory, String(row.migration_name || ""), "migration.sql");
     if (!fs.existsSync(file)) throw new GateFailure("TENANT_GATE_MIGRATION_FILE_MISSING");
     const checksum = String(row.checksum || "").trim().toLowerCase();
-    if (!/^[a-f0-9]{64}$/.test(checksum) || checksum !== sha256(file)) {
+    if (!/^[a-f0-9]{64}$/.test(checksum) || !matchesMigrationHash(file, checksum)) {
       throw new GateFailure("TENANT_GATE_MIGRATION_CHECKSUM_MISMATCH");
     }
   }
@@ -618,12 +626,11 @@ function assertCanonicalMigrationSequence(directory, kind, architecture) {
     if (migrationRegistrationRequired(kind, name) && !registry) {
       throw new GateFailure("TENANT_GATE_MIGRATION_UNREGISTERED");
     }
-    const actualHash = sha256(file);
-    if (!sourceHashes[name] || sourceHashes[name] !== actualHash) {
+    if (!sourceHashes[name] || !matchesMigrationHash(file, sourceHashes[name])) {
       throw new GateFailure("TENANT_GATE_MIGRATION_HASH_MISMATCH");
     }
     if (!registry) continue;
-    if (registry[hashKey] !== actualHash) throw new GateFailure("TENANT_GATE_MIGRATION_HASH_MISMATCH");
+    if (!matchesMigrationHash(file, registry[hashKey])) throw new GateFailure("TENANT_GATE_MIGRATION_HASH_MISMATCH");
     if (registry.relationCount !== relationSpecs.length) throw new GateFailure("TENANT_GATE_REGISTRY_RELATION_COUNT_MISMATCH");
     if (registry.relationManifestSha256 !== architecture.relationManifestHash) {
       throw new GateFailure("TENANT_GATE_REGISTRY_MANIFEST_HASH_MISMATCH");
@@ -658,14 +665,14 @@ async function pendingMigrationBoundary({ url, directory, migrationName, archite
     if (!registry && migrationRegistrationRequired(kind, name)) {
       throw new GateFailure("TENANT_GATE_MIGRATION_UNREGISTERED");
     }
-    if (!sourceHashes[name] || sourceHashes[name] !== sha256(file)) {
+    if (!sourceHashes[name] || !matchesMigrationHash(file, sourceHashes[name])) {
       throw new GateFailure("TENANT_GATE_MIGRATION_HASH_MISMATCH");
     }
     if (pending.appTableCount > 0) {
       for (const table of createdTables) allowedMissingTables.add(table);
     }
     if (!registry) continue;
-    if (registry[hashKey] !== sha256(file)) throw new GateFailure("TENANT_GATE_MIGRATION_HASH_MISMATCH");
+    if (!matchesMigrationHash(file, registry[hashKey])) throw new GateFailure("TENANT_GATE_MIGRATION_HASH_MISMATCH");
     if (registry.relationCount !== relationSpecs.length) throw new GateFailure("TENANT_GATE_REGISTRY_RELATION_COUNT_MISMATCH");
     if (registry.relationManifestSha256 !== architecture.relationManifestHash) {
       throw new GateFailure("TENANT_GATE_REGISTRY_MANIFEST_HASH_MISMATCH");
@@ -680,6 +687,18 @@ async function pendingMigrationBoundary({ url, directory, migrationName, archite
 
 function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+function matchesMigrationHash(file, expectedHash) {
+  if (!/^[a-f0-9]{64}$/i.test(String(expectedHash || ""))) return false;
+  const sql = fs.readFileSync(file, "utf8");
+  const lf = sql.replace(/\r\n/g, "\n");
+  const crlf = lf.replace(/\n/g, "\r\n");
+  const hashes = new Set([
+    crypto.createHash("sha256").update(lf, "utf8").digest("hex"),
+    crypto.createHash("sha256").update(crlf, "utf8").digest("hex"),
+  ]);
+  return hashes.has(String(expectedHash).toLowerCase());
 }
 
 function inferHashKey(directory) {
@@ -727,7 +746,7 @@ function assertMigrationRegistration({
       throw new GateFailure("TENANT_GATE_MIGRATION_PROVIDER_DRIFT");
     }
     createdTables = providerCreatedTables;
-    if (registry && hashKey && registry[hashKey] !== sha256(file)) throw new GateFailure("TENANT_GATE_MIGRATION_HASH_MISMATCH");
+    if (registry && hashKey && !matchesMigrationHash(file, registry[hashKey])) throw new GateFailure("TENANT_GATE_MIGRATION_HASH_MISMATCH");
   }
 
   if (relationAffecting && !registry) throw new GateFailure("TENANT_GATE_MIGRATION_UNREGISTERED");

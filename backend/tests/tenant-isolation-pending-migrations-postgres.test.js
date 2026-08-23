@@ -76,9 +76,9 @@ test("PostgreSQL migration boundary cobre 6+2, 7+1 e 8/8 sem consultar campo pen
     assert.equal(finalStatus.length, 8);
     assert.equal(finalStatus.every((row) => row.finished && !row.rolledBack), true);
     assert.equal(post.safe, true);
-    assert.equal(post.checkedRelationCount, 91);
+    assert.equal(post.checkedRelationCount, 113);
     assert.deepEqual(post.totals, { orphaned: 0, crossed: 0 });
-    assert.equal(post.constraints.checkedForeignKeys, 138);
+    assert.equal(post.constraints.checkedForeignKeys, 175);
     assert.equal(post.constraints.checkedUniqueParents, 17);
   } finally {
     try {
