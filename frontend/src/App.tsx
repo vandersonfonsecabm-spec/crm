@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ErrorState } from "./components/ui";
+import { Button, ErrorState } from "./components/ui";
 import Dashboard from "./pages/Dashboard";
 import { Login } from "./pages/Login";
 import PublicSecurityFlow from "./pages/PublicSecurityFlow";
@@ -80,6 +80,11 @@ function App() {
     }
   }
 
+  function returnToLogin() {
+    clearAuthSession();
+    setAuthState("unauthenticated");
+  }
+
   if (securityMode) return <PublicSecurityFlow mode={securityMode} onBack={() => navigatePublic("/")} />;
 
   if (authState === "checking") {
@@ -97,15 +102,20 @@ function App() {
   if (authState === "unavailable") {
     return (
       <main className="login-shell flex min-h-screen items-center justify-center px-4">
-        <ErrorState
-          description="Sua sessão foi preservada. Verifique a conexão e tente validar o acesso novamente."
-          onRetry={() => {
-            setAuthState("checking");
-            setAuthCheckAttempt((attempt) => attempt + 1);
-          }}
-          role="alert"
-          title="Não foi possível validar o acesso agora"
-        />
+        <div className="w-full max-w-md">
+          <ErrorState
+            description="Sua sessão foi preservada. Verifique a conexão e tente validar o acesso novamente."
+            onRetry={() => {
+              setAuthState("checking");
+              setAuthCheckAttempt((attempt) => attempt + 1);
+            }}
+            role="alert"
+            title="Não foi possível validar o acesso agora"
+          />
+          <div className="mt-2 flex justify-center">
+            <Button onClick={returnToLogin} size="sm" variant="ghost">Voltar ao login</Button>
+          </div>
+        </div>
       </main>
     );
   }

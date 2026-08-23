@@ -348,6 +348,14 @@ test("reload sem access token restaura a sessao pelo cookie valido", async (t) =
   assert.match(app, /if \(!getAuthSession\(\)\) await refreshAuthSession\(\);/);
 });
 
+test("falha transitória no reload preserva retry e oferece retorno local ao login", async () => {
+  const app = await source("src/App.tsx");
+
+  assert.match(app, /function returnToLogin\(\) \{\s*clearAuthSession\(\);\s*setAuthState\("unauthenticated"\);\s*\}/);
+  assert.match(app, /onRetry=\{\(\) => \{\s*setAuthState\("checking"\);\s*setAuthCheckAttempt\(\(attempt\) => attempt \+ 1\);\s*\}\}/);
+  assert.match(app, /<Button onClick=\{returnToLogin\} size="sm" variant="ghost">Voltar ao login<\/Button>/);
+});
+
 test("fetchAuthMe limpa somente apos refresh 401 e permite nova tentativa apos falha transitoria", async (t) => {
   t.after(resetAuthTestState);
   seedAccessToken("access-token-expirado");
