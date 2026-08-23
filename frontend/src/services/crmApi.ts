@@ -7,6 +7,7 @@ const configuredApiUrl = runtimeEnv?.VITE_API_URL?.trim();
 // rewrite proxies /api to the backend so the HttpOnly refresh cookie is first-party.
 const API_URL = runtimeEnv?.PROD ? "/api" : configuredApiUrl || "http://localhost:3001";
 const LEGACY_TOKEN_KEY = "crm-auth-token";
+const SESSION_TOKEN_KEY = "crm-auth-session-token";
 const USER_KEY = "crm-auth-user";
 const COMPANY_KEY = "crm-auth-company";
 const ROLE_KEY = "crm-auth-role";
@@ -14,9 +15,9 @@ const EXPIRES_KEY = "crm-auth-expires-at";
 const PLATFORM_OPERATOR_KEY = "crm-auth-platform-operator";
 const LEGACY_BYPASS_STORAGE_KEYS = ["crm-auth-demo", "crm-premium-clients"] as const;
 
-// O access token nunca deve sobreviver ao contexto JavaScript. A sessao
-// persistente e renovada pelo cookie HttpOnly de refresh; este valor existe
-// apenas enquanto a aba atual esta autenticada.
+// A memoria e a fonte primaria do access token. O cookie HttpOnly continua
+// sendo tentado primeiro no reload; sessionStorage e apenas o fallback da aba
+// atual quando o browser nao persiste esse cookie atraves do proxy same-origin.
 let accessTokenMemory: string | null = null;
 
 if (typeof localStorage !== "undefined") {
@@ -1527,11 +1528,33 @@ export function getAuthToken() {
 
 export function setAuthToken(token: string) {
   accessTokenMemory = token;
+  try {
+    sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+  } catch {
+    // Storage indisponivel reduz o fluxo ao refresh HttpOnly, sem abrir fallback menos seguro.
+  }
 }
 
 export function clearAuthToken() {
   accessTokenMemory = null;
   localStorage.removeItem(LEGACY_TOKEN_KEY);
+  try {
+    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+  } catch {
+    // A limpeza em memoria continua obrigatoria quando o storage esta indisponivel.
+  }
+}
+
+export function restoreAuthTokenFromSession() {
+  if (accessTokenMemory) return true;
+  try {
+    const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    if (!token) return false;
+    accessTokenMemory = token;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function setAuthUser(user?: ApiAuthUser) {

@@ -26,13 +26,18 @@ const {
   createEmailInboundLifecycleService,
 } = require("../integrations/emailInboundLifecycle");
 const { isEmailError } = require("../integrations/emailFoundation");
+const {
+  createAuthRateLimiter,
+  createPostgresAuthRateLimiter,
+  requestIp,
+} = require("../auth-rate-limiter");
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 20;
 const MAX_REASON_LENGTH = 500;
 
-function mountPlatformRoutes({ app, prisma, authenticate }) {
-  const rateLimiter = createPlatformRateLimiter();
+function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
+  const rateLimiter = createPlatformRateLimiter({ prisma, env });
   const guarded = [authenticate, requirePlatformOperator, rateLimiter];
   const whatsappInboundProvisioning = createWhatsappInboundProvisioningService({ prisma });
   const whatsappInboundLifecycle = createWhatsappInboundLifecycleService({ prisma });
@@ -470,20 +475,43 @@ function requirePlatformOperator(req, res, next) {
   return next();
 }
 
-function createPlatformRateLimiter({ windowMs = 60_000, max = 90 } = {}) {
-  const hits = new Map();
-  return (req, res, next) => {
-    const key = String(req.auth?.usuarioId || req.ip || "anonymous");
-    const now = Date.now();
-    const entry = hits.get(key);
-    if (!entry || entry.resetAt <= now) {
-      hits.set(key, { count: 1, resetAt: now + windowMs });
-      return next();
+function createPlatformRateLimiter({ windowMs = 60_000, max = 90, prisma, env = process.env, limiter } = {}) {
+  const platformLimiter = limiter || createPlatformRequestLimiter({ prisma, env, windowMs, max });
+  return async (req, res, next) => {
+    const context = {
+      identity: `platform:${String(req.auth?.usuarioId || "anonymous")}`,
+      ip: requestIp(req),
+    };
+    try {
+      if (typeof platformLimiter.consume === "function") {
+        await platformLimiter.consume(context);
+      } else {
+        await platformLimiter.check(context);
+        await platformLimiter.recordFailure(context);
+      }
+    } catch (error) {
+      if (error?.code === "AUTH_RATE_LIMITED") {
+        if (error.retryAfterSeconds) res.set("Retry-After", String(error.retryAfterSeconds));
+        return platformError(res, 429, "Muitas operacoes em pouco tempo.", "PLATFORM_RATE_LIMITED");
+      }
+      return platformError(
+        res,
+        error?.status || 503,
+        "Operacao de plataforma temporariamente indisponivel.",
+        "PLATFORM_RATE_LIMIT_STORE_UNAVAILABLE",
+      );
     }
-    entry.count += 1;
-    if (entry.count > max) return platformError(res, 429, "Muitas operacoes em pouco tempo.", "PLATFORM_RATE_LIMITED");
     return next();
   };
+}
+
+function createPlatformRequestLimiter({ prisma, env = process.env, windowMs, max }) {
+  const options = { windowMs, identityLimit: max, ipLimit: max };
+  const postgresqlRuntime = String(env.CRM_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql";
+  if (env.NODE_ENV === "production" && postgresqlRuntime) {
+    return createPostgresAuthRateLimiter({ prisma, ...options });
+  }
+  return createAuthRateLimiter(options);
 }
 
 function tenantSearchWhere(search) {
@@ -604,5 +632,6 @@ function isMessengerPlatformError(error) {
 
 module.exports = {
   createPlatformRateLimiter,
+  createPlatformRequestLimiter,
   mountPlatformRoutes,
 };

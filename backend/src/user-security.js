@@ -746,6 +746,10 @@ function createUserSecurity({
 
   async function applySensitiveRateLimit(req, identity) {
     const ip = requestIp(req);
+    if (typeof rateLimiter.consume === "function") {
+      await rateLimiter.consume({ identity, ip });
+      return;
+    }
     await rateLimiter.check({ identity, ip });
     await rateLimiter.recordFailure({ identity, ip });
   }

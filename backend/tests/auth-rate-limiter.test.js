@@ -1,5 +1,9 @@
 const assert = require("node:assert/strict");
+const bcrypt = require("bcryptjs");
+const express = require("express");
+const http = require("node:http");
 const test = require("node:test");
+const { createAuth } = require("../src/auth");
 const {
   authIdentity,
   createAuthRateLimiter,
@@ -55,4 +59,104 @@ test("usa somente X-Real-IP valido quando o alvo Railway foi atestado", () => {
   assert.equal(requestIp(base), "203.0.113.10");
   assert.equal(requestIp({ ...base, headers: { ...base.headers, "x-real-ip": "203.0.113.10, 198.51.100.99" } }), "192.0.2.5");
   assert.equal(requestIp({ ...base, app: { locals: { railwayTargetVerified: false } } }), "192.0.2.5");
+});
+
+test("falha ao limpar bucket de login nao cria nem expõe sessao", async (t) => {
+  const password = "SenhaSegura123";
+  const usuario = {
+    id: 1,
+    empresaId: 1,
+    nome: "Admin",
+    email: "admin@rate-limit.example",
+    senhaHash: await bcrypt.hash(password, 4),
+    papel: "ADMIN",
+    ativo: true,
+    empresa: { id: 1, nome: "Empresa", slug: "empresa", ativo: true, createdAt: new Date(), updatedAt: new Date() },
+  };
+  const sessions = [];
+  const prisma = {
+    usuario: {
+      async findMany() { return [usuario]; },
+    },
+    async $transaction(callback) {
+      return callback({
+        usuario: {
+          async updateMany() { return { count: 1 }; },
+          async findFirst() { return usuario; },
+        },
+        sessaoUsuario: {
+          async create({ data }) { sessions.push(data); return data; },
+        },
+        sessaoRefreshToken: {
+          async create({ data }) { return data; },
+        },
+      });
+    },
+    auditoriaSeguranca: {
+      async create({ data }) { return data; },
+    },
+  };
+  const unavailable = new Error("store unavailable");
+  unavailable.status = 503;
+  unavailable.code = "AUTH_RATE_LIMIT_STORE_UNAVAILABLE";
+  const loginRateLimiter = {
+    async check() {},
+    async recordFailure() {},
+    async recordSuccess() { throw unavailable; },
+  };
+  const app = express();
+  app.use(express.json());
+  createAuth({
+    prisma,
+    loginRateLimiter,
+    securityDelivery: { async deliver() { return { status: "NOT_CONFIGURED" }; } },
+  }).mountRoutes(app);
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const address = server.address();
+  const response = await fetch(`http://127.0.0.1:${address.port}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: usuario.email, senha: password }),
+  });
+
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).codigo, "AUTH_RATE_LIMIT_STORE_UNAVAILABLE");
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.equal(sessions.length, 0);
+});
+
+test("falha ao registrar credencial ausente retorna indisponibilidade sanitizada", async (t) => {
+  const unavailable = new Error("store unavailable");
+  unavailable.status = 503;
+  unavailable.code = "AUTH_RATE_LIMIT_STORE_UNAVAILABLE";
+  const app = express();
+  app.use(express.json());
+  createAuth({
+    prisma: {},
+    loginRateLimiter: {
+      async check() {},
+      async recordFailure() { throw unavailable; },
+      async recordSuccess() {},
+    },
+    securityDelivery: { async deliver() { return { status: "NOT_CONFIGURED" }; } },
+  }).mountRoutes(app);
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const address = server.address();
+  const response = await fetch(`http://127.0.0.1:${address.port}/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email: "missing@rate-limit.example" }),
+  });
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    erro: "Nao foi possivel autenticar agora.",
+    codigo: "AUTH_RATE_LIMIT_STORE_UNAVAILABLE",
+  });
 });

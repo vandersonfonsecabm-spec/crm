@@ -219,9 +219,15 @@ function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDe
         identity: authIdentity(email, slug),
         ip: requestIp(req),
       };
+      let rateLimitConsumed = false;
 
       try {
-        await loginLimiter.check(limiterContext);
+        if (typeof loginLimiter.consume === "function") {
+          await loginLimiter.consume(limiterContext);
+          rateLimitConsumed = true;
+        } else {
+          await loginLimiter.check(limiterContext);
+        }
       } catch (error) {
         if (error.code === "AUTH_RATE_LIMITED") {
           if (error.retryAfterSeconds) res.set("Retry-After", String(error.retryAfterSeconds));
@@ -231,7 +237,18 @@ function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDe
       }
 
       if (!email || !senha) {
-        await loginLimiter.recordFailure(limiterContext);
+        if (!rateLimitConsumed) {
+          try {
+            await loginLimiter.recordFailure(limiterContext);
+          } catch (error) {
+            return authError(
+              res,
+              error.status || 503,
+              "Nao foi possivel autenticar agora.",
+              error.code || "AUTH_RATE_LIMIT_STORE_UNAVAILABLE",
+            );
+          }
+        }
         return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
       }
 
@@ -245,7 +262,7 @@ function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDe
           take: 2,
         });
         if (usuarios.length !== 1) {
-          await loginLimiter.recordFailure(limiterContext);
+          if (!rateLimitConsumed) await loginLimiter.recordFailure(limiterContext);
           return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
         }
 
@@ -264,7 +281,7 @@ function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDe
           } catch (auditError) {
             logInternalError("Falha ao registrar rejeicao de login.", auditError);
           }
-          await loginLimiter.recordFailure(limiterContext);
+          if (!rateLimitConsumed) await loginLimiter.recordFailure(limiterContext);
           return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
         }
         if (process.env.NODE_ENV === "test" && typeof globalThis.__CRM_TEST_AUTH_AFTER_PASSWORD_COMPARE === "function") {
@@ -277,6 +294,10 @@ function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDe
           return authError(res, 403, "Empresa inativa.", "COMPANY_INACTIVE");
         }
 
+        // A limpeza do bucket faz parte do controle fail-closed. Execute-a
+        // antes de criar ou expor a sessao para que uma falha no store nao
+        // devolva um cookie valido junto com uma resposta 503.
+        await loginLimiter.recordSuccess(limiterContext);
         const session = await security.createLoginSession({ usuario, expectedPasswordHash: usuario.senhaHash, req });
         const updated = session.usuario;
         const platformOperator = await resolvePlatformOperator({ prisma, usuario: updated, env: process.env });
@@ -294,7 +315,6 @@ function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDe
         } catch (auditError) {
           logInternalError("Falha ao registrar sucesso de login.", auditError);
         }
-        await loginLimiter.recordSuccess(limiterContext);
         return res.json(loginResponse(updated, config, platformOperator, session));
       } catch (error) {
         if (error?.status) {

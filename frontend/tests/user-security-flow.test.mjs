@@ -32,7 +32,10 @@ class MemoryStorage {
 }
 
 const originalFetch = globalThis.fetch;
-globalThis.localStorage = new MemoryStorage();
+const testLocalStorage = new MemoryStorage();
+const testSessionStorage = new MemoryStorage();
+globalThis.localStorage = testLocalStorage;
+globalThis.sessionStorage = testSessionStorage;
 const api = await import("../src/services/crmApi.ts");
 
 function jsonResponse(body, status = 200) {
@@ -44,12 +47,14 @@ function jsonResponse(body, status = 200) {
 
 function seedAccessToken(token = "access-token-de-teste") {
   localStorage.clear();
+  sessionStorage.clear();
   api.setAuthToken(token);
 }
 
 function resetAuthTestState() {
   api.clearAuthSession();
   localStorage.clear();
+  sessionStorage.clear();
   globalThis.fetch = originalFetch;
 }
 
@@ -345,7 +350,38 @@ test("reload sem access token restaura a sessao pelo cookie valido", async (t) =
   assert.deepEqual(requests, ["/auth/refresh"]);
 
   const app = await source("src/App.tsx");
-  assert.match(app, /if \(!getAuthSession\(\)\) await refreshAuthSession\(\);/);
+  assert.match(app, /if \(!getAuthSession\(\)\) \{\s*try \{\s*await refreshAuthSession\(\);/);
+});
+
+test("cookie continua prioritário e sessionStorage restaura somente a aba atual", async (t) => {
+  t.after(() => {
+    globalThis.sessionStorage = testSessionStorage;
+    resetAuthTestState();
+  });
+  const firstTabStorage = new MemoryStorage();
+  const secondTabStorage = new MemoryStorage();
+  globalThis.sessionStorage = firstTabStorage;
+  localStorage.clear();
+  api.clearAuthSession();
+  api.setAuthToken("access-token-primeira-aba");
+
+  assert.equal(localStorage.getItem("crm-auth-token"), null);
+  assert.equal(firstTabStorage.getItem("crm-auth-session-token"), "access-token-primeira-aba");
+
+  globalThis.sessionStorage = secondTabStorage;
+  api.clearAuthToken();
+  assert.equal(api.restoreAuthTokenFromSession(), false);
+  assert.equal(firstTabStorage.getItem("crm-auth-session-token"), "access-token-primeira-aba");
+
+  globalThis.sessionStorage = firstTabStorage;
+  assert.equal(api.restoreAuthTokenFromSession(), true);
+  assert.equal(api.getAuthToken(), "access-token-primeira-aba");
+  api.clearAuthSession();
+  assert.equal(firstTabStorage.getItem("crm-auth-session-token"), null);
+
+  const app = await source("src/App.tsx");
+  assert.ok(app.indexOf("await refreshAuthSession()") < app.indexOf("restoreAuthTokenFromSession()"));
+  assert.match(app, /async function sair\(\) \{[\s\S]*?finally \{\s*clearAuthSession\(\);/);
 });
 
 test("produção encaminha auth pelo mesmo host antes do fallback da SPA", async () => {

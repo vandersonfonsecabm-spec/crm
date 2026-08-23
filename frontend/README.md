@@ -6,15 +6,23 @@ This template provides a minimal setup to get React working in Vite with HMR and
 
 Em produção, o cliente chama a API pelo prefixo same-origin `/api`. A primeira
 regra de rewrite em `vercel.json` encaminha esse prefixo ao backend oficial
-antes do fallback da SPA. Assim, o cookie HttpOnly de refresh é emitido no host
-do CRM e pode restaurar a sessão após reload, sem gravar access token em
-`localStorage` ou `sessionStorage`.
+antes do fallback da SPA. O refresh pelo cookie HttpOnly é sempre a primeira
+tentativa depois de reload. Como alguns navegadores não persistem esse cookie
+quando ele retorna por rewrite externo, o access token também fica em
+`sessionStorage` apenas na aba atual; ele nunca é gravado em `localStorage`.
+
+Esse fallback permite reload na mesma aba, não é compartilhado entre abas e é
+apagado em logout/limpeza de sessão. O tradeoff é que, durante a vida da aba,
+o token permanece acessível ao JavaScript: a aplicação mantém CSP restritiva,
+não registra tokens e prefere o refresh HttpOnly sempre que disponível. Quando
+o refresh falha por ausência do cookie, a revogação baseada somente nele só
+prevalece quando o access token expira ou é rejeitado pelo backend.
 
 Após a publicação dessa mudança, usuários com cookie emitido no host anterior
-precisam entrar uma vez; os próximos reloads usam o cookie do host do CRM. A
-validação de release deve confirmar no DevTools que login e refresh usam
-`/api/auth/*`, retornam `Set-Cookie` e que um reload em rota protegida mantém a
-sessão. Não registrar nem copiar valores de cookies durante essa verificação.
+precisam entrar uma vez. A validação de release deve confirmar no DevTools que
+login e refresh usam `/api/auth/*` e que um reload em rota protegida mantém a
+sessão. Não registrar nem copiar valores de cookies ou tokens durante essa
+verificação.
 
 Currently, two official plugins are available:
 

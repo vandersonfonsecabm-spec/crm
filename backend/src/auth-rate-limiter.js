@@ -35,6 +35,11 @@ function createAuthRateLimiter({
     increment(bucketKey("ip", ip), ipLimit);
   }
 
+  function consume({ identity, ip }) {
+    check({ identity, ip });
+    recordFailure({ identity, ip });
+  }
+
   function recordSuccess({ identity }) {
     buckets.delete(bucketKey("identity", identity));
   }
@@ -56,7 +61,7 @@ function createAuthRateLimiter({
     }
   }
 
-  return { check, recordFailure, recordSuccess };
+  return { check, consume, recordFailure, recordSuccess };
 }
 
 function createPostgresAuthRateLimiter({
@@ -99,6 +104,23 @@ function createPostgresAuthRateLimiter({
         await incrementBucket(tx, bucketKey("ip", ip), ipLimit, current);
       });
     } catch (error) {
+      throw rateLimitStoreError(error);
+    }
+  }
+
+  async function consume({ identity, ip }) {
+    const current = new Date(now());
+    await pruneIfDue(current);
+    try {
+      await prisma.$transaction(async (tx) => {
+        const identityResetAt = await consumeBucket(tx, bucketKey("identity", identity), identityLimit, current);
+        if (identityResetAt) throw rateLimitError(retryAfterSeconds(identityResetAt, current));
+
+        const ipResetAt = await consumeBucket(tx, bucketKey("ip", ip), ipLimit, current);
+        if (ipResetAt) throw rateLimitError(retryAfterSeconds(ipResetAt, current));
+      });
+    } catch (error) {
+      if (error?.code === "AUTH_RATE_LIMITED") throw error;
       throw rateLimitStoreError(error);
     }
   }
@@ -159,7 +181,57 @@ function createPostgresAuthRateLimiter({
     }
   }
 
-  return { check, recordFailure, recordSuccess };
+  async function consumeBucket(tx, id, limit, current) {
+    const resetAt = new Date(current.getTime() + windowMs);
+    if (typeof tx.$queryRaw === "function") {
+      // A reserva e o limite sao decididos pela mesma instrucao. Assim, duas
+      // replicas nao podem liberar simultaneamente a mesma tentativa.
+      const rows = await tx.$queryRaw`
+        INSERT INTO "RateLimitBucket" ("id", "count", "limit", "resetAt", "createdAt", "updatedAt")
+        VALUES (${id}, 1, ${limit}, ${resetAt}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT ("id") DO UPDATE SET
+          "count" = CASE WHEN "RateLimitBucket"."resetAt" <= ${current}
+            THEN 1 ELSE "RateLimitBucket"."count" + 1 END,
+          "limit" = EXCLUDED."limit",
+          "resetAt" = CASE WHEN "RateLimitBucket"."resetAt" <= ${current}
+            THEN EXCLUDED."resetAt" ELSE "RateLimitBucket"."resetAt" END,
+          "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "RateLimitBucket"."resetAt" <= ${current}
+          OR "RateLimitBucket"."count" < ${limit}
+        RETURNING "resetAt"
+      `;
+      if (rows.length === 1) return null;
+      const blocked = await tx.rateLimitBucket.findUnique({ where: { id }, select: { resetAt: true } });
+      if (blocked?.resetAt > current) return blocked.resetAt;
+      throw new Error("AUTH_RATE_LIMIT_CONSUME_STATE_INVALID");
+    }
+
+    const updated = await tx.rateLimitBucket.updateMany({
+      where: { id, resetAt: { gt: current }, count: { lt: limit } },
+      data: { count: { increment: 1 }, limit },
+    });
+    if (updated.count === 1) return null;
+
+    const existing = await tx.rateLimitBucket.findUnique({ where: { id }, select: { resetAt: true } });
+    if (existing?.resetAt > current) return existing.resetAt;
+
+    try {
+      await tx.rateLimitBucket.create({ data: { id, count: 1, limit, resetAt } });
+      return null;
+    } catch (error) {
+      if (error?.code !== "P2002") throw error;
+      const retried = await tx.rateLimitBucket.updateMany({
+        where: { id, resetAt: { gt: current }, count: { lt: limit } },
+        data: { count: { increment: 1 }, limit },
+      });
+      if (retried.count === 1) return null;
+      const blocked = await tx.rateLimitBucket.findUnique({ where: { id }, select: { resetAt: true } });
+      if (blocked?.resetAt > current) return blocked.resetAt;
+      throw error;
+    }
+  }
+
+  return { check, consume, recordFailure, recordSuccess };
 }
 
 function rateLimitError(retryAfterSeconds) {
@@ -168,6 +240,10 @@ function rateLimitError(retryAfterSeconds) {
   error.code = "AUTH_RATE_LIMITED";
   error.retryAfterSeconds = retryAfterSeconds;
   return error;
+}
+
+function retryAfterSeconds(resetAt, current) {
+  return Math.max(1, Math.ceil((resetAt.getTime() - current.getTime()) / 1000));
 }
 
 function rateLimitStoreError(cause) {

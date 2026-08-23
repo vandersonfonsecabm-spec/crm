@@ -9,6 +9,10 @@ function fakePrisma() {
       const ids = new Set(where.id.in);
       return [...rows.values()].filter((row) => ids.has(row.id)).map(clone);
     },
+    async findUnique({ where }) {
+      const row = rows.get(where.id);
+      return row ? clone(row) : null;
+    },
     async deleteMany({ where }) {
       let count = 0;
       for (const [id, row] of rows) {
@@ -21,8 +25,13 @@ function fakePrisma() {
     },
     async updateMany({ where, data }) {
       const row = rows.get(where.id);
-      if (!row || row.resetAt <= where.resetAt.gt) return { count: 0 };
-      row.count += data.count.increment;
+      if (!row) return { count: 0 };
+      if (where.resetAt?.gt && row.resetAt <= where.resetAt.gt) return { count: 0 };
+      if (where.resetAt?.lte && row.resetAt > where.resetAt.lte) return { count: 0 };
+      if (where.count?.lt !== undefined && row.count >= where.count.lt) return { count: 0 };
+      if (data.count?.increment) row.count += data.count.increment;
+      if (data.limit !== undefined) row.limit = data.limit;
+      if (data.resetAt !== undefined) row.resetAt = new Date(data.resetAt);
       return { count: 1 };
     },
     async create({ data }) {
@@ -74,4 +83,18 @@ test("falha do store e fail-closed sem fallback local", async () => {
   };
   const limiter = createPostgresAuthRateLimiter({ prisma: unavailable });
   await assert.rejects(limiter.check({ identity: "a", ip: "b" }), (error) => error.code === "AUTH_RATE_LIMIT_STORE_UNAVAILABLE" && error.status === 503);
+});
+
+test("reserva atomica bloqueia tentativa paralela antes da verificacao de credencial", async () => {
+  const prisma = fakePrisma();
+  const options = { prisma, now: () => 1_000, windowMs: 1_000, identityLimit: 1, ipLimit: 20, pruneEveryMs: 0 };
+  const first = createPostgresAuthRateLimiter(options);
+  const second = createPostgresAuthRateLimiter(options);
+  const context = { identity: "tenant-a:user-a", ip: "203.0.113.10" };
+
+  const attempts = await Promise.allSettled([first.consume(context), second.consume(context)]);
+  assert.equal(attempts.filter((attempt) => attempt.status === "fulfilled").length, 1);
+  const rejected = attempts.find((attempt) => attempt.status === "rejected");
+  assert.equal(rejected?.reason?.code, "AUTH_RATE_LIMITED");
+  assert.equal(rejected?.reason?.status, 429);
 });

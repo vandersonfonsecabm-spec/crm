@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { maintenanceReadOnlyEnabled } = require("../database/maintenance-read-only");
+const { queryDatabaseWithServerTimeout } = require("../database/readiness-probe");
 const { WORKER_ACTION_TYPES } = require("./actions");
 const { createAutomationWorkerLogger } = require("./worker-observability");
 const { databaseProviderFromEnv } = require("../../scripts/prisma-runtime.cjs");
@@ -215,7 +216,7 @@ function startAutomationWorker({
   };
 }
 
-async function runAutomationWorkerProcess({ env = process.env, logger = console } = {}) {
+async function runAutomationWorkerProcess({ env = process.env, logger = console, queryDatabase = queryDatabaseWithServerTimeout } = {}) {
   require("dotenv").config();
   const { createPrismaClient } = require("../database/prisma-client");
   const { createAutomationService } = require("./service");
@@ -223,10 +224,7 @@ async function runAutomationWorkerProcess({ env = process.env, logger = console 
   const provider = validateWorkerRuntimeTarget(env);
   const prisma = createPrismaClient({ env });
   try {
-    await Promise.race([
-      prisma.$queryRaw`SELECT 1`,
-      new Promise((_, reject) => setTimeout(() => reject(new Error("WORKER_DATABASE_PREFLIGHT_TIMEOUT")), 5000)),
-    ]);
+    await preflightWorkerDatabase({ prisma, env, queryDatabase });
     await runGate({ mode: provider === "postgresql" ? "production-readonly" : "post-migration", env });
   } catch (error) {
     await prisma.$disconnect();
@@ -240,6 +238,10 @@ async function runAutomationWorkerProcess({ env = process.env, logger = console 
     return 0;
   }
   return waitForShutdown(worker, prisma);
+}
+
+async function preflightWorkerDatabase({ prisma, env = process.env, queryDatabase = queryDatabaseWithServerTimeout } = {}) {
+  return queryDatabase({ prisma, env, timeoutMs: 5000 });
 }
 
 function isRailwayEnvironment(env = process.env) {
@@ -323,6 +325,7 @@ if (require.main === module) {
 module.exports = {
   WORKER_DEFAULTS,
   automationProvider,
+  preflightWorkerDatabase,
   readAutomationWorkerConfig,
   runAutomationWorkerProcess,
   shouldStartAutomationWorker,

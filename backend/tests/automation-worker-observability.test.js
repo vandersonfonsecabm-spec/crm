@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const { after, afterEach, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const { createAutomationService } = require("../src/automations/service");
-const { automationProvider, startAutomationWorker } = require("../src/automations/worker");
+const { automationProvider, preflightWorkerDatabase, startAutomationWorker } = require("../src/automations/worker");
 const {
   MAX_ERROR_MESSAGE_LENGTH,
   createAutomationWorkerLogger,
@@ -44,6 +44,20 @@ let sequence = 0;
 before(cleanDatabase);
 afterEach(cleanDatabase);
 after(() => prisma.$disconnect());
+
+test("preflight do worker usa timeout finito do probe de banco", async () => {
+  const calls = [];
+  await preflightWorkerDatabase({
+    prisma: { marker: "worker" },
+    env: { CRM_DATABASE_PROVIDER: "postgresql" },
+    queryDatabase: async (options) => { calls.push(options); },
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].prisma.marker, "worker");
+  assert.equal(calls[0].env.CRM_DATABASE_PROVIDER, "postgresql");
+  assert.equal(calls[0].timeoutMs, 5000);
+});
 
 test("worker registra startup uma vez e polling vazio sem ruido de job", async () => {
   assert.equal(automationProvider({ POSTGRES_DATABASE_URL: "postgresql://stored-but-inactive" }), "sqlite");
