@@ -12,6 +12,9 @@ const DEFAULT_PREVIEW_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_ACTIVE_BATCHES_PER_TENANT = 2;
 const MAX_ACTIVE_BATCHES_PER_ACTOR = 1;
+// Preview enforces this already; confirmation repeats the bound so a malformed
+// or legacy staging record can never turn into an unbounded transaction.
+const MAX_CONFIRM_LINES = 500;
 
 function createStockImportService({
   prisma,
@@ -188,7 +191,7 @@ function createStockImportService({
       throw stockError(409, "STOCK_CANONICAL_APPLIER_REQUIRED", "Aplicador canonico de estoque indisponivel.");
     }
     const now = clockDate(clock);
-    const importacao = await requireImport({ empresaId, importacaoId });
+    const importacao = await requireImport({ empresaId, importacaoId, includeLines: false });
     await loadCsvSource({ empresaId, fonteId: importacao.fonteId });
     if (isExpired(importacao, now)) {
       await expireIfEditable({ empresaId, importacaoId, now });
@@ -197,6 +200,7 @@ function createStockImportService({
     if (["APPLIED", "PARTIAL"].includes(importacao.status)) return presentImport(importacao);
     if (importacao.status !== "READY") throw stockError(409, "STOCK_IMPORT_NOT_READY", "Importacao de estoque nao esta pronta para confirmacao.");
     if (importacao.rejectedCount > 0 && allowPartial !== true) throw stockError(409, "STOCK_IMPORT_PARTIAL_CONFIRM_REQUIRED", "Confirmacao parcial explicita obrigatoria.");
+    assertConfirmationBounds(importacao);
 
     const finalized = await prisma.$transaction(async (tx) => {
       const claimed = await tx.importacaoEstoque.updateMany({
@@ -204,7 +208,7 @@ function createStockImportService({
         data: { status: "PROCESSING", confirmedAt: now, revision: { increment: 1 } },
       });
       if (claimed.count !== 1) throw stockError(409, "STOCK_IMPORT_REVISION_CONFLICT", "Importacao de estoque foi alterada.");
-      const working = await tx.importacaoEstoque.findFirst({ where: { id: importacaoId, empresaId }, include: importInclude() });
+      const working = await tx.importacaoEstoque.findFirst({ where: { id: importacaoId, empresaId } });
       const syncRun = await tx.execucaoSincronizacaoEstoque.create({
         data: {
           empresaId,
@@ -220,7 +224,11 @@ function createStockImportService({
       const acceptedLines = await tx.linhaImportacaoEstoque.findMany({
         where: { empresaId, importacaoId, status: "ACCEPTED" },
         orderBy: { rowNumber: "asc" },
+        take: MAX_CONFIRM_LINES + 1,
       });
+      if (acceptedLines.length > MAX_CONFIRM_LINES) {
+        throw stockError(409, "STOCK_IMPORT_BOUNDS_EXCEEDED", "Importacao de estoque excede o limite de confirmacao.");
+      }
       const result = await applyAcceptedRows({
         tx,
         empresaId,
@@ -296,8 +304,10 @@ function createStockImportService({
     }
   }
 
-  async function requireImport({ empresaId, importacaoId }) {
-    const importacao = await prisma.importacaoEstoque.findFirst({ where: { id: importacaoId, empresaId }, include: importInclude() });
+  async function requireImport({ empresaId, importacaoId, includeLines = true }) {
+    const query = { where: { id: importacaoId, empresaId } };
+    if (includeLines) query.include = importInclude();
+    const importacao = await prisma.importacaoEstoque.findFirst(query);
     if (!importacao) throw stockError(404, "STOCK_IMPORT_NOT_FOUND", "Importacao de estoque nao encontrada.");
     return importacao;
   }
@@ -392,6 +402,17 @@ function normalizeAppliedIds(value, acceptedLines) {
   return unique;
 }
 
+function assertConfirmationBounds(importacao) {
+  const rowCount = Number(importacao?.rowCount);
+  const acceptedCount = Number(importacao?.acceptedCount);
+  const rejectedCount = Number(importacao?.rejectedCount);
+  if (!Number.isSafeInteger(rowCount) || !Number.isSafeInteger(acceptedCount) || !Number.isSafeInteger(rejectedCount)
+    || rowCount < 1 || rowCount > MAX_CONFIRM_LINES || acceptedCount < 0 || rejectedCount < 0
+    || acceptedCount + rejectedCount !== rowCount) {
+    throw stockError(409, "STOCK_IMPORT_BOUNDS_EXCEEDED", "Importacao de estoque excede o limite de confirmacao.");
+  }
+}
+
 function sanitizeFilename(value) {
   const name = String(value || "arquivo.csv").replace(/[\\/\u0000-\u001F]/g, "_").trim().slice(0, 160);
   return name || "arquivo.csv";
@@ -455,6 +476,7 @@ module.exports = {
   ACTIVE_IMPORT_STATUSES,
   MAX_ACTIVE_BATCHES_PER_ACTOR,
   MAX_ACTIVE_BATCHES_PER_TENANT,
+  MAX_CONFIRM_LINES,
   QUOTA_IMPORT_STATUSES,
   createStockImportService,
   presentImport,

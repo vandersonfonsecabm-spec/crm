@@ -257,6 +257,9 @@ model Empresa {
   eventosOutboxEstoque       EventoOutboxEstoque[]
   importacoesEstoque         ImportacaoEstoque[]
   linhasImportacaoEstoque    LinhaImportacaoEstoque[]
+  configuracoesRegraEstoque  ConfiguracaoRegraEstoque[]
+  overridesEstoque            OverrideEstoque[]
+  avaliacoesRegraEstoque      AvaliacaoRegraEstoque[]
 }
 
 model Usuario {
@@ -1321,6 +1324,13 @@ model Notificacao {
   alvoTipo            String
   alvoId              Int?
   alvoSubId           Int?
+  stockTargetType     String?
+  stockTargetId       Int?
+  stockTargetSubId    Int?
+  stockSnapshotJson   String?
+  stockMaterialVersion Int?
+  stockSourceObservedAt DateTime?
+  stockResolutionState String?
   ocorridoEm          DateTime
   venceEm             DateTime?
   lidaEm              DateTime?
@@ -1560,6 +1570,7 @@ model ProdutoEstoque {
   mapeamentosExternos      MapeamentoProdutoExterno[]
   lotes                    LoteEstoque[]
   saldos                   SaldoEstoque[]
+  avaliacoesRegraEstoque   AvaliacaoRegraEstoque[]
 
   @@unique([empresaId, id])
   @@index([empresaId, skuCanonico])
@@ -1604,6 +1615,7 @@ model LocalEstoque {
   pai                LocalEstoque?    @relation("LocalEstoqueHierarquia", fields: [empresaId, parentId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   filhos             LocalEstoque[]   @relation("LocalEstoqueHierarquia")
   saldos             SaldoEstoque[]
+  avaliacoesRegraEstoque AvaliacaoRegraEstoque[]
 
   @@unique([empresaId, id])
   @@index([empresaId, fonteId, externalLocationId])
@@ -1631,6 +1643,7 @@ model LoteEstoque {
   produtoEstoque     ProdutoEstoque          @relation(fields: [empresaId, produtoEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   fonte              FonteEstoque            @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   saldos             SaldoEstoque[]
+  avaliacoesRegraEstoque AvaliacaoRegraEstoque[]
 
   @@unique([empresaId, id])
   @@index([empresaId, produtoEstoqueId, estado])
@@ -1827,6 +1840,106 @@ model LinhaImportacaoEstoque {
 
   @@unique([empresaId, importacaoId, rowNumber])
   @@index([empresaId, importacaoId, rowChecksum])
+  @@index([empresaId, retentionUntil])
+}
+
+// E3 rule configuration/evidence. Evaluation reads only committed canonical
+// state; source payloads are never accepted as rule input.
+model ConfiguracaoRegraEstoque {
+  id                       Int      @id @default(autoincrement())
+  empresaId                Int
+  ruleType                 String
+  scopeType                String   @default("TENANT")
+  scopeKey                 String   @default("TENANT")
+  enabled                  Boolean  @default(false)
+  expiryWindowDays         Int?
+  freshnessSlaMinutes      Int?
+  timezone                 String?
+  requiredCapabilitiesJson String?
+  priorityBandsJson       String?
+  recipientPolicyJson     String?
+  suppressionPolicyJson   String?
+  revision                 Int      @default(1)
+  actorRef                 String?
+  correlationId            String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  empresa                  Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, ruleType, scopeType, scopeKey])
+  @@unique([empresaId, id])
+  @@index([empresaId, ruleType, enabled])
+  @@index([empresaId, updatedAt])
+}
+
+model OverrideEstoque {
+  id                       Int      @id @default(autoincrement())
+  empresaId                Int
+  ruleType                 String
+  targetType               String
+  targetId                 String
+  enabled                  Boolean?
+  thresholdJson            String?
+  freshnessSlaMinutes     Int?
+  priority                 String?
+  recipientPolicyJson     String?
+  revision                 Int      @default(1)
+  actorRef                 String?
+  correlationId            String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  empresa                  Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, ruleType, targetType, targetId])
+  @@unique([empresaId, id])
+  @@index([empresaId, ruleType, targetType, targetId])
+  @@index([empresaId, updatedAt])
+}
+
+model AvaliacaoRegraEstoque {
+  id                       Int       @id @default(autoincrement())
+  empresaId                Int
+  schemaVersion             String
+  ruleType                 String
+  sourceConnectionId       Int?
+  scopeJson                String?
+  produtoEstoqueId        Int?
+  loteEstoqueId           Int?
+  localEstoqueId          Int?
+  requiredCapabilitiesJson String?
+  capabilitiesObservedJson String?
+  enabledEffective         Boolean
+  thresholdJson            String?
+  evaluationTime           DateTime
+  tenantTimezone           String
+  freshnessRequirement     String?
+  freshnessObserved        String?
+  quantitySemantic         String?
+  quantityRelevant         Boolean?
+  expiryDate               String?
+  expiryPrecision          String?
+  matched                  Boolean
+  noMatchReason            String?
+  priority                 String?
+  occurrenceKey            String
+  materialVersion          Int
+  materialChange           Boolean       @default(false)
+  destinationJson          String?
+  resolutionCandidate      String?
+  suppressionPolicyJson    String?
+  confidence               String?
+  correlationId            String?
+  evaluatedAt              DateTime      @default(now())
+  retentionUntil           DateTime
+  empresa                  Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  produtoEstoque           ProdutoEstoque? @relation(fields: [empresaId, produtoEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  loteEstoque              LoteEstoque?  @relation(fields: [empresaId, loteEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  localEstoque             LocalEstoque? @relation(fields: [empresaId, localEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@index([empresaId, ruleType, evaluatedAt])
+  @@index([empresaId, occurrenceKey, materialVersion])
+  @@index([empresaId, matched, evaluatedAt])
   @@index([empresaId, retentionUntil])
 }
 

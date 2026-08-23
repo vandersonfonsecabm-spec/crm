@@ -400,6 +400,9 @@ function priorityLabel(priority: NotificationItem["prioridade"]) {
 function targetLabel(kind: NotificationTargetKind) {
   if (kind === "CONVERSATION") return "Caixa de entrada";
   if (kind === "FOLLOW_UP") return "Agenda";
+  if (kind === "ESTOQUE_LOTE") return "Lote de estoque";
+  if (kind === "ESTOQUE_PRODUTO") return "Produto de estoque";
+  if (kind === "ESTOQUE_FONTE") return "Fonte de estoque";
   return "Negócios";
 }
 

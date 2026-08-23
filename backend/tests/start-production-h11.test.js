@@ -14,7 +14,7 @@ const {
 
 const backendDirectory = path.resolve(__dirname, "..");
 const sourcePrismaDirectory = path.join(backendDirectory, "prisma");
-const pendingMigrationName = "20260823180000_add_stock_core_e2";
+const pendingMigrationName = "20260823200000_add_stock_rules_h8_projection";
 const currentMigrationCount = fs.readdirSync(path.join(sourcePrismaDirectory, "migrations"), { withFileTypes: true })
   .filter((entry) => entry.isDirectory()).length;
 const testServiceId = "railway-service-test";

@@ -9,7 +9,7 @@ test("stock worker stays dormant when flags are absent and does not query schema
   let touched = false;
   const prisma = new Proxy({}, { get() { touched = true; throw new Error("schema should not be queried"); } });
   const result = await runStockWorkerCycle({ prisma, env: {}, now: new Date() });
-  assert.deepEqual(result, { enabled: false, claimed: 0, processed: 0, quarantined: 0 });
+  assert.deepEqual(result, { enabled: false, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, tenants: 0 });
   assert.equal(touched, false);
 });
 
@@ -33,7 +33,9 @@ test("worker leaves valid E2 outbox pending while H8 projection is OFF", async (
   let queried = false;
   const prisma = new Proxy({}, { get() { queried = true; throw new Error("outbox must remain pending while H8 is off"); } });
   const result = await runStockWorkerCycle({ prisma, env: { STOCK_DOMAIN_ENABLED: "true", STOCK_SYNC_WORKER_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "1", STOCK_H8_PROJECTION_ENABLED: "false" } });
-  assert.equal(result.enabled, false);
+  assert.equal(result.enabled, true);
+  assert.equal(result.claimed, 0);
+  assert.equal(result.processed, 0);
   assert.equal(queried, false);
 });
 

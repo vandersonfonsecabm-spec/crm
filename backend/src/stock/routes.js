@@ -73,6 +73,15 @@ function mountStockRoutes({ app, prisma, authenticate, requireRole, env = proces
     return res.json({ item: publicSource(current) });
   }));
 
+  app.post("/estoque/fontes/:id/sincronizar", ...sourceGuardRole("ADMIN"), route(async (req, res) => {
+    const fonteId = parsePathId(req.params.id);
+    const { empresaId, usuarioId } = req.stockContext;
+    const source = await prisma.fonteEstoque.findFirst({ where: { id: fonteId, empresaId } });
+    if (!source) throw new StockError("STOCK_NOT_FOUND", "Fonte nao encontrada.");
+    const result = await getServices().sync.createRun({ empresaId, fonteId, modo: req.body?.modo || "IMPORT", actorUsuarioId: usuarioId, correlationId: req.get("X-Correlation-Id") || null, snapshotGeneration: req.body?.snapshotGeneration || null });
+    return res.status(202).json({ item: publicSync(result) });
+  }));
+
   app.post("/estoque/importacoes/preview", ...sourceGuardRoleLarge("ADMIN"), route(async (req, res) => {
     const context = req.stockContext;
     const body = requestBody(req);
@@ -114,6 +123,12 @@ function mountStockRoutes({ app, prisma, authenticate, requireRole, env = proces
     return res.json({ item: publicSync(row) });
   }));
 
+  app.get("/estoque/sincronizacoes", ...guardRole("ADMIN", "GERENTE"), route(async (req, res) => {
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const rows = await prisma.execucaoSincronizacaoEstoque.findMany({ where: { empresaId: req.stockContext.empresaId }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take: limit });
+    return res.json({ items: rows.map(publicSync) });
+  }));
+
   for (const [path, entity] of [["/estoque/produtos", "produtoEstoque"], ["/estoque/lotes", "loteEstoque"], ["/estoque/saldos", "saldoEstoque"], ["/estoque/problemas-qualidade", "problemaQualidadeEstoque"]]) {
     app.get(path, ...guardRole("ADMIN", "GERENTE"), route(async (req, res) => {
       const result = await getServices().canonical.list(entity, { empresaId: req.stockContext.empresaId, cursor: req.query.cursor, limit: req.query.limit, orderBy: { id: "asc" } });
@@ -123,6 +138,60 @@ function mountStockRoutes({ app, prisma, authenticate, requireRole, env = proces
   app.get("/estoque/freshness", ...guardRole("ADMIN", "GERENTE"), route(async (req, res) => {
     const result = await getServices().canonical.list("saldoEstoque", { empresaId: req.stockContext.empresaId, cursor: req.query.cursor, limit: req.query.limit, orderBy: { id: "asc" } });
     return res.json({ ...result, items: result.items.map((item) => ({ id: item.id, freshnessEstado: item.freshnessEstado, dataConfidence: item.dataConfidence, observedAt: item.observedAt })) });
+  }));
+
+  app.get("/estoque/regras", ...guardRole("ADMIN", "GERENTE"), route(async (req, res) => {
+    const rows = await prisma.configuracaoRegraEstoque.findMany({ where: { empresaId: req.stockContext.empresaId }, orderBy: [{ ruleType: "asc" }, { scopeKey: "asc" }] });
+    return res.json({ items: rows.map(publicRuleConfig) });
+  }));
+
+  app.put("/estoque/regras/:ruleType", ...sourceGuardRole("ADMIN"), route(async (req, res) => {
+    const { RULE_TYPES } = require("./rules");
+    const ruleType = String(req.params.ruleType || "").trim();
+    if (!RULE_TYPES.includes(ruleType)) throw new StockError("STOCK_INVALID", "Regra de estoque nao suportada.");
+    const body = req.body || {};
+    const empresaId = req.stockContext.empresaId;
+    const expectedRevision = body.revision === undefined ? null : Number(body.revision);
+    const data = {
+      enabled: body.enabled === true,
+      expiryWindowDays: Number.isInteger(Number(body.expiryWindowDays)) ? Math.min(3650, Math.max(0, Number(body.expiryWindowDays))) : null,
+      freshnessSlaMinutes: Number.isInteger(Number(body.freshnessSlaMinutes)) ? Math.min(7 * 24 * 60, Math.max(1, Number(body.freshnessSlaMinutes))) : null,
+      timezone: typeof body.timezone === "string" && body.timezone.length <= 80 ? body.timezone : "America/Sao_Paulo",
+      requiredCapabilitiesJson: boundedRuleJson(body.requiredCapabilities),
+      priorityBandsJson: boundedRuleJson(body.priorityBands),
+      recipientPolicyJson: boundedRuleJson(body.recipientPolicy),
+      suppressionPolicyJson: boundedRuleJson(body.suppressionPolicy),
+      actorRef: `usuario:${req.stockContext.usuarioId}`,
+      correlationId: typeof req.get === "function" ? (req.get("X-Correlation-Id") || null) : null,
+      revision: { increment: 1 },
+    };
+    const write = async (tx) => {
+      const existing = await tx.configuracaoRegraEstoque.findFirst({ where: { empresaId, ruleType, scopeType: "TENANT", scopeKey: "TENANT" } });
+      if (existing && expectedRevision !== null && expectedRevision !== existing.revision) throw new StockError("STOCK_CONFLICT", "Configuracao de regra alterada por outro operador.", undefined, 409);
+      let row;
+      if (existing) {
+        const cas = await tx.configuracaoRegraEstoque.updateMany({ where: { id: existing.id, empresaId, revision: existing.revision }, data });
+        if (cas.count !== 1) throw new StockError("STOCK_CONFLICT", "Configuracao de regra alterada por outro operador.", undefined, 409);
+        row = await tx.configuracaoRegraEstoque.findFirst({ where: { id: existing.id, empresaId } });
+      } else {
+        row = await tx.configuracaoRegraEstoque.create({ data: { empresaId, ruleType, scopeType: "TENANT", scopeKey: "TENANT", ...data, revision: 1 } });
+      }
+      await tx.eventoAuditoriaEstoque.create({ data: { empresaId, actorType: "USER", actorUsuarioId: req.stockContext.usuarioId, action: "STOCK_RULE_CONFIG_CHANGED", beforeJsonSanitized: existing ? boundedRuleJson(publicRuleConfig(existing)) : null, afterJsonSanitized: boundedRuleJson(publicRuleConfig(row)), correlationId: data.correlationId } });
+      return row;
+    };
+    const row = prisma.$transaction ? await prisma.$transaction(write) : await write(prisma);
+    return res.json({ item: publicRuleConfig(row) });
+  }));
+
+  app.get("/estoque/avaliacoes", ...guardRole("ADMIN", "GERENTE"), route(async (req, res) => {
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+    const rows = await prisma.avaliacaoRegraEstoque.findMany({ where: { empresaId: req.stockContext.empresaId }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }], take: limit });
+    return res.json({ items: rows.map(publicRuleEvaluation) });
+  }));
+
+  app.post("/estoque/regras/avaliar", ...sourceGuardRole("ADMIN"), route(async (req, res) => {
+    const result = await getServices().rules.evaluateTenant(req.stockContext.empresaId, { limit: req.body?.limit, capabilities: req.body?.capabilities || {} });
+    return res.json({ item: result });
   }));
 }
 
@@ -178,5 +247,9 @@ function publicEntity(entity, row) {
 }
 function boundedJsonArray(value) { if (!value) return []; try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed.slice(0, 50) : []; } catch { return []; } }
 function safePublicConfig(value) { if (!value) return null; try { const parsed = typeof value === "string" ? JSON.parse(value) : value; return { delimiter: parsed?.delimiter === "semicolon" ? "semicolon" : parsed?.delimiter === "comma" ? "comma" : undefined, encoding: parsed?.encoding === "utf8" ? "utf8" : undefined }; } catch { return null; } }
+function boundedRuleJson(value) { if (value === undefined) return null; try { const text = JSON.stringify(value); return text.length <= 4000 ? text : null; } catch { return null; } }
+function publicRuleConfig(row) { return { id: row.id, ruleType: row.ruleType, scopeType: row.scopeType, scopeKey: row.scopeKey, enabled: row.enabled, expiryWindowDays: row.expiryWindowDays, freshnessSlaMinutes: row.freshnessSlaMinutes, timezone: row.timezone, requiredCapabilities: parseJson(row.requiredCapabilitiesJson), priorityBands: parseJson(row.priorityBandsJson), recipientPolicy: parseJson(row.recipientPolicyJson), suppressionPolicy: parseJson(row.suppressionPolicyJson), revision: row.revision, updatedAt: row.updatedAt }; }
+function publicRuleEvaluation(row) { return { id: row.id, ruleType: row.ruleType, matched: row.matched, noMatchReason: row.noMatchReason, priority: row.priority, occurrenceKey: row.occurrenceKey, materialVersion: row.materialVersion, materialChange: row.materialChange, freshnessObserved: row.freshnessObserved, confidence: row.confidence, expiryDate: row.expiryDate, expiryPrecision: row.expiryPrecision, evaluatedAt: row.evaluatedAt, correlationId: row.correlationId }; }
+function parseJson(value) { if (!value) return null; try { return JSON.parse(value); } catch { return null; } }
 
 module.exports = { mountStockRoutes, parsePathId, publicSource, publicImport };

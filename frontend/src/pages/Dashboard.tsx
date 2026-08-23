@@ -36,7 +36,7 @@ import DashboardKanbanBoard from "../components/dashboard/DashboardKanbanBoard";
 import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomationsPanel";
 import DashboardPlatformTenantsPanel from "../components/dashboard/DashboardPlatformTenantsPanel";
 import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
-import DashboardInventoryPanel from "../components/dashboard/DashboardInventoryPanel";
+import StockControlPanel from "../components/stock/StockControlPanel";
 import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegrationsPanel";
 import DashboardSiteLeadIntegrationPanel from "../components/dashboard/DashboardSiteLeadIntegrationPanel";
 import DashboardUserSecurityPanel from "../components/dashboard/DashboardUserSecurityPanel";
@@ -53,7 +53,7 @@ import type { WhatsappExternalRequest } from "../components/dashboard/WhatsappEx
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
 import { ApiHttpError, canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchCommunicationAttentionSummary, fetchDashboardSummaryFromBackend, getAuthSession, shouldInvalidateAuthSession } from "../services/crmApi";
-import type { ApiDashboardSummary, AuthSession } from "../services/crmApi";
+import type { ApiDashboardSummary, AuthSession, NotificationTargetKind } from "../services/crmApi";
 import { resolveTenantFeatureAccess } from "../config/featureFlags";
 import { EmptyState, ErrorState } from "../components/ui";
 import { LockKeyhole } from "lucide-react";
@@ -575,7 +575,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     handleSetActivePage("agenda");
   }, [handleSetActivePage]);
 
-  const openNotificationTarget = useCallback((target: { tipo: "CONVERSATION" | "FOLLOW_UP" | "DEAL"; id: number; rota: string }) => {
+  const openNotificationTarget = useCallback((target: { tipo: NotificationTargetKind; id: number; rota: string }) => {
     invalidateCustomerDrawerFocusSession();
     setIsCustomerDrawerOpen(false);
     if (target.tipo === "CONVERSATION") {
@@ -589,8 +589,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       navigate({ pathname: getDashboardPath("agenda"), search: `?acompanhamentoId=${encodeURIComponent(target.id)}` });
       return;
     }
-    setKanbanBusinessId(target.id);
-    navigate({ pathname: getDashboardPath("kanban"), search: `?negocioId=${encodeURIComponent(target.id)}` });
+    if (target.tipo === "DEAL") {
+      setKanbanBusinessId(target.id);
+      navigate({ pathname: getDashboardPath("kanban"), search: `?negocioId=${encodeURIComponent(target.id)}` });
+      return;
+    }
+    const kind = target.tipo === "ESTOQUE_LOTE" ? "lotes" : target.tipo === "ESTOQUE_PRODUTO" ? "produtos" : "fontes";
+    navigate(`/estoque/${kind}/${encodeURIComponent(target.id)}`);
   }, [invalidateCustomerDrawerFocusSession, navigate]);
 
   const openCustomerContext = useCallback((destination: "INBOX" | "KANBAN" | "AGENDA", id: number) => {
@@ -1043,7 +1048,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 />
               )}
 
-              {activePage === "estoque" && <DashboardInventoryPanel onOpenIntegrations={() => handleSetActivePage("integracoes")} />}
+              {activePage === "estoque" && <StockControlPanel />}
 
               {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
                 <WhatsAppIntegrationCard

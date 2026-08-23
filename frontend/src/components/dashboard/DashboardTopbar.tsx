@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import DashboardCommandSearch from "./DashboardCommandSearch";
 import DashboardNotifications from "./DashboardNotifications";
 import DashboardQuickActions from "./DashboardQuickActions";
-import type { AuthSession } from "../../services/crmApi";
+import type { AuthSession, NotificationTargetKind } from "../../services/crmApi";
 import type { ActivePage, Client } from "../../types/dashboard";
 
 type DashboardTopbarProps = {
@@ -19,7 +19,7 @@ type DashboardTopbarProps = {
   authSession: AuthSession | null;
   canManageIntegrations: boolean;
   leadsCommunicationEnabled: boolean;
-  onOpenNotificationTarget: (target: { tipo: "CONVERSATION" | "FOLLOW_UP" | "DEAL"; id: number; rota: string }) => void;
+  onOpenNotificationTarget: (target: { tipo: NotificationTargetKind; id: number; rota: string }) => void;
   canManageNotifications: boolean;
   readOnly?: boolean;
 };

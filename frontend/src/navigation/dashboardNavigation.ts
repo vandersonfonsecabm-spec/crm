@@ -56,6 +56,14 @@ const legacyDashboardPathnames = new Set(["/"]);
 const dashboardDetailRoutes = new Map([
   ["/integracoes/whatsapp", { page: "integracoes" as const, detail: "whatsapp" as const }],
 ]);
+const stockSubroutes = new Set([
+  "/estoque/produtos",
+  "/estoque/lotes",
+  "/estoque/fontes",
+  "/estoque/importacoes",
+  "/estoque/mapeamentos",
+  "/estoque/regras",
+]);
 
 export function getDashboardRoute(page: ActivePage): DashboardRoute {
   const route = routeByPage.get(page);
@@ -96,6 +104,26 @@ export function resolveDashboardPathname(pathname: string) {
   if (detailRoute) {
     return {
       ...detailRoute,
+      pathname: normalizedPathname,
+      isKnown: true,
+      needsReplace: pathname !== normalizedPathname,
+    };
+  }
+
+  const stockDetail = normalizedPathname.match(/^\/estoque\/(produtos|lotes|fontes)\/(\d+)$/);
+  if (stockDetail) {
+    return {
+      page: "estoque" as const,
+      detail: `${stockDetail[1]}:${stockDetail[2]}`,
+      pathname: normalizedPathname,
+      isKnown: true,
+      needsReplace: pathname !== normalizedPathname,
+    };
+  }
+  if (stockSubroutes.has(normalizedPathname)) {
+    return {
+      page: "estoque" as const,
+      detail: null,
       pathname: normalizedPathname,
       isKnown: true,
       needsReplace: pathname !== normalizedPathname,

@@ -74,8 +74,9 @@ mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookOrchestra
 mountInstagramWebhookRoutes({ app, processWebhook: createInstagramWebhookOrchestrator({ prisma }) });
 mountMessengerWebhookRoutes({ app, processWebhook: createMessengerWebhookOrchestrator({ prisma }) });
 app.use(siteLeadBodyLimit);
-// The E2 CSV preview is bounded separately (5 MiB CSV + JSON envelope) so the
-// legacy 100 KiB parser does not reject valid source-ready imports first.
+// The stock route installs its bounded JSON parser after authentication. The
+// legacy parser deliberately excludes preview so unauthenticated requests are
+// not buffered at the application boundary.
 app.use(express.json({
   limit: "100kb",
   type: (req) => !req.path.startsWith("/estoque/importacoes/preview")

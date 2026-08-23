@@ -1,0 +1,9 @@
+LUNAMAX STOCK MASTER SCORECARD
+
+SOURCE_CORE=PASS
+POSTGRES_ISOLATED=PASS
+RULES_H8_SOURCE=PASS
+UI_SOURCE=PASS
+OFFICIAL_RELEASE=BLOCKED_SAFE
+
+Verdict: source implementation advanced through E4, but no claim of production ship is made.

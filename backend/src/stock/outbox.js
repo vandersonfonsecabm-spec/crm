@@ -3,9 +3,9 @@
 const { buildStockEvent, validateStockEvent, ACTIVE_EVENT_TYPES } = require("./events");
 const { StockError } = require("./errors");
 
-async function appendStockOutbox({ tx, event, retentionUntil }) {
+async function appendStockOutbox({ tx, event, retentionUntil, allowReserved = false }) {
   if (!tx?.eventoOutboxEstoque) return null;
-  validateStockEvent(event, { activeOnly: true });
+  validateStockEvent(event, { activeOnly: !allowReserved });
   const data = {
     empresaId: event.empresaId,
     eventType: event.eventType,
@@ -65,13 +65,16 @@ async function claimStockOutbox({ prisma, empresaId, owner, limit = 20, leaseMs 
       data: { status: "PROCESSING", leaseOwner: boundedOwner, leaseExpiresAt: leaseUntil, attempts: { increment: 1 } },
     });
     if (result.count === 1) {
-      claimed.push({ ...row, status: "PROCESSING", leaseOwner: boundedOwner, leaseExpiresAt: leaseUntil });
+      // Carry the lease value used by the successful CAS. It is the per-claim
+      // token used below to prevent a stale worker from committing or
+      // quarantining a row reclaimed by another worker.
+      claimed.push({ ...row, status: "PROCESSING", leaseOwner: boundedOwner, leaseExpiresAt: leaseUntil, attempts: Number(row.attempts || 0) + 1 });
     }
   }
   return claimed;
 }
 
-async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date(), logger = console, h8ProjectionEnabled = false, consumer = null }) {
+async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date(), logger = console, h8ProjectionEnabled = false, consumer = null, allowReserved = false }) {
   if (!h8ProjectionEnabled) return { claimed: 0, processed: 0, quarantined: 0, disabled: true };
   if (typeof consumer !== "function") throw new StockError("STOCK_UNAVAILABLE", "Consumer de outbox nao esta ativo.", undefined, 503);
   const effectiveOwner = String(owner || "stock-worker").slice(0, 128);
@@ -81,25 +84,49 @@ async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, l
   for (const row of claimed) {
     try {
       const event = JSON.parse(row.payloadStructuredJson || "{}");
-      validateStockEvent(event, { activeOnly: true });
-      if (!ACTIVE_EVENT_TYPES.includes(event.eventType)) throw new StockError("STOCK_SCHEMA_UNSUPPORTED", "Evento reservado.");
+      validateStockEvent(event, { activeOnly: !allowReserved });
+      if (!allowReserved && !ACTIVE_EVENT_TYPES.includes(event.eventType)) throw new StockError("STOCK_SCHEMA_UNSUPPORTED", "Evento reservado.");
       await consumer(event, row);
+      const completedAt = new Date();
       const marked = await prisma.eventoOutboxEstoque.updateMany({
-        where: { id: row.id, empresaId: Number(empresaId), status: "PROCESSING", leaseOwner: effectiveOwner },
-        data: { status: "PROCESSED", processedAt: new Date(), leaseOwner: null, leaseExpiresAt: null },
+        where: {
+          id: row.id,
+          empresaId: Number(empresaId),
+          status: "PROCESSING",
+          leaseOwner: effectiveOwner,
+          AND: [{ leaseExpiresAt: row.leaseExpiresAt }, { leaseExpiresAt: { gt: completedAt } }],
+        },
+        data: { status: "PROCESSED", processedAt: completedAt, leaseOwner: null, leaseExpiresAt: null },
       });
-      if (marked.count !== 1) throw new StockError("STOCK_CONFLICT", "Lease do outbox expirada antes do commit.");
+      if (marked.count !== 1) throw leaseLostError();
       processed += 1;
     } catch (error) {
+      if (error?.outboxLeaseLost === true) {
+        logger.warn?.("stock_outbox_lease_lost", { outboxId: row.id });
+        continue;
+      }
       logger.warn?.("stock_outbox_quarantined", { code: error?.code || "STOCK_EVENT_INVALID", outboxId: row.id });
+      const failedAt = new Date();
       const quarantinedRow = await prisma.eventoOutboxEstoque.updateMany({
-        where: { id: row.id, empresaId: Number(empresaId), status: "PROCESSING", leaseOwner: effectiveOwner },
+        where: {
+          id: row.id,
+          empresaId: Number(empresaId),
+          status: "PROCESSING",
+          leaseOwner: effectiveOwner,
+          AND: [{ leaseExpiresAt: row.leaseExpiresAt }, { leaseExpiresAt: { gt: failedAt } }],
+        },
         data: { status: "QUARANTINED", leaseOwner: null, leaseExpiresAt: null },
       });
       if (quarantinedRow.count === 1) quarantined += 1;
     }
   }
   return { claimed: claimed.length, processed, quarantined };
+}
+
+function leaseLostError() {
+  const error = new StockError("STOCK_CONFLICT", "Lease do outbox expirada antes do commit.");
+  error.outboxLeaseLost = true;
+  return error;
 }
 
 module.exports = { appendStockOutbox, claimStockOutbox, processStockOutboxBatch };

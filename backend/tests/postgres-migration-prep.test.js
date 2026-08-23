@@ -94,12 +94,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260815120000_add_h8_notifications",
       "20260823152000_add_distributed_rate_limit",
       "20260823180000_add_stock_core_e2",
+      "20260823200000_add_stock_rules_h8_projection",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260823180000_add_stock_core_e2",
+        "20260823200000_add_stock_rules_h8_projection",
         "migration.sql",
       ),
     );
@@ -176,6 +177,17 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(h8Migration, /COMMIT;\s*$/m);
     assert.match(h8Migration, /ConfiguracaoNotificacaoEmpresa/);
     assert.doesNotMatch(h8Migration, /^\s*(?:DROP|DELETE|UPDATE|TRUNCATE)\b/im);
+    const stockRulesMigration = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260823200000_add_stock_rules_h8_projection",
+      "migration.sql",
+    ), "utf8");
+    assert.match(stockRulesMigration, /^BEGIN;\s*$/m);
+    assert.match(stockRulesMigration, /ALTER TABLE "Notificacao" ADD COLUMN "stockTargetType"/);
+    assert.match(stockRulesMigration, /ConfiguracaoRegraEstoque/);
+    assert.match(stockRulesMigration, /OverrideEstoque/);
+    assert.match(stockRulesMigration, /AvaliacaoRegraEstoque/);
+    assert.doesNotMatch(stockRulesMigration, /^\s*(?:DROP|DELETE|UPDATE|TRUNCATE)\b/im);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

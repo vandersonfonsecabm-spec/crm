@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createFileCsvAdapter } = require("../src/stock/adapters/fileCsv");
 const { createStockImportService: createIntegrationService, createStockFeatureGate } = require("../src/stock/imports/service");
-const { createStockImportService } = require("../src/stock/imports/staging-service");
+const { createStockImportService, MAX_CONFIRM_LINES } = require("../src/stock/imports/staging-service");
 
 test("FILE_IMPORT_CSV exige cabecalhos estritos, identidade explicita e metadados portaveis", async () => {
   const adapter = createFileCsvAdapter({ limits: { maxRows: 4 } });
@@ -136,6 +136,59 @@ test("preview, replay por idempotencia, confirmacao CAS e staging duravel nao pe
   assert.equal(prisma.state.syncRuns[0].estado, "PARTIAL");
   assert.equal(prisma.state.lines.find((line) => line.status === "APPLIED").appliedAt.toISOString(), now.toISOString());
   assert.equal(prisma.state.audits.some((audit) => audit.action === "STOCK_IMPORT_CONFIRMED"), true);
+});
+
+test("confirmacao recusa staging acima do limite antes de chamar o aplicador", async () => {
+  const prisma = memoryPrisma();
+  const now = new Date("2026-08-23T18:00:00.000Z");
+  prisma.state.imports.push({
+    id: 91,
+    empresaId: 1,
+    fonteId: 10,
+    actorUsuarioId: 100,
+    status: "READY",
+    schemaVersion: "stock-csv.v1",
+    fileHash: "d".repeat(64),
+    safeFilename: "bounded.csv",
+    byteSize: 1024,
+    rowCount: MAX_CONFIRM_LINES + 1,
+    acceptedCount: MAX_CONFIRM_LINES + 1,
+    rejectedCount: 0,
+    idempotencyKey: "stock-preview-bounded",
+    revision: 1,
+    expiresAt: new Date(now.getTime() + 60000),
+    retentionUntil: new Date(now.getTime() + 86400000),
+  });
+  for (let index = 0; index <= MAX_CONFIRM_LINES; index += 1) {
+    prisma.state.lines.push({
+      id: 1000 + index,
+      empresaId: 1,
+      importacaoId: 91,
+      rowNumber: index + 2,
+      rowChecksum: `${index}`.padStart(64, "0"),
+      sourceRecordId: `product-${index}`,
+      sourceVersion: `manual:${index}`,
+      status: "ACCEPTED",
+      normalizedJsonSanitized: "{}",
+      warningsJson: "[]",
+      errorsJson: "[]",
+      revision: 1,
+    });
+  }
+  let applied = false;
+  const service = createStockImportService({
+    prisma,
+    clock: () => now,
+    featureGate: async () => true,
+    applyAcceptedRows: async () => { applied = true; },
+  });
+
+  await assert.rejects(
+    service.confirm({ empresaId: 1, importacaoId: 91, actorUsuarioId: 100, expectedRevision: 1 }),
+    (error) => error.code === "STOCK_IMPORT_BOUNDS_EXCEEDED",
+  );
+  assert.equal(applied, false);
+  assert.equal(prisma.state.imports[0].status, "READY");
 });
 
 function memoryPrisma() {
