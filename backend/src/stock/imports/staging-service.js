@@ -388,7 +388,9 @@ async function writeCapabilities(tx, { empresaId, fonteId, manifest, observedAt 
 
 async function lockTenantQuota(tx, empresaId) {
   if (typeof tx?.$executeRawUnsafe !== "function") return;
-  await tx.$executeRawUnsafe('UPDATE "Empresa" SET "updatedAt" = "updatedAt" WHERE "id" = ?', empresaId);
+  const id = Number(empresaId);
+  if (!Number.isSafeInteger(id) || id <= 0) throw stockError(422, "STOCK_CONTEXT_INVALID", "empresaId invalido.");
+  await tx.$executeRawUnsafe(`UPDATE "Empresa" SET "updatedAt" = "updatedAt" WHERE "id" = ${id}`);
 }
 
 function normalizeAppliedIds(value, acceptedLines) {
