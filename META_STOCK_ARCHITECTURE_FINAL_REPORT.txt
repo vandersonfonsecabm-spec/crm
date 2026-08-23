@@ -1,0 +1,50 @@
+E1 — ARQUITETURA CANÔNICA DE ESTOQUE
+
+CURRENT_STATE_AS_OF=2026-08-23T17:51:15Z
+BASELINE_SHA=a5a280c3ebc54741ced02a77d4da5ec51834d583
+ARCHITECTURE_VERSION=E1-v1.0
+DOCUMENT_STATUS=FINAL
+STATE=STOCK_ARCHITECTURE_CONTRACT_APPROVED
+
+OBJETIVO
+Projetar a camada de estoque source-agnostic que normaliza fontes suportadas no modelo interno tenant-safe e projeta eventos para a Central H8 existente, sem implementar runtime.
+
+RECONCILIAÇÃO
+- Baseline/tag/HEAD e worktree isolado verificados.
+- Vercel production `dpl_C7y1vt6U39mk7msn3jcGahiE3J6T`, Railway API `c1e0eff9-8624-4466-ba4a-13af3d277c79` e worker `4378a6ba-3b44-4432-acf0-18f6ee0bad92` permanecem no SHA aprovado.
+- PostgreSQL oficial permanece `Postgres-u_yI`, database `railway`, schema `public`, 11 migrations e `RateLimitBucket`.
+- `/health=200`, `/ready=200`, frontend canônico=200.
+- Nenhuma mutation de runtime, banco, flag, credencial ou deploy.
+
+ESTADO ATUAL
+- `/estoque` é shell/tela de consulta integrada; `DashboardInventoryPanel` chama `/hub/produtos` e exibe somente leitura, origem e possível stale.
+- Rotas legadas `/estoque/*` estão deliberadamente 410 até isolamento por empresa.
+- `Produto`, `MovimentacaoEstoque`, `ProdutoExterno` e `EstoqueExterno` existem; não cobrem integralmente lote/validade/freshness/capability.
+- CSV/XLSX e Hub existentes são conceitos reutilizáveis; Bling permanece TEST_ONLY/fail-closed.
+- Branch `archive/estoque-local-618a289` e commit `618a2895b53cb71e96b465a7a8da112cc82dc993` foram preservados e lidos; código histórico inseguro não foi importado.
+
+DECISÕES CENTRAIS
+1. `ProdutoEstoque`, `LoteEstoque`, `SaldoEstoque`, `FonteEstoque`, mapping, freshness, quality, rules e outbox com `empresaId` direto/FKs compostas.
+2. Capability manifest truthful; regra sem capability necessária fica bloqueada/visível.
+3. CSV sintético é o adapter de referência; MVP read-only para fontes, sem writeback.
+4. Full/delta/webhook/import/manual têm semânticas distintas, cursor/generation e idempotency keys.
+5. DATE/precisão para validade; UTC para instantes; avaliação no timezone do tenant.
+6. Multi-source usa autoridade explícita, não last-write-wins universal.
+7. Outbox PostgreSQL transacional alimenta o worker existente e a única projeção H8.
+8. Occurrence keys estáveis, coalescência, predicates de resolução e recipients tenant-scoped.
+9. Rollout OFF→canário→shadow→projection→target; rollback por flags/camadas, sem DROP.
+
+REVISÃO ADVERSARIAL
+Foram cobertos replay/duplicata, fora de ordem, partial snapshot, cursor antes de commit, SKU/lot collision, timezone, tenant spoof, worker duplicado, queda após metade, webhook durante full, credencial expirada, arquivo malicioso, mapping/regra concorrente, H8 OFF, recipient ausente e milhares de lotes. O contrato resultante não deixou finding arquitetural acionável aberto.
+
+LEDGER FINAL
+ARCH_CRITICAL_OPEN=0
+ARCH_HIGH_OPEN=0
+ARCH_MEDIUM_ACTIONABLE_OPEN=0
+ARCH_LOW_ACTIONABLE_OPEN=0
+NO_IMPLEMENTATION_PERFORMED=PASS
+DELIVERY_PACKAGE_PREPARED=PASS
+
+SOL_EXTRA_HIGH_STOCK_ARCHITECTURE_VERDICT=STOCK_ARCHITECTURE_CONTRACT_APPROVED
+
+O commit local dos documentos será informado no handoff final (`ARCHITECTURE_DOCS_COMMIT`); nenhum push/PR/deploy foi feito.
