@@ -1547,7 +1547,9 @@ model ProdutoEstoque {
   empresaId                Int
   nomeExibicao             String
   skuCanonico              String?
+  skuCanonicoConfirmado    Boolean                   @default(false)
   barcodeCanonico          String?
+  barcodeCanonicoConfirmado Boolean                  @default(false)
   unidadeCanonica          String
   ativo                    Boolean                   @default(true)
   metadataNamespacedJson   String?
@@ -1573,7 +1575,7 @@ model MapeamentoProdutoExterno {
   produtoEstoqueId  Int?
   estado            StockMappingStatus @default(UNMATCHED)
   evidenciaJson     String?
-  sourceVersion     String?
+  sourceVersion     String
   revision          Int                @default(1)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
@@ -1612,7 +1614,7 @@ model LoteEstoque {
   id                 Int                     @id @default(autoincrement())
   empresaId          Int
   produtoEstoqueId   Int
-  fonteId            Int?
+  fonteId            Int
   sourceLotId        String?
   codigoLote         String?
   // ISO day strings are portable across SQLite/PostgreSQL. The precision
@@ -1627,7 +1629,7 @@ model LoteEstoque {
   updatedAt          DateTime                @updatedAt
   empresa            Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   produtoEstoque     ProdutoEstoque          @relation(fields: [empresaId, produtoEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
-  fonte              FonteEstoque?           @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  fonte              FonteEstoque            @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   saldos             SaldoEstoque[]
 
   @@unique([empresaId, id])
@@ -1657,7 +1659,7 @@ model SaldoEstoque {
   observedAt                DateTime                @default(now())
   freshnessEstado           StockFreshnessState     @default(UNKNOWN)
   dataConfidence            StockDataConfidence     @default(UNKNOWN)
-  sourceVersion             String?
+  sourceVersion             String
   revision                  Int                     @default(1)
   createdAt                 DateTime                @default(now())
   updatedAt                 DateTime                @updatedAt
@@ -1678,7 +1680,7 @@ model ObservacaoEstoque {
   id                 Int                   @id @default(autoincrement())
   empresaId          Int
   fonteId            Int
-  syncRunId          Int?
+  syncRunId          Int
   sourceEntityType   String
   sourceRecordId     String
   sourceVersion      String
@@ -1690,7 +1692,7 @@ model ObservacaoEstoque {
   retentionUntil     DateTime
   empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   fonte              FonteEstoque          @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
-  syncRun            ExecucaoSincronizacaoEstoque? @relation(fields: [empresaId, syncRunId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  syncRun            ExecucaoSincronizacaoEstoque  @relation(fields: [empresaId, syncRunId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([empresaId, fonteId, sourceEntityType, sourceRecordId, sourceVersion])
   @@index([empresaId, fonteId, checksum])
@@ -1700,7 +1702,8 @@ model ObservacaoEstoque {
 model ProblemaQualidadeEstoque {
   id                     Int                     @id @default(autoincrement())
   empresaId              Int
-  fonteId                Int?
+  fonteId                Int
+  // Source-level quality may exist before a specific synchronization run.
   syncRunId              Int?
   tipo                   String
   severidade             String
@@ -1715,7 +1718,7 @@ model ProblemaQualidadeEstoque {
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   empresa                Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  fonte                  FonteEstoque?           @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  fonte                  FonteEstoque            @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   syncRun                ExecucaoSincronizacaoEstoque? @relation(fields: [empresaId, syncRunId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([empresaId, estado, lastSeenAt])

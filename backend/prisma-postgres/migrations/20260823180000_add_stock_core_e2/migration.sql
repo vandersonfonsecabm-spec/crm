@@ -97,7 +97,9 @@ CREATE TABLE "ProdutoEstoque" (
     "empresaId" INTEGER NOT NULL,
     "nomeExibicao" TEXT NOT NULL,
     "skuCanonico" TEXT,
+    "skuCanonicoConfirmado" BOOLEAN NOT NULL DEFAULT false,
     "barcodeCanonico" TEXT,
+    "barcodeCanonicoConfirmado" BOOLEAN NOT NULL DEFAULT false,
     "unidadeCanonica" TEXT NOT NULL,
     "ativo" BOOLEAN NOT NULL DEFAULT true,
     "metadataNamespacedJson" TEXT,
@@ -111,6 +113,8 @@ CREATE UNIQUE INDEX "ProdutoEstoque_empresaId_id_key" ON "ProdutoEstoque"("empre
 CREATE INDEX "ProdutoEstoque_empresaId_skuCanonico_idx" ON "ProdutoEstoque"("empresaId", "skuCanonico");
 CREATE INDEX "ProdutoEstoque_empresaId_barcodeCanonico_idx" ON "ProdutoEstoque"("empresaId", "barcodeCanonico");
 CREATE INDEX "ProdutoEstoque_empresaId_ativo_idx" ON "ProdutoEstoque"("empresaId", "ativo");
+CREATE UNIQUE INDEX "stock_product_confirmed_sku_uq" ON "ProdutoEstoque"("empresaId", "skuCanonico") WHERE "skuCanonico" IS NOT NULL AND "skuCanonicoConfirmado" = TRUE;
+CREATE UNIQUE INDEX "stock_product_confirmed_barcode_uq" ON "ProdutoEstoque"("empresaId", "barcodeCanonico") WHERE "barcodeCanonico" IS NOT NULL AND "barcodeCanonicoConfirmado" = TRUE;
 
 CREATE TABLE "MapeamentoProdutoExterno" (
     "id" SERIAL NOT NULL,
@@ -120,7 +124,7 @@ CREATE TABLE "MapeamentoProdutoExterno" (
     "produtoEstoqueId" INTEGER,
     "estado" TEXT NOT NULL DEFAULT 'UNMATCHED',
     "evidenciaJson" TEXT,
-    "sourceVersion" TEXT,
+    "sourceVersion" TEXT NOT NULL,
     "revision" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -159,7 +163,7 @@ CREATE TABLE "LoteEstoque" (
     "id" SERIAL NOT NULL,
     "empresaId" INTEGER NOT NULL,
     "produtoEstoqueId" INTEGER NOT NULL,
-    "fonteId" INTEGER,
+    "fonteId" INTEGER NOT NULL,
     "sourceLotId" TEXT,
     "codigoLote" TEXT,
     "validadeEm" TEXT,
@@ -186,8 +190,8 @@ CREATE INDEX "LoteEstoque_empresaId_produtoEstoqueId_estado_idx" ON "LoteEstoque
 CREATE INDEX "LoteEstoque_empresaId_fonteId_sourceLotId_idx" ON "LoteEstoque"("empresaId", "fonteId", "sourceLotId");
 CREATE INDEX "LoteEstoque_empresaId_fonteId_codigoLote_idx" ON "LoteEstoque"("empresaId", "fonteId", "codigoLote");
 CREATE INDEX "LoteEstoque_empresaId_validadeEm_idx" ON "LoteEstoque"("empresaId", "validadeEm");
-CREATE UNIQUE INDEX "stock_lot_external_identity_uq" ON "LoteEstoque"("empresaId", "fonteId", "produtoEstoqueId", "sourceLotId") WHERE "fonteId" IS NOT NULL AND "sourceLotId" IS NOT NULL;
-CREATE UNIQUE INDEX "stock_lot_code_identity_uq" ON "LoteEstoque"("empresaId", "fonteId", "produtoEstoqueId", "codigoLote") WHERE "fonteId" IS NOT NULL AND "sourceLotId" IS NULL AND "codigoLote" IS NOT NULL;
+CREATE UNIQUE INDEX "stock_lot_external_identity_uq" ON "LoteEstoque"("empresaId", "fonteId", "sourceLotId") WHERE "sourceLotId" IS NOT NULL;
+CREATE UNIQUE INDEX "stock_lot_code_identity_uq" ON "LoteEstoque"("empresaId", "fonteId", "produtoEstoqueId", "codigoLote") WHERE "sourceLotId" IS NULL AND "codigoLote" IS NOT NULL;
 
 CREATE TABLE "SaldoEstoque" (
     "id" SERIAL NOT NULL,
@@ -209,7 +213,7 @@ CREATE TABLE "SaldoEstoque" (
     "observedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "freshnessEstado" TEXT NOT NULL DEFAULT 'UNKNOWN',
     "dataConfidence" TEXT NOT NULL DEFAULT 'UNKNOWN',
-    "sourceVersion" TEXT,
+    "sourceVersion" TEXT NOT NULL,
     "revision" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -234,7 +238,7 @@ CREATE TABLE "ObservacaoEstoque" (
     "id" SERIAL NOT NULL,
     "empresaId" INTEGER NOT NULL,
     "fonteId" INTEGER NOT NULL,
-    "syncRunId" INTEGER,
+    "syncRunId" INTEGER NOT NULL,
     "sourceEntityType" TEXT NOT NULL,
     "sourceRecordId" TEXT NOT NULL,
     "sourceVersion" TEXT NOT NULL,
@@ -256,7 +260,7 @@ CREATE INDEX "ObservacaoEstoque_empresaId_retentionUntil_idx" ON "ObservacaoEsto
 CREATE TABLE "ProblemaQualidadeEstoque" (
     "id" SERIAL NOT NULL,
     "empresaId" INTEGER NOT NULL,
-    "fonteId" INTEGER,
+    "fonteId" INTEGER NOT NULL,
     "syncRunId" INTEGER,
     "tipo" TEXT NOT NULL,
     "severidade" TEXT NOT NULL,

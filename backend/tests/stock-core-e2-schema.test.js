@@ -27,8 +27,23 @@ test("E2 congela enums e campos portaveis de estoque", () => {
   }
   assert.match(modelBlock(schema, "MapeamentoProdutoExterno"), /sourceProductId\s+String\b/);
   assert.doesNotMatch(modelBlock(schema, "MapeamentoProdutoExterno"), /sourceProductId\s+String\?/);
+  assert.match(modelBlock(schema, "MapeamentoProdutoExterno"), /sourceVersion\s+String\b/);
+  assert.doesNotMatch(modelBlock(schema, "MapeamentoProdutoExterno"), /sourceVersion\s+String\?/);
   assert.match(modelBlock(schema, "LoteEstoque"), /validadeEm\s+String\?/);
+  assert.match(modelBlock(schema, "LoteEstoque"), /fonteId\s+Int\b/);
+  assert.doesNotMatch(modelBlock(schema, "LoteEstoque"), /fonteId\s+Int\?/);
+  assert.match(modelBlock(schema, "LocalEstoque"), /fonteId\s+Int\?/);
+  assert.match(modelBlock(schema, "ObservacaoEstoque"), /sourceVersion\s+String\b/);
+  assert.doesNotMatch(modelBlock(schema, "ObservacaoEstoque"), /sourceVersion\s+String\?/);
   assert.match(modelBlock(schema, "SaldoEstoque"), /onHand\s+Decimal/);
+  assert.match(modelBlock(schema, "SaldoEstoque"), /sourceVersion\s+String\b/);
+  assert.doesNotMatch(modelBlock(schema, "SaldoEstoque"), /sourceVersion\s+String\?/);
+  assert.match(modelBlock(schema, "ObservacaoEstoque"), /syncRunId\s+Int\b/);
+  assert.doesNotMatch(modelBlock(schema, "ObservacaoEstoque"), /syncRunId\s+Int\?/);
+  assert.match(modelBlock(schema, "ProblemaQualidadeEstoque"), /fonteId\s+Int\b/);
+  assert.doesNotMatch(modelBlock(schema, "ProblemaQualidadeEstoque"), /fonteId\s+Int\?/);
+  assert.match(modelBlock(schema, "ProdutoEstoque"), /skuCanonicoConfirmado\s+Boolean\s+@default\(false\)/);
+  assert.match(modelBlock(schema, "ProdutoEstoque"), /barcodeCanonicoConfirmado\s+Boolean\s+@default\(false\)/);
   assert.match(modelBlock(schema, "EventoAuditoriaEstoque"), /actorType\s+StockAuditActorType/);
   assert.match(modelBlock(schema, "EventoAuditoriaEstoque"), /actorSystemKey\s+String\?/);
   assert.match(modelBlock(schema, "ImportacaoEstoque"), /@@unique\(\[empresaId, idempotencyKey\]\)/);
@@ -43,6 +58,8 @@ test("E2 declara os indices parciais e constraints iguais nos pacotes SQLite/Pos
     "stock_location_external_identity_uq",
     "stock_lot_external_identity_uq",
     "stock_lot_code_identity_uq",
+    "stock_product_confirmed_sku_uq",
+    "stock_product_confirmed_barcode_uq",
     "stock_balance_product_only_uq",
     "stock_balance_product_location_uq",
     "stock_balance_product_lot_uq",
@@ -86,6 +103,12 @@ test("E2 aplica isolamento composto e invariantes de importacao apenas no sandbo
 
     const indexSql = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?");
     assert.match(indexSql.get("stock_import_active_file_uq").sql, /WHERE "status" IN \('PREVIEW', 'READY', 'PROCESSING', 'APPLIED', 'PARTIAL'\)/);
+    assert.match(indexSql.get("stock_lot_external_identity_uq").sql, /\("empresaId", "fonteId", "sourceLotId"\) WHERE "sourceLotId" IS NOT NULL/);
+    assert.doesNotMatch(indexSql.get("stock_lot_external_identity_uq").sql, /produtoEstoqueId/);
+    assert.doesNotMatch(indexSql.get("stock_lot_external_identity_uq").sql, /fonteId" IS NOT NULL/);
+    assert.match(indexSql.get("stock_lot_code_identity_uq").sql, /WHERE "sourceLotId" IS NULL AND "codigoLote" IS NOT NULL/);
+    assert.match(indexSql.get("stock_product_confirmed_sku_uq").sql, /"skuCanonico" IS NOT NULL AND "skuCanonicoConfirmado" = TRUE/);
+    assert.match(indexSql.get("stock_product_confirmed_barcode_uq").sql, /"barcodeCanonico" IS NOT NULL AND "barcodeCanonicoConfirmado" = TRUE/);
     assert.match(indexSql.get("stock_balance_product_lot_location_uq").sql, /"loteId" IS NOT NULL AND "localId" IS NOT NULL/);
     assert.match(database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'EventoAuditoriaEstoque'").get().sql, /stock_audit_actor_shape_ck/);
 
@@ -99,6 +122,23 @@ test("E2 aplica isolamento composto e invariantes de importacao apenas no sandbo
     const fonteA = insertFonte(database, empresaA, "Fonte A", now);
     const fonteB = insertFonte(database, empresaB, "Fonte B", now);
     const produtoA = insertProduto(database, empresaA, now);
+    const insertProductIdentity = database.prepare(`
+      INSERT INTO "ProdutoEstoque" (
+        "empresaId", "nomeExibicao", "skuCanonico", "skuCanonicoConfirmado",
+        "barcodeCanonico", "barcodeCanonicoConfirmado", "unidadeCanonica", "createdAt", "updatedAt"
+      ) VALUES (?, ?, ?, ?, ?, ?, 'UN', ?, ?)
+    `);
+    assert.doesNotThrow(() => insertProductIdentity.run(empresaA, "SKU sem confirmacao A", "SKU-E2", 0, null, 0, now, now));
+    assert.doesNotThrow(() => insertProductIdentity.run(empresaA, "SKU sem confirmacao B", "SKU-E2", 0, null, 0, now, now));
+    assert.doesNotThrow(() => insertProductIdentity.run(empresaA, "SKU confirmado A", "SKU-E2", 1, "BAR-E2", 1, now, now));
+    assert.throws(
+      () => insertProductIdentity.run(empresaA, "SKU confirmado B", "SKU-E2", 1, "BAR-OTHER", 1, now, now),
+      /UNIQUE|constraint/i,
+    );
+    assert.throws(
+      () => insertProductIdentity.run(empresaA, "Barcode confirmado B", "SKU-OTHER", 1, "BAR-E2", 1, now, now),
+      /UNIQUE|constraint/i,
+    );
 
     const insertImport = database.prepare(`
       INSERT INTO "ImportacaoEstoque" (

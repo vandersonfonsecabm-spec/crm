@@ -23,7 +23,7 @@ const databaseUrl = validateTestPostgresUrl(
   process.env,
 );
 
-test("PostgreSQL migration boundary cobre 6+2, 7+1 e 8/8 sem consultar campo pendente", async () => {
+test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto final", async () => {
   fs.mkdirSync(testRoot, { recursive: true });
   const runDir = fs.mkdtempSync(path.join(testRoot, "v46-pg-boundary-"));
   const workspace = preparePostgresWorkspace({ root: path.join(runDir, "workspace") });
@@ -73,13 +73,13 @@ test("PostgreSQL migration boundary cobre 6+2, 7+1 e 8/8 sem consultar campo pen
     runPrismaDeploy(workspace.schemaPath);
     const post = await runGate({ mode: "post-migration", ...gateOptions });
     const finalStatus = await migrationStatus(client);
-    assert.equal(finalStatus.length, 8);
+    assert.equal(finalStatus.length, migrationNames.length);
     assert.equal(finalStatus.every((row) => row.finished && !row.rolledBack), true);
     assert.equal(post.safe, true);
     assert.equal(post.checkedRelationCount, 113);
     assert.deepEqual(post.totals, { orphaned: 0, crossed: 0 });
     assert.equal(post.constraints.checkedForeignKeys, 175);
-    assert.equal(post.constraints.checkedUniqueParents, 17);
+    assert.equal(post.constraints.checkedUniqueParents, 23);
   } finally {
     try {
       if (ownsEmptyTarget) {
