@@ -48,6 +48,7 @@ function seedAccessToken(token = "access-token-de-teste") {
 }
 
 function resetAuthTestState() {
+  api.clearAuthSession();
   localStorage.clear();
   globalThis.fetch = originalFetch;
 }
@@ -339,6 +340,7 @@ test("reload sem access token restaura a sessao pelo cookie valido", async (t) =
   const restored = await api.refreshAuthSession();
   assert.equal(restored.access_token, "access-token-restaurado");
   assert.equal(api.getAuthToken(), "access-token-restaurado");
+  assert.equal(localStorage.getItem("crm-auth-token"), null);
   assert.equal(api.getAuthSession()?.usuario.empresaId, 3);
   assert.deepEqual(requests, ["/auth/refresh"]);
 

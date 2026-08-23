@@ -6,6 +6,7 @@ const { createUserSecurity } = require("./user-security");
 const {
   authIdentity,
   createAuthRateLimiter,
+  createPostgresAuthRateLimiter,
   requestIp,
 } = require("./auth-rate-limiter");
 
@@ -14,7 +15,7 @@ const JWT_ISSUER = "crm-agro-saas-api";
 const JWT_AUDIENCE = "crm-agro-saas";
 const LOCAL_JWT_SECRET = "local-development-only-change-me";
 
-function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securityDelivery = createSecurityDelivery({ env: process.env }), allowedOrigins = [] }) {
+function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDelivery = createSecurityDelivery({ env: process.env }), allowedOrigins = [] }) {
   const production = process.env.NODE_ENV === "production";
   const railwayRuntime = Boolean(
     process.env.RAILWAY_SERVICE_ID
@@ -35,6 +36,14 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securi
   if (!production && !jwtSecret) {
     console.warn("JWT_SECRET ausente. Usando segredo local temporario; defina JWT_SECRET fora de producao compartilhada.");
   }
+
+  const postgresqlRuntime = String(process.env.CRM_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql";
+  const loginLimiter = loginRateLimiter || (production && postgresqlRuntime
+    ? createPostgresAuthRateLimiter({ prisma })
+    : createAuthRateLimiter());
+  const securityLimiter = sensitiveRateLimiter || (production && postgresqlRuntime
+    ? createPostgresAuthRateLimiter({ prisma, ipLimit: 40 })
+    : createAuthRateLimiter({ identityLimit: 8, ipLimit: 40 }));
 
   const config = {
     secret: jwtSecret || LOCAL_JWT_SECRET,
@@ -66,6 +75,7 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securi
     production,
     reservedPlatformEmails: parsePlatformAdminEmails(process.env.PLATFORM_ADMIN_EMAILS),
     securityDelivery,
+    sensitiveRateLimiter: securityLimiter,
   });
 
   async function authenticate(req, res, next) {
@@ -211,14 +221,17 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securi
       };
 
       try {
-        loginRateLimiter.check(limiterContext);
+        await loginLimiter.check(limiterContext);
       } catch (error) {
-        if (error.retryAfterSeconds) res.set("Retry-After", String(error.retryAfterSeconds));
-        return authError(res, 429, "Nao foi possivel autenticar agora.", "AUTH_RATE_LIMITED");
+        if (error.code === "AUTH_RATE_LIMITED") {
+          if (error.retryAfterSeconds) res.set("Retry-After", String(error.retryAfterSeconds));
+          return authError(res, 429, "Nao foi possivel autenticar agora.", error.code);
+        }
+        return authError(res, error.status || 503, "Nao foi possivel autenticar agora.", error.code || "AUTH_RATE_LIMIT_STORE_UNAVAILABLE");
       }
 
       if (!email || !senha) {
-        loginRateLimiter.recordFailure(limiterContext);
+        await loginLimiter.recordFailure(limiterContext);
         return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
       }
 
@@ -232,7 +245,7 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securi
           take: 2,
         });
         if (usuarios.length !== 1) {
-          loginRateLimiter.recordFailure(limiterContext);
+          await loginLimiter.recordFailure(limiterContext);
           return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
         }
 
@@ -251,7 +264,7 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securi
           } catch (auditError) {
             logInternalError("Falha ao registrar rejeicao de login.", auditError);
           }
-          loginRateLimiter.recordFailure(limiterContext);
+          await loginLimiter.recordFailure(limiterContext);
           return authError(res, 401, "E-mail ou senha invalidos.", "AUTH_INVALID_CREDENTIALS");
         }
         if (process.env.NODE_ENV === "test" && typeof globalThis.__CRM_TEST_AUTH_AFTER_PASSWORD_COMPARE === "function") {
@@ -281,7 +294,7 @@ function createAuth({ prisma, loginRateLimiter = createAuthRateLimiter(), securi
         } catch (auditError) {
           logInternalError("Falha ao registrar sucesso de login.", auditError);
         }
-        loginRateLimiter.recordSuccess(limiterContext);
+        await loginLimiter.recordSuccess(limiterContext);
         return res.json(loginResponse(updated, config, platformOperator, session));
       } catch (error) {
         if (error?.status) {

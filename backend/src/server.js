@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const { Prisma } = require("@prisma/client");
 const { createPrismaClient } = require("./database/prisma-client");
+const { createDatabaseProbe } = require("./database/readiness-probe");
 const { dashboardScoreQuery } = require("./dashboard-score");
 const {
   createMaintenanceReadOnlyMiddleware,
@@ -40,9 +41,7 @@ const { createMessengerWebhookOrchestrator } = require("./integrations/messenger
 const { CANONICAL_CLIENT_STATUSES: CLIENT_LIFECYCLE_STATUSES, isPostgresRuntime, lockClienteRow } = require("./shared/clientLifecycleLock");
 
 const prisma = createPrismaClient();
-const READINESS_CACHE_MS = 1000;
-let readinessProbeInFlight = null;
-let readinessCache = null;
+const readinessProbe = createDatabaseProbe({ prisma, env: process.env });
 
 const app = express();
 app.disable("x-powered-by");
@@ -2353,30 +2352,7 @@ function parsePositiveId(value) {
 
 async function probeDatabase({ allowMaintenanceBypass = false } = {}) {
   if (allowMaintenanceBypass && maintenanceReadOnlyEnabled(process.env)) return true;
-  const now = Date.now();
-  if (readinessCache && readinessCache.expiresAt > now) {
-    if (readinessCache.ok) return true;
-    throw new Error("READINESS_DATABASE_UNAVAILABLE");
-  }
-  if (readinessProbeInFlight) return readinessProbeInFlight;
-  readinessProbeInFlight = (async () => {
-    let timer = null;
-    try {
-      await Promise.race([
-        prisma.$queryRaw`SELECT 1`,
-        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("READINESS_DATABASE_TIMEOUT")), 3000); }),
-      ]);
-      readinessCache = { ok: true, expiresAt: Date.now() + READINESS_CACHE_MS };
-      return true;
-    } catch (error) {
-      readinessCache = { ok: false, expiresAt: Date.now() + 250 };
-      throw error;
-    } finally {
-      if (timer) clearTimeout(timer);
-      readinessProbeInFlight = null;
-    }
-  })();
-  return readinessProbeInFlight;
+  return readinessProbe.probe();
 }
 
 app.get("/health", async (req, res) => {

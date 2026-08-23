@@ -92,8 +92,11 @@ Nunca registrar senha, hash de senha, token, hash de token, Authorization, cooki
 ## Limitações atuais
 
 - não há entrega real de convite ou recuperação;
-- rate limit é local ao processo e não distribuído entre réplicas;
-- o access token continua no `localStorage` por compatibilidade;
+- rate limit distribuído usa `RateLimitBucket` no PostgreSQL com TTL e falha
+  fechada quando o store está indisponível; o fallback em memória permanece
+  restrito a testes/desenvolvimento;
+- o access token fica somente em memória da aba; o cookie HttpOnly de refresh
+  restaura a sessão após reload e nenhum token é persistido no `localStorage`;
 - logout server-side depende do access token ainda válido para revogar a sessão atual;
 - sessões antigas emitidas antes da migration permanecem aceitas como JWT legado até expirarem, sem refresh associado;
 - não há histórico de senhas para impedir reutilização imediata; essa política depende de uma decisão e modelo próprios;

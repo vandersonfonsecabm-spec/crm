@@ -59,6 +59,125 @@ function createAuthRateLimiter({
   return { check, recordFailure, recordSuccess };
 }
 
+function createPostgresAuthRateLimiter({
+  prisma,
+  now = () => Date.now(),
+  windowMs = DEFAULT_WINDOW_MS,
+  identityLimit = DEFAULT_IDENTITY_LIMIT,
+  ipLimit = DEFAULT_IP_LIMIT,
+  pruneEveryMs = 30 * 1000,
+} = {}) {
+  if (!prisma?.rateLimitBucket) {
+    throw new Error("Rate limiter distribuido exige o modelo RateLimitBucket.");
+  }
+
+  let lastPruneAt = 0;
+
+  async function check({ identity, ip }) {
+    const keys = [bucketKey("identity", identity), bucketKey("ip", ip)];
+    const current = new Date(now());
+    await pruneIfDue(current);
+    let rows;
+    try {
+      rows = await prisma.rateLimitBucket.findMany({ where: { id: { in: keys } } });
+    } catch (error) {
+      throw rateLimitStoreError(error);
+    }
+    const blocked = rows
+      .filter((row) => row.resetAt > current && row.count >= row.limit)
+      .sort((left, right) => right.resetAt.getTime() - left.resetAt.getTime())[0];
+    if (!blocked) return;
+    throw rateLimitError(Math.max(1, Math.ceil((blocked.resetAt.getTime() - current.getTime()) / 1000)));
+  }
+
+  async function recordFailure({ identity, ip }) {
+    const current = new Date(now());
+    await pruneIfDue(current);
+    try {
+      await prisma.$transaction(async (tx) => {
+        await incrementBucket(tx, bucketKey("identity", identity), identityLimit, current);
+        await incrementBucket(tx, bucketKey("ip", ip), ipLimit, current);
+      });
+    } catch (error) {
+      throw rateLimitStoreError(error);
+    }
+  }
+
+  async function recordSuccess({ identity }) {
+    try {
+      await prisma.rateLimitBucket.deleteMany({ where: { id: bucketKey("identity", identity) } });
+    } catch (error) {
+      throw rateLimitStoreError(error);
+    }
+  }
+
+  async function pruneIfDue(current) {
+    if (current.getTime() - lastPruneAt < pruneEveryMs) return;
+    lastPruneAt = current.getTime();
+    try {
+      await prisma.rateLimitBucket.deleteMany({ where: { resetAt: { lte: current } } });
+    } catch (error) {
+      throw rateLimitStoreError(error);
+    }
+  }
+
+  async function incrementBucket(tx, id, limit, current) {
+    const resetAt = new Date(current.getTime() + windowMs);
+    if (typeof tx.$executeRaw === "function") {
+      // O upsert condicional é uma única operação PostgreSQL: duas réplicas
+      // não perdem incrementos nem precisam continuar uma transação após
+      // capturar uma violação de unique.
+      await tx.$executeRaw`
+        INSERT INTO "RateLimitBucket" ("id", "count", "limit", "resetAt", "createdAt", "updatedAt")
+        VALUES (${id}, 1, ${limit}, ${resetAt}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT ("id") DO UPDATE SET
+          "count" = CASE WHEN "RateLimitBucket"."resetAt" <= ${current}
+            THEN 1 ELSE "RateLimitBucket"."count" + 1 END,
+          "limit" = EXCLUDED."limit",
+          "resetAt" = CASE WHEN "RateLimitBucket"."resetAt" <= ${current}
+            THEN EXCLUDED."resetAt" ELSE "RateLimitBucket"."resetAt" END,
+          "updatedAt" = CURRENT_TIMESTAMP
+      `;
+      return;
+    }
+    const updated = await tx.rateLimitBucket.updateMany({
+      where: { id, resetAt: { gt: current } },
+      data: { count: { increment: 1 } },
+    });
+    if (updated.count === 1) return;
+    try {
+      await tx.rateLimitBucket.create({ data: { id, count: 1, limit, resetAt } });
+    } catch (error) {
+      if (error?.code !== "P2002") throw error;
+      // Outra réplica criou o bucket entre o update e o create. O update
+      // condicional preserva a janela e torna o incremento atômico.
+      const retried = await tx.rateLimitBucket.updateMany({
+        where: { id, resetAt: { gt: current } },
+        data: { count: { increment: 1 } },
+      });
+      if (retried.count !== 1) throw error;
+    }
+  }
+
+  return { check, recordFailure, recordSuccess };
+}
+
+function rateLimitError(retryAfterSeconds) {
+  const error = new Error("Nao foi possivel autenticar agora.");
+  error.status = 429;
+  error.code = "AUTH_RATE_LIMITED";
+  error.retryAfterSeconds = retryAfterSeconds;
+  return error;
+}
+
+function rateLimitStoreError(cause) {
+  const error = new Error("Rate limiter indisponivel.");
+  error.status = 503;
+  error.code = "AUTH_RATE_LIMIT_STORE_UNAVAILABLE";
+  error.cause = cause;
+  return error;
+}
+
 function authIdentity(email, slug) {
   return digest(`${String(email || "").trim().toLowerCase()}\n${String(slug || "").trim().toLowerCase()}`);
 }
@@ -86,6 +205,7 @@ function digest(value) {
 module.exports = {
   authIdentity,
   createAuthRateLimiter,
+  createPostgresAuthRateLimiter,
   normalizeIp,
   requestIp,
 };

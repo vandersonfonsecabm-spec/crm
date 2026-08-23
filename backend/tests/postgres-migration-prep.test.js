@@ -92,12 +92,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260811130000_add_meta_oauth_state_binding",
       "20260813150000_add_customer_archive",
       "20260815120000_add_h8_notifications",
+      "20260823152000_add_distributed_rate_limit",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260815120000_add_h8_notifications",
+        "20260823152000_add_distributed_rate_limit",
         "migration.sql",
       ),
     );

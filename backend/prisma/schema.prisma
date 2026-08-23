@@ -1407,6 +1407,17 @@ model PlatformTenantAudit {
   @@index([action, createdAt])
 }
 
+model RateLimitBucket {
+  id        String   @id
+  count     Int
+  limit     Int
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
 enum ChaveFuncionalidade {
   LEADS_COMMUNICATION
   SITE_LEAD_CAPTURE

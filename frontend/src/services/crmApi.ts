@@ -4,13 +4,23 @@ import { isAuthRefreshCoordinationError, runAuthRefreshSingleFlight } from "./au
 const runtimeEnv = import.meta.env as ImportMetaEnv | undefined;
 const configuredApiUrl = runtimeEnv?.VITE_API_URL?.trim();
 const API_URL = configuredApiUrl || (runtimeEnv?.PROD ? "" : "http://localhost:3001");
-const TOKEN_KEY = "crm-auth-token";
+const LEGACY_TOKEN_KEY = "crm-auth-token";
 const USER_KEY = "crm-auth-user";
 const COMPANY_KEY = "crm-auth-company";
 const ROLE_KEY = "crm-auth-role";
 const EXPIRES_KEY = "crm-auth-expires-at";
 const PLATFORM_OPERATOR_KEY = "crm-auth-platform-operator";
 const LEGACY_BYPASS_STORAGE_KEYS = ["crm-auth-demo", "crm-premium-clients"] as const;
+
+// O access token nunca deve sobreviver ao contexto JavaScript. A sessao
+// persistente e renovada pelo cookie HttpOnly de refresh; este valor existe
+// apenas enquanto a aba atual esta autenticada.
+let accessTokenMemory: string | null = null;
+
+if (typeof localStorage !== "undefined") {
+  // Remova tokens gravados por versoes anteriores sem le-los nem expo-los.
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+}
 
 type ApiAuthResponse = {
   access_token: string;
@@ -1510,15 +1520,16 @@ export type MessengerOperationalStatusResponse = {
 };
 
 export function getAuthToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  return accessTokenMemory;
 }
 
 export function setAuthToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token);
+  accessTokenMemory = token;
 }
 
 export function clearAuthToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  accessTokenMemory = null;
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 function setAuthUser(user?: ApiAuthUser) {
@@ -1621,8 +1632,18 @@ function setAuthSessionFromResponse(data: ApiAuthResponse) {
 export async function fetchAuthMe(options: { allowRefresh?: boolean } = {}) {
   const allowRefresh = options.allowRefresh !== false;
   const token = getAuthToken();
-  if (!token || !hasRemoteApi()) {
+  if (!hasRemoteApi()) {
     throw new Error("Sessao indisponivel.");
+  }
+  if (!token) {
+    if (!allowRefresh) throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
+    try {
+      await refreshAuthSession();
+    } catch (refreshError) {
+      if (shouldInvalidateAuthSession(refreshError)) clearAuthSession();
+      throw refreshError;
+    }
+    return fetchAuthMe({ allowRefresh: false });
   }
 
   let response: Response;

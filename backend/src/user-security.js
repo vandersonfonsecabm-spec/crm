@@ -25,12 +25,13 @@ function createUserSecurity({
   production = process.env.NODE_ENV === "production",
   reservedPlatformEmails = new Set(),
   securityDelivery,
+  sensitiveRateLimiter,
 }) {
   const refreshDays = positiveNumber(process.env.AUTH_REFRESH_DAYS, DEFAULT_REFRESH_DAYS);
   const resetMinutes = positiveNumber(process.env.AUTH_RESET_MINUTES, DEFAULT_RESET_MINUTES);
   const inviteHours = positiveNumber(process.env.AUTH_INVITE_HOURS, DEFAULT_INVITE_HOURS);
   const delivery = securityDelivery;
-  const sensitiveRateLimiter = createAuthRateLimiter({ identityLimit: 8, ipLimit: 40 });
+  const rateLimiter = sensitiveRateLimiter || createAuthRateLimiter({ identityLimit: 8, ipLimit: 40 });
 
   async function createLoginSession({ usuario, expectedPasswordHash = usuario?.senhaHash, req }) {
     if (isSystemActor(usuario)) throw securityError("SYSTEM_ACTOR_RESERVED", 403);
@@ -381,7 +382,7 @@ function createUserSecurity({
       const rawRefreshToken = readCookie(req, REFRESH_COOKIE_NAME);
       if (!rawRefreshToken) {
         try {
-          applyAnonymousRefreshRateLimit(req);
+          await applyAnonymousRefreshRateLimit(req);
         } catch (error) {
           if (error?.status) {
             res.set("Retry-After", String(error.retryAfterSeconds || 60));
@@ -392,7 +393,7 @@ function createUserSecurity({
         return authError(res, 401, "Sessao de renovacao invalida.", "AUTH_REFRESH_INVALID");
       }
       try {
-        applySensitiveRateLimit(req, `refresh:${hashToken(rawRefreshToken)}`);
+        await applySensitiveRateLimit(req, `refresh:${hashToken(rawRefreshToken)}`);
       } catch (error) {
         if (error?.status) {
           res.set("Retry-After", String(error.retryAfterSeconds || 60));
@@ -460,7 +461,7 @@ function createUserSecurity({
 
     app.post("/auth/change-password", authenticate, async (req, res) => {
       try {
-        applySensitiveRateLimit(req, `change-password:${req.auth.usuarioId}`);
+        await applySensitiveRateLimit(req, `change-password:${req.auth.usuarioId}`);
         assertPassword(String(req.body?.novaSenha || ""));
         const current = String(req.body?.senhaAtual || "");
         const usuario = await prisma.usuario.findFirst({ where: { id: req.auth.usuarioId, empresaId: req.auth.empresaId } });
@@ -493,7 +494,7 @@ function createUserSecurity({
       const empresaSlug = normalizeCompanySlug(req.body?.empresaSlug || req.body?.slug);
       const generic = { ok: true, message: "Se a conta existir, as instrucoes serao entregues pelo canal configurado." };
       try {
-        applySensitiveRateLimit(req, `${email || "invalid-email"}:${empresaSlug || "missing-company"}`);
+        await applySensitiveRateLimit(req, `${email || "invalid-email"}:${empresaSlug || "missing-company"}`);
       } catch (error) {
         if (error?.status) {
           res.set("Retry-After", String(error.retryAfterSeconds || 60));
@@ -517,7 +518,7 @@ function createUserSecurity({
 
     app.post("/auth/reset-password", async (req, res) => {
       try {
-        applySensitiveRateLimit(req, hashToken(req.body?.token) || "missing-token");
+        await applySensitiveRateLimit(req, hashToken(req.body?.token) || "missing-token");
         await resetPassword({ rawToken: req.body?.token, newPassword: String(req.body?.novaSenha || ""), req });
         return res.json({ ok: true });
       } catch (error) {
@@ -529,7 +530,7 @@ function createUserSecurity({
 
     app.post("/auth/accept-invite", async (req, res) => {
       try {
-        applySensitiveRateLimit(req, hashToken(req.body?.token) || "missing-invite-token");
+        await applySensitiveRateLimit(req, hashToken(req.body?.token) || "missing-invite-token");
         const usuario = await acceptInvite({ rawToken: req.body?.token, nome: req.body?.nome, newPassword: String(req.body?.senha || ""), req });
         return res.status(201).json({ usuario: publicUser(usuario) });
       } catch (error) {
@@ -588,7 +589,7 @@ function createUserSecurity({
 
     app.post("/usuarios", authenticate, requireRole("ADMIN"), async (req, res) => {
       try {
-        applySensitiveRateLimit(req, `invite:${req.auth.usuarioId}`);
+        await applySensitiveRateLimit(req, `invite:${req.auth.usuarioId}`);
         if (allowLegacyTestPasswordCreate(req.body)) {
           const usuario = await createLegacyTestUser(req.auth.empresaId, req.auth.usuarioId, req.body, req);
           return res.status(201).json(usuario);
@@ -634,7 +635,7 @@ function createUserSecurity({
     app.post("/usuarios/:id/reativar", authenticate, requireRole("ADMIN"), async (req, res) => updateUserStatus(req, res, true));
     app.post("/usuarios/:id/iniciar-reset-senha", authenticate, requireRole("ADMIN"), async (req, res) => {
       try {
-        applySensitiveRateLimit(req, `admin-reset:${req.auth.usuarioId}:${positiveInteger(req.params.id, 0)}`);
+        await applySensitiveRateLimit(req, `admin-reset:${req.auth.usuarioId}:${positiveInteger(req.params.id, 0)}`);
         const result = await startAdminReset({ empresaId: req.auth.empresaId, actorUsuarioId: req.auth.usuarioId, targetUsuarioId: positiveInteger(req.params.id, 0), req });
         if (result.kind === "not-found") return authError(res, 404, "Usuario nao encontrado.", "USER_NOT_FOUND");
         if (result.kind === "reserved") return authError(res, 409, "Identidade interna reservada.", "SYSTEM_ACTOR_RESERVED");
@@ -685,7 +686,7 @@ function createUserSecurity({
 
   async function resendInvite(req, res) {
     try {
-      applySensitiveRateLimit(req, `invite-resend:${req.auth.usuarioId}`);
+      await applySensitiveRateLimit(req, `invite-resend:${req.auth.usuarioId}`);
     } catch (error) {
       if (error?.status) {
         res.set("Retry-After", String(error.retryAfterSeconds || 60));
@@ -743,16 +744,16 @@ function createUserSecurity({
     }
   }
 
-  function applySensitiveRateLimit(req, identity) {
+  async function applySensitiveRateLimit(req, identity) {
     const ip = requestIp(req);
-    sensitiveRateLimiter.check({ identity, ip });
-    sensitiveRateLimiter.recordFailure({ identity, ip });
+    await rateLimiter.check({ identity, ip });
+    await rateLimiter.recordFailure({ identity, ip });
   }
 
-  function applyAnonymousRefreshRateLimit(req) {
+  async function applyAnonymousRefreshRateLimit(req) {
     const ip = requestIp(req);
     if (!ip || ip === "unknown") return;
-    applySensitiveRateLimit(req, `refresh-anonymous:${ip}`);
+    await applySensitiveRateLimit(req, `refresh-anonymous:${ip}`);
   }
 
   function setRefreshCookie(res, rawToken) {
