@@ -4,19 +4,17 @@ This template provides a minimal setup to get React working in Vite with HMR and
 
 ## Produção: API e sessão
 
-Em produção, o cliente chama a API pelo prefixo same-origin `/api`. A primeira
-regra de rewrite em `vercel.json` encaminha esse prefixo ao backend oficial
-antes do fallback da SPA. O refresh pelo cookie HttpOnly é sempre a primeira
-tentativa depois de reload. Como alguns navegadores não persistem esse cookie
-quando ele retorna por rewrite externo, o access token também fica em
-`sessionStorage` apenas na aba atual; ele nunca é gravado em `localStorage`.
+No host canônico `crm-murex-six-83.vercel.app`, o cliente chama a API pelo
+prefixo same-origin `/api`. A primeira regra de rewrite em `vercel.json`
+encaminha esse prefixo ao backend antes do fallback da SPA, e o cookie HttpOnly
+de refresh precisa de `Path=/` para acompanhar `/api/auth/*` após o proxy.
+O access token permanece apenas em memória: não é gravado em `localStorage` ou
+`sessionStorage`.
 
-Esse fallback permite reload na mesma aba, não é compartilhado entre abas e é
-apagado em logout/limpeza de sessão. O tradeoff é que, durante a vida da aba,
-o token permanece acessível ao JavaScript: a aplicação mantém CSP restritiva,
-não registra tokens e prefere o refresh HttpOnly sempre que disponível. Quando
-o refresh falha por ausência do cookie, a revogação baseada somente nele só
-prevalece quando o access token expira ou é rejeitado pelo backend.
+Em preview ou homologação, o cliente usa somente `VITE_API_URL` quando ela
+estiver configurada para aquele ambiente. Sem configuração, ou quando ela
+apontar para a API oficial de produção, o frontend falha fechado e não envia
+tráfego de testes ao backend de produção.
 
 Após a publicação dessa mudança, usuários com cookie emitido no host anterior
 precisam entrar uma vez. A validação de release deve confirmar no DevTools que

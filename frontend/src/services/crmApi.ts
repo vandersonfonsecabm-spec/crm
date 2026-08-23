@@ -3,11 +3,14 @@ import { isAuthRefreshCoordinationError, runAuthRefreshSingleFlight } from "./au
 
 const runtimeEnv = import.meta.env as ImportMetaEnv | undefined;
 const configuredApiUrl = runtimeEnv?.VITE_API_URL?.trim();
-// In production, keep refresh and access requests on the CRM origin. The Vercel
-// rewrite proxies /api to the backend so the HttpOnly refresh cookie is first-party.
-const API_URL = runtimeEnv?.PROD ? "/api" : configuredApiUrl || "http://localhost:3001";
+const CANONICAL_PRODUCTION_HOST = "crm-murex-six-83.vercel.app";
+const OFFICIAL_PRODUCTION_API_ORIGIN = "https://api-production-875f9.up.railway.app";
+const API_URL = resolveApiBaseUrl({
+  configuredApiUrl,
+  hostname: typeof window === "undefined" ? "" : window.location.hostname,
+  production: runtimeEnv?.PROD === true,
+});
 const LEGACY_TOKEN_KEY = "crm-auth-token";
-const SESSION_TOKEN_KEY = "crm-auth-session-token";
 const USER_KEY = "crm-auth-user";
 const COMPANY_KEY = "crm-auth-company";
 const ROLE_KEY = "crm-auth-role";
@@ -15,9 +18,8 @@ const EXPIRES_KEY = "crm-auth-expires-at";
 const PLATFORM_OPERATOR_KEY = "crm-auth-platform-operator";
 const LEGACY_BYPASS_STORAGE_KEYS = ["crm-auth-demo", "crm-premium-clients"] as const;
 
-// A memoria e a fonte primaria do access token. O cookie HttpOnly continua
-// sendo tentado primeiro no reload; sessionStorage e apenas o fallback da aba
-// atual quando o browser nao persiste esse cookie atraves do proxy same-origin.
+// O access token existe somente em memoria. Reload e autenticado pelo cookie
+// HttpOnly enviado para /api/auth, nunca por Web Storage.
 let accessTokenMemory: string | null = null;
 
 if (typeof localStorage !== "undefined") {
@@ -1528,33 +1530,11 @@ export function getAuthToken() {
 
 export function setAuthToken(token: string) {
   accessTokenMemory = token;
-  try {
-    sessionStorage.setItem(SESSION_TOKEN_KEY, token);
-  } catch {
-    // Storage indisponivel reduz o fluxo ao refresh HttpOnly, sem abrir fallback menos seguro.
-  }
 }
 
 export function clearAuthToken() {
   accessTokenMemory = null;
   localStorage.removeItem(LEGACY_TOKEN_KEY);
-  try {
-    sessionStorage.removeItem(SESSION_TOKEN_KEY);
-  } catch {
-    // A limpeza em memoria continua obrigatoria quando o storage esta indisponivel.
-  }
-}
-
-export function restoreAuthTokenFromSession() {
-  if (accessTokenMemory) return true;
-  try {
-    const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
-    if (!token) return false;
-    accessTokenMemory = token;
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function setAuthUser(user?: ApiAuthUser) {
@@ -2615,6 +2595,29 @@ export async function fetchPlatformTenantAutomationsAudit(id: number, params: { 
 
 export function getApiBaseUrl() {
   return API_URL;
+}
+
+export function resolveApiBaseUrl({
+  configuredApiUrl,
+  hostname,
+  production,
+}: {
+  configuredApiUrl?: string;
+  hostname?: string;
+  production: boolean;
+}) {
+  if (!production) return configuredApiUrl || "http://localhost:3001";
+  if (hostname?.toLowerCase() === CANONICAL_PRODUCTION_HOST) return "/api";
+  if (!configuredApiUrl || isOfficialProductionApi(configuredApiUrl)) return "";
+  return configuredApiUrl;
+}
+
+function isOfficialProductionApi(apiUrl: string) {
+  try {
+    return new URL(apiUrl).origin === OFFICIAL_PRODUCTION_API_ORIGIN;
+  } catch {
+    return false;
+  }
 }
 
 async function requestCliente(method: "POST" | "PATCH" | "PUT", path: string, payload: ClientePayload): Promise<ApiCliente>;

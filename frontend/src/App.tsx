@@ -10,7 +10,6 @@ import {
   getAuthSession,
   logoutFromBackend,
   refreshAuthSession,
-  restoreAuthTokenFromSession,
   shouldInvalidateAuthSession,
 } from "./services/crmApi";
 
@@ -42,13 +41,7 @@ function App() {
     async function validateStoredSession() {
       cleanupLegacyBypassStorage();
       try {
-        if (!getAuthSession()) {
-          try {
-            await refreshAuthSession();
-          } catch (refreshError) {
-            if (!restoreAuthTokenFromSession()) throw refreshError;
-          }
-        }
+        if (!getAuthSession()) await refreshAuthSession();
         await fetchAuthMe();
         if (active) setAuthState("authenticated");
       } catch (error) {

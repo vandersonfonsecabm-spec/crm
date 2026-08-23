@@ -33,9 +33,7 @@ class MemoryStorage {
 
 const originalFetch = globalThis.fetch;
 const testLocalStorage = new MemoryStorage();
-const testSessionStorage = new MemoryStorage();
 globalThis.localStorage = testLocalStorage;
-globalThis.sessionStorage = testSessionStorage;
 const api = await import("../src/services/crmApi.ts");
 
 function jsonResponse(body, status = 200) {
@@ -47,14 +45,12 @@ function jsonResponse(body, status = 200) {
 
 function seedAccessToken(token = "access-token-de-teste") {
   localStorage.clear();
-  sessionStorage.clear();
   api.setAuthToken(token);
 }
 
 function resetAuthTestState() {
   api.clearAuthSession();
   localStorage.clear();
-  sessionStorage.clear();
   globalThis.fetch = originalFetch;
 }
 
@@ -350,48 +346,33 @@ test("reload sem access token restaura a sessao pelo cookie valido", async (t) =
   assert.deepEqual(requests, ["/auth/refresh"]);
 
   const app = await source("src/App.tsx");
-  assert.match(app, /if \(!getAuthSession\(\)\) \{\s*try \{\s*await refreshAuthSession\(\);/);
+  assert.match(app, /if \(!getAuthSession\(\)\) await refreshAuthSession\(\);/);
 });
 
-test("cookie continua prioritário e sessionStorage restaura somente a aba atual", async (t) => {
-  t.after(() => {
-    globalThis.sessionStorage = testSessionStorage;
-    resetAuthTestState();
-  });
-  const firstTabStorage = new MemoryStorage();
-  const secondTabStorage = new MemoryStorage();
-  globalThis.sessionStorage = firstTabStorage;
+test("access token permanece somente em memória e logout preserva Web Storage sem token", async (t) => {
+  t.after(resetAuthTestState);
   localStorage.clear();
   api.clearAuthSession();
-  api.setAuthToken("access-token-primeira-aba");
+  api.setAuthToken("access-token-em-memoria");
 
   assert.equal(localStorage.getItem("crm-auth-token"), null);
-  assert.equal(firstTabStorage.getItem("crm-auth-session-token"), "access-token-primeira-aba");
-
-  globalThis.sessionStorage = secondTabStorage;
-  api.clearAuthToken();
-  assert.equal(api.restoreAuthTokenFromSession(), false);
-  assert.equal(firstTabStorage.getItem("crm-auth-session-token"), "access-token-primeira-aba");
-
-  globalThis.sessionStorage = firstTabStorage;
-  assert.equal(api.restoreAuthTokenFromSession(), true);
-  assert.equal(api.getAuthToken(), "access-token-primeira-aba");
+  assert.equal(api.getAuthToken(), "access-token-em-memoria");
   api.clearAuthSession();
-  assert.equal(firstTabStorage.getItem("crm-auth-session-token"), null);
+  assert.equal(api.getAuthToken(), null);
 
-  const app = await source("src/App.tsx");
-  assert.ok(app.indexOf("await refreshAuthSession()") < app.indexOf("restoreAuthTokenFromSession()"));
+  const [apiSource, app] = await Promise.all([source("src/services/crmApi.ts"), source("src/App.tsx")]);
+  assert.doesNotMatch(apiSource, /sessionStorage/);
   assert.match(app, /async function sair\(\) \{[\s\S]*?finally \{\s*clearAuthSession\(\);/);
 });
 
 test("produção encaminha auth pelo mesmo host antes do fallback da SPA", async () => {
-  const [apiSource, vercelConfigSource] = await Promise.all([
-    source("src/services/crmApi.ts"),
-    source("vercel.json"),
-  ]);
+  const vercelConfigSource = await source("vercel.json");
   const [vercelConfig, rootVercelConfig] = [JSON.parse(vercelConfigSource), JSON.parse(await source("../vercel.json"))];
 
-  assert.match(apiSource, /runtimeEnv\?\.PROD \? "\/api" : configuredApiUrl \|\| "http:\/\/localhost:3001"/);
+  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "crm-murex-six-83.vercel.app" }), "/api");
+  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app", configuredApiUrl: "https://api-homolog.example" }), "https://api-homolog.example");
+  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app", configuredApiUrl: "https://api-production-875f9.up.railway.app" }), "");
+  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app" }), "");
   assert.deepEqual(vercelConfig.rewrites.slice(0, 2), [
     {
       source: "/api/:path*",

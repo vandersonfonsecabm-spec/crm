@@ -967,7 +967,9 @@ function cookieOptions(production, days) {
     httpOnly: true,
     secure: production,
     sameSite: production ? "none" : "lax",
-    path: "/auth",
+    // O frontend de produção usa o proxy same-origin /api; o cookie precisa
+    // acompanhar /api/auth/refresh e também o endpoint direto /auth/refresh.
+    path: "/",
     maxAge: days * 24 * 60 * 60 * 1000,
   };
 }
