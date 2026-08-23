@@ -94,3 +94,4 @@ erDiagram
 - `available` só é calculado quando o adapter declara a fórmula; caso contrário permanece `UNKNOWN`.
 - `STALE`/`UNKNOWN` não são zero; saldo zero só vem de dado explícito ou resolução operacional válida.
 - Soft delete/tombstone e retenção preservam idempotência, auditoria e replays.
+- Retenção padrão futura: canonical ativo enquanto operacional; observations/sync runs/outbox com janela bounded suficiente para replay; quarantine e auditoria retidas conforme policy tenant-aware; payload bruto não persiste por default; tombstones duram além do maior replay/cursor window. Cleanup nunca remove checkpoint, checksum ou evidência necessária para dedupe.

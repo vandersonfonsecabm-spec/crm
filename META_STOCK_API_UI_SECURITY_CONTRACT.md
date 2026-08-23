@@ -25,6 +25,21 @@ Todas as rotas exigem autenticação, tenant do contexto server-side e role adeq
 
 Erros: 400 schema, 401 sessão, 403 role/tenant, 404 target seguro, 409 revision/lease, 413 arquivo, 422 capability/dado inválido, 429 quota, 503 fonte degradada. Stack trace, URL de banco e PII nunca aparecem.
 
+## Eventos internos versionados
+
+Os eventos são contratos internos transacionais; não exigem broker externo:
+
+- `StockSyncStarted.v1`
+- `StockSyncCompleted.v1`
+- `StockSyncFailed.v1`
+- `StockRecordObserved.v1`
+- `StockCanonicalStateChanged.v1`
+- `StockRuleMatched.v1`
+- `StockRuleResolved.v1`
+- `StockProjectionRequested.v1`
+
+Todo envelope de evento contém `schemaVersion`, `empresaId` resolvido, `correlationId`, `syncRunId` quando aplicável, aggregate type/id, material version, `occurredAt` e payload estruturado sanitizado. Consumers rejeitam versões futuras desconhecidas; dedupe usa `(empresaId,eventType,aggregateId,materialVersion)` e o outbox garante retry/ordering por aggregate.
+
 ## UI contratual futura
 
 Sem implementação nesta missão, a interface deverá contemplar: visão geral, produtos, lotes, vencidos/próximos, fontes/status, freshness/confiança, mappings pendentes, histórico de sync e regras. Cada estado deve ter loading, empty, error, restricted, stale e partial. Exibir fonte, `observedAt`, confiança e capability ausente; nunca sugerir quantidade atual quando stale.

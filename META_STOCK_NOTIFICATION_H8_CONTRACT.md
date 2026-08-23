@@ -79,6 +79,10 @@ Resolver no tenant: administradores/gestores autorizados e responsáveis por loc
 
 `item/lote override > source/location rule > tenant/company default > safe system default`. Toda mudança exige actor, before/after, correlationId, transação e política de recálculo. Alteração não reescreve histórico; decide explicitamente se afeta ocorrências abertas, futuras ou ambas.
 
+## Contrato de avaliação de regra
+
+Cada regra futura possui `ruleType`, `requiredCapabilities`, escopo (tenant/fonte/local/produto/lote), `enabled`, thresholds/bands, `evaluationTime`, timezone, requisito de freshness, `materialChange`, `occurrenceKey`, prioridade, destination, predicate de resolução e suppression policy. A avaliação recebe somente estado canônico commitado e retorna match/no-match, motivo sanitizado, materialVersion, confidence e resolução candidata. Regra sem capability ou com estado `STALE` incompatível não gera match afirmativo.
+
 ## Deep links
 
 - `ESTOQUE_LOTE`: produto/lote/local canônicos; abre detalhe autorizado.
