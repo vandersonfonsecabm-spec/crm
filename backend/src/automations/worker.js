@@ -5,6 +5,7 @@ const { WORKER_ACTION_TYPES } = require("./actions");
 const { createAutomationWorkerLogger } = require("./worker-observability");
 const { databaseProviderFromEnv } = require("../../scripts/prisma-runtime.cjs");
 const { runGate } = require("../../scripts/tenant-isolation-gate.cjs");
+const { assertStockFlagsOffForProduction, stockFlags } = require("../stock/flags");
 
 const WORKER_DEFAULTS = Object.freeze({
   batchSize: 5,
@@ -44,6 +45,19 @@ function shouldStartTemporalScanWorker(env = process.env) {
   return flag === "true" || flag === "1";
 }
 
+function shouldStartStockWorker(env = process.env) {
+  if (maintenanceReadOnlyEnabled(env)) return false;
+  const enabled = String(env.STOCK_DOMAIN_ENABLED || "").trim().toLowerCase();
+  const worker = String(env.STOCK_SYNC_WORKER_ENABLED || "").trim().toLowerCase();
+  const allowlist = String(env.STOCK_TENANT_ALLOWLIST || "").trim();
+  const runtimeAllowed = env.NODE_ENV === "production"
+    || (env.NODE_ENV === "test" && ["true", "1"].includes(String(env.CRM_TEST_STOCK_WORKER || "").trim().toLowerCase()));
+  return runtimeAllowed
+    && ["true", "1"].includes(enabled)
+    && ["true", "1"].includes(worker)
+    && allowlist.length > 0;
+}
+
 function readAutomationWorkerConfig(env = process.env) {
   const executionTimeoutMs = boundedInteger(
     env.AUTOMATION_WORKER_EXECUTION_TIMEOUT_MS,
@@ -67,6 +81,7 @@ function readAutomationWorkerConfig(env = process.env) {
 function startAutomationWorker({
   service,
   notificationService = null,
+  stockWorker = null,
   env = process.env,
   logger = console,
   workerId = `automation-worker-${process.pid}-${crypto.randomUUID()}`,
@@ -80,8 +95,9 @@ function startAutomationWorker({
   });
   const automationEnabled = shouldStartAutomationWorker(env);
   const notificationsEnabled = shouldStartNotificationWorker(env);
+  const stockEnabled = shouldStartStockWorker(env) && typeof stockWorker?.processDue === "function";
   const temporalScanEnabled = shouldStartTemporalScanWorker(env);
-  if ((!service && !notificationService) || (!automationEnabled && !notificationsEnabled)) {
+  if ((!service && !notificationService && !stockWorker) || (!automationEnabled && !notificationsEnabled && !stockEnabled)) {
     eventLogger.info("worker_disabled", { status: "disabled" });
     return { started: false, async stop() {} };
   }
@@ -97,6 +113,7 @@ function startAutomationWorker({
   const stoppedPromise = new Promise((resolve) => { resolveStopped = resolve; });
   let consecutiveAutomationFailures = 0;
   let consecutiveNotificationFailures = 0;
+  let consecutiveStockFailures = 0;
 
   function markStopped() {
     if (stopped) return;
@@ -108,6 +125,7 @@ function startAutomationWorker({
     status: "started",
     automationEnabled,
     notificationsEnabled,
+    stockEnabled,
     temporalScanEnabled,
     pollIntervalMs: config.pollIntervalMs,
     batchSize: config.batchSize,
@@ -123,6 +141,7 @@ function startAutomationWorker({
     const now = new Date();
     let automationFailed = false;
     let notificationsFailed = false;
+    let stockFailed = false;
     if (automationEnabled && service) {
       try {
         if (temporalScanEnabled && typeof service.scanTemporalTriggers === "function") {
@@ -162,20 +181,31 @@ function startAutomationWorker({
         eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "notifications" });
       }
     }
+    if (stockEnabled) {
+      try {
+        await stockWorker.processDue({ now, limit: config.batchSize, leaseOwner: workerId, leaseMs: config.leaseMs });
+      } catch (error) {
+        stockFailed = true;
+        eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "stock_core" });
+      }
+    }
     const automationActive = automationEnabled && Boolean(service);
     const notificationsActive = notificationsEnabled && Boolean(notificationService?.processDue);
     if (automationActive) consecutiveAutomationFailures = automationFailed ? consecutiveAutomationFailures + 1 : 0;
     if (notificationsActive) consecutiveNotificationFailures = notificationsFailed ? consecutiveNotificationFailures + 1 : 0;
+    const stockActive = stockEnabled && Boolean(stockWorker?.processDue);
+    if (stockActive) consecutiveStockFailures = stockFailed ? consecutiveStockFailures + 1 : 0;
     const unhealthySubsystem = consecutiveAutomationFailures >= MAX_CONSECUTIVE_FULL_FAILURES
       ? "automation"
-      : consecutiveNotificationFailures >= MAX_CONSECUTIVE_FULL_FAILURES ? "notifications" : null;
+      : consecutiveNotificationFailures >= MAX_CONSECUTIVE_FULL_FAILURES ? "notifications"
+        : consecutiveStockFailures >= MAX_CONSECUTIVE_FULL_FAILURES ? "stock_core" : null;
     if (unhealthySubsystem) {
       stopping = true;
       fatal = true;
       eventLogger.error("worker_unhealthy", new Error("Falhas consecutivas no subsistema ativo."), {
         durationMs: elapsedMs(startedAt),
         subsystem: unhealthySubsystem,
-        consecutiveFailures: unhealthySubsystem === "automation" ? consecutiveAutomationFailures : consecutiveNotificationFailures,
+        consecutiveFailures: unhealthySubsystem === "automation" ? consecutiveAutomationFailures : unhealthySubsystem === "notifications" ? consecutiveNotificationFailures : consecutiveStockFailures,
       });
     }
     running = false;
@@ -218,21 +248,37 @@ function startAutomationWorker({
 
 async function runAutomationWorkerProcess({ env = process.env, logger = console, queryDatabase = queryDatabaseWithServerTimeout } = {}) {
   require("dotenv").config();
+  assertStockFlagsOffForProduction(env);
   const { createPrismaClient } = require("../database/prisma-client");
   const { createAutomationService } = require("./service");
   const { createNotificationService } = require("../notifications/service");
   const provider = validateWorkerRuntimeTarget(env);
   const prisma = createPrismaClient({ env });
+  const stockRuntimeDisabled = !stockFlags(env).domainEnabled && !stockFlags(env).syncWorkerEnabled && !stockFlags(env).sourceEnabled;
   try {
     await preflightWorkerDatabase({ prisma, env, queryDatabase });
-    await runGate({ mode: provider === "postgresql" ? "production-readonly" : "post-migration", env });
+    try {
+      await runGate({ mode: provider === "postgresql" ? "production-readonly" : "post-migration", env });
+    } catch (error) {
+      // Test/isolated old-schema runs may intentionally lack the additive E2
+      // migration while every stock flag is OFF. Production still fails closed
+      // and must migrate before this artifact is deployed.
+      if (!(env.NODE_ENV === "test" && stockRuntimeDisabled && error?.code === "TENANT_GATE_MIGRATION_PENDING")) throw error;
+      logger.warn?.("stock_schema_pending_flags_off", { status: "disabled" });
+    }
   } catch (error) {
     await prisma.$disconnect();
     throw error;
   }
   const service = createAutomationService({ prisma, env });
   const notificationService = createNotificationService({ prisma, env });
-  const worker = startAutomationWorker({ service, notificationService, env, logger });
+  let stockWorker = null;
+  if (shouldStartStockWorker(env)) {
+    const { createStockServices } = require("../stock");
+    const stockServices = createStockServices({ prisma, env, logger });
+    stockWorker = { processDue: (options) => stockServices.worker(options) };
+  }
+  const worker = startAutomationWorker({ service, notificationService, stockWorker, env, logger });
   if (!worker.started) {
     await prisma.$disconnect();
     return 0;
@@ -330,6 +376,7 @@ module.exports = {
   runAutomationWorkerProcess,
   shouldStartAutomationWorker,
   shouldStartNotificationWorker,
+  shouldStartStockWorker,
   shouldStartTemporalScanWorker,
   validateWorkerRuntimeTarget,
   startAutomationWorker,

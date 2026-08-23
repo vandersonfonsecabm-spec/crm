@@ -23,6 +23,7 @@ const { mountCustomer360Routes } = require("./customer-360/routes");
 const { mountAutomationRoutes } = require("./automations/routes");
 const { mountPlatformRoutes } = require("./platform/routes");
 const { mountNotificationRoutes } = require("./notifications/routes");
+const { mountStockRoutes } = require("./stock/routes");
 const { isValidCpfCnpj } = require("./customer-360/service");
 const { createAgendaService } = require("./agenda/service");
 const {
@@ -73,7 +74,12 @@ mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookOrchestra
 mountInstagramWebhookRoutes({ app, processWebhook: createInstagramWebhookOrchestrator({ prisma }) });
 mountMessengerWebhookRoutes({ app, processWebhook: createMessengerWebhookOrchestrator({ prisma }) });
 app.use(siteLeadBodyLimit);
-app.use(express.json());
+// The E2 CSV preview is bounded separately (5 MiB CSV + JSON envelope) so the
+// legacy 100 KiB parser does not reject valid source-ready imports first.
+app.use(express.json({
+  limit: "100kb",
+  type: (req) => !req.path.startsWith("/estoque/importacoes/preview"),
+}));
 mountSiteLeadPublicRoutes({ app, prisma });
 app.use(
   cors({
@@ -114,6 +120,9 @@ mountCustomer360Routes({ app, prisma, authenticate: requireAuth });
 mountAutomationRoutes({ app, prisma, authenticate: requireAuth });
 mountPlatformRoutes({ app, prisma, authenticate: requireAuth });
 mountNotificationRoutes({ app, prisma, authenticate: requireAuth });
+// E2 stock routes are mounted before the legacy 410 guard. The guard remains
+// responsible for the historical movement/catalog paths below.
+mountStockRoutes({ app, prisma, authenticate: requireAuth, requireRole, env: process.env });
 
 app.use(
   ["/categorias-produtos", "/produtos", "/estoque"],
@@ -2387,6 +2396,9 @@ app.use((error, req, res, next) => {
       erro: "Formulario maior que o limite permitido.",
       codigo: "BODY_TOO_LARGE",
     });
+  }
+  if (req.path === "/estoque/importacoes/preview" && error?.type === "entity.too.large") {
+    return res.status(413).json({ error: { code: "STOCK_FILE_TOO_LARGE", message: "Importacao de estoque excede o limite." } });
   }
 
   if (req.path.startsWith("/public/site-leads/") && error?.type === "entity.parse.failed") {

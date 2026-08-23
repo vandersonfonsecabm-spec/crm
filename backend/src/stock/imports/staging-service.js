@@ -1,8 +1,10 @@
 const crypto = require("node:crypto");
 const { STOCK_CSV_SCHEMA_VERSION, createStockCsvAdapter } = require("../csv/stock-csv-v1");
 const { stockError } = require("../shared/errors");
+const { buildStockEvent } = require("../events");
+const { appendStockOutbox } = require("../outbox");
 
-const ACTIVE_IMPORT_STATUSES = new Set(["PREVIEW", "READY", "PROCESSING", "APPLIED", "PARTIAL"]);
+const ACTIVE_IMPORT_STATUSES = new Set(["PREVIEW", "READY", "PROCESSING"]);
 const QUOTA_IMPORT_STATUSES = new Set(["PREVIEW", "READY", "PROCESSING"]);
 const EDITABLE_IMPORT_STATUSES = new Set(["PREVIEW", "READY"]);
 const TERMINAL_IMPORT_STATUSES = new Set(["APPLIED", "PARTIAL", "CANCELLED", "EXPIRED", "FAILED"]);
@@ -21,6 +23,8 @@ function createStockImportService({
   retentionMs = DEFAULT_RETENTION_MS,
 } = {}) {
   if (!prisma) throw new Error("Prisma obrigatorio para importacao de estoque.");
+  previewTtlMs = Math.min(24 * 60 * 60 * 1000, Math.max(60 * 1000, Number(previewTtlMs) || DEFAULT_PREVIEW_TTL_MS));
+  retentionMs = Math.min(365 * 24 * 60 * 60 * 1000, Math.max(24 * 60 * 60 * 1000, Number(retentionMs) || DEFAULT_RETENTION_MS));
 
   async function preview({
     empresaId,
@@ -36,18 +40,20 @@ function createStockImportService({
     assertIdempotencyKey(idempotencyKey);
     await assertEnabled({ empresaId, fonteId });
 
-    const existing = await prisma.importacaoEstoque.findUnique({
-      where: { empresaId_idempotencyKey: { empresaId, idempotencyKey } },
-      include: importInclude(),
-    });
-    if (existing) return { replayed: true, importacao: presentImport(existing) };
-
     const source = await loadCsvSource({ empresaId, fonteId });
     const parsed = await adapter.parsePreview({
       input: content,
       delimiter,
       schemaVersion: STOCK_CSV_SCHEMA_VERSION,
     });
+    const existing = await prisma.importacaoEstoque.findUnique({
+      where: { empresaId_idempotencyKey: { empresaId, idempotencyKey } },
+      include: importInclude(),
+    });
+    if (existing) {
+      if (existing.fonteId !== fonteId || existing.fileHash !== parsed.fileHash || existing.schemaVersion !== STOCK_CSV_SCHEMA_VERSION) throw stockError(409, "STOCK_IMPORT_IDEMPOTENCY_CONFLICT", "Chave de idempotencia ja vinculada a outro arquivo.");
+      return { replayed: true, importacao: presentImport(existing) };
+    }
     const now = clockDate(clock);
     const expiresAt = new Date(now.getTime() + previewTtlMs);
     const retentionUntil = new Date(now.getTime() + retentionMs);
@@ -67,6 +73,7 @@ function createStockImportService({
 
     try {
       const created = await prisma.$transaction(async (tx) => {
+        await assertQuota({ empresaId, actorUsuarioId, db: tx });
         const importacao = await tx.importacaoEstoque.create({
           data: {
             empresaId,
@@ -103,6 +110,7 @@ function createStockImportService({
             revision: 1,
           })),
         });
+        await writeCapabilities(tx, { empresaId, fonteId, manifest: parsed.capabilities, observedAt: now });
         await writeAudit(tx, {
           empresaId,
           actorUsuarioId,
@@ -170,7 +178,7 @@ function createStockImportService({
     return presentImport(updated);
   }
 
-  async function confirm({ empresaId, importacaoId, actorUsuarioId, expectedRevision, correlationId = null } = {}) {
+  async function confirm({ empresaId, importacaoId, actorUsuarioId, expectedRevision, correlationId = null, allowPartial = false } = {}) {
     assertActorContext({ empresaId, actorUsuarioId });
     assertPositiveInt(importacaoId, "importacaoId");
     assertRevision(expectedRevision);
@@ -187,6 +195,7 @@ function createStockImportService({
     }
     if (["APPLIED", "PARTIAL"].includes(importacao.status)) return presentImport(importacao);
     if (importacao.status !== "READY") throw stockError(409, "STOCK_IMPORT_NOT_READY", "Importacao de estoque nao esta pronta para confirmacao.");
+    if (importacao.rejectedCount > 0 && allowPartial !== true) throw stockError(409, "STOCK_IMPORT_PARTIAL_CONFIRM_REQUIRED", "Confirmacao parcial explicita obrigatoria.");
 
     const finalized = await prisma.$transaction(async (tx) => {
       const claimed = await tx.importacaoEstoque.updateMany({
@@ -206,6 +215,7 @@ function createStockImportService({
           retentionUntil: working.retentionUntil,
         },
       });
+      await appendStockOutbox({ tx, event: buildStockEvent({ type: "StockSyncStarted.v1", empresaId, syncRunId: syncRun.id, aggregateType: "StockSyncRun", aggregateId: String(syncRun.id), materialVersion: 1, correlationId: working.correlationId, payload: { mode: "IMPORT" } }) });
       const acceptedLines = await tx.linhaImportacaoEstoque.findMany({
         where: { empresaId, importacaoId, status: "ACCEPTED" },
         orderBy: { rowNumber: "asc" },
@@ -238,6 +248,7 @@ function createStockImportService({
           rejeitados: working.rejectedCount + (acceptedLines.length - appliedCount),
         },
       });
+      await appendStockOutbox({ tx, event: buildStockEvent({ type: finalStatus === "APPLIED" ? "StockSyncCompleted.v1" : "StockSyncFailed.v1", empresaId, syncRunId: syncRun.id, aggregateType: "StockSyncRun", aggregateId: String(syncRun.id), materialVersion: 2, correlationId: working.correlationId, payload: { mode: "IMPORT", status: finalStatus, appliedCount } }) });
       const finalizedUpdate = await tx.importacaoEstoque.updateMany({
         where: { id: importacaoId, empresaId, status: "PROCESSING", revision: working.revision },
         data: { status: finalStatus, syncRunId: syncRun.id, acceptedCount: appliedCount, rejectedCount: working.rowCount - appliedCount, revision: { increment: 1 } },
@@ -251,7 +262,7 @@ function createStockImportService({
         after: { importacaoId, syncRunId: syncRun.id, status: finalStatus, appliedCount },
       });
       return tx.importacaoEstoque.findFirst({ where: { id: importacaoId, empresaId }, include: importInclude() });
-    });
+    }, { maxWait: 5000, timeout: 30000 });
     return presentImport(finalized);
   }
 
@@ -271,10 +282,10 @@ function createStockImportService({
     return source;
   }
 
-  async function assertQuota({ empresaId, actorUsuarioId }) {
+  async function assertQuota({ empresaId, actorUsuarioId, db = prisma }) {
     const [tenantActive, actorActive] = await Promise.all([
-      prisma.importacaoEstoque.count({ where: { empresaId, status: { in: [...QUOTA_IMPORT_STATUSES] } } }),
-      prisma.importacaoEstoque.count({ where: { empresaId, actorUsuarioId, status: { in: [...QUOTA_IMPORT_STATUSES] } } }),
+      db.importacaoEstoque.count({ where: { empresaId, status: { in: [...QUOTA_IMPORT_STATUSES] } } }),
+      db.importacaoEstoque.count({ where: { empresaId, actorUsuarioId, status: { in: [...QUOTA_IMPORT_STATUSES] } } }),
     ]);
     if (tenantActive >= MAX_ACTIVE_BATCHES_PER_TENANT || actorActive >= MAX_ACTIVE_BATCHES_PER_ACTOR) {
       throw stockError(429, "STOCK_IMPORT_QUOTA_EXCEEDED", "Limite de importacoes de estoque atingido.");
@@ -300,7 +311,7 @@ function createStockImportService({
 function importInclude() {
   return {
     linhas: {
-      select: { id: true, rowNumber: true, rowChecksum: true, sourceRecordId: true, sourceVersion: true, status: true, warningsJson: true, errorsJson: true, appliedAt: true, revision: true },
+      select: { id: true, rowNumber: true, rowChecksum: true, sourceRecordId: true, sourceVersion: true, status: true, normalizedJsonSanitized: true, warningsJson: true, errorsJson: true, appliedAt: true, revision: true },
       orderBy: { rowNumber: "asc" },
     },
   };
@@ -357,6 +368,18 @@ function writeAudit(tx, { empresaId, actorUsuarioId, action, correlationId, afte
       correlationId: sanitizeCorrelationId(correlationId),
     },
   });
+}
+
+async function writeCapabilities(tx, { empresaId, fonteId, manifest, observedAt }) {
+  if (!tx.capacidadeFonteEstoque) return;
+  for (const [codigo, value] of Object.entries(manifest || {})) {
+    if (codigo === "schemaVersion" || codigo === "IMPORT_BATCH") continue;
+    const versao = STOCK_CSV_SCHEMA_VERSION;
+    const current = await tx.capacidadeFonteEstoque.findFirst({ where: { empresaId, fonteId, codigo, versao } });
+    const data = { suportada: Boolean(value), semanticaJson: JSON.stringify({ source: "FILE_IMPORT_CSV", headerDerived: true }), observadaEm: observedAt };
+    if (current) await tx.capacidadeFonteEstoque.update({ where: { id: current.id }, data });
+    else await tx.capacidadeFonteEstoque.create({ data: { empresaId, fonteId, codigo, versao, ...data } });
+  }
 }
 
 function normalizeAppliedIds(value, acceptedLines) {

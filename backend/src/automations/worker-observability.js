@@ -110,7 +110,7 @@ const SAFE_STATUSES = new Set([
 ]);
 const SAFE_LIFECYCLE_STATUSES = new Set(["disabled", "started", "stopped", "stopping"]);
 const SAFE_PROVIDERS = new Set(["postgresql", "sqlite", "unknown"]);
-const SAFE_SUBSYSTEMS = new Set(["automation", "automation_temporal", "automation_jobs", "notifications"]);
+const SAFE_SUBSYSTEMS = new Set(["automation", "automation_temporal", "automation_jobs", "notifications", "stock_core"]);
 
 const NUMERIC_FIELDS = new Set([
   "tenantId",
@@ -123,7 +123,11 @@ const NUMERIC_FIELDS = new Set([
   "durationMs",
   "consecutiveFailures",
   "pollIntervalMs",
+  "syncRunId",
+  "sourceConnectionId",
+  "materialVersion",
 ]);
+const OPAQUE_FIELDS = new Set(["aggregateId", "correlationId"]);
 
 const DATE_FIELDS = new Set(["retryAt", "leaseUntil"]);
 const BOOLEAN_FIELDS = new Set(["final", "permanent", "retryable", "willRetry"]);
@@ -178,6 +182,11 @@ function sanitizeLogFields(fields = {}) {
     if (NUMERIC_FIELDS.has(key)) {
       const number = Number(value);
       if (Number.isFinite(number) && number >= 0) safe[key] = number;
+      continue;
+    }
+    if (OPAQUE_FIELDS.has(key)) {
+      const text = String(value).trim();
+      if (/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(text)) safe[key] = text;
       continue;
     }
     if (key === "workerInstanceId") {

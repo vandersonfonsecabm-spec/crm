@@ -175,7 +175,10 @@ function normalizeRawRecord(record, headers, limits) {
     if (value.includes("\uFFFD") || Array.from(value).length > limits.maxFieldCodePoints) {
       throw stockError(422, "STOCK_CSV_FIELD_INVALID", "Campo CSV invalido ou acima do limite.");
     }
-    if (value.includes("\u0000")) throw stockError(422, "STOCK_CSV_CONTROL_CHARACTER", "CSV contem caractere de controle proibido.");
+    if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value)) throw stockError(422, "STOCK_CSV_CONTROL_CHARACTER", "CSV contem caractere de controle proibido.");
+    if (/^[=+@]/.test(value) || (/^-/.test(value) && !/^-?(?:0|[1-9]\d{0,29})(?:\.\d{1,6})?$/.test(value))) {
+      throw stockError(422, "STOCK_CSV_FORMULA_OR_CONTROL", "CSV contem formula ou conteudo executavel.");
+    }
     normalized[header] = value;
   }
   return normalized;
@@ -186,6 +189,7 @@ function normalizeLine(raw, rowNumber) {
     const sourceProductId = requiredIdentifier(raw.source_product_id, "source_product_id");
     const quantities = Object.fromEntries(QUANTITY_FIELDS.map((field) => [field, parseDecimal(raw[field], field)]));
     const hasQuantity = Object.values(quantities).some((value) => value !== null);
+    if (quantities.on_hand === null) throw stockError(422, "STOCK_CSV_ON_HAND_REQUIRED", "on_hand explicito obrigatorio; ausencia nao significa zero.");
     const unit = optionalText(raw.unit, 32);
     if (hasQuantity && !unit) throw stockError(422, "STOCK_CSV_UNIT_REQUIRED", "Unidade obrigatoria quando houver quantidade.");
     const expiry = parseExpiry(raw.expiry_date, raw.expiry_precision);
@@ -240,6 +244,12 @@ function parseExpiry(value, precisionValue) {
   }
   const pattern = precision === "DAY" ? /^\d{4}-\d{2}-\d{2}$/ : precision === "MONTH" ? /^\d{4}-\d{2}$/ : /^\d{4}$/;
   if (!pattern.test(date)) throw stockError(422, "STOCK_CSV_EXPIRY_INVALID", "Validade CSV invalida.");
+  if (precision === "DAY") {
+    const parsed = new Date(`${date}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) throw stockError(422, "STOCK_CSV_EXPIRY_INVALID", "Validade CSV invalida.");
+  }
+  if (precision === "MONTH" && (Number(date.slice(5)) < 1 || Number(date.slice(5)) > 12)) throw stockError(422, "STOCK_CSV_EXPIRY_INVALID", "Validade CSV invalida.");
+  if (precision === "YEAR" && (Number(date) < 1900 || Number(date) > 9999)) throw stockError(422, "STOCK_CSV_EXPIRY_INVALID", "Validade CSV invalida.");
   return { date, precision };
 }
 
@@ -256,7 +266,7 @@ function parseAvailableSemantics(value, available) {
 function parseDecimal(value, field) {
   const text = String(value || "").trim();
   if (!text) return null;
-  if (!/^-?(?:0|[1-9]\d{0,29})(?:\.\d{1,6})?$/.test(text)) {
+  if (!/^(?:0|[1-9]\d{0,29})(?:\.\d{1,6})?$/.test(text)) {
     throw stockError(422, "STOCK_CSV_DECIMAL_INVALID", `${field} invalido.`);
   }
   return text;
@@ -265,6 +275,7 @@ function parseDecimal(value, field) {
 function parseOptionalTimestamp(value) {
   const text = String(value || "").trim();
   if (!text) return null;
+  if (!/(?:Z|[+-]\d{2}:?\d{2})$/.test(text)) throw stockError(422, "STOCK_CSV_TIMESTAMP_TIMEZONE_REQUIRED", "Timestamp de fonte precisa de timezone.");
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) throw stockError(422, "STOCK_CSV_TIMESTAMP_INVALID", "Timestamp de fonte invalido.");
   return date.toISOString();
@@ -273,6 +284,11 @@ function parseOptionalTimestamp(value) {
 function capabilityManifest(headers) {
   return {
     schemaVersion: STOCK_CSV_SCHEMA_VERSION,
+    // A manual CSV has no completeness/generation proof, so it is IMPORT only.
+    FULL_SNAPSHOT: false,
+    IMPORT_BATCH: true,
+    INCREMENTAL_CURSOR: false,
+    WEBHOOK_EVENTS: false,
     PRODUCT_IDENTITY: headers.has("source_product_id"),
     SOURCE_VERSION: headers.has("source_version"),
     LOT_IDENTIFIER: headers.has("source_lot_id") || headers.has("lot_code"),
@@ -285,6 +301,10 @@ function capabilityManifest(headers) {
     UNIT_OF_MEASURE: headers.has("unit"),
     SOURCE_UPDATED_AT: headers.has("source_updated_at"),
     READ_ONLY_ACCESS: true,
+    PAGINATION: false,
+    RATE_LIMIT_METADATA: false,
+    MOVEMENTS: false,
+    TOMBSTONES_DELETIONS: false,
   };
 }
 
@@ -336,7 +356,7 @@ function sha256(value) {
 function normalizeLimits(limits) {
   const result = { ...DEFAULT_LIMITS };
   for (const [key, value] of Object.entries(limits || {})) {
-    if (Number.isInteger(value) && value > 0) result[key] = value;
+    if (Number.isInteger(value) && value > 0 && Object.hasOwn(DEFAULT_LIMITS, key)) result[key] = Math.min(DEFAULT_LIMITS[key], Math.max(1, value));
   }
   return result;
 }

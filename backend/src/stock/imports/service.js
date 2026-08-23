@@ -1,5 +1,6 @@
 const { createFileCsvAdapter } = require("../adapters/fileCsv");
 const { createStockImportService: createStagingService } = require("./staging-service");
+const { stockEnabledForTenant } = require("../flags");
 
 function createStockImportService({
   prisma,
@@ -26,19 +27,7 @@ function createCanonicalApplier({ canonicalService, syncService }) {
 }
 
 function createStockFeatureGate(env = process.env) {
-  const globalEnabled = boolean(env.STOCK_DOMAIN_ENABLED) && boolean(env.STOCK_SOURCE_ENABLED);
-  const allowlist = new Set(
-    String(env.STOCK_TENANT_ALLOWLIST || "")
-      .split(",")
-      .map((item) => Number(item.trim()))
-      .filter((id) => Number.isInteger(id) && id > 0),
-  );
-  return async ({ empresaId }) => globalEnabled && allowlist.has(empresaId);
-}
-
-function boolean(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return normalized === "true" || normalized === "1";
+  return async ({ empresaId }) => stockEnabledForTenant(empresaId, env, { source: true });
 }
 
 module.exports = {

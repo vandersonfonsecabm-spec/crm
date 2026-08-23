@@ -31,6 +31,9 @@ test("FILE_IMPORT_CSV exige cabecalhos estritos, identidade explicita e metadado
     adapter.parsePreview({ input: "product_name,unit\nProduto,UN", delimiter: "comma" }),
     (error) => error.code === "STOCK_CSV_SOURCE_PRODUCT_ID_REQUIRED",
   );
+  const invalidExpiry = await adapter.parsePreview({ input: "source_product_id,unit,on_hand,expiry_date,expiry_precision\np-1,UN,1,2026-00,MONTH", delimiter: "comma" });
+  assert.equal(invalidExpiry.lines[0].status, "REJECTED");
+  assert.equal(invalidExpiry.lines[0].errors[0].code, "STOCK_CSV_EXPIRY_INVALID");
 });
 
 test("servico de importacao fica desligado por padrao antes de consultar Prisma", async () => {
@@ -120,7 +123,7 @@ test("preview, replay por idempotencia, confirmacao CAS e staging duravel nao pe
   assert.equal(replay.replayed, true);
   assert.equal(prisma.state.imports.length, 1);
 
-  const confirmed = await service.confirm({ empresaId: 1, importacaoId: first.importacao.id, actorUsuarioId: 100, expectedRevision: 1 });
+  const confirmed = await service.confirm({ empresaId: 1, importacaoId: first.importacao.id, actorUsuarioId: 100, expectedRevision: 1, allowPartial: true });
   assert.equal(confirmed.status, "PARTIAL");
   assert.equal(confirmed.syncRunId, 1);
   assert.equal(prisma.state.syncRuns[0].estado, "PARTIAL");
