@@ -6,7 +6,7 @@ const { stockError } = require("../shared/errors");
 const STOCK_CSV_SCHEMA_VERSION = "stock-csv.v1";
 const DEFAULT_LIMITS = Object.freeze({
   maxBytes: 5 * 1024 * 1024,
-  maxRows: 5_000,
+  maxRows: 500,
   maxColumns: 32,
   maxFieldCodePoints: 512,
   parseTimeoutMs: 30_000,

@@ -49,6 +49,13 @@ test("servico de importacao fica desligado por padrao antes de consultar Prisma"
   assert.equal(await createStockFeatureGate({ STOCK_DOMAIN_ENABLED: "true", STOCK_SOURCE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "1" })({ empresaId: 2 }), false);
 });
 
+test("CSV hard cap stays bounded even when a caller requests a larger limit", async () => {
+  const adapter = createFileCsvAdapter({ limits: { maxRows: 999999 } });
+  const rows = ["source_product_id,unit,on_hand"];
+  for (let index = 0; index < 501; index += 1) rows.push(`p-${index},UN,1`);
+  await assert.rejects(adapter.parsePreview({ input: rows.join("\n"), delimiter: "comma" }), (error) => error.code === "STOCK_CSV_ROWS_EXCEEDED");
+});
+
 test("preview, replay por idempotencia, confirmacao CAS e staging duravel nao persistem arquivo bruto", async () => {
   const prisma = memoryPrisma();
   const adapter = {

@@ -59,8 +59,8 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
     if (!live || (live.leaseExpiresAt && new Date(live.leaseExpiresAt).getTime() <= clock().getTime())) throw new StockError("STOCK_CONFLICT", "Lease da sincronizacao expirou.");
     const current = await tx.checkpointSincronizacaoEstoque.findFirst({ where: { empresaId, fonteId } });
     const data = { cursor: cursor ?? current?.cursor ?? null, sourceGeneration: generation ?? current?.sourceGeneration ?? null, revision: { increment: 1 }, updatedAt: clock() };
-    if (mode === "FULL" || mode === "IMPORT") data.lastFullSnapshotAt = clock();
-    else data.lastIncrementalSyncAt = clock();
+    if (mode === "FULL") data.lastFullSnapshotAt = clock();
+    else if (["DELTA", "WEBHOOK"].includes(mode)) data.lastIncrementalSyncAt = clock();
     data.lastSuccessfulSyncAt = clock();
     if (!current) return tx.checkpointSincronizacaoEstoque.create({ data: { empresaId, fonteId, cursor: data.cursor, sourceGeneration: data.sourceGeneration, lastSuccessfulSyncAt: data.lastSuccessfulSyncAt, lastFullSnapshotAt: data.lastFullSnapshotAt || null, lastIncrementalSyncAt: data.lastIncrementalSyncAt || null, revision: 1 } });
     const result = await tx.checkpointSincronizacaoEstoque.updateMany({ where: { id: current.id, empresaId, revision: current.revision }, data });

@@ -374,18 +374,6 @@ function writeAudit(tx, { empresaId, actorUsuarioId, action, correlationId, afte
   });
 }
 
-async function writeCapabilities(tx, { empresaId, fonteId, manifest, observedAt }) {
-  if (!tx.capacidadeFonteEstoque) return;
-  for (const [codigo, value] of Object.entries(manifest || {})) {
-    if (codigo === "schemaVersion" || codigo === "IMPORT_BATCH") continue;
-    const versao = STOCK_CSV_SCHEMA_VERSION;
-    const current = await tx.capacidadeFonteEstoque.findFirst({ where: { empresaId, fonteId, codigo, versao } });
-    const data = { suportada: Boolean(value), semanticaJson: JSON.stringify({ source: "FILE_IMPORT_CSV", headerDerived: true }), observadaEm: observedAt };
-    if (current) await tx.capacidadeFonteEstoque.update({ where: { id: current.id }, data });
-    else await tx.capacidadeFonteEstoque.create({ data: { empresaId, fonteId, codigo, versao, ...data } });
-  }
-}
-
 async function lockTenantQuota(tx, empresaId) {
   if (typeof tx?.$executeRawUnsafe !== "function") return;
   const id = Number(empresaId);
