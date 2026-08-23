@@ -18,6 +18,7 @@ function createStockImportService({
   adapter = createStockCsvAdapter(),
   featureGate = async () => false,
   applyAcceptedRows = null,
+  syncService = null,
   clock = () => new Date(),
   previewTtlMs = DEFAULT_PREVIEW_TTL_MS,
   retentionMs = DEFAULT_RETENTION_MS,
@@ -73,6 +74,7 @@ function createStockImportService({
 
     try {
       const created = await prisma.$transaction(async (tx) => {
+        await lockTenantQuota(tx, empresaId);
         await assertQuota({ empresaId, actorUsuarioId, db: tx });
         const importacao = await tx.importacaoEstoque.create({
           data: {
@@ -110,7 +112,6 @@ function createStockImportService({
             revision: 1,
           })),
         });
-        await writeCapabilities(tx, { empresaId, fonteId, manifest: parsed.capabilities, observedAt: now });
         await writeAudit(tx, {
           empresaId,
           actorUsuarioId,
@@ -238,6 +239,9 @@ function createStockImportService({
       }
       const appliedCount = appliedIds.length;
       const finalStatus = appliedCount === acceptedLines.length && working.rejectedCount === 0 ? "APPLIED" : "PARTIAL";
+      if (finalStatus === "APPLIED" && syncService?.advanceCheckpoint) {
+        await syncService.advanceCheckpoint({ tx, empresaId, fonteId: working.fonteId, run: syncRun, cursor: working.fileHash, generation: working.fileHash, mode: "IMPORT" });
+      }
       await tx.execucaoSincronizacaoEstoque.update({
         where: { id: syncRun.id },
         data: {
@@ -380,6 +384,11 @@ async function writeCapabilities(tx, { empresaId, fonteId, manifest, observedAt 
     if (current) await tx.capacidadeFonteEstoque.update({ where: { id: current.id }, data });
     else await tx.capacidadeFonteEstoque.create({ data: { empresaId, fonteId, codigo, versao, ...data } });
   }
+}
+
+async function lockTenantQuota(tx, empresaId) {
+  if (typeof tx?.$executeRawUnsafe !== "function") return;
+  await tx.$executeRawUnsafe('UPDATE "Empresa" SET "updatedAt" = "updatedAt" WHERE "id" = ?', empresaId);
 }
 
 function normalizeAppliedIds(value, acceptedLines) {

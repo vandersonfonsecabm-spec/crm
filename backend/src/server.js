@@ -78,7 +78,8 @@ app.use(siteLeadBodyLimit);
 // legacy 100 KiB parser does not reject valid source-ready imports first.
 app.use(express.json({
   limit: "100kb",
-  type: (req) => !req.path.startsWith("/estoque/importacoes/preview"),
+  type: (req) => !req.path.startsWith("/estoque/importacoes/preview")
+    && /^application\/(?:json|[A-Za-z0-9.+-]+\+json)(?:;|$)/i.test(String(req.headers["content-type"] || "")),
 }));
 mountSiteLeadPublicRoutes({ app, prisma });
 app.use(

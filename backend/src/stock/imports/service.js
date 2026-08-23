@@ -16,6 +16,7 @@ function createStockImportService({
     prisma,
     adapter,
     clock,
+    syncService,
     applyAcceptedRows: applier,
     featureGate: createStockFeatureGate(env),
   });

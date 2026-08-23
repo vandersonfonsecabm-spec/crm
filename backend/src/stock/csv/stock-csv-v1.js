@@ -6,7 +6,7 @@ const { stockError } = require("../shared/errors");
 const STOCK_CSV_SCHEMA_VERSION = "stock-csv.v1";
 const DEFAULT_LIMITS = Object.freeze({
   maxBytes: 5 * 1024 * 1024,
-  maxRows: 50_000,
+  maxRows: 5_000,
   maxColumns: 32,
   maxFieldCodePoints: 512,
   parseTimeoutMs: 30_000,
@@ -36,6 +36,7 @@ const SENSITIVE_HEADER = /(?:password|token|secret|authorization|cpf|cnpj|email|
 const AVAILABLE_SEMANTICS = new Set(["EXPLICIT", "DERIVED_ON_HAND_MINUS_RESERVED", "UNAVAILABLE", "UNKNOWN"]);
 const EXPIRY_PRECISIONS = new Set(["DAY", "MONTH", "YEAR", "UNKNOWN"]);
 const QUANTITY_FIELDS = ["on_hand", "reserved", "available", "quarantined", "damaged", "in_transit"];
+const KNOWN_UNITS = new Set(["UN", "KG", "L", "SC", "TON", "ML", "G", "M", "CM", "M2", "M3"]);
 
 function createStockCsvAdapter({ limits = {}, clock = () => Date.now() } = {}) {
   const effectiveLimits = normalizeLimits(limits);
@@ -192,6 +193,7 @@ function normalizeLine(raw, rowNumber) {
     if (quantities.on_hand === null) throw stockError(422, "STOCK_CSV_ON_HAND_REQUIRED", "on_hand explicito obrigatorio; ausencia nao significa zero.");
     const unit = optionalText(raw.unit, 32);
     if (hasQuantity && !unit) throw stockError(422, "STOCK_CSV_UNIT_REQUIRED", "Unidade obrigatoria quando houver quantidade.");
+    if (unit && !KNOWN_UNITS.has(unit.toUpperCase())) throw stockError(422, "STOCK_CSV_UNIT_UNSUPPORTED", "Unidade CSV nao suportada.");
     const expiry = parseExpiry(raw.expiry_date, raw.expiry_precision);
     const availableSemantics = parseAvailableSemantics(raw.available_semantics, quantities.available);
     const normalized = {

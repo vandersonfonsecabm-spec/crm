@@ -20,6 +20,7 @@ test("E2 routes are exact and mounted before legacy 410 middleware", () => {
   assert.ok(server.indexOf("mountStockRoutes") < server.indexOf("legacyInventoryUnavailable"));
   assert.match(server, /app\.use\(\s*\[\"\/categorias-produtos\", \"\/produtos\", \"\/estoque\"\]/);
   assert.match(server, /express\.json\(\{[\s\S]*type: \(req\) => !req\.path\.startsWith\("\/estoque\/importacoes\/preview"\)/);
+  assert.match(server, /content-type/);
   assert.match(fs.readFileSync(path.join(__dirname, "..", "src", "stock", "routes.js"), "utf8"), /sourceGuardRoleLarge[\s\S]*express\.json\(\{ limit: "6mb"/);
   const stockFiles = fs.readdirSync(path.join(__dirname, "..", "src", "stock"), { recursive: true }).filter((name) => String(name).endsWith(".js"));
   for (const file of stockFiles) {

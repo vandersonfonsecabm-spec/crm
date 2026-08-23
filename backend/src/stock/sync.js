@@ -14,6 +14,9 @@ const TRANSITIONS = Object.freeze({
 
 function createStockSyncService({ prisma, canonicalService, adapterRegistry = new Map(), clock = () => new Date(), env = process.env, logger = console } = {}) {
   if (!prisma || !canonicalService) throw new Error("prisma e canonicalService obrigatorios");
+  function assertSyncEnabled(empresaId) {
+    if (!stockEnabledForTenant(empresaId, env, { source: true })) throw new StockError("STOCK_DISABLED", "Sincronizacao de estoque indisponivel.");
+  }
 
   async function createRun({ empresaId, fonteId, modo = "IMPORT", actorUsuarioId, correlationId, snapshotGeneration = null, importacaoId = null }) {
     assertSyncEnabled(empresaId);
@@ -125,6 +128,3 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
 }
 
 module.exports = { createStockSyncService, TRANSITIONS };
-  function assertSyncEnabled(empresaId) {
-    if (!stockEnabledForTenant(empresaId, env, { source: true })) throw new StockError("STOCK_DISABLED", "Sincronizacao de estoque indisponivel.");
-  }
