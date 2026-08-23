@@ -348,6 +348,27 @@ test("reload sem access token restaura a sessao pelo cookie valido", async (t) =
   assert.match(app, /if \(!getAuthSession\(\)\) await refreshAuthSession\(\);/);
 });
 
+test("produção encaminha auth pelo mesmo host antes do fallback da SPA", async () => {
+  const [apiSource, vercelConfigSource] = await Promise.all([
+    source("src/services/crmApi.ts"),
+    source("vercel.json"),
+  ]);
+  const [vercelConfig, rootVercelConfig] = [JSON.parse(vercelConfigSource), JSON.parse(await source("../vercel.json"))];
+
+  assert.match(apiSource, /runtimeEnv\?\.PROD \? "\/api" : configuredApiUrl \|\| "http:\/\/localhost:3001"/);
+  assert.deepEqual(vercelConfig.rewrites.slice(0, 2), [
+    {
+      source: "/api/:path*",
+      destination: "https://api-production-875f9.up.railway.app/:path*",
+    },
+    {
+      source: "/(.*)",
+      destination: "/index.html",
+    },
+  ]);
+  assert.deepEqual(rootVercelConfig.rewrites.slice(0, 2), vercelConfig.rewrites.slice(0, 2));
+});
+
 test("falha transitória no reload preserva retry e oferece retorno local ao login", async () => {
   const app = await source("src/App.tsx");
 

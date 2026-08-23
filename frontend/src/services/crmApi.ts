@@ -3,7 +3,9 @@ import { isAuthRefreshCoordinationError, runAuthRefreshSingleFlight } from "./au
 
 const runtimeEnv = import.meta.env as ImportMetaEnv | undefined;
 const configuredApiUrl = runtimeEnv?.VITE_API_URL?.trim();
-const API_URL = configuredApiUrl || (runtimeEnv?.PROD ? "" : "http://localhost:3001");
+// In production, keep refresh and access requests on the CRM origin. The Vercel
+// rewrite proxies /api to the backend so the HttpOnly refresh cookie is first-party.
+const API_URL = runtimeEnv?.PROD ? "/api" : configuredApiUrl || "http://localhost:3001";
 const LEGACY_TOKEN_KEY = "crm-auth-token";
 const USER_KEY = "crm-auth-user";
 const COMPANY_KEY = "crm-auth-company";

@@ -2,6 +2,20 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Produção: API e sessão
+
+Em produção, o cliente chama a API pelo prefixo same-origin `/api`. A primeira
+regra de rewrite em `vercel.json` encaminha esse prefixo ao backend oficial
+antes do fallback da SPA. Assim, o cookie HttpOnly de refresh é emitido no host
+do CRM e pode restaurar a sessão após reload, sem gravar access token em
+`localStorage` ou `sessionStorage`.
+
+Após a publicação dessa mudança, usuários com cookie emitido no host anterior
+precisam entrar uma vez; os próximos reloads usam o cookie do host do CRM. A
+validação de release deve confirmar no DevTools que login e refresh usam
+`/api/auth/*`, retornam `Set-Cookie` e que um reload em rota protegida mantém a
+sessão. Não registrar nem copiar valores de cookies durante essa verificação.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
