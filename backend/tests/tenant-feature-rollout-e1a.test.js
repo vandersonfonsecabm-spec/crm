@@ -55,6 +55,7 @@ test("E1A combina kill switch global e liberacao tenant sem vazamento", async ()
     whatsappOutbound: false,
     messengerIntegration: false,
     messengerInbound: false,
+    aiCommerce: false,
   });
   assert.equal((await authRequest("GET", "/leads", undefined, pilot.token)).status, 404);
   assert.equal((await authRequest("GET", "/canais/site-form", undefined, pilot.token)).status, 404);
@@ -74,6 +75,7 @@ test("E1A combina kill switch global e liberacao tenant sem vazamento", async ()
     whatsappOutbound: false,
     messengerIntegration: false,
     messengerInbound: false,
+    aiCommerce: false,
   });
   assert.deepEqual(controlCapabilities.body.capabilities, {
     leadsCommunication: false,
@@ -85,6 +87,7 @@ test("E1A combina kill switch global e liberacao tenant sem vazamento", async ()
     whatsappOutbound: false,
     messengerIntegration: false,
     messengerInbound: false,
+    aiCommerce: false,
   });
   assert.equal((await authRequest("GET", "/leads", undefined, pilot.token)).status, 200);
   assert.equal((await authRequest("GET", "/leads", undefined, control.token)).status, 404);

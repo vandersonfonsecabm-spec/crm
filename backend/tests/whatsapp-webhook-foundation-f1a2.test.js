@@ -223,7 +223,7 @@ test("parser raw fica isolado e regressao JSON, health, Site Form e gate ADMIN p
 
   const serverSource = fs.readFileSync(path.join(backendDir, "src", "server.js"), "utf8");
   const mountPosition = serverSource.indexOf("mountWhatsAppWebhookRoutes({ app, processWebhook:");
-  const jsonPosition = serverSource.indexOf("app.use(express.json())");
+  const jsonPosition = serverSource.indexOf("app.use(express.json");
   assert.ok(mountPosition > 0 && mountPosition < jsonPosition);
   assert.equal(serverSource.match(/mountWhatsAppWebhookRoutes\(\{ app, processWebhook:/g)?.length, 1);
 });

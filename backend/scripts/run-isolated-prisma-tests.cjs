@@ -23,7 +23,7 @@ const command = process.argv.slice(2);
 const metaSandboxOnly = command[0] === "meta-suite";
 const expectedHash = "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533";
 const expectedSize = 1282048;
-const expectedMigrationCount = 37;
+const expectedMigrationCount = 39;
 const historicalMigrationCount = 9;
 const prismaCli = resolvePrismaCli();
 const prismaConfigModule = require.resolve("prisma/config", { paths: [backendDir] });
@@ -267,6 +267,8 @@ async function runTenantGate(mode, env, schemaPath, migrationsDir, migrationName
 
 function runNode(args, cwd, env, logicalCommand) {
   const capturePrisma = logicalCommand.startsWith("Prisma");
+  const captureTest = logicalCommand.startsWith("Teste Node");
+  if (captureTest) console.error(`[isolated-prisma] START ${logicalCommand}`);
   let result;
   try {
     result = spawnSync(process.execPath, args, {
@@ -276,12 +278,14 @@ function runNode(args, cwd, env, logicalCommand) {
       encoding: capturePrisma ? "utf8" : undefined,
       windowsHide: true,
       shell: false,
+      timeout: captureTest ? 60000 : undefined,
     });
   } finally {
     assertProtectedDatabases();
   }
   if (result.error) {
     if (capturePrisma) throw createPrismaFailure(logicalCommand, result.error.message);
+    if (result.error.code === "ETIMEDOUT") throw new Error(`${logicalCommand} excedeu o limite de 60000ms.`);
     throw new Error(`${logicalCommand} nao iniciou.`);
   }
   if (!Number.isInteger(result.status)) {

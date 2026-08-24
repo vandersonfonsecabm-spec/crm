@@ -161,6 +161,7 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
     whatsappOutbound: false,
     messengerIntegration: false,
     messengerInbound: false,
+    aiCommerce: false,
   });
 
   const adminC = await registerAndLogin("Empresa WhatsApp Credencial", "Admin WhatsApp Credencial", "admin-c@whatsapp-f1a1.test");

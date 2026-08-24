@@ -14,9 +14,10 @@ const {
 
 const backendDirectory = path.resolve(__dirname, "..");
 const sourcePrismaDirectory = path.join(backendDirectory, "prisma");
-const pendingMigrationName = "20260823200000_add_stock_rules_h8_projection";
-const currentMigrationCount = fs.readdirSync(path.join(sourcePrismaDirectory, "migrations"), { withFileTypes: true })
-  .filter((entry) => entry.isDirectory()).length;
+const migrationNames = fs.readdirSync(path.join(sourcePrismaDirectory, "migrations"), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+const pendingMigrationName = migrationNames.at(-1);
+const currentMigrationCount = migrationNames.length;
 const testServiceId = "railway-service-test";
 
 test("validate-runtime falha fechado quando Railway nao declara production", () => {

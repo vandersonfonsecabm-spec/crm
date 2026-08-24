@@ -369,7 +369,7 @@ test("Site, entidades fora do fluxo, privacidade e ausencia de rede permanecem p
 
   const serverSource = fs.readFileSync(path.join(__dirname, "..", "src", "server.js"), "utf8");
   const mountPosition = serverSource.indexOf("createWhatsAppWebhookOrchestrator({ prisma })");
-  const jsonPosition = serverSource.indexOf("app.use(express.json())");
+  const jsonPosition = serverSource.indexOf("app.use(express.json");
   assert.ok(mountPosition > 0 && mountPosition < jsonPosition);
   assert.equal(serverSource.match(/createWhatsAppWebhookOrchestrator\(\{ prisma \}\)/g)?.length, 1);
 });
