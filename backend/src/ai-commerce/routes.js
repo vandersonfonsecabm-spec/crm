@@ -4,6 +4,7 @@ const express = require("express");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
 const { MODES, normalizeMode } = require("./policy");
 const { MockCommerceAIConnection, UnconfiguredCommerceAIConnection } = require("./connection");
+const { TOOL_NAMES } = require("./tools");
 
 function mountAICommerceRoutes({
   app,
@@ -125,6 +126,7 @@ function normalizeSettings(body = {}) {
   if (unknown.length) throw routeError("AI_SETTINGS_FIELDS_INVALID", "Campos de configuracao nao permitidos.", 422);
   const mode = normalizeMode(body.mode);
   const allowedTools = Array.isArray(body.allowedTools) ? body.allowedTools.map((item) => String(item).slice(0, 80)).slice(0, 8) : [];
+  if (allowedTools.some((name) => !TOOL_NAMES.includes(name))) throw routeError("AI_SETTINGS_TOOL_INVALID", "Ferramenta nao autorizada na configuracao.", 422);
   if (body.enabled !== undefined && typeof body.enabled !== "boolean") throw routeError("AI_SETTINGS_INVALID", "enabled deve ser booleano.", 422);
   return {
     enabled: body.enabled === true && mode !== MODES.OFF,
