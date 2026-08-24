@@ -2,8 +2,8 @@
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 POST_STOCK_RUNTIME_BASE_SHA=a1232a195795912d0a900d51edfcc5f12d4b8955
-AI_COMMERCE_SOURCE_COMMIT=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
-AI_COMMERCE_RUNTIME_SHA=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
+AI_COMMERCE_SOURCE_COMMIT=a45eba71aede67546cf1459b0955e80e6586bff9
+AI_COMMERCE_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
 
 CURRENT_STATE_AS_OF=2026-08-24
 MISSION_MODE=IMPLEMENTATION_WITH_SAFE_GATES
@@ -23,6 +23,6 @@ CURRENT_AI_IMPLEMENTATION=NONE_FOUND
 
 PRODUCTION_SCOPE=OFF_ONLY
 - A separate exact confirmation was provided for backup, migration and deploy.
-  Those gates passed with AI OFF. No tenant AI activation, Mock canary or
-  outbound was authorized/executed because no authenticated controlled-tenant
-  session was available.
+  Those gates passed with AI OFF. The API Mock canary was later executed only
+  for controlled tenant 1 and fully reverted; browser visual QA remains
+  blocked by the login gate.

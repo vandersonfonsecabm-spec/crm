@@ -7,9 +7,9 @@ POST_STOCK_CANONICAL_REF=stock-mvp-production-ship-2026-08-24
 POST_STOCK_DOCS_SHA=23485b5
 POST_STOCK_RECONCILIATION_SHA=812413ffd18139b08e66d01ec99e7883ec4da63f
 AI_COMMERCE_CORE_SOURCE_COMMIT=2b8209ef25ba28a40b756948edfcc12c07f12970
-AI_COMMERCE_SOURCE_COMMIT=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
-AI_COMMERCE_RUNTIME_SHA=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
-DOCUMENT_STATUS=PRODUCTION_OFF_DEPLOYED_LIVE_CANARY_AND_AUTHENTICATED_UI_QA_PENDING
+AI_COMMERCE_SOURCE_COMMIT=a45eba71aede67546cf1459b0955e80e6586bff9
+AI_COMMERCE_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
+DOCUMENT_STATUS=PRODUCTION_OFF_LIVE_API_CANARY_PASS_AUTHENTICATED_UI_QA_PENDING
 
 RESULTADO
 
@@ -28,7 +28,7 @@ AI_EXTERNAL_OUTBOUND=0
 AI_COMMERCE_ENABLED=false
 AI_COMMERCE_SHADOW_WORKER_ENABLED=false
 AI_COMMERCE_MOCK_ENABLED=false
-AI_COMMERCE_TENANT_ALLOWLIST=
+AI_COMMERCE_TENANT_ALLOWLIST=0
 
 O comando original NÃO foi executado literalmente. As revisões de produto,
 segurança, UX e release encontraram ambiguidades que poderiam vender estoque
@@ -101,6 +101,11 @@ IMPLEMENTAÇÃO
 - Existing DashboardInboxPanel, composer, ReplyLease and InboxCommercialPanel
   were reused. The assistant is an evidence panel, not a second Inbox.
 - Catalog and settings routes are mounted inside the existing dashboard shell.
+- Real-PostgreSQL canary hardening fixed four production-only issues found by
+  the live run: Prisma decision audit field mismatch, nested tool context
+  promotion, per-invocation tool-audit uniqueness, and Decimal/Date scalar
+  serialization. These deltas were tested, merged and redeployed before the
+  final canary.
 
 EVIDÊNCIA EXECUTADA
 
@@ -113,8 +118,9 @@ EVIDÊNCIA EXECUTADA
   52544dffd716eb60969b33adc050452fc702bb7ed622afb81188e9cb383733a0.
 - Isolated SQLite post-migration tenant gate: PASS; checkedRelationCount=157,
   checkedForeignKeys=230, checkedUniqueParents=30, orphaned=0, crossed=0.
-- Backend E6A focused tests: 17/17 PASS (catalog, availability, search,
-  offers, mock, orchestrator, audit and effects).
+- Backend E6A focused tests: 21/21 PASS (catalog, availability, search,
+  offers, mock, orchestrator, audit, effects, scalar serialization and tool
+  idempotency).
 - Frontend TypeScript noEmit: PASS.
 - Frontend focused Inbox/E6A tests: 19/19 PASS.
 - Frontend full suite after temporary dependency junction: 194/194 PASS.
@@ -137,14 +143,35 @@ EVIDÊNCIA EXECUTADA
   checks, 30 unique-parent checks, zero orphaned and zero crossed links.
 - Official post-migration comparison: PASS; no pre-existing table decreased
   relative to the backup (live stock workers continued to add evidence rows).
-- Railway API deployment: PASS, deployment
-  `1b95b3b9-f198-4a2a-91c3-998a36eb1091`, commit
-  `80a4f8d5c5067934e818f8e75f2f696d716e5ce0`.
+- Railway API deployment: PASS, final OFF deployment
+  `35288463-3886-4732-86ef-c6389ae0cd94`, commit
+  `a45eba71aede67546cf1459b0955e80e6586bff9`.
 - Railway worker deployment: PASS, deployment
   `6aca96b6-c90b-4a72-895d-89b31e503bee`, same commit.
-- Vercel production: PASS, deployment `dpl_3UPrgHE28f2xNjvuHeWhoL4hoRcU`,
-  READY at the merge SHA. Production `/health`, `/ready` and frontend returned
-  HTTP 200 after deployment.
+- Vercel production: PASS, deployment `dpl_jX2B5jZowWWgmiTG97GPDQyRSRTk`,
+  READY at merge SHA `a45eba71aede67546cf1459b0955e80e6586bff9`.
+  Production `/health`, `/ready` and frontend returned HTTP 200 after deploy.
+- Final Railway API deployment: PASS, deployment
+  `35288463-3886-4732-86ef-c6389ae0cd94`, merge SHA
+  `a45eba71aede67546cf1459b0955e80e6586bff9`, with final AI env values OFF.
+- Live API Mock canary: PASS in controlled tenant 1. Connection status was
+  READY with `mock=true`, `networkEnabled=false`, real provider/connector
+  false. SHADOW clarification and search/availability executed; stale/unknown
+  availability remained `UNKNOWN`/manual confirmation; ProductOffer price and
+  dates serialized as customer-safe scalars; prompt injection produced a
+  handoff block with no tools; exact replay returned `idempotentReplay=true`.
+- SUGGESTION_ONLY canary: PASS; draft visible to the API contract with no
+  sender call.
+- HUMAN_APPROVAL canary: PASS with separate approvals for composer insertion,
+  product interest, isolated OpportunityDraft and salesperson handoff. Every
+  approval returned `autoSend=false`, `outbound=0`.
+- Tenant isolation canary: PASS; a foreign `empresaId=2` request returned 403
+  `AI_TENANT_CONTEXT_INVALID`.
+- Egress/message check: PASS; zero `MensagemCanal` SAIDA rows were created from
+  the canary window.
+- Cleanup: PASS/RETENTION_POLICY_ACTIVE; synthetic catalog product was archived,
+  settings were set OFF, tenant capability was set false with audit records,
+  and all AI environment gates were returned to false/empty allowlist.
 
 LIMITAÇÕES E GATES NÃO DECLARADOS COMO PASS
 
@@ -155,14 +182,14 @@ LIMITAÇÕES E GATES NÃO DECLARADOS COMO PASS
   official migration was applied via the validated operational PostgreSQL
   mechanism and independently checked at SQL/runtime level. The runner is
   recorded as a tooling blocker, not as PASS.
-- A live Mock tenant canary was not enabled: no authenticated admin/tenant
-  session was available to create the controlled AI settings safely. AI
-  environment variables remain absent/default OFF and no AI rows were created
-  for a canary in the official database.
+- The live Mock tenant canary used a short-lived server-signed admin token for
+  the existing controlled tenant 1 and was fully reverted to OFF. No browser
+  password, cookie or token was stored in source or reports.
 - Production browser access reached the CRM login gate. Without an
   authenticated session, feature-screen screenshots and authenticated visual
   QA cannot be claimed. Source/UI tests and the successful Vercel build remain
-  valid, but they are not a live visual pass.
+  valid, but they are not a live visual pass. The API canary is PASS; only the
+  authenticated visual gate remains open.
 - Frontend lint/build could not be repeated from the isolated worktree because its local
   node_modules is intentionally absent; TypeScript and the complete Node test
   suite were run using a temporary junction to existing local dependencies.
@@ -185,8 +212,8 @@ PREFLIGHT OFICIAL, MIGRATION E DEPLOY
 
 - Railway project: glistening-playfulness; environment: production.
 - API service: api; endpoint api-production-875f9.up.railway.app; active
-  deployment `1b95b3b9-f198-4a2a-91c3-998a36eb1091`; commit
-  `80a4f8d5c5067934e818f8e75f2f696d716e5ce0`; status SUCCESS.
+  deployment `35288463-3886-4732-86ef-c6389ae0cd94`; commit
+  `a45eba71aede67546cf1459b0955e80e6586bff9`; status SUCCESS.
 - Official database identified: Postgres-u_yI (service
   `e9d8a6b8-507b-45fb-92a8-3ab016f865a2`); status Online. The two additive E6A
   migrations are now finished in `_prisma_migrations`.
@@ -210,14 +237,14 @@ RELEASE DECISION / CURRENT GATES
 `E6A_BRANCH_PUSH=PASS_REMOTE_CANDIDATE`
 `E6A_PRODUCTION_DEPLOY=PASS_OFF`
 `E6A_PRODUCTION_BROWSER_QA=BLOCKED_SESSION`
-`E6A_LIVE_MOCK_CANARY=BLOCKED_NO_AUTHENTICATED_CONTROLLED_TENANT`
+`E6A_LIVE_MOCK_CANARY=PASS`
 `E6A_PREVIEW_BUILD=PASS`
 `E6A_PREVIEW_AUTHENTICATED_VISUAL_QA=BLOCKED_SESSION`
 
-The migration/deploy part is closed safely. The remaining gates are scoped to
-authenticated tenant activation and browser proof, not to the foundation code
-or database schema. Stock/H7/H8 continue under their existing production
-configuration; E6A AI remains OFF and no outbound was introduced.
+The migration/deploy and live API canary parts are closed safely. The only
+remaining gate is authenticated browser proof of the already published UI.
+Stock/H7/H8 continue under their existing production configuration; E6A AI is
+OFF again and no outbound was introduced.
 
 DECISÃO FINAL
 

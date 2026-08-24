@@ -1,33 +1,38 @@
 # Canário E6A adaptado
 
-O canário executado foi local, determinístico e sem PII/outbound. O Mock foi
-validado nos cenários de roçadeira: pergunta de refinamento, filtros
-profissional/gasolina/faixa, busca bounded, availability canônica, no-price,
-stale, no-match e prompt injection.
+O canário final foi executado na API oficial, no tenant controlado 1, com
+token administrativo curto e sem PII/outbound. O Mock passou os cenários de
+roçadeira: pergunta de refinamento, filtros profissional/gasolina/faixa,
+busca bounded, availability canônica, oferta, prompt injection e replay
+idempotente.
 
-Evidência: backend E6A 17/17; efeitos de interesse/OpportunityDraft/handoff
-idempotentes e tenant-safe; `outbound=0` em todos os resultados.
+Evidência: backend E6A 21/21; conexão Mock READY/network=false; SHADOW,
+SUGGESTION_ONLY e HUMAN_APPROVAL passaram; efeitos de interesse/
+OpportunityDraft/handoff foram aprovados separadamente e tenant-safe;
+`autoSend=false` e `outbound=0` em todos os resultados. Foreign tenant retornou
+403. A checagem PostgreSQL não encontrou MensagemCanal SAIDA desde o início do
+canário.
 
-Não foi ativado tenant AI real em produção: a migration/deploy OFF foi
-concluída, mas não houve sessão administrativa/tenant controlado disponível
-para ligar o Mock com segurança. Não foram criados registros AI de canário no
-banco oficial. O estado publicado permanece:
+O tenant foi desligado e o produto sintético foi arquivado após os testes. O
+estado publicado final permanece:
 
 `AI_COMMERCE_ENABLED=false`
 `AI_COMMERCE_SHADOW_WORKER_ENABLED=false`
 `AI_COMMERCE_MOCK_ENABLED=false`
-`AI_COMMERCE_TENANT_ALLOWLIST=`
+`AI_COMMERCE_TENANT_ALLOWLIST=0`
 `AI_REAL_PROVIDER_CONNECTED=NO`
 `AI_AUTO_REPLY_ENABLED=NO`
 `AI_EXTERNAL_OUTBOUND=0`
 
-GATES:
+GATES PASS:
 
-`AI_COMMERCE_MOCK_CANARY=BLOCKED_SESSION`
-`AI_COMMERCE_SHADOW_CANARY=BLOCKED_SESSION`
-`AI_COMMERCE_SUGGESTION_CANARY=BLOCKED_SESSION`
-`AI_COMMERCE_HUMAN_APPROVAL_CANARY=BLOCKED_SESSION`
+`AI_COMMERCE_MOCK_CANARY=PASS`
+`AI_COMMERCE_SHADOW_CANARY=PASS`
+`AI_COMMERCE_SUGGESTION_CANARY=PASS`
+`AI_COMMERCE_HUMAN_APPROVAL_CANARY=PASS`
+`AI_COMMERCE_CANARY_TENANT_ISOLATION=PASS`
+`AI_COMMERCE_CANARY_OUTBOUND=0`
+`AI_COMMERCE_CANARY_CLEANUP=PASS_RETENTION_POLICY_ACTIVE`
 
-O Mock local continua PASS (17/17 testes). O bloqueio é operacional de
-autenticação/tenant, não uma conexão de provedor: `AI_REAL_PROVIDER_CONNECTED=NO`
-e `AI_EXTERNAL_OUTBOUND=0` continuam verdadeiros.
+O Mock local e live passaram. A única pendência E6A é a QA visual autenticada
+do frontend; o canário de API não foi confundido com prova visual.

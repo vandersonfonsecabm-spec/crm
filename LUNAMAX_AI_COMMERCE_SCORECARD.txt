@@ -11,11 +11,11 @@ SQLITE REHEARSAL: PASS
 PRISMA OFFICIAL RUNNER: BLOCKED_GENERIC_ENGINE_ERROR
 POSTGRES OFFICIAL MIGRATION: PASS_ADDITIVE (157/157 tenant/FK gate)
 PRODUCTION DEPLOY: PASS_OFF (Railway API/worker + Vercel merge SHA)
-LIVE CANARY: BLOCKED_SESSION (no authenticated controlled tenant)
+LIVE CANARY: PASS (tenant 1 API Mock + granular HITL)
 PRODUCTION VISUAL QA: BLOCKED_SESSION (login gate; no authenticated screen)
 FINAL STATE: OFF / FOUNDATION READY
 
-SCORE=FOUNDATION_OFF_DEPLOYED_WITH_CANARY_AND_VISUAL_GATES_OPEN
+SCORE=FOUNDATION_OFF_DEPLOYED_LIVE_API_CANARY_PASS_VISUAL_GATE_OPEN
 
 The command had strong guardrails but was not executable literally. The major
 improvements were canonical stock authority, isolated opportunity drafts,

@@ -15,8 +15,10 @@ are tenant/conversation/idempotent; existing Inbox/composer/lease are reused.
 Official logical backup, isolated restore/rehearsal, additive PostgreSQL
 migration, Railway API/worker deploy, Vercel production deploy and post-deploy
 health are PASS. The Prisma generic runner remains BLOCKED before execution,
-and live Mock canary/authenticated visual QA remain BLOCKED_SESSION because no
-controlled admin session was available. Deployment metadata records exact
-merge-SHA parity for the current release. Do not rename this verdict to a live
-autonomous seller: AI remains OFF, no real provider is connected, and outbound
-is zero.
+while the operational PostgreSQL mechanism is evidenced separately. Live Mock
+API canary is PASS: SHADOW, SUGGESTION_ONLY, granular HUMAN_APPROVAL, tenant
+isolation, idempotency, and zero outbound. Authenticated visual QA remains
+BLOCKED_SESSION because the browser opens the login gate. Deployment metadata
+records exact merge-SHA parity for the current release. Do not rename this
+verdict to a live autonomous seller: AI is OFF again, no real provider is
+connected, and outbound is zero.

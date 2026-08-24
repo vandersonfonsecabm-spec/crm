@@ -30,11 +30,13 @@ fictícia de provedores.
 `AI_COMMERCE_PRODUCTION_VISUAL_QA=BLOCKED_SESSION`
 `AI_COMMERCE_SOURCE_UI_CONTRACTS=PASS`
 `AI_COMMERCE_VERCEL_BUILD=PASS`
+`AI_COMMERCE_LIVE_API_CANARY=PASS`
 
 Viewports de produção não foram declarados aprovados (1440/1366/1024/900/390/
 1920) porque a sessão não permitiu chegar ao shell autenticado. A próxima
 verificação segura é entrar com uma conta já autorizada e repetir apenas essas
-dimensões, sem ativar IA real ou outbound.
+dimensões, sem ativar IA real ou outbound. O canário API já passou
+independentemente da prova visual.
 
 Frontend lint isolado ficou BLOCKED por ausência intencional de node_modules no
 worktree; não foi mascarado como PASS.

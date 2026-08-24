@@ -8,7 +8,8 @@ Rollback lógico, sem down migration:
 4. limpar allowlist tenant;
 5. cancelar runs pendentes e rejeitar drafts por revisão/CAS;
 6. preservar audit/idempotency;
-7. voltar ao runtime anterior identificável `a1232a1`/tag stock;
+7. voltar ao runtime anterior identificável no histórico Railway/Vercel
+   (último E5R ou `a1232a1`/tag stock);
 8. manter schema aditivo e H7/H8/stock intactos.
 
 Compatibilidade foi verificada por startup do runtime com flags OFF, rehearsal
@@ -19,3 +20,4 @@ restore isolado também estão disponíveis para recuperação sem down migratio
 
 `AI_COMMERCE_ROLLBACK_COMPATIBILITY=PASS_LOCAL`
 `AI_COMMERCE_ROLLBACK_AVAILABLE=PASS_LOGICAL_AND_PREVIOUS_DEPLOYMENT_IDENTIFIED`
+`AI_COMMERCE_CANARY_ROLLBACK=PASS_FLAGS_OFF_HEALTHY`

@@ -1,7 +1,7 @@
 # Banco, migrations e release
 
-AI_COMMERCE_SOURCE_COMMIT=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
-AI_COMMERCE_RUNTIME_SHA=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
+AI_COMMERCE_SOURCE_COMMIT=a45eba71aede67546cf1459b0955e80e6586bff9
+AI_COMMERCE_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
 
 Migrations aditivas:
 
@@ -42,6 +42,7 @@ Esse backup foi restaurado no alvo isolado `e6a_restore_20260824`, onde todas as
 `PRODUCTION_MIGRATION=PASS_ADDITIVE`
 `POST_MIGRATION_GATE=PASS`
 
-API/worker foram publicados no merge SHA `80a4f8d5c5067934e818f8e75f2f696d716e5ce0`
-com flags AI ausentes/default OFF; `/health` e `/ready` retornaram 200. Live
-Mock canary e QA visual autenticado permanecem BLOCKED_SESSION.
+API/worker foram publicados no merge SHA `a45eba71aede67546cf1459b0955e80e6586bff9`
+com flags AI retornadas a false/allowlist 0; `/health` e `/ready` retornaram
+200. Live Mock canary API passou; QA visual autenticado permanece
+`BLOCKED_SESSION`.

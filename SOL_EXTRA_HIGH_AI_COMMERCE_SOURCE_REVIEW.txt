@@ -7,7 +7,7 @@ VERDICT=AI_COMMERCE_FOUNDATION_SOURCE_READY
 
 Evidence reviewed: additive SQLite/PG migrations, tenant relation gate
 relationCount=157, manifest 52544dffd716eb60969b33adc050452fc702bb7ed622afb81188e9cb383733a0,
-focused backend 17/17, frontend TypeScript, frontend suite 194/194, server
+focused backend 21/21, frontend TypeScript, frontend suite 194/194, server
 startup smoke, URL/tool/prompt redaction and no provider SDK/adapter.
 
 The original command was adapted before execution. Legacy external catalog and

@@ -2,7 +2,7 @@ E6A OPERATIONAL RELEASE ATTEMPT
 
 CURRENT_STATE_AS_OF=2026-08-24 15:45 BRT
 CORE_SOURCE=2b8209ef25ba28a40b756948edfcc12c07f12970
-SOURCE=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
+SOURCE=a45eba71aede67546cf1459b0955e80e6586bff9
 DOCS=e5189ca (bundle commit; report docs 8a8c3bf)
 
 PREFLIGHT PASS
@@ -37,7 +37,7 @@ bytes; SHA-256 `8fae9053…`) and restored it into isolated PostgreSQL target
 `e6a_restore_20260824`. Restore/rehearsal passed; the two additive E6A
 migrations were then applied to the official database and the post-migration
 tenant gate passed 157/157 with zero orphaned/crossed links. API, worker and
-Vercel deployed the merge SHA `80a4f8d5…` with AI OFF.
+Vercel deployed the merge SHA `a45eba71…` with AI OFF after cleanup.
 
 NOT CLAIMED
 
@@ -45,15 +45,32 @@ PRODUCTION_BACKUP=PASS_LOGICAL_PROTECTED_BACKUP
 PRODUCTION_DB_PRECHECK=PASS
 STOCK/AI_PROD_MIGRATION=PASS_STOCK_SCHEMA_UNCHANGED_AI_ADDITIVE
 E6A_BROWSER_PROD_QA=BLOCKED_SESSION
-E6A_LIVE_CANARY=BLOCKED_NO_AUTHENTICATED_CONTROLLED_TENANT
+E6A_LIVE_CANARY=PASS_API_MOCK_AND_HITL
 E6A_BRANCH_PUSH=PASS_REMOTE_CANDIDATE
 E6A_PREVIEW_BUILD=PASS
 E6A_PREVIEW_AUTHENTICATED_VISUAL_QA=BLOCKED_SESSION
 
 SAFE RESUME
 
-Provide an authenticated admin session for the already controlled tenant, then
-run only the Mock shadow → suggestion → human approval canary and browser QA.
-Do not connect a real provider, activate auto-reply, or send outbound. If no
-session is available, the current production state is already the safe OFF
-endpoint and no migration/deploy needs repeating.
+The API canary is now complete. The only safe remaining action is to provide an
+authenticated browser session for visual QA. Do not connect a real provider,
+activate auto-reply, or send outbound. If no session is available, production
+is already the safe OFF endpoint and no migration/deploy/canary needs repeating.
+
+FINAL LIVE CANARY UPDATE
+
+- After the first live attempt exposed real Prisma audit mismatches, the
+  smallest source fixes were merged through PRs #2–#6 and redeployed.
+- Final API deployment: `35288463-3886-4732-86ef-c6389ae0cd94`, merge SHA
+  `a45eba71aede67546cf1459b0955e80e6586bff9`.
+- Mock connection status: READY; mock=true; networkEnabled=false;
+  realProviderConnected=false; autoReplyEnabled=false.
+- SHADOW: PASS (clarification, search, canonical availability, ProductOffer,
+  prompt injection block, replay idempotency).
+- SUGGESTION_ONLY: PASS (draft only, no send).
+- HUMAN_APPROVAL: PASS (composer insertion, product interest,
+  OpportunityDraft and handoff separately approved; all outbound=0).
+- Foreign tenant: 403; post-canary `MensagemCanal` SAIDA count: 0.
+- Cleanup: tenant feature false, settings OFF, AI env flags false/allowlist 0,
+  synthetic catalog archived. Visual browser QA still BLOCKED_SESSION because
+  production browser opens the login gate without an authenticated session.
