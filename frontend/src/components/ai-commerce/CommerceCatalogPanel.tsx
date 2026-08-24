@@ -1,7 +1,7 @@
 import { Archive, ChevronRight, PackageSearch, RefreshCw, ShieldCheck, Tag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiHttpError } from "../../services/crmApi";
-import { fetchAICommerceCatalog, previewAICommerceOffer } from "../../services/aiCommerceApi";
+import { fetchAICommerceCatalog, previewAICommerceOffer, searchAICommerceCatalog } from "../../services/aiCommerceApi";
 import type { AICommerceAvailabilityStatus, AICommerceCatalogProduct, AICommerceProductOffer, AICommerceVisibility } from "../../services/aiCommerceApi";
 import { Badge, Button, EmptyState, ErrorState, Input, LoadingState, SectionHeader, Select, Surface } from "../ui";
 import ProductOfferCard from "./ProductOfferCard";
@@ -40,7 +40,8 @@ export default function CommerceCatalogPanel({ onOpenProduct }: CommerceCatalogP
     setLoading(true);
     setError("");
     try {
-      const next = await fetchAICommerceCatalog({ q: query, visibility: visibility || undefined, availability: availability || undefined, page: 1, limit: 20 });
+      const fetcher = query.trim() ? searchAICommerceCatalog : fetchAICommerceCatalog;
+      const next = await fetcher({ q: query, visibility: visibility || undefined, availability: availability || undefined, page: 1, limit: 20 });
       setResult(next);
     } catch (nextError) {
       setResult(null);
