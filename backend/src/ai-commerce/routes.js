@@ -109,10 +109,16 @@ async function readSettings({ prisma, settingsService, empresaId }) {
 }
 
 async function writeSettings({ prisma, settingsService, empresaId, actorUsuarioId, body }) {
+  const expectedRevision = body.revision === undefined ? null : Number(body.revision);
+  if (expectedRevision !== null && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)) throw routeError("AI_SETTINGS_REVISION_INVALID", "Revisao de configuracao invalida.", 422);
   const data = normalizeSettings(body);
-  if (typeof settingsService?.update === "function") return settingsService.update({ empresaId, actorUsuarioId, data });
+  if (typeof settingsService?.update === "function") return settingsService.update({ empresaId, actorUsuarioId, expectedRevision, data });
   const model = prisma.aiCommerceSettings || prisma.aICommerceSettings;
   if (!model?.upsert) return { ...defaultSettings(empresaId), ...data, actorUsuarioId };
+  if (expectedRevision !== null && model.findUnique) {
+    const current = await model.findUnique({ where: { empresaId }, select: { revision: true } });
+    if (current && Number(current.revision) !== expectedRevision) throw routeError("AI_SETTINGS_CONFLICT", "Configuracao alterada por outro operador.", 409);
+  }
   return model.upsert({
     where: { empresaId },
     create: { empresaId, ...data, revision: 1, actorUsuarioId },
@@ -121,7 +127,7 @@ async function writeSettings({ prisma, settingsService, empresaId, actorUsuarioI
 }
 
 function normalizeSettings(body = {}) {
-  const allowed = new Set(["mode", "enabled", "allowedTools", "maxTools", "maxContextMessages", "maxProducts", "humanApprovalRequired", "catalogVisibilityPolicy", "exactQuantityPolicy", "stalePolicy", "noPricePolicy", "opportunityPolicy", "handoffPolicy"]);
+  const allowed = new Set(["revision", "mode", "enabled", "allowedTools", "maxTools", "maxContextMessages", "maxProducts", "humanApprovalRequired", "catalogVisibilityPolicy", "exactQuantityPolicy", "stalePolicy", "noPricePolicy", "opportunityPolicy", "handoffPolicy"]);
   const unknown = Object.keys(body).filter((key) => !allowed.has(key));
   if (unknown.length) throw routeError("AI_SETTINGS_FIELDS_INVALID", "Campos de configuracao nao permitidos.", 422);
   const mode = normalizeMode(body.mode);
