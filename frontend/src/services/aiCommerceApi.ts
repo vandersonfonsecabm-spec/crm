@@ -18,7 +18,7 @@ export type AICommerceAvailabilityStatus =
   | "DATA_STALE"
   | "UNKNOWN";
 export type AICommerceVisibility = "HIDDEN" | "PUBLISHED" | "ARCHIVED";
-export type AICommercePriceStatus = "VALID" | "ON_REQUEST" | "STALE" | "MISSING";
+export type AICommercePriceStatus = "VALID" | "AVAILABLE" | "ON_REQUEST" | "UNAVAILABLE" | "STALE" | "MISSING";
 
 export type AICommerceCatalogProduct = {
   id: number;
