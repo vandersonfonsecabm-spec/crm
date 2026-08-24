@@ -25,6 +25,10 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
   const purge = async (tx) => {
     const counts = {};
     for (const [key, model, condition] of targets) {
+      if (key === "evaluations" && typeof tx.eventoOutboxEstoque?.count === "function") {
+        const pending = await tx.eventoOutboxEstoque.count({ where: { empresaId, status: { in: ["PENDING", "PROCESSING"] } } });
+        if (pending > 0) continue;
+      }
       const delegate = tx[model];
       if (!delegate || typeof delegate.findMany !== "function" || typeof delegate.deleteMany !== "function") continue;
       let deleted = 0;

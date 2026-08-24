@@ -154,6 +154,10 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
     }
     let evaluated = 0; let matched = 0; let resolved = 0;
     for (const { balance, state } of stateItems) {
+      const lifecycleOccurrenceKey = balance ? `${tenantId}:logicalExpiryLifecycle:${state.loteEstoqueId}:${state.localEstoqueId || "scope"}` : null;
+      const previousLifecycleMatched = lifecycleOccurrenceKey && typeof prisma.avaliacaoRegraEstoque?.findFirst === "function"
+        ? await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: lifecycleOccurrenceKey, matched: true }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] })
+        : null;
       const ruleTypes = balance ? ["STOCK_LOT_EXPIRED", "STOCK_LOT_EXPIRING"] : ["STOCK_DATA_STALE", "STOCK_SYNC_FAILED"];
       for (const ruleType of ruleTypes) {
         const baseConfig = configByType.get(ruleType) || { ruleType, enabled: false };
@@ -181,6 +185,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         let eventType = evaluation.match ? "StockRuleMatched.v1" : (previous?.matched ? "StockRuleResolved.v1" : null);
         if (balance && ruleType === "STOCK_LOT_EXPIRED" && !evaluation.match && evaluation.noMatchReason === "NOT_EXPIRED") eventType = null;
         if (balance && ruleType === "STOCK_LOT_EXPIRING" && !evaluation.match && evaluation.noMatchReason === "ALREADY_EXPIRED") eventType = null;
+        if (balance && ruleType === "STOCK_LOT_EXPIRING" && !evaluation.match && evaluation.noMatchReason !== "ALREADY_EXPIRED" && !previous?.matched && previousLifecycleMatched?.matched) eventType = "StockRuleResolved.v1";
         const event = eventType ? eventForEvaluation(evaluationWithChange, eventType, now) : null;
         const projectionEvent = eventType ? eventForEvaluation(evaluationWithChange, "StockProjectionRequested.v1", now) : null;
         const apply = async (tx) => {

@@ -221,15 +221,16 @@ function createStockImportService({
         },
       });
       await appendStockOutbox({ tx, event: buildStockEvent({ type: "StockSyncStarted.v1", empresaId, syncRunId: syncRun.id, aggregateType: "StockSyncRun", aggregateId: String(syncRun.id), materialVersion: 1, correlationId: working.correlationId, payload: { mode: "IMPORT" } }) });
-      const acceptedLines = await tx.linhaImportacaoEstoque.findMany({
-        where: { empresaId, importacaoId, status: "ACCEPTED" },
+      const stagedLines = await tx.linhaImportacaoEstoque.findMany({
+        where: { empresaId, importacaoId },
         orderBy: { rowNumber: "asc" },
         take: MAX_CONFIRM_LINES + 1,
       });
-      if (acceptedLines.length > MAX_CONFIRM_LINES) {
+      if (stagedLines.length > MAX_CONFIRM_LINES) {
         throw stockError(409, "STOCK_IMPORT_BOUNDS_EXCEEDED", "Importacao de estoque excede o limite de confirmacao.");
       }
-      await promoteCapabilities(tx, { empresaId, fonteId: working.fonteId, lines: acceptedLines, now });
+      const acceptedLines = stagedLines.filter((line) => line.status === "ACCEPTED");
+      await promoteCapabilities(tx, { empresaId, fonteId: working.fonteId, lines: stagedLines, now });
       const result = await applyAcceptedRows({
         tx,
         empresaId,

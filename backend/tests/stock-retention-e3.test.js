@@ -12,6 +12,7 @@ test("retention purges only expired terminal evidence and never pending outbox",
   const remaining = new Map();
   for (const model of ["linhaImportacaoEstoque", "importacaoEstoque", "observacaoEstoque", "problemaQualidadeEstoque", "avaliacaoRegraEstoque", "eventoOutboxEstoque", "execucaoSincronizacaoEstoque"]) {
     delegates[model] = {
+      ...(model === "eventoOutboxEstoque" ? { count: async () => 1 } : {}),
       findMany: async ({ where }) => {
         const key = `${model}:${JSON.stringify(where.status || where.estado || {})}`;
         if (!remaining.has(key)) {
@@ -36,5 +37,6 @@ test("retention purges only expired terminal evidence and never pending outbox",
   assert.ok(deleted.every((entry) => entry.where.empresaId === 4));
   assert.equal(deleted.some((entry) => entry.model === "eventoOutboxEstoque" && entry.where.id.in.includes(99)), false);
   assert.equal(deleted.some((entry) => entry.model === "eventoOutboxEstoque" && entry.where.id.in.includes(7)), true);
+  assert.equal(deleted.some((entry) => entry.model === "avaliacaoRegraEstoque"), false);
   assert.equal(expired instanceof Date, true);
 });
