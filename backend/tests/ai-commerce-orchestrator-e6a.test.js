@@ -99,6 +99,19 @@ test("tool registry requires granular human approval for side effects", async ()
   assert.equal(result.id, "interest-1");
 });
 
+test("tool audit usa idempotência por invocação, não a chave única do run", async () => {
+  const invocations = [];
+  const tools = createCommercialToolRegistry({
+    services: { searchCommercialCatalog: async () => [] },
+    audit: { recordToolInvocation: async (payload) => invocations.push(payload) },
+  });
+  const context = { empresaId: 1, conversationId: 1, runId: "run-tool-audit", idempotencyKey: "run-idempotency" };
+  await tools.execute("searchCommercialCatalog", { query: "roçadeira" }, context);
+  await tools.execute("searchCommercialCatalog", { query: "gasolina" }, context);
+  assert.equal(invocations.length, 2);
+  assert.notEqual(invocations[0].idempotencyKey, invocations[1].idempotencyKey);
+});
+
 test("catalog references may be opaque CUID-like identifiers", async () => {
   const tools = createCommercialToolRegistry({ services: { getProductDetails: async ({ catalogProductId }) => ({ catalogProductId, title: "Produto" }) } });
   const result = await tools.execute("getProductDetails", { catalogProductId: "cmj9f2x8k0001s9abc" }, { empresaId: 1, conversationId: 1, mode: MODES.SHADOW, runId: "r-cuid" });

@@ -72,6 +72,8 @@ function createCommercialToolRegistry({
     const used = counter.get(runKey) || 0;
     if (used >= limit) throw toolError("AI_TOOL_CALL_LIMIT", "Limite de ferramentas por turno excedido.", 429);
     counter.set(runKey, used + 1);
+    const invocationNumber = used + 1;
+    const auditIdempotencyKey = `${String(context.idempotencyKey || runKey)}:${name}:${invocationNumber}`.slice(0, 200);
     validateInput(name, input);
 
     if (typeof authorizeTool === "function") {
@@ -89,12 +91,12 @@ function createCommercialToolRegistry({
     try {
       result = await handlers.get(name)(safeInput, safeContext);
     } catch (error) {
-      await recordAudit(audit, "tool", { name, classification: definition.classification, context: safeContext, input: safeInput, status: "FAILED", errorCode: String(error?.code || "TOOL_FAILED"), durationMs: Date.now() - startedAt });
+      await recordAudit(audit, "tool", { name, classification: definition.classification, context: safeContext, input: safeInput, idempotencyKey: auditIdempotencyKey, status: "FAILED", errorCode: String(error?.code || "TOOL_FAILED"), durationMs: Date.now() - startedAt });
       throw error;
     }
     const normalizedResult = name === "searchCommercialCatalog" ? normalizeSearchResult(result) : result;
     const safeResult = sanitizeData(normalizedResult);
-    await recordAudit(audit, "tool", { name, classification: definition.classification, context: safeContext, input: safeInput, output: safeResult, status: "SUCCEEDED", durationMs: Date.now() - startedAt });
+    await recordAudit(audit, "tool", { name, classification: definition.classification, context: safeContext, input: safeInput, output: safeResult, idempotencyKey: auditIdempotencyKey, status: "SUCCEEDED", durationMs: Date.now() - startedAt });
     return safeResult;
   }
 
