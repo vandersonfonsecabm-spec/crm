@@ -194,7 +194,7 @@ function sanitizeToolResults(value) {
   return Object.fromEntries(Object.entries(value).map(([key, list]) => [key, (Array.isArray(list) ? list : [list]).slice(0, 3).map((item) => {
     if (!item || typeof item !== "object") return item;
     const copy = { ...item };
-    for (const field of ["externalId", "credentialRef", "rawPayload", "cost", "margin"]) delete copy[field];
+    for (const field of ["externalId", "credentialRef", "rawPayload", "sourceId", "sourceRecordId", "externalLocationId", "cost", "margin"]) delete copy[field];
     return copy;
   })]));
 }
