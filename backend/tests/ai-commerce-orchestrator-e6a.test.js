@@ -162,3 +162,19 @@ test("audit de decisão não envia status inexistente ao Prisma", async () => {
   await audit.recordDecision({ empresaId: 1, conversationId: 2, runId: "run-decision", decision: { intent: "PRODUCT_SEARCH", nextAction: "ASK_CLARIFYING_QUESTION" }, state: "DISCOVERY" });
   assert.equal(captured.runId, "run-decision");
 });
+
+test("audit de ferramenta promove contexto tenant-scoped para a linha Prisma", async () => {
+  let captured;
+  const model = {
+    create: async ({ data }) => {
+      captured = data;
+      assert.equal(data.empresaId, 1);
+      assert.equal(data.runId, "run-tool");
+      assert.equal(data.conversationId, 2);
+      return data;
+    },
+  };
+  const audit = createAICommerceAudit({ prisma: { aICommerceToolInvocation: model }, logger: { info() {}, warn() {} } });
+  await audit.recordToolInvocation({ name: "searchCommercialCatalog", classification: "READ", context: { empresaId: 1, conversationId: 2, runId: "run-tool", correlationId: "corr-tool" }, input: {}, output: {}, status: "SUCCEEDED" });
+  assert.equal(captured.correlationId, "corr-tool");
+});
