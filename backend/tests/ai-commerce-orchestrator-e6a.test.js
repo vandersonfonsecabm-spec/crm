@@ -89,6 +89,7 @@ test("context is bounded and URLs fail closed", () => {
   assert.equal(isAllowedHttpsUrl("https://example.com/p/1", "example.com"), true);
   assert.equal(isAllowedHttpsUrl("javascript:alert(1)", "example.com"), false);
   assert.equal(isAllowedHttpsUrl("https://127.0.0.1/admin", "127.0.0.1"), false);
+  assert.equal(isAllowedHttpsUrl("https://172.16.0.1/admin", "172.16.0.1"), false);
 });
 
 test("AI feature gate is globally fail-closed by default", () => {

@@ -147,11 +147,22 @@ function isAllowedHttpsUrl(value, allowedDomain) {
       const host = url.hostname.toLowerCase().replace(/^www\./, "");
       if (!(host === domain || host.endsWith(`.${domain}`))) return false;
     }
-    if (url.hostname === "localhost" || /^127\.|^10\.|^192\.168\.|^169\.254\./.test(url.hostname)) return false;
+    if (isPrivateHost(url.hostname)) return false;
     return true;
   } catch {
     return false;
   }
+}
+
+function isPrivateHost(hostname) {
+  const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host === "::1") return true;
+  if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host)) return true;
+  const private172 = host.match(/^172\.(\d{1,3})\./);
+  if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return true;
+  if (/^(0|224|225|226|227|228|229|230|231|232|233|234|235|236|237|238|239)\./.test(host)) return true;
+  if (/^[0-9a-f:]+$/i.test(host) && (host === "::" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb"))) return true;
+  return false;
 }
 
 function containsForbiddenOutput(text) {
@@ -208,6 +219,7 @@ module.exports = {
   makeIdempotencyKey,
   validateApproval,
   isAllowedHttpsUrl,
+  isPrivateHost,
   containsForbiddenOutput,
   sanitizeData,
   policyError,
