@@ -6,11 +6,14 @@ const { runStockRetention } = require("./retention");
 const { projectStockEvaluation } = require("./projection");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 const ruleCursors = new Map();
+const MAX_CYCLE_TELEMETRY_DURATION_MS = 10 * 60 * 1000;
+const MAX_FAILED_TENANTS_TELEMETRY = 100;
 
 async function runStockWorkerCycle({ prisma, rules = null, env = process.env, owner = null, leaseOwner = null, leaseMs = 30000, logger = console, now = new Date(), limit = 20 } = {}) {
   const flags = stockFlags(env);
   assertStockFlagsOffForProduction(env);
   if (!flags.domainEnabled || !flags.syncWorkerEnabled || flags.tenantAllowlist.size === 0) return { enabled: false, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, tenants: 0 };
+  const cycleStartedAt = Date.now();
   const results = { enabled: true, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, matched: 0, resolved: 0, tenants: 0, failedTenants: [] };
   for (const empresaId of flags.tenantAllowlist) {
     if (!stockEnabledForTenant(empresaId, env, { worker: true })) continue;
@@ -45,7 +48,23 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
       results.failedTenants.push(empresaId);
     }
   }
+  const failedTenants = results.failedTenants.slice(0, MAX_FAILED_TENANTS_TELEMETRY);
+  try {
+    logger.info?.("stock_worker_cycle", {
+      durationMs: boundedCycleDuration(cycleStartedAt),
+      failedTenants,
+      failedCount: failedTenants.length,
+    });
+  } catch {
+    // Observability must not change worker cadence or turn a completed cycle into a failure.
+  }
   return results;
+}
+
+function boundedCycleDuration(startedAt) {
+  const elapsed = Date.now() - Number(startedAt);
+  if (!Number.isFinite(elapsed)) return 0;
+  return Math.min(MAX_CYCLE_TELEMETRY_DURATION_MS, Math.max(0, elapsed));
 }
 
 function createProjectionConsumer({ prisma, empresaId, env, now, projector = projectStockEvaluation }) {

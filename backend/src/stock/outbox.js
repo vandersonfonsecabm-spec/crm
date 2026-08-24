@@ -144,7 +144,8 @@ async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, l
 
 function isTransientOutboxError(error) {
   const code = String(error?.code || "").toUpperCase();
-  return error?.status === 503 || ["STOCK_UNAVAILABLE", "STOCK_PROJECTION_CONFLICT", "P1001", "P1008", "P1017", "P2024", "ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "EAI_AGAIN"].includes(code);
+  return error?.status === 503 || ["STOCK_UNAVAILABLE", "STOCK_PROJECTION_CONFLICT", "P1001", "P1008", "P1017", "P2024", "P2028", "P2034", "ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "EAI_AGAIN"].includes(code)
+    || (/^PrismaClient/i.test(String(error?.name || "")) && /\btransaction\b.*\b(?:timed?\s*out|timeout|expired)\b/i.test(String(error?.message || "")));
 }
 
 function leaseLostError() {

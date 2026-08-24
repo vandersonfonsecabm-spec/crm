@@ -29,6 +29,50 @@ test("outbox rejects malformed/future envelopes into quarantine without H8 calls
   assert.equal(updates.at(-1).data.status, "QUARANTINED");
 });
 
+test("outbox retries transient Prisma transaction conflicts without quarantining the leased tenant row", async () => {
+  const event = {
+    schemaVersion: "stock-event.v1",
+    eventType: "StockRecordObserved.v1",
+    empresaId: 7,
+    aggregateType: "FonteEstoque",
+    aggregateId: "source-1",
+    materialVersion: 1,
+    occurredAt: "2026-08-24T12:00:00.000Z",
+    payload: {},
+  };
+  for (const failure of [
+    { code: "P2028", name: "PrismaClientKnownRequestError", message: "Transaction API error: transaction expired." },
+    { code: "P2034", name: "PrismaClientKnownRequestError", message: "Transaction failed due to a write conflict or a deadlock." },
+  ]) {
+    const updates = [];
+    const prisma = {
+      eventoOutboxEstoque: {
+        findMany: async () => [{ id: 1, empresaId: 7, attempts: 0, payloadStructuredJson: JSON.stringify(event) }],
+        updateMany: async (args) => { updates.push(args); return { count: 1 }; },
+      },
+    };
+    const error = Object.assign(new Error(failure.message), failure);
+    const result = await processStockOutboxBatch({
+      prisma,
+      empresaId: 7,
+      owner: "w",
+      limit: 1,
+      now: new Date("2026-08-24T12:00:00.000Z"),
+      h8ProjectionEnabled: true,
+      consumer: async () => { throw error; },
+    });
+    assert.equal(result.processed, 0);
+    assert.equal(result.quarantined, 0);
+    assert.equal(updates.length, 2);
+    const retry = updates.at(-1);
+    assert.equal(retry.data.status, "PENDING");
+    assert.equal(retry.where.empresaId, 7);
+    assert.equal(retry.where.leaseOwner, "w");
+    assert.ok(retry.where.leaseExpiresAt instanceof Date);
+    assert.equal(retry.where.leaseExpiresAt.getTime(), updates[0].data.leaseExpiresAt.getTime());
+  }
+});
+
 test("worker leaves valid E2 outbox pending while H8 projection is OFF", async () => {
   let queried = false;
   const prisma = new Proxy({}, { get() { queried = true; throw new Error("outbox must remain pending while H8 is off"); } });
@@ -68,14 +112,21 @@ test("active non-projection stock events use the durable outbox sink", async () 
 
 test("one tenant failure is isolated from the remaining worker cycle", async () => {
   const seen = [];
+  const telemetry = [];
   const result = await runStockWorkerCycle({
     prisma: {},
     rules: { evaluateTenant: async (tenantId) => { seen.push(tenantId); if (tenantId === 1) throw new Error("poison tenant"); return { evaluated: 2, matched: 0, resolved: 0 }; } },
     env: { STOCK_DOMAIN_ENABLED: "true", STOCK_SYNC_WORKER_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "1,2", STOCK_H8_PROJECTION_ENABLED: "false" },
+    logger: { error() {}, info: (event, fields) => telemetry.push({ event, fields }) },
   });
   assert.deepEqual(seen, [1, 2]);
   assert.deepEqual(result.failedTenants, [1]);
   assert.equal(result.tenants, 2);
+  const cycle = telemetry.find((entry) => entry.event === "stock_worker_cycle");
+  assert.ok(cycle);
+  assert.ok(cycle.fields.durationMs >= 0 && cycle.fields.durationMs <= 10 * 60 * 1000);
+  assert.deepEqual(cycle.fields.failedTenants, [1]);
+  assert.equal(cycle.fields.failedCount, 1);
 });
 
 test("target override recipient policy wins over tenant fallback", async () => {
