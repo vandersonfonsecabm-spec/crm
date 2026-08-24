@@ -116,14 +116,16 @@ async function writeSettings({ prisma, settingsService, empresaId, actorUsuarioI
   if (typeof settingsService?.update === "function") return settingsService.update({ empresaId, actorUsuarioId, expectedRevision, data });
   const model = prisma.aiCommerceSettings || prisma.aICommerceSettings;
   if (!model?.upsert) return { ...defaultSettings(empresaId), ...data, actorUsuarioId };
+  const persistenceData = { ...data, allowedToolsJson: JSON.stringify(data.allowedTools || []) };
+  delete persistenceData.allowedTools;
   if (expectedRevision !== null && model.findUnique) {
     const current = await model.findUnique({ where: { empresaId }, select: { revision: true } });
     if (current && Number(current.revision) !== expectedRevision) throw routeError("AI_SETTINGS_CONFLICT", "Configuracao alterada por outro operador.", 409);
   }
   return model.upsert({
     where: { empresaId },
-    create: { empresaId, ...data, revision: 1, actorUsuarioId },
-    update: { ...data, revision: { increment: 1 }, actorUsuarioId },
+    create: { empresaId, ...persistenceData, revision: 1, actorUsuarioId },
+    update: { ...persistenceData, revision: { increment: 1 }, actorUsuarioId },
   });
 }
 
@@ -158,7 +160,7 @@ function publicSettings(item) {
     empresaId: positiveId(value.empresaId),
     enabled: value.enabled === true,
     mode: normalizeMode(value.mode),
-    allowedTools: Array.isArray(value.allowedTools) ? value.allowedTools.slice(0, 8) : [],
+    allowedTools: parseAllowedTools(value.allowedTools ?? value.allowedToolsJson),
     maxTools: Number(value.maxTools) || 5,
     maxContextMessages: Number(value.maxContextMessages) || 20,
     maxProducts: Number(value.maxProducts) || 3,
@@ -201,6 +203,10 @@ function rejectForeignTenant(body, empresaId) {
   if (body && body.empresaId !== undefined && positiveId(body.empresaId) !== positiveId(empresaId)) throw routeError("AI_TENANT_CONTEXT_INVALID", "Tenant nao autorizado.", 403);
 }
 function defaultSettings(empresaId) { return { empresaId, enabled: false, mode: MODES.OFF, allowedTools: [], maxTools: 5, maxContextMessages: 20, maxProducts: 3, humanApprovalRequired: true, revision: 1 }; }
+function parseAllowedTools(value) {
+  if (Array.isArray(value)) return value.map(String).filter((name) => TOOL_NAMES.includes(name)).slice(0, 8);
+  try { const parsed = JSON.parse(String(value || "[]")); return Array.isArray(parsed) ? parsed.map(String).filter((name) => TOOL_NAMES.includes(name)).slice(0, 8) : []; } catch { return []; }
+}
 function clamp(value, min, max, fallback) { const number = Number(value); return Number.isInteger(number) ? Math.min(max, Math.max(min, number)) : fallback; }
 function positiveId(value) { const parsed = Number(value); return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null; }
 function routeError(code, message, status = 400) { const error = new Error(message); error.code = code; error.status = status; return error; }
