@@ -9,7 +9,7 @@ const {
 const { createCommercialToolRegistry } = require("../src/ai-commerce/tools");
 const { createAICommerceOrchestrator } = require("../src/ai-commerce/orchestrator");
 const { createAICommerceAudit } = require("../src/ai-commerce/audit");
-const { MODES, buildSanitizedContext, isAllowedHttpsUrl } = require("../src/ai-commerce/policy");
+const { MODES, buildSanitizedContext, isAllowedHttpsUrl, sanitizeData } = require("../src/ai-commerce/policy");
 const { FEATURE_KEYS, isGlobalFeatureEnabled } = require("../src/tenant-features/service");
 
 test("unconfigured connection fails closed without network", async () => {
@@ -125,6 +125,16 @@ test("context is bounded and URLs fail closed", () => {
   assert.equal(isAllowedHttpsUrl("javascript:alert(1)", "example.com"), false);
   assert.equal(isAllowedHttpsUrl("https://127.0.0.1/admin", "127.0.0.1"), false);
   assert.equal(isAllowedHttpsUrl("https://172.16.0.1/admin", "172.16.0.1"), false);
+});
+
+test("customer-safe sanitization serializes dates and Decimal prices", () => {
+  class Decimal {
+    constructor(value) { this.value = value; }
+    toJSON() { return this.value; }
+  }
+  const safe = sanitizeData({ price: new Decimal("1499.90"), expiresAt: new Date("2026-08-24T12:00:00Z") });
+  assert.equal(safe.price, "1499.90");
+  assert.equal(safe.expiresAt, "2026-08-24T12:00:00.000Z");
 });
 
 test("AI feature gate is globally fail-closed by default", () => {
