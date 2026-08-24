@@ -107,18 +107,28 @@ function normalizeModelData(kind, payload) {
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
     occurredAt,
   };
-  if (kind === "tool") return {
+  if (kind === "tool") {
+    // The closed tool registry sends tenant/run metadata inside `context`.
+    // Promote only those server-created fields to the tenant-scoped audit row;
+    // never trust tool input for tenant or actor identity.
+    const context = payload.context && typeof payload.context === "object" ? payload.context : {};
+    return {
     ...base,
+    empresaId: payload.empresaId || context.empresaId,
+    conversationId: payload.conversationId || context.conversationId,
+    runId: payload.runId || context.runId ? String(payload.runId || context.runId).slice(0, 128) : undefined,
+    correlationId: payload.correlationId || context.correlationId ? String(payload.correlationId || context.correlationId).slice(0, 128) : null,
     name: String(payload.name || "unknown").slice(0, 100),
     classification: String(payload.classification || "READ").slice(0, 40),
-    idempotencyKey: payload.idempotencyKey ? String(payload.idempotencyKey).slice(0, 200) : null,
+    idempotencyKey: payload.idempotencyKey || context.idempotencyKey ? String(payload.idempotencyKey || context.idempotencyKey).slice(0, 200) : null,
     inputJsonSanitized: JSON.stringify(payload.input || {}),
     outputJsonSanitized: payload.output === undefined ? null : JSON.stringify(payload.output),
     errorCode: payload.errorCode ? String(payload.errorCode).slice(0, 100) : null,
     latencyMs: Number.isFinite(payload.durationMs) ? Math.max(0, Math.round(payload.durationMs)) : null,
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
     occurredAt,
-  };
+    };
+  }
   if (kind === "decision") {
     // AICommerceDecision has no generic `status` column. Keep status in the
     // event envelope for audit readability, but never send it to Prisma.
