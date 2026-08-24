@@ -1,11 +1,18 @@
 Integrated stock mission checkpoint
 
 STATE=STOCK_MVP_RELEASE_BLOCKED
+CURRENT_STATE_AS_OF=2026-08-23T23:59:00-03:00
 BASELINE_SHA=a5a280c3ebc54741ced02a77d4da5ec51834d583
 E1_DOCS_COMMIT=3c6cbab39cb3c75023a856e9ede7d91df0be955e
 E2_SOURCE_COMMIT=5c286e74004ada98274cc5b9496dfb5129e0ccc3
 INTEGRATION_BRANCH=feature/stock-mvp-e2r-e5
+E2R_VALIDATED_COMMIT=efcfc5f56874017c7f808f2b1d9ec8f924218abe
+E3_SOURCE_COMMIT=78d2de0fb0f6df2a8ea197d42167f3dea9a5e086
+E4_SOURCE_COMMIT=78d2de0fb0f6df2a8ea197d42167f3dea9a5e086
+STOCK_MVP_RELEASE_COMMIT=NOT_CREATED
+RUNTIME_SHA=NOT_DEPLOYED
+DOCUMENT_STATUS=SOURCE_CHECKPOINT_WITH_OPERATIONAL_GATES_BLOCKED
 
 E2R isolated PostgreSQL schema/data rehearsals, E3 source rules/H8 adapter, and E4 source UI were implemented and tested. Production migration, deploy, canary activation and official backup/restore were not executed because the official target and migration-history parity gate were not available in the authorized local surface.
 
-No push, PR, merge to master, production DB write, Railway/Vercel deploy, flag activation, outbound or Bling dependency occurred.
+No push, PR, merge to master, production DB write, Railway/Vercel deploy, flag activation, outbound or Bling dependency occurred. Final source checkpoint includes PostgreSQL SQL-level disposable rehearsal evidence; the official Prisma runner stopped at a generic engine error before migration execution.
