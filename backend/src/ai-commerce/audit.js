@@ -119,8 +119,12 @@ function normalizeModelData(kind, payload) {
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
     occurredAt,
   };
-  if (kind === "decision") return {
-    ...base,
+  if (kind === "decision") {
+    // AICommerceDecision has no generic `status` column. Keep status in the
+    // event envelope for audit readability, but never send it to Prisma.
+    const { status: _status, ...decisionBase } = base;
+    return {
+    ...decisionBase,
     intent: payload.decision?.intent ? String(payload.decision.intent).slice(0, 100) : null,
     confidence: payload.decision?.confidence ? String(payload.decision.confidence).slice(0, 40) : null,
     nextAction: payload.decision?.nextAction ? String(payload.decision.nextAction).slice(0, 100) : null,
@@ -134,7 +138,8 @@ function normalizeModelData(kind, payload) {
     decisionJson: JSON.stringify(payload.decision || {}),
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
     occurredAt,
-  };
+    };
+  }
   if (kind === "draft") {
     const draft = payload.draft || {};
     return {

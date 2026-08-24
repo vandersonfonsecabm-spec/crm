@@ -148,3 +148,17 @@ test("audit atualiza o run persistido sem recriar nem alterar chaves", async () 
   assert.equal(Object.prototype.hasOwnProperty.call(updates[0], "id"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(updates[0], "createdAt"), false);
 });
+
+test("audit de decisão não envia status inexistente ao Prisma", async () => {
+  let captured;
+  const model = {
+    create: async ({ data }) => {
+      captured = data;
+      assert.equal(Object.prototype.hasOwnProperty.call(data, "status"), false);
+      return data;
+    },
+  };
+  const audit = createAICommerceAudit({ prisma: { aICommerceDecision: model }, logger: { info() {}, warn() {} } });
+  await audit.recordDecision({ empresaId: 1, conversationId: 2, runId: "run-decision", decision: { intent: "PRODUCT_SEARCH", nextAction: "ASK_CLARIFYING_QUESTION" }, state: "DISCOVERY" });
+  assert.equal(captured.runId, "run-decision");
+});
