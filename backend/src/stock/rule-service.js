@@ -146,16 +146,23 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
       const checkpoint = checkpointBySource.get(source.id);
       const latestRun = latestRunBySource.get(source.id);
       const failedRun = latestRun && ["FAILED", "RETRY_WAIT"].includes(latestRun.estado) ? latestRun : null;
+      const previousFailure = typeof prisma.avaliacaoRegraEstoque?.findFirst === "function"
+        ? await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, sourceConnectionId: source.id, ruleType: "STOCK_SYNC_FAILED", matched: true }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] })
+        : null;
+      const previousErrorFamily = previousFailure?.occurrenceKey ? String(previousFailure.occurrenceKey).split(":").at(-1) : null;
       const staleBaseConfig = configByType.get("STOCK_DATA_STALE") || {};
       const staleOverride = overrideByKey.get(`STOCK_DATA_STALE:ESTOQUE_FONTE:${source.id}`);
       let staleConfig = staleBaseConfig;
       if (staleOverride) staleConfig = { ...staleBaseConfig, freshnessSlaMinutes: staleOverride.freshnessSlaMinutes ?? staleBaseConfig.freshnessSlaMinutes };
       const freshness = classifyFreshness({ lastSuccessfulSyncAt: checkpoint?.lastSuccessfulSyncAt, slaMs: Number(staleConfig.freshnessSlaMinutes || 0) * 60000, now });
-      stateItems.push({ balance: null, state: { empresaId: tenantId, sourceConnectionId: source.id, freshnessEstado: freshness, sourceFreshnessEvidence: Boolean(checkpoint?.lastSuccessfulSyncAt), syncFailed: failedRun?.estado === "FAILED", retriesExhausted: failedRun?.estado === "FAILED" && Number(failedRun.retryCount || 0) >= 3, errorFamily: latestRun?.errorClass || "UNKNOWN", revision: Number(latestRun?.revision || checkpoint?.revision || 1), correlationId: latestRun?.correlationId || `stock-rule:${tenantId}:source:${source.id}` } });
+      stateItems.push({ balance: null, state: { empresaId: tenantId, sourceConnectionId: source.id, freshnessEstado: freshness, sourceFreshnessEvidence: Boolean(checkpoint?.lastSuccessfulSyncAt), latestRunHealthy: latestRun?.estado === "SUCCEEDED" || (!latestRun && Boolean(checkpoint?.lastSuccessfulSyncAt)), syncFailed: failedRun?.estado === "FAILED", retriesExhausted: failedRun?.estado === "FAILED" && Number(failedRun.retryCount || 0) >= 3, errorFamily: latestRun?.errorClass || previousErrorFamily || "UNKNOWN", revision: Number(latestRun?.revision || checkpoint?.revision || 1), correlationId: latestRun?.correlationId || previousFailure?.correlationId || `stock-rule:${tenantId}:source:${source.id}` } });
     }
     let evaluated = 0; let matched = 0; let resolved = 0;
     for (const { balance, state } of stateItems) {
       const lifecycleOccurrenceKey = balance ? `${tenantId}:logicalExpiryLifecycle:${state.loteEstoqueId}:${state.localEstoqueId || "scope"}` : null;
+      const previousLifecycleState = lifecycleOccurrenceKey && typeof prisma.avaliacaoRegraEstoque?.findFirst === "function"
+        ? await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: lifecycleOccurrenceKey }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] })
+        : null;
       const previousLifecycleMatched = lifecycleOccurrenceKey && typeof prisma.avaliacaoRegraEstoque?.findFirst === "function"
         ? await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: lifecycleOccurrenceKey, matched: true }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] })
         : null;
@@ -180,19 +187,21 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         if (evaluation.match) matched += 1;
         const retentionUntil = new Date(now.getTime() + DEFAULT_RETENTION_DAYS * 86400000);
         const previous = await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: evaluation.occurrenceKey, ruleType }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] });
+        const previousMatched = previous?.matched ? previous : (typeof prisma.avaliacaoRegraEstoque?.findFirst === "function" ? await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: evaluation.occurrenceKey, ruleType, matched: true }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] }) : null);
         let effectiveEvaluation = evaluation;
         const lifecycleResolution = balance && ruleType === "STOCK_LOT_EXPIRING" && !evaluation.match && evaluation.noMatchReason !== "ALREADY_EXPIRED" && !previous?.matched && previousLifecycleMatched?.matched;
-        if (balance && previousLifecycleMatched?.matched && Number(previousLifecycleMatched.materialVersion || 0) >= Number(evaluation.materialVersion || 0) && (evaluation.match || lifecycleResolution)) {
-          effectiveEvaluation = { ...evaluation, materialVersion: Number(previousLifecycleMatched.materialVersion) + 1 };
+        if (balance && previousLifecycleState && Number(previousLifecycleState.materialVersion || 0) >= Number(evaluation.materialVersion || 0) && (evaluation.match || lifecycleResolution)) {
+          effectiveEvaluation = { ...evaluation, materialVersion: Number(previousLifecycleState.materialVersion) + 1 };
         }
         const materialChange = Boolean(previous && previous.materialVersion !== effectiveEvaluation.materialVersion);
         const evaluationWithChange = { ...effectiveEvaluation, materialChange };
         const data = evaluationData(evaluationWithChange, retentionUntil);
-        let eventType = effectiveEvaluation.match ? "StockRuleMatched.v1" : (previous?.matched ? "StockRuleResolved.v1" : null);
+        let eventType = effectiveEvaluation.match ? "StockRuleMatched.v1" : (previousMatched?.matched ? "StockRuleResolved.v1" : null);
         if (balance && ruleType === "STOCK_LOT_EXPIRED" && !effectiveEvaluation.match && effectiveEvaluation.noMatchReason === "NOT_EXPIRED") eventType = null;
         if (balance && ruleType === "STOCK_LOT_EXPIRING" && !effectiveEvaluation.match && effectiveEvaluation.noMatchReason === "ALREADY_EXPIRED") eventType = null;
         if (lifecycleResolution) eventType = "StockRuleResolved.v1";
         if (eventType === "StockRuleResolved.v1" && !["QUANTITY_NOT_POSITIVE", "OUTSIDE_WINDOW", "FRESHNESS_WITHIN_SLA", "RETRIES_NOT_EXHAUSTED"].includes(effectiveEvaluation.noMatchReason)) eventType = null;
+        if (eventType === "StockRuleResolved.v1" && ruleType === "STOCK_SYNC_FAILED" && state.latestRunHealthy !== true) eventType = null;
         const event = eventType ? eventForEvaluation(evaluationWithChange, eventType, now) : null;
         const projectionEvent = eventType ? eventForEvaluation(evaluationWithChange, "StockProjectionRequested.v1", now) : null;
         const apply = async (tx) => {

@@ -26,12 +26,24 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
     const counts = {};
     const protectedOccurrences = new Set();
     if (typeof tx.notificacao?.findMany === "function") {
-      const open = await tx.notificacao.findMany({ where: { empresaId, resolvidaEm: null, stockTargetType: { not: null } }, select: { occurrenceKey: true } });
-      for (const row of open) if (row.occurrenceKey) protectedOccurrences.add(row.occurrenceKey);
+      let cursor = null;
+      for (;;) {
+        const open = await tx.notificacao.findMany({ where: { empresaId, resolvidaEm: null, stockTargetType: { not: null }, ...(cursor ? { id: { gt: cursor } } : {}) }, select: { id: true, occurrenceKey: true }, orderBy: { id: "asc" }, take: 500 });
+        for (const row of open) if (row.occurrenceKey) protectedOccurrences.add(row.occurrenceKey);
+        if (open.length < 500) break;
+        cursor = open.at(-1)?.id;
+        if (!cursor) break;
+      }
     }
     if (typeof tx.eventoOutboxEstoque?.findMany === "function") {
-      const pending = await tx.eventoOutboxEstoque.findMany({ where: { empresaId, status: { in: ["PENDING", "PROCESSING"] } }, select: { payloadStructuredJson: true }, take: 500 });
-      for (const row of pending) { try { const event = JSON.parse(row.payloadStructuredJson || "{}"); if (event.payload?.occurrenceKey) protectedOccurrences.add(event.payload.occurrenceKey); } catch {} }
+      let cursor = null;
+      for (;;) {
+        const pending = await tx.eventoOutboxEstoque.findMany({ where: { empresaId, status: { in: ["PENDING", "PROCESSING"] }, ...(cursor ? { id: { gt: cursor } } : {}) }, select: { id: true, payloadStructuredJson: true }, orderBy: { id: "asc" }, take: 500 });
+        for (const row of pending) { try { const event = JSON.parse(row.payloadStructuredJson || "{}"); if (event.payload?.occurrenceKey) protectedOccurrences.add(event.payload.occurrenceKey); } catch {} }
+        if (pending.length < 500) break;
+        cursor = pending.at(-1)?.id;
+        if (!cursor) break;
+      }
     }
     for (const [key, model, condition] of targets) {
       const delegate = tx[model];

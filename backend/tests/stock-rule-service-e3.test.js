@@ -81,7 +81,7 @@ test("expiry lifecycle emits one effective occurrence and resolves only after qu
     execucaoSincronizacaoEstoque: { findMany: async () => [] },
     overrideEstoque: { findMany: async () => [] },
     avaliacaoRegraEstoque: {
-      findFirst: async ({ where }) => [...evaluations].reverse().find((row) => row.empresaId === where.empresaId && row.occurrenceKey === where.occurrenceKey && row.ruleType === where.ruleType) || null,
+      findFirst: async ({ where }) => [...evaluations].reverse().find((row) => row.empresaId === where.empresaId && row.occurrenceKey === where.occurrenceKey && (!where.ruleType || row.ruleType === where.ruleType) && (where.matched === undefined || row.matched === where.matched)) || null,
       create: async ({ data }) => { const row = { id: evaluations.length + 1, ...data }; evaluations.push(row); return row; },
     },
     eventoOutboxEstoque: { create: async ({ data }) => { outbox.push(data); return data; }, findFirst: async () => null },
@@ -106,12 +106,16 @@ test("a healthy run resolves the latest sync failure occurrence", async () => {
   prisma.configuracaoRegraEstoque.findMany = async () => [{ ruleType: "STOCK_SYNC_FAILED", enabled: true, scopeType: "TENANT", scopeKey: "TENANT" }];
   prisma.checkpointSincronizacaoEstoque = { findMany: async () => [] };
   prisma.execucaoSincronizacaoEstoque = { findMany: async () => [run] };
-  prisma.avaliacaoRegraEstoque.findFirst = async ({ where }) => [...prisma.evaluations].reverse().find((row) => row.empresaId === where.empresaId && row.occurrenceKey === where.occurrenceKey && row.ruleType === where.ruleType) || null;
+  prisma.avaliacaoRegraEstoque.findFirst = async ({ where }) => [...prisma.evaluations].reverse().find((row) => row.empresaId === where.empresaId && (!where.occurrenceKey || row.occurrenceKey === where.occurrenceKey) && (!where.sourceConnectionId || row.sourceConnectionId === where.sourceConnectionId) && row.ruleType === where.ruleType && (where.matched === undefined || row.matched === where.matched)) || null;
   const service = createStockRuleService({ prisma, env: { STOCK_DOMAIN_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "3" } });
   const first = await service.evaluateTenant(3);
   assert.equal(first.matched, 1);
+  run.estado = "RETRY_WAIT";
+  const retrying = await service.evaluateTenant(3);
+  assert.equal(retrying.resolved, 0);
   run.estado = "SUCCEEDED";
   run.retryCount = 0;
+  run.errorClass = null;
   const second = await service.evaluateTenant(3);
   assert.equal(second.resolved, 1);
 });
