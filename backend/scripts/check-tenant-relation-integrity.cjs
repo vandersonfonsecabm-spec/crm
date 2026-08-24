@@ -121,6 +121,7 @@ const relationSpecs = Object.freeze([
   ["stock", "AvaliacaoRegraEstoque", "produtoEstoqueId", "ProdutoEstoque"],
   ["stock", "AvaliacaoRegraEstoque", "loteEstoqueId", "LoteEstoque"],
   ["stock", "AvaliacaoRegraEstoque", "localEstoqueId", "LocalEstoque"],
+  ["stock", "AvaliacaoRegraEstoque", "sourceConnectionId", "FonteEstoque"],
 ]);
 
 function ident(value) {

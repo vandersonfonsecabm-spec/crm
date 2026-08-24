@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { stockFlags, stockEnabledForTenant } = require("../src/stock/flags");
+const { stockFlags, stockEnabledForTenant, assertStockFlagsOffForProduction } = require("../src/stock/flags");
 const { buildStockEvent, validateStockEvent } = require("../src/stock/events");
 const { normalizePayload, validateExpiry, decimal } = require("../src/stock/canonical");
 const { classifyFreshness, confidenceFor } = require("../src/stock/freshness");
@@ -15,6 +15,12 @@ test("stock flags are deny-by-default and tenant scoped", () => {
   const env = { STOCK_DOMAIN_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "1,2" };
   assert.equal(stockEnabledForTenant(1, env), true);
   assert.equal(stockEnabledForTenant(3, env), false);
+});
+
+test("production rule/H8 activation requires an explicit single-tenant canary gate", () => {
+  assert.throws(() => assertStockFlagsOffForProduction({ NODE_ENV: "production", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "1" }), /MUST_REMAIN_OFF/);
+  assert.doesNotThrow(() => assertStockFlagsOffForProduction({ NODE_ENV: "production", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_H8_PROJECTION_ENABLED: "true", STOCK_RUNTIME_CANARY_APPROVED: "true", STOCK_TENANT_ALLOWLIST: "1" }));
+  assert.throws(() => assertStockFlagsOffForProduction({ NODE_ENV: "production", STOCK_H8_PROJECTION_ENABLED: "true", STOCK_RUNTIME_CANARY_APPROVED: "true", STOCK_TENANT_ALLOWLIST: "1,2" }), /MUST_REMAIN_OFF/);
 });
 
 test("context never trusts a different tenant from request body", () => {

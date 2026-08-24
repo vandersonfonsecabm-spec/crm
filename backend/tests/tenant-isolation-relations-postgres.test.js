@@ -33,7 +33,7 @@ test("PostgreSQL possui as 113 FKs compostas tenant-scoped", async () => {
      WHERE constraint_row.contype = 'f'
        AND child.relnamespace = current_schema()::regnamespace`);
 
-  assert.equal(relationSpecs.length, 116);
+  assert.equal(relationSpecs.length, 117);
   for (const [, childTable, childField, parentTable, tenantField = "empresaId"] of relationSpecs) {
     const expectedForeign = normalizeConstraint(`FOREIGN KEY (${tenantField}, ${childField})`);
     const expectedReference = normalizeConstraint(`REFERENCES ${parentTable}(empresaId, id)`);

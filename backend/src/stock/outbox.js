@@ -42,7 +42,7 @@ async function appendStockOutbox({ tx, event, retentionUntil, allowReserved = fa
   }
 }
 
-async function claimStockOutbox({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date() }) {
+async function claimStockOutbox({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date(), eventTypes = null }) {
   if (!Number.isSafeInteger(Number(empresaId)) || Number(empresaId) <= 0) throw new StockError("STOCK_TENANT_CONTEXT_INVALID", "Tenant do outbox invalido.", undefined, 401);
   const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
   const boundedOwner = String(owner || "stock-worker").slice(0, 128);
@@ -51,6 +51,7 @@ async function claimStockOutbox({ prisma, empresaId, owner, limit = 20, leaseMs 
     where: {
       empresaId: Number(empresaId),
       status: { in: ["PENDING", "PROCESSING"] },
+      ...(Array.isArray(eventTypes) && eventTypes.length ? { eventType: { in: eventTypes } } : {}),
       availableAt: { lte: now },
       OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }],
     },
@@ -74,11 +75,11 @@ async function claimStockOutbox({ prisma, empresaId, owner, limit = 20, leaseMs 
   return claimed;
 }
 
-async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date(), logger = console, h8ProjectionEnabled = false, consumer = null, allowReserved = false }) {
+async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date(), logger = console, h8ProjectionEnabled = false, consumer = null, allowReserved = false, eventTypes = null }) {
   if (!h8ProjectionEnabled) return { claimed: 0, processed: 0, quarantined: 0, disabled: true };
   if (typeof consumer !== "function") throw new StockError("STOCK_UNAVAILABLE", "Consumer de outbox nao esta ativo.", undefined, 503);
   const effectiveOwner = String(owner || "stock-worker").slice(0, 128);
-  const claimed = await claimStockOutbox({ prisma, empresaId, owner: effectiveOwner, limit, leaseMs, now });
+  const claimed = await claimStockOutbox({ prisma, empresaId, owner: effectiveOwner, limit, leaseMs, now, eventTypes });
   let processed = 0;
   let quarantined = 0;
   for (const row of claimed) {
@@ -86,7 +87,8 @@ async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, l
       const event = JSON.parse(row.payloadStructuredJson || "{}");
       validateStockEvent(event, { activeOnly: !allowReserved });
       if (!allowReserved && !ACTIVE_EVENT_TYPES.includes(event.eventType)) throw new StockError("STOCK_SCHEMA_UNSUPPORTED", "Evento reservado.");
-      await consumer(event, row);
+      const outcome = await consumer(event, row);
+      if (outcome?.handled !== true) throw new StockError("STOCK_UNAVAILABLE", "Evento de estoque nao foi processado pelo consumer.", undefined, 503);
       const completedAt = new Date();
       const marked = await prisma.eventoOutboxEstoque.updateMany({
         where: {
@@ -105,6 +107,15 @@ async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, l
         logger.warn?.("stock_outbox_lease_lost", { outboxId: row.id });
         continue;
       }
+      if (isTransientOutboxError(error) && Number(row.attempts || 0) < 5) {
+        const retryAt = new Date(now.getTime() + Math.min(15 * 60 * 1000, Math.max(1000, 2 ** Math.max(0, Number(row.attempts || 1)) * 1000)));
+        await prisma.eventoOutboxEstoque.updateMany({
+          where: { id: row.id, empresaId: Number(empresaId), status: "PROCESSING", leaseOwner: effectiveOwner, leaseExpiresAt: row.leaseExpiresAt },
+          data: { status: "PENDING", availableAt: retryAt, leaseOwner: null, leaseExpiresAt: null },
+        });
+        logger.warn?.("stock_outbox_retry", { outboxId: row.id, code: error?.code || "STOCK_TRANSIENT" });
+        continue;
+      }
       logger.warn?.("stock_outbox_quarantined", { code: error?.code || "STOCK_EVENT_INVALID", outboxId: row.id });
       const failedAt = new Date();
       const quarantinedRow = await prisma.eventoOutboxEstoque.updateMany({
@@ -121,6 +132,11 @@ async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, l
     }
   }
   return { claimed: claimed.length, processed, quarantined };
+}
+
+function isTransientOutboxError(error) {
+  const code = String(error?.code || "").toUpperCase();
+  return error?.status === 503 || ["STOCK_UNAVAILABLE", "P2024", "ETIMEDOUT", "ECONNRESET", "EAI_AGAIN"].includes(code);
 }
 
 function leaseLostError() {

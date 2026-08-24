@@ -91,6 +91,7 @@ CREATE TABLE "AvaliacaoRegraEstoque" (
     "evaluatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "retentionUntil" DATETIME NOT NULL,
     CONSTRAINT "AvaliacaoRegraEstoque_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT "AvaliacaoRegraEstoque_empresaId_sourceConnectionId_fkey" FOREIGN KEY ("empresaId", "sourceConnectionId") REFERENCES "FonteEstoque" ("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT "AvaliacaoRegraEstoque_empresaId_produtoEstoqueId_fkey" FOREIGN KEY ("empresaId", "produtoEstoqueId") REFERENCES "ProdutoEstoque" ("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT "AvaliacaoRegraEstoque_empresaId_loteEstoqueId_fkey" FOREIGN KEY ("empresaId", "loteEstoqueId") REFERENCES "LoteEstoque" ("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT "AvaliacaoRegraEstoque_empresaId_localEstoqueId_fkey" FOREIGN KEY ("empresaId", "localEstoqueId") REFERENCES "LocalEstoque" ("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT

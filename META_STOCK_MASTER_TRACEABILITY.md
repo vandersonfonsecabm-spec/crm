@@ -7,7 +7,7 @@ INTEGRATION_BRANCH=`feature/stock-mvp-e2r-e5`
 
 | Requisito | Source document/section | Implementação | Teste/gate | Status |
 |---|---|---|---|---|
-| Modelo canônico tenant-safe | E1 canonical data model | `backend/prisma/schema.prisma`, E2/E3 migrations | stock schema test, tenant gate | PASS |
+| Modelo canônico tenant-safe | E1 canonical data model | `backend/prisma/schema.prisma`, E2/E3 migrations | stock schema test, tenant gate (117 relações) | PASS |
 | FILE_IMPORT_CSV | E1 adapter/sync contract | `backend/src/stock/csv`, `adapters/fileCsv.js` | `stock-csv-staging.test.js` | PASS |
 | Preview/confirm/cancel | E1 API/UI security | `stock/imports/staging-service.js`, routes | CSV staging + MIME tests | PASS |
 | Sync/checkpoint/lease | E1 reliability ADRs | `stock/sync.js`, `stock/outbox.js` | `stock-sync-e2r-safety`, worker tests | PASS |

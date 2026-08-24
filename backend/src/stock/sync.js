@@ -195,27 +195,30 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
     const expectedLeaseExpiresAt = run?.leaseExpiresAt ? new Date(run.leaseExpiresAt) : null;
     if (!expectedLeaseExpiresAt || Number.isNaN(expectedLeaseExpiresAt.getTime()) || expectedLeaseExpiresAt.getTime() <= failedAt.getTime()) return false;
     try {
-      const changed = await prisma.execucaoSincronizacaoEstoque.updateMany({
-        where: {
-          id: runId,
-          empresaId,
-          estado: "RUNNING",
-          leaseOwner: owner,
-          AND: [{ leaseExpiresAt: expectedLeaseExpiresAt }, { leaseExpiresAt: { gt: failedAt } }],
-        },
-        data: { estado: "RETRY_WAIT", retryCount: { increment: 1 }, errorClass: String(error?.code || "STOCK_SYNC_FAILED").slice(0, 120), leaseOwner: null, leaseExpiresAt: null, revision: { increment: 1 }, updatedAt: failedAt },
-      });
-      if (changed.count !== 1) return false;
-      await emitFailureEvent({ empresaId, run, runId, error });
-      return true;
+      const transition = async (tx) => {
+        const changed = await tx.execucaoSincronizacaoEstoque.updateMany({
+          where: {
+            id: runId,
+            empresaId,
+            estado: "RUNNING",
+            leaseOwner: owner,
+            AND: [{ leaseExpiresAt: expectedLeaseExpiresAt }, { leaseExpiresAt: { gt: failedAt } }],
+          },
+          data: { estado: "RETRY_WAIT", retryCount: { increment: 1 }, errorClass: String(error?.code || "STOCK_SYNC_FAILED").slice(0, 120), leaseOwner: null, leaseExpiresAt: null, revision: { increment: 1 }, updatedAt: failedAt },
+        });
+        if (changed.count !== 1) return false;
+        await emitFailureEvent({ tx, empresaId, run, runId, error });
+        return true;
+      };
+      return prisma.$transaction ? await prisma.$transaction(transition) : await transition(prisma);
     } catch {
       return false;
     }
   }
 
-  async function emitFailureEvent({ empresaId, run, runId, error }) {
+  async function emitFailureEvent({ tx = prisma, empresaId, run, runId, error }) {
     const event = buildStockEvent({ type: "StockSyncFailed.v1", empresaId, syncRunId: runId, aggregateType: "StockSyncRun", aggregateId: String(runId), materialVersion: Number(run?.revision || 1) + 1, correlationId: run?.correlationId, payload: { errorClass: String(error?.code || "STOCK_SYNC_FAILED").slice(0, 120) } });
-    return prisma.$transaction((tx) => appendStockOutbox({ tx, event }));
+    return appendStockOutbox({ tx, event });
   }
 
   return { createRun, transitionRun, acquireLease, advanceCheckpoint, processRecords, startRun, transitions: TRANSITIONS };

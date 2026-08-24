@@ -15,7 +15,7 @@ test("E2 routes are exact and mounted before legacy 410 middleware", () => {
   mountStockRoutes({ app, prisma: {}, authenticate: () => {}, requireRole: () => () => {}, env: {} });
   const paths = methods.map((entry) => entry.route);
   for (const required of [
-    "/estoque/fontes", "/estoque/fontes/:id/validar", "/estoque/fontes/:id/sincronizar", "/estoque/importacoes/preview", "/estoque/importacoes/:id",
+    "/estoque/fontes", "/estoque/fontes/:id", "/estoque/produtos/:id", "/estoque/lotes/:id", "/estoque/fontes/:id/validar", "/estoque/fontes/:id/sincronizar", "/estoque/importacoes/preview", "/estoque/importacoes/:id",
     "/estoque/importacoes/:id/confirmar", "/estoque/importacoes/:id/cancelar", "/estoque/sincronizacoes/:id", "/estoque/sincronizacoes",
     "/estoque/produtos", "/estoque/lotes", "/estoque/saldos", "/estoque/freshness", "/estoque/problemas-qualidade",
     "/estoque/regras", "/estoque/regras/:ruleType", "/estoque/avaliacoes", "/estoque/regras/avaliar",
@@ -33,6 +33,7 @@ test("E2 routes are exact and mounted before legacy 410 middleware", () => {
     assert.doesNotMatch(text, /notifications\/service|upsertProjection|Notificacao/);
   }
   assert.match(fs.readFileSync(path.join(__dirname, "..", "src", "stock", "projection.js"), "utf8"), /upsertStockProjection/);
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, "..", "src", "stock", "routes.js"), "utf8"), /evaluateTenant\([^\n]*capabilities:\s*req\.body/);
 });
 
 test("MIME-aware parser preserves multipart uploads and allows bounded preview JSON", async () => {

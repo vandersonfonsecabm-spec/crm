@@ -115,6 +115,16 @@ function createStockImportService({
             revision: 1,
           })),
         });
+        if (typeof tx.capacidadeFonteEstoque?.upsert === "function") {
+          const capabilityValues = parsed.capabilities?.capabilities || Object.fromEntries(Object.entries(parsed.capabilities || {}).filter(([key, value]) => key !== "schemaVersion" && key !== "semantics" && typeof value === "boolean"));
+          for (const [codigo, suportada] of Object.entries(capabilityValues)) {
+            await tx.capacidadeFonteEstoque.upsert({
+              where: { empresaId_fonteId_codigo_versao: { empresaId, fonteId, codigo, versao: parsed.capabilities.version } },
+              update: { suportada: suportada === true, semanticaJson: JSON.stringify(parsed.capabilities.semantics || {}), observadaEm: now },
+              create: { empresaId, fonteId, codigo, suportada: suportada === true, versao: parsed.capabilities.version, semanticaJson: JSON.stringify(parsed.capabilities.semantics || {}), observadaEm: now },
+            });
+          }
+        }
         await writeAudit(tx, {
           empresaId,
           actorUsuarioId,

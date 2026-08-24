@@ -1048,7 +1048,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                 />
               )}
 
-              {activePage === "estoque" && <StockControlPanel />}
+              {activePage === "estoque" && <StockControlPanel detail={resolvedNavigation.detail} />}
 
               {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
                 <WhatsAppIntegrationCard

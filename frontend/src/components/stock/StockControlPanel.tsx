@@ -1,11 +1,11 @@
 import { AlertTriangle, FileUp, RefreshCw, ShieldAlert, Waves } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { ApiHttpError, fetchStockFreshness, fetchStockQualityIssues, fetchStockSources, previewStockCsv, type StockBalance, type StockQualityIssue, type StockSource } from "../../services/crmApi";
+import { ApiHttpError, fetchStockFreshness, fetchStockLots, fetchStockProducts, fetchStockQualityIssues, fetchStockSources, previewStockCsv, type StockBalance, type StockImportPreview, type StockLot, type StockProduct, type StockQualityIssue, type StockSource } from "../../services/crmApi";
 import { Button, EmptyState, ErrorState, Input, LoadingState, SectionHeader, Select, Surface, Textarea } from "../ui";
 
 type LoadState = "loading" | "ready" | "error" | "restricted";
 
-export default function StockControlPanel() {
+export default function StockControlPanel({ detail = null }: { detail?: string | null }) {
   const [state, setState] = useState<LoadState>("loading");
   const [sources, setSources] = useState<StockSource[]>([]);
   const [freshness, setFreshness] = useState<StockBalance[]>([]);
@@ -17,6 +17,13 @@ export default function StockControlPanel() {
   const [preview, setPreview] = useState<{ accepted?: number; rejected?: number; status?: string } | null>(null);
   const [previewError, setPreviewError] = useState("");
   const [previewing, setPreviewing] = useState(false);
+  const [detailRow, setDetailRow] = useState<StockProduct | StockLot | StockSource | null>(null);
+  const [detailError, setDetailError] = useState("");
+
+  const detailTarget = useMemo(() => {
+    const match = String(detail || "").match(/^(produtos|lotes|fontes):(\d+)$/);
+    return match ? { kind: match[1], id: Number(match[2]) } : null;
+  }, [detail]);
 
   useEffect(() => {
     let active = true;
@@ -33,6 +40,18 @@ export default function StockControlPanel() {
     return () => { active = false; };
   }, [retry]);
 
+  useEffect(() => {
+    if (!detailTarget) return;
+    let active = true;
+    const request = detailTarget.kind === "produtos" ? fetchStockProducts() : detailTarget.kind === "lotes" ? fetchStockLots() : fetchStockSources();
+    void request.then((result) => {
+      if (!active) return;
+      setDetailRow(result.items.find((item) => item.id === detailTarget.id) || null);
+      setDetailError("");
+    }).catch((error) => { if (active) setDetailError(error instanceof Error ? error.message : "Detalhe indisponível."); });
+    return () => { active = false; };
+  }, [detailTarget]);
+
   const freshnessSummary = useMemo(() => ({
     fresh: freshness.filter((item) => item.freshnessEstado === "FRESH").length,
     stale: freshness.filter((item) => item.freshnessEstado === "STALE").length,
@@ -45,8 +64,9 @@ export default function StockControlPanel() {
     if (!Number.isSafeInteger(id) || !content.trim()) return;
     setPreviewing(true); setPreviewError(""); setPreview(null);
     try {
-      const result = await previewStockCsv({ fonteId: id, content, filename: filename.trim() || undefined });
-      setPreview({ accepted: result.item.acceptedCount, rejected: result.item.rejectedCount, status: result.item.status });
+      const result = await previewStockCsv({ fonteId: id, content, filename: filename.trim() || undefined, delimiter: "comma" });
+      const importItem: StockImportPreview = result.item.importacao ?? (result.item as unknown as StockImportPreview);
+      setPreview({ accepted: importItem.acceptedCount, rejected: importItem.rejectedCount, status: importItem.status });
     } catch (error) { setPreviewError(error instanceof Error ? error.message : "Não foi possível gerar a prévia segura."); }
     finally { setPreviewing(false); }
   }
@@ -56,6 +76,7 @@ export default function StockControlPanel() {
   if (state === "error") return <Surface><ErrorState state="unavailable" title="Estoque indisponível" description="Não foi possível carregar a verdade operacional agora." onRetry={() => { setState("loading"); setRetry((value) => value + 1); }} /></Surface>;
 
   return <section className="space-y-3" aria-label="Controle operacional de estoque">
+    {detailTarget && <Surface><SectionHeader title={detailTarget.kind === "produtos" ? "Detalhe do produto" : detailTarget.kind === "lotes" ? "Detalhe do lote" : "Detalhe da fonte"} description="Leitura canônica tenant-scoped." />{detailError ? <ErrorState state="unavailable" title="Detalhe indisponível" description={detailError} /> : !detailRow ? <EmptyState state="empty" title="Registro não encontrado" description="O target pode ter sido removido ou não pertence ao tenant atual." /> : <dl className="grid gap-3 border-t border-[var(--border-default)] p-4 text-xs sm:grid-cols-2"><DetailField label="ID canônico" value={detailRow.id} /><DetailField label="Nome" value={detailName(detailRow)} /><DetailField label="Estado" value={detailState(detailRow)} /><DetailField label="Atualizado" value={detailUpdatedAt(detailRow)} /></dl>}</Surface>}
     <Surface className="overflow-hidden">
       <SectionHeader title="Controle de estoque" icon={<Waves size={16} />} description="Saldos, qualidade e importação sob uma única leitura operacional." />
       <div className="grid border-t border-[var(--border-default)] sm:grid-cols-3">
@@ -85,6 +106,27 @@ export default function StockControlPanel() {
     </div>
     <div className="flex justify-end"><Button leftIcon={<RefreshCw size={14} />} onClick={() => { setState("loading"); setRetry((value) => value + 1); }} size="sm" variant="secondary">Atualizar leitura</Button></div>
   </section>;
+}
+
+function DetailField({ label, value }: { label: string; value: string | number }) {
+  return <div><dt className="text-[10px] font-bold uppercase tracking-[.08em] text-[var(--text-muted)]">{label}</dt><dd className="mt-1 break-words font-medium text-[var(--text-primary)]">{value}</dd></div>;
+}
+
+function detailName(row: StockProduct | StockLot | StockSource) {
+  if (typeof (row as StockProduct).nomeExibicao === "string") return (row as StockProduct).nomeExibicao || "Indisponível";
+  if (typeof (row as StockSource).nome === "string") return (row as StockSource).nome || "Indisponível";
+  if (typeof (row as StockLot).codigoLote === "string") return (row as StockLot).codigoLote || "Lote sem código";
+  return "Indisponível";
+}
+
+function detailState(row: StockProduct | StockLot | StockSource) {
+  const value = (row as StockLot).estado || (row as StockSource).statusCiclo;
+  return typeof value === "string" && value ? value : "READY";
+}
+
+function detailUpdatedAt(row: StockProduct | StockLot | StockSource) {
+  const value = (row as StockProduct).updatedAt || (row as StockLot).observedAt;
+  return typeof value === "string" && value ? value : "Indisponível";
 }
 
 function FreshnessCell({ label, tone, value }: { label: string; tone: string; value: number }) {

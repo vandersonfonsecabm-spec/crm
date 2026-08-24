@@ -140,6 +140,15 @@ function mountStockRoutes({ app, prisma, authenticate, requireRole, env = proces
     return res.json({ ...result, items: result.items.map((item) => ({ id: item.id, freshnessEstado: item.freshnessEstado, dataConfidence: item.dataConfidence, observedAt: item.observedAt })) });
   }));
 
+  for (const [path, entity] of [["fontes", "fonteEstoque"], ["produtos", "produtoEstoque"], ["lotes", "loteEstoque"]]) {
+    app.get(`/estoque/${path}/:id`, ...guardRole("ADMIN", "GERENTE"), route(async (req, res) => {
+      const id = parsePathId(req.params.id);
+      const row = await prisma[entity].findFirst({ where: { id, empresaId: req.stockContext.empresaId } });
+      if (!row) throw new StockError("STOCK_NOT_FOUND", "Registro de estoque nao encontrado.");
+      return res.json({ item: entity === "fonteEstoque" ? publicSource(row) : publicEntity(entity, row) });
+    }));
+  }
+
   app.get("/estoque/regras", ...guardRole("ADMIN", "GERENTE"), route(async (req, res) => {
     const rows = await prisma.configuracaoRegraEstoque.findMany({ where: { empresaId: req.stockContext.empresaId }, orderBy: [{ ruleType: "asc" }, { scopeKey: "asc" }] });
     return res.json({ items: rows.map(publicRuleConfig) });
@@ -156,7 +165,7 @@ function mountStockRoutes({ app, prisma, authenticate, requireRole, env = proces
       enabled: body.enabled === true,
       expiryWindowDays: Number.isInteger(Number(body.expiryWindowDays)) ? Math.min(3650, Math.max(0, Number(body.expiryWindowDays))) : null,
       freshnessSlaMinutes: Number.isInteger(Number(body.freshnessSlaMinutes)) ? Math.min(7 * 24 * 60, Math.max(1, Number(body.freshnessSlaMinutes))) : null,
-      timezone: typeof body.timezone === "string" && body.timezone.length <= 80 ? body.timezone : "America/Sao_Paulo",
+      timezone: normalizeTimezone(body.timezone),
       requiredCapabilitiesJson: boundedRuleJson(body.requiredCapabilities),
       priorityBandsJson: boundedRuleJson(body.priorityBands),
       recipientPolicyJson: boundedRuleJson(body.recipientPolicy),
@@ -190,7 +199,7 @@ function mountStockRoutes({ app, prisma, authenticate, requireRole, env = proces
   }));
 
   app.post("/estoque/regras/avaliar", ...sourceGuardRole("ADMIN"), route(async (req, res) => {
-    const result = await getServices().rules.evaluateTenant(req.stockContext.empresaId, { limit: req.body?.limit, capabilities: req.body?.capabilities || {} });
+    const result = await getServices().rules.evaluateTenant(req.stockContext.empresaId, { limit: req.body?.limit });
     return res.json({ item: result });
   }));
 }
@@ -248,6 +257,7 @@ function publicEntity(entity, row) {
 function boundedJsonArray(value) { if (!value) return []; try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed.slice(0, 50) : []; } catch { return []; } }
 function safePublicConfig(value) { if (!value) return null; try { const parsed = typeof value === "string" ? JSON.parse(value) : value; return { delimiter: parsed?.delimiter === "semicolon" ? "semicolon" : parsed?.delimiter === "comma" ? "comma" : undefined, encoding: parsed?.encoding === "utf8" ? "utf8" : undefined }; } catch { return null; } }
 function boundedRuleJson(value) { if (value === undefined) return null; try { const text = JSON.stringify(value); return text.length <= 4000 ? text : null; } catch { return null; } }
+function normalizeTimezone(value) { if (value === undefined || value === null || value === "") return "America/Sao_Paulo"; if (typeof value !== "string" || value.length > 80) throw new StockError("STOCK_INVALID", "Timezone invalido."); try { new Intl.DateTimeFormat("en-US", { timeZone: value }).format(); return value; } catch { throw new StockError("STOCK_INVALID", "Timezone invalido."); } }
 function publicRuleConfig(row) { return { id: row.id, ruleType: row.ruleType, scopeType: row.scopeType, scopeKey: row.scopeKey, enabled: row.enabled, expiryWindowDays: row.expiryWindowDays, freshnessSlaMinutes: row.freshnessSlaMinutes, timezone: row.timezone, requiredCapabilities: parseJson(row.requiredCapabilitiesJson), priorityBands: parseJson(row.priorityBandsJson), recipientPolicy: parseJson(row.recipientPolicyJson), suppressionPolicy: parseJson(row.suppressionPolicyJson), revision: row.revision, updatedAt: row.updatedAt }; }
 function publicRuleEvaluation(row) { return { id: row.id, ruleType: row.ruleType, matched: row.matched, noMatchReason: row.noMatchReason, priority: row.priority, occurrenceKey: row.occurrenceKey, materialVersion: row.materialVersion, materialChange: row.materialChange, freshnessObserved: row.freshnessObserved, confidence: row.confidence, expiryDate: row.expiryDate, expiryPrecision: row.expiryPrecision, evaluatedAt: row.evaluatedAt, correlationId: row.correlationId }; }
 function parseJson(value) { if (!value) return null; try { return JSON.parse(value); } catch { return null; } }

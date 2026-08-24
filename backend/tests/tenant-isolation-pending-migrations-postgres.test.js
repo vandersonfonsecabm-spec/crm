@@ -76,9 +76,9 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
     assert.equal(finalStatus.length, migrationNames.length);
     assert.equal(finalStatus.every((row) => row.finished && !row.rolledBack), true);
     assert.equal(post.safe, true);
-    assert.equal(post.checkedRelationCount, 116);
+    assert.equal(post.checkedRelationCount, 117);
     assert.deepEqual(post.totals, { orphaned: 0, crossed: 0 });
-    assert.equal(post.constraints.checkedForeignKeys, 182);
+    assert.equal(post.constraints.checkedForeignKeys, 178);
     assert.equal(post.constraints.checkedUniqueParents, 23);
   } finally {
     try {

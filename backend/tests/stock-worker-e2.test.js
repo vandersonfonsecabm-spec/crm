@@ -23,7 +23,7 @@ test("outbox rejects malformed/future envelopes into quarantine without H8 calls
       updateMany: async (args) => { updates.push(args); return { count: 1 }; },
     },
   };
-  const result = await processStockOutboxBatch({ prisma, empresaId: 1, owner: "w", limit: 1, now: new Date(), h8ProjectionEnabled: true, consumer: async () => {} });
+  const result = await processStockOutboxBatch({ prisma, empresaId: 1, owner: "w", limit: 1, now: new Date(), h8ProjectionEnabled: true, consumer: async () => ({ handled: true }) });
   assert.equal(result.quarantined, 1);
   assert.equal(claims[0].where.empresaId, 1);
   assert.equal(updates.at(-1).data.status, "QUARANTINED");
@@ -48,4 +48,14 @@ test("outbox claims every row for the scoped tenant and reclaims expired process
   const rows = await claimStockOutbox({ prisma, empresaId: 7, owner: "w", limit: 2, now: new Date() });
   assert.equal(rows.length, 2);
   assert.equal(updates.every((entry) => entry.where.empresaId === 7), true);
+});
+
+test("rule cursor rotates beyond the first bounded page", async () => {
+  const cursors = [];
+  const rules = { evaluateTenant: async (_tenant, options) => { cursors.push(options.cursor || null); return { evaluated: 1, matched: 0, resolved: 0, nextCursor: cursors.length === 1 ? 10 : null }; } };
+  const env = { STOCK_DOMAIN_ENABLED: "true", STOCK_SYNC_WORKER_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "1", STOCK_H8_PROJECTION_ENABLED: "false" };
+  const prisma = {};
+  await runStockWorkerCycle({ prisma, rules, env, limit: 1 });
+  await runStockWorkerCycle({ prisma, rules, env, limit: 1 });
+  assert.deepEqual(cursors, [null, 10]);
 });

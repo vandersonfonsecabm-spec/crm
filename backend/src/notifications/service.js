@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
+const { sanitizeStructured } = require("../stock/contracts");
 
 const ACTIVE_FOLLOW_UP_STATUSES = ["PENDENTE", "EM_ANDAMENTO"];
 const MANAGER_ROLES = ["ADMIN", "GERENTE"];
@@ -18,6 +19,7 @@ const MAX_SOURCE_ROWS = 1000;
 const DEFAULT_LIMIT = 20;
 const EFFECTIVE_TIME_ZONE = "America/Sao_Paulo";
 const TENANT_ALLOWLIST_ENV = "H8_NOTIFICATION_TENANT_ALLOWLIST";
+const STOCK_RULE_TYPES = new Set(["STOCK_LOT_EXPIRING", "STOCK_LOT_EXPIRED", "STOCK_DATA_STALE", "STOCK_SYNC_FAILED"]);
 
 function createNotificationService({ prisma, env = process.env, clock = () => new Date() } = {}) {
   let tenantCursor = 0;
@@ -378,20 +380,25 @@ async function upsertStockProjection({
   const canonicalId = Number(targetId);
   const validTargets = new Set(["ESTOQUE_LOTE", "ESTOQUE_PRODUTO", "ESTOQUE_FONTE"]);
   if (!Number.isSafeInteger(tenantId) || tenantId < 1 || !Number.isSafeInteger(recipientId) || recipientId < 1) throw domainError(401, "STOCK_TENANT_CONTEXT_INVALID", "Contexto de estoque invalido.");
-  if (!validTargets.has(targetType) || !Number.isSafeInteger(canonicalId) || canonicalId < 1) throw domainError(422, "STOCK_TARGET_INVALID", "Destino canonico de estoque invalido.");
+  if (!validTargets.has(targetType) || !Number.isSafeInteger(canonicalId) || canonicalId < 1 || (targetType !== "ESTOQUE_LOTE" && targetSubId !== null && targetSubId !== undefined) || (targetSubId !== null && targetSubId !== undefined && (!Number.isSafeInteger(Number(targetSubId)) || Number(targetSubId) < 1))) throw domainError(422, "STOCK_TARGET_INVALID", "Destino canonico de estoque invalido.");
+  if (!STOCK_RULE_TYPES.has(String(ruleType || ""))) throw domainError(422, "STOCK_RULE_INVALID", "Regra de estoque invalida.");
+  if (!["OPEN", "RESOLVED"].includes(String(resolutionState || "OPEN"))) throw domainError(422, "STOCK_RESOLUTION_INVALID", "Estado de resolucao invalido.");
   if (!Number.isSafeInteger(Number(materialVersion)) || Number(materialVersion) < 1) throw domainError(422, "STOCK_MATERIAL_VERSION_INVALID", "Versao material invalida.");
-  const [recipient, target] = await Promise.all([
+  const [recipient, target, subTarget] = await Promise.all([
     prisma.usuario.findFirst({ where: { empresaId: tenantId, id: recipientId, ativo: true }, select: { id: true } }),
     targetType === "ESTOQUE_LOTE"
       ? prisma.loteEstoque.findFirst({ where: { empresaId: tenantId, id: canonicalId }, select: { id: true } })
       : targetType === "ESTOQUE_PRODUTO"
         ? prisma.produtoEstoque.findFirst({ where: { empresaId: tenantId, id: canonicalId }, select: { id: true } })
         : prisma.fonteEstoque.findFirst({ where: { empresaId: tenantId, id: canonicalId }, select: { id: true } }),
+    targetType === "ESTOQUE_LOTE" && targetSubId !== null && targetSubId !== undefined
+      ? prisma.localEstoque.findFirst({ where: { empresaId: tenantId, id: Number(targetSubId) }, select: { id: true } })
+      : null,
   ]);
-  if (!recipient || !target) throw domainError(404, "STOCK_TARGET_NOT_FOUND", "Destino de estoque nao encontrado.");
+  if (!recipient || !target || (targetSubId !== null && targetSubId !== undefined && !subTarget)) throw domainError(404, "STOCK_TARGET_NOT_FOUND", "Destino de estoque nao encontrado.");
   const key = boundedText(occurrenceKey, 240);
   if (!key) throw domainError(422, "STOCK_OCCURRENCE_INVALID", "Ocorrencia de estoque invalida.");
-  const safeSnapshot = boundedText(JSON.stringify(snapshot || {}), 8000);
+  const safeSnapshot = boundedText(JSON.stringify(sanitizeStructured(snapshot || {})), 8000);
   const next = {
     tipo: String(ruleType || "STOCK_RULE").slice(0, 80),
     prioridade: VALID_PRIORITIES.has(priority) ? priority : "ATENCAO",
@@ -424,13 +431,15 @@ async function upsertStockProjection({
       if (!existing) throw error;
     }
   }
+  if (Number.isSafeInteger(existing.stockMaterialVersion) && existing.stockMaterialVersion > next.stockMaterialVersion) throw domainError(409, "STOCK_MATERIAL_VERSION_REGRESSION", "Evento de estoque atrasado foi rejeitado.");
   const changed = Number(existing.stockMaterialVersion || 0) !== next.stockMaterialVersion
     || existing.stockSnapshotJson !== next.stockSnapshotJson
     || existing.prioridade !== next.prioridade
     || existing.stockResolutionState !== next.stockResolutionState;
   if (!changed) return { created: 0, updated: 0, reopened: 0 };
   const reopened = Boolean(existing.resolvidaEm);
-  await prisma.notificacao.update({ where: { id: existing.id }, data: { ...next, lidaEm: reopened ? null : existing.lidaEm, resolvidaEm: resolutionState === "RESOLVED" ? existing.resolvidaEm || new Date() : null, versao: { increment: 1 }, presentationVersion: { increment: 1 } } });
+  const materialChanged = Number(existing.stockMaterialVersion || 0) !== next.stockMaterialVersion;
+  await prisma.notificacao.update({ where: { id: existing.id }, data: { ...next, lidaEm: materialChanged || reopened ? null : existing.lidaEm, resolvidaEm: resolutionState === "RESOLVED" ? existing.resolvidaEm || new Date() : null, versao: { increment: 1 }, presentationVersion: { increment: 1 } } });
   return { created: 0, updated: 1, reopened: reopened ? 1 : 0 };
 }
 

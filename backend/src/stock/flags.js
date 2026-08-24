@@ -59,7 +59,9 @@ function stockEnabledForTenant(empresaId, env = process.env, options = {}) {
 
 function assertStockFlagsOffForProduction(env = process.env) {
   if (String(env.NODE_ENV || "").toLowerCase() !== "production") return;
-  if (stockFlags(env).ruleEngineEnabled || stockFlags(env).h8ProjectionEnabled) {
+  const flags = stockFlags(env);
+  const canaryApproved = parseBoolean(env.STOCK_RUNTIME_CANARY_APPROVED);
+  if ((flags.ruleEngineEnabled || flags.h8ProjectionEnabled) && (!canaryApproved || flags.tenantAllowlist.size !== 1)) {
     throw new Error("STOCK_RULE_OR_H8_RUNTIME_MUST_REMAIN_OFF_IN_E2");
   }
 }

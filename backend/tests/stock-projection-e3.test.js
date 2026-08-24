@@ -9,6 +9,7 @@ function makePrisma() {
   return {
     rows,
     usuario: { findFirst: async ({ where }) => where.id === 7 && where.empresaId === 3 ? { id: 7 } : null },
+    configuracaoNotificacaoEmpresa: { findUnique: async () => ({ habilitada: true }) },
     loteEstoque: { findFirst: async ({ where }) => where.id === 11 && where.empresaId === 3 ? { id: 11 } : null },
     produtoEstoque: { findFirst: async () => null },
     fonteEstoque: { findFirst: async () => null },
@@ -35,11 +36,23 @@ test("stock projection uses existing H8 row, coalesces and keeps canonical targe
   assert.equal(prisma.rows.length, 1);
   assert.equal(prisma.rows[0].alvoTipo, "ESTOQUE_LOTE");
   assert.equal(prisma.rows[0].stockMaterialVersion, 3);
+  prisma.rows[0].lidaEm = new Date("2026-08-23T13:00:00Z");
+  await projectStockEvaluation({ prisma, evaluation: { ...evaluation, materialVersion: 4, match: true }, recipients: [7], env, now: new Date("2026-08-23T12:00:00Z") });
+  assert.equal(prisma.rows[0].lidaEm, null);
+  await assert.rejects(() => projectStockEvaluation({ prisma, evaluation: { ...evaluation, materialVersion: 2, match: true }, recipients: [7], env, now: new Date("2026-08-23T12:00:00Z") }), /atrasado|regress/i);
 });
 
 test("projection stays disabled in shadow mode and never touches H8", async () => {
   const prisma = makePrisma();
   const result = await projectStockEvaluation({ prisma, evaluation: { empresaId: 3, ruleType: "STOCK_DATA_STALE", match: true, occurrenceKey: "3:stale:2", sourceConnectionId: 2, materialVersion: 1 }, recipients: [7], env: { ...env, STOCK_H8_PROJECTION_ENABLED: "false" } });
+  assert.equal(result.disabled, true);
+  assert.equal(prisma.rows.length, 0);
+});
+
+test("projection respects the existing H8 tenant setting", async () => {
+  const prisma = makePrisma();
+  prisma.configuracaoNotificacaoEmpresa.findUnique = async () => ({ habilitada: false });
+  const result = await projectStockEvaluation({ prisma, evaluation: { empresaId: 3, ruleType: "STOCK_DATA_STALE", match: true, occurrenceKey: "3:stale:2", sourceConnectionId: 2, materialVersion: 1 }, recipients: [7], env });
   assert.equal(result.disabled, true);
   assert.equal(prisma.rows.length, 0);
 });

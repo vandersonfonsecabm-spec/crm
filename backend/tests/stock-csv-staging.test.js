@@ -19,6 +19,8 @@ test("FILE_IMPORT_CSV exige cabecalhos estritos, identidade explicita e metadado
   assert.equal(preview.rejectedCount, 0);
   assert.equal(preview.capabilities.PRODUCT_IDENTITY, true);
   assert.equal(preview.capabilities.EXPIRATION_DATE, true);
+  assert.equal(preview.capabilities.semantics.quantityRelevantForExpiry, true);
+  assert.equal(preview.lines[0].normalized.quantityRelevantForExpiry, true);
   assert.match(preview.lines[0].sourceVersion, /^manual:[a-f0-9]{64}$/);
   assert.deepEqual(preview.lines[0].normalized.expiryDate, "2026-12");
   assert.deepEqual(preview.lines[0].normalized.expiryPrecision, "MONTH");

@@ -21,7 +21,7 @@ test("E4 conecta somente as leituras E2 e mantém o gate de prévia explícito",
   assert.match(panel, /Nenhuma linha é aplicada antes/);
   assert.match(panel, /role="alert"/);
   assert.match(panel, /aria-label="Controle operacional de estoque"/);
-  assert.match(dashboard, /<StockControlPanel \/>/);
+  assert.match(dashboard, /<StockControlPanel\b/);
   assert.match(navigation, /stockDetail/);
   assert.match(navigation, /\/estoque\/(produtos|lotes|fontes)/);
   assert.doesNotMatch(panel, /localStorage|sessionStorage|window\.open/);

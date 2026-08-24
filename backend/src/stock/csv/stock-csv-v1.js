@@ -108,7 +108,7 @@ async function parseStockCsv({ input, delimiter, schemaVersion = STOCK_CSV_SCHEM
     byteSize: byteLimiter.byteSize,
     fileHash: byteLimiter.digest(),
     headers,
-    capabilities: capabilityManifest(new Set(headers)),
+    capabilities: capabilityManifest(new Set(headers), { quantityRelevantForExpiry: headers.includes("on_hand"), quantitySemantic: headers.includes("on_hand") ? "ON_HAND" : "UNKNOWN" }),
     lines,
     rowCount: lines.length,
     acceptedCount,
@@ -203,6 +203,7 @@ function normalizeLine(raw, rowNumber) {
       unit,
       quantities,
       availableSemantics,
+      quantityRelevantForExpiry: quantities.on_hand !== null,
       sourceLotId: optionalIdentifier(raw.source_lot_id, "source_lot_id"),
       lotCode: optionalText(raw.lot_code, 120),
       expiryDate: expiry.date,
@@ -283,7 +284,7 @@ function parseOptionalTimestamp(value) {
   return date.toISOString();
 }
 
-function capabilityManifest(headers) {
+function capabilityManifest(headers, semantics = {}) {
   return {
     schemaVersion: STOCK_CSV_SCHEMA_VERSION,
     // A manual CSV has no completeness/generation proof, so it is IMPORT only.
@@ -307,6 +308,7 @@ function capabilityManifest(headers) {
     RATE_LIMIT_METADATA: false,
     MOVEMENTS: false,
     TOMBSTONES_DELETIONS: false,
+    semantics: { quantityRelevantForExpiry: headers.has("on_hand"), quantitySemantic: headers.has("on_hand") ? "ON_HAND" : "UNKNOWN", ...semantics },
   };
 }
 

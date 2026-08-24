@@ -4,6 +4,7 @@ const { stockFlags, stockEnabledForTenant } = require("./flags");
 const { buildStockEvent } = require("./events");
 const { appendStockOutbox } = require("./outbox");
 const { evaluateStockState, RULE_TYPES, RULE_SCHEMA_VERSION } = require("./rules");
+const { classifyFreshness } = require("./freshness");
 const { sanitizeStructured } = require("./contracts");
 const { StockError } = require("./errors");
 
@@ -79,16 +80,16 @@ function eventForEvaluation(evaluation, eventType, now) {
 function createStockRuleService({ prisma, env = process.env, clock = () => new Date(), logger = console } = {}) {
   if (!prisma) throw new StockError("STOCK_UNAVAILABLE", "Prisma de estoque ausente.", undefined, 503);
 
-  async function evaluateTenant(empresaId, { limit = 100, now = clock(), capabilities = {} } = {}) {
+  async function evaluateTenant(empresaId, { limit = 100, cursor = null, now = clock() } = {}) {
     const tenantId = Number(empresaId);
     const flags = stockFlags(env);
     if (!stockEnabledForTenant(tenantId, env) || !flags.ruleEngineEnabled) return { disabled: true, evaluated: 0, matched: 0, resolved: 0 };
     const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
-    const [balances, configs] = await Promise.all([
+    const [balances, configs, overrides] = await Promise.all([
       prisma.saldoEstoque.findMany({
-        where: { empresaId: tenantId },
+        where: { empresaId: tenantId, ...(cursor ? { id: { gt: Number(cursor) } } : {}), fonteAutoritativa: { statusCiclo: "ACTIVE" } },
         orderBy: { id: "asc" },
-        take: safeLimit,
+        take: safeLimit + 1,
         include: {
           produtoEstoque: { select: { id: true, nomeExibicao: true } },
           lote: { select: { id: true, validadeEm: true, precisaoValidade: true, revision: true } },
@@ -97,8 +98,15 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         },
       }),
       prisma.configuracaoRegraEstoque.findMany({ where: { empresaId: tenantId, scopeType: "TENANT", scopeKey: "TENANT" } }),
+      typeof prisma.overrideEstoque?.findMany === "function" ? prisma.overrideEstoque.findMany({ where: { empresaId: tenantId } }) : [],
     ]);
-    const sourceIds = [...new Set(balances.map((balance) => Number(balance.fonteAutoritativaId)).filter((id) => Number.isSafeInteger(id) && id > 0))];
+    const sourceRows = typeof prisma.fonteEstoque?.findMany === "function"
+      ? await prisma.fonteEstoque.findMany({ where: { empresaId: tenantId, statusCiclo: "ACTIVE" }, select: { id: true, statusCiclo: true } })
+      : [];
+    const sourceIds = [...new Set([
+      ...balances.map((balance) => Number(balance.fonteAutoritativaId)),
+      ...sourceRows.map((source) => Number(source.id)),
+    ].filter((id) => Number.isSafeInteger(id) && id > 0))];
     const capabilityRows = sourceIds.length && typeof prisma.capacidadeFonteEstoque?.findMany === "function"
       ? await prisma.capacidadeFonteEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceIds }, suportada: true }, select: { fonteId: true, codigo: true } })
       : [];
@@ -109,9 +117,17 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
       capabilityBySource.set(row.fonteId, current);
     }
     const configByType = new Map(configs.map((config) => [config.ruleType, config]));
-    let evaluated = 0; let matched = 0; let resolved = 0;
-    for (const balance of balances) {
-      const state = {
+    const overrideByKey = new Map(overrides.map((override) => [`${override.ruleType}:${override.targetType}:${override.targetId}`, override]));
+    const sourceScopeIds = [...new Set(sourceRows.map((row) => Number(row.id)).filter((id) => Number.isSafeInteger(id) && id > 0))];
+    const [checkpointRows, failedRuns] = await Promise.all([
+      sourceScopeIds.length && typeof prisma.checkpointSincronizacaoEstoque?.findMany === "function" ? prisma.checkpointSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } } }) : [],
+      sourceScopeIds.length && typeof prisma.execucaoSincronizacaoEstoque?.findMany === "function" ? prisma.execucaoSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds }, estado: { in: ["FAILED", "RETRY_WAIT"] } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] }) : [],
+    ]);
+    const checkpointBySource = new Map(checkpointRows.map((row) => [row.fonteId, row]));
+    const failedBySource = new Map();
+    for (const run of failedRuns) if (!failedBySource.has(run.fonteId)) failedBySource.set(run.fonteId, run);
+    const pageBalances = balances.slice(0, safeLimit);
+    const stateItems = pageBalances.map((balance) => ({ balance, state: {
         empresaId: tenantId,
         sourceConnectionId: balance.fonteAutoritativaId,
         produtoEstoqueId: balance.produtoEstoqueId,
@@ -125,11 +141,30 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         semanticaDisponivel: balance.semanticaDisponivel,
         revision: balance.revision,
         correlationId: `stock-rule:${tenantId}:${balance.id}:${balance.revision}`,
-      };
+      } }));
+    for (const source of sourceRows) {
+      const checkpoint = checkpointBySource.get(source.id);
+      const failedRun = failedBySource.get(source.id);
+      const staleConfig = configByType.get("STOCK_DATA_STALE") || {};
+      const freshness = classifyFreshness({ lastSuccessfulSyncAt: checkpoint?.lastSuccessfulSyncAt, slaMs: Number(staleConfig.freshnessSlaMinutes || 0) * 60000, now });
+      stateItems.push({ balance: null, state: { empresaId: tenantId, sourceConnectionId: source.id, freshnessEstado: freshness, syncFailed: failedRun?.estado === "FAILED", retriesExhausted: failedRun?.estado === "FAILED" && Number(failedRun.retryCount || 0) >= 3, errorFamily: failedRun?.errorClass || "UNKNOWN", correlationId: failedRun?.correlationId || `stock-rule:${tenantId}:source:${source.id}` } });
+    }
+    let evaluated = 0; let matched = 0; let resolved = 0;
+    for (const { balance, state } of stateItems) {
       for (const ruleType of RULE_TYPES) {
-        const config = configByType.get(ruleType) || { ruleType, enabled: false };
-        const effectiveCapabilities = Object.keys(capabilities || {}).length ? capabilities : { capabilities: capabilityBySource.get(balance.fonteAutoritativaId) || {} };
+        const baseConfig = configByType.get(ruleType) || { ruleType, enabled: false };
+        const targetType = state.loteEstoqueId ? "ESTOQUE_LOTE" : state.produtoEstoqueId ? "ESTOQUE_PRODUTO" : "ESTOQUE_FONTE";
+        const targetId = state.loteEstoqueId || state.produtoEstoqueId || state.sourceConnectionId;
+        const override = overrideByKey.get(`${ruleType}:${targetType}:${targetId}`);
+        let config = baseConfig;
+        if (override) {
+          let threshold = {};
+          try { threshold = override.thresholdJson ? JSON.parse(override.thresholdJson) : {}; } catch { threshold = {}; }
+          config = { ...baseConfig, enabled: override.enabled === null || override.enabled === undefined ? baseConfig.enabled : override.enabled, expiryWindowDays: Number.isInteger(threshold.expiryWindowDays) ? threshold.expiryWindowDays : baseConfig.expiryWindowDays, freshnessSlaMinutes: override.freshnessSlaMinutes ?? baseConfig.freshnessSlaMinutes, priority: override.priority || baseConfig.priority, recipientPolicy: override.recipientPolicyJson ? (() => { try { return JSON.parse(override.recipientPolicyJson); } catch { return null; } })() : baseConfig.recipientPolicy };
+        }
+        const effectiveCapabilities = { capabilities: capabilityBySource.get(state.sourceConnectionId) || {} };
         const evaluation = evaluateStockState({ ruleType, state, config, capabilities: effectiveCapabilities, now });
+        if (config.priority) evaluation.priority = config.priority;
         evaluated += 1;
         if (evaluation.match) matched += 1;
         const retentionUntil = new Date(now.getTime() + DEFAULT_RETENTION_DAYS * 86400000);
@@ -151,7 +186,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
       }
     }
     logger.info?.("stock_rule_evaluation_cycle", { empresaId: tenantId, evaluated, matched, resolved });
-    return { disabled: false, evaluated, matched, resolved };
+    return { disabled: false, evaluated, matched, resolved, nextCursor: balances.length > safeLimit ? pageBalances.at(-1)?.id || null : null };
   }
 
   return { evaluateTenant };

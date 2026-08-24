@@ -26,6 +26,7 @@ test("E3 evaluation FKs are composite tenant-scoped", () => {
     assert.match(sql, /AvaliacaoRegraEstoque_empresaId_produtoEstoqueId_fkey/);
     assert.match(sql, /AvaliacaoRegraEstoque_empresaId_loteEstoqueId_fkey/);
     assert.match(sql, /AvaliacaoRegraEstoque_empresaId_localEstoqueId_fkey/);
+    assert.match(sql, /AvaliacaoRegraEstoque_empresaId_sourceConnectionId_fkey/);
     assert.match(sql, /\("empresaId", "produtoEstoqueId"\)/);
   }
 });

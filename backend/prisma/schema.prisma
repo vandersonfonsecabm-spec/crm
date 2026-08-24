@@ -1472,6 +1472,7 @@ model FonteEstoque {
   observacoes              ObservacaoEstoque[]
   problemasQualidade       ProblemaQualidadeEstoque[]
   importacoes              ImportacaoEstoque[]
+  avaliacoesRegraEstoque   AvaliacaoRegraEstoque[] @relation("AvaliacaoRegraEstoqueFonte")
 
   @@unique([empresaId, nome])
   @@unique([empresaId, id])
@@ -1935,6 +1936,7 @@ model AvaliacaoRegraEstoque {
   produtoEstoque           ProdutoEstoque? @relation(fields: [empresaId, produtoEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   loteEstoque              LoteEstoque?  @relation(fields: [empresaId, loteEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   localEstoque             LocalEstoque? @relation(fields: [empresaId, localEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  fonte                    FonteEstoque? @relation("AvaliacaoRegraEstoqueFonte", fields: [empresaId, sourceConnectionId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([empresaId, id])
   @@index([empresaId, ruleType, evaluatedAt])

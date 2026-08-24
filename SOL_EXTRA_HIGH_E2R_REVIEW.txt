@@ -1,5 +1,5 @@
 SOL_EXTRA_HIGH_E2R_REVIEW
 
 Isolated schema/rehearsal: PASS.
-Tenant gate: PASS at 116 relations and manifest 0ad871737d723d3e1fb072f9528897ffd85ba518b91dca5d530938a7aea30d3a.
+Tenant gate: PASS at 117 relations and manifest 26dfa2a9ed3df280fe5762d35bfd646c52dae31e0c7f67ba4e97828a8666a456.
 Official database/deploy: NOT REVIEWED; remains blocked.

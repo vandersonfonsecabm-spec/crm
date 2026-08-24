@@ -11,16 +11,19 @@ function projectionTarget(evaluation) {
   return null;
 }
 
-function h8TenantEnabled(empresaId, env) {
+async function h8TenantEnabled(prisma, empresaId, env) {
   if (!parseBoolean(env.H8_NOTIFICATIONS_ENABLED)) return false;
   const ids = parseTenantAllowlist(env.H8_NOTIFICATION_TENANT_ALLOWLIST);
-  return ids.includes(Number(empresaId));
+  if (!ids.includes(Number(empresaId))) return false;
+  if (typeof prisma.configuracaoNotificacaoEmpresa?.findUnique !== "function") return false;
+  const settings = await prisma.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId: Number(empresaId) }, select: { habilitada: true } });
+  return settings?.habilitada === true;
 }
 
 async function projectStockEvaluation({ prisma, evaluation, recipients = [], env = process.env, now = new Date() } = {}) {
   const tenantId = Number(evaluation?.empresaId);
   const flags = stockFlags(env);
-  if (!stockEnabledForTenant(tenantId, env) || !flags.ruleEngineEnabled || !flags.h8ProjectionEnabled || !h8TenantEnabled(tenantId, env)) return { created: 0, updated: 0, disabled: true };
+  if (!stockEnabledForTenant(tenantId, env) || !flags.ruleEngineEnabled || !flags.h8ProjectionEnabled || !(await h8TenantEnabled(prisma, tenantId, env))) return { created: 0, updated: 0, disabled: true };
   const target = projectionTarget(evaluation);
   if (!target) return { created: 0, updated: 0, disabled: false, rejected: "STOCK_TARGET_INVALID" };
   const title = evaluation.ruleType === "STOCK_LOT_EXPIRED" ? "Lote de estoque vencido" : evaluation.ruleType === "STOCK_LOT_EXPIRING" ? "Lote de estoque próximo do vencimento" : evaluation.ruleType === "STOCK_DATA_STALE" ? "Dados de estoque desatualizados" : "Sincronização de estoque falhou";

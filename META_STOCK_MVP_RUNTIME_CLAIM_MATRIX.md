@@ -3,16 +3,16 @@
 | Claim | Status | Evidence |
 |---|---|---|
 | E2_SOURCE_IDENTITY | PASS | integrated HEAD `5c286e7` ancestor/worktree |
-| POSTGRES_EMPTY_REHEARSAL | PASS (isolated) | Neon empty branch schema/FK/index queries |
-| POSTGRES_RESTORE_REHEARSAL | PARTIAL | synthetic representative branch; no official dump |
-| E2_POSTGRES_FUNCTIONAL | PASS (SQL-level) | canonical rows, tenant rejection, dedupe |
-| E2_IDEMPOTENCY_POSTGRES | PASS | outbox/import unique conflict queries |
-| E2_CONCURRENCY_POSTGRES | PASS (focused) | lease/CAS unit evidence; no two-live Prisma workers |
-| E2_TENANT_ISOLATION_POSTGRES | PASS (isolated) | composite FK violation query |
-| E2_OUTBOX_POSTGRES | PASS (isolated) | pending/dedupe/lease schema checks |
-| BACKEND_FULL_SUITE | PASS WITH TARGETED FINAL RERUN | full runner reached 29/30 before final historical-fixture expectation correction; final tenant-gate file rerun 30/30, all stock focals green |
-| FRONTEND_FULL_SUITE | PASS WITH TRANSIENT VITE RERUN | 189/190 then affected test PASS |
-| TENANT_GATE | PASS | architecture/pre-migration 116 relations |
+| POSTGRES_EMPTY_REHEARSAL | PASS (SQL-level isolated) | Disposable Neon branch: 13 migration packages, 70 tables, 101 stock indexes, 45 stock FKs; branch deleted |
+| POSTGRES_RESTORE_REHEARSAL | PARTIAL | prior synthetic representative branch evidence; no official dump/restore |
+| E2_POSTGRES_FUNCTIONAL | PASS (SQL-level) | disposable PostgreSQL schema assertions and same-tenant insert |
+| E2_IDEMPOTENCY_POSTGRES | PASS (schema-level) | unique/dedupe constraints inspected; no Prisma runtime replay |
+| E2_CONCURRENCY_POSTGRES | PARTIAL | lease/CAS focused tests; two-live Prisma workers not run |
+| E2_TENANT_ISOLATION_POSTGRES | PASS (isolated) | cross-tenant composite FK insert rejected |
+| E2_OUTBOX_POSTGRES | PASS (schema/focused) | outbox indexes, dedupe, lease and retry tests |
+| BACKEND_FULL_SUITE | BLOCKED | official isolated Prisma runner stopped at generic engine error; 27 stock-focused tests pass |
+| FRONTEND_FULL_SUITE | PASS WITH TRANSIENT VITE RERUN | 189/190 then affected test passed alone; lint/build pass |
+| TENANT_GATE | PASS | architecture/pre-migration 117 relations |
 | E3_PRODUCT_DECISIONS_FROZEN | PASS | decisions document |
 | E3_DEFAULT_OFF | PASS | flags/worker tests |
 | STOCK_RULE_EVALUATION_CONTRACT | PASS | rules service/evaluator tests |
