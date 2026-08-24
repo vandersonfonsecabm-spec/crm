@@ -3,13 +3,13 @@
 CURRENT_STATE_AS_OF=2026-08-23
 REPORT_TIMEZONE=America/Sao_Paulo (BRT)
 SOURCE_CHECKPOINT_REQUESTED=c398bbe5b3794c342fe3a630dcff65421a97e485
-SOURCE_CHECKPOINT_EFFECTIVE=43f0378ed514c6f640fcc65548d6e842489b18b3
+SOURCE_CHECKPOINT_EFFECTIVE=9259973a6d1619e18eebd79d2a06744c4a9e6f3b
 RELEASE_BRANCH=release/stock-mvp-e5r
-STOCK_MVP_RELEASE_COMMIT=43f0378ed514c6f640fcc65548d6e842489b18b3
+STOCK_MVP_RELEASE_COMMIT=9259973a6d1619e18eebd79d2a06744c4a9e6f3b
 BASELINE_SHA=a5a280c3ebc54741ced02a77d4da5ec51834d583
 HISTORICAL_618A_PRESERVED=PASS
 
-The requested checkpoint exists and is an ancestor of the candidate. Later commits are the causal source-rule material-version fix (`2ed75b2`), the final source-gate documentation commit (`fff712d`), the E5R preflight reports (`9860c72`), the focused sync-failure family/version correction plus timestamp reconciliation (`78b4050`), the durable run-sequence material-version floor with retention regression proof (`4b30871`), the INTEGER-bounded durable floor plus PostgreSQL boundary tests (`317d4ed`), the stale-rule floor needed to prevent same-cycle outbox collisions (`19a6c7b`), bounded database-side MAX aggregation with query-shape coverage (`9ee3d25`), bounded latest-run/failure-history reads (`e34f4ed`), and null-safe latest-run handling with production-path tests (`43f0378`). No unrelated drift was found.
+The requested checkpoint exists and is an ancestor of the candidate. Later commits are the causal source-rule material-version fix (`2ed75b2`), the final source-gate documentation commit (`fff712d`), the E5R preflight reports (`9860c72`), the focused sync-failure family/version correction plus timestamp reconciliation (`78b4050`), the durable run-sequence material-version floor with retention regression proof (`4b30871`), the INTEGER-bounded durable floor plus PostgreSQL boundary tests (`317d4ed`), the stale-rule floor needed to prevent same-cycle outbox collisions (`19a6c7b`), bounded database-side MAX aggregation with query-shape coverage (`9ee3d25`), bounded latest-run/failure-history reads (`e34f4ed`), null-safe latest-run handling with production-path tests (`43f0378`), and explicit query select allowlists with shape assertions (`9259973`). No unrelated drift was found.
 
 OFFICIAL_ENVIRONMENT_IDENTIFIED=PASS
 - Railway project: glistening-playfulness (`ddfbf66c-e274-47b1-9493-286232d2f426`)
