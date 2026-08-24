@@ -135,6 +135,20 @@ test("sync failure cleanup compares the original lease token before retrying a r
   assert.equal(updates[0].where.AND[0].leaseExpiresAt.getTime(), leaseExpiresAt.getTime());
 });
 
+test("sync failure budget terminalizes a run after the third retry", async () => {
+  const now = new Date();
+  const run = { id: 19, empresaId: 1, fonteId: 4, estado: "RUNNING", leaseOwner: "worker-a", leaseExpiresAt: new Date(now.getTime() + 60000), revision: 2, retryCount: 2 };
+  let update;
+  const prisma = {
+    fonteEstoque: { findFirst: async () => ({ id: 4, empresaId: 1, statusCiclo: "ACTIVE" }) },
+    execucaoSincronizacaoEstoque: { findFirst: async () => ({ ...run }), updateMany: async (query) => { update = query; return { count: 1 }; } },
+    $transaction: async (callback) => callback(prisma),
+  };
+  const service = createStockSyncService({ prisma, canonicalService: { applyNormalizedRecord: async () => { throw new Error("failure"); } }, env: ENABLED_ENV, clock: () => now, logger: { warn() {} } });
+  await assert.rejects(service.processRecords({ empresaId: 1, fonteId: 4, runId: 19, owner: "worker-a", records: [{}] }));
+  assert.equal(update.data.estado, "FAILED");
+});
+
 test("sync failure transition and StockSyncFailed outbox append share one transaction", async () => {
   const now = new Date();
   const run = { id: 18, empresaId: 1, fonteId: 4, estado: "RUNNING", leaseOwner: "worker-a", leaseExpiresAt: new Date(now.getTime() + 60000), revision: 5, correlationId: "failure-correlation" };
@@ -207,6 +221,19 @@ test("transient outbox consumer errors return the row to bounded retry", async (
     updateMany: async (query) => { updates.push(query); return { count: 1 }; },
   } };
   const result = await processStockOutboxBatch({ prisma, empresaId: 1, owner: "worker-a", h8ProjectionEnabled: true, allowReserved: true, eventTypes: ["StockProjectionRequested.v1"], consumer: async () => { const error = new Error("temporary"); error.code = "STOCK_UNAVAILABLE"; error.status = 503; throw error; } });
+  assert.equal(result.quarantined, 0);
+  assert.equal(updates.at(-1).data.status, "PENDING");
+});
+
+test("provider connection failures remain retryable", async () => {
+  const event = buildStockEvent({ type: "StockProjectionRequested.v1", empresaId: 1, aggregateType: "FonteEstoque", aggregateId: "2", materialVersion: 1, payload: { occurrenceKey: "1:source:2" } });
+  const updates = [];
+  const prisma = { eventoOutboxEstoque: {
+    findMany: async () => [{ id: 10, empresaId: 1, attempts: 1, payloadStructuredJson: JSON.stringify(event), leaseExpiresAt: new Date(Date.now() + 30000) }],
+    updateMany: async (query) => { updates.push(query); return { count: 1 }; },
+  } };
+  const error = Object.assign(new Error("database unavailable"), { code: "P1001" });
+  const result = await processStockOutboxBatch({ prisma, empresaId: 1, owner: "worker-a", h8ProjectionEnabled: true, allowReserved: true, eventTypes: ["StockProjectionRequested.v1"], consumer: async () => { throw error; } });
   assert.equal(result.quarantined, 0);
   assert.equal(updates.at(-1).data.status, "PENDING");
 });

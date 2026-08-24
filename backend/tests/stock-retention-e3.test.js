@@ -10,7 +10,7 @@ test("retention purges only expired terminal evidence and never pending outbox",
   const expired = new Date("2026-08-01T00:00:00Z");
   const delegates = {};
   const remaining = new Map();
-  for (const model of ["linhaImportacaoEstoque", "importacaoEstoque", "observacaoEstoque", "problemaQualidadeEstoque", "eventoOutboxEstoque", "execucaoSincronizacaoEstoque"]) {
+  for (const model of ["linhaImportacaoEstoque", "importacaoEstoque", "observacaoEstoque", "problemaQualidadeEstoque", "avaliacaoRegraEstoque", "eventoOutboxEstoque", "execucaoSincronizacaoEstoque"]) {
     delegates[model] = {
       findMany: async ({ where }) => {
         const key = `${model}:${JSON.stringify(where.status || where.estado || {})}`;
@@ -21,7 +21,7 @@ test("retention purges only expired terminal evidence and never pending outbox",
           else if (model === "problemaQualidadeEstoque" && where.estado?.in?.includes("RESOLVED")) ids = [8];
           else if (model === "importacaoEstoque" && where.status?.in?.includes("APPLIED")) ids = [9];
           else if (model === "execucaoSincronizacaoEstoque" && where.estado?.in?.includes("SUCCEEDED")) ids = [10];
-          else if (model === "linhaImportacaoEstoque" || model === "observacaoEstoque") ids = [11];
+          else if (model === "linhaImportacaoEstoque" || model === "observacaoEstoque" || model === "avaliacaoRegraEstoque") ids = [11];
           remaining.set(key, ids);
         }
         return remaining.get(key).map((id) => ({ id }));

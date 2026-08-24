@@ -1,6 +1,6 @@
 import { AlertTriangle, FileUp, RefreshCw, ShieldAlert, Waves } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { ApiHttpError, fetchStockFreshness, fetchStockLots, fetchStockProducts, fetchStockQualityIssues, fetchStockSources, previewStockCsv, type StockBalance, type StockImportPreview, type StockLot, type StockProduct, type StockQualityIssue, type StockSource } from "../../services/crmApi";
+import { ApiHttpError, fetchStockFreshness, fetchStockLot, fetchStockProduct, fetchStockQualityIssues, fetchStockSource, fetchStockSources, previewStockCsv, type StockBalance, type StockImportPreview, type StockLot, type StockProduct, type StockQualityIssue, type StockSource } from "../../services/crmApi";
 import { Button, EmptyState, ErrorState, Input, LoadingState, SectionHeader, Select, Surface, Textarea } from "../ui";
 
 type LoadState = "loading" | "ready" | "error" | "restricted";
@@ -43,10 +43,10 @@ export default function StockControlPanel({ detail = null }: { detail?: string |
   useEffect(() => {
     if (!detailTarget) return;
     let active = true;
-    const request = detailTarget.kind === "produtos" ? fetchStockProducts() : detailTarget.kind === "lotes" ? fetchStockLots() : fetchStockSources();
+    const request = detailTarget.kind === "produtos" ? fetchStockProduct(detailTarget.id) : detailTarget.kind === "lotes" ? fetchStockLot(detailTarget.id) : fetchStockSource(detailTarget.id);
     void request.then((result) => {
       if (!active) return;
-      setDetailRow(result.items.find((item) => item.id === detailTarget.id) || null);
+      setDetailRow(result.item);
       setDetailError("");
     }).catch((error) => { if (active) setDetailError(error instanceof Error ? error.message : "Detalhe indisponível."); });
     return () => { active = false; };

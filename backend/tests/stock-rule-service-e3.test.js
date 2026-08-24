@@ -29,7 +29,7 @@ test("rule service persists versioned evaluation and reserved E3 outbox events o
   const service = createStockRuleService({ prisma, env: { STOCK_DOMAIN_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "3" }, clock: () => new Date("2026-08-23T12:00:00Z") });
   const result = await service.evaluateTenant(3, { capabilities: { capabilities: { LOT_IDENTIFIER: true, EXPIRATION_DATE: true, ON_HAND_QUANTITY: true, UNIT_OF_MEASURE: true, SOURCE_UPDATED_AT: true } } });
   assert.equal(result.disabled, false);
-  assert.equal(result.evaluated, 4);
+  assert.equal(result.evaluated, 2);
   assert.ok(result.matched >= 1);
   assert.ok(prisma.evaluations.some((row) => row.ruleType === "STOCK_LOT_EXPIRING" && row.matched === true));
   assert.ok(prisma.outbox.some((row) => row.eventType === "StockRuleMatched.v1"));
@@ -53,7 +53,7 @@ test("rule service ignores caller-forged capabilities and uses persisted source 
 });
 
 test("rule service evaluates stale state at source scope even without balances", async () => {
-  const prisma = mockPrisma({ capabilities: true });
+  const prisma = mockPrisma({ capabilities: false });
   prisma.saldoEstoque.findMany = async () => [];
   prisma.fonteEstoque = { findMany: async () => [{ id: 2, statusCiclo: "ACTIVE" }] };
   prisma.configuracaoRegraEstoque.findMany = async () => [{ ruleType: "STOCK_DATA_STALE", enabled: true, freshnessSlaMinutes: 60, scopeType: "TENANT", scopeKey: "TENANT" }];

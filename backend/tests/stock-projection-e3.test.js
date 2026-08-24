@@ -16,6 +16,12 @@ function makePrisma() {
     notificacao: {
       findUnique: async ({ where }) => rows.find((row) => row.empresaId === where.empresaId_destinatarioId_occurrenceKey.empresaId && row.destinatarioId === where.empresaId_destinatarioId_occurrenceKey.destinatarioId && row.occurrenceKey === where.empresaId_destinatarioId_occurrenceKey.occurrenceKey) || null,
       create: async ({ data }) => { const row = { id: rows.length + 1, ...data, resolvidaEm: null, lidaEm: null, versao: 1, presentationVersion: 1 }; rows.push(row); return row; },
+      updateMany: async ({ where, data }) => {
+        const row = rows.find((item) => item.id === where.id && item.empresaId === where.empresaId && item.versao === where.versao && item.stockMaterialVersion === where.stockMaterialVersion);
+        if (!row) return { count: 0 };
+        for (const [key, value] of Object.entries(data)) row[key] = value && typeof value === "object" && Object.hasOwn(value, "increment") ? Number(row[key] || 0) + value.increment : value;
+        return { count: 1 };
+      },
       update: async ({ where, data }) => { const row = rows.find((item) => item.id === where.id); Object.assign(row, data); return row; },
     },
   };
@@ -72,7 +78,8 @@ test("missing H8 recipients become an explicit quality issue", async () => {
     problemaQualidadeEstoque: { create: async ({ data }) => quality.push(data) },
   };
   const consumer = createProjectionConsumer({ prisma, empresaId: 3, env: {}, now: new Date("2026-08-23T12:00:00Z") });
-  await consumer({ eventType: "StockProjectionRequested.v1", materialVersion: 1, payload: { occurrenceKey: "3:stale:2" } });
+  const outcome = await consumer({ eventType: "StockProjectionRequested.v1", materialVersion: 1, payload: { occurrenceKey: "3:stale:2" } });
   assert.equal(quality.length, 1);
   assert.equal(quality[0].tipo, "STOCK_RECIPIENT_MISSING");
+  assert.equal(outcome.handled, false);
 });

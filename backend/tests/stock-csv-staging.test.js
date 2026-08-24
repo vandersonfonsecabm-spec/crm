@@ -120,6 +120,7 @@ test("preview, replay por idempotencia, confirmacao CAS e staging duravel nao pe
   assert.equal(prisma.state.imports[0].safeFilename, ".._.._estoque.csv");
   assert.equal(prisma.state.lines.length, 2);
   assert.equal(prisma.state.lines[0].normalizedJsonSanitized.includes("never persisted"), false);
+  assert.equal(prisma.state.capabilities[0].versao, "stock-csv.v1");
 
   const replay = await service.preview({
     empresaId: 1,
@@ -200,6 +201,7 @@ function memoryPrisma() {
     lines: [],
     sources: [{ id: 10, empresaId: 1, tipoFonte: "FILE_IMPORT_CSV", statusCiclo: "ACTIVE", schemaVersion: "stock-csv.v1" }],
     syncRuns: [],
+    capabilities: [],
   };
   let importId = 1;
   let lineId = 1;
@@ -250,6 +252,14 @@ function memoryPrisma() {
     },
     eventoAuditoriaEstoque: {
       async create({ data }) { state.audits.push({ ...data }); return data; },
+    },
+    capacidadeFonteEstoque: {
+      async upsert({ create, update }) {
+        const existing = state.capabilities.find((row) => row.empresaId === create.empresaId && row.fonteId === create.fonteId && row.codigo === create.codigo && row.versao === create.versao);
+        if (existing) Object.assign(existing, update);
+        else state.capabilities.push({ ...create });
+        return existing || create;
+      },
     },
     execucaoSincronizacaoEstoque: {
       async create({ data }) { const item = { id: syncRunId++, revision: 1, ...data }; state.syncRuns.push(item); return { ...item }; },

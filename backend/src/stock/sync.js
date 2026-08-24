@@ -204,7 +204,7 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
             leaseOwner: owner,
             AND: [{ leaseExpiresAt: expectedLeaseExpiresAt }, { leaseExpiresAt: { gt: failedAt } }],
           },
-          data: { estado: "RETRY_WAIT", retryCount: { increment: 1 }, errorClass: String(error?.code || "STOCK_SYNC_FAILED").slice(0, 120), leaseOwner: null, leaseExpiresAt: null, revision: { increment: 1 }, updatedAt: failedAt },
+        data: { estado: Number(run?.retryCount || 0) + 1 >= 3 ? "FAILED" : "RETRY_WAIT", retryCount: { increment: 1 }, errorClass: String(error?.code || "STOCK_SYNC_FAILED").slice(0, 120), leaseOwner: null, leaseExpiresAt: null, revision: { increment: 1 }, updatedAt: failedAt },
         });
         if (changed.count !== 1) return false;
         await emitFailureEvent({ tx, empresaId, run, runId, error });

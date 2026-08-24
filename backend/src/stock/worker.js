@@ -36,7 +36,7 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
         logger,
         h8ProjectionEnabled: flags.h8ProjectionEnabled && flags.ruleEngineEnabled,
         allowReserved: flags.h8ProjectionEnabled && flags.ruleEngineEnabled,
-        eventTypes: flags.h8ProjectionEnabled && flags.ruleEngineEnabled ? ["StockProjectionRequested.v1", "StockRuleResolved.v1"] : null,
+        eventTypes: flags.h8ProjectionEnabled && flags.ruleEngineEnabled ? ["StockProjectionRequested.v1", "StockRuleMatched.v1", "StockRuleResolved.v1"] : null,
         consumer: flags.h8ProjectionEnabled && flags.ruleEngineEnabled ? createProjectionConsumer({ prisma, empresaId, env, now }) : null,
       });
       results.claimed += result.claimed; results.processed += result.processed; results.quarantined += result.quarantined;
@@ -52,18 +52,30 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
 
 function createProjectionConsumer({ prisma, empresaId, env, now }) {
   return async (event) => {
-    if (event.eventType !== "StockProjectionRequested.v1" && event.eventType !== "StockRuleResolved.v1") return { handled: false };
+    if (event.eventType !== "StockProjectionRequested.v1" && event.eventType !== "StockRuleMatched.v1" && event.eventType !== "StockRuleResolved.v1") return { handled: false };
     const occurrenceKey = event.payload?.occurrenceKey;
     if (!occurrenceKey || typeof prisma.avaliacaoRegraEstoque?.findFirst !== "function") return { handled: false };
     const row = await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId, occurrenceKey, materialVersion: event.materialVersion }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] });
     if (!row) return { handled: false };
-    const recipients = await prisma.usuario.findMany({ where: { empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL }, papel: { in: ["ADMIN", "GERENTE"] } }, select: { id: true } });
+    let recipientPolicy = {};
+    if (typeof prisma.configuracaoRegraEstoque?.findFirst === "function") {
+      const config = await prisma.configuracaoRegraEstoque.findFirst({ where: { empresaId, ruleType: row.ruleType, scopeType: "TENANT", scopeKey: "TENANT" }, select: { recipientPolicyJson: true } });
+      try { recipientPolicy = config?.recipientPolicyJson ? JSON.parse(config.recipientPolicyJson) : {}; } catch { recipientPolicy = {}; }
+    }
+    const configuredIds = Array.isArray(recipientPolicy.usuarioIds || recipientPolicy.userIds)
+      ? [...new Set((recipientPolicy.usuarioIds || recipientPolicy.userIds).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))]
+      : [];
+    const recipientWhere = { empresaId, ativo: true, email: { not: SYSTEM_ACTOR_EMAIL }, papel: { in: ["ADMIN", "GERENTE"] }, ...(configuredIds.length ? { id: { in: configuredIds } } : {}) };
+    const recipients = await prisma.usuario.findMany({ where: recipientWhere, select: { id: true } });
     if (!recipients.length) {
       const fonteId = Number(row.sourceConnectionId || event.payload?.sourceConnectionId || 0);
       if (fonteId > 0 && typeof prisma.problemaQualidadeEstoque?.create === "function") {
-        await prisma.problemaQualidadeEstoque.create({ data: { empresaId, fonteId, tipo: "STOCK_RECIPIENT_MISSING", severidade: "HIGH", targetRef: row.occurrenceKey, estado: "OPEN", detailsSanitizedJson: JSON.stringify({ ruleType: row.ruleType, occurrenceKey: row.occurrenceKey }), retentionUntil: new Date(now.getTime() + 90 * 86400000) } });
+        const existingQuality = typeof prisma.problemaQualidadeEstoque.findFirst === "function"
+          ? await prisma.problemaQualidadeEstoque.findFirst({ where: { empresaId, fonteId, tipo: "STOCK_RECIPIENT_MISSING", targetRef: row.occurrenceKey, estado: "OPEN" } })
+          : null;
+        if (!existingQuality) await prisma.problemaQualidadeEstoque.create({ data: { empresaId, fonteId, tipo: "STOCK_RECIPIENT_MISSING", severidade: "HIGH", targetRef: row.occurrenceKey, estado: "OPEN", detailsSanitizedJson: JSON.stringify({ ruleType: row.ruleType, occurrenceKey: row.occurrenceKey }), retentionUntil: new Date(now.getTime() + 90 * 86400000) } });
       }
-      return { handled: true, recipients: 0 };
+      return { handled: false, retryable: true, recipients: 0 };
     }
     await projectStockEvaluation({
       prisma,

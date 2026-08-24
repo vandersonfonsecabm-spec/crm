@@ -117,11 +117,12 @@ function createStockImportService({
         });
         if (typeof tx.capacidadeFonteEstoque?.upsert === "function") {
           const capabilityValues = parsed.capabilities?.capabilities || Object.fromEntries(Object.entries(parsed.capabilities || {}).filter(([key, value]) => key !== "schemaVersion" && key !== "semantics" && typeof value === "boolean"));
+          const capabilityVersion = parsed.capabilities.schemaVersion || parsed.capabilities.version || STOCK_CSV_SCHEMA_VERSION;
           for (const [codigo, suportada] of Object.entries(capabilityValues)) {
             await tx.capacidadeFonteEstoque.upsert({
-              where: { empresaId_fonteId_codigo_versao: { empresaId, fonteId, codigo, versao: parsed.capabilities.version } },
+              where: { empresaId_fonteId_codigo_versao: { empresaId, fonteId, codigo, versao: capabilityVersion } },
               update: { suportada: suportada === true, semanticaJson: JSON.stringify(parsed.capabilities.semantics || {}), observadaEm: now },
-              create: { empresaId, fonteId, codigo, suportada: suportada === true, versao: parsed.capabilities.version, semanticaJson: JSON.stringify(parsed.capabilities.semantics || {}), observadaEm: now },
+              create: { empresaId, fonteId, codigo, suportada: suportada === true, versao: capabilityVersion, semanticaJson: JSON.stringify(parsed.capabilities.semantics || {}), observadaEm: now },
             });
           }
         }

@@ -78,6 +78,7 @@ function mountStockRoutes({ app, prisma, authenticate, requireRole, env = proces
     const { empresaId, usuarioId } = req.stockContext;
     const source = await prisma.fonteEstoque.findFirst({ where: { id: fonteId, empresaId } });
     if (!source) throw new StockError("STOCK_NOT_FOUND", "Fonte nao encontrada.");
+    if (source.tipoFonte === "FILE_IMPORT_CSV") throw new StockError("STOCK_SYNC_CSV_IMPORT_REQUIRED", "Fonte CSV deve ser processada por preview e confirmacao de importacao.", undefined, 409);
     const result = await getServices().sync.createRun({ empresaId, fonteId, modo: req.body?.modo || "IMPORT", actorUsuarioId: usuarioId, correlationId: req.get("X-Correlation-Id") || null, snapshotGeneration: req.body?.snapshotGeneration || null });
     return res.status(202).json({ item: publicSync(result) });
   }));

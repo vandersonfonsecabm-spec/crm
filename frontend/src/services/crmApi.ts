@@ -2094,6 +2094,9 @@ export type StockList<T> = { items: T[]; nextCursor?: string | null };
 export async function fetchStockSources() { return requestApiGetAuthenticated<StockList<StockSource>>("/estoque/fontes"); }
 export async function fetchStockProducts() { return requestApiGetAuthenticated<StockList<StockProduct>>("/estoque/produtos"); }
 export async function fetchStockLots() { return requestApiGetAuthenticated<StockList<StockLot>>("/estoque/lotes"); }
+export async function fetchStockSource(id: number) { return requestApiGetAuthenticated<{ item: StockSource }>(`/estoque/fontes/${id}`); }
+export async function fetchStockProduct(id: number) { return requestApiGetAuthenticated<{ item: StockProduct }>(`/estoque/produtos/${id}`); }
+export async function fetchStockLot(id: number) { return requestApiGetAuthenticated<{ item: StockLot }>(`/estoque/lotes/${id}`); }
 export async function fetchStockFreshness() { return requestApiGetAuthenticated<StockList<StockBalance>>("/estoque/freshness"); }
 export async function fetchStockQualityIssues() { return requestApiGetAuthenticated<StockList<StockQualityIssue>>("/estoque/problemas-qualidade"); }
 export async function previewStockCsv(payload: { fonteId: number; content: string; filename?: string; delimiter?: "comma" | "semicolon" }) {

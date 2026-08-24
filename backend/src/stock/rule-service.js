@@ -145,13 +145,17 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
     for (const source of sourceRows) {
       const checkpoint = checkpointBySource.get(source.id);
       const failedRun = failedBySource.get(source.id);
-      const staleConfig = configByType.get("STOCK_DATA_STALE") || {};
+      const staleBaseConfig = configByType.get("STOCK_DATA_STALE") || {};
+      const staleOverride = overrideByKey.get(`STOCK_DATA_STALE:ESTOQUE_FONTE:${source.id}`);
+      let staleConfig = staleBaseConfig;
+      if (staleOverride) staleConfig = { ...staleBaseConfig, freshnessSlaMinutes: staleOverride.freshnessSlaMinutes ?? staleBaseConfig.freshnessSlaMinutes };
       const freshness = classifyFreshness({ lastSuccessfulSyncAt: checkpoint?.lastSuccessfulSyncAt, slaMs: Number(staleConfig.freshnessSlaMinutes || 0) * 60000, now });
-      stateItems.push({ balance: null, state: { empresaId: tenantId, sourceConnectionId: source.id, freshnessEstado: freshness, syncFailed: failedRun?.estado === "FAILED", retriesExhausted: failedRun?.estado === "FAILED" && Number(failedRun.retryCount || 0) >= 3, errorFamily: failedRun?.errorClass || "UNKNOWN", correlationId: failedRun?.correlationId || `stock-rule:${tenantId}:source:${source.id}` } });
+      stateItems.push({ balance: null, state: { empresaId: tenantId, sourceConnectionId: source.id, freshnessEstado: freshness, sourceFreshnessEvidence: Boolean(checkpoint?.lastSuccessfulSyncAt), syncFailed: failedRun?.estado === "FAILED", retriesExhausted: failedRun?.estado === "FAILED" && Number(failedRun.retryCount || 0) >= 3, errorFamily: failedRun?.errorClass || "UNKNOWN", revision: Number(failedRun?.revision || checkpoint?.revision || 1), correlationId: failedRun?.correlationId || `stock-rule:${tenantId}:source:${source.id}` } });
     }
     let evaluated = 0; let matched = 0; let resolved = 0;
     for (const { balance, state } of stateItems) {
-      for (const ruleType of RULE_TYPES) {
+      const ruleTypes = balance ? ["STOCK_LOT_EXPIRING", "STOCK_LOT_EXPIRED"] : ["STOCK_DATA_STALE", "STOCK_SYNC_FAILED"];
+      for (const ruleType of ruleTypes) {
         const baseConfig = configByType.get(ruleType) || { ruleType, enabled: false };
         const targetType = state.loteEstoqueId ? "ESTOQUE_LOTE" : state.produtoEstoqueId ? "ESTOQUE_PRODUTO" : "ESTOQUE_FONTE";
         const targetId = state.loteEstoqueId || state.produtoEstoqueId || state.sourceConnectionId;
@@ -162,7 +166,9 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
           try { threshold = override.thresholdJson ? JSON.parse(override.thresholdJson) : {}; } catch { threshold = {}; }
           config = { ...baseConfig, enabled: override.enabled === null || override.enabled === undefined ? baseConfig.enabled : override.enabled, expiryWindowDays: Number.isInteger(threshold.expiryWindowDays) ? threshold.expiryWindowDays : baseConfig.expiryWindowDays, freshnessSlaMinutes: override.freshnessSlaMinutes ?? baseConfig.freshnessSlaMinutes, priority: override.priority || baseConfig.priority, recipientPolicy: override.recipientPolicyJson ? (() => { try { return JSON.parse(override.recipientPolicyJson); } catch { return null; } })() : baseConfig.recipientPolicy };
         }
-        const effectiveCapabilities = { capabilities: capabilityBySource.get(state.sourceConnectionId) || {} };
+        const observedCapabilities = { ...(capabilityBySource.get(state.sourceConnectionId) || {}) };
+        if (!balance && state.sourceFreshnessEvidence) observedCapabilities.SOURCE_UPDATED_AT = true;
+        const effectiveCapabilities = { capabilities: observedCapabilities };
         const evaluation = evaluateStockState({ ruleType, state, config, capabilities: effectiveCapabilities, now });
         if (config.priority) evaluation.priority = config.priority;
         evaluated += 1;
