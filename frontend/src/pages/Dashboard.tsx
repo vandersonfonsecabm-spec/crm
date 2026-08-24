@@ -56,7 +56,7 @@ import useDashboardActions from "../hooks/useDashboardActions";
 import { ApiHttpError, canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchCommunicationAttentionSummary, fetchDashboardSummaryFromBackend, getAuthSession, shouldInvalidateAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession, NotificationTargetKind } from "../services/crmApi";
 import { resolveTenantFeatureAccess } from "../config/featureFlags";
-import { EmptyState, ErrorState } from "../components/ui";
+import { Button, EmptyState, ErrorState } from "../components/ui";
 import { LockKeyhole } from "lucide-react";
 
 import { emptyClient, statusList } from "../data/clientDefaults";
@@ -154,6 +154,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     negociosKanban: negociosKanbanEnabled,
   } = resolveTenantFeatureAccess(authSession?.capabilities);
   const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
+  const aiCommerceEnabled = authSession?.capabilities?.aiCommerce === true;
   const requestedActivePage = resolvedNavigation.page;
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations
     ? "comercial"
@@ -1013,8 +1014,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   />
                 </>
               )}
-              {activePage === "comercial" && resolvedNavigation.detail === "catalogo-comercial" && <CommerceCatalogPanel />}
-              {activePage === "comercial" && resolvedNavigation.detail === "ia-comercial" && <CommerceSettingsPanel />}
+              {activePage === "comercial" && !resolvedNavigation.detail && <div className="flex flex-wrap items-center gap-2 rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-muted)] p-3" aria-label="Atalhos comerciais">
+                <Button onClick={() => navigate("/catalogo-comercial")} size="sm" variant="secondary">Catálogo comercial</Button>
+                <Button onClick={() => navigate("/configuracoes/ia-comercial")} size="sm" variant="ghost">Configurações da IA comercial</Button>
+              </div>}
+              {activePage === "comercial" && (resolvedNavigation.detail === "catalogo-comercial" || resolvedNavigation.detail === "catalogo-comercial-produtos") && <CommerceCatalogPanel enabled={aiCommerceEnabled} onOpenProduct={(id) => navigate(`/catalogo-comercial/produtos/${encodeURIComponent(id)}`)} />}
+              {activePage === "comercial" && resolvedNavigation.detail?.startsWith("catalogo-comercial-produto:") && <CommerceCatalogPanel enabled={aiCommerceEnabled} productId={Number(resolvedNavigation.detail.split(":")[1])} onBack={() => navigate("/catalogo-comercial/produtos")} />}
+              {activePage === "comercial" && resolvedNavigation.detail === "ia-comercial" && <CommerceSettingsPanel enabled={aiCommerceEnabled} />}
               {activePage === "comercial" && !resolvedNavigation.detail && (
                 <DashboardControlCenter
                   clients={clients}

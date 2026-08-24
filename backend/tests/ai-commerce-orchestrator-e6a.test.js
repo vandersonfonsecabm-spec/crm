@@ -76,7 +76,7 @@ test("draft approval persists tenant/revision state when the AI draft model is a
   const draftModel = {
     create: async ({ data }) => { const row = { id: "draft-db-1", ...data }; rows.set(row.id, row); return row; },
     findFirst: async ({ where }) => rows.get(where.id) || null,
-    updateMany: async ({ where, data }) => { const row = rows.get(where.id); if (!row || row.empresaId !== where.empresaId || row.revision !== where.revision) return { count: 0 }; row.status = data.status; row.revision += 1; return { count: 1 }; },
+    updateMany: async ({ where, data }) => { const row = rows.get(where.id); if (!row || row.empresaId !== where.empresaId || row.revision !== where.revision || (where.status && row.status !== where.status)) return { count: 0 }; row.status = data.status; if (data.revision?.increment) row.revision += data.revision.increment; return { count: 1 }; },
   };
   const tools = createCommercialToolRegistry({ services: {} });
   const orchestrator = createAICommerceOrchestrator({ prisma: { aICommerceDraft: draftModel }, connection: new MockCommerceAIConnection({ enabled: true, allowlist: [1] }), toolRegistry: tools, featureGate: async () => true });
@@ -127,6 +127,53 @@ test("context is bounded and URLs fail closed", () => {
   assert.equal(isAllowedHttpsUrl("https://172.16.0.1/admin", "172.16.0.1"), false);
 });
 
+test("connector receives catalog context only after server-side redaction", async () => {
+  let received;
+  const connection = {
+    generateCommercialDecision: async (input) => {
+      received = input.catalogContext;
+      return { intent: "PRODUCT_SEARCH", confidence: 0.5, nextAction: "ASK_CLARIFYING_QUESTION", missingInformation: ["uso"], requestedTools: [], draftResponse: "Qual uso você dará ao produto?" };
+    },
+  };
+  const orchestrator = createAICommerceOrchestrator({ connection, toolRegistry: { execute: async () => [] }, featureGate: async () => true });
+  await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 11, messageRevision: 1, mode: MODES.SUGGESTION_ONLY, enabled: true, mockEnabled: true, latestMessage: "Quero um produto", catalogContext: { secretToken: "abc", nested: { password: "pw", label: "safe" } } });
+  assert.equal(received.secretToken, "[redacted]");
+  assert.equal(received.nested.password, "[redacted]");
+  assert.equal(received.nested.label, "safe");
+});
+
+test("concurrent human approvals claim one draft before side effects", async () => {
+  let effects = 0;
+  const connection = { generateCommercialDecision: async () => ({ intent: "PRODUCT_SEARCH", confidence: 0.5, nextAction: "OFFER_READY", requestedTools: [], draftResponse: "Produto encontrado." }) };
+  const orchestrator = createAICommerceOrchestrator({ connection, featureGate: async () => true, toolRegistry: {
+    execute: async (name) => {
+      if (name === "registerProductInterest") {
+        effects += 1;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      return { ok: true };
+    },
+  } });
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 12, messageRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
+  const approvals = await Promise.allSettled([
+    orchestrator.approve({ draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 2, conversationRevision: "", approvalToken: "a", idempotencyKey: "a" }),
+    orchestrator.approve({ draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 2, conversationRevision: "", approvalToken: "b", idempotencyKey: "b" }),
+  ]);
+  assert.equal(effects, 1);
+  assert.equal(approvals.filter((item) => item.status === "fulfilled").length, 1);
+  assert.equal(approvals.filter((item) => item.status === "rejected" && item.reason?.code === "AI_DRAFT_CONFLICT").length, 1);
+});
+
+test("human can reject a draft without executing a tool", async () => {
+  let executed = 0;
+  const connection = { generateCommercialDecision: async () => ({ intent: "PRODUCT_SEARCH", confidence: 0.5, nextAction: "OFFER_READY", requestedTools: [], draftResponse: "Produto encontrado." }) };
+  const orchestrator = createAICommerceOrchestrator({ connection, featureGate: async () => true, toolRegistry: { execute: async () => { executed += 1; return {}; } } });
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 13, messageRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
+  const rejected = await orchestrator.reject({ draftId: run.draft.draftId, empresaId: 1, conversationRevision: "", actorUsuarioId: 2, approvalToken: "reject", idempotencyKey: "reject-1" });
+  assert.equal(rejected.status, "REJECTED");
+  assert.equal(executed, 0);
+});
+
 test("customer-safe sanitization serializes dates and Decimal prices", () => {
   class Decimal {
     constructor(value) { this.value = value; }
@@ -144,6 +191,7 @@ test("AI feature gate is globally fail-closed by default", () => {
   assert.equal(isGlobalFeatureEnabled(FEATURE_KEYS.AI_COMMERCE, {}), false);
   assert.equal(isGlobalFeatureEnabled(FEATURE_KEYS.AI_COMMERCE, { AI_COMMERCE_ENABLED: "true" }), true);
 });
+
 
 test("audit maps required tenant-scoped run fields and redacts prompt data", async () => {
   const writes = [];

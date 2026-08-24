@@ -132,10 +132,18 @@ function createCommercialCatalogService({ prisma, clock = () => new Date(), poli
     return update({ empresaId, catalogProductId, expectedRevision, data: { visibility: VISIBILITY.PUBLISHED, sellabilityPolicy: "STOCK_CANONICAL_ONLY" } });
   }
 
-  async function list({ empresaId, cursor = null, limit = 20, includeHidden = false, category = null, brand = null } = {}) {
+  async function list({ empresaId, cursor = null, limit = 20, includeHidden = false, category = null, brand = null, visibility = null } = {}) {
     const tenantId = requireTenantId(empresaId);
     const take = Math.min(100, Math.max(1, Number(limit) || 20));
     const where = { empresaId: tenantId, ...(includeHidden ? {} : { visibility: VISIBILITY.PUBLISHED, archivedAt: null }) };
+    if (visibility !== null && visibility !== undefined && String(visibility).trim()) {
+      const requestedVisibility = String(visibility).trim().toUpperCase();
+      if (!Object.values(VISIBILITY).includes(requestedVisibility)) throw new CommerceCatalogError("COMMERCE_INVALID_VISIBILITY", "Visibilidade invalida.", 422);
+      if (!includeHidden && requestedVisibility !== VISIBILITY.PUBLISHED) throw new CommerceCatalogError("COMMERCE_VISIBILITY_FORBIDDEN", "Esta visibilidade exige permissao de gestor.", 403);
+      where.visibility = requestedVisibility;
+      if (requestedVisibility === VISIBILITY.ARCHIVED) where.archivedAt = { not: null };
+      if (requestedVisibility !== VISIBILITY.ARCHIVED) where.archivedAt = null;
+    }
     if (category) where.category = boundedString(category, 255, "category");
     if (brand) where.brand = boundedString(brand, 255, "brand");
     if (cursor !== null && cursor !== undefined) where.id = { gt: requirePositiveId(cursor, "COMMERCE_CURSOR_INVALID") };

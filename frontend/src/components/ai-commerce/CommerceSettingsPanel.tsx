@@ -12,7 +12,7 @@ import { Badge, Button, EmptyState, ErrorState, LoadingState, SectionHeader, Sel
  * palette: graphite workbench, moss for verified mock, amber for review-required state;
  * depth/spacing: borders-only, 4px rhythm, controls remain easy to scan on mobile.
  */
-export default function CommerceSettingsPanel() {
+export default function CommerceSettingsPanel({ enabled = true }: { enabled?: boolean }) {
   const [settings, setSettings] = useState<AICommerceSettings | null>(null);
   const [connection, setConnection] = useState<AICommerceConnectionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,6 +21,12 @@ export default function CommerceSettingsPanel() {
   const [feedback, setFeedback] = useState("");
 
   const load = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      setSettings({ ...defaultOffSettings() });
+      setConnection(null);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -32,7 +38,7 @@ export default function CommerceSettingsPanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -45,7 +51,7 @@ export default function CommerceSettingsPanel() {
     setFeedback("");
     setError("");
     try {
-      const next = await updateAICommerceSettings({ mode, enabled: mode !== "OFF", humanApprovalRequired: true, revision: settings.revision });
+      const next = await updateAICommerceSettings({ mode, enabled: mode !== "OFF", allowedTools: settings.allowedTools, maxTools: settings.maxTools, maxContextMessages: settings.maxContextMessages, maxProducts: settings.maxProducts, humanApprovalRequired: true, catalogVisibilityPolicy: settings.catalogVisibilityPolicy, exactQuantityPolicy: settings.exactQuantityPolicy, stalePolicy: settings.stalePolicy, noPricePolicy: settings.noPricePolicy, revision: settings.revision });
       setSettings(next);
       setFeedback(mode === "OFF" ? "IA Comercial permanece desligada para este tenant." : `Modo ${modeLabel(mode)} salvo. Nenhum envio automático foi habilitado.`);
     } catch (nextError) {
@@ -72,6 +78,7 @@ export default function CommerceSettingsPanel() {
   if (loading) return <LoadingState label="Carregando configurações da IA Comercial" rows={5} />;
   if (error && !settings) return <Surface><ErrorState description="A Inbox e o catálogo permanecem disponíveis sem a fundação de IA." onRetry={() => void load()} state={error.toLowerCase().includes("acesso") ? "restricted" : "unavailable"} title={error} /></Surface>;
   if (!settings) return <Surface><EmptyState description="A configuração ainda não está disponível neste ambiente." icon={<Bot size={19} />} state="empty" title="Fundação não configurada" /></Surface>;
+  if (!enabled) return <section aria-label="Configurações da IA Comercial" className="space-y-3" data-testid="ai-commerce-settings-panel"><Surface><div className="p-4"><h2 className="text-sm font-semibold text-[var(--text-primary)]">Fundação comercial OFF</h2><p className="mt-1 text-[11px] leading-4 text-[var(--text-secondary)]">O tenant não possui a capacidade AI_COMMERCE habilitada. Nenhum endpoint de IA é chamado e nenhum provedor real está conectado.</p></div></Surface></section>;
 
   const connectionReady = connection?.status === "MOCK_AVAILABLE";
   return <section aria-label="Configurações da IA Comercial" className="space-y-3" data-testid="ai-commerce-settings-panel">
@@ -130,4 +137,8 @@ function settingsErrorMessage(error: unknown) {
   if (error instanceof ApiHttpError && error.status === 404) return "A fundação comercial ainda não foi publicada neste ambiente.";
   if (error instanceof Error && error.message) return error.message;
   return "Não foi possível carregar as configurações agora.";
+}
+
+function defaultOffSettings(): AICommerceSettings {
+  return { enabled: false, mode: "OFF", allowedTools: [], maxTools: 5, maxContextMessages: 20, maxProducts: 3, humanApprovalRequired: true, revision: 1 };
 }

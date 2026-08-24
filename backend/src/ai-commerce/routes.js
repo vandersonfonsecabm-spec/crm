@@ -98,6 +98,16 @@ function mountAICommerceRoutes({
     } catch (error) { return sendError(res, error); }
   });
 
+  router.post("/drafts/:id/reject", express.json({ limit: "16kb" }), async (req, res) => {
+    try {
+      if (!orchestrator || typeof orchestrator.reject !== "function") return res.status(503).json({ error: { code: "AI_COMMERCE_UNAVAILABLE", message: "Rejeicao indisponivel." } });
+      const body = req.body || {};
+      rejectForeignTenant(body, req.aiCommerceContext.empresaId);
+      const result = await orchestrator.reject({ ...body, draftId: req.params.id, empresaId: req.aiCommerceContext.empresaId, conversationId: body.conversationId || undefined, actorUsuarioId: req.aiCommerceContext.actorUsuarioId });
+      return res.json({ item: redactRun(result) });
+    } catch (error) { return sendError(res, error); }
+  });
+
   app.use("/ai-commerce", router);
   return router;
 }
@@ -112,7 +122,14 @@ async function readSettings({ prisma, settingsService, empresaId }) {
 async function writeSettings({ prisma, settingsService, empresaId, actorUsuarioId, body }) {
   const expectedRevision = body.revision === undefined ? null : Number(body.revision);
   if (expectedRevision !== null && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)) throw routeError("AI_SETTINGS_REVISION_INVALID", "Revisao de configuracao invalida.", 422);
-  const data = normalizeSettings(body);
+  const current = typeof settingsService?.get === "function"
+    ? await settingsService.get({ empresaId })
+    : prisma?.aiCommerceSettings?.findUnique
+      ? await prisma.aiCommerceSettings.findUnique({ where: { empresaId } })
+      : prisma?.aICommerceSettings?.findUnique
+        ? await prisma.aICommerceSettings.findUnique({ where: { empresaId } })
+        : null;
+  const data = normalizeSettings(body, current || defaultSettings(empresaId));
   if (typeof settingsService?.update === "function") return settingsService.update({ empresaId, actorUsuarioId, expectedRevision, data });
   const model = prisma.aiCommerceSettings || prisma.aICommerceSettings;
   if (!model?.upsert) return { ...defaultSettings(empresaId), ...data, actorUsuarioId };
@@ -129,28 +146,30 @@ async function writeSettings({ prisma, settingsService, empresaId, actorUsuarioI
   });
 }
 
-function normalizeSettings(body = {}) {
+function normalizeSettings(body = {}, current = {}) {
   const allowed = new Set(["revision", "mode", "enabled", "allowedTools", "maxTools", "maxContextMessages", "maxProducts", "humanApprovalRequired", "catalogVisibilityPolicy", "exactQuantityPolicy", "stalePolicy", "noPricePolicy", "opportunityPolicy", "handoffPolicy"]);
   const unknown = Object.keys(body).filter((key) => !allowed.has(key));
   if (unknown.length) throw routeError("AI_SETTINGS_FIELDS_INVALID", "Campos de configuracao nao permitidos.", 422);
-  const mode = normalizeMode(body.mode);
-  const allowedTools = Array.isArray(body.allowedTools) ? body.allowedTools.map((item) => String(item).slice(0, 80)).slice(0, 8) : [];
+  const mode = body.mode === undefined ? normalizeMode(current.mode) : normalizeMode(body.mode);
+  const allowedTools = body.allowedTools === undefined
+    ? parseAllowedTools(current.allowedTools ?? current.allowedToolsJson)
+    : Array.isArray(body.allowedTools) ? body.allowedTools.map((item) => String(item).slice(0, 80)).slice(0, 8) : [];
   if (allowedTools.some((name) => !TOOL_NAMES.includes(name))) throw routeError("AI_SETTINGS_TOOL_INVALID", "Ferramenta nao autorizada na configuracao.", 422);
   if (body.enabled !== undefined && typeof body.enabled !== "boolean") throw routeError("AI_SETTINGS_INVALID", "enabled deve ser booleano.", 422);
   return {
-    enabled: body.enabled === true && mode !== MODES.OFF,
+    enabled: (body.enabled === undefined ? current.enabled === true : body.enabled === true) && mode !== MODES.OFF,
     mode,
     allowedTools,
-    maxTools: clamp(body.maxTools, 1, 5, 5),
-    maxContextMessages: clamp(body.maxContextMessages, 1, 20, 20),
-    maxProducts: clamp(body.maxProducts, 1, 3, 3),
+    maxTools: clamp(body.maxTools, 1, 5, clamp(current.maxTools, 1, 5, 5)),
+    maxContextMessages: clamp(body.maxContextMessages, 1, 20, clamp(current.maxContextMessages, 1, 20, 20)),
+    maxProducts: clamp(body.maxProducts, 1, 3, clamp(current.maxProducts, 1, 3, 3)),
     humanApprovalRequired: true,
-    catalogVisibilityPolicy: String(body.catalogVisibilityPolicy || "PUBLISHED").slice(0, 80),
-    exactQuantityPolicy: String(body.exactQuantityPolicy || "HIDDEN").slice(0, 80),
-    stalePolicy: String(body.stalePolicy || "NEEDS_CONFIRMATION").slice(0, 80),
-    noPricePolicy: String(body.noPricePolicy || "DO_NOT_QUOTE").slice(0, 80),
-    opportunityPolicy: String(body.opportunityPolicy || "DRAFT_ONLY").slice(0, 80),
-    handoffPolicy: String(body.handoffPolicy || "HUMAN_ONLY").slice(0, 80),
+    catalogVisibilityPolicy: String(body.catalogVisibilityPolicy ?? current.catalogVisibilityPolicy ?? "PUBLISHED").slice(0, 80),
+    exactQuantityPolicy: String(body.exactQuantityPolicy ?? current.exactQuantityPolicy ?? "HIDDEN").slice(0, 80),
+    stalePolicy: String(body.stalePolicy ?? current.stalePolicy ?? "NEEDS_CONFIRMATION").slice(0, 80),
+    noPricePolicy: String(body.noPricePolicy ?? current.noPricePolicy ?? "DO_NOT_QUOTE").slice(0, 80),
+    opportunityPolicy: String(body.opportunityPolicy ?? current.opportunityPolicy ?? "DRAFT_ONLY").slice(0, 80),
+    handoffPolicy: String(body.handoffPolicy ?? current.handoffPolicy ?? "HUMAN_ONLY").slice(0, 80),
   };
 }
 

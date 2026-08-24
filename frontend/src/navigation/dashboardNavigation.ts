@@ -113,6 +113,17 @@ export function resolveDashboardPathname(pathname: string) {
     };
   }
 
+  const commercialProductDetail = normalizedPathname.match(/^\/catalogo-comercial\/produtos\/([1-9]\d*)$/);
+  if (commercialProductDetail) {
+    return {
+      page: "comercial" as const,
+      detail: `catalogo-comercial-produto:${commercialProductDetail[1]}`,
+      pathname: normalizedPathname,
+      isKnown: true,
+      needsReplace: pathname !== normalizedPathname,
+    };
+  }
+
   const stockDetail = normalizedPathname.match(/^\/estoque\/(produtos|lotes|fontes)\/(\d+)$/);
   if (stockDetail) {
     return {

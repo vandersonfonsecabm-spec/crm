@@ -1,13 +1,16 @@
 import { Archive, ChevronRight, PackageSearch, RefreshCw, ShieldCheck, Tag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiHttpError } from "../../services/crmApi";
-import { fetchAICommerceCatalog, previewAICommerceOffer, searchAICommerceCatalog } from "../../services/aiCommerceApi";
+import { fetchAICommerceCatalog, fetchAICommerceCatalogProduct, previewAICommerceOffer, searchAICommerceCatalog } from "../../services/aiCommerceApi";
 import type { AICommerceAvailabilityStatus, AICommerceCatalogProduct, AICommerceProductOffer, AICommerceVisibility } from "../../services/aiCommerceApi";
 import { Badge, Button, EmptyState, ErrorState, Input, LoadingState, SectionHeader, Select, Surface } from "../ui";
 import ProductOfferCard from "./ProductOfferCard";
 
 type CommerceCatalogPanelProps = {
   onOpenProduct?: (id: number) => void;
+  onBack?: () => void;
+  productId?: number;
+  enabled?: boolean;
 };
 
 const visibilityOptions: Array<{ value: "" | AICommerceVisibility; label: string }> = [
@@ -24,7 +27,7 @@ const visibilityOptions: Array<{ value: "" | AICommerceVisibility; label: string
  * depth: borders and quiet surface shifts keep this a workbench, not a storefront;
  * spacing: existing 4px rhythm, compact controls, generous air around the focal row.
  */
-export default function CommerceCatalogPanel({ onOpenProduct }: CommerceCatalogPanelProps) {
+export default function CommerceCatalogPanel({ onOpenProduct, onBack, productId, enabled = true }: CommerceCatalogPanelProps) {
   const [query, setQuery] = useState("");
   const [visibility, setVisibility] = useState<"" | AICommerceVisibility>("PUBLISHED");
   const [availability, setAvailability] = useState<"" | AICommerceAvailabilityStatus>("");
@@ -35,21 +38,35 @@ export default function CommerceCatalogPanel({ onOpenProduct }: CommerceCatalogP
   const [requestKey, setRequestKey] = useState(0);
   const [offerLoadingId, setOfferLoadingId] = useState<number | null>(null);
   const [offerError, setOfferError] = useState("");
+  const [detailProduct, setDetailProduct] = useState<AICommerceCatalogProduct | null>(null);
 
   const load = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      setError("");
+      setResult(null);
+      setDetailProduct(null);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
-      const fetcher = query.trim() ? searchAICommerceCatalog : fetchAICommerceCatalog;
-      const next = await fetcher({ q: query, visibility: visibility || undefined, availability: availability || undefined, page: 1, limit: 20 });
-      setResult(next);
+      if (productId) {
+        setDetailProduct(await fetchAICommerceCatalogProduct(productId));
+        setResult(null);
+      } else {
+        const fetcher = query.trim() || availability ? searchAICommerceCatalog : fetchAICommerceCatalog;
+        const next = await fetcher({ q: query, visibility: visibility || undefined, availability: availability || undefined, page: 1, limit: 20 });
+        setDetailProduct(null);
+        setResult(next);
+      }
     } catch (nextError) {
       setResult(null);
       setError(catalogErrorMessage(nextError));
     } finally {
       setLoading(false);
     }
-  }, [availability, query, visibility]);
+  }, [availability, enabled, productId, query, visibility]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 180);
@@ -71,6 +88,8 @@ export default function CommerceCatalogPanel({ onOpenProduct }: CommerceCatalogP
     }
   }
 
+  if (!enabled) return <section aria-label="Catálogo comercial" className="space-y-3" data-testid="ai-commerce-catalog-panel"><Surface><div className="p-4"><h2 className="text-sm font-semibold text-[var(--text-primary)]">Fundação comercial OFF</h2><p className="mt-1 text-[11px] leading-4 text-[var(--text-secondary)]">O catálogo comercial permanece publicado em estado somente leitura até que o recurso seja habilitado para este tenant.</p></div></Surface></section>;
+
   return (
     <section aria-label="Catálogo comercial" className="space-y-3" data-testid="ai-commerce-catalog-panel">
       <Surface>
@@ -90,9 +109,10 @@ export default function CommerceCatalogPanel({ onOpenProduct }: CommerceCatalogP
 
       {loading && <LoadingState label="Carregando catálogo comercial" rows={5} />}
       {!loading && error && <Surface><ErrorState description="O catálogo permanece intacto; tente novamente quando a API estiver disponível." onRetry={() => setRequestKey((value) => value + 1)} state={new ApiHttpError(error, error.toLowerCase().includes("acesso") ? 403 : 500).status === 403 ? "restricted" : "unavailable"} title={error} /></Surface>}
-      {!loading && !error && result && result.data.length === 0 && <Surface><EmptyState description="Produtos ocultos, arquivados ou sem vínculo canônico não aparecem nesta leitura." icon={<PackageSearch size={19} />} state="empty" title="Nenhum produto publicado" /></Surface>}
+      {!loading && !error && productId && detailProduct && <Surface><div className="space-y-3 p-4"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-[10px] uppercase tracking-[.08em] text-[var(--text-muted)]">Produto comercial</p><h2 className="mt-1 text-base font-semibold text-[var(--text-primary)]">{detailProduct.title}</h2></div>{onBack && <Button onClick={onBack} size="sm" variant="ghost">Voltar ao catálogo</Button>}</div><p className="text-xs leading-5 text-[var(--text-secondary)]">{detailProduct.longDescription || detailProduct.shortDescription || "Descrição comercial não informada."}</p><div className="grid gap-2 sm:grid-cols-2"><Info label="Visibilidade" value={detailProduct.visibility} /><Info label="Preço" value={formatPrice(detailProduct)} /><Info label="Revisão" value={String(detailProduct.revision)} /><Info label="Estoque canônico" value={detailProduct.stockProductId ? `Produto #${detailProduct.stockProductId}` : "Sem vínculo · confirmação obrigatória"} /></div><div className="flex flex-wrap gap-2"><Button disabled={detailProduct.visibility !== "PUBLISHED"} leftIcon={<ShieldCheck size={12} />} onClick={() => void previewOffer(detailProduct)} size="sm" variant="primary">Prévia segura</Button></div></div></Surface>}
+      {!loading && !error && !productId && result && result.data.length === 0 && <Surface><EmptyState description="Produtos ocultos, arquivados ou sem vínculo canônico não aparecem nesta leitura." icon={<PackageSearch size={19} />} state="empty" title="Nenhum produto publicado" /></Surface>}
 
-      {!loading && !error && result && result.data.length > 0 && (
+      {!loading && !error && !productId && result && result.data.length > 0 && (
         <Surface className="overflow-hidden">
           <div className="divide-y divide-[var(--border-default)]">
             {result.data.map((product) => <CatalogRow busy={offerLoadingId === product.id} key={product.id} onOpen={onOpenProduct} onPreview={previewOffer} product={product} />)}
@@ -121,4 +141,15 @@ function catalogErrorMessage(error: unknown) {
   if (error instanceof ApiHttpError && error.status === 404) return "A fundação comercial ainda não foi publicada neste ambiente.";
   if (error instanceof Error && error.message) return error.message;
   return "Não foi possível carregar o catálogo comercial agora.";
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-muted)] p-3"><p className="text-[10px] uppercase tracking-[.08em] text-[var(--text-muted)]">{label}</p><p className="mt-1 truncate text-xs font-semibold text-[var(--text-primary)]">{value}</p></div>;
+}
+
+function formatPrice(product: AICommerceCatalogProduct) {
+  if (product.priceStatus === "ON_REQUEST" || product.commercialPrice === null || product.commercialPrice === undefined) return "Preço sob consulta";
+  const number = Number(product.commercialPrice);
+  if (!Number.isFinite(number)) return "Preço sob consulta";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: product.currency || "BRL" }).format(number);
 }

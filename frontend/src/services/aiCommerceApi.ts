@@ -26,6 +26,7 @@ export type AICommerceCatalogProduct = {
   stockProductId?: number | null;
   title: string;
   shortDescription?: string | null;
+  longDescription?: string | null;
   category?: string | null;
   brand?: string | null;
   model?: string | null;
@@ -248,6 +249,12 @@ export async function approveAICommerceDraft(id: string, payload: { revision: nu
   return { draft: normalizeDraft(item.draft as Record<string, unknown> | null | undefined), applied: item.status === "APPROVED" || item.action !== undefined };
 }
 
+export async function rejectAICommerceDraft(id: string, payload: { revision: number; conversationRevision?: number; approvalToken?: string; idempotencyKey?: string }) {
+  assertOpaqueId(id, "draftId");
+  const response = await request<{ item?: Record<string, unknown> }>(`/ai-commerce/drafts/${encodeURIComponent(id)}/reject`, { method: "POST", body: { ...payload, approvalToken: payload.approvalToken || createOpaqueKey("reject"), idempotencyKey: payload.idempotencyKey || createOpaqueKey("reject-idem") } });
+  return { draft: normalizeDraft(response.item?.draft as Record<string, unknown> | null | undefined), rejected: response.item?.status === "REJECTED" };
+}
+
 export function isOfferExpired(offer: Pick<AICommerceProductOffer, "expiresAt">, now = Date.now()) {
   const expires = Date.parse(offer.expiresAt);
   return !Number.isFinite(expires) || expires <= now;
@@ -277,12 +284,17 @@ function normalizeAssistantResult(value?: Record<string, unknown>): AICommerceAs
   const draftValue = result.draft && typeof result.draft === "object" ? result.draft as Record<string, unknown> : null;
   const toolResults = result.toolResults && typeof result.toolResults === "object" ? result.toolResults as Record<string, unknown> : {};
   const offers = Array.isArray(draftValue?.productOffers) ? draftValue.productOffers : collectOfferValues(toolResults);
-  const trace = Object.entries(toolResults).slice(0, 5).map(([name, raw]) => ({
-    name,
-    classification: isSideEffectTool(name) ? "SIDE_EFFECT" as const : "READ" as const,
-    status: "COMPLETED" as const,
-    safeSummary: Array.isArray(raw) ? `${raw.length} resultado(s) sanitizado(s)` : "Resultado sanitizado",
-  }));
+  const trace = Object.entries(toolResults).slice(0, 5).map(([name, raw]) => {
+    const sample = Array.isArray(raw) ? raw[0] : raw;
+    const candidateStatus = sample && typeof sample === "object" && "status" in sample ? String((sample as Record<string, unknown>).status) : "";
+    const status = candidateStatus === "REQUESTED" || candidateStatus === "COMPLETED" || candidateStatus === "BLOCKED" || candidateStatus === "FAILED" ? candidateStatus : "COMPLETED";
+    return {
+      name,
+      classification: isSideEffectTool(name) ? "SIDE_EFFECT" as const : "READ" as const,
+      status: status as AICommerceToolTrace["status"],
+      safeSummary: Array.isArray(raw) ? `${raw.length} resultado(s) sanitizado(s)` : "Resultado sanitizado",
+    };
+  });
   return {
     runId: String(result.runId ?? ""),
     mode: normalizeModeValue(result.mode),

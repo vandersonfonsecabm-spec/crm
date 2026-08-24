@@ -14,11 +14,17 @@ function createCommercialSearchService({ prisma, catalogService = null, availabi
   if (!prisma?.commercialCatalogProduct) throw new Error("COMMERCIAL_SEARCH_PRISMA_MODEL_MISSING");
   const effectivePolicy = { ...DEFAULT_POLICY, ...policy };
 
-  async function search({ empresaId, query = "", category = null, brand = null, minPrice = null, maxPrice = null, availability = null, limit = effectivePolicy.maxSearchCandidates } = {}) {
+  async function search({ empresaId, query = "", category = null, brand = null, minPrice = null, maxPrice = null, availability = null, visibility = null, limit = effectivePolicy.maxSearchCandidates } = {}) {
     const tenantId = requireTenantId(empresaId);
     const normalizedQuery = normalizeSearchText(query);
     const take = Math.min(effectivePolicy.maxSearchCandidates, Math.max(1, Number(limit) || effectivePolicy.maxSearchCandidates));
     const where = { empresaId: tenantId, visibility: VISIBILITY.PUBLISHED, archivedAt: null };
+    if (visibility !== null && visibility !== undefined && String(visibility).trim()) {
+      const requestedVisibility = String(visibility).trim().toUpperCase();
+      if (!Object.values(VISIBILITY).includes(requestedVisibility)) throw new CommerceCatalogError("COMMERCE_INVALID_VISIBILITY", "Visibilidade invalida.", 422);
+      where.visibility = requestedVisibility;
+      where.archivedAt = requestedVisibility === VISIBILITY.ARCHIVED ? { not: null } : null;
+    }
     if (category) where.category = String(category).trim();
     if (brand) where.brand = String(brand).trim();
     if (minPrice !== null && minPrice !== undefined && minPrice !== "") where.commercialPrice = { ...(where.commercialPrice || {}), gte: assertPrice(minPrice) };

@@ -60,6 +60,7 @@ export type TenantCapabilities = {
   siteLeadCapture: boolean;
   negociosKanban: boolean;
   automations: boolean;
+  aiCommerce: boolean;
 };
 
 export type ApiUserRole = "ADMIN" | "GERENTE" | "VENDEDOR";
@@ -2889,6 +2890,7 @@ function normalizeCapabilities(capabilities?: Partial<TenantCapabilities>): Tena
     siteLeadCapture: capabilities?.siteLeadCapture === true,
     negociosKanban: capabilities?.negociosKanban === true,
     automations: capabilities?.automations === true,
+    aiCommerce: capabilities?.aiCommerce === true,
   };
 }
 

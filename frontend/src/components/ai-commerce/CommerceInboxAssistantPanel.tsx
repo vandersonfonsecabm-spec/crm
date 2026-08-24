@@ -1,7 +1,7 @@
 import { AlertTriangle, ArrowUpRight, Bot, CheckCircle2, Clock3, Handshake, MessageSquareText, ShieldAlert, Sparkles, UserRound, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiHttpError } from "../../services/crmApi";
-import { approveAICommerceDraft, runAICommerceAssistant } from "../../services/aiCommerceApi";
+import { approveAICommerceDraft, fetchAICommerceSettings, rejectAICommerceDraft, runAICommerceAssistant } from "../../services/aiCommerceApi";
 import type { AICommerceAssistantResult, AICommerceMode } from "../../services/aiCommerceApi";
 import { Badge, Button, ErrorState, LoadingState, Surface } from "../ui";
 import ProductOfferCard from "./ProductOfferCard";
@@ -12,7 +12,8 @@ type CommerceInboxAssistantPanelProps = {
   conversationRevision?: number | null;
   messageRevision?: number | null;
   latestMessage?: string | null;
-  mode?: Exclude<AICommerceMode, "OFF">;
+  mode?: AICommerceMode;
+  enabled?: boolean;
   onInsertComposer?: (text: string) => void;
 };
 
@@ -22,30 +23,40 @@ type CommerceInboxAssistantPanelProps = {
  * signature: every recommendation carries a freshness/approval rail back to stock;
  * reject: no purple “AI magic”, no second composer, no one-click send.
  */
-export default function CommerceInboxAssistantPanel({ conversationId, conversationRevision = null, latestMessage = null, messageRevision = null, mode = "SUGGESTION_ONLY", onInsertComposer, sourceMessageId = null }: CommerceInboxAssistantPanelProps) {
+export default function CommerceInboxAssistantPanel({ conversationId, conversationRevision = null, latestMessage = null, messageRevision = null, mode = "OFF", enabled = true, onInsertComposer, sourceMessageId = null }: CommerceInboxAssistantPanelProps) {
   const [result, setResult] = useState<AICommerceAssistantResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [busyAction, setBusyAction] = useState("");
+  const [effectiveMode, setEffectiveMode] = useState<AICommerceMode>(mode);
   const approvalKeys = useRef<Record<string, { approvalToken: string; idempotencyKey: string }>>({});
 
   useEffect(() => {
-    setResult(null);
-    setError("");
-    setFeedback("");
-  }, [conversationId]);
+    let ignore = false;
+    if (!enabled || mode !== "OFF") return () => { ignore = true; };
+    void fetchAICommerceSettings().then((settings) => {
+      if (!ignore) setEffectiveMode(settings.mode);
+    }).catch(() => {
+      if (!ignore) setEffectiveMode("OFF");
+    });
+    return () => { ignore = true; };
+  }, [enabled, mode]);
 
   const draftStale = Boolean(result?.draft && conversationRevision !== null && result.conversationRevision !== null && result.conversationRevision !== conversationRevision);
   const hasApprovalMode = result?.mode === "HUMAN_APPROVAL";
   const draft = result?.draft ?? null;
 
   async function runAssistant() {
+    if (!enabled || effectiveMode === "OFF") {
+      setFeedback("A fundação comercial está OFF para este tenant. Nenhuma execução foi iniciada.");
+      return;
+    }
     setLoading(true);
     setError("");
     setFeedback("");
     try {
-      const next = await runAICommerceAssistant({ conversationId, sourceMessageId: sourceMessageId ?? undefined, messageRevision: messageRevision ?? undefined, conversationRevision: conversationRevision ?? undefined, latestMessage: latestMessage ?? undefined, mode });
+      const next = await runAICommerceAssistant({ conversationId, sourceMessageId: sourceMessageId ?? undefined, messageRevision: messageRevision ?? undefined, conversationRevision: conversationRevision ?? undefined, latestMessage: latestMessage ?? undefined, mode: effectiveMode });
       setResult(next);
     } catch (nextError) {
       setError(assistantErrorMessage(nextError));
@@ -81,19 +92,40 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
     }
   }
 
+  async function reject() {
+    if (!draft || draftStale || busyAction) return;
+    setBusyAction("REJECT");
+    setError("");
+    setFeedback("");
+    try {
+      const keys = approvalKeys.current[draft.id] ?? { approvalToken: `approval-${draft.id}`, idempotencyKey: `reject-${draft.id}` };
+      approvalKeys.current[draft.id] = keys;
+      await rejectAICommerceDraft(draft.id, { revision: draft.revision, conversationRevision: conversationRevision ?? undefined, ...keys });
+      setResult((current) => current ? { ...current, draft: null } : current);
+      setFeedback("Rascunho rejeitado e registrado na auditoria. Nenhuma ação foi executada.");
+    } catch (nextError) {
+      setError(assistantErrorMessage(nextError));
+    } finally {
+      setBusyAction("");
+    }
+  }
+
   const modeNote = useMemo(() => {
-    if (!result) return "OFF por padrão · mock somente sob allowlist";
+    const visibleMode = !enabled ? "OFF" : mode !== "OFF" ? mode : effectiveMode;
+    if (!result) return visibleMode === "OFF" ? "OFF por padrão · nenhum endpoint é chamado" : "Mock somente sob allowlist";
     if (result.mode === "SHADOW") return "Shadow: decisão registrada, invisível para o cliente";
     if (result.mode === "SUGGESTION_ONLY") return "Sugestão: draft visível, sem envio";
     if (result.mode === "HUMAN_APPROVAL") return "Aprovação humana: cada efeito é separado";
     return "OFF: nenhuma execução";
-  }, [result]);
+  }, [effectiveMode, enabled, mode, result]);
+
+  const visibleMode: AICommerceMode = !enabled ? "OFF" : mode !== "OFF" ? mode : effectiveMode;
 
   return <section aria-label="Assistente comercial da Inbox" className="space-y-3" data-testid="ai-commerce-inbox-assistant">
-    <Surface>
-      <div className="flex flex-wrap items-start justify-between gap-3 p-4">
-        <div className="flex min-w-0 items-start gap-3"><div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[5px] border border-[var(--brand-border)] bg-[var(--brand-subtle)] text-[var(--brand)]"><Bot size={17} /></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold text-[var(--text-primary)]">Assistente comercial</h2><Badge variant={result?.mode === "SHADOW" ? "neutral" : "primary"}>{result ? result.mode : "OFF"}</Badge></div><p className="mt-1 text-[11px] leading-4 text-[var(--text-muted)]">{modeNote}. Usa somente catálogo e estoque canônicos desta conversa.</p></div></div>
-        <Button disabled={loading} leftIcon={<Sparkles size={13} />} loading={loading} onClick={() => void runAssistant()} size="sm" variant="primary">Gerar sugestão segura</Button>
+      <Surface>
+        <div className="flex flex-wrap items-start justify-between gap-3 p-4">
+        <div className="flex min-w-0 items-start gap-3"><div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[5px] border border-[var(--brand-border)] bg-[var(--brand-subtle)] text-[var(--brand)]"><Bot size={17} /></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold text-[var(--text-primary)]">Assistente comercial</h2><Badge variant={result?.mode === "SHADOW" ? "neutral" : "primary"}>{result ? result.mode : visibleMode}</Badge></div><p className="mt-1 text-[11px] leading-4 text-[var(--text-muted)]">{modeNote}. Usa somente catálogo e estoque canônicos desta conversa.</p></div></div>
+        <Button disabled={loading || visibleMode === "OFF"} leftIcon={<Sparkles size={13} />} loading={loading} onClick={() => void runAssistant()} size="sm" variant="primary">{visibleMode === "OFF" ? "Fundação OFF" : "Gerar sugestão segura"}</Button>
       </div>
       <div className="flex flex-wrap gap-3 border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-2.5 text-[10px] text-[var(--text-muted)]"><span className="inline-flex items-center gap-1.5"><ShieldAlert size={12} />Não lê banco diretamente</span><span className="inline-flex items-center gap-1.5"><XCircle size={12} />Não envia mensagem</span><span className="inline-flex items-center gap-1.5"><Clock3 size={12} />Oferta tem TTL</span></div>
     </Surface>
@@ -115,12 +147,12 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border-default)] p-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold text-[var(--text-primary)]">Rascunho para revisão</h2><Badge variant={draftStale ? "danger" : hasApprovalMode ? "warning" : "neutral"}>{draftStale ? "Conversa mudou" : draft.requiresHumanApproval ? "Aprovação obrigatória" : "Somente leitura"}</Badge></div><p className="mt-1 text-[11px] text-[var(--text-muted)]">Revisão {draft.revision} · expira {draft.expiresAt ? formatDateTime(draft.expiresAt) : "sem data informada"}</p></div><UserRound aria-hidden="true" className="text-[var(--text-muted)]" size={15} /></div>
         {draftStale && <div className="flex items-start gap-2 border-b border-[var(--danger-border)] bg-[var(--danger-subtle)] px-4 py-3 text-[11px] text-[var(--danger)]"><AlertTriangle className="mt-0.5 shrink-0" size={13} />A conversa recebeu uma alteração. Gere uma nova sugestão antes de aprovar este rascunho.</div>}
         <div className="space-y-3 p-4"><p className="whitespace-pre-wrap rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-muted)] p-3 text-xs leading-5 text-[var(--text-primary)]">{draft.text || "Nenhum texto sugerido; faça uma pergunta de esclarecimento."}</p>{draft.questions.length > 0 && <div><p className="text-[10px] font-semibold uppercase tracking-[.08em] text-[var(--text-muted)]">Perguntas sugeridas</p><ul className="mt-1.5 list-disc space-y-1 pl-5 text-[11px] text-[var(--text-secondary)]">{draft.questions.slice(0, 4).map((question) => <li key={question}>{question}</li>)}</ul></div>}{draft.handoffReason && <p className="flex items-start gap-1.5 text-[11px] text-[var(--warning)]"><Handshake className="mt-0.5 shrink-0" size={13} />{draft.handoffReason}</p>}
-          <div className="flex flex-wrap gap-2 border-t border-[var(--border-default)] pt-3"><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} leftIcon={<ArrowUpRight size={12} />} loading={busyAction === "INSERT_COMPOSER"} onClick={() => void approve("INSERT_COMPOSER")} size="sm" variant="primary">Inserir no composer</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} leftIcon={<CheckCircle2 size={12} />} loading={busyAction === "REGISTER_INTEREST"} onClick={() => void approve("REGISTER_INTEREST")} size="sm" variant="secondary">Aprovar interesse</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} loading={busyAction === "CREATE_OPPORTUNITY_DRAFT"} onClick={() => void approve("CREATE_OPPORTUNITY_DRAFT")} size="sm" variant="secondary">Criar oportunidade rascunho</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} leftIcon={<Handshake size={12} />} loading={busyAction === "HANDOFF"} onClick={() => void approve("HANDOFF")} size="sm" variant="secondary">Aprovar handoff</Button></div>
+          <div className="flex flex-wrap gap-2 border-t border-[var(--border-default)] pt-3"><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} leftIcon={<ArrowUpRight size={12} />} loading={busyAction === "INSERT_COMPOSER"} onClick={() => void approve("INSERT_COMPOSER")} size="sm" variant="primary">Inserir no composer</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} leftIcon={<CheckCircle2 size={12} />} loading={busyAction === "REGISTER_INTEREST"} onClick={() => void approve("REGISTER_INTEREST")} size="sm" variant="secondary">Aprovar interesse</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} loading={busyAction === "CREATE_OPPORTUNITY_DRAFT"} onClick={() => void approve("CREATE_OPPORTUNITY_DRAFT")} size="sm" variant="secondary">Criar oportunidade rascunho</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} leftIcon={<Handshake size={12} />} loading={busyAction === "HANDOFF"} onClick={() => void approve("HANDOFF")} size="sm" variant="secondary">Aprovar handoff</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} loading={busyAction === "REJECT"} onClick={() => void reject()} size="sm" variant="ghost">Rejeitar rascunho</Button></div>
         </div>
       </Surface>}
 
       <Surface>
-        <div className="flex items-center justify-between gap-2 border-b border-[var(--border-default)] px-4 py-3"><h2 className="text-xs font-semibold text-[var(--text-primary)]">Rastro de ferramentas</h2><Badge variant="neutral">{result.toolTrace.length} chamada(s)</Badge></div><ul className="divide-y divide-[var(--border-default)]">{result.toolTrace.length === 0 ? <li className="px-4 py-3 text-[11px] text-[var(--text-muted)]">Nenhuma ferramenta executada.</li> : result.toolTrace.slice(0, 5).map((trace) => <li className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[11px]" key={`${trace.name}-${trace.version ?? "1"}`}><span className="font-medium text-[var(--text-primary)]">{trace.name}</span><span className="text-[var(--text-muted)]">{trace.classification} · {trace.status}{trace.durationMs ? ` · ${trace.durationMs}ms` : ""}</span>{trace.safeSummary && <span className="basis-full text-[10px] text-[var(--text-secondary)]">{trace.safeSummary}</span>}</li>)}</ul>
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--border-default)] px-4 py-3"><h2 className="text-xs font-semibold text-[var(--text-primary)]">Rastro de ferramentas</h2><Badge variant="neutral">{result.toolTrace.length} chamada(s)</Badge></div><ul className="divide-y divide-[var(--border-default)]">{result.toolTrace.length === 0 ? <li className="px-4 py-3 text-[11px] text-[var(--text-muted)]">Nenhuma ferramenta executada.</li> : result.toolTrace.slice(0, 5).map((trace, index) => <li className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-[11px]" key={`${trace.name}-${trace.version ?? "1"}-${index}`}><span className="font-medium text-[var(--text-primary)]">{trace.name}</span><span className="text-[var(--text-muted)]">{trace.classification} · {trace.status}{trace.durationMs ? ` · ${trace.durationMs}ms` : ""}</span>{trace.safeSummary && <span className="basis-full text-[10px] text-[var(--text-secondary)]">{trace.safeSummary}</span>}</li>)}</ul>
       </Surface>
     </>}
 

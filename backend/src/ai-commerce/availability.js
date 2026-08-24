@@ -37,9 +37,9 @@ function createSellableAvailabilityService({ prisma, clock = () => new Date(), p
   async function getSellableAvailability({ empresaId, catalogProductId, quantity = null, locationId = null, now = clock(), internal = false } = {}) {
     const tenantId = requireTenantId(empresaId);
     const catalog = await loadCatalog(tenantId, catalogProductId);
-    if (catalog.visibility !== "PUBLISHED" || catalog.archivedAt || catalog.sellabilityPolicy !== "STOCK_CANONICAL_ONLY") return notSellable(catalog, "CATALOG_NOT_PUBLISHED");
+    if (catalog.visibility !== "PUBLISHED" || catalog.archivedAt || catalog.sellabilityPolicy !== "STOCK_CANONICAL_ONLY") return notSellable(catalog, "CATALOG_NOT_PUBLISHED", internal);
     const stockProduct = catalog.stockProduct || await prisma.produtoEstoque?.findFirst?.({ where: { id: catalog.stockProductId, empresaId: tenantId } });
-    if (!stockProduct || stockProduct.ativo === false) return notSellable(catalog, "STOCK_PRODUCT_INACTIVE");
+    if (!stockProduct || stockProduct.ativo === false) return notSellable(catalog, "STOCK_PRODUCT_INACTIVE", internal);
 
     const requested = quantity === null || quantity === undefined || quantity === "" ? null : positiveQuantity(quantity);
     const balances = await readBalances(tenantId, catalog.stockProductId, locationId);
@@ -169,7 +169,11 @@ function isExpired(value, precision, now, timeZone) {
 function result(status, reasonCode, extra = {}) {
   return { status, reasonCode, label: labelFor(status), manualConfirmationRequired: ![AVAILABILITY_STATUS.AVAILABLE, AVAILABILITY_STATUS.OUT_OF_STOCK].includes(status), freshness: extra.freshness || "UNKNOWN", confidence: extra.confidence || "UNKNOWN", observedAt: extra.observedAt || null, expiresAt: extra.expiresAt || null, stockMaterialVersion: extra.stockMaterialVersion || 0, customerSafeMessage: extra.customerSafeMessage || "Disponibilidade precisa ser confirmada com um vendedor.", evidence: extra.evidence || [], quantity: extra.quantity ?? null, unit: extra.unit || null };
 }
-function notSellable(catalog, reasonCode) { return { catalogProductId: catalog.id, stockProductId: catalog.stockProductId, status: AVAILABILITY_STATUS.NOT_SELLABLE, label: "Não vendável", exactQuantityAuthorized: false, freshness: "UNKNOWN", confidence: "UNKNOWN", reasonCode, customerSafeMessage: "Este produto não está disponível para oferta.", manualConfirmationRequired: true, stockMaterialVersion: 0, evidence: [] }; }
+function notSellable(catalog, reasonCode, internal = false) {
+  const result = { catalogProductId: catalog.id, status: AVAILABILITY_STATUS.NOT_SELLABLE, label: "Não vendável", exactQuantityAuthorized: false, freshness: "UNKNOWN", confidence: "UNKNOWN", reasonCode, customerSafeMessage: "Este produto não está disponível para oferta.", manualConfirmationRequired: true, stockMaterialVersion: 0, evidence: [] };
+  if (internal) result.stockProductId = catalog.stockProductId;
+  return result;
+}
 function labelFor(status) { return ({ AVAILABLE: "Disponível", LOW_AVAILABILITY: "Disponibilidade limitada", OUT_OF_STOCK: "Sem estoque", NEEDS_CONFIRMATION: "Confirmação necessária", NOT_SELLABLE: "Não vendável", DATA_STALE: "Dados desatualizados", UNKNOWN: "Disponibilidade desconhecida" })[status] || "Confirmação necessária"; }
 
 module.exports = { createSellableAvailabilityService, evaluateBalances, isExpired, declaredAvailable };

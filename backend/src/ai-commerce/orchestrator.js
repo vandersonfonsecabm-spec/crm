@@ -13,6 +13,7 @@ const {
   makeIdempotencyKey,
   validateApproval,
   policyError,
+  sanitizeData,
 } = require("./policy");
 const { UnconfiguredCommerceAIConnection } = require("./connection");
 
@@ -31,6 +32,7 @@ function createAICommerceOrchestrator({
   if (!toolRegistry || typeof toolRegistry.execute !== "function") throw new Error("AI_COMMERCE_TOOL_REGISTRY_REQUIRED");
   const runs = new Map();
   const drafts = new Map();
+  const approvalLocks = new Set();
 
   async function run(input = {}) {
     const empresaId = positiveId(input.empresaId);
@@ -83,13 +85,14 @@ function createAICommerceOrchestrator({
     let decision;
     let toolResults = {};
     let turn = 0;
+    const catalogContext = sanitizeData(input.catalogContext);
     try {
       decision = await connection.generateCommercialDecision({
         ...baseContext,
         conversationContext: context,
         latestMessage: input.latestMessage,
         toolResults,
-        catalogContext: input.catalogContext,
+        catalogContext,
         offerIds: input.offerIds,
       });
       await auditCall(audit, "recordDecision", { ...baseContext, decision, state });
@@ -112,7 +115,7 @@ function createAICommerceOrchestrator({
           }
         }
         if (state === STATES.AWAITING_APPROVAL) break;
-        decision = await connection.generateCommercialDecision({ ...baseContext, conversationContext: context, latestMessage: input.latestMessage, toolResults, catalogContext: input.catalogContext, offerIds: input.offerIds });
+        decision = await connection.generateCommercialDecision({ ...baseContext, conversationContext: context, latestMessage: input.latestMessage, toolResults, catalogContext, offerIds: input.offerIds });
         await auditCall(audit, "recordTurn", { ...baseContext, turn: turn + 1, state, decision, toolResults });
       }
       if (turn >= MAX_TURNS) throw policyError("AI_TOOL_LOOP_LIMIT", "Loop de ferramentas excedeu o limite.", 422);
@@ -153,34 +156,81 @@ function createAICommerceOrchestrator({
 
   async function approve(input = {}) {
     const draftId = String(input.draftId || "");
+    if (!draftId || approvalLocks.has(draftId)) throw policyError("AI_DRAFT_CONFLICT", "Rascunho alterado por outro aprovador.", 409);
     const stored = drafts.get(draftId) || await loadPersistedDraft({ prisma, draftId, empresaId: input.empresaId });
     if (!stored) throw policyError("AI_DRAFT_NOT_FOUND", "Rascunho comercial nao encontrado.", 404);
     if (!drafts.has(draftId)) drafts.set(draftId, stored);
     const approval = validateApproval({ ...input, mode: stored.mode, empresaId: stored.empresaId, conversationId: stored.conversationId, draftRevision: input.draftRevision || stored.revision });
     if (stored.empresaId !== approval.empresaId || stored.conversationId !== approval.conversationId) throw policyError("AI_DRAFT_CONTEXT_MISMATCH", "Rascunho fora do tenant ou conversa.", 403);
     if (String(input.conversationRevision || "") !== String(stored.conversationRevision || input.conversationRevision || "")) throw policyError("AI_DRAFT_CONVERSATION_CHANGED", "A conversa mudou antes da aprovacao.", 409);
-    const actionTool = actionToTool(approval.action);
-    let effect = { action: approval.action, status: "APPROVED", autoSend: false, outbound: 0 };
-    if (actionTool && actionTool !== "insertComposer") {
-      effect.result = await toolRegistry.execute(actionTool, actionInput(actionTool, stored.draft, input), {
-        empresaId: approval.empresaId,
-        conversationId: approval.conversationId,
-        actorUsuarioId: approval.actorUsuarioId,
-        runId: stored.runId,
-        correlationId: stored.correlationId,
-        mode: MODES.HUMAN_APPROVAL,
-        approvedActions: { [actionTool]: true },
-        idempotencyKey: approval.idempotencyKey,
-      });
+    approvalLocks.add(draftId);
+    const expectedRevision = Number(stored.revision) || 1;
+    let claimed = false;
+    try {
+      claimed = await claimPersistedDraft({ prisma, draftId, empresaId: approval.empresaId, revision: expectedRevision, actorUsuarioId: approval.actorUsuarioId });
+      const actionTool = actionToTool(approval.action);
+      let effect = { action: approval.action, status: "APPROVED", autoSend: false, outbound: 0 };
+      if (actionTool && actionTool !== "insertComposer") {
+        effect.result = await toolRegistry.execute(actionTool, actionInput(actionTool, stored.draft, input), {
+          empresaId: approval.empresaId,
+          conversationId: approval.conversationId,
+          actorUsuarioId: approval.actorUsuarioId,
+          runId: stored.runId,
+          correlationId: stored.correlationId,
+          mode: MODES.HUMAN_APPROVAL,
+          approvedActions: { [actionTool]: true },
+          idempotencyKey: approval.idempotencyKey,
+        });
+      }
+      await finalizePersistedDraft({ prisma, draftId, empresaId: approval.empresaId, revision: expectedRevision, actorUsuarioId: approval.actorUsuarioId, status: "APPROVED" });
+      stored.revision = expectedRevision + 1;
+      stored.approvedAction = approval.action;
+      await auditCall(audit, "recordPolicyDecision", { empresaId: approval.empresaId, conversationId: approval.conversationId, runId: stored.runId, action: approval.action, actorUsuarioId: approval.actorUsuarioId, status: "APPROVED" });
+      return freezeResult({ ...effect, draftId, revision: stored.revision, draft: stored.draft });
+    } catch (error) {
+      if (claimed) {
+        try {
+          await finalizePersistedDraft({ prisma, draftId, empresaId: approval.empresaId, revision: expectedRevision, actorUsuarioId: approval.actorUsuarioId, status: "FAILED" });
+        } catch {
+          // Preserve the original side-effect error; the persisted claim remains
+          // visible for audit/recovery instead of being reopened unsafely.
+        }
+      }
+      throw error;
+    } finally {
+      approvalLocks.delete(draftId);
     }
-    stored.revision += 1;
-    stored.approvedAction = approval.action;
-    await updatePersistedDraft({ prisma, draftId, empresaId: approval.empresaId, revision: stored.revision - 1, actorUsuarioId: approval.actorUsuarioId, status: "APPROVED" });
-    await auditCall(audit, "recordPolicyDecision", { empresaId: approval.empresaId, conversationId: approval.conversationId, runId: stored.runId, action: approval.action, actorUsuarioId: approval.actorUsuarioId, status: "APPROVED" });
-    return freezeResult({ ...effect, draftId, revision: stored.revision, draft: stored.draft });
   }
 
-  return Object.freeze({ run, approve, getRun: (idempotencyKey) => runs.get(String(idempotencyKey)) || null, getDraft: (draftId) => drafts.get(String(draftId)) || null, reset: () => { runs.clear(); drafts.clear(); toolRegistry.reset?.(); } });
+  async function reject(input = {}) {
+    const draftId = String(input.draftId || "");
+    if (!draftId || approvalLocks.has(draftId)) throw policyError("AI_DRAFT_CONFLICT", "Rascunho alterado por outro aprovador.", 409);
+    const stored = drafts.get(draftId) || await loadPersistedDraft({ prisma, draftId, empresaId: input.empresaId });
+    if (!stored) throw policyError("AI_DRAFT_NOT_FOUND", "Rascunho comercial nao encontrado.", 404);
+    if (stored.empresaId !== positiveId(input.empresaId) || stored.conversationId !== positiveId(input.conversationId || stored.conversationId)) throw policyError("AI_DRAFT_CONTEXT_MISMATCH", "Rascunho fora do tenant ou conversa.", 403);
+    if (String(input.conversationRevision || "") !== String(stored.conversationRevision || input.conversationRevision || "")) throw policyError("AI_DRAFT_CONVERSATION_CHANGED", "A conversa mudou antes da rejeicao.", 409);
+    if (!String(input.approvalToken || "").trim() || !String(input.idempotencyKey || "").trim()) throw policyError("AI_APPROVAL_TOKEN_REQUIRED", "A rejeicao exige token e idempotencia.", 422);
+    approvalLocks.add(draftId);
+    const expectedRevision = Number(stored.revision) || 1;
+    let claimed = false;
+    try {
+      claimed = await claimPersistedDraft({ prisma, draftId, empresaId: stored.empresaId, revision: expectedRevision, actorUsuarioId: input.actorUsuarioId });
+      await finalizePersistedDraft({ prisma, draftId, empresaId: stored.empresaId, revision: expectedRevision, actorUsuarioId: input.actorUsuarioId, status: "REJECTED" });
+      stored.revision = expectedRevision + 1;
+      stored.rejected = true;
+      await auditCall(audit, "recordPolicyDecision", { empresaId: stored.empresaId, conversationId: stored.conversationId, runId: stored.runId, action: "rejectDraft", actorUsuarioId: input.actorUsuarioId, status: "REJECTED" });
+      return freezeResult({ action: "rejectDraft", status: "REJECTED", draftId, revision: stored.revision, autoSend: false, outbound: 0, draft: stored.draft });
+    } catch (error) {
+      if (claimed) {
+        try { await finalizePersistedDraft({ prisma, draftId, empresaId: stored.empresaId, revision: expectedRevision, actorUsuarioId: input.actorUsuarioId, status: "FAILED" }); } catch { /* preserve original error */ }
+      }
+      throw error;
+    } finally {
+      approvalLocks.delete(draftId);
+    }
+  }
+
+  return Object.freeze({ run, approve, reject, getRun: (idempotencyKey) => runs.get(String(idempotencyKey)) || null, getDraft: (draftId) => drafts.get(String(draftId)) || null, reset: () => { runs.clear(); drafts.clear(); approvalLocks.clear(); toolRegistry.reset?.(); } });
 }
 
 function buildDraft(decision, offers, { empresaId, conversationId, conversationRevision = "", mode, now }) {
@@ -298,10 +348,18 @@ async function loadPersistedDraft({ prisma, draftId, empresaId }) {
   };
 }
 
-async function updatePersistedDraft({ prisma, draftId, empresaId, revision, actorUsuarioId, status }) {
+async function claimPersistedDraft({ prisma, draftId, empresaId, revision, actorUsuarioId }) {
+  const model = prisma?.aICommerceDraft || prisma?.aiCommerceDraft;
+  if (!model?.updateMany || !positiveId(empresaId)) return false;
+  const result = await model.updateMany({ where: { id: String(draftId), empresaId: positiveId(empresaId), revision, status: "PENDING_APPROVAL" }, data: { status: "PROCESSING", actorUsuarioId: positiveId(actorUsuarioId) } });
+  if (result.count !== 1) throw policyError("AI_DRAFT_CONFLICT", "Rascunho alterado por outro aprovador.", 409);
+  return true;
+}
+
+async function finalizePersistedDraft({ prisma, draftId, empresaId, revision, actorUsuarioId, status }) {
   const model = prisma?.aICommerceDraft || prisma?.aiCommerceDraft;
   if (!model?.updateMany || !positiveId(empresaId)) return;
-  const result = await model.updateMany({ where: { id: String(draftId), empresaId: positiveId(empresaId), revision, status: "PENDING_APPROVAL" }, data: { status, approvedAt: status === "APPROVED" ? new Date() : undefined, actorUsuarioId: positiveId(actorUsuarioId), revision: { increment: 1 } } });
+  const result = await model.updateMany({ where: { id: String(draftId), empresaId: positiveId(empresaId), revision, status: "PROCESSING" }, data: { status, approvedAt: status === "APPROVED" ? new Date() : undefined, actorUsuarioId: positiveId(actorUsuarioId), revision: { increment: 1 } } });
   if (result.count !== 1) throw policyError("AI_DRAFT_CONFLICT", "Rascunho alterado por outro aprovador.", 409);
 }
 

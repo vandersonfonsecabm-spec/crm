@@ -21,12 +21,13 @@ connection port, Mock, orchestrator, audit, efeitos HITL, Inbox e settings/UI.
 
 Nenhum HIGH/CRITICAL aberto no source local após as correções. O risco
 operacional restante é explícito: runner Prisma genérico bloqueado antes da
-execução, live Mock canary sem sessão administrativa e QA visual autenticado
-sem sessão. O backup lógico protegido, restore/rehearsal, migration aditiva,
-deploy OFF e health pós-deploy foram concluídos com evidência.
+execução; ele permanece NOT PASS. O live Mock canary e a QA visual autenticada
+foram concluídos com PASS, cleanup OFF e zero outbound. O backup lógico
+protegido, restore/rehearsal, migration aditiva, deploy OFF e health pós-deploy
+foram concluídos com evidência.
 
 No preflight oficial, o Railway confirmou o banco Postgres-u_yI online. O
 plano Hobby bloqueia Backups/PITR gerenciados; a operação usou backup lógico
 protegido e restore isolado, sem imprimir nem enviar dados reais. As migrations
 E6A foram aplicadas de forma aditiva e o banco passou o gate tenant/FK. A
-produção permanece AI OFF; isso é OFF-ready, não canário live concluído.
+produção permanece AI OFF; isso é foundation OFF-ready após canário controlado.
