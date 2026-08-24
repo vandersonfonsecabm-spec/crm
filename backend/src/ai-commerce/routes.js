@@ -145,12 +145,12 @@ function normalizeSettings(body = {}) {
     maxContextMessages: clamp(body.maxContextMessages, 1, 20, 20),
     maxProducts: clamp(body.maxProducts, 1, 3, 3),
     humanApprovalRequired: true,
-    catalogVisibilityPolicy: "PUBLISHED_ONLY",
-    exactQuantityPolicy: "HIDDEN_BY_DEFAULT",
-    stalePolicy: "NEEDS_CONFIRMATION",
-    noPricePolicy: "DO_NOT_QUOTE",
-    opportunityPolicy: "DRAFT_ONLY",
-    handoffPolicy: "HUMAN_SELLER",
+    catalogVisibilityPolicy: String(value.catalogVisibilityPolicy || "PUBLISHED").slice(0, 80),
+    exactQuantityPolicy: String(value.exactQuantityPolicy || "HIDDEN").slice(0, 80),
+    stalePolicy: String(value.stalePolicy || "NEEDS_CONFIRMATION").slice(0, 80),
+    noPricePolicy: String(value.noPricePolicy || "DO_NOT_QUOTE").slice(0, 80),
+    opportunityPolicy: String(value.opportunityPolicy || "DRAFT_ONLY").slice(0, 80),
+    handoffPolicy: String(value.handoffPolicy || "HUMAN_ONLY").slice(0, 80),
   };
 }
 
