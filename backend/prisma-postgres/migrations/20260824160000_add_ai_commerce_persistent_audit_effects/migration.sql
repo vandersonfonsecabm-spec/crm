@@ -61,6 +61,7 @@ CREATE TABLE "AICommerceOpportunityDraft" ("id" TEXT NOT NULL, "empresaId" INTEG
 CREATE UNIQUE INDEX "AICommerceOpportunityDraft_empresaId_id_key" ON "AICommerceOpportunityDraft"("empresaId", "id"); CREATE UNIQUE INDEX "AICommerceOpportunityDraft_empresaId_idempotencyKey_key" ON "AICommerceOpportunityDraft"("empresaId", "idempotencyKey"); CREATE INDEX "AICommerceOpportunityDraft_empresaId_conversationId_status_idx" ON "AICommerceOpportunityDraft"("empresaId", "conversationId", "status"); CREATE INDEX "AICommerceOpportunityDraft_empresaId_retentionUntil_idx" ON "AICommerceOpportunityDraft"("empresaId", "retentionUntil");
 
 
+
 ALTER TABLE "AICommerceHandoff" ADD CONSTRAINT "AICommerceHandoff_empresaId_opportunityDraftId_fkey" FOREIGN KEY ("empresaId", "opportunityDraftId") REFERENCES "AICommerceOpportunityDraft"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 COMMIT;
