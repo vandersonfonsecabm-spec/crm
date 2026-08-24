@@ -23,6 +23,8 @@ with exit 0, preserving the protected databases. PostgreSQL-only tests remain
 separately scoped and were not coerced into SQLite. The SQLite result used the
 approved temporary fixture copy under `%TEMP%`; the protected repository
 `dev.db` remained immutable.
+The confirmation log SHA is
+`40a81acee6c0a7828287d984fb265a47932cde82f42d182d4baeeae08ccb30dc`.
 It was not relabeled PASS. The two moderate ExcelJS/uuid advisories were
 reviewed against the actual admin-only bounded import path and accepted as
 non-actionable for this release; no blind `audit fix --force` was run.

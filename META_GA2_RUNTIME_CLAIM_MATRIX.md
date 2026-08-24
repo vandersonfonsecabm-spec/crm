@@ -45,7 +45,7 @@ DOCUMENT_STATUS=FINAL_CLAIMS_PASS
 | DEPENDENCY_AUDIT | ACCEPTED_NON_ACTIONABLE | ExcelJS/uuid path reviewed; no force fix |
 | TOOLCHAIN_INTEGRITY | PASS | tsc/lint/build and runtime manifests |
 | BUILD_REPRODUCIBILITY | PASS | Vite build and Railway/Vercel deploys |
-| BACKEND_FULL_SUITE | PASS | canonical isolated SQLite node-suite completed with exit 0 across all non-PostgreSQL test files; PG-only cases are intentionally excluded and separately documented |
+| BACKEND_FULL_SUITE | PASS | confirmation log SHA `40a81acee6c0a7828287d984fb265a47932cde82f42d182d4baeeae08ccb30dc`; canonical isolated SQLite node-suite exit 0, H11 15/15; PG-only cases intentionally separate |
 | FRONTEND_FULL_SUITE | PASS | 194/194 |
 | TENANT_GATE | PASS_REUSED | 157 relation gate, no schema delta |
 | E2E_GLOBAL | PASS | authenticated canonical-domain SPA smoke for Central/catalog/settings/Inbox |

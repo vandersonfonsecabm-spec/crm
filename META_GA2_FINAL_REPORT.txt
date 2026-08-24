@@ -34,7 +34,7 @@ VALIDAÇÃO
   terminou com exit 0 em todos os arquivos não-PostgreSQL; os testes
   exclusivamente PostgreSQL continuam separados pelo runner oficial bloqueado.
 - Frontend: 194/194 PASS, TypeScript noEmit PASS, lint PASS, Vite build PASS.
-- Railway API/worker backend b9: SUCCESS; Vercel ca: READY; health/ready e
+- Railway API/worker eda: SUCCESS/RUNNING; Vercel eda: READY; health/ready e
   frontend HTTP 200; Postgres database OK.
 - Nenhuma migration ou alteração de dados foi necessária nesta GA2.
 - AI flags OFF, allowlist deny-all, provider real NO, auto-reply NO,
@@ -62,6 +62,10 @@ OTIMIZAÇÕES DE EXECUÇÃO
 - A suíte backend global foi executada uma vez no sandbox isolado e passou;
   o bloqueio foi limitado ao runner PostgreSQL genérico e não houve loop de
   retries.
+- Uma confirmação adicional foi necessária porque havia um log histórico de
+  H11 anterior à correção; o log final `full-suite-ga2.log` tem SHA-256
+  `40a81acee6c0a7828287d984fb265a47932cde82f42d182d4baeeae08ccb30dc`, H11
+  15/15 e `fail 0` em toda a bateria SQLite.
 - O sandbox usou cópias temporárias aprovadas dos fixtures protegidos; `dev.db`
   e o PostgreSQL oficial permaneceram imutáveis. O push de teste acionou
   automaticamente novos deploys saudáveis, sem delta funcional de runtime.

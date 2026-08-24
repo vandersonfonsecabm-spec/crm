@@ -14,6 +14,11 @@ runner migration-count fix, dynamic H11 migration fixture, and capability/
 webhook test-contract updates. PostgreSQL-only files remain intentionally
 excluded from SQLite and retain the separate official runner limitation.
 
+The confirmation run was saved as
+`%TEMP%\\crm-ga2-final-suite-20260824\\backend\\full-suite-ga2.log` with SHA-256
+`40a81acee6c0a7828287d984fb265a47932cde82f42d182d4baeeae08ccb30dc`;
+H11 scenario 2 passed and every reported file ended with `fail 0`.
+
 The suite used the approved temporary sandbox fixture: read-only copies of
 the protected test databases were placed under
 `%TEMP%\\crm-ga2-final-suite-20260824` and removed by the runner. The repository

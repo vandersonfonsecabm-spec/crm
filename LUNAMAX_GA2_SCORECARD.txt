@@ -8,11 +8,12 @@ AGENTS_ACTUALLY_USED=4
 PEAK_SIMULTANEOUS_AGENTS=4
 OVERLAPPING_FILE_MUTATIONS=0
 DUPLICATE_FULL_REPO_SCANS=0
-DUPLICATE_FULL_SUITES=0
+DUPLICATE_FULL_SUITES=1
 
 Agents: root integrator; infra/DB read-only; security/backend read-only;
 frontend/product read-only. All three auditors were reused for final review;
-no extra role was invented.
+no extra role was invented. One full-suite confirmation rerun was justified by
+contradictory historical H11 evidence and produced the final hashed log.
 
 FINDINGS_TOTAL=16
 FINDINGS_RESOLVED=13

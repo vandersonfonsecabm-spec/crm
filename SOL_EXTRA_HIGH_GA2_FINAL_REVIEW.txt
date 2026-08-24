@@ -8,8 +8,8 @@ VERDICT=SAAS_POST_E6A_GLOBAL_AUDIT_PASS
 HIGH_OPEN=0
 CRITICAL_OPEN=0
 
-The exact runtime reconciliation is healthy: Railway API/worker backend b9
-SUCCESS, Vercel ca READY, health/ready/database OK, AI OFF and outbound zero.
+The exact runtime reconciliation is healthy: Railway API/worker eda SUCCESS,
+Vercel eda READY, health/ready/database OK, AI OFF and outbound zero.
 Authenticated canonical-domain SPA smoke passed six viewports for Central,
 catalog, settings and Inbox. No code or DB rollback is required.
 
