@@ -121,4 +121,6 @@ test("a healthy run resolves the latest sync failure occurrence", async () => {
   run.errorClass = null;
   const second = await service.evaluateTenant(3);
   assert.equal(second.resolved, 1);
+  const third = await service.evaluateTenant(3);
+  assert.equal(third.resolved, 0);
 });

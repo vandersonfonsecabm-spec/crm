@@ -187,7 +187,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         if (evaluation.match) matched += 1;
         const retentionUntil = new Date(now.getTime() + DEFAULT_RETENTION_DAYS * 86400000);
         const previous = await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: evaluation.occurrenceKey, ruleType }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] });
-        const previousMatched = previous?.matched ? previous : (typeof prisma.avaliacaoRegraEstoque?.findFirst === "function" ? await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: evaluation.occurrenceKey, ruleType, matched: true }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] }) : null);
+        const previousMatched = previous?.matched ? previous : (previous?.materialChange === true ? null : (typeof prisma.avaliacaoRegraEstoque?.findFirst === "function" ? await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: evaluation.occurrenceKey, ruleType, matched: true }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] }) : null));
         let effectiveEvaluation = evaluation;
         const lifecycleResolution = balance && ruleType === "STOCK_LOT_EXPIRING" && !evaluation.match && evaluation.noMatchReason !== "ALREADY_EXPIRED" && !previous?.matched && previousLifecycleMatched?.matched;
         const resolutionCandidate = !evaluation.match && previousMatched?.matched && (ruleType !== "STOCK_SYNC_FAILED" || state.latestRunHealthy === true);
