@@ -3,7 +3,8 @@ Auditoria global pós-E6A — relatório final
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
 FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
-FINAL_RUNTIME_SHA=e18121ec91ab0278c72856048fea5411db407cbb (Vercel docs-only deploy; API/worker eda; source tag eda)
+FINAL_RUNTIME_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c (source/runtime baseline; later documentation-only Vercel deploys)
+FINAL_DOCUMENTATION_HEAD=DOCUMENTATION_ONLY_AFTER_SOURCE_TAG
 DOCUMENT_STATUS=GA2_FINAL_PASS
 
 RESULTADO
@@ -53,8 +54,11 @@ VALIDAÇÃO
   terminou com exit 0 em todos os arquivos não-PostgreSQL; os testes
   exclusivamente PostgreSQL continuam separados pelo runner oficial bloqueado.
 - Frontend: 194/194 PASS, TypeScript noEmit PASS, lint PASS, Vite build PASS.
-- Railway API/worker eda: SUCCESS/RUNNING; Vercel docs-only e181: READY;
-  health/ready e frontend HTTP 200; Postgres database OK.
+- Railway API deployment `c5e36ec7-92d6-4c0c-843f-98ff4eb9d650` and worker
+  deployment `dcf18b0f-4d35-4d8c-9ce1-52c5e6c2d366`: SUCCESS/RUNNING at eda.
+  Vercel latest verified docs-only deployment
+  `dpl_6TLhWra6vJqixjWJXD4GEaPEX738`: READY; health/ready e frontend HTTP
+  200; Postgres database OK.
 - Nenhuma migration ou alteração de dados foi necessária nesta GA2.
 - AI flags OFF, allowlist deny-all, provider real NO, auto-reply NO,
   outbound 0; H7/H8/estoque preservados.
@@ -89,3 +93,70 @@ OTIMIZAÇÕES DE EXECUÇÃO
   e o PostgreSQL oficial permaneceram imutáveis. O push de teste acionou
   automaticamente novos deploys saudáveis, sem delta funcional de runtime.
 - Não foi repetido backup/migration, pois GA2 não alterou schema/dados.
+
+INVENTÁRIO COMPLETO DA ENTREGA
+
+Os 15 documentos gerados e incluídos no ZIP são:
+
+1. META_GA2_FINAL_REPORT.txt
+2. META_GA2_PREFLIGHT.md
+3. META_GA2_ARCHITECTURE_MAP.md
+4. META_GA2_FINDING_LEDGER.md
+5. META_GA2_DB_SECURITY_REPORT.md
+6. META_GA2_BACKEND_WORKERS_REPORT.md
+7. META_GA2_FRONTEND_E2E_REPORT.md
+8. META_GA2_H7_H8_STOCK_AI_REPORT.md
+9. META_GA2_INFRA_RELEASE_REPORT.md
+10. META_GA2_RUNTIME_CLAIM_MATRIX.md
+11. META_GA2_FINAL_AUDIT.md
+12. SOL_EXTRA_HIGH_GA2_SOURCE_REVIEW.txt
+13. SOL_EXTRA_HIGH_GA2_FINAL_REVIEW.txt
+14. LUNAMAX_GA2_SCORECARD.txt
+15. BASELINE_SAAS_POST_E6A_GLOBAL_AUDIT_PASS.md
+
+Pacote: META_GA2_REPORTS_20260824.zip
+SHA-256 do pacote: 28a40438f314a0b6ffa0222d6c36bf05d4fbeafffbbbd4a560b805633265606c
+
+HISTÓRICO DE COMMITS E RELEASE
+
+- `52e687f`: correções causais iniciais da auditoria global;
+- `b9a1e54`: serializer de catálogo e replay HITL;
+- `ca9744b`: preço stale/unavailable não autoritativo na UI;
+- `eda4559`: runner/fixtures corrigidos; baseline de source e tag imutável;
+- `8227240`, `e18121e`, `93c59c0`, `871384d`: pacote documental, reconciliação,
+  adaptação do comando e relatório final.
+
+O tag de runtime aponta para `eda455912c5ddecb8ae42766f56e2397dce0085c`.
+Os commits posteriores são documentais e não alteram backend, frontend
+funcional, schema ou migrations.
+
+ALTERAÇÕES VISUAIS
+
+Não houve redesign nem troca de identidade visual. A única mudança visual
+funcional foi a representação segura de preço `STALE`/`UNAVAILABLE` como
+“Preço sob consulta”. As telas de catálogo, configurações e Inbox mantiveram o
+shell existente, com estado explícito OFF. A prova autenticada cobriu
+1920x1080, 1440x900, 1366x768, 1024x768, 900x768 e 390x844, sem overflow.
+
+LOGIN E VALIDAÇÃO OPERACIONAL
+
+O ambiente canônico abriu autenticado como Javali Apps durante a validação
+final. A credencial fornecida foi usada somente no fluxo de autenticação e não
+foi registrada em código, relatório, fixture ou log.
+
+LIMITAÇÕES RESTANTES, SEM BLOQUEAR A BASELINE
+
+- O runner PostgreSQL genérico continua falhando antes da execução; os testes
+  PostgreSQL-only não foram falsamente marcados como PASS.
+- A rota de detalhe de produto teve cobertura de source/contrato; não houve
+  screenshot separado dessa rota, enquanto as superfícies principais tiveram
+  QA visual autenticada.
+- O advisory moderado ExcelJS/uuid e os outliers históricos de banco ficam
+  para observação/manutenção, sem caminho causal comprovado nesta missão.
+
+PRÓXIMA MISSÃO
+
+A E6B pode escolher exatamente um provedor, implementar um único conector,
+configurar credencial scoped e testar structured output/tool calling em
+shadow, suggestion-only e human approval. Nenhuma reconstrução de catálogo,
+estoque, ProductOffer, ferramentas, Inbox ou auditoria é necessária.
