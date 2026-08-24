@@ -27,5 +27,5 @@ AI_COMMERCE_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
 - AI flags/env: ausentes/default OFF; nenhum modelo real, adapter ou outbound.
 - Live Mock canary API: PASS em tenant 1; SHADOW/SUGGESTION/HUMAN_APPROVAL,
   tenant isolation e zero outbound.
-- QA visual autenticado: `BLOCKED_SESSION`, pois a sessão disponível chegou
-  apenas à tela de login.
+- QA visual autenticado: PASS nos seis viewports; primeira tentativa chegou ao
+  login, depois a conta de teste permitiu a coleta completa.

@@ -23,7 +23,8 @@ Nenhum HIGH/CRITICAL aberto no source local após as correções. O runner Prism
 genérico permanece bloqueado antes da execução, mas a migration oficial passou
 por mecanismo PostgreSQL operacional equivalente. O live Mock canary passou
 com SHADOW/SUGGESTION/HUMAN_APPROVAL, tenant isolation, idempotência e zero
-outbound. A única pendência é QA visual autenticado sem sessão.
+outbound. A QA visual autenticada passou em seis viewports, com drawer/contexto
+responsivo validado; o ambiente foi retornado ao OFF após a coleta.
 
 No preflight oficial, o Railway confirmou o banco Postgres-u_yI online. O
 plano Hobby bloqueia Backups/PITR gerenciados; a operação usou backup lógico

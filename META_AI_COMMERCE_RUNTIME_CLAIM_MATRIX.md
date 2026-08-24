@@ -27,12 +27,12 @@
 | Live tenant isolation | PASS | foreign tenant request 403; capability false after cleanup |
 | Remote E6A branch | PASS | fixes merged through PR #6; master a45eba71 |
 | Vercel preview build | PASS | dpl_7GcexRMqBfGdSWKdMBQjEKwK7eHq, exact branch SHA |
-| Authenticated production visual QA | BLOCKED_SESSION | production opened CRM login gate; no authenticated feature screen |
+| Authenticated production visual QA | PASS | catalog/settings/Inbox at 1440/1366/1024/900/390/1920; drawer at 1024/390 |
 | Authenticated preview visual QA | BLOCKED_SESSION | preview origin could not validate session |
 | Auto reply/outbound | PASS_ZERO | outbound=0; no sender path |
 | Final state | PASS_OFF | all AI flags/allowlist OFF |
 
 `AI_COMMERCE_SHA_PARITY=PASS_EXACT_DEPLOY_METADATA` for current Railway and
-Vercel merge deployment. Older manual uploads remain un-attested. The live API
-canary is PASS; only authenticated visual UI proof remains open, so the final
-status is foundation OFF-ready, not live autonomous seller.
+Vercel merge deployment. Older manual uploads remain un-attested. Live API and
+visual canary evidence are PASS; the final status is foundation OFF-ready, not
+live autonomous seller.

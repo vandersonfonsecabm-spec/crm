@@ -17,8 +17,8 @@ migration, Railway API/worker deploy, Vercel production deploy and post-deploy
 health are PASS. The Prisma generic runner remains BLOCKED before execution,
 while the operational PostgreSQL mechanism is evidenced separately. Live Mock
 API canary is PASS: SHADOW, SUGGESTION_ONLY, granular HUMAN_APPROVAL, tenant
-isolation, idempotency, and zero outbound. Authenticated visual QA remains
-BLOCKED_SESSION because the browser opens the login gate. Deployment metadata
-records exact merge-SHA parity for the current release. Do not rename this
-verdict to a live autonomous seller: AI is OFF again, no real provider is
-connected, and outbound is zero.
+isolation, idempotency, and zero outbound. Authenticated visual QA is also
+PASS across 1440/1366/1024/900/390/1920 with responsive context drawer checks.
+Deployment metadata records exact merge-SHA parity for the current release. Do
+not rename this verdict to a live autonomous seller: AI is OFF again, no real
+provider is connected, and outbound is zero.

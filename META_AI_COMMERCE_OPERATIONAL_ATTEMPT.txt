@@ -44,7 +44,7 @@ NOT CLAIMED
 PRODUCTION_BACKUP=PASS_LOGICAL_PROTECTED_BACKUP
 PRODUCTION_DB_PRECHECK=PASS
 STOCK/AI_PROD_MIGRATION=PASS_STOCK_SCHEMA_UNCHANGED_AI_ADDITIVE
-E6A_BROWSER_PROD_QA=BLOCKED_SESSION
+E6A_BROWSER_PROD_QA=PASS_AUTHENTICATED_SIX_VIEWPORTS
 E6A_LIVE_CANARY=PASS_API_MOCK_AND_HITL
 E6A_BRANCH_PUSH=PASS_REMOTE_CANDIDATE
 E6A_PREVIEW_BUILD=PASS
@@ -72,5 +72,5 @@ FINAL LIVE CANARY UPDATE
   OpportunityDraft and handoff separately approved; all outbound=0).
 - Foreign tenant: 403; post-canary `MensagemCanal` SAIDA count: 0.
 - Cleanup: tenant feature false, settings OFF, AI env flags false/allowlist 0,
-  synthetic catalog archived. Visual browser QA still BLOCKED_SESSION because
-  production browser opens the login gate without an authenticated session.
+  synthetic catalog archived. Authenticated browser QA passed in six viewports;
+  screenshots remain temporary because they contain test-account data.

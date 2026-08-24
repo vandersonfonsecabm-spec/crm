@@ -12,10 +12,10 @@ PRISMA OFFICIAL RUNNER: BLOCKED_GENERIC_ENGINE_ERROR
 POSTGRES OFFICIAL MIGRATION: PASS_ADDITIVE (157/157 tenant/FK gate)
 PRODUCTION DEPLOY: PASS_OFF (Railway API/worker + Vercel merge SHA)
 LIVE CANARY: PASS (tenant 1 API Mock + granular HITL)
-PRODUCTION VISUAL QA: BLOCKED_SESSION (login gate; no authenticated screen)
+PRODUCTION VISUAL QA: PASS (6 viewports; catalog/settings/Inbox; drawer responsive)
 FINAL STATE: OFF / FOUNDATION READY
 
-SCORE=FOUNDATION_OFF_DEPLOYED_LIVE_API_CANARY_PASS_VISUAL_GATE_OPEN
+SCORE=FOUNDATION_OFF_DEPLOYED_LIVE_API_AND_VISUAL_CANARY_PASS
 
 The command had strong guardrails but was not executable literally. The major
 improvements were canonical stock authority, isolated opportunity drafts,
