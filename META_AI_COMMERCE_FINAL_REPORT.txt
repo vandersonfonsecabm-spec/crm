@@ -136,6 +136,40 @@ LIMITAÇÕES E GATES NÃO DECLARADOS COMO PASS
 - Exact Git SHA parity for a future deployment is NOT claimed; runtime SHA is
   source-only until an attested deployment manifest exists.
 
+PREFLIGHT OFICIAL E BLOQUEIO DE RELEASE
+
+- Railway project: glistening-playfulness; environment: production.
+- API service: api; endpoint api-production-875f9.up.railway.app; active
+  deployment 9236aa00-8e86-4727-ba4c-692427a52268; runtime label
+  stock-e5r-canary-context-fix-a1232a1; status Online.
+- Official database identified: Postgres-u_yI (service
+  e9d8a6b8-507b-45fb-92a8-3ab016f865a2); status Online. Its visible public
+  schema list has no CommercialCatalogProduct/ProductOffer/AICommerce* tables,
+  proving E6A migration is not applied.
+- Railway production plan is Hobby. The official Backups page explicitly
+  reports that backups and PITR require Pro. No logical backup was created,
+  because the connection secret is not exposed and no approved pg_dump target
+  is available locally.
+- Vercel project crm is identified as prj_xAWKcwZGDQsT3pEZLUZ5YWf6lDFq. Latest
+  production deployment dpl_969EcRQMZhGJnwKdZsGYBavMSAhc is READY, but its Git
+  SHA metadata is empty; exact source parity is therefore not claimed.
+- API /health, /ready and current Vercel alias returned HTTP 200. These are
+  health checks for the existing E5R runtime, not proof of E6A deployment.
+
+RELEASE DECISION
+
+`PRODUCTION_BACKUP=BLOCKED_RAILWAY_HOBBY_NO_BACKUPS_PITR`
+`PRODUCTION_DB_MIGRATION=NOT_EXECUTED`
+`E6A_BRANCH_PUSH=NOT_EXECUTED`
+`E6A_PRODUCTION_DEPLOY=NOT_EXECUTED`
+`E6A_PRODUCTION_BROWSER_QA=NOT_EXECUTED`
+
+This is a material hard stop, not a temporary test failure: applying an
+additive migration without a recoverable official backup would violate the
+release protocol. The safe next action is to enable an approved backup/recovery
+path (Railway Pro/PITR or a separately authorized sanitized logical backup),
+then resume from this exact source and re-run only the blocked release gates.
+
 DECISÃO FINAL
 
 AI_COMMERCE_FOUNDATION_PRODUCTION_OFF_READY

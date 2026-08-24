@@ -23,3 +23,8 @@ Nenhum HIGH/CRITICAL aberto no source local após as correções. O risco
 operacional restante é explícito: runner Prisma genérico bloqueado e ausência
 de rehearsal/migration/deploy oficial. Isso impede declarar production ship,
 mas não impede declarar a fundação source/rehearsal OFF-ready.
+
+No preflight oficial, o Railway confirmou que o banco Postgres-u_yI está online
+e ainda sem tabelas E6A, enquanto o plano Hobby bloqueia Backups/PITR. Esse é um
+hard stop material para migration oficial: não houve push, merge, deploy ou
+alteração de produção.

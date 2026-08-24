@@ -22,3 +22,15 @@ engine antes da execução. Portanto:
 
 Isso não equivale a PASS de migration PostgreSQL oficial. Backup/restore/
 migration/deploy oficiais ficam para lote operacional com confirmação própria.
+
+No preflight oficial, o alvo foi identificado como Railway project
+`glistening-playfulness`, environment `production`, service `Postgres-u_yI`.
+O banco está online, mas ainda não contém as tabelas E6A. A página de Backups
+do Railway informa que Backups/PITR exigem plano Pro; no plano Hobby não há
+backup oficial recuperável disponível.
+
+`PRODUCTION_DB_IDENTIFIED=PASS`
+`PRODUCTION_BACKUP=BLOCKED_RAILWAY_HOBBY_NO_BACKUPS_PITR`
+`PRODUCTION_MIGRATION=NOT_EXECUTED`
+
+O runtime atual permaneceu intacto.

@@ -18,9 +18,9 @@
 | Tenant schema/FKs | PASS | architecture/post-migration gates |
 | SQLite rehearsal | PASS | 39 migrations isolated copy |
 | PostgreSQL official runner | BLOCKED | generic engine error before execution |
-| PostgreSQL official migration | NOT_EXECUTED | no production mutation authorized |
-| Official backup/restore | NOT_EXECUTED | no production mutation authorized |
-| Railway/Vercel deploy | NOT_EXECUTED | no E6A deploy confirmation |
+| PostgreSQL official migration | BLOCKED | official DB identified but E6A tables absent |
+| Official backup/restore | BLOCKED | Railway Hobby disables Backups/PITR |
+| Railway/Vercel deploy | NOT_EXECUTED | current production is E5R runtime |
 | Live canary | NOT_EXECUTED | local controlled Mock only |
 | Auto reply/outbound | PASS_ZERO | outbound=0; no sender path |
 | Final state | PASS_OFF | all AI flags/allowlist OFF |
