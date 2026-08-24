@@ -88,6 +88,14 @@ async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, l
       validateStockEvent(event, { activeOnly: !allowReserved });
       if (!allowReserved && !ACTIVE_EVENT_TYPES.includes(event.eventType)) throw new StockError("STOCK_SCHEMA_UNSUPPORTED", "Evento reservado.");
       const outcome = await consumer(event, row);
+      if (outcome?.waitingForRecipient === true) {
+        await prisma.eventoOutboxEstoque.updateMany({
+          where: { id: row.id, empresaId: Number(empresaId), status: "PROCESSING", leaseOwner: effectiveOwner, leaseExpiresAt: row.leaseExpiresAt },
+          data: { status: "PENDING", availableAt: new Date(now.getTime() + 15 * 60 * 1000), leaseOwner: null, leaseExpiresAt: null, attempts: { decrement: 1 } },
+        });
+        logger.warn?.("stock_outbox_waiting_for_recipient", { outboxId: row.id });
+        continue;
+      }
       if (outcome?.handled !== true) throw new StockError("STOCK_UNAVAILABLE", "Evento de estoque nao foi processado pelo consumer.", undefined, 503);
       const completedAt = new Date();
       const marked = await prisma.eventoOutboxEstoque.updateMany({

@@ -237,3 +237,16 @@ test("provider connection failures remain retryable", async () => {
   assert.equal(result.quarantined, 0);
   assert.equal(updates.at(-1).data.status, "PENDING");
 });
+
+test("recipient absence keeps projection pending beyond transient retry budget", async () => {
+  const event = buildStockEvent({ type: "StockProjectionRequested.v1", empresaId: 1, aggregateType: "FonteEstoque", aggregateId: "2", materialVersion: 1, payload: { occurrenceKey: "1:source:2" } });
+  const updates = [];
+  const prisma = { eventoOutboxEstoque: {
+    findMany: async () => [{ id: 11, empresaId: 1, attempts: 5, payloadStructuredJson: JSON.stringify(event), leaseExpiresAt: new Date(Date.now() + 30000) }],
+    updateMany: async (query) => { updates.push(query); return { count: 1 }; },
+  } };
+  const result = await processStockOutboxBatch({ prisma, empresaId: 1, owner: "worker-a", h8ProjectionEnabled: true, allowReserved: true, eventTypes: ["StockProjectionRequested.v1"], consumer: async () => ({ handled: false, waitingForRecipient: true }) });
+  assert.equal(result.quarantined, 0);
+  assert.equal(updates.at(-1).data.status, "PENDING");
+  assert.equal(updates.at(-1).data.attempts.decrement, 1);
+});

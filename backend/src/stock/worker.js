@@ -75,7 +75,7 @@ function createProjectionConsumer({ prisma, empresaId, env, now }) {
           : null;
         if (!existingQuality) await prisma.problemaQualidadeEstoque.create({ data: { empresaId, fonteId, tipo: "STOCK_RECIPIENT_MISSING", severidade: "HIGH", targetRef: row.occurrenceKey, estado: "OPEN", detailsSanitizedJson: JSON.stringify({ ruleType: row.ruleType, occurrenceKey: row.occurrenceKey }), retentionUntil: new Date(now.getTime() + 90 * 86400000) } });
       }
-      return { handled: false, retryable: true, recipients: 0 };
+      return { handled: false, waitingForRecipient: true, recipients: 0 };
     }
     await projectStockEvaluation({
       prisma,

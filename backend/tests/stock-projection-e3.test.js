@@ -85,4 +85,5 @@ test("missing H8 recipients become an explicit quality issue", async () => {
   assert.equal(quality.length, 1);
   assert.equal(quality[0].tipo, "STOCK_RECIPIENT_MISSING");
   assert.equal(outcome.handled, false);
+  assert.equal(outcome.waitingForRecipient, true);
 });
