@@ -323,6 +323,10 @@ function normalizeText(value) {
 
 function sanitizeData(value, depth = 0) {
   if (depth > 4 || value === null || value === undefined) return value ?? null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  if (value && typeof value === "object" && (value.constructor?.name === "Decimal" || value.constructor?.name === "PrismaDecimal")) {
+    return typeof value.toJSON === "function" ? String(value.toJSON()) : String(value);
+  }
   if (typeof value === "string") return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").slice(0, 4000);
   if (typeof value === "number" || typeof value === "boolean") return value;
   if (Array.isArray(value)) return value.slice(0, 20).map((item) => sanitizeData(item, depth + 1));
