@@ -24,12 +24,18 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
   ];
   const purge = async (tx) => {
     const counts = {};
-    const protectedOccurrences = new Set();
+    const protectedVersions = new Map();
+    const protect = (occurrenceKey, materialVersion = null) => {
+      if (!occurrenceKey) return;
+      const versions = protectedVersions.get(occurrenceKey) || new Set();
+      versions.add(Number.isSafeInteger(Number(materialVersion)) && Number(materialVersion) > 0 ? Number(materialVersion) : null);
+      protectedVersions.set(occurrenceKey, versions);
+    };
     if (typeof tx.notificacao?.findMany === "function") {
       let cursor = null;
       for (;;) {
-        const open = await tx.notificacao.findMany({ where: { empresaId, resolvidaEm: null, stockTargetType: { not: null }, ...(cursor ? { id: { gt: cursor } } : {}) }, select: { id: true, occurrenceKey: true }, orderBy: { id: "asc" }, take: 500 });
-        for (const row of open) if (row.occurrenceKey) protectedOccurrences.add(row.occurrenceKey);
+        const open = await tx.notificacao.findMany({ where: { empresaId, resolvidaEm: null, stockTargetType: { not: null }, ...(cursor ? { id: { gt: cursor } } : {}) }, select: { id: true, occurrenceKey: true, stockMaterialVersion: true }, orderBy: { id: "asc" }, take: 500 });
+        for (const row of open) protect(row.occurrenceKey, row.stockMaterialVersion);
         if (open.length < 500) break;
         cursor = open.at(-1)?.id;
         if (!cursor) break;
@@ -39,7 +45,7 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
       let cursor = null;
       for (;;) {
         const pending = await tx.eventoOutboxEstoque.findMany({ where: { empresaId, status: { in: ["PENDING", "PROCESSING"] }, ...(cursor ? { id: { gt: cursor } } : {}) }, select: { id: true, payloadStructuredJson: true }, orderBy: { id: "asc" }, take: 500 });
-        for (const row of pending) { try { const event = JSON.parse(row.payloadStructuredJson || "{}"); if (event.payload?.occurrenceKey) protectedOccurrences.add(event.payload.occurrenceKey); } catch {} }
+        for (const row of pending) { try { const event = JSON.parse(row.payloadStructuredJson || "{}"); protect(event.payload?.occurrenceKey, event.materialVersion); } catch {} }
         if (pending.length < 500) break;
         cursor = pending.at(-1)?.id;
         if (!cursor) break;
@@ -48,8 +54,10 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
     for (const [key, model, condition] of targets) {
       const delegate = tx[model];
       if (!delegate || typeof delegate.findMany !== "function" || typeof delegate.deleteMany !== "function") continue;
-      const effectiveCondition = key === "evaluations" && protectedOccurrences.size
-        ? { ...condition, occurrenceKey: { notIn: [...protectedOccurrences] } }
+      const protectedPairs = key === "evaluations" ? [...protectedVersions].flatMap(([occurrenceKey, versions]) => [...versions].filter((version) => version !== null).map((materialVersion) => ({ occurrenceKey, materialVersion }))) : [];
+      const protectedWholeOccurrences = key === "evaluations" ? [...protectedVersions].filter(([, versions]) => versions.has(null)).map(([occurrenceKey]) => ({ occurrenceKey })) : [];
+      const effectiveCondition = key === "evaluations" && (protectedPairs.length || protectedWholeOccurrences.length)
+        ? { ...condition, NOT: { OR: [...protectedPairs, ...protectedWholeOccurrences] } }
         : condition;
       let deleted = 0;
       for (let batch = 0; batch < MAX_BATCHES_PER_MODEL; batch += 1) {

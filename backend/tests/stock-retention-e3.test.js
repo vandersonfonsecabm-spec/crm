@@ -45,7 +45,7 @@ test("retention preserves an evaluation referenced by an open notification and p
     notificacao: { findMany: async () => [{ occurrenceKey: "protected-occurrence" }] },
     eventoOutboxEstoque: { findMany: async () => [{ payloadStructuredJson: JSON.stringify({ payload: { occurrenceKey: "protected-occurrence" } }) }] },
     avaliacaoRegraEstoque: {
-      findMany: async ({ where }) => where.occurrenceKey?.notIn?.includes("protected-occurrence") ? [] : [{ id: 1 }],
+      findMany: async ({ where }) => where.NOT?.OR?.length ? [] : [{ id: 1 }],
       deleteMany: async () => { throw new Error("protected evaluation should not be deleted"); },
     },
     $transaction: async (callback) => callback(prisma),

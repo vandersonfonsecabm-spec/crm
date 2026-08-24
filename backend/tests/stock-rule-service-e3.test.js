@@ -91,6 +91,9 @@ test("expiry lifecycle emits one effective occurrence and resolves only after qu
   const service = createStockRuleService({ prisma, env });
   await service.evaluateTenant(3, { now: new Date("2026-08-23T12:00:00Z") });
   assert.equal(outbox.filter((row) => row.eventType === "StockRuleResolved.v1").length, 0);
+  const stableOutboxCount = outbox.length;
+  await service.evaluateTenant(3, { now: new Date("2026-08-23T12:00:00Z") });
+  assert.equal(outbox.length, stableOutboxCount);
   await service.evaluateTenant(3, { now: new Date("2026-08-31T12:00:00Z") });
   assert.equal(outbox.filter((row) => row.eventType === "StockRuleResolved.v1").length, 0);
   state.onHand = "0.000000";

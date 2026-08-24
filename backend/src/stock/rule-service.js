@@ -190,8 +190,12 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         const previousMatched = previous?.matched ? previous : (typeof prisma.avaliacaoRegraEstoque?.findFirst === "function" ? await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: evaluation.occurrenceKey, ruleType, matched: true }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] }) : null);
         let effectiveEvaluation = evaluation;
         const lifecycleResolution = balance && ruleType === "STOCK_LOT_EXPIRING" && !evaluation.match && evaluation.noMatchReason !== "ALREADY_EXPIRED" && !previous?.matched && previousLifecycleMatched?.matched;
-        if (balance && previousLifecycleState && Number(previousLifecycleState.materialVersion || 0) >= Number(evaluation.materialVersion || 0) && (evaluation.match || lifecycleResolution)) {
-          effectiveEvaluation = { ...evaluation, materialVersion: Number(previousLifecycleState.materialVersion) + 1 };
+        const resolutionCandidate = !evaluation.match && previousMatched?.matched && (ruleType !== "STOCK_SYNC_FAILED" || state.latestRunHealthy === true);
+        const previousState = balance ? previousLifecycleState : previous;
+        const stableSameMatch = Boolean(evaluation.match && previousState?.matched && previousState.ruleType === ruleType && Number(previousState.materialVersion || 0) === Number(evaluation.materialVersion || 0));
+        const shouldAdvanceMaterial = (lifecycleResolution || resolutionCandidate || (evaluation.match && previousState && !stableSameMatch)) && previousState;
+        if (shouldAdvanceMaterial && Number(previousState.materialVersion || 0) >= Number(evaluation.materialVersion || 0)) {
+          effectiveEvaluation = { ...evaluation, materialVersion: Number(previousState.materialVersion) + 1 };
         }
         const materialChange = Boolean(previous && previous.materialVersion !== effectiveEvaluation.materialVersion);
         const evaluationWithChange = { ...effectiveEvaluation, materialChange };
@@ -202,6 +206,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         if (lifecycleResolution) eventType = "StockRuleResolved.v1";
         if (eventType === "StockRuleResolved.v1" && !["QUANTITY_NOT_POSITIVE", "OUTSIDE_WINDOW", "FRESHNESS_WITHIN_SLA", "RETRIES_NOT_EXHAUSTED"].includes(effectiveEvaluation.noMatchReason)) eventType = null;
         if (eventType === "StockRuleResolved.v1" && ruleType === "STOCK_SYNC_FAILED" && state.latestRunHealthy !== true) eventType = null;
+        if (stableSameMatch) eventType = null;
         const event = eventType ? eventForEvaluation(evaluationWithChange, eventType, now) : null;
         const projectionEvent = eventType ? eventForEvaluation(evaluationWithChange, "StockProjectionRequested.v1", now) : null;
         const apply = async (tx) => {
