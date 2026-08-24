@@ -466,7 +466,7 @@ function assertOpaqueId(value: string, label: string): asserts value is string {
 
 function isPrivateHostname(hostname: string) {
   const normalized = hostname.toLowerCase();
-  if (normalized === "::1" || normalized === "0.0.0.0") return true;
+  if (normalized === "::1" || normalized === "0.0.0.0" || normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:")) return true;
   if (/^127\./.test(normalized) || /^10\./.test(normalized) || /^169\.254\./.test(normalized) || /^192\.168\./.test(normalized)) return true;
   const private172 = normalized.match(/^172\.(\d{1,3})\./);
   return Boolean(private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31);
