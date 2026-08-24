@@ -120,7 +120,6 @@ test("preview, replay por idempotencia, confirmacao CAS e staging duravel nao pe
   assert.equal(prisma.state.imports[0].safeFilename, ".._.._estoque.csv");
   assert.equal(prisma.state.lines.length, 2);
   assert.equal(prisma.state.lines[0].normalizedJsonSanitized.includes("never persisted"), false);
-  assert.equal(prisma.state.capabilities[0].versao, "stock-csv.v1");
 
   const replay = await service.preview({
     empresaId: 1,
@@ -139,6 +138,7 @@ test("preview, replay por idempotencia, confirmacao CAS e staging duravel nao pe
   assert.equal(prisma.state.syncRuns[0].estado, "PARTIAL");
   assert.equal(prisma.state.lines.find((line) => line.status === "APPLIED").appliedAt.toISOString(), now.toISOString());
   assert.equal(prisma.state.audits.some((audit) => audit.action === "STOCK_IMPORT_CONFIRMED"), true);
+  assert.equal(prisma.state.capabilities[0].versao, "stock-csv.v1");
 });
 
 test("confirmacao recusa staging acima do limite antes de chamar o aplicador", async () => {

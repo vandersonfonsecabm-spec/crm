@@ -115,17 +115,6 @@ function createStockImportService({
             revision: 1,
           })),
         });
-        if (typeof tx.capacidadeFonteEstoque?.upsert === "function") {
-          const capabilityValues = parsed.capabilities?.capabilities || Object.fromEntries(Object.entries(parsed.capabilities || {}).filter(([key, value]) => key !== "schemaVersion" && key !== "semantics" && typeof value === "boolean"));
-          const capabilityVersion = parsed.capabilities.schemaVersion || parsed.capabilities.version || STOCK_CSV_SCHEMA_VERSION;
-          for (const [codigo, suportada] of Object.entries(capabilityValues)) {
-            await tx.capacidadeFonteEstoque.upsert({
-              where: { empresaId_fonteId_codigo_versao: { empresaId, fonteId, codigo, versao: capabilityVersion } },
-              update: { suportada: suportada === true, semanticaJson: JSON.stringify(parsed.capabilities.semantics || {}), observadaEm: now },
-              create: { empresaId, fonteId, codigo, suportada: suportada === true, versao: capabilityVersion, semanticaJson: JSON.stringify(parsed.capabilities.semantics || {}), observadaEm: now },
-            });
-          }
-        }
         await writeAudit(tx, {
           empresaId,
           actorUsuarioId,
@@ -240,6 +229,7 @@ function createStockImportService({
       if (acceptedLines.length > MAX_CONFIRM_LINES) {
         throw stockError(409, "STOCK_IMPORT_BOUNDS_EXCEEDED", "Importacao de estoque excede o limite de confirmacao.");
       }
+      await promoteCapabilities(tx, { empresaId, fonteId: working.fonteId, lines: acceptedLines, now });
       const result = await applyAcceptedRows({
         tx,
         empresaId,
@@ -480,6 +470,36 @@ function safeJson(value) {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+async function promoteCapabilities(tx, { empresaId, fonteId, lines, now }) {
+  if (typeof tx?.capacidadeFonteEstoque?.upsert !== "function") return;
+  const values = { PRODUCT_IDENTITY: false, SOURCE_VERSION: false, LOT_IDENTIFIER: false, EXPIRATION_DATE: false, LOCATION: false, ON_HAND_QUANTITY: false, RESERVED_QUANTITY: false, AVAILABLE_QUANTITY: false, QUARANTINED_QUANTITY: false, UNIT_OF_MEASURE: false, SOURCE_UPDATED_AT: false, IMPORT_BATCH: true };
+  for (const line of lines || []) {
+    let normalized = null;
+    try { normalized = line.normalizedJsonSanitized ? JSON.parse(line.normalizedJsonSanitized) : null; } catch { normalized = null; }
+    if (!normalized) continue;
+    if (normalized.sourceProductId) values.PRODUCT_IDENTITY = true;
+    if (normalized.sourceVersion) values.SOURCE_VERSION = true;
+    if (normalized.sourceLotId || normalized.lotCode) values.LOT_IDENTIFIER = true;
+    if (normalized.expiryDate && normalized.expiryPrecision) values.EXPIRATION_DATE = true;
+    if (normalized.sourceLocationId || normalized.locationName) values.LOCATION = true;
+    const quantities = normalized.quantities || {};
+    if (quantities.on_hand !== null && quantities.on_hand !== undefined) values.ON_HAND_QUANTITY = true;
+    if (quantities.reserved !== null && quantities.reserved !== undefined) values.RESERVED_QUANTITY = true;
+    if (quantities.available !== null && quantities.available !== undefined) values.AVAILABLE_QUANTITY = true;
+    if (quantities.quarantined !== null && quantities.quarantined !== undefined) values.QUARANTINED_QUANTITY = true;
+    if (normalized.unitOfMeasure) values.UNIT_OF_MEASURE = true;
+    if (normalized.sourceUpdatedAt) values.SOURCE_UPDATED_AT = true;
+  }
+  const semantics = { quantityRelevantForExpiry: values.ON_HAND_QUANTITY, quantitySemantic: values.ON_HAND_QUANTITY ? "ON_HAND" : "UNKNOWN", promotedAt: now.toISOString() };
+  for (const [codigo, suportada] of Object.entries(values)) {
+    await tx.capacidadeFonteEstoque.upsert({
+      where: { empresaId_fonteId_codigo_versao: { empresaId, fonteId, codigo, versao: STOCK_CSV_SCHEMA_VERSION } },
+      update: { suportada, semanticaJson: JSON.stringify(semantics), observadaEm: now },
+      create: { empresaId, fonteId, codigo, suportada, versao: STOCK_CSV_SCHEMA_VERSION, semanticaJson: JSON.stringify(semantics), observadaEm: now },
+    });
   }
 }
 

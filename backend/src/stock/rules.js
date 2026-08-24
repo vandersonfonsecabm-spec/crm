@@ -78,6 +78,8 @@ function evaluateStockState({ ruleType, state = {}, config = {}, capabilities = 
   const requiredCapabilities = REQUIRED_CAPABILITIES[type] || [];
   const observed = capabilityValues(capabilities);
   const missing = hasRequiredCapabilities(type, capabilities);
+  const canonicalRevision = Number(state.revision || state.balance?.revision || state.lot?.revision) || 1;
+  const lifecycleMaterialOffset = type === "STOCK_LOT_EXPIRING" ? 1 : type === "STOCK_LOT_EXPIRED" ? 2 : 0;
   const base = {
     schemaVersion: RULE_SCHEMA_VERSION,
     ruleType: type,
@@ -103,7 +105,7 @@ function evaluateStockState({ ruleType, state = {}, config = {}, capabilities = 
     noMatchReason: null,
     priority: PRIORITY[type] || null,
     occurrenceKey: occurrenceKey(type, state),
-    materialVersion: Number.isSafeInteger(state.materialVersion) ? state.materialVersion : (Number(state.revision || state.balance?.revision || state.lot?.revision) || 1),
+    materialVersion: Number.isSafeInteger(state.materialVersion) ? state.materialVersion : (canonicalRevision * 10 + lifecycleMaterialOffset),
     materialChange: state.materialChange === true,
     destination: state.destination || null,
     resolutionCandidate: null,

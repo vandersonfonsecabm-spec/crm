@@ -11,8 +11,7 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
   const flags = stockFlags(env);
   assertStockFlagsOffForProduction(env);
   if (!flags.domainEnabled || !flags.syncWorkerEnabled || flags.tenantAllowlist.size === 0) return { enabled: false, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, tenants: 0 };
-  const results = { enabled: true, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, matched: 0, resolved: 0, tenants: 0 };
-  let cycleError = null;
+  const results = { enabled: true, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, matched: 0, resolved: 0, tenants: 0, failedTenants: [] };
   for (const empresaId of flags.tenantAllowlist) {
     if (!stockEnabledForTenant(empresaId, env, { worker: true })) continue;
     results.tenants += 1;
@@ -36,31 +35,37 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
         logger,
         h8ProjectionEnabled: flags.h8ProjectionEnabled && flags.ruleEngineEnabled,
         allowReserved: flags.h8ProjectionEnabled && flags.ruleEngineEnabled,
-        eventTypes: flags.h8ProjectionEnabled && flags.ruleEngineEnabled ? ["StockProjectionRequested.v1", "StockRuleMatched.v1", "StockRuleResolved.v1"] : null,
+        eventTypes: flags.h8ProjectionEnabled && flags.ruleEngineEnabled ? ["StockProjectionRequested.v1", "StockRuleMatched.v1", "StockRuleResolved.v1", "StockSyncStarted.v1", "StockSyncCompleted.v1", "StockSyncFailed.v1", "StockRecordObserved.v1", "StockCanonicalStateChanged.v1"] : null,
         consumer: flags.h8ProjectionEnabled && flags.ruleEngineEnabled ? createProjectionConsumer({ prisma, empresaId, env, now }) : null,
       });
       results.claimed += result.claimed; results.processed += result.processed; results.quarantined += result.quarantined;
       if (parseBoolean(env.STOCK_RETENTION_ENABLED) && parseBoolean(env.STOCK_RETENTION_WORKER_ENABLED)) await runStockRetention({ prisma, empresaId, now, dryRun: false, env, logger });
     } catch (error) {
       logger.error?.("stock_tenant_cycle_failed", { empresaId, code: error?.code || "STOCK_CYCLE_FAILED" });
-      cycleError ||= error;
+      results.failedTenants.push(empresaId);
     }
   }
-  if (cycleError) throw cycleError;
   return results;
 }
 
-function createProjectionConsumer({ prisma, empresaId, env, now }) {
+function createProjectionConsumer({ prisma, empresaId, env, now, projector = projectStockEvaluation }) {
   return async (event) => {
-    if (event.eventType !== "StockProjectionRequested.v1" && event.eventType !== "StockRuleMatched.v1" && event.eventType !== "StockRuleResolved.v1") return { handled: false };
+    const projectionEvents = new Set(["StockProjectionRequested.v1", "StockRuleMatched.v1", "StockRuleResolved.v1"]);
+    if (!projectionEvents.has(event.eventType)) return { handled: true, sinked: true };
     const occurrenceKey = event.payload?.occurrenceKey;
     if (!occurrenceKey || typeof prisma.avaliacaoRegraEstoque?.findFirst !== "function") return { handled: false };
     const row = await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId, occurrenceKey, materialVersion: event.materialVersion }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] });
     if (!row) return { handled: false };
     let recipientPolicy = {};
+    const targetType = row.loteEstoqueId ? "ESTOQUE_LOTE" : row.produtoEstoqueId ? "ESTOQUE_PRODUTO" : "ESTOQUE_FONTE";
+    const targetId = row.loteEstoqueId || row.produtoEstoqueId || row.sourceConnectionId;
     if (typeof prisma.configuracaoRegraEstoque?.findFirst === "function") {
       const config = await prisma.configuracaoRegraEstoque.findFirst({ where: { empresaId, ruleType: row.ruleType, scopeType: "TENANT", scopeKey: "TENANT" }, select: { recipientPolicyJson: true } });
       try { recipientPolicy = config?.recipientPolicyJson ? JSON.parse(config.recipientPolicyJson) : {}; } catch { recipientPolicy = {}; }
+    }
+    if (typeof prisma.overrideEstoque?.findFirst === "function") {
+      const override = await prisma.overrideEstoque.findFirst({ where: { empresaId, ruleType: row.ruleType, targetType, targetId: String(targetId) }, select: { recipientPolicyJson: true } });
+      if (override?.recipientPolicyJson) { try { recipientPolicy = { ...recipientPolicy, ...JSON.parse(override.recipientPolicyJson) }; } catch {} }
     }
     const configuredIds = Array.isArray(recipientPolicy.usuarioIds || recipientPolicy.userIds)
       ? [...new Set((recipientPolicy.usuarioIds || recipientPolicy.userIds).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))]
@@ -77,7 +82,7 @@ function createProjectionConsumer({ prisma, empresaId, env, now }) {
       }
       return { handled: false, waitingForRecipient: true, recipients: 0 };
     }
-    await projectStockEvaluation({
+    await projector({
       prisma,
       env,
       now,

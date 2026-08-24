@@ -27,6 +27,7 @@ test("expiry rules are timezone/date-only aware and share occurrence", () => {
   assert.equal(expiring.expiryDate, "2026-08-30");
   assert.equal(expiring.occurrenceKey, expired.occurrenceKey);
   assert.equal(expired.match, true);
+  assert.notEqual(expiring.materialVersion, expired.materialVersion);
 });
 
 test("unknown quantity and missing capability fail closed without becoming zero", () => {

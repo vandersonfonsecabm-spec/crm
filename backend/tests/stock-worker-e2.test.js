@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { runStockWorkerCycle } = require("../src/stock/worker");
+const { runStockWorkerCycle, createProjectionConsumer } = require("../src/stock/worker");
 const { processStockOutboxBatch, claimStockOutbox } = require("../src/stock/outbox");
 
 test("stock worker stays dormant when flags are absent and does not query schema", async () => {
@@ -58,4 +58,36 @@ test("rule cursor rotates beyond the first bounded page", async () => {
   await runStockWorkerCycle({ prisma, rules, env, limit: 1 });
   await runStockWorkerCycle({ prisma, rules, env, limit: 1 });
   assert.deepEqual(cursors, [null, 10]);
+});
+
+test("active non-projection stock events use the durable outbox sink", async () => {
+  const consumer = createProjectionConsumer({ prisma: {}, empresaId: 1, env: {}, now: new Date() });
+  assert.deepEqual(await consumer({ eventType: "StockRecordObserved.v1" }), { handled: true, sinked: true });
+  assert.deepEqual(await consumer({ eventType: "StockSyncFailed.v1" }), { handled: true, sinked: true });
+});
+
+test("one tenant failure is isolated from the remaining worker cycle", async () => {
+  const seen = [];
+  const result = await runStockWorkerCycle({
+    prisma: {},
+    rules: { evaluateTenant: async (tenantId) => { seen.push(tenantId); if (tenantId === 1) throw new Error("poison tenant"); return { evaluated: 2, matched: 0, resolved: 0 }; } },
+    env: { STOCK_DOMAIN_ENABLED: "true", STOCK_SYNC_WORKER_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "1,2", STOCK_H8_PROJECTION_ENABLED: "false" },
+  });
+  assert.deepEqual(seen, [1, 2]);
+  assert.deepEqual(result.failedTenants, [1]);
+  assert.equal(result.tenants, 2);
+});
+
+test("target override recipient policy wins over tenant fallback", async () => {
+  let projection;
+  const prisma = {
+    avaliacaoRegraEstoque: { findFirst: async () => ({ ruleType: "STOCK_LOT_EXPIRING", occurrenceKey: "1:logicalExpiryLifecycle:4:scope", loteEstoqueId: 4, sourceConnectionId: 9, matched: true, priority: "ATENCAO", materialVersion: 2 }) },
+    configuracaoRegraEstoque: { findFirst: async () => ({ recipientPolicyJson: JSON.stringify({ usuarioIds: [10] }) }) },
+    overrideEstoque: { findFirst: async () => ({ recipientPolicyJson: JSON.stringify({ usuarioIds: [11] }) }) },
+    usuario: { findMany: async ({ where }) => { assert.deepEqual(where.id.in, [11]); return [{ id: 11 }]; } },
+  };
+  const consumer = createProjectionConsumer({ prisma, empresaId: 1, env: {}, now: new Date(), projector: async (input) => { projection = input; } });
+  const outcome = await consumer({ eventType: "StockProjectionRequested.v1", materialVersion: 2, payload: { occurrenceKey: "1:logicalExpiryLifecycle:4:scope" } });
+  assert.equal(outcome.handled, true);
+  assert.deepEqual(projection.recipients, [11]);
 });
