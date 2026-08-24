@@ -1,0 +1,159 @@
+E6A — FUNDAÇÃO COMERCIAL PREPARADA PARA IA
+RELATÓRIO FINAL ADAPTADO E EVIDÊNCIA OPERACIONAL
+
+CURRENT_STATE_AS_OF=2026-08-24 BRT
+POST_STOCK_RUNTIME_BASE_SHA=a1232a195795912d0a900d51edfcc5f12d4b8955
+POST_STOCK_CANONICAL_REF=stock-mvp-production-ship-2026-08-24
+POST_STOCK_DOCS_SHA=23485b5
+POST_STOCK_RECONCILIATION_SHA=812413ffd18139b08e66d01ec99e7883ec4da63f
+AI_COMMERCE_SOURCE_COMMIT=2b8209ef25ba28a40b756948edfcc12c07f12970
+AI_COMMERCE_RUNTIME_SHA=NOT_DEPLOYED
+DOCUMENT_STATUS=SOURCE_AND_REHEARSAL_COMPLETE_PRODUCTION_OFF
+
+RESULTADO
+
+A fundação comercial foi implementada como um vertical slice tenant-scoped e
+permanece desligada por padrão. Ela prepara o CRM para uma futura conexão com
+exatamente um modelo, sem implementar modelo real, adapter de fornecedor,
+registry multiprovedor, auto reply ou outbound.
+
+Estado efetivo:
+AI_COMMERCE_FOUNDATION_PRODUCTION_OFF_READY=PASS
+AI_REAL_PROVIDER_CONNECTED=NO
+AI_REAL_CONNECTOR_IMPLEMENTED=NO
+AI_PROVIDER_ADAPTER_REGISTRY_IMPLEMENTED=NO
+AI_AUTO_REPLY_ENABLED=NO
+AI_EXTERNAL_OUTBOUND=0
+AI_COMMERCE_ENABLED=false
+AI_COMMERCE_SHADOW_WORKER_ENABLED=false
+AI_COMMERCE_MOCK_ENABLED=false
+AI_COMMERCE_TENANT_ALLOWLIST=
+
+O comando original NÃO foi executado literalmente. As revisões de produto,
+segurança, UX e release encontraram ambiguidades que poderiam vender estoque
+ou preço incorretos, criar Negocio indevido, vazar tenant ou produzir efeitos
+sem aprovação. O usuário autorizou a adaptação segura.
+
+FALHAS DO COMANDO ORIGINAL E ADAPTAÇÕES
+
+1. Baseline pós-estoque misturava runtime, documentação e reconciliação.
+   Adaptação: runtime foi congelado em a1232a1; a tag anotada
+   stock-mvp-production-ship-2026-08-24 aponta para esse código; 5127d53 e
+   812413f foram tratados como documentação/reconciliação, não como runtime.
+
+2. O serviço legado commercialCatalogService/ProdutoExterno/EstoqueExterno
+   expõe externalId, soma quantidade e marca EM_ESTOQUE sem freshness, lote,
+   quarentena ou semântica canônica. O simulador WhatsApp também cria efeitos
+   de canal. Adaptação: o caminho de IA usa somente ProdutoEstoque,
+   SaldoEstoque, LoteEstoque, FonteEstoque e o overlay
+   CommercialCatalogProduct; o legado ficou fora do AI path.
+
+3. stockProductId, preço, moeda, autoridade de disponibilidade e
+   LOW_AVAILABILITY estavam ambíguos. Adaptação: vínculo canônico composto é
+   obrigatório para oferta vendável; preço é Decimal versionado; preço ausente
+   é DO_NOT_QUOTE; stale/unknown/conflito/unidade incompatível/lote vencido
+   são NEEDS_CONFIRMATION; zero só é OUT_OF_STOCK quando autoritativo.
+
+4. Opportunity não tinha semântica de rascunho e Negocio NOVO poluiria o funil.
+   Adaptação: AICommerceOpportunityDraft isolado, idempotente e tenant-safe;
+   promoção para Negocio normal permanece uma ação humana futura/oficial.
+
+5. Modes e aprovações eram insuficientemente precisos. Adaptação: gate efetivo
+   é global/env AND capability do tenant AND allowlist/canary AND settings;
+   vazio é deny-by-default. HUMAN_APPROVAL usa aprovação separada, actor real,
+   CAS, revisão da conversa e idempotency para composer, interesse, rascunho e
+   handoff. Nenhuma aprovação chama sender.
+
+6. Trigger, revisão e concorrência não estavam congelados. Adaptação: run é
+   identificado por tenant/conversa/mensagem/revisão/policy/mode; claim
+   persistente é atômico; mensagem nova, troca de conversa, perda de lease,
+   encerramento e oferta expirada invalidam draft antigo.
+
+7. Retenção, PII, URL, prompt injection e excessive agency não tinham limites
+   suficientes. Adaptação: contexto bounded (20 mensagens e limites de bytes),
+   payload sanitizado sem chain-of-thought, URLs HTTPS com allowlist e bloqueio
+   de redes privadas, registry fechado, revalidação server-side e retenção
+   finita de 30 dias para evidência AI.
+
+8. O comando era grande demais para uma onda única. Adaptação operacional:
+   freeze/gap/decisions → catálogo/availability/search/offer → connection/mock/
+   tools/orchestrator/policy → Inbox/UI → schema/rehearsal/source gate. A
+   produção ficou explicitamente fora desta retomada por não haver confirmação
+   E6A de migration/deploy.
+
+IMPLEMENTAÇÃO
+
+- CommercialCatalogProduct tenant-scoped, default HIDDEN, links to canonical
+  ProdutoEstoque with composite FK and revisioned URLs/price.
+- Sellable availability fail-closed; no exact quantity customer-visible by
+  default; ProductOffer immutable/TTL/material-version snapshot.
+- Deterministic search bounded to 20 candidates and three final offers.
+- Closed registry of eight tools; no generic HTTP/SQL/send/reserve/discount/
+  payment/order tools.
+- CommerceAIConnectionPort represented only by Unconfigured and Mock.
+- MockCommerceAI deterministic for clarification, search, availability,
+  no-price, stale, no-match and prompt-injection scenarios; no network.
+- Bounded orchestrator with persisted AICommerceRun/Turn/Decision/Draft,
+  audit redaction, CAS approvals and no auto-send.
+- AICommerceProductInterest, AICommerceOpportunityDraft and AICommerceHandoff
+  persist only after granular human approval; no normal Negocio side effect.
+- Existing DashboardInboxPanel, composer, ReplyLease and InboxCommercialPanel
+  were reused. The assistant is an evidence panel, not a second Inbox.
+- Catalog and settings routes are mounted inside the existing dashboard shell.
+
+EVIDÊNCIA EXECUTADA
+
+- Prisma SQLite schema validate: PASS.
+- PostgreSQL derived schema validate: PASS (no official DB touched).
+- SQLite rehearsal on an isolated copy: 39 migrations applied, including
+  20260824150000 and 20260824160000: PASS.
+- Tenant architecture gate: PASS; relationCount=157; manifest=
+  52544dffd716eb60969b33adc050452fc702bb7ed622afb81188e9cb383733a0.
+- Isolated SQLite post-migration tenant gate: PASS; checkedRelationCount=157,
+  checkedForeignKeys=230, checkedUniqueParents=30, orphaned=0, crossed=0.
+- Backend E6A focused tests: 17/17 PASS (catalog, availability, search,
+  offers, mock, orchestrator, audit and effects).
+- Frontend TypeScript noEmit: PASS.
+- Frontend focused Inbox/E6A tests: 19/19 PASS.
+- Frontend full suite after temporary dependency junction: 194/194 PASS.
+  The junction was removed; no dependency or lockfile was changed.
+- Server startup smoke with isolated SQLite: PASS; stock/AI remain OFF unless
+  every gate is explicitly enabled.
+- git diff --check and JavaScript syntax checks: PASS.
+- Static scan for provider adapters and dangerous generic tools: no matches.
+
+LIMITAÇÕES E GATES NÃO DECLARADOS COMO PASS
+
+- PRISMA_OFFICIAL_RUNNER=BLOCKED_GENERIC_ENGINE_ERROR_BEFORE_MIGRATION_EXECUTION.
+  The isolated runner was reproduced once and stopped at the generic engine
+  error. It is recorded as a tooling blocker, not a migration PASS.
+- PostgreSQL official migration, backup/restore oficial, Railway/Vercel deploy,
+  live canary and production UI browser run were NOT executed in E6A. No
+  production state was changed.
+- Frontend lint could not run from the isolated worktree because its local
+  node_modules is intentionally absent; TypeScript and the complete Node test
+  suite were run using a temporary junction to existing local dependencies.
+- Exact Git SHA parity for a future deployment is NOT claimed; runtime SHA is
+  source-only until an attested deployment manifest exists.
+
+DECISÃO FINAL
+
+AI_COMMERCE_FOUNDATION_PRODUCTION_OFF_READY
+
+Isso significa: a fundação de catálogo, verdade de estoque, ofertas, mock,
+ferramentas, orquestrador, auditoria, Inbox e HITL está pronta no source
+candidate e validada em rehearsal isolado; o produto permanece OFF. Uma missão
+posterior, com confirmação operacional explícita, poderá executar backup,
+migration/deploy OFF, canário controlado e então conectar UM provedor real.
+
+REFERÊNCIAS DE SEGURANÇA UTILIZADAS
+
+OWASP LLM Top 10 / prompt injection / excessive agency:
+https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+https://owasp.org/www-project-top-10-for-large-language-model-applications/2_0_vulns/LLM06_ExcessiveAgency.html
+NIST AI RMF Generative AI Profile:
+https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-generative-artificial-intelligence
+OWASP SSRF Prevention Cheat Sheet:
+https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+ANPD Nota Técnica 29/2024:
+https://www.gov.br/anpd/pt-br/centrais-de-conteudo/documentos-tecnicos-orientativos/nota-tecnica-29_2024.pdf
