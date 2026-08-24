@@ -294,7 +294,7 @@ function normalizeAssistantResult(value?: Record<string, unknown>): AICommerceAs
     offers: offers.map((item) => normalizeOffer(item)).filter((item): item is AICommerceProductOffer => item !== null).slice(0, 3),
     toolTrace: trace,
     warnings: arrayOfStrings(draftValue?.warnings ?? decision.safetyFlags),
-    conversationRevision: result.conversationRevision === undefined ? null : Number(result.conversationRevision),
+    conversationRevision: result.conversationRevision === undefined || result.conversationRevision === null || result.conversationRevision === "" ? null : Number(result.conversationRevision),
     sourceMessageId: null,
   };
 }
