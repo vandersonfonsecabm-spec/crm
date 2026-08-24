@@ -164,7 +164,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
     const overrideByKey = new Map(overrides.map((override) => [`${override.ruleType}:${override.targetType}:${override.targetId}`, override]));
     const sourceScopeIds = [...new Set(sourceRows.map((row) => Number(row.id)).filter((id) => Number.isSafeInteger(id) && id > 0))];
     const recentRunsPromise = sourceScopeIds.length && typeof prisma.execucaoSincronizacaoEstoque?.findFirst === "function"
-      ? Promise.all(sourceScopeIds.map((sourceId) => prisma.execucaoSincronizacaoEstoque.findFirst({ where: { empresaId: tenantId, fonteId: sourceId }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] })))
+      ? Promise.all(sourceScopeIds.map((sourceId) => prisma.execucaoSincronizacaoEstoque.findFirst({ where: { empresaId: tenantId, fonteId: sourceId }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] }))).then((rows) => rows.filter(Boolean))
       : sourceScopeIds.length && typeof prisma.execucaoSincronizacaoEstoque?.findMany === "function"
         ? prisma.execucaoSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take: Math.min(MAX_FAILURE_HISTORY_ROWS, Math.max(1, sourceScopeIds.length * 4)) })
         : Promise.resolve([]);

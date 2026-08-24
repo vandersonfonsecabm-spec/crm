@@ -58,7 +58,7 @@ test("rule service evaluates stale state at source scope even without balances",
   prisma.fonteEstoque = { findMany: async () => [{ id: 2, statusCiclo: "ACTIVE" }] };
   prisma.configuracaoRegraEstoque.findMany = async () => [{ ruleType: "STOCK_DATA_STALE", enabled: true, freshnessSlaMinutes: 60, scopeType: "TENANT", scopeKey: "TENANT" }];
   prisma.checkpointSincronizacaoEstoque = { findMany: async () => [{ fonteId: 2, lastSuccessfulSyncAt: new Date("2026-08-20T12:00:00Z") }] };
-  prisma.execucaoSincronizacaoEstoque = { findMany: async () => [] };
+  prisma.execucaoSincronizacaoEstoque = { findFirst: async () => null, findMany: async () => [] };
   const service = createStockRuleService({ prisma, env: { STOCK_DOMAIN_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "3" }, clock: () => new Date("2026-08-23T12:00:00Z") });
   const result = await service.evaluateTenant(3);
   assert.equal(result.matched, 1);
@@ -120,7 +120,7 @@ test("a healthy run resolves the latest sync failure occurrence", async () => {
   prisma.fonteEstoque = { findMany: async () => [{ id: 2, statusCiclo: "ACTIVE" }] };
   prisma.configuracaoRegraEstoque.findMany = async () => [{ ruleType: "STOCK_SYNC_FAILED", enabled: true, scopeType: "TENANT", scopeKey: "TENANT" }];
   prisma.checkpointSincronizacaoEstoque = { findMany: async () => [] };
-  prisma.execucaoSincronizacaoEstoque = { findMany: async () => [run] };
+  prisma.execucaoSincronizacaoEstoque = { findFirst: async () => run, findMany: async () => [run] };
   prisma.avaliacaoRegraEstoque.findFirst = async ({ where }) => [...prisma.evaluations].reverse().find((row) => row.empresaId === where.empresaId && (!where.occurrenceKey || row.occurrenceKey === where.occurrenceKey) && (!where.sourceConnectionId || row.sourceConnectionId === where.sourceConnectionId) && row.ruleType === where.ruleType && (where.matched === undefined || row.matched === where.matched)) || null;
   const service = createStockRuleService({ prisma, env: { STOCK_DOMAIN_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "3" } });
   const first = await service.evaluateTenant(3);
