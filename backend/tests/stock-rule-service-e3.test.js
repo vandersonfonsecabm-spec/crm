@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createStockRuleService } = require("../src/stock/rule-service");
+const { createStockRuleService, syncFailureMaterialVersion, MAX_PRISMA_INT } = require("../src/stock/rule-service");
 
 function mockPrisma({ capabilities = true } = {}) {
   const evaluations = [];
@@ -140,6 +140,7 @@ test("a healthy run resolves the latest sync failure occurrence", async () => {
 test("different sync failure families receive distinct monotonic material versions", async () => {
   const evaluations = [];
   const outboxRows = [];
+  const notificationRows = [];
   const run = { id: 1, fonteId: 2, estado: "FAILED", retryCount: 3, revision: 3, errorClass: "TIMEOUT", correlationId: "sync-failure" };
   const prisma = {
     saldoEstoque: { findMany: async () => [] },
@@ -172,6 +173,7 @@ test("different sync failure families receive distinct monotonic material versio
       },
       findFirst: async ({ where }) => outboxRows.find((row) => row.empresaId === where.empresaId && row.eventType === where.eventType && row.aggregateType === where.aggregateType && row.aggregateId === where.aggregateId && row.materialVersion === where.materialVersion) || null,
     },
+    notificacao: { findMany: async () => notificationRows },
   };
   prisma.$transaction = async (callback) => callback(prisma);
   const service = createStockRuleService({ prisma, env: { STOCK_DOMAIN_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "3" }, clock: () => new Date("2026-08-23T12:00:00Z") });
@@ -185,6 +187,7 @@ test("different sync failure families receive distinct monotonic material versio
   assert.notEqual(matched[0].materialVersion, matched[1].materialVersion);
 
   const highestBeforeRetention = Math.max(...matched.map((row) => row.materialVersion));
+  notificationRows.push({ stockTargetId: 2, stockMaterialVersion: highestBeforeRetention });
   evaluations.length = 0;
   outboxRows.length = 0;
   run.id = 2;
@@ -192,4 +195,11 @@ test("different sync failure families receive distinct monotonic material versio
   await service.evaluateTenant(3);
   const afterRetention = outboxRows.find((row) => row.eventType === "StockRuleMatched.v1");
   assert.ok(afterRetention.materialVersion > highestBeforeRetention);
+});
+
+test("sync failure material versions stay within PostgreSQL INTEGER bounds", () => {
+  assert.equal(syncFailureMaterialVersion({ empresaId: 3, sourceId: 2, runId: 2147483, revision: 1, errorFamily: "TIMEOUT", failureHistory: [] }), 2147483);
+  assert.equal(syncFailureMaterialVersion({ empresaId: 3, sourceId: 2, runId: 2147484, revision: 1, errorFamily: "TIMEOUT", failureHistory: [] }), 2147484);
+  assert.equal(MAX_PRISMA_INT, 2147483647);
+  assert.throws(() => syncFailureMaterialVersion({ empresaId: 3, sourceId: 2, runId: MAX_PRISMA_INT + 1, revision: 1, errorFamily: "TIMEOUT", failureHistory: [] }), /limite de materialVersion/);
 });

@@ -9,6 +9,7 @@ const { sanitizeStructured } = require("./contracts");
 const { StockError } = require("./errors");
 
 const DEFAULT_RETENTION_DAYS = 90;
+const MAX_PRISMA_INT = 2147483647;
 
 function asDate(value, fallback = new Date()) {
   const date = value instanceof Date ? value : new Date(value || fallback);
@@ -94,23 +95,28 @@ function latestRowsByOccurrence(rows = []) {
   return latest;
 }
 
-function syncFailureMaterialVersion({ empresaId, sourceId, runId, revision, errorFamily, failureHistory }) {
+function syncFailureMaterialVersion({ empresaId, sourceId, runId, revision, errorFamily, failureHistory, durableVersions = [] }) {
   const safeRevision = Number.isSafeInteger(Number(revision)) && Number(revision) > 0 ? Number(revision) : 1;
-  // Run ids are backed by the database sequence and are never reused. Keep a
-  // wide namespace so a later run remains above versions from an earlier run
-  // even after its evaluations/outbox rows are purged by retention.
-  const safeRunId = Number.isSafeInteger(Number(runId)) && Number(runId) > 0 ? Number(runId) : 0;
-  const baseVersion = Math.max(safeRevision * 10 + 2, safeRunId * 1000 + 2);
+  // Run ids are backed by a database sequence and are never reused. Keep the
+  // raw id (rather than multiplying it) so the persisted INTEGER contract is
+  // never overflowed. Historical H8/outbox versions provide the durable floor
+  // after evaluation rows have been removed by retention.
+  const numericRunId = Number(runId);
+  if (Number.isSafeInteger(numericRunId) && numericRunId > MAX_PRISMA_INT) throw new StockError("STOCK_CONFLICT", "Sequencia de sincronizacao excedeu o limite de materialVersion.");
+  const safeRunId = Number.isSafeInteger(numericRunId) && numericRunId > 0 ? numericRunId : 0;
+  const baseVersion = safeRunId || (safeRevision * 10 + 2);
   const occurrenceKey = `${empresaId}:STOCK_SYNC_FAILED:${sourceId}:${errorFamily || "UNKNOWN"}`;
   const latest = latestRowsByOccurrence(failureHistory);
   const current = latest.get(occurrenceKey);
   const currentVersion = Number(current?.materialVersion);
   if (current?.matched === true && Number.isSafeInteger(currentVersion) && currentVersion > 0) return currentVersion;
-  const maxVersion = failureHistory.reduce((max, row) => {
+  const maxVersion = [...failureHistory, ...durableVersions.map((materialVersion) => ({ materialVersion }))].reduce((max, row) => {
     const value = Number(row?.materialVersion);
     return Number.isSafeInteger(value) && value > max ? value : max;
   }, 0);
-  return Math.max(baseVersion, maxVersion + 1);
+  const nextVersion = Math.max(baseVersion, maxVersion + 1);
+  if (nextVersion > MAX_PRISMA_INT) throw new StockError("STOCK_CONFLICT", "Nao foi possivel alocar materialVersion dentro do INTEGER.");
+  return nextVersion;
 }
 
 function createStockRuleService({ prisma, env = process.env, clock = () => new Date(), logger = console } = {}) {
@@ -155,13 +161,25 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
     const configByType = new Map(configs.map((config) => [config.ruleType, config]));
     const overrideByKey = new Map(overrides.map((override) => [`${override.ruleType}:${override.targetType}:${override.targetId}`, override]));
     const sourceScopeIds = [...new Set(sourceRows.map((row) => Number(row.id)).filter((id) => Number.isSafeInteger(id) && id > 0))];
-    const [checkpointRows, recentRuns] = await Promise.all([
+    const [checkpointRows, recentRuns, notificationRows, sourceOutboxRows] = await Promise.all([
       sourceScopeIds.length && typeof prisma.checkpointSincronizacaoEstoque?.findMany === "function" ? prisma.checkpointSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } } }) : [],
       sourceScopeIds.length && typeof prisma.execucaoSincronizacaoEstoque?.findMany === "function" ? prisma.execucaoSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] }) : [],
+      sourceScopeIds.length && typeof prisma.notificacao?.findMany === "function" ? prisma.notificacao.findMany({ where: { empresaId: tenantId, stockTargetType: "ESTOQUE_FONTE", stockTargetId: { in: sourceScopeIds } }, select: { stockTargetId: true, stockMaterialVersion: true } }) : [],
+      sourceScopeIds.length && typeof prisma.eventoOutboxEstoque?.findMany === "function" ? prisma.eventoOutboxEstoque.findMany({ where: { empresaId: tenantId, aggregateType: "FonteEstoque", aggregateId: { in: sourceScopeIds.map(String) } }, select: { aggregateId: true, materialVersion: true } }) : [],
     ]);
     const checkpointBySource = new Map(checkpointRows.map((row) => [row.fonteId, row]));
     const latestRunBySource = new Map();
     for (const run of recentRuns) if (!latestRunBySource.has(run.fonteId)) latestRunBySource.set(run.fonteId, run);
+    const durableVersionsBySource = new Map();
+    const recordDurableVersion = (sourceId, materialVersion) => {
+      const value = Number(materialVersion);
+      if (!Number.isSafeInteger(value) || value < 1) return;
+      const list = durableVersionsBySource.get(Number(sourceId)) || [];
+      list.push(value);
+      durableVersionsBySource.set(Number(sourceId), list);
+    };
+    for (const row of notificationRows) recordDurableVersion(row.stockTargetId, row.stockMaterialVersion);
+    for (const row of sourceOutboxRows) recordDurableVersion(Number(row.aggregateId), row.materialVersion);
     const pageBalances = balances.slice(0, safeLimit);
     const stateItems = pageBalances.map((balance) => ({ balance, state: {
         empresaId: tenantId,
@@ -199,6 +217,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         revision: latestRun?.revision || checkpoint?.revision || 1,
         errorFamily,
         failureHistory,
+        durableVersions: durableVersionsBySource.get(source.id) || [],
       });
       const staleBaseConfig = configByType.get("STOCK_DATA_STALE") || {};
       const staleOverride = overrideByKey.get(`STOCK_DATA_STALE:ESTOQUE_FONTE:${source.id}`);
@@ -298,4 +317,4 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
   return { evaluateTenant };
 }
 
-module.exports = { createStockRuleService, evaluationData, eventForEvaluation };
+module.exports = { createStockRuleService, evaluationData, eventForEvaluation, syncFailureMaterialVersion, MAX_PRISMA_INT };
