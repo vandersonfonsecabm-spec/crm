@@ -1,0 +1,68 @@
+Auditoria global pós-E6A — relatório final
+
+CURRENT_STATE_AS_OF=2026-08-24 BRT
+START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
+FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
+FINAL_RUNTIME_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c (API/worker/Vercel deploy; frontend code lineage ca9744b)
+DOCUMENT_STATUS=GA2_FINAL_PASS
+
+RESULTADO
+
+SAAS_POST_E6A_GLOBAL_AUDIT_PASS
+
+A auditoria foi executada com quatro posições efetivas: root + três agentes
+read-only. O runtime pós-E6A foi identificado corretamente em `a45eba7`, sem
+usar a branch principal local suja. A auditoria encontrou defeitos causais e
+eles foram corrigidos em commits focados:
+
+- CAS antes de efeitos HITL, lock em memória e replay sequencial bloqueado;
+- `catalogContext` sanitizado antes de qualquer conexão futura;
+- settings parciais preservam allowlist e políticas omitidas;
+- filtros de visibilidade/disponibilidade respeitam o contrato do catálogo;
+- detalhe de produto usa serializer seguro, sem tenant/stock/raw JSON;
+- disponibilidade de produto oculto não expõe ID interno;
+- rejeição de draft auditada sem efeito;
+- rotas `/catalogo-comercial/produtos` e `/:id` renderizam no shell;
+- AI OFF é explícito e não chama endpoint quando a capability está desligada;
+- status de preço stale/unavailable não é apresentado como preço válido;
+- relatórios E6A antigos do master foram reconciliados com a evidência atual.
+
+VALIDAÇÃO
+
+- Backend E6A/catalog: 25/25 PASS antes do último commit UI; latest orchestrator
+  21/21 PASS e syntax checks PASS. A suíte canônica isolada SQLite completa
+  terminou com exit 0 em todos os arquivos não-PostgreSQL; os testes
+  exclusivamente PostgreSQL continuam separados pelo runner oficial bloqueado.
+- Frontend: 194/194 PASS, TypeScript noEmit PASS, lint PASS, Vite build PASS.
+- Railway API/worker backend b9: SUCCESS; Vercel ca: READY; health/ready e
+  frontend HTTP 200; Postgres database OK.
+- Nenhuma migration ou alteração de dados foi necessária nesta GA2.
+- AI flags OFF, allowlist deny-all, provider real NO, auto-reply NO,
+  outbound 0; H7/H8/estoque preservados.
+
+PROVA BROWSER FINAL
+
+Uma sessão QA autenticada no domínio canônico percorreu Central, catálogo,
+configurações e Inbox em 1920x1080, 1440x900, 1366x768, 1024x768, 900x768 e
+390x844. Todas as resoluções ficaram sem login, sem overflow horizontal, com
+catálogo/settings OFF e Inbox sem CTA de execução AI. A prova foi feita por
+navegação SPA para preservar a sessão; screenshots ficaram em diretório
+temporário protegido e não foram enviados por conterem dados de teste.
+
+A tag `saas-post-e6a-global-audit-pass-2026-08-24` foi criada apontando para o
+SHA exato da baseline de source `eda455912c5ddecb8ae42766f56e2397dce0085c`;
+os componentes publicados estão API/worker/Vercel em `eda4559`; o delta de
+frontend de runtime vem da linhagem `ca9744b`.
+
+OTIMIZAÇÕES DE EXECUÇÃO
+
+- Quatro posições foram usadas conforme pedido; não foram inventados oito
+  agentes.
+- Evidências E5R/E6A foram reutilizadas apenas para schema/domínios sem delta.
+- A suíte backend global foi executada uma vez no sandbox isolado e passou;
+  o bloqueio foi limitado ao runner PostgreSQL genérico e não houve loop de
+  retries.
+- O sandbox usou cópias temporárias aprovadas dos fixtures protegidos; `dev.db`
+  e o PostgreSQL oficial permaneceram imutáveis. O push de teste acionou
+  automaticamente novos deploys saudáveis, sem delta funcional de runtime.
+- Não foi repetido backup/migration, pois GA2 não alterou schema/dados.

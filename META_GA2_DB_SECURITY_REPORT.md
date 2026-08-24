@@ -1,0 +1,32 @@
+# GA2 database and security report
+
+CURRENT_STATE_AS_OF=2026-08-24 BRT
+START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
+FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
+FINAL_RUNTIME_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c (source baseline; no DB delta)
+DOCUMENT_STATUS=PASS_WITH_ISOLATED_RUNNER_AND_OFFICIAL_PG_LIMITATION
+
+No GA2 migration or schema change occurred. Existing PostgreSQL E6A migration
+history, tenant/FK gate, backup and restore evidence remain valid because no
+related schema files changed. Official Postgres-u_yI remained healthy.
+
+Security review found no auth bypass, cross-tenant read/write, recipient leak,
+generic dangerous tool, provider network call or outbound path. The raw catalog
+detail response was corrected to use the customer-safe serializer. Hidden
+availability responses no longer expose the internal stock product ID.
+
+The official generic Prisma runner remains
+`BLOCKED_GENERIC_ENGINE_ERROR_BEFORE_MIGRATION_EXECUTION` for the disposable
+PostgreSQL command path. This does not block the verified SQLite rehearsal:
+the canonical isolated runner completed its full non-PostgreSQL node-suite
+with exit 0, preserving the protected databases. PostgreSQL-only tests remain
+separately scoped and were not coerced into SQLite. The SQLite result used the
+approved temporary fixture copy under `%TEMP%`; the protected repository
+`dev.db` remained immutable.
+It was not relabeled PASS. The two moderate ExcelJS/uuid advisories were
+reviewed against the actual admin-only bounded import path and accepted as
+non-actionable for this release; no blind `audit fix --force` was run.
+
+Historical failed PostgreSQL password attempts were correlated to removed old
+Railway API deployments and private service traffic; no public ingress was
+observed in the current window. Current API/worker connections succeed.
