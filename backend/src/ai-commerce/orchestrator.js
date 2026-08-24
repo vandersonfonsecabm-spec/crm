@@ -38,7 +38,9 @@ function createAICommerceOrchestrator({
     if (!empresaId || !conversationId) throw policyError("AI_CONTEXT_INVALID", "Tenant e conversa sao obrigatorios.", 401);
     const featureEnabled = await resolveFeature({ empresaId, input, featureGate });
     const settings = await resolveSettings({ empresaId, input, settingsResolver });
-    const mode = normalizeMode(input.mode || settings.mode || MODES.OFF);
+    const configuredMode = normalizeMode(settings.mode || MODES.OFF);
+    const mode = normalizeMode(input.mode || configuredMode);
+    if (modeRank(mode) > modeRank(configuredMode)) throw policyError("AI_MODE_ESCALATION", "Modo solicitado excede a politica do tenant.", 403);
     const mockEnabled = input.mockEnabled === true || settings.mockEnabled === true;
     const tenantAllowed = input.tenantAllowed !== false;
     const modePolicy = buildModePolicy({ mode, enabled: input.enabled !== false && settings.enabled !== false, featureEnabled, mockEnabled, tenantAllowed });
@@ -336,6 +338,7 @@ async function resolveSettings({ empresaId, input, settingsResolver }) {
 }
 
 function defaultSettings() { return { enabled: false, mode: MODES.OFF, mockEnabled: false, revision: 1, policyVersion: "ai-commerce-policy.v1" }; }
+function modeRank(mode) { return ({ [MODES.OFF]: 0, [MODES.SHADOW]: 1, [MODES.SUGGESTION_ONLY]: 2, [MODES.HUMAN_APPROVAL]: 3 })[normalizeMode(mode)] || 0; }
 
 async function getExistingRun({ prisma, idempotencyKey, runs }) {
   const memory = runs.get(idempotencyKey);

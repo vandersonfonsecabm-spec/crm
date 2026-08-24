@@ -86,6 +86,12 @@ test("draft approval persists tenant/revision state when the AI draft model is a
   assert.equal(rows.get("draft-db-1").status, "APPROVED");
 });
 
+test("tenant mode cannot be escalated by a request body", async () => {
+  const tools = createCommercialToolRegistry({ services: {} });
+  const orchestrator = createAICommerceOrchestrator({ connection: new MockCommerceAIConnection({ enabled: true, allowlist: [1] }), toolRegistry: tools, featureGate: async () => true, settingsResolver: async () => ({ enabled: true, mode: MODES.SUGGESTION_ONLY, mockEnabled: true, revision: 1 }) });
+  await assert.rejects(() => orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 10, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Quero uma roçadeira" }), { code: "AI_MODE_ESCALATION" });
+});
+
 test("tool registry requires granular human approval for side effects", async () => {
   const tools = createCommercialToolRegistry({ services: { registerProductInterest: async () => ({ id: "interest-1" }) } });
   await assert.rejects(() => tools.execute("registerProductInterest", { offerId: "offer-1" }, { empresaId: 1, conversationId: 1, mode: MODES.SUGGESTION_ONLY, runId: "r1" }), { code: "AI_TOOL_HUMAN_APPROVAL_REQUIRED" });
