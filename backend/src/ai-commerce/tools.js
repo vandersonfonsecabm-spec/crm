@@ -92,7 +92,8 @@ function createCommercialToolRegistry({
       await recordAudit(audit, "tool", { name, context: safeContext, input: safeInput, status: "FAILED", errorCode: String(error?.code || "TOOL_FAILED"), durationMs: Date.now() - startedAt });
       throw error;
     }
-    const safeResult = sanitizeData(result);
+    const normalizedResult = name === "searchCommercialCatalog" ? normalizeSearchResult(result) : result;
+    const safeResult = sanitizeData(normalizedResult);
     await recordAudit(audit, "tool", { name, context: safeContext, input: safeInput, output: safeResult, status: "SUCCEEDED", durationMs: Date.now() - startedAt });
     return safeResult;
   }
@@ -161,6 +162,14 @@ function sanitizeToolInput(input) {
   const safe = sanitizeData(input || {});
   if (safe && typeof safe === "object") delete safe.empresaId;
   return safe;
+}
+
+function normalizeSearchResult(result) {
+  const items = Array.isArray(result) ? result : Array.isArray(result?.items) ? result.items : [];
+  return items.slice(0, 20).map((item) => {
+    if (item?.product && typeof item.product === "object") return { ...item.product, ...(item.availability && typeof item.availability === "object" ? { availability: item.availability } : {}) };
+    return item;
+  });
 }
 
 function sanitizeContext(context) {
