@@ -120,7 +120,10 @@ test("a healthy run resolves the latest sync failure occurrence", async () => {
   prisma.fonteEstoque = { findMany: async () => [{ id: 2, statusCiclo: "ACTIVE" }] };
   prisma.configuracaoRegraEstoque.findMany = async () => [{ ruleType: "STOCK_SYNC_FAILED", enabled: true, scopeType: "TENANT", scopeKey: "TENANT" }];
   prisma.checkpointSincronizacaoEstoque = { findMany: async () => [] };
-  prisma.execucaoSincronizacaoEstoque = { findFirst: async () => run, findMany: async () => [run] };
+  prisma.execucaoSincronizacaoEstoque = { findFirst: async ({ select }) => {
+    assert.deepEqual(Object.keys(select).sort(), ["correlationId", "errorClass", "estado", "fonteId", "id", "retryCount", "revision"]);
+    return run;
+  }, findMany: async () => [run] };
   prisma.avaliacaoRegraEstoque.findFirst = async ({ where }) => [...prisma.evaluations].reverse().find((row) => row.empresaId === where.empresaId && (!where.occurrenceKey || row.occurrenceKey === where.occurrenceKey) && (!where.sourceConnectionId || row.sourceConnectionId === where.sourceConnectionId) && row.ruleType === where.ruleType && (where.matched === undefined || row.matched === where.matched)) || null;
   const service = createStockRuleService({ prisma, env: { STOCK_DOMAIN_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "3" } });
   const first = await service.evaluateTenant(3);
@@ -142,6 +145,8 @@ test("different sync failure families receive distinct monotonic material versio
   const outboxRows = [];
   const notificationRows = [];
   let aggregateCalls = 0;
+  let failureHistorySelect = null;
+  let latestRunSelect = null;
   const run = { id: 1, fonteId: 2, estado: "FAILED", retryCount: 3, revision: 3, errorClass: "TIMEOUT", correlationId: "sync-failure" };
   const prisma = {
     saldoEstoque: { findMany: async () => [] },
@@ -149,9 +154,12 @@ test("different sync failure families receive distinct monotonic material versio
     configuracaoRegraEstoque: { findMany: async () => [{ ruleType: "STOCK_SYNC_FAILED", enabled: true, scopeType: "TENANT", scopeKey: "TENANT" }] },
     capacidadeFonteEstoque: { findMany: async () => [] },
     checkpointSincronizacaoEstoque: { findMany: async () => [] },
-    execucaoSincronizacaoEstoque: { findMany: async () => [run] },
+    execucaoSincronizacaoEstoque: { findMany: async ({ select }) => { latestRunSelect = select; return [run]; } },
     avaliacaoRegraEstoque: {
-      findMany: async ({ where }) => evaluations.filter((row) => row.empresaId === where.empresaId && row.sourceConnectionId === where.sourceConnectionId && row.ruleType === where.ruleType),
+      findMany: async ({ where, select }) => {
+        failureHistorySelect = select;
+        return evaluations.filter((row) => row.empresaId === where.empresaId && row.sourceConnectionId === where.sourceConnectionId && row.ruleType === where.ruleType);
+      },
       findFirst: async ({ where }) => {
         const rows = evaluations.filter((row) => row.empresaId === where.empresaId
           && (!where.sourceConnectionId || row.sourceConnectionId === where.sourceConnectionId)
@@ -208,6 +216,8 @@ test("different sync failure families receive distinct monotonic material versio
   const afterRetention = outboxRows.find((row) => row.eventType === "StockRuleMatched.v1");
   assert.ok(afterRetention.materialVersion > highestBeforeRetention);
   assert.ok(aggregateCalls >= 2);
+  assert.deepEqual(Object.keys(latestRunSelect).sort(), ["correlationId", "errorClass", "estado", "fonteId", "id", "retryCount", "revision"]);
+  assert.deepEqual(Object.keys(failureHistorySelect).sort(), ["correlationId", "evaluatedAt", "id", "matched", "materialVersion", "occurrenceKey"]);
 });
 
 test("sync failure material versions stay within PostgreSQL INTEGER bounds", () => {

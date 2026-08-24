@@ -11,6 +11,8 @@ const { StockError } = require("./errors");
 const DEFAULT_RETENTION_DAYS = 90;
 const MAX_PRISMA_INT = 2147483647;
 const MAX_FAILURE_HISTORY_ROWS = 500;
+const LATEST_RUN_SELECT = Object.freeze({ id: true, fonteId: true, estado: true, retryCount: true, revision: true, errorClass: true, correlationId: true });
+const FAILURE_HISTORY_SELECT = Object.freeze({ id: true, occurrenceKey: true, evaluatedAt: true, matched: true, materialVersion: true, correlationId: true });
 
 function asDate(value, fallback = new Date()) {
   const date = value instanceof Date ? value : new Date(value || fallback);
@@ -164,9 +166,9 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
     const overrideByKey = new Map(overrides.map((override) => [`${override.ruleType}:${override.targetType}:${override.targetId}`, override]));
     const sourceScopeIds = [...new Set(sourceRows.map((row) => Number(row.id)).filter((id) => Number.isSafeInteger(id) && id > 0))];
     const recentRunsPromise = sourceScopeIds.length && typeof prisma.execucaoSincronizacaoEstoque?.findFirst === "function"
-      ? Promise.all(sourceScopeIds.map((sourceId) => prisma.execucaoSincronizacaoEstoque.findFirst({ where: { empresaId: tenantId, fonteId: sourceId }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] }))).then((rows) => rows.filter(Boolean))
+      ? Promise.all(sourceScopeIds.map((sourceId) => prisma.execucaoSincronizacaoEstoque.findFirst({ where: { empresaId: tenantId, fonteId: sourceId }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], select: LATEST_RUN_SELECT }))).then((rows) => rows.filter(Boolean))
       : sourceScopeIds.length && typeof prisma.execucaoSincronizacaoEstoque?.findMany === "function"
-        ? prisma.execucaoSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take: Math.min(MAX_FAILURE_HISTORY_ROWS, Math.max(1, sourceScopeIds.length * 4)) })
+        ? prisma.execucaoSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }], take: Math.min(MAX_FAILURE_HISTORY_ROWS, Math.max(1, sourceScopeIds.length * 4)), select: LATEST_RUN_SELECT })
         : Promise.resolve([]);
     const notificationMaxPromise = sourceScopeIds.length && typeof prisma.notificacao?.groupBy === "function"
       ? prisma.notificacao.groupBy({ by: ["stockTargetId"], where: { empresaId: tenantId, stockTargetType: "ESTOQUE_FONTE", stockTargetId: { in: sourceScopeIds } }, _max: { stockMaterialVersion: true } })
@@ -221,7 +223,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         ? await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, sourceConnectionId: source.id, ruleType: "STOCK_SYNC_FAILED", matched: true }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] })
         : null;
       const failureHistory = typeof prisma.avaliacaoRegraEstoque?.findMany === "function"
-        ? await prisma.avaliacaoRegraEstoque.findMany({ where: { empresaId: tenantId, sourceConnectionId: source.id, ruleType: "STOCK_SYNC_FAILED" }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }], take: MAX_FAILURE_HISTORY_ROWS })
+        ? await prisma.avaliacaoRegraEstoque.findMany({ where: { empresaId: tenantId, sourceConnectionId: source.id, ruleType: "STOCK_SYNC_FAILED" }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }], take: MAX_FAILURE_HISTORY_ROWS, select: FAILURE_HISTORY_SELECT })
         : [];
       const latestFailureState = latestRowsByOccurrence(failureHistory);
       const openSyncFailures = [...latestFailureState.values()].filter((row) => row.matched === true);
