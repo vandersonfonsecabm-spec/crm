@@ -92,7 +92,7 @@ function mountStockRoutes({ app, prisma, authenticate, requireRole, env = proces
     if (source.tipoFonte !== "FILE_IMPORT_CSV") throw new StockError("STOCK_INVALID", "A fonte nao suporta importacao CSV.");
     const service = loadImportService({ prisma, services: getServices(), env, logger });
     const csv = body?.content ?? body?.csv;
-    const result = await service.preview({ ...context, fonteId: sourceId, content: csv, delimiter: body?.delimiter, safeFilename: body?.filename, idempotencyKey: req.get("Idempotency-Key") || body?.idempotencyKey });
+    const result = await service.preview({ ...context, actorUsuarioId: context.usuarioId, fonteId: sourceId, content: csv, delimiter: body?.delimiter, safeFilename: body?.filename, idempotencyKey: req.get("Idempotency-Key") || body?.idempotencyKey });
     return res.status(201).json({ item: result });
   }));
 
@@ -107,14 +107,14 @@ function mountStockRoutes({ app, prisma, authenticate, requireRole, env = proces
   app.post("/estoque/importacoes/:id/confirmar", ...sourceGuardRole("ADMIN"), route(async (req, res) => {
     const context = req.stockContext;
     const service = loadImportService({ prisma, services: getServices(), env, logger });
-    const result = await service.confirm({ ...context, importacaoId: parsePathId(req.params.id), expectedRevision: req.body?.revision, idempotencyKey: req.get("Idempotency-Key") || req.body?.idempotencyKey, allowPartial: req.body?.allowPartial === true });
+    const result = await service.confirm({ ...context, actorUsuarioId: context.usuarioId, importacaoId: parsePathId(req.params.id), expectedRevision: req.body?.revision, idempotencyKey: req.get("Idempotency-Key") || req.body?.idempotencyKey, allowPartial: req.body?.allowPartial === true });
     return res.json({ item: result });
   }));
 
   app.post("/estoque/importacoes/:id/cancelar", ...sourceGuardRole("ADMIN"), route(async (req, res) => {
     const context = req.stockContext;
     const service = loadImportService({ prisma, services: getServices(), env, logger });
-    const result = await service.cancel({ ...context, importacaoId: parsePathId(req.params.id), expectedRevision: req.body?.revision });
+    const result = await service.cancel({ ...context, actorUsuarioId: context.usuarioId, importacaoId: parsePathId(req.params.id), expectedRevision: req.body?.revision });
     return res.json({ item: result });
   }));
 

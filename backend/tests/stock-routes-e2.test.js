@@ -33,7 +33,11 @@ test("E2 routes are exact and mounted before legacy 410 middleware", () => {
     assert.doesNotMatch(text, /notifications\/service|upsertProjection|Notificacao/);
   }
   assert.match(fs.readFileSync(path.join(__dirname, "..", "src", "stock", "projection.js"), "utf8"), /upsertStockProjection/);
-  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, "..", "src", "stock", "routes.js"), "utf8"), /evaluateTenant\([^\n]*capabilities:\s*req\.body/);
+  const routesSource = fs.readFileSync(path.join(__dirname, "..", "src", "stock", "routes.js"), "utf8");
+  assert.doesNotMatch(routesSource, /evaluateTenant\([^\n]*capabilities:\s*req\.body/);
+  assert.match(routesSource, /service\.preview\(\{ \.\.\.context, actorUsuarioId: context\.usuarioId/);
+  assert.match(routesSource, /service\.confirm\(\{ \.\.\.context, actorUsuarioId: context\.usuarioId/);
+  assert.match(routesSource, /service\.cancel\(\{ \.\.\.context, actorUsuarioId: context\.usuarioId/);
 });
 
 test("MIME-aware parser preserves multipart uploads and allows bounded preview JSON", async () => {
