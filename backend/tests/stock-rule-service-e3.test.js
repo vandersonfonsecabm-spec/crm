@@ -68,9 +68,9 @@ test("rule service evaluates stale state at source scope even without balances",
 test("expiry lifecycle emits one effective occurrence and resolves only after quantity goes zero", async () => {
   const evaluations = [];
   const outbox = [];
-  const state = { onHand: "2.000000" };
+  const state = { onHand: "2.000000", expiry: "2026-08-30" };
   const prisma = {
-    saldoEstoque: { findMany: async () => [{ id: 1, empresaId: 3, produtoEstoqueId: 10, loteId: 11, localId: 12, fonteAutoritativaId: 2, onHand: state.onHand, quantityRelevantForExpiry: true, semanticaDisponivel: "DECLARED", freshnessEstado: "FRESH", dataConfidence: "HIGH", revision: 1, lote: { id: 11, validadeEm: "2026-08-30", precisaoValidade: "DAY", revision: 1 }, local: { id: 12, nome: "A" }, produtoEstoque: { id: 10, nomeExibicao: "Produto" }, fonteAutoritativa: { id: 2, nome: "CSV", statusCiclo: "ACTIVE" } }] },
+    saldoEstoque: { findMany: async () => [{ id: 1, empresaId: 3, produtoEstoqueId: 10, loteId: 11, localId: 12, fonteAutoritativaId: 2, onHand: state.onHand, quantityRelevantForExpiry: true, semanticaDisponivel: "DECLARED", freshnessEstado: "FRESH", dataConfidence: "HIGH", revision: 1, lote: { id: 11, validadeEm: state.expiry, precisaoValidade: "DAY", revision: 1 }, local: { id: 12, nome: "A" }, produtoEstoque: { id: 10, nomeExibicao: "Produto" }, fonteAutoritativa: { id: 2, nome: "CSV", statusCiclo: "ACTIVE" } }] },
     configuracaoRegraEstoque: { findMany: async () => [
       { ruleType: "STOCK_LOT_EXPIRING", enabled: true, expiryWindowDays: 7, scopeType: "TENANT", scopeKey: "TENANT" },
       { ruleType: "STOCK_LOT_EXPIRED", enabled: true, scopeType: "TENANT", scopeKey: "TENANT" },
@@ -99,6 +99,18 @@ test("expiry lifecycle emits one effective occurrence and resolves only after qu
   state.onHand = "0.000000";
   await service.evaluateTenant(3, { now: new Date("2026-09-01T12:00:00Z") });
   assert.equal(outbox.filter((row) => row.eventType === "StockRuleResolved.v1").length, 1);
+
+  evaluations.length = 0;
+  outbox.length = 0;
+  state.onHand = "2.000000";
+  state.expiry = "2026-08-20";
+  await service.evaluateTenant(3, { now: new Date("2026-08-23T12:00:00Z") });
+  state.expiry = "2026-09-30";
+  await service.evaluateTenant(3, { now: new Date("2026-08-23T12:00:00Z") });
+  assert.equal(outbox.filter((row) => row.eventType === "StockRuleResolved.v1").length, 1);
+  const correctedCount = outbox.length;
+  await service.evaluateTenant(3, { now: new Date("2026-08-23T12:00:00Z") });
+  assert.equal(outbox.length, correctedCount);
 });
 
 test("a healthy run resolves the latest sync failure occurrence", async () => {
