@@ -119,13 +119,13 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
     const configByType = new Map(configs.map((config) => [config.ruleType, config]));
     const overrideByKey = new Map(overrides.map((override) => [`${override.ruleType}:${override.targetType}:${override.targetId}`, override]));
     const sourceScopeIds = [...new Set(sourceRows.map((row) => Number(row.id)).filter((id) => Number.isSafeInteger(id) && id > 0))];
-    const [checkpointRows, failedRuns] = await Promise.all([
+    const [checkpointRows, recentRuns] = await Promise.all([
       sourceScopeIds.length && typeof prisma.checkpointSincronizacaoEstoque?.findMany === "function" ? prisma.checkpointSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } } }) : [],
-      sourceScopeIds.length && typeof prisma.execucaoSincronizacaoEstoque?.findMany === "function" ? prisma.execucaoSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds }, estado: { in: ["FAILED", "RETRY_WAIT"] } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] }) : [],
+      sourceScopeIds.length && typeof prisma.execucaoSincronizacaoEstoque?.findMany === "function" ? prisma.execucaoSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] }) : [],
     ]);
     const checkpointBySource = new Map(checkpointRows.map((row) => [row.fonteId, row]));
-    const failedBySource = new Map();
-    for (const run of failedRuns) if (!failedBySource.has(run.fonteId)) failedBySource.set(run.fonteId, run);
+    const latestRunBySource = new Map();
+    for (const run of recentRuns) if (!latestRunBySource.has(run.fonteId)) latestRunBySource.set(run.fonteId, run);
     const pageBalances = balances.slice(0, safeLimit);
     const stateItems = pageBalances.map((balance) => ({ balance, state: {
         empresaId: tenantId,
@@ -144,13 +144,14 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
       } }));
     for (const source of sourceRows) {
       const checkpoint = checkpointBySource.get(source.id);
-      const failedRun = failedBySource.get(source.id);
+      const latestRun = latestRunBySource.get(source.id);
+      const failedRun = latestRun && ["FAILED", "RETRY_WAIT"].includes(latestRun.estado) ? latestRun : null;
       const staleBaseConfig = configByType.get("STOCK_DATA_STALE") || {};
       const staleOverride = overrideByKey.get(`STOCK_DATA_STALE:ESTOQUE_FONTE:${source.id}`);
       let staleConfig = staleBaseConfig;
       if (staleOverride) staleConfig = { ...staleBaseConfig, freshnessSlaMinutes: staleOverride.freshnessSlaMinutes ?? staleBaseConfig.freshnessSlaMinutes };
       const freshness = classifyFreshness({ lastSuccessfulSyncAt: checkpoint?.lastSuccessfulSyncAt, slaMs: Number(staleConfig.freshnessSlaMinutes || 0) * 60000, now });
-      stateItems.push({ balance: null, state: { empresaId: tenantId, sourceConnectionId: source.id, freshnessEstado: freshness, sourceFreshnessEvidence: Boolean(checkpoint?.lastSuccessfulSyncAt), syncFailed: failedRun?.estado === "FAILED", retriesExhausted: failedRun?.estado === "FAILED" && Number(failedRun.retryCount || 0) >= 3, errorFamily: failedRun?.errorClass || "UNKNOWN", revision: Number(failedRun?.revision || checkpoint?.revision || 1), correlationId: failedRun?.correlationId || `stock-rule:${tenantId}:source:${source.id}` } });
+      stateItems.push({ balance: null, state: { empresaId: tenantId, sourceConnectionId: source.id, freshnessEstado: freshness, sourceFreshnessEvidence: Boolean(checkpoint?.lastSuccessfulSyncAt), syncFailed: failedRun?.estado === "FAILED", retriesExhausted: failedRun?.estado === "FAILED" && Number(failedRun.retryCount || 0) >= 3, errorFamily: latestRun?.errorClass || "UNKNOWN", revision: Number(latestRun?.revision || checkpoint?.revision || 1), correlationId: latestRun?.correlationId || `stock-rule:${tenantId}:source:${source.id}` } });
     }
     let evaluated = 0; let matched = 0; let resolved = 0;
     for (const { balance, state } of stateItems) {
@@ -179,13 +180,19 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         if (evaluation.match) matched += 1;
         const retentionUntil = new Date(now.getTime() + DEFAULT_RETENTION_DAYS * 86400000);
         const previous = await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: evaluation.occurrenceKey, ruleType }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] });
-        const materialChange = Boolean(previous && previous.materialVersion !== evaluation.materialVersion);
-        const evaluationWithChange = { ...evaluation, materialChange };
+        let effectiveEvaluation = evaluation;
+        const lifecycleResolution = balance && ruleType === "STOCK_LOT_EXPIRING" && !evaluation.match && evaluation.noMatchReason !== "ALREADY_EXPIRED" && !previous?.matched && previousLifecycleMatched?.matched;
+        if (balance && previousLifecycleMatched?.matched && Number(previousLifecycleMatched.materialVersion || 0) >= Number(evaluation.materialVersion || 0) && (evaluation.match || lifecycleResolution)) {
+          effectiveEvaluation = { ...evaluation, materialVersion: Number(previousLifecycleMatched.materialVersion) + 1 };
+        }
+        const materialChange = Boolean(previous && previous.materialVersion !== effectiveEvaluation.materialVersion);
+        const evaluationWithChange = { ...effectiveEvaluation, materialChange };
         const data = evaluationData(evaluationWithChange, retentionUntil);
-        let eventType = evaluation.match ? "StockRuleMatched.v1" : (previous?.matched ? "StockRuleResolved.v1" : null);
-        if (balance && ruleType === "STOCK_LOT_EXPIRED" && !evaluation.match && evaluation.noMatchReason === "NOT_EXPIRED") eventType = null;
-        if (balance && ruleType === "STOCK_LOT_EXPIRING" && !evaluation.match && evaluation.noMatchReason === "ALREADY_EXPIRED") eventType = null;
-        if (balance && ruleType === "STOCK_LOT_EXPIRING" && !evaluation.match && evaluation.noMatchReason !== "ALREADY_EXPIRED" && !previous?.matched && previousLifecycleMatched?.matched) eventType = "StockRuleResolved.v1";
+        let eventType = effectiveEvaluation.match ? "StockRuleMatched.v1" : (previous?.matched ? "StockRuleResolved.v1" : null);
+        if (balance && ruleType === "STOCK_LOT_EXPIRED" && !effectiveEvaluation.match && effectiveEvaluation.noMatchReason === "NOT_EXPIRED") eventType = null;
+        if (balance && ruleType === "STOCK_LOT_EXPIRING" && !effectiveEvaluation.match && effectiveEvaluation.noMatchReason === "ALREADY_EXPIRED") eventType = null;
+        if (lifecycleResolution) eventType = "StockRuleResolved.v1";
+        if (eventType === "StockRuleResolved.v1" && !["QUANTITY_NOT_POSITIVE", "OUTSIDE_WINDOW", "FRESHNESS_WITHIN_SLA", "RETRIES_NOT_EXHAUSTED"].includes(effectiveEvaluation.noMatchReason)) eventType = null;
         const event = eventType ? eventForEvaluation(evaluationWithChange, eventType, now) : null;
         const projectionEvent = eventType ? eventForEvaluation(evaluationWithChange, "StockProjectionRequested.v1", now) : null;
         const apply = async (tx) => {

@@ -24,16 +24,24 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
   ];
   const purge = async (tx) => {
     const counts = {};
+    const protectedOccurrences = new Set();
+    if (typeof tx.notificacao?.findMany === "function") {
+      const open = await tx.notificacao.findMany({ where: { empresaId, resolvidaEm: null, stockTargetType: { not: null } }, select: { occurrenceKey: true } });
+      for (const row of open) if (row.occurrenceKey) protectedOccurrences.add(row.occurrenceKey);
+    }
+    if (typeof tx.eventoOutboxEstoque?.findMany === "function") {
+      const pending = await tx.eventoOutboxEstoque.findMany({ where: { empresaId, status: { in: ["PENDING", "PROCESSING"] } }, select: { payloadStructuredJson: true }, take: 500 });
+      for (const row of pending) { try { const event = JSON.parse(row.payloadStructuredJson || "{}"); if (event.payload?.occurrenceKey) protectedOccurrences.add(event.payload.occurrenceKey); } catch {} }
+    }
     for (const [key, model, condition] of targets) {
-      if (key === "evaluations" && typeof tx.eventoOutboxEstoque?.count === "function") {
-        const pending = await tx.eventoOutboxEstoque.count({ where: { empresaId, status: { in: ["PENDING", "PROCESSING"] } } });
-        if (pending > 0) continue;
-      }
       const delegate = tx[model];
       if (!delegate || typeof delegate.findMany !== "function" || typeof delegate.deleteMany !== "function") continue;
+      const effectiveCondition = key === "evaluations" && protectedOccurrences.size
+        ? { ...condition, occurrenceKey: { notIn: [...protectedOccurrences] } }
+        : condition;
       let deleted = 0;
       for (let batch = 0; batch < MAX_BATCHES_PER_MODEL; batch += 1) {
-        const rows = await delegate.findMany({ where: { empresaId, ...condition }, select: { id: true }, orderBy: { id: "asc" }, take: 100 });
+        const rows = await delegate.findMany({ where: { empresaId, ...effectiveCondition }, select: { id: true }, orderBy: { id: "asc" }, take: 100 });
         if (!rows.length) break;
         const result = await delegate.deleteMany({ where: { empresaId, id: { in: rows.map((row) => row.id) } } });
         deleted += Number(result?.count || 0);

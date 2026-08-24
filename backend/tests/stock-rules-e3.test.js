@@ -39,6 +39,8 @@ test("unknown quantity and missing capability fail closed without becoming zero"
   assert.equal(result.match, false);
   assert.equal(result.noMatchReason, "CAPABILITY_MISSING");
   assert.equal(result.quantityRelevant, false);
+  const unknown = evaluateStockState({ ruleType: "STOCK_LOT_EXPIRING", state: { empresaId: 1, lot: { id: 1, validadeEm: "2026-08-25", precisaoValidade: "DAY" }, balance: { onHand: null, quantityRelevantForExpiry: true } }, config: { enabled: true }, capabilities: caps, now: new Date("2026-08-23T12:00:00Z") });
+  assert.equal(unknown.noMatchReason, "QUANTITY_UNKNOWN");
 });
 
 test("stale and failed rules coalesce by source/error family and require explicit state", () => {

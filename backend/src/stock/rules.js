@@ -56,6 +56,7 @@ function hasRequiredCapabilities(ruleType, capabilities) {
 
 function quantityState(balance) {
   if (balance?.quantityRelevantForExpiry !== true) return { relevant: false, positive: false, reason: "QUANTITY_SEMANTICS_UNDECLARED" };
+  if (balance?.onHand === null || balance?.onHand === undefined || balance?.onHand === "") return { relevant: true, positive: false, reason: "QUANTITY_UNKNOWN" };
   const value = Number(balance?.onHand);
   if (!Number.isFinite(value)) return { relevant: true, positive: false, reason: "QUANTITY_UNKNOWN" };
   return { relevant: true, positive: value > 0, reason: value > 0 ? null : "QUANTITY_NOT_POSITIVE" };

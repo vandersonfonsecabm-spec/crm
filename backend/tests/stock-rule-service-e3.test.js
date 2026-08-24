@@ -97,3 +97,21 @@ test("expiry lifecycle emits one effective occurrence and resolves only after qu
   await service.evaluateTenant(3, { now: new Date("2026-09-01T12:00:00Z") });
   assert.equal(outbox.filter((row) => row.eventType === "StockRuleResolved.v1").length, 1);
 });
+
+test("a healthy run resolves the latest sync failure occurrence", async () => {
+  const prisma = mockPrisma({ capabilities: false });
+  const run = { id: 1, fonteId: 2, estado: "FAILED", retryCount: 3, revision: 3, errorClass: "TIMEOUT", correlationId: "sync-failure" };
+  prisma.saldoEstoque.findMany = async () => [];
+  prisma.fonteEstoque = { findMany: async () => [{ id: 2, statusCiclo: "ACTIVE" }] };
+  prisma.configuracaoRegraEstoque.findMany = async () => [{ ruleType: "STOCK_SYNC_FAILED", enabled: true, scopeType: "TENANT", scopeKey: "TENANT" }];
+  prisma.checkpointSincronizacaoEstoque = { findMany: async () => [] };
+  prisma.execucaoSincronizacaoEstoque = { findMany: async () => [run] };
+  prisma.avaliacaoRegraEstoque.findFirst = async ({ where }) => [...prisma.evaluations].reverse().find((row) => row.empresaId === where.empresaId && row.occurrenceKey === where.occurrenceKey && row.ruleType === where.ruleType) || null;
+  const service = createStockRuleService({ prisma, env: { STOCK_DOMAIN_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "3" } });
+  const first = await service.evaluateTenant(3);
+  assert.equal(first.matched, 1);
+  run.estado = "SUCCEEDED";
+  run.retryCount = 0;
+  const second = await service.evaluateTenant(3);
+  assert.equal(second.resolved, 1);
+});
