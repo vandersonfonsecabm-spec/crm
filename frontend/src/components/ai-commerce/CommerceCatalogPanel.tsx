@@ -1,4 +1,4 @@
-import { Archive, ChevronRight, Filter, PackageSearch, RefreshCw, Search, ShieldCheck, Tag } from "lucide-react";
+import { Archive, ChevronRight, PackageSearch, RefreshCw, ShieldCheck, Tag } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiHttpError } from "../../services/crmApi";
 import { fetchAICommerceCatalog, previewAICommerceOffer } from "../../services/aiCommerceApi";
