@@ -45,6 +45,9 @@ test("stock projection uses existing H8 row, coalesces and keeps canonical targe
   prisma.rows[0].lidaEm = new Date("2026-08-23T13:00:00Z");
   await projectStockEvaluation({ prisma, evaluation: { ...evaluation, materialVersion: 4, match: true }, recipients: [7], env, now: new Date("2026-08-23T12:00:00Z") });
   assert.equal(prisma.rows[0].lidaEm, null);
+  prisma.rows[0].lidaEm = new Date("2026-08-23T14:00:00Z");
+  await projectStockEvaluation({ prisma, evaluation: { ...evaluation, materialVersion: 4, confidence: "MEDIUM", match: true }, recipients: [7], env, now: new Date("2026-08-23T12:00:00Z") });
+  assert.equal(prisma.rows[0].lidaEm, null);
   await assert.rejects(() => projectStockEvaluation({ prisma, evaluation: { ...evaluation, materialVersion: 2, match: true }, recipients: [7], env, now: new Date("2026-08-23T12:00:00Z") }), /atrasado|regress/i);
 });
 

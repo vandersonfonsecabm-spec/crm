@@ -440,7 +440,7 @@ async function upsertStockProjection({
   if (!changed) return { created: 0, updated: 0, reopened: 0 };
   const reopened = Boolean(existing.resolvidaEm);
   const materialChanged = Number(existing.stockMaterialVersion || 0) !== next.stockMaterialVersion;
-  const updateData = { ...next, lidaEm: materialChanged || reopened ? null : existing.lidaEm, resolvidaEm: resolutionState === "RESOLVED" ? existing.resolvidaEm || new Date() : null, versao: { increment: 1 }, presentationVersion: { increment: 1 } };
+  const updateData = { ...next, lidaEm: changed || reopened ? null : existing.lidaEm, resolvidaEm: resolutionState === "RESOLVED" ? existing.resolvidaEm || new Date() : null, versao: { increment: 1 }, presentationVersion: { increment: 1 } };
   const casWhere = { id: existing.id, empresaId: tenantId, versao: existing.versao };
   casWhere.stockMaterialVersion = existing.stockMaterialVersion === null || existing.stockMaterialVersion === undefined ? null : existing.stockMaterialVersion;
   const updated = typeof prisma.notificacao.updateMany === "function"
