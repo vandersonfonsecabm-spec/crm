@@ -46,7 +46,7 @@ test("catalog defaults hidden, binds canonical tenant product and rejects unappr
   await assert.rejects(() => service.create({ empresaId: 1, data: { stockProductId: 7, title: "X", allowedLinkDomain: "catalog.example.test", productUrl: "https://evil.example.org/x" } }), (error) => error.code === "COMMERCE_URL_DOMAIN_NOT_ALLOWED");
   const created = await service.create({ empresaId: 1, data: { stockProductId: 7, title: "Rocadeira nova", allowedLinkDomain: "catalog.example.test", productUrl: "https://catalog.example.test/x" } });
   assert.equal(created.visibility, "HIDDEN");
-  assert.equal(created.stockProductId, 7);
+  assert.equal(created.id, 2);
 });
 
 test("availability is fail-closed for stale, unknown and expired canonical balances", () => {

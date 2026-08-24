@@ -19,7 +19,7 @@ function createProductOfferService({ prisma, catalogService, availabilityService
   if (!availabilityService?.getSellableAvailability) throw new Error("PRODUCT_OFFER_AVAILABILITY_SERVICE_MISSING");
   const effectivePolicy = { ...DEFAULT_POLICY, ...policy };
 
-  async function create({ empresaId, catalogProductId, conversationId = null, customerId = null, correlationId = null, now = clock() } = {}) {
+  async function create({ empresaId, catalogProductId, conversationId = null, customerId = null, correlationId = null, now = clock(), internal = false } = {}) {
     const tenantId = requireTenantId(empresaId);
     const catalog = await catalogService.get(tenantId, catalogProductId, { includeHidden: true });
     if (catalog.visibility !== VISIBILITY.PUBLISHED || catalog.archivedAt || catalog.sellabilityPolicy !== "STOCK_CANONICAL_ONLY") throw new CommerceCatalogError("COMMERCE_PRODUCT_NOT_SELLABLE", "Produto comercial nao pode ser ofertado.", 422);
@@ -70,40 +70,38 @@ function createProductOfferService({ prisma, catalogService, availabilityService
     };
     validateSnapshotUrls(data, catalog.allowedLinkDomain);
     const row = await prisma.productOffer.create({ data });
-    return publicOffer(row);
+    return publicOffer(row, { internal });
   }
 
-  async function get({ empresaId, offerId, revalidate = true, now = clock() } = {}) {
+  async function get({ empresaId, offerId, revalidate = true, now = clock(), internal = false } = {}) {
     const tenantId = requireTenantId(empresaId);
     const id = boundedOfferId(offerId);
     const row = await prisma.productOffer.findFirst({ where: { id, empresaId: tenantId } });
     if (!row) throw new CommerceCatalogError("COMMERCE_OFFER_NOT_FOUND", "Oferta nao encontrada.", 404);
     if (new Date(row.expiresAt).getTime() <= new Date(now).getTime()) {
       if (row.status === "ACTIVE") await prisma.productOffer.updateMany({ where: { id, empresaId: tenantId, status: "ACTIVE" }, data: { status: "EXPIRED" } });
-      return { ...publicOffer({ ...row, status: "EXPIRED" }), valid: false, invalidReason: "OFFER_EXPIRED" };
+      return { ...publicOffer({ ...row, status: "EXPIRED" }, { internal }), valid: false, invalidReason: "OFFER_EXPIRED" };
     }
-    if (!revalidate) return { ...publicOffer(row), valid: row.status === "ACTIVE", invalidReason: row.status === "ACTIVE" ? null : `OFFER_${row.status}` };
+    if (!revalidate) return { ...publicOffer(row, { internal }), valid: row.status === "ACTIVE", invalidReason: row.status === "ACTIVE" ? null : `OFFER_${row.status}` };
     const catalog = await catalogService.get(tenantId, row.catalogProductId, { includeHidden: true }).catch(() => null);
-    if (!catalog || catalog.visibility !== VISIBILITY.PUBLISHED || catalog.archivedAt || catalog.revision !== row.catalogRevision) return markStale(row, tenantId, "CATALOG_CHANGED");
+    if (!catalog || catalog.visibility !== VISIBILITY.PUBLISHED || catalog.archivedAt || catalog.revision !== row.catalogRevision) return markStale(row, tenantId, "CATALOG_CHANGED", internal);
     const current = await availabilityService.getSellableAvailability({ empresaId: tenantId, catalogProductId: row.catalogProductId, now });
-    if (Number(current.stockMaterialVersion || 0) !== Number(row.stockMaterialVersion || 0) || current.status !== row.availabilityStatus) return markStale(row, tenantId, "AVAILABILITY_CHANGED");
-    return { ...publicOffer(row), valid: row.status === "ACTIVE", invalidReason: row.status === "ACTIVE" ? null : `OFFER_${row.status}` };
+    if (Number(current.stockMaterialVersion || 0) !== Number(row.stockMaterialVersion || 0) || current.status !== row.availabilityStatus) return markStale(row, tenantId, "AVAILABILITY_CHANGED", internal);
+    return { ...publicOffer(row, { internal }), valid: row.status === "ACTIVE", invalidReason: row.status === "ACTIVE" ? null : `OFFER_${row.status}` };
   }
 
-  async function markStale(row, tenantId, reason) {
+  async function markStale(row, tenantId, reason, internal = false) {
     await prisma.productOffer.updateMany({ where: { id: row.id, empresaId: tenantId, status: "ACTIVE" }, data: { status: "STALE" } });
-    return { ...publicOffer({ ...row, status: "STALE" }), valid: false, invalidReason: reason };
+    return { ...publicOffer({ ...row, status: "STALE" }, { internal }), valid: false, invalidReason: reason };
   }
 
   return Object.freeze({ create, get, public: publicOffer, policy: effectivePolicy });
 }
 
-function publicOffer(row) {
-  return {
+function publicOffer(row, { internal = false } = {}) {
+  const safe = {
     offerId: row.id,
     catalogProductId: row.catalogProductId,
-    stockProductId: row.stockProductId,
-    conversationId: row.conversationId || null,
     title: row.title,
     shortDescription: row.shortDescription || null,
     imageUrl: row.imageUrl || null,
@@ -126,6 +124,8 @@ function publicOffer(row) {
     correlationId: row.correlationId || null,
     status: row.status,
   };
+  if (internal) Object.assign(safe, { stockProductId: row.stockProductId, conversationId: row.conversationId || null, customerId: row.customerId || null, empresaId: row.empresaId });
+  return safe;
 }
 
 function validateSnapshotUrls(data, domain) {

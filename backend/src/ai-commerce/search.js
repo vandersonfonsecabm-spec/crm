@@ -70,8 +70,7 @@ function scoreRow(row, query) {
 
 function publicSearchProduct(row) {
   return {
-    id: row.id,
-    stockProductId: row.stockProductId,
+    catalogProductId: row.id,
     title: row.title,
     shortDescription: row.shortDescription || null,
     category: row.category || null,

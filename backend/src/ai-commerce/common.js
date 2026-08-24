@@ -124,12 +124,10 @@ function validatePublicUrl(value, allowedLinkDomain, field = "URL") {
   return parsed.toString();
 }
 
-function publicCatalogProduct(row) {
+function publicCatalogProduct(row, { internal = false } = {}) {
   if (!row) return null;
-  return {
+  const safe = {
     id: row.id,
-    empresaId: row.empresaId,
-    stockProductId: row.stockProductId,
     title: row.title,
     shortDescription: row.shortDescription || null,
     longDescription: row.longDescription || null,
@@ -149,12 +147,12 @@ function publicCatalogProduct(row) {
     sellabilityPolicy: row.sellabilityPolicy,
     productUrl: row.productUrl || null,
     purchaseUrl: row.purchaseUrl || null,
-    allowedLinkDomain: row.allowedLinkDomain || null,
     revision: row.revision,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    archivedAt: row.archivedAt || null,
   };
+  if (internal) Object.assign(safe, { empresaId: row.empresaId, stockProductId: row.stockProductId, allowedLinkDomain: row.allowedLinkDomain || null, archivedAt: row.archivedAt || null });
+  return safe;
 }
 
 module.exports = {

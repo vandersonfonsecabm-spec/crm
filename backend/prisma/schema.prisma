@@ -39,6 +39,8 @@ model Cliente {
   contatosCanal   ContatoCanal[]
   historicosQualificacao HistoricoQualificacaoConversa[]
   ofertasProduto       ProductOffer[] @relation("ProductOfferCustomer")
+  interessesAICommerce AICommerceProductInterest[] @relation("AICommerceInterestCustomer")
+  rascunhosAICommerce AICommerceOpportunityDraft[] @relation("AICommerceDraftCustomer")
   propostasComerciais PropostaComercial[]
 
   @@unique([empresaId, id])
@@ -263,6 +265,16 @@ model Empresa {
   avaliacoesRegraEstoque      AvaliacaoRegraEstoque[]
   catalogosComerciais         CommercialCatalogProduct[]
   ofertasProduto              ProductOffer[]
+  configuracoesAICommerce    AICommerceSettings[]
+  execucoesAICommerce         AICommerceRun[]
+  turnosAICommerce            AICommerceTurn[]
+  ferramentasAICommerce      AICommerceToolInvocation[]
+  decisoesAICommerce          AICommerceDecision[]
+  rascunhosAICommerce         AICommerceDraft[]
+  politicasAICommerce         AICommercePolicyDecision[]
+  handoffsAICommerce          AICommerceHandoff[]
+  interessesAICommerce        AICommerceProductInterest[]
+  oportunidadesAICommerce     AICommerceOpportunityDraft[]
 }
 
 model Usuario {
@@ -315,6 +327,12 @@ model Usuario {
   preferenciasNotificacao    PreferenciaNotificacaoUsuario[]
   importacoesEstoqueCriadas  ImportacaoEstoque[] @relation("ImportacaoEstoqueActor")
   eventosAuditoriaEstoque    EventoAuditoriaEstoque[] @relation("EventoAuditoriaEstoqueActor")
+  configuracoesAICommerce     AICommerceSettings[] @relation("AICommerceSettingsActor")
+  interessesAICommerce        AICommerceProductInterest[] @relation("AICommerceInterestActor")
+  oportunidadesAICommerce    AICommerceOpportunityDraft[] @relation("AICommerceDraftActor")
+  rascunhosAICommerce         AICommerceDraft[] @relation("AICommerceDraftAuditActor")
+  politicasAICommerce         AICommercePolicyDecision[] @relation("AICommercePolicyActor")
+  handoffsAICommerce          AICommerceHandoff[] @relation("AICommerceHandoffActor")
 
   @@unique([empresaId, email])
   @@unique([empresaId, id])
@@ -821,6 +839,15 @@ model ConversaCanal {
   acompanhamentos          Acompanhamento[]
   historicosQualificacao   HistoricoQualificacaoConversa[]
   ofertasProduto            ProductOffer[]
+  execucoesAICommerce       AICommerceRun[]
+  turnosAICommerce          AICommerceTurn[]
+  ferramentasAICommerce    AICommerceToolInvocation[]
+  decisoesAICommerce        AICommerceDecision[]
+  rascunhosAICommerce       AICommerceDraft[]
+  politicasAICommerce       AICommercePolicyDecision[]
+  handoffsAICommerce        AICommerceHandoff[]
+  interessesAICommerce     AICommerceProductInterest[]
+  oportunidadesAICommerce AICommerceOpportunityDraft[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -862,6 +889,7 @@ model MensagemCanal {
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
   emailMetadata     EmailMessageMetadata?
+  aiCommerceRuns    AICommerceRun[] @relation("AICommerceRunTriggerMessage")
 
   @@unique([canalIntegracaoId, externalId])
   @@unique([empresaId, id])
@@ -1620,6 +1648,8 @@ model CommercialCatalogProduct {
   empresa             Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   stockProduct        ProdutoEstoque @relation(fields: [empresaId, stockProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   offers              ProductOffer[]
+  interests           AICommerceProductInterest[] @relation("AICommerceInterestCatalogProduct")
+  opportunityDrafts   AICommerceOpportunityDraft[] @relation("AICommerceDraftCatalogProduct")
 
   @@unique([empresaId, id])
   @@unique([empresaId, stockProductId])
@@ -1665,12 +1695,338 @@ model ProductOffer {
   cliente               Cliente?                  @relation("ProductOfferCustomer", fields: [empresaId, customerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   catalogProduct        CommercialCatalogProduct  @relation(fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   stockProduct          ProdutoEstoque             @relation("ProductOfferStockProduct", fields: [empresaId, stockProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  interests             AICommerceProductInterest[] @relation("AICommerceInterestOffer")
+  opportunityDrafts     AICommerceOpportunityDraft[] @relation("AICommerceDraftOffer")
+  handoffs              AICommerceHandoff[] @relation("AICommerceHandoffOffer")
 
   @@unique([empresaId, id])
   @@index([empresaId, conversationId, createdAt])
   @@index([empresaId, customerId, createdAt])
   @@index([empresaId, catalogProductId, createdAt])
   @@index([empresaId, expiresAt, status])
+}
+
+model AICommerceSettings {
+  id                       Int       @id @default(autoincrement())
+  empresaId                Int
+  enabled                  Boolean   @default(false)
+  mode                     String    @default("OFF")
+  mockEnabled              Boolean   @default(false)
+  allowedToolsJson         String    @default("[]")
+  maxTools                 Int       @default(5)
+  maxContextMessages       Int       @default(20)
+  maxProducts              Int       @default(3)
+  humanApprovalRequired    Boolean   @default(true)
+  catalogVisibilityPolicy String    @default("PUBLISHED")
+  exactQuantityPolicy     String    @default("HIDDEN")
+  stalePolicy             String    @default("NEEDS_CONFIRMATION")
+  noPricePolicy           String    @default("DO_NOT_QUOTE")
+  opportunityPolicy       String    @default("DRAFT_ONLY")
+  handoffPolicy           String    @default("HUMAN_ONLY")
+  retentionDays           Int       @default(30)
+  revision                Int       @default(1)
+  actorUsuarioId          Int?
+  correlationId           String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  empresa                 Empresa   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario            Usuario?  @relation("AICommerceSettingsActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@unique([empresaId])
+  @@index([empresaId, enabled, mode])
+  @@index([empresaId, revision])
+}
+
+model AICommerceRun {
+  id                String                    @id @default(cuid())
+  empresaId         Int
+  runId             String
+  conversationId    Int?
+  triggerMessageId  Int?
+  idempotencyKey    String
+  mode              String                    @default("OFF")
+  state             String                    @default("IDLE")
+  status            String                    @default("STARTED")
+  policyVersion     String                    @default("ai-commerce-policy.v1")
+  messageRevision   String?
+  correlationId     String?
+  eventJson         String                    @default("{}")
+  revision          Int                       @default(1)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  completedAt       DateTime?
+  retentionUntil    DateTime                  @default(now())
+  empresa           Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversation      ConversaCanal?            @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  triggerMessage    MensagemCanal?             @relation("AICommerceRunTriggerMessage", fields: [empresaId, triggerMessageId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  turns             AICommerceTurn[]
+  toolInvocations   AICommerceToolInvocation[]
+  decisions         AICommerceDecision[]
+  drafts            AICommerceDraft[]
+  policyDecisions   AICommercePolicyDecision[]
+  handoffs          AICommerceHandoff[]
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, runId])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, conversationId, createdAt])
+  @@index([empresaId, status, createdAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceTurn {
+  id                String                    @id @default(cuid())
+  empresaId         Int
+  runId             String
+  conversationId    Int?
+  turnNumber        Int                       @default(0)
+  state             String                    @default("DISCOVERY")
+  status            String                    @default("RECORDED")
+  decisionJson      String?
+  toolResultsJson   String?
+  latencyMs         Int?
+  correlationId     String?
+  eventJson         String                    @default("{}")
+  revision          Int                       @default(1)
+  occurredAt        DateTime                  @default(now())
+  retentionUntil    DateTime                  @default(now())
+  empresa           Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run               AICommerceRun             @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  conversation      ConversaCanal?            @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  toolInvocations   AICommerceToolInvocation[]
+  decisions         AICommerceDecision[]
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, runId, turnNumber])
+  @@index([empresaId, conversationId, occurredAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceToolInvocation {
+  id                    String          @id @default(cuid())
+  empresaId             Int
+  runId                 String?
+  turnId                String?
+  conversationId        Int?
+  name                  String          @default("unknown")
+  classification        String          @default("READ")
+  status                String          @default("RECORDED")
+  idempotencyKey        String?
+  inputJsonSanitized    String          @default("{}")
+  outputJsonSanitized   String?
+  errorCode             String?
+  latencyMs             Int?
+  correlationId         String?
+  eventJson             String          @default("{}")
+  revision              Int             @default(1)
+  occurredAt            DateTime        @default(now())
+  retentionUntil        DateTime        @default(now())
+  empresa               Empresa         @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run                   AICommerceRun?  @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  turn                  AICommerceTurn? @relation(fields: [empresaId, turnId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  conversation          ConversaCanal?  @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@index([empresaId, runId, occurredAt])
+  @@index([empresaId, name, status])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceDecision {
+  id                  String          @id @default(cuid())
+  empresaId           Int
+  runId               String
+  turnId              String?
+  conversationId      Int?
+  intent              String?
+  confidence          String?
+  nextAction          String?
+  missingInformationJson String?
+  requestedToolsJson  String?
+  draftResponse       String?
+  offerIdsJson        String?
+  handoffReason       String?
+  safetyFlagsJson     String?
+  policyFlagsJson     String?
+  decisionJson        String          @default("{}")
+  correlationId      String?
+  eventJson           String          @default("{}")
+  revision            Int             @default(1)
+  occurredAt          DateTime        @default(now())
+  retentionUntil      DateTime        @default(now())
+  empresa             Empresa         @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run                 AICommerceRun   @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  turn                AICommerceTurn? @relation(fields: [empresaId, turnId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  conversation        ConversaCanal? @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  drafts              AICommerceDraft[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId, runId, occurredAt])
+  @@index([empresaId, conversationId, occurredAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceDraft {
+  id                    String             @id @default(cuid())
+  empresaId             Int
+  runId                 String
+  conversationId        Int
+  decisionId            String?
+  status                String             @default("PENDING_APPROVAL")
+  textSanitized         String?
+  offersJson            String              @default("[]")
+  questionsJson         String              @default("[]")
+  actionsJson           String              @default("[]")
+  warningsJson          String              @default("[]")
+  requiresHumanApproval Boolean             @default(true)
+  conversationRevision  String?
+  revision              Int                 @default(1)
+  expiresAt             DateTime
+  approvedAt            DateTime?
+  rejectedAt            DateTime?
+  actorUsuarioId        Int?
+  correlationId         String?
+  eventJson             String              @default("{}")
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  retentionUntil        DateTime            @default(now())
+  empresa               Empresa             @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run                   AICommerceRun       @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  conversation          ConversaCanal       @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  decision              AICommerceDecision? @relation(fields: [empresaId, decisionId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario          Usuario?            @relation("AICommerceDraftAuditActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  policyDecisions       AICommercePolicyDecision[]
+  handoffs              AICommerceHandoff[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId, conversationId, status])
+  @@index([empresaId, expiresAt, status])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommercePolicyDecision {
+  id                String             @id @default(cuid())
+  empresaId         Int
+  runId             String
+  conversationId    Int?
+  draftId           String?
+  action            String             @default("UNSPECIFIED")
+  status            String             @default("RECORDED")
+  reasonCode        String?
+  detailsJson       String              @default("{}")
+  actorUsuarioId    Int?
+  correlationId     String?
+  eventJson         String              @default("{}")
+  revision          Int                 @default(1)
+  occurredAt        DateTime            @default(now())
+  retentionUntil    DateTime           @default(now())
+  empresa           Empresa             @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run               AICommerceRun       @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  conversation      ConversaCanal?      @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  draft             AICommerceDraft?    @relation(fields: [empresaId, draftId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario      Usuario?            @relation("AICommercePolicyActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@index([empresaId, runId, occurredAt])
+  @@index([empresaId, draftId, occurredAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceHandoff {
+  id                String             @id @default(cuid())
+  empresaId         Int
+  runId             String?
+  conversationId    Int?
+  draftId           String?
+  offerId           String?
+  reason            String             @default("UNSPECIFIED")
+  summarySanitized  String?
+  queueKey          String?
+  status            String             @default("REQUESTED")
+  idempotencyKey    String?
+  actorUsuarioId    Int?
+  correlationId     String?
+  eventJson         String             @default("{}")
+  revision          Int                @default(1)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  retentionUntil    DateTime           @default(now())
+  empresa           Empresa            @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run               AICommerceRun?     @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  conversation      ConversaCanal?     @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  draft             AICommerceDraft?   @relation(fields: [empresaId, draftId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  offer             ProductOffer?      @relation("AICommerceHandoffOffer", fields: [empresaId, offerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario      Usuario?           @relation("AICommerceHandoffActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, conversationId, status])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceProductInterest {
+  id                 String                    @id @default(cuid())
+  empresaId          Int
+  conversationId     Int
+  customerId         Int?
+  offerId            String
+  catalogProductId   Int
+  desiredQuantity    Decimal?
+  preferencesJson    String                    @default("{}")
+  status             String                    @default("REGISTERED")
+  source             String                    @default("HUMAN_APPROVED")
+  idempotencyKey     String
+  actorUsuarioId     Int?
+  correlationId      String?
+  revision           Int                       @default(1)
+  eventJson          String                    @default("{}")
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  retentionUntil     DateTime
+  empresa            Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversation       ConversaCanal             @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  customer           Cliente?                  @relation("AICommerceInterestCustomer", fields: [empresaId, customerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  offer              ProductOffer              @relation("AICommerceInterestOffer", fields: [empresaId, offerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogProduct     CommercialCatalogProduct  @relation("AICommerceInterestCatalogProduct", fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario       Usuario?                 @relation("AICommerceInterestActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, conversationId, status])
+  @@index([empresaId, offerId, createdAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceOpportunityDraft {
+  id                 String                    @id @default(cuid())
+  empresaId          Int
+  conversationId     Int
+  customerId         Int?
+  primaryOfferId     String?
+  catalogProductId   Int?
+  offerIdsJson       String                    @default("[]")
+  summarySanitized   String
+  status             String                    @default("DRAFT")
+  idempotencyKey     String
+  actorUsuarioId     Int?
+  correlationId      String?
+  revision           Int                       @default(1)
+  eventJson          String                    @default("{}")
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  retentionUntil     DateTime
+  empresa            Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversation       ConversaCanal             @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  customer           Cliente?                  @relation("AICommerceDraftCustomer", fields: [empresaId, customerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  primaryOffer       ProductOffer?             @relation("AICommerceDraftOffer", fields: [empresaId, primaryOfferId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogProduct     CommercialCatalogProduct? @relation("AICommerceDraftCatalogProduct", fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario       Usuario?                 @relation("AICommerceDraftActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, conversationId, status])
+  @@index([empresaId, retentionUntil])
 }
 
 model MapeamentoProdutoExterno {
@@ -2053,6 +2409,7 @@ enum ChaveFuncionalidade {
   MESSENGER_INBOUND
   EMAIL_INTEGRATION
   EMAIL_INBOUND
+  AI_COMMERCE
 }
 
 enum GatilhoAutomacao {

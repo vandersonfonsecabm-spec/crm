@@ -34,7 +34,7 @@ function createSellableAvailabilityService({ prisma, clock = () => new Date(), p
     });
   }
 
-  async function getSellableAvailability({ empresaId, catalogProductId, quantity = null, locationId = null, now = clock() } = {}) {
+  async function getSellableAvailability({ empresaId, catalogProductId, quantity = null, locationId = null, now = clock(), internal = false } = {}) {
     const tenantId = requireTenantId(empresaId);
     const catalog = await loadCatalog(tenantId, catalogProductId);
     if (catalog.visibility !== "PUBLISHED" || catalog.archivedAt || catalog.sellabilityPolicy !== "STOCK_CANONICAL_ONLY") return notSellable(catalog, "CATALOG_NOT_PUBLISHED");
@@ -44,9 +44,8 @@ function createSellableAvailabilityService({ prisma, clock = () => new Date(), p
     const requested = quantity === null || quantity === undefined || quantity === "" ? null : positiveQuantity(quantity);
     const balances = await readBalances(tenantId, catalog.stockProductId, locationId);
     const evaluated = evaluateBalances({ balances, now, requested, tenantTimezone: effectivePolicy.tenantTimezone });
-    return {
+    const response = {
       catalogProductId: catalog.id,
-      stockProductId: catalog.stockProductId,
       status: evaluated.status,
       label: evaluated.label,
       exactQuantityAuthorized: Boolean(effectivePolicy.exactQuantityAuthorized),
@@ -63,6 +62,8 @@ function createSellableAvailabilityService({ prisma, clock = () => new Date(), p
       stockMaterialVersion: evaluated.stockMaterialVersion,
       evidence: evaluated.evidence,
     };
+    if (internal) response.stockProductId = catalog.stockProductId;
+    return response;
   }
 
   return Object.freeze({ getSellableAvailability, evaluateBalances, policy: effectivePolicy });

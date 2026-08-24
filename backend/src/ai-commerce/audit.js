@@ -77,6 +77,7 @@ function normalizeModelData(kind, payload) {
   };
   if (kind === "run") return {
     ...base,
+    id: String(payload.runId || `audit-${occurredAt.getTime()}`).slice(0, 128),
     idempotencyKey: String(payload.idempotencyKey || `audit:${payload.runId || occurredAt.getTime()}`).slice(0, 200),
     mode: String(payload.mode || "OFF").slice(0, 40),
     state: String(payload.state || "IDLE").slice(0, 40),
