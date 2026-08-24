@@ -12,6 +12,9 @@ test("E6A UI exposes a bounded single-connection surface", () => {
   assert.match(api, /AICommerceMode = \"OFF\" \| \"SHADOW\" \| \"SUGGESTION_ONLY\" \| \"HUMAN_APPROVAL\"/);
   assert.match(api, /runAICommerceAssistant/);
   assert.match(api, /\/ai-commerce\/connection\/status/);
+  assert.match(api, /\/catalogo-comercial\/busca/);
+  assert.match(api, /\/catalogo-comercial\/ofertas\/preview/);
+  assert.doesNotMatch(api, /\/ai-commerce\/catalog|\/ai-commerce\/interests|\/ai-commerce\/opportunity-drafts|\/ai-commerce\/handoffs/);
   assert.match(api, /isSafeCommerceUrl/);
   assert.doesNotMatch(api, /OpenAIAdapter|GeminiAdapter|AnthropicAdapter|ProviderRegistry/);
   assert.match(settings, /realProviderConnected.*false|Não conectado/);
