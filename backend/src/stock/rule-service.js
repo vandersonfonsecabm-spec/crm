@@ -94,9 +94,13 @@ function latestRowsByOccurrence(rows = []) {
   return latest;
 }
 
-function syncFailureMaterialVersion({ empresaId, sourceId, revision, errorFamily, failureHistory }) {
+function syncFailureMaterialVersion({ empresaId, sourceId, runId, revision, errorFamily, failureHistory }) {
   const safeRevision = Number.isSafeInteger(Number(revision)) && Number(revision) > 0 ? Number(revision) : 1;
-  const baseVersion = safeRevision * 10 + 2;
+  // Run ids are backed by the database sequence and are never reused. Keep a
+  // wide namespace so a later run remains above versions from an earlier run
+  // even after its evaluations/outbox rows are purged by retention.
+  const safeRunId = Number.isSafeInteger(Number(runId)) && Number(runId) > 0 ? Number(runId) : 0;
+  const baseVersion = Math.max(safeRevision * 10 + 2, safeRunId * 1000 + 2);
   const occurrenceKey = `${empresaId}:STOCK_SYNC_FAILED:${sourceId}:${errorFamily || "UNKNOWN"}`;
   const latest = latestRowsByOccurrence(failureHistory);
   const current = latest.get(occurrenceKey);
@@ -191,6 +195,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
       const failureMaterialVersion = syncFailureMaterialVersion({
         empresaId: tenantId,
         sourceId: source.id,
+        runId: latestRun?.id,
         revision: latestRun?.revision || checkpoint?.revision || 1,
         errorFamily,
         failureHistory,

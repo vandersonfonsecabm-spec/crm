@@ -183,4 +183,13 @@ test("different sync failure families receive distinct monotonic material versio
   const matched = outboxRows.filter((row) => row.eventType === "StockRuleMatched.v1");
   assert.equal(matched.length, 2);
   assert.notEqual(matched[0].materialVersion, matched[1].materialVersion);
+
+  const highestBeforeRetention = Math.max(...matched.map((row) => row.materialVersion));
+  evaluations.length = 0;
+  outboxRows.length = 0;
+  run.id = 2;
+  run.errorClass = "TIMEOUT";
+  await service.evaluateTenant(3);
+  const afterRetention = outboxRows.find((row) => row.eventType === "StockRuleMatched.v1");
+  assert.ok(afterRetention.materialVersion > highestBeforeRetention);
 });
