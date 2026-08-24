@@ -3,12 +3,13 @@
 CURRENT_STATE_AS_OF=2026-08-23
 REPORT_TIMEZONE=America/Sao_Paulo (BRT)
 SOURCE_CHECKPOINT_REQUESTED=c398bbe5b3794c342fe3a630dcff65421a97e485
-SOURCE_CHECKPOINT_EFFECTIVE=fff712dc46db1f219e746b9f443b8eb666c7f24d
+SOURCE_CHECKPOINT_EFFECTIVE=78b40503ca3877e5ffa2ca6b8630fd81661d95b3
 RELEASE_BRANCH=release/stock-mvp-e5r
+STOCK_MVP_RELEASE_COMMIT=78b40503ca3877e5ffa2ca6b8630fd81661d95b3
 BASELINE_SHA=a5a280c3ebc54741ced02a77d4da5ec51834d583
 HISTORICAL_618A_PRESERVED=PASS
 
-The requested checkpoint exists and is an ancestor of the effective source. The only later commits are the causal source-rule material-version fix (`2ed75b2`) and the final source-gate documentation commit (`fff712d`); no unrelated drift was found.
+The requested checkpoint exists and is an ancestor of the candidate. Later commits are the causal source-rule material-version fix (`2ed75b2`), the final source-gate documentation commit (`fff712d`), the E5R preflight reports (`9860c72`), and the focused monotonic sync-failure material-version correction plus timestamp reconciliation (`78b4050`). No unrelated drift was found.
 
 OFFICIAL_ENVIRONMENT_IDENTIFIED=PASS
 - Railway project: glistening-playfulness (`ddfbf66c-e274-47b1-9493-286232d2f426`)
