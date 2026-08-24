@@ -21,8 +21,20 @@ fictícia de provedores.
 - Full frontend Node suite: 194/194 PASS após junction temporária para
   dependências existentes; junction removida e lockfiles preservados.
 - A11y foi coberta por contratos existentes e estados `aria-live`, foco,
-  teclado, Escape, loading/error/stale/expired e mobile. Browser production
-  não foi executado nesta missão.
+  teclado, Escape, loading/error/stale/expired e mobile. Vercel production no
+  merge SHA retornou HTTP 200, mas o navegador chegou ao gate de login
+  (`Acesso ao CRM`) sem sessão autenticada. Portanto não há prova visual
+  autenticada das telas E6A em produção; isso está marcado como
+  `BLOCKED_SESSION`, não como PASS.
+
+`AI_COMMERCE_PRODUCTION_VISUAL_QA=BLOCKED_SESSION`
+`AI_COMMERCE_SOURCE_UI_CONTRACTS=PASS`
+`AI_COMMERCE_VERCEL_BUILD=PASS`
+
+Viewports de produção não foram declarados aprovados (1440/1366/1024/900/390/
+1920) porque a sessão não permitiu chegar ao shell autenticado. A próxima
+verificação segura é entrar com uma conta já autorizada e repetir apenas essas
+dimensões, sem ativar IA real ou outbound.
 
 Frontend lint isolado ficou BLOCKED por ausência intencional de node_modules no
 worktree; não foi mascarado como PASS.

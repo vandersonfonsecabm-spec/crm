@@ -11,9 +11,11 @@ Rollback lógico, sem down migration:
 7. voltar ao runtime anterior identificável `a1232a1`/tag stock;
 8. manter schema aditivo e H7/H8/stock intactos.
 
-Compatibilidade local foi verificada por startup do runtime com flags OFF e
-rehearsal em cópia isolada. Rollback de deployment oficial e recovery de
-backup não foram executados porque não houve migration/deploy oficial E6A.
+Compatibilidade foi verificada por startup do runtime com flags OFF, rehearsal
+em cópia isolada e health/ready após o deployment oficial. O deployment
+anterior ao merge permanece identificável no histórico Railway/Vercel; não foi
+necessário acioná-lo porque não houve incidente. O backup lógico protegido e o
+restore isolado também estão disponíveis para recuperação sem down migration.
 
 `AI_COMMERCE_ROLLBACK_COMPATIBILITY=PASS_LOCAL`
-`AI_COMMERCE_ROLLBACK_AVAILABLE=PASS_LOGICAL_NOT_DEPLOYED`
+`AI_COMMERCE_ROLLBACK_AVAILABLE=PASS_LOGICAL_AND_PREVIOUS_DEPLOYMENT_IDENTIFIED`

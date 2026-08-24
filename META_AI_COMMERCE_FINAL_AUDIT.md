@@ -20,11 +20,13 @@ connection port, Mock, orchestrator, audit, efeitos HITL, Inbox e settings/UI.
 ## Resultado
 
 Nenhum HIGH/CRITICAL aberto no source local após as correções. O risco
-operacional restante é explícito: runner Prisma genérico bloqueado e ausência
-de rehearsal/migration/deploy oficial. Isso impede declarar production ship,
-mas não impede declarar a fundação source/rehearsal OFF-ready.
+operacional restante é explícito: runner Prisma genérico bloqueado antes da
+execução, live Mock canary sem sessão administrativa e QA visual autenticado
+sem sessão. O backup lógico protegido, restore/rehearsal, migration aditiva,
+deploy OFF e health pós-deploy foram concluídos com evidência.
 
-No preflight oficial, o Railway confirmou que o banco Postgres-u_yI está online
-e ainda sem tabelas E6A, enquanto o plano Hobby bloqueia Backups/PITR. Esse é um
-hard stop material para migration oficial: não houve push, merge, deploy ou
-alteração de produção.
+No preflight oficial, o Railway confirmou o banco Postgres-u_yI online. O
+plano Hobby bloqueia Backups/PITR gerenciados; a operação usou backup lógico
+protegido e restore isolado, sem imprimir nem enviar dados reais. As migrations
+E6A foram aplicadas de forma aditiva e o banco passou o gate tenant/FK. A
+produção permanece AI OFF; isso é OFF-ready, não canário live concluído.

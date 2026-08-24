@@ -7,9 +7,9 @@ POST_STOCK_CANONICAL_REF=stock-mvp-production-ship-2026-08-24
 POST_STOCK_DOCS_SHA=23485b5
 POST_STOCK_RECONCILIATION_SHA=812413ffd18139b08e66d01ec99e7883ec4da63f
 AI_COMMERCE_CORE_SOURCE_COMMIT=2b8209ef25ba28a40b756948edfcc12c07f12970
-AI_COMMERCE_SOURCE_COMMIT=0fbd3bcbfbd884f740e4d1e0c5afd372fd88e3e9
-AI_COMMERCE_RUNTIME_SHA=NOT_DEPLOYED
-DOCUMENT_STATUS=SOURCE_AND_REHEARSAL_COMPLETE_PRODUCTION_OFF
+AI_COMMERCE_SOURCE_COMMIT=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
+AI_COMMERCE_RUNTIME_SHA=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
+DOCUMENT_STATUS=PRODUCTION_OFF_DEPLOYED_LIVE_CANARY_AND_AUTHENTICATED_UI_QA_PENDING
 
 RESULTADO
 
@@ -79,8 +79,8 @@ FALHAS DO COMANDO ORIGINAL E ADAPTAÇÕES
 8. O comando era grande demais para uma onda única. Adaptação operacional:
    freeze/gap/decisions → catálogo/availability/search/offer → connection/mock/
    tools/orchestrator/policy → Inbox/UI → schema/rehearsal/source gate. A
-   produção ficou explicitamente fora desta retomada por não haver confirmação
-   E6A de migration/deploy.
+   operação oficial foi executada somente depois do backup lógico protegido,
+   restore isolado e gates de integridade; a ativação AI permaneceu OFF.
 
 IMPLEMENTAÇÃO
 
@@ -105,7 +105,8 @@ IMPLEMENTAÇÃO
 EVIDÊNCIA EXECUTADA
 
 - Prisma SQLite schema validate: PASS.
-- PostgreSQL derived schema validate: PASS (no official DB touched).
+- PostgreSQL derived schema validate: PASS; official migration later applied
+  through the operational PostgreSQL path after backup/restore gates.
 - SQLite rehearsal on an isolated copy: 39 migrations applied, including
   20260824150000 and 20260824160000: PASS.
 - Tenant architecture gate: PASS; relationCount=157; manifest=
@@ -122,20 +123,52 @@ EVIDÊNCIA EXECUTADA
   every gate is explicitly enabled.
 - git diff --check and JavaScript syntax checks: PASS.
 - Static scan for provider adapters and dangerous generic tools: no matches.
+- Official logical backup: PASS; 64,627,065 bytes, 70 data tables, 50,072
+  rows, SHA-256 `8fae9053054dca2e7ac5099715e698851f7de024eebabf6f1470c94fa19064af`.
+  The backup is retained only in a protected temporary location and is not in
+  the repository or report package.
+- Isolated PostgreSQL restore/rehearsal: PASS; database
+  `e6a_restore_20260824` on the non-official test service received the logical
+  backup and all 16 migrations, then passed tenant/FK checks and runtime
+  `/health`/`/ready` smoke with flags OFF.
+- Official PostgreSQL migration: PASS; only the two additive E6A migrations
+  were applied through the official migration mechanism. Post-migration gate
+  passed with relationCount=157, checkedRelationCount=157, 239 foreign-key
+  checks, 30 unique-parent checks, zero orphaned and zero crossed links.
+- Official post-migration comparison: PASS; no pre-existing table decreased
+  relative to the backup (live stock workers continued to add evidence rows).
+- Railway API deployment: PASS, deployment
+  `1b95b3b9-f198-4a2a-91c3-998a36eb1091`, commit
+  `80a4f8d5c5067934e818f8e75f2f696d716e5ce0`.
+- Railway worker deployment: PASS, deployment
+  `6aca96b6-c90b-4a72-895d-89b31e503bee`, same commit.
+- Vercel production: PASS, deployment `dpl_3UPrgHE28f2xNjvuHeWhoL4hoRcU`,
+  READY at the merge SHA. Production `/health`, `/ready` and frontend returned
+  HTTP 200 after deployment.
 
 LIMITAÇÕES E GATES NÃO DECLARADOS COMO PASS
 
 - PRISMA_OFFICIAL_RUNNER=BLOCKED_GENERIC_ENGINE_ERROR_BEFORE_MIGRATION_EXECUTION.
   The isolated runner was reproduced once and stopped at the generic engine
   error. It is recorded as a tooling blocker, not a migration PASS.
-- PostgreSQL official migration, backup/restore oficial, Railway/Vercel deploy,
-  live canary and production UI browser run were NOT executed in E6A. No
-  production state was changed.
-- Frontend lint could not run from the isolated worktree because its local
+- The generic Prisma runner remains blocked before migration execution; the
+  official migration was applied via the validated operational PostgreSQL
+  mechanism and independently checked at SQL/runtime level. The runner is
+  recorded as a tooling blocker, not as PASS.
+- A live Mock tenant canary was not enabled: no authenticated admin/tenant
+  session was available to create the controlled AI settings safely. AI
+  environment variables remain absent/default OFF and no AI rows were created
+  for a canary in the official database.
+- Production browser access reached the CRM login gate. Without an
+  authenticated session, feature-screen screenshots and authenticated visual
+  QA cannot be claimed. Source/UI tests and the successful Vercel build remain
+  valid, but they are not a live visual pass.
+- Frontend lint/build could not be repeated from the isolated worktree because its local
   node_modules is intentionally absent; TypeScript and the complete Node test
   suite were run using a temporary junction to existing local dependencies.
-- Exact Git SHA parity for a future deployment is NOT claimed; runtime SHA is
-  source-only until an attested deployment manifest exists.
+- Railway and Vercel deploys now carry the merge SHA in deployment metadata.
+  This is exact source/deploy evidence for this release; it does not
+  retroactively attest older manual uploads.
 - A Vercel preview was created from the pushed E6A branch. The first preview
   failed with TypeScript scope errors; the errors were fixed in source commit
   `0fbd3bcbfbd884f740e4d1e0c5afd372fd88e3e9`, and preview deployment
@@ -148,51 +181,54 @@ LIMITAÇÕES E GATES NÃO DECLARADOS COMO PASS
   validate a session on the preview origin. No feature-screen screenshot or
   authenticated visual pass was claimed.
 
-PREFLIGHT OFICIAL E BLOQUEIO DE RELEASE
+PREFLIGHT OFICIAL, MIGRATION E DEPLOY
 
 - Railway project: glistening-playfulness; environment: production.
 - API service: api; endpoint api-production-875f9.up.railway.app; active
-  deployment 9236aa00-8e86-4727-ba4c-692427a52268; runtime label
-  stock-e5r-canary-context-fix-a1232a1; status Online.
+  deployment `1b95b3b9-f198-4a2a-91c3-998a36eb1091`; commit
+  `80a4f8d5c5067934e818f8e75f2f696d716e5ce0`; status SUCCESS.
 - Official database identified: Postgres-u_yI (service
-  e9d8a6b8-507b-45fb-92a8-3ab016f865a2); status Online. Its visible public
-  schema list has no CommercialCatalogProduct/ProductOffer/AICommerce* tables,
-  proving E6A migration is not applied.
-- Railway production plan is Hobby. The official Backups page explicitly
-  reports that backups and PITR require Pro. No logical backup was created,
-  because the connection secret is not exposed and no approved pg_dump target
-  is available locally.
+  `e9d8a6b8-507b-45fb-92a8-3ab016f865a2`); status Online. The two additive E6A
+  migrations are now finished in `_prisma_migrations`.
+- Railway Hobby has no managed Backups/PITR, so the protocol was adapted to a
+  protected, parameterized logical backup plus an isolated restore drill. The
+  backup was never printed, committed, or sent to the conversation.
 - Vercel project crm is identified as prj_xAWKcwZGDQsT3pEZLUZ5YWf6lDFq. Latest
   production deployment dpl_969EcRQMZhGJnwKdZsGYBavMSAhc is READY, but its Git
   SHA metadata is empty; exact source parity is therefore not claimed.
-- API /health, /ready and current Vercel alias returned HTTP 200. These are
-  health checks for the existing E5R runtime, not proof of E6A deployment.
+- API `/health`, `/ready` and current Vercel alias returned HTTP 200 after the
+  E6A merge deployment. Railway deployment metadata records the same merge
+  SHA for API and worker; Vercel production is READY at that SHA.
 
-RELEASE DECISION
+RELEASE DECISION / CURRENT GATES
 
-`PRODUCTION_BACKUP=BLOCKED_RAILWAY_HOBBY_NO_BACKUPS_PITR`
-`PRODUCTION_DB_MIGRATION=NOT_EXECUTED`
+`PRODUCTION_BACKUP=PASS_LOGICAL_PROTECTED_BACKUP`
+`RESTORE_DRILL=PASS`
+`STOCK_MIGRATION_REHEARSAL=PASS`
+`PRODUCTION_DB_MIGRATION=PASS_ADDITIVE`
+`POST_MIGRATION_HEALTH=PASS`
 `E6A_BRANCH_PUSH=PASS_REMOTE_CANDIDATE`
-`E6A_PRODUCTION_DEPLOY=NOT_EXECUTED`
-`E6A_PRODUCTION_BROWSER_QA=NOT_EXECUTED`
+`E6A_PRODUCTION_DEPLOY=PASS_OFF`
+`E6A_PRODUCTION_BROWSER_QA=BLOCKED_SESSION`
+`E6A_LIVE_MOCK_CANARY=BLOCKED_NO_AUTHENTICATED_CONTROLLED_TENANT`
 `E6A_PREVIEW_BUILD=PASS`
 `E6A_PREVIEW_AUTHENTICATED_VISUAL_QA=BLOCKED_SESSION`
 
-This is a material hard stop, not a temporary test failure: applying an
-additive migration without a recoverable official backup would violate the
-release protocol. The safe next action is to enable an approved backup/recovery
-path (Railway Pro/PITR or a separately authorized sanitized logical backup),
-then resume from this exact source and re-run only the blocked release gates.
+The migration/deploy part is closed safely. The remaining gates are scoped to
+authenticated tenant activation and browser proof, not to the foundation code
+or database schema. Stock/H7/H8 continue under their existing production
+configuration; E6A AI remains OFF and no outbound was introduced.
 
 DECISÃO FINAL
 
 AI_COMMERCE_FOUNDATION_PRODUCTION_OFF_READY
 
 Isso significa: a fundação de catálogo, verdade de estoque, ofertas, mock,
-ferramentas, orquestrador, auditoria, Inbox e HITL está pronta no source
-candidate e validada em rehearsal isolado; o produto permanece OFF. Uma missão
-posterior, com confirmação operacional explícita, poderá executar backup,
-migration/deploy OFF, canário controlado e então conectar UM provedor real.
+ferramentas, orquestrador, auditoria, Inbox e HITL está publicada com schema
+aditivo, API/worker/frontend OFF e health/ready verdes. Falta somente ativar um
+tenant controlado com sessão administrativa verificável e executar a prova
+visual autenticada. Depois disso, uma missão própria poderá conectar UM
+provedor real; nenhum modelo real é necessário ou permitido nesta etapa.
 
 REFERÊNCIAS DE SEGURANÇA UTILIZADAS
 

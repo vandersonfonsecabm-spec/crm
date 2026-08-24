@@ -14,5 +14,7 @@ The original command was adapted before execution. Legacy external catalog and
 WhatsApp simulation are excluded; offers require canonical stock; effects use
 isolated OpportunityDraft and granular approval; all defaults are OFF.
 
-This is not a deployment approval. Official Prisma runner remains BLOCKED and
-official PostgreSQL/deploy evidence is not present.
+This source verdict is not a live-AI approval. The official Prisma runner
+remains BLOCKED before execution; PostgreSQL backup/restore/migration and
+Railway/Vercel deployment were later evidenced separately. AI remains OFF,
+and authenticated canary/visual gates are still open.

@@ -2,8 +2,8 @@
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 POST_STOCK_RUNTIME_BASE_SHA=a1232a195795912d0a900d51edfcc5f12d4b8955
-AI_COMMERCE_SOURCE_COMMIT=2b8209ef25ba28a40b756948edfcc12c07f12970
-AI_COMMERCE_RUNTIME_SHA=NOT_DEPLOYED
+AI_COMMERCE_SOURCE_COMMIT=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
+AI_COMMERCE_RUNTIME_SHA=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
 
 CURRENT_STATE_AS_OF=2026-08-24
 MISSION_MODE=IMPLEMENTATION_WITH_SAFE_GATES
@@ -22,4 +22,7 @@ CURRENT_AI_IMPLEMENTATION=NONE_FOUND
 - No provider SDK, provider adapter, multiprovider registry or real AI connector is introduced by E6A.
 
 PRODUCTION_SCOPE=OFF_ONLY
-- No production migration/deploy/flag activation is authorized in this foundation slice without a separate exact confirmation after source gates.
+- A separate exact confirmation was provided for backup, migration and deploy.
+  Those gates passed with AI OFF. No tenant AI activation, Mock canary or
+  outbound was authorized/executed because no authenticated controlled-tenant
+  session was available.

@@ -6,8 +6,8 @@ POST_STOCK_CANONICAL_REF=stock-mvp-production-ship-2026-08-24
 POST_STOCK_DOCS_SHA=23485b5
 POST_STOCK_RECONCILIATION_SHA=812413ffd18139b08e66d01ec99e7883ec4da63f
 AI_COMMERCE_CORE_SOURCE_COMMIT=2b8209ef25ba28a40b756948edfcc12c07f12970
-AI_COMMERCE_SOURCE_COMMIT=0fbd3bcbfbd884f740e4d1e0c5afd372fd88e3e9
-AI_COMMERCE_RUNTIME_SHA=NOT_DEPLOYED
+AI_COMMERCE_SOURCE_COMMIT=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
+AI_COMMERCE_RUNTIME_SHA=80a4f8d5c5067934e818f8e75f2f696d716e5ce0
 
 `a1232a1` foi comprovado como o tree de runtime. `5127d53` e `812413f` são
 documentação/reconciliação e não foram usados como base de código. A tag
@@ -20,4 +20,8 @@ adiciona somente migrations aditivas posteriores:
 - `20260824150000_add_ai_commerce_catalog_foundation`
 - `20260824160000_add_ai_commerce_persistent_audit_effects`
 
-Nenhuma migration oficial ou deploy foi executado nesta missão.
+As migrations oficiais foram aplicadas somente depois de backup lógico
+protegido, restore/rehearsal isolado e gate de integridade. API, worker e
+frontend foram publicados com a fundação AI OFF no merge SHA
+`80a4f8d5c5067934e818f8e75f2f696d716e5ce0`. A ativação do tenant Mock e a prova
+visual autenticada ainda estão pendentes por falta de sessão controlada.
