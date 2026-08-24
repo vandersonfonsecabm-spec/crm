@@ -38,6 +38,7 @@ model Cliente {
   negociosLegados Negocio[]        @relation("NegocioClienteLegado")
   contatosCanal   ContatoCanal[]
   historicosQualificacao HistoricoQualificacaoConversa[]
+  ofertasProduto       ProductOffer[] @relation("ProductOfferCustomer")
   propostasComerciais PropostaComercial[]
 
   @@unique([empresaId, id])
@@ -260,6 +261,8 @@ model Empresa {
   configuracoesRegraEstoque  ConfiguracaoRegraEstoque[]
   overridesEstoque            OverrideEstoque[]
   avaliacoesRegraEstoque      AvaliacaoRegraEstoque[]
+  catalogosComerciais         CommercialCatalogProduct[]
+  ofertasProduto              ProductOffer[]
 }
 
 model Usuario {
@@ -817,6 +820,7 @@ model ConversaCanal {
   historicoAtribuicoes     HistoricoAtribuicao[]
   acompanhamentos          Acompanhamento[]
   historicosQualificacao   HistoricoQualificacaoConversa[]
+  ofertasProduto            ProductOffer[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -1572,11 +1576,101 @@ model ProdutoEstoque {
   lotes                    LoteEstoque[]
   saldos                   SaldoEstoque[]
   avaliacoesRegraEstoque   AvaliacaoRegraEstoque[]
+  catalogosComerciais      CommercialCatalogProduct[]
+  ofertasProduto            ProductOffer[] @relation("ProductOfferStockProduct")
 
   @@unique([empresaId, id])
   @@index([empresaId, skuCanonico])
   @@index([empresaId, barcodeCanonico])
   @@index([empresaId, ativo])
+}
+
+// Commercial catalog is a tenant-scoped, customer-safe projection of a
+// canonical stock product.  It deliberately does not reuse ProdutoExterno or
+// EstoqueExterno: sellable availability is resolved from the E2 canonical
+// stock graph at request time.
+model CommercialCatalogProduct {
+  id                  Int           @id @default(autoincrement())
+  empresaId           Int
+  stockProductId      Int
+  title               String
+  shortDescription    String?
+  longDescription     String?
+  category            String?
+  brand               String?
+  model               String?
+  tagsJson            String        @default("[]")
+  synonymsJson        String        @default("[]")
+  attributesJson      String        @default("{}")
+  primaryImageUrl     String?
+  additionalMediaJson String?
+  commercialPrice     Decimal?
+  currency            String        @default("BRL")
+  priceStatus         String        @default("ON_REQUEST")
+  priceObservedAt     DateTime?
+  visibility          String        @default("HIDDEN")
+  sellabilityPolicy   String        @default("STOCK_CANONICAL_ONLY")
+  productUrl          String?
+  purchaseUrl         String?
+  allowedLinkDomain   String?
+  revision            Int           @default(1)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  archivedAt          DateTime?
+  empresa             Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  stockProduct        ProdutoEstoque @relation(fields: [empresaId, stockProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  offers              ProductOffer[]
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, stockProductId])
+  @@index([empresaId, visibility, archivedAt])
+  @@index([empresaId, stockProductId])
+  @@index([empresaId, category, visibility])
+  @@index([empresaId, brand, visibility])
+  @@index([empresaId, revision])
+}
+
+// ProductOffer is an immutable, tenant/conversation-scoped snapshot.  Its
+// expiry and material versions are revalidated before any downstream action.
+model ProductOffer {
+  id                    String                    @id @default(cuid())
+  empresaId             Int
+  conversationId        Int?
+  customerId            Int?
+  catalogProductId      Int
+  stockProductId        Int
+  title                 String
+  shortDescription      String?
+  imageUrl              String?
+  price                 Decimal?
+  currency              String
+  availabilityStatus    String
+  availabilityLabel     String
+  commercialTermsJson   String                    @default("{}")
+  productUrl            String?
+  purchaseUrl           String?
+  allowedActionsJson    String                    @default("[]")
+  sourceFreshness       String
+  confidence            String
+  manualConfirmationRequired Boolean              @default(true)
+  createdAt             DateTime                  @default(now())
+  expiresAt             DateTime
+  catalogRevision       Int
+  stockMaterialVersion  Int?
+  policyVersion         String
+  correlationId         String?
+  status                String                    @default("ACTIVE")
+  empresa               Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversaCanal         ConversaCanal?            @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  cliente               Cliente?                  @relation("ProductOfferCustomer", fields: [empresaId, customerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogProduct        CommercialCatalogProduct  @relation(fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  stockProduct          ProdutoEstoque             @relation("ProductOfferStockProduct", fields: [empresaId, stockProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@index([empresaId, conversationId, createdAt])
+  @@index([empresaId, customerId, createdAt])
+  @@index([empresaId, catalogProductId, createdAt])
+  @@index([empresaId, expiresAt, status])
 }
 
 model MapeamentoProdutoExterno {
