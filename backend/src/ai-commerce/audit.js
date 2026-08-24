@@ -17,6 +17,10 @@ function createAICommerceAudit({ prisma, logger = console, now = () => new Date(
           const existing = await model.findFirst({ where: { empresaId: safe.empresaId, idempotencyKey: String(safe.idempotencyKey || "") } });
           if (existing) return model.update({ where: { id: existing.id }, data: { ...data, revision: { increment: 1 }, updatedAt: data.occurredAt, completedAt: ["COMPLETED", "FAILED"].includes(data.status) ? data.occurredAt : undefined } });
         }
+        if (kind === "draft" && safe.draft?.draftId && typeof model.findFirst === "function" && typeof model.update === "function") {
+          const existing = await model.findFirst({ where: { id: String(safe.draft.draftId), empresaId: safe.empresaId } });
+          if (existing) return model.update({ where: { id: existing.id }, data: { eventJson: data.eventJson, updatedAt: data.updatedAt } });
+        }
         return await model.create({ data });
       } catch (error) {
         logger.warn?.("ai_commerce_audit_persist_failed", { kind, model: modelName, code: String(error?.code || "AUDIT_WRITE_FAILED") });

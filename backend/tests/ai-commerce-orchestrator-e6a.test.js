@@ -71,6 +71,21 @@ test("human approval is tied to draft revision and conversation revision", async
   assert.equal(approved.outbound, 0);
 });
 
+test("draft approval persists tenant/revision state when the AI draft model is available", async () => {
+  const rows = new Map();
+  const draftModel = {
+    create: async ({ data }) => { const row = { id: "draft-db-1", ...data }; rows.set(row.id, row); return row; },
+    findFirst: async ({ where }) => rows.get(where.id) || null,
+    updateMany: async ({ where, data }) => { const row = rows.get(where.id); if (!row || row.empresaId !== where.empresaId || row.revision !== where.revision) return { count: 0 }; row.status = data.status; row.revision += 1; return { count: 1 }; },
+  };
+  const tools = createCommercialToolRegistry({ services: {} });
+  const orchestrator = createAICommerceOrchestrator({ prisma: { aICommerceDraft: draftModel }, connection: new MockCommerceAIConnection({ enabled: true, allowlist: [1] }), toolRegistry: tools, featureGate: async () => true });
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 9, conversationRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Quero uma roçadeira" });
+  assert.equal(run.draft.draftId, "draft-db-1");
+  await orchestrator.approve({ draftId: "draft-db-1", action: "insertComposer", actorUsuarioId: 2, conversationRevision: 1, approvalToken: "a", idempotencyKey: "idem-draft" });
+  assert.equal(rows.get("draft-db-1").status, "APPROVED");
+});
+
 test("tool registry requires granular human approval for side effects", async () => {
   const tools = createCommercialToolRegistry({ services: { registerProductInterest: async () => ({ id: "interest-1" }) } });
   await assert.rejects(() => tools.execute("registerProductInterest", { offerId: "offer-1" }, { empresaId: 1, conversationId: 1, mode: MODES.SUGGESTION_ONLY, runId: "r1" }), { code: "AI_TOOL_HUMAN_APPROVAL_REQUIRED" });

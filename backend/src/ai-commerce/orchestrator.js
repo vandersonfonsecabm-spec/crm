@@ -113,7 +113,8 @@ function createAICommerceOrchestrator({
       }
       if (turn >= MAX_TURNS) throw policyError("AI_TOOL_LOOP_LIMIT", "Loop de ferramentas excedeu o limite.", 422);
       const allOffers = await materializeOffers({ toolResults, explicitOffers: input.offers, offerService, context: baseContext, customerId: input.customerId });
-      const draft = buildDraft(decision, allOffers, { empresaId, conversationId, conversationRevision: input.conversationRevision, mode, now });
+      let draft = buildDraft(decision, allOffers, { empresaId, conversationId, conversationRevision: input.conversationRevision, mode, now });
+      draft = await persistDraft({ prisma, draft, baseContext, decision, actorUsuarioId: input.actorUsuarioId, now });
       const result = freezeResult({
         schemaVersion: "AICommerceRun.v1",
         runId,
@@ -148,8 +149,9 @@ function createAICommerceOrchestrator({
 
   async function approve(input = {}) {
     const draftId = String(input.draftId || "");
-    const stored = drafts.get(draftId);
+    const stored = drafts.get(draftId) || await loadPersistedDraft({ prisma, draftId, empresaId: input.empresaId });
     if (!stored) throw policyError("AI_DRAFT_NOT_FOUND", "Rascunho comercial nao encontrado.", 404);
+    if (!drafts.has(draftId)) drafts.set(draftId, stored);
     const approval = validateApproval({ ...input, mode: stored.mode, empresaId: stored.empresaId, conversationId: stored.conversationId, draftRevision: input.draftRevision || stored.revision });
     if (stored.empresaId !== approval.empresaId || stored.conversationId !== approval.conversationId) throw policyError("AI_DRAFT_CONTEXT_MISMATCH", "Rascunho fora do tenant ou conversa.", 403);
     if (String(input.conversationRevision || "") !== String(stored.conversationRevision || input.conversationRevision || "")) throw policyError("AI_DRAFT_CONVERSATION_CHANGED", "A conversa mudou antes da aprovacao.", 409);
@@ -169,6 +171,7 @@ function createAICommerceOrchestrator({
     }
     stored.revision += 1;
     stored.approvedAction = approval.action;
+    await updatePersistedDraft({ prisma, draftId, empresaId: approval.empresaId, revision: stored.revision - 1, actorUsuarioId: approval.actorUsuarioId, status: "APPROVED" });
     await auditCall(audit, "recordPolicyDecision", { empresaId: approval.empresaId, conversationId: approval.conversationId, runId: stored.runId, action: approval.action, actorUsuarioId: approval.actorUsuarioId, status: "APPROVED" });
     return freezeResult({ ...effect, draftId, revision: stored.revision, draft: stored.draft });
   }
@@ -230,6 +233,72 @@ async function materializeOffers({ toolResults, explicitOffers, offerService, co
   }
   return offers.slice(0, 3);
 }
+
+async function persistDraft({ prisma, draft, baseContext, decision, actorUsuarioId, now }) {
+  if (!draft) return null;
+  const model = prisma?.aICommerceDraft || prisma?.aiCommerceDraft;
+  if (!model?.create) return draft;
+  const created = await model.create({ data: {
+    empresaId: baseContext.empresaId,
+    runId: baseContext.runId,
+    conversationId: baseContext.conversationId,
+    status: "PENDING_APPROVAL",
+    textSanitized: draft.text,
+    offersJson: JSON.stringify(draft.productOffers || []),
+    questionsJson: JSON.stringify(draft.questions || []),
+    actionsJson: JSON.stringify(draft.actions || []),
+    warningsJson: JSON.stringify(draft.warnings || []),
+    requiresHumanApproval: true,
+    conversationRevision: draft.conversationRevision || null,
+    revision: 1,
+    expiresAt: new Date(draft.expiresAt),
+    actorUsuarioId: positiveId(actorUsuarioId),
+    correlationId: baseContext.correlationId,
+    eventJson: JSON.stringify({ decision, provenanceRefs: draft.provenanceRefs || [] }),
+    retentionUntil: new Date(now().getTime() + 30 * 24 * 60 * 60 * 1000),
+  } });
+  return Object.freeze({ ...draft, draftId: String(created.id), revision: Number(created.revision) || 1 });
+}
+
+async function loadPersistedDraft({ prisma, draftId, empresaId }) {
+  const model = prisma?.aICommerceDraft || prisma?.aiCommerceDraft;
+  if (!model?.findFirst || !positiveId(empresaId)) return null;
+  const row = await model.findFirst({ where: { id: String(draftId), empresaId: positiveId(empresaId) } });
+  if (!row || String(row.status || "").toUpperCase() !== "PENDING_APPROVAL") return null;
+  if (row.expiresAt && new Date(row.expiresAt).getTime() <= Date.now()) return null;
+  return {
+    runId: row.runId,
+    empresaId: row.empresaId,
+    conversationId: row.conversationId,
+    conversationRevision: row.conversationRevision || "",
+    mode: MODES.HUMAN_APPROVAL,
+    correlationId: row.correlationId || null,
+    revision: Number(row.revision) || 1,
+    draft: {
+      draftId: String(row.id),
+      empresaId: row.empresaId,
+      conversationId: row.conversationId,
+      conversationRevision: row.conversationRevision || "",
+      revision: Number(row.revision) || 1,
+      text: String(row.textSanitized || ""),
+      productOffers: parseJsonArray(row.offersJson),
+      questions: parseJsonArray(row.questionsJson),
+      actions: parseJsonArray(row.actionsJson),
+      warnings: parseJsonArray(row.warningsJson),
+      requiresHumanApproval: true,
+      expiresAt: row.expiresAt,
+    },
+  };
+}
+
+async function updatePersistedDraft({ prisma, draftId, empresaId, revision, actorUsuarioId, status }) {
+  const model = prisma?.aICommerceDraft || prisma?.aiCommerceDraft;
+  if (!model?.updateMany || !positiveId(empresaId)) return;
+  const result = await model.updateMany({ where: { id: String(draftId), empresaId: positiveId(empresaId), revision, status: "PENDING_APPROVAL" }, data: { status, approvedAt: status === "APPROVED" ? new Date() : undefined, actorUsuarioId: positiveId(actorUsuarioId), revision: { increment: 1 } } });
+  if (result.count !== 1) throw policyError("AI_DRAFT_CONFLICT", "Rascunho alterado por outro aprovador.", 409);
+}
+
+function parseJsonArray(value) { try { const parsed = JSON.parse(String(value || "[]")); return Array.isArray(parsed) ? parsed.slice(0, 20) : []; } catch { return []; } }
 
 function stateForDecision(decision) {
   const action = String(decision?.nextAction || "").toUpperCase();
