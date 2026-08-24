@@ -58,7 +58,8 @@ function modelCandidates(kind) {
 function normalizeModelData(kind, payload) {
   // Model adapters may map this envelope to their exact Prisma fields. The
   // generic fields intentionally avoid prompts, provider secrets and raw PII.
-  const occurredAt = payload.occurredAt instanceof Date ? payload.occurredAt : new Date(payload.occurredAt || Date.now());
+  const parsedOccurredAt = payload.occurredAt instanceof Date ? payload.occurredAt : new Date(payload.occurredAt || Date.now());
+  const occurredAt = Number.isNaN(parsedOccurredAt.getTime()) ? new Date() : parsedOccurredAt;
   const retentionUntil = payload.retentionUntil ? new Date(payload.retentionUntil) : new Date(occurredAt.getTime() + 30 * 24 * 60 * 60 * 1000);
   const base = {
     ...(payload.empresaId ? { empresaId: payload.empresaId } : {}),
@@ -166,7 +167,10 @@ function normalizeModelData(kind, payload) {
 }
 
 function sanitizeAuditPayload(payload = {}) {
-  const safe = sanitizeData(payload);
+  const source = payload && typeof payload === "object" && payload.occurredAt instanceof Date
+    ? { ...payload, occurredAt: payload.occurredAt.toISOString() }
+    : payload;
+  const safe = sanitizeData(source);
   if (!safe || typeof safe !== "object") return {};
   const forbidden = ["prompt", "rawPrompt", "systemPrompt", "chainOfThought", "chain_of_thought", "reasoning", "secret", "token", "cookie", "authorization", "credential", "password", "databaseUrl"];
   for (const key of Object.keys(safe)) if (forbidden.some((fragment) => key.toLowerCase().includes(fragment.toLowerCase()))) safe[key] = "[redacted]";
