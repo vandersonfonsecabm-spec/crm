@@ -6,7 +6,8 @@ POST_STOCK_RUNTIME_BASE_SHA=a1232a195795912d0a900d51edfcc5f12d4b8955
 POST_STOCK_CANONICAL_REF=stock-mvp-production-ship-2026-08-24
 POST_STOCK_DOCS_SHA=23485b5
 POST_STOCK_RECONCILIATION_SHA=812413ffd18139b08e66d01ec99e7883ec4da63f
-AI_COMMERCE_SOURCE_COMMIT=2b8209ef25ba28a40b756948edfcc12c07f12970
+AI_COMMERCE_CORE_SOURCE_COMMIT=2b8209ef25ba28a40b756948edfcc12c07f12970
+AI_COMMERCE_SOURCE_COMMIT=0fbd3bcbfbd884f740e4d1e0c5afd372fd88e3e9
 AI_COMMERCE_RUNTIME_SHA=NOT_DEPLOYED
 DOCUMENT_STATUS=SOURCE_AND_REHEARSAL_COMPLETE_PRODUCTION_OFF
 
@@ -135,6 +136,14 @@ LIMITAÇÕES E GATES NÃO DECLARADOS COMO PASS
   suite were run using a temporary junction to existing local dependencies.
 - Exact Git SHA parity for a future deployment is NOT claimed; runtime SHA is
   source-only until an attested deployment manifest exists.
+- A Vercel preview was created from the pushed E6A branch. The first preview
+  failed with TypeScript scope errors; the errors were fixed in source commit
+  `0fbd3bcbfbd884f740e4d1e0c5afd372fd88e3e9`, and preview deployment
+  `dpl_7GcexRMqBfGdSWKdMBQjEKwK7eHq` became READY at alias
+  `crm-git-feature-ai-commerce-e6a-vand-s-projects.vercel.app`.
+- Browser access to that preview reached the CRM auth gate but could not
+  validate a session on the preview origin. No feature-screen screenshot or
+  authenticated visual pass was claimed.
 
 PREFLIGHT OFICIAL E BLOQUEIO DE RELEASE
 
@@ -160,9 +169,11 @@ RELEASE DECISION
 
 `PRODUCTION_BACKUP=BLOCKED_RAILWAY_HOBBY_NO_BACKUPS_PITR`
 `PRODUCTION_DB_MIGRATION=NOT_EXECUTED`
-`E6A_BRANCH_PUSH=NOT_EXECUTED`
+`E6A_BRANCH_PUSH=PASS_REMOTE_CANDIDATE`
 `E6A_PRODUCTION_DEPLOY=NOT_EXECUTED`
 `E6A_PRODUCTION_BROWSER_QA=NOT_EXECUTED`
+`E6A_PREVIEW_BUILD=PASS`
+`E6A_PREVIEW_AUTHENTICATED_VISUAL_QA=BLOCKED_SESSION`
 
 This is a material hard stop, not a temporary test failure: applying an
 additive migration without a recoverable official backup would violate the

@@ -3,7 +3,7 @@
 | Claim | Status | Evidência |
 |---|---|---|
 | Baseline stock congelada | PASS | tag local aponta para a1232a1; docs 23485b5 |
-| Runtime source E6A | PASS | commit 2b8209e |
+| Runtime source E6A | PASS | final candidate 0fbd3bc; core 2b8209e |
 | Canonical catalog authority | PASS | overlay + FK ProdutoEstoque; tests 4/4 |
 | Sellable availability truth | PASS | stale/unknown/expired fail-closed |
 | Deterministic search | PASS | bounded/tenant-safe test |
@@ -22,6 +22,9 @@
 | Official backup/restore | BLOCKED | Railway Hobby disables Backups/PITR |
 | Railway/Vercel deploy | NOT_EXECUTED | current production is E5R runtime |
 | Live canary | NOT_EXECUTED | local controlled Mock only |
+| Remote E6A branch | PASS | origin/feature/ai-commerce-e6a at 0fbd3bc |
+| Vercel preview build | PASS | dpl_7GcexRMqBfGdSWKdMBQjEKwK7eHq, exact branch SHA |
+| Authenticated preview visual QA | BLOCKED | preview origin could not validate session |
 | Auto reply/outbound | PASS_ZERO | outbound=0; no sender path |
 | Final state | PASS_OFF | all AI flags/allowlist OFF |
 
