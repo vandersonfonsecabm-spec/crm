@@ -68,7 +68,6 @@ function normalizeModelData(kind, payload) {
     status: String(payload.status || "RECORDED").slice(0, 40),
     correlationId: String(payload.correlationId || "").slice(0, 128) || null,
     eventJson: JSON.stringify(payload),
-    occurredAt,
     retentionUntil: Number.isNaN(retentionUntil.getTime()) ? new Date(occurredAt.getTime() + 30 * 24 * 60 * 60 * 1000) : retentionUntil,
   };
   if (kind === "run") return {
@@ -79,6 +78,8 @@ function normalizeModelData(kind, payload) {
     policyVersion: String(payload.policyVersion || "ai-commerce-policy.v1").slice(0, 100),
     messageRevision: payload.messageRevision === undefined ? null : String(payload.messageRevision).slice(0, 80),
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+    createdAt: occurredAt,
+    updatedAt: occurredAt,
   };
   if (kind === "turn") return {
     ...base,
@@ -88,6 +89,7 @@ function normalizeModelData(kind, payload) {
     toolResultsJson: JSON.stringify(payload.toolResults || {}),
     latencyMs: Number.isFinite(payload.durationMs) ? Math.max(0, Math.round(payload.durationMs)) : null,
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+    occurredAt,
   };
   if (kind === "tool") return {
     ...base,
@@ -99,6 +101,7 @@ function normalizeModelData(kind, payload) {
     errorCode: payload.errorCode ? String(payload.errorCode).slice(0, 100) : null,
     latencyMs: Number.isFinite(payload.durationMs) ? Math.max(0, Math.round(payload.durationMs)) : null,
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+    occurredAt,
   };
   if (kind === "decision") return {
     ...base,
@@ -114,6 +117,7 @@ function normalizeModelData(kind, payload) {
     policyFlagsJson: JSON.stringify(payload.decision?.policyFlags || []),
     decisionJson: JSON.stringify(payload.decision || {}),
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+    occurredAt,
   };
   if (kind === "draft") {
     const draft = payload.draft || {};
@@ -131,6 +135,8 @@ function normalizeModelData(kind, payload) {
       revision: Number.isSafeInteger(draft.revision) ? draft.revision : 1,
       expiresAt: draft.expiresAt ? new Date(draft.expiresAt) : new Date(occurredAt.getTime() + 15 * 60 * 1000),
       actorUsuarioId: payload.actorUsuarioId || null,
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
     };
   }
   if (kind === "policy") return {
@@ -141,6 +147,7 @@ function normalizeModelData(kind, payload) {
     draftId: payload.draftId || null,
     actorUsuarioId: payload.actorUsuarioId || null,
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+    occurredAt,
   };
   if (kind === "handoff") return {
     ...base,
@@ -152,6 +159,8 @@ function normalizeModelData(kind, payload) {
     idempotencyKey: payload.idempotencyKey || null,
     actorUsuarioId: payload.actorUsuarioId || null,
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+    createdAt: occurredAt,
+    updatedAt: occurredAt,
   };
   return base;
 }
