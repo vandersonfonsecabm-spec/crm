@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
+const { sanitizeStructured } = require("../stock/contracts");
 
 const ACTIVE_FOLLOW_UP_STATUSES = ["PENDENTE", "EM_ANDAMENTO"];
 const MANAGER_ROLES = ["ADMIN", "GERENTE"];
@@ -10,7 +11,7 @@ const NOTIFICATION_TYPES = Object.freeze({
   FOLLOW_UP: "ACOMPANHAMENTO",
   FOLLOW_UP_REMINDER: "LEMBRETE_ACOMPANHAMENTO",
 });
-const TARGET_KINDS = new Set(["CONVERSATION", "FOLLOW_UP", "DEAL"]);
+const TARGET_KINDS = new Set(["CONVERSATION", "FOLLOW_UP", "DEAL", "ESTOQUE_LOTE", "ESTOQUE_PRODUTO", "ESTOQUE_FONTE"]);
 const SOURCE_KINDS = new Set(["CONVERSATION", "FOLLOW_UP"]);
 const MAX_LIMIT = 50;
 const MAX_LIST_ROWS = 1000;
@@ -18,6 +19,7 @@ const MAX_SOURCE_ROWS = 1000;
 const DEFAULT_LIMIT = 20;
 const EFFECTIVE_TIME_ZONE = "America/Sao_Paulo";
 const TENANT_ALLOWLIST_ENV = "H8_NOTIFICATION_TENANT_ALLOWLIST";
+const STOCK_RULE_TYPES = new Set(["STOCK_LOT_EXPIRING", "STOCK_LOT_EXPIRED", "STOCK_DATA_STALE", "STOCK_SYNC_FAILED"]);
 
 function createNotificationService({ prisma, env = process.env, clock = () => new Date() } = {}) {
   let tenantCursor = 0;
@@ -351,6 +353,103 @@ async function upsertProjection({ prisma, empresaId, destinatarioId, tipo, prior
   return { created: 0, updated: 1 };
 }
 
+// Stock projection is intentionally a separate, explicit boundary. Existing
+// H8 source/target validation remains unchanged for CRM notifications; stock
+// callers must provide a server-resolved tenant, recipient and canonical
+// target and receive the same coalescing/lifecycle semantics.
+async function upsertStockProjection({
+  prisma,
+  empresaId,
+  destinatarioId,
+  ruleType,
+  priority = "ATENCAO",
+  occurrenceKey,
+  title,
+  summary,
+  targetType,
+  targetId,
+  targetSubId = null,
+  snapshot = {},
+  materialVersion,
+  sourceObservedAt = null,
+  resolutionState = "OPEN",
+  occurredAt = new Date(),
+}) {
+  const tenantId = Number(empresaId);
+  const recipientId = Number(destinatarioId);
+  const canonicalId = Number(targetId);
+  const validTargets = new Set(["ESTOQUE_LOTE", "ESTOQUE_PRODUTO", "ESTOQUE_FONTE"]);
+  if (!Number.isSafeInteger(tenantId) || tenantId < 1 || !Number.isSafeInteger(recipientId) || recipientId < 1) throw domainError(401, "STOCK_TENANT_CONTEXT_INVALID", "Contexto de estoque invalido.");
+  if (!validTargets.has(targetType) || !Number.isSafeInteger(canonicalId) || canonicalId < 1 || (targetType !== "ESTOQUE_LOTE" && targetSubId !== null && targetSubId !== undefined) || (targetSubId !== null && targetSubId !== undefined && (!Number.isSafeInteger(Number(targetSubId)) || Number(targetSubId) < 1))) throw domainError(422, "STOCK_TARGET_INVALID", "Destino canonico de estoque invalido.");
+  if (!STOCK_RULE_TYPES.has(String(ruleType || ""))) throw domainError(422, "STOCK_RULE_INVALID", "Regra de estoque invalida.");
+  if (!["OPEN", "RESOLVED"].includes(String(resolutionState || "OPEN"))) throw domainError(422, "STOCK_RESOLUTION_INVALID", "Estado de resolucao invalido.");
+  if (!Number.isSafeInteger(Number(materialVersion)) || Number(materialVersion) < 1) throw domainError(422, "STOCK_MATERIAL_VERSION_INVALID", "Versao material invalida.");
+  const [recipient, target, subTarget] = await Promise.all([
+    prisma.usuario.findFirst({ where: { empresaId: tenantId, id: recipientId, ativo: true }, select: { id: true } }),
+    targetType === "ESTOQUE_LOTE"
+      ? prisma.loteEstoque.findFirst({ where: { empresaId: tenantId, id: canonicalId }, select: { id: true, fonteId: true } })
+      : targetType === "ESTOQUE_PRODUTO"
+        ? prisma.produtoEstoque.findFirst({ where: { empresaId: tenantId, id: canonicalId }, select: { id: true } })
+        : prisma.fonteEstoque.findFirst({ where: { empresaId: tenantId, id: canonicalId }, select: { id: true } }),
+    targetType === "ESTOQUE_LOTE" && targetSubId !== null && targetSubId !== undefined
+      ? prisma.localEstoque.findFirst({ where: { empresaId: tenantId, id: Number(targetSubId) }, select: { id: true, fonteId: true } })
+      : null,
+  ]);
+  if (!recipient || !target || (targetSubId !== null && targetSubId !== undefined && !subTarget)) throw domainError(404, "STOCK_TARGET_NOT_FOUND", "Destino de estoque nao encontrado.");
+  if (targetType === "ESTOQUE_LOTE" && subTarget && target.fonteId && subTarget.fonteId && Number(target.fonteId) !== Number(subTarget.fonteId)) throw domainError(404, "STOCK_TARGET_NOT_FOUND", "Local do lote nao pertence a fonte canonica.");
+  const key = boundedText(occurrenceKey, 240);
+  if (!key) throw domainError(422, "STOCK_OCCURRENCE_INVALID", "Ocorrencia de estoque invalida.");
+  const safeSnapshot = boundedText(JSON.stringify(sanitizeStructured(snapshot || {})), 8000);
+  const next = {
+    tipo: String(ruleType || "STOCK_RULE").slice(0, 80),
+    prioridade: VALID_PRIORITIES.has(priority) ? priority : "ATENCAO",
+    origemTipo: "STOCK_RULE",
+    origemId: canonicalId,
+    occurrenceKey: key,
+    dedupeKey: key,
+    titulo: boundedText(title, 120) || "Alerta de estoque",
+    corpo: boundedText(summary, 280),
+    alvoTipo: targetType,
+    alvoId: canonicalId,
+    alvoSubId: Number.isSafeInteger(Number(targetSubId)) && Number(targetSubId) > 0 ? Number(targetSubId) : null,
+    ocorridoEm: occurredAt instanceof Date ? occurredAt : new Date(occurredAt),
+    stockTargetType: targetType,
+    stockTargetId: canonicalId,
+    stockTargetSubId: Number.isSafeInteger(Number(targetSubId)) && Number(targetSubId) > 0 ? Number(targetSubId) : null,
+    stockSnapshotJson: safeSnapshot,
+    stockMaterialVersion: Number(materialVersion),
+    stockSourceObservedAt: sourceObservedAt ? new Date(sourceObservedAt) : null,
+    stockResolutionState: String(resolutionState || "OPEN").slice(0, 40),
+  };
+  let existing = await prisma.notificacao.findUnique({ where: { empresaId_destinatarioId_occurrenceKey: { empresaId: tenantId, destinatarioId: recipientId, occurrenceKey: key } } });
+  if (!existing) {
+    try {
+      await prisma.notificacao.create({ data: { empresaId: tenantId, destinatarioId: recipientId, ...next } });
+      return { created: 1, updated: 0, reopened: 0 };
+    } catch (error) {
+      if (error?.code !== "P2002") throw error;
+      existing = await prisma.notificacao.findUnique({ where: { empresaId_destinatarioId_occurrenceKey: { empresaId: tenantId, destinatarioId: recipientId, occurrenceKey: key } } });
+      if (!existing) throw error;
+    }
+  }
+  if (Number.isSafeInteger(existing.stockMaterialVersion) && existing.stockMaterialVersion > next.stockMaterialVersion) throw domainError(409, "STOCK_MATERIAL_VERSION_REGRESSION", "Evento de estoque atrasado foi rejeitado.");
+  const changed = Number(existing.stockMaterialVersion || 0) !== next.stockMaterialVersion
+    || existing.stockSnapshotJson !== next.stockSnapshotJson
+    || existing.prioridade !== next.prioridade
+    || existing.stockResolutionState !== next.stockResolutionState;
+  if (!changed) return { created: 0, updated: 0, reopened: 0 };
+  const reopened = Boolean(existing.resolvidaEm);
+  const materialChanged = Number(existing.stockMaterialVersion || 0) !== next.stockMaterialVersion;
+  const updateData = { ...next, lidaEm: changed || reopened ? null : existing.lidaEm, resolvidaEm: resolutionState === "RESOLVED" ? existing.resolvidaEm || new Date() : null, versao: { increment: 1 }, presentationVersion: { increment: 1 } };
+  const casWhere = { id: existing.id, empresaId: tenantId, versao: existing.versao };
+  casWhere.stockMaterialVersion = existing.stockMaterialVersion === null || existing.stockMaterialVersion === undefined ? null : existing.stockMaterialVersion;
+  const updated = typeof prisma.notificacao.updateMany === "function"
+    ? await prisma.notificacao.updateMany({ where: casWhere, data: updateData })
+    : { count: (await prisma.notificacao.update({ where: { id: existing.id }, data: updateData })) ? 1 : 0 };
+  if (updated.count !== 1) throw domainError(409, "STOCK_PROJECTION_CONFLICT", "Projecao de estoque foi alterada por outro worker.");
+  return { created: 0, updated: 1, reopened: reopened ? 1 : 0 };
+}
+
 async function resolveCompletedFollowUps(empresaId, now, prismaArg, userById = new Map(), managers = []) {
   if (!prismaArg) return 0;
   const rows = await prismaArg.notificacao.findMany({ where: { empresaId, origemTipo: "FOLLOW_UP", resolvidaEm: null }, select: { id: true, origemId: true, destinatarioId: true, occurrenceKey: true } });
@@ -393,7 +492,7 @@ async function resolveCompletedConversations(empresaId, now, prismaArg, userById
 async function resolveMissingTargets(prisma, context, now) {
   const recipientFilter = Number.isInteger(context.usuarioId) ? { destinatarioId: context.usuarioId } : {};
   const rows = await prisma.notificacao.findMany({
-    where: { empresaId: context.empresaId, ...recipientFilter, resolvidaEm: null },
+    where: { empresaId: context.empresaId, ...recipientFilter, resolvidaEm: null, alvoTipo: { notIn: ["ESTOQUE_LOTE", "ESTOQUE_PRODUTO", "ESTOQUE_FONTE"] } },
     select: { id: true, alvoTipo: true, alvoId: true },
     take: MAX_LIST_ROWS,
   });
@@ -466,7 +565,24 @@ function presentNotification(row) {
     nova: row.lidaEm === null,
     adiada: row.adiadaAte !== null && new Date(row.adiadaAte) > new Date(),
     destino: route ? { tipo: row.alvoTipo, id: row.alvoId, rota: route } : null,
+    estoque: row.stockTargetType ? {
+      tipo: row.stockTargetType,
+      id: row.stockTargetId,
+      subId: row.stockTargetSubId || null,
+      snapshot: parseStockSnapshot(row.stockSnapshotJson),
+      materialVersion: row.stockMaterialVersion || null,
+      sourceObservedAt: row.stockSourceObservedAt || null,
+      resolutionState: row.stockResolutionState || "OPEN",
+    } : null,
   };
+}
+
+function parseStockSnapshot(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch { return null; }
 }
 
 function routeForTarget(kind, id) {
@@ -474,6 +590,9 @@ function routeForTarget(kind, id) {
   if (kind === "CONVERSATION") return `/caixa-de-entrada?conversationId=${encodeURIComponent(id)}`;
   if (kind === "FOLLOW_UP") return `/agenda?acompanhamentoId=${encodeURIComponent(id)}`;
   if (kind === "DEAL") return `/negocios?negocioId=${encodeURIComponent(id)}`;
+  if (kind === "ESTOQUE_LOTE") return `/estoque/lotes/${encodeURIComponent(id)}`;
+  if (kind === "ESTOQUE_PRODUTO") return `/estoque/produtos/${encodeURIComponent(id)}`;
+  if (kind === "ESTOQUE_FONTE") return `/estoque/fontes/${encodeURIComponent(id)}`;
   return null;
 }
 
@@ -598,4 +717,5 @@ module.exports = {
   parseTenantAllowlist,
   presentNotification,
   routeForTarget,
+  upsertStockProjection,
 };

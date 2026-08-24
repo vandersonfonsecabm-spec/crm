@@ -1,0 +1,54 @@
+E6A OPERATIONAL RELEASE ATTEMPT
+
+CURRENT_STATE_AS_OF=2026-08-24 14:48 BRT
+CORE_SOURCE=2b8209ef25ba28a40b756948edfcc12c07f12970
+SOURCE=0fbd3bcbfbd884f740e4d1e0c5afd372fd88e3e9
+DOCS=e5189ca (bundle commit; report docs 8a8c3bf)
+
+PREFLIGHT PASS
+
+- Railway project glistening-playfulness, production environment identified.
+- API service api identified and Online at api-production-875f9.up.railway.app.
+- Active API deployment is the prior E5R runtime label
+  stock-e5r-canary-context-fix-a1232a1.
+- PostgreSQL official target identified as Postgres-u_yI and Online.
+- Vercel project crm identified; latest production deployment dpl_969... is
+  READY and /health, /ready, frontend returned HTTP 200.
+- AI flags are absent/default OFF in the visible API variables; no provider or
+  outbound was activated.
+
+PREVIEW BUILD
+
+- First Vercel preview failed on TypeScript scope/nullability errors; the
+  smallest UI fix was committed and pushed as `0fbd3bcb`.
+- Preview deployment `dpl_7GcexRMqBfGdSWKdMBQjEKwK7eHq` is READY and has exact
+  Git metadata for branch `feature/ai-commerce-e6a`.
+- Latest documentation-bundle preview `dpl_85gWzvQMhk8YjrHfAJswtzRkt2sv` is
+  READY at the same branch alias, with Git SHA `ae3614d118b8731dae1c6213423f1f4e25ba2f8a`.
+- Browser opened the preview but authentication could not be validated on the
+  preview origin. Feature-screen visual QA was not claimed.
+
+HARD STOP
+
+Railway Backups for the production service display: “Upgrade to Pro to enable
+Backups and PITR”. The official database has no E6A tables yet. Because no
+recoverable official backup or authorized logical dump target is available,
+the protocol forbids migration. The E6A branch was pushed as a remote candidate;
+no merge, Railway deploy or production Vercel deploy was performed.
+
+NOT CLAIMED
+
+PRODUCTION_BACKUP=BLOCKED
+PRODUCTION_DB_PRECHECK=BLOCKED_AT_BACKUP
+STOCK/AI_PROD_MIGRATION=NOT_EXECUTED
+E6A_BROWSER_PROD_QA=NOT_EXECUTED
+E6A_LIVE_CANARY=NOT_EXECUTED
+E6A_BRANCH_PUSH=PASS_REMOTE_CANDIDATE
+E6A_PREVIEW_BUILD=PASS
+E6A_PREVIEW_AUTHENTICATED_VISUAL_QA=BLOCKED_SESSION
+
+SAFE RESUME
+
+Provide an approved backup/recovery path (Railway Pro/PITR or an authorized
+sanitized logical backup), preserve current E5R runtime, then resume from the
+E6A source commit without reimplementing catalog/orchestrator/UI work.

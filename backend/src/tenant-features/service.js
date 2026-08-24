@@ -8,6 +8,7 @@ const FEATURE_KEYS = Object.freeze({
   WHATSAPP_OUTBOUND: "WHATSAPP_OUTBOUND",
   MESSENGER_INTEGRATION: "MESSENGER_INTEGRATION",
   MESSENGER_INBOUND: "MESSENGER_INBOUND",
+  AI_COMMERCE: "AI_COMMERCE",
 });
 
 const FEATURE_ENV_KEYS = Object.freeze({
@@ -20,6 +21,7 @@ const FEATURE_ENV_KEYS = Object.freeze({
   [FEATURE_KEYS.WHATSAPP_OUTBOUND]: "WHATSAPP_OUTBOUND_ENABLED",
   [FEATURE_KEYS.MESSENGER_INTEGRATION]: "MESSENGER_INTEGRATION_ENABLED",
   [FEATURE_KEYS.MESSENGER_INBOUND]: "MESSENGER_INBOUND_ENABLED",
+  [FEATURE_KEYS.AI_COMMERCE]: "AI_COMMERCE_ENABLED",
 });
 
 const WHATSAPP_DEPENDENT_FEATURES = new Set([
@@ -81,6 +83,7 @@ async function capabilitiesForTenant({ prisma, empresaId, env = process.env }) {
     whatsappOutbound: false,
     messengerIntegration: false,
     messengerInbound: false,
+    aiCommerce: false,
   };
   if (!Number.isInteger(empresaId) || empresaId < 1 || globallyEnabled.length === 0) return disabled;
 
@@ -102,6 +105,7 @@ async function capabilitiesForTenant({ prisma, empresaId, env = process.env }) {
       whatsappOutbound: whatsappIntegration && enabled.has(FEATURE_KEYS.WHATSAPP_OUTBOUND),
       messengerIntegration,
       messengerInbound: messengerIntegration && enabled.has(FEATURE_KEYS.MESSENGER_INBOUND),
+      aiCommerce: enabled.has(FEATURE_KEYS.AI_COMMERCE),
     };
   } catch (error) {
     console.error("Falha ao carregar funcionalidades do tenant.", safeFeatureError(error));

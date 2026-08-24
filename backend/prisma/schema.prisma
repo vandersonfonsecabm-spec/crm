@@ -38,6 +38,9 @@ model Cliente {
   negociosLegados Negocio[]        @relation("NegocioClienteLegado")
   contatosCanal   ContatoCanal[]
   historicosQualificacao HistoricoQualificacaoConversa[]
+  ofertasProduto       ProductOffer[] @relation("ProductOfferCustomer")
+  interessesAICommerce AICommerceProductInterest[] @relation("AICommerceInterestCustomer")
+  rascunhosAICommerce AICommerceOpportunityDraft[] @relation("AICommerceDraftCustomer")
   propostasComerciais PropostaComercial[]
 
   @@unique([empresaId, id])
@@ -242,6 +245,36 @@ model Empresa {
   notificacoes               Notificacao[]
   configuracaoNotificacao    ConfiguracaoNotificacaoEmpresa?
   preferenciasNotificacao    PreferenciaNotificacaoUsuario[]
+  fontesEstoque              FonteEstoque[]
+  capacidadesFonteEstoque    CapacidadeFonteEstoque[]
+  execucoesSincronizacaoEstoque ExecucaoSincronizacaoEstoque[]
+  checkpointsSincronizacaoEstoque CheckpointSincronizacaoEstoque[]
+  produtosEstoque            ProdutoEstoque[]
+  mapeamentosProdutoEstoque  MapeamentoProdutoExterno[]
+  locaisEstoque              LocalEstoque[]
+  lotesEstoque               LoteEstoque[]
+  saldosEstoque              SaldoEstoque[]
+  observacoesEstoque         ObservacaoEstoque[]
+  problemasQualidadeEstoque  ProblemaQualidadeEstoque[]
+  eventosAuditoriaEstoque    EventoAuditoriaEstoque[]
+  eventosOutboxEstoque       EventoOutboxEstoque[]
+  importacoesEstoque         ImportacaoEstoque[]
+  linhasImportacaoEstoque    LinhaImportacaoEstoque[]
+  configuracoesRegraEstoque  ConfiguracaoRegraEstoque[]
+  overridesEstoque            OverrideEstoque[]
+  avaliacoesRegraEstoque      AvaliacaoRegraEstoque[]
+  catalogosComerciais         CommercialCatalogProduct[]
+  ofertasProduto              ProductOffer[]
+  configuracoesAICommerce    AICommerceSettings[]
+  execucoesAICommerce         AICommerceRun[]
+  turnosAICommerce            AICommerceTurn[]
+  ferramentasAICommerce      AICommerceToolInvocation[]
+  decisoesAICommerce          AICommerceDecision[]
+  rascunhosAICommerce         AICommerceDraft[]
+  politicasAICommerce         AICommercePolicyDecision[]
+  handoffsAICommerce          AICommerceHandoff[]
+  interessesAICommerce        AICommerceProductInterest[]
+  oportunidadesAICommerce     AICommerceOpportunityDraft[]
 }
 
 model Usuario {
@@ -292,6 +325,14 @@ model Usuario {
   convitesCriados             ConviteUsuario[]
   notificacoesRecebidas       Notificacao[] @relation("NotificacaoDestinatario")
   preferenciasNotificacao    PreferenciaNotificacaoUsuario[]
+  importacoesEstoqueCriadas  ImportacaoEstoque[] @relation("ImportacaoEstoqueActor")
+  eventosAuditoriaEstoque    EventoAuditoriaEstoque[] @relation("EventoAuditoriaEstoqueActor")
+  configuracoesAICommerce     AICommerceSettings[] @relation("AICommerceSettingsActor")
+  interessesAICommerce        AICommerceProductInterest[] @relation("AICommerceInterestActor")
+  oportunidadesAICommerce    AICommerceOpportunityDraft[] @relation("AICommerceDraftActor")
+  rascunhosAICommerce         AICommerceDraft[] @relation("AICommerceDraftAuditActor")
+  politicasAICommerce         AICommercePolicyDecision[] @relation("AICommercePolicyActor")
+  handoffsAICommerce          AICommerceHandoff[] @relation("AICommerceHandoffActor")
 
   @@unique([empresaId, email])
   @@unique([empresaId, id])
@@ -797,6 +838,16 @@ model ConversaCanal {
   historicoAtribuicoes     HistoricoAtribuicao[]
   acompanhamentos          Acompanhamento[]
   historicosQualificacao   HistoricoQualificacaoConversa[]
+  ofertasProduto            ProductOffer[]
+  execucoesAICommerce       AICommerceRun[]
+  turnosAICommerce          AICommerceTurn[]
+  ferramentasAICommerce    AICommerceToolInvocation[]
+  decisoesAICommerce        AICommerceDecision[]
+  rascunhosAICommerce       AICommerceDraft[]
+  politicasAICommerce       AICommercePolicyDecision[]
+  handoffsAICommerce        AICommerceHandoff[]
+  interessesAICommerce     AICommerceProductInterest[]
+  oportunidadesAICommerce AICommerceOpportunityDraft[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -838,6 +889,7 @@ model MensagemCanal {
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
   emailMetadata     EmailMessageMetadata?
+  aiCommerceRuns    AICommerceRun[] @relation("AICommerceRunTriggerMessage")
 
   @@unique([canalIntegracaoId, externalId])
   @@unique([empresaId, id])
@@ -1304,6 +1356,13 @@ model Notificacao {
   alvoTipo            String
   alvoId              Int?
   alvoSubId           Int?
+  stockTargetType     String?
+  stockTargetId       Int?
+  stockTargetSubId    Int?
+  stockSnapshotJson   String?
+  stockMaterialVersion Int?
+  stockSourceObservedAt DateTime?
+  stockResolutionState String?
   ocorridoEm          DateTime
   venceEm             DateTime?
   lidaEm              DateTime?
@@ -1418,6 +1477,927 @@ model RateLimitBucket {
   @@index([resetAt])
 }
 
+// E2 estoque source-agnostic. Todas as relacoes entre entidades tenant-scoped
+// usam [empresaId, id] para impedir vinculos cruzados entre tenants.
+model FonteEstoque {
+  id                       Int                       @id @default(autoincrement())
+  empresaId                Int
+  tipoFonte                StockSourceType
+  nome                     String
+  statusCiclo              StockSourceStatus         @default(DRAFT)
+  configuracaoPublicaJson  String?
+  credencialRef            String?
+  capabilitiesVersion      String?
+  prioridade               Int                       @default(100)
+  schemaVersion            String
+  disabledAt               DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  empresa                  Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  capacidades              CapacidadeFonteEstoque[]
+  execucoes                ExecucaoSincronizacaoEstoque[]
+  checkpoint               CheckpointSincronizacaoEstoque?
+  mapeamentos              MapeamentoProdutoExterno[]
+  locais                   LocalEstoque[]
+  lotes                    LoteEstoque[]
+  saldosAutoritativos      SaldoEstoque[]            @relation("SaldoEstoqueFonteAutoritativa")
+  observacoes              ObservacaoEstoque[]
+  problemasQualidade       ProblemaQualidadeEstoque[]
+  importacoes              ImportacaoEstoque[]
+  avaliacoesRegraEstoque   AvaliacaoRegraEstoque[] @relation("AvaliacaoRegraEstoqueFonte")
+
+  @@unique([empresaId, nome])
+  @@unique([empresaId, id])
+  @@index([empresaId, statusCiclo])
+  @@index([empresaId, tipoFonte, statusCiclo])
+}
+
+model CapacidadeFonteEstoque {
+  id             Int          @id @default(autoincrement())
+  empresaId      Int
+  fonteId        Int
+  codigo         String
+  suportada      Boolean      @default(false)
+  semanticaJson  String?
+  versao         String
+  observadaEm    DateTime     @default(now())
+  empresa        Empresa      @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fonte          FonteEstoque @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, fonteId, codigo, versao])
+  @@index([empresaId, fonteId, suportada])
+}
+
+model ExecucaoSincronizacaoEstoque {
+  id                Int             @id @default(autoincrement())
+  empresaId         Int
+  fonteId           Int
+  modo              StockSyncMode
+  estado            StockSyncStatus @default(PENDING)
+  startedAt         DateTime        @default(now())
+  finishedAt        DateTime?
+  cursorAntes       String?
+  cursorDepois      String?
+  snapshotGeneration String?
+  lidos             Int             @default(0)
+  aceitos           Int             @default(0)
+  rejeitados        Int             @default(0)
+  criados           Int             @default(0)
+  atualizados       Int             @default(0)
+  tombstoned        Int             @default(0)
+  warningsJson      String?
+  errorClass        String?
+  retryCount        Int             @default(0)
+  correlationId     String?
+  leaseOwner        String?
+  leaseExpiresAt    DateTime?
+  revision          Int             @default(1)
+  retentionUntil    DateTime
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  empresa           Empresa         @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fonte             FonteEstoque    @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  observacoes       ObservacaoEstoque[]
+  problemasQualidade ProblemaQualidadeEstoque[]
+  importacoes       ImportacaoEstoque[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId, fonteId, startedAt])
+  @@index([empresaId, estado, leaseExpiresAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model CheckpointSincronizacaoEstoque {
+  id                     Int          @id @default(autoincrement())
+  empresaId              Int
+  fonteId                Int
+  cursor                 String?
+  sourceGeneration       String?
+  lastSuccessfulSyncAt   DateTime?
+  lastFullSnapshotAt     DateTime?
+  lastIncrementalSyncAt  DateTime?
+  revision               Int          @default(1)
+  updatedAt              DateTime     @updatedAt
+  empresa                Empresa      @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fonte                  FonteEstoque @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, fonteId])
+  @@unique([empresaId, id])
+}
+
+model ProdutoEstoque {
+  id                       Int                       @id @default(autoincrement())
+  empresaId                Int
+  nomeExibicao             String
+  skuCanonico              String?
+  skuCanonicoConfirmado    Boolean                   @default(false)
+  barcodeCanonico          String?
+  barcodeCanonicoConfirmado Boolean                  @default(false)
+  unidadeCanonica          String
+  ativo                    Boolean                   @default(true)
+  metadataNamespacedJson   String?
+  revision                 Int                       @default(1)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  empresa                  Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  mapeamentosExternos      MapeamentoProdutoExterno[]
+  lotes                    LoteEstoque[]
+  saldos                   SaldoEstoque[]
+  avaliacoesRegraEstoque   AvaliacaoRegraEstoque[]
+  catalogosComerciais      CommercialCatalogProduct[]
+  ofertasProduto            ProductOffer[] @relation("ProductOfferStockProduct")
+
+  @@unique([empresaId, id])
+  @@index([empresaId, skuCanonico])
+  @@index([empresaId, barcodeCanonico])
+  @@index([empresaId, ativo])
+}
+
+// Commercial catalog is a tenant-scoped, customer-safe projection of a
+// canonical stock product.  It deliberately does not reuse ProdutoExterno or
+// EstoqueExterno: sellable availability is resolved from the E2 canonical
+// stock graph at request time.
+model CommercialCatalogProduct {
+  id                  Int           @id @default(autoincrement())
+  empresaId           Int
+  stockProductId      Int
+  title               String
+  shortDescription    String?
+  longDescription     String?
+  category            String?
+  brand               String?
+  model               String?
+  tagsJson            String        @default("[]")
+  synonymsJson        String        @default("[]")
+  attributesJson      String        @default("{}")
+  primaryImageUrl     String?
+  additionalMediaJson String?
+  commercialPrice     Decimal?
+  currency            String        @default("BRL")
+  priceStatus         String        @default("ON_REQUEST")
+  priceObservedAt     DateTime?
+  visibility          String        @default("HIDDEN")
+  sellabilityPolicy   String        @default("STOCK_CANONICAL_ONLY")
+  productUrl          String?
+  purchaseUrl         String?
+  allowedLinkDomain   String?
+  revision            Int           @default(1)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  archivedAt          DateTime?
+  empresa             Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  stockProduct        ProdutoEstoque @relation(fields: [empresaId, stockProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  offers              ProductOffer[]
+  interests           AICommerceProductInterest[] @relation("AICommerceInterestCatalogProduct")
+  opportunityDrafts   AICommerceOpportunityDraft[] @relation("AICommerceDraftCatalogProduct")
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, stockProductId])
+  @@index([empresaId, visibility, archivedAt])
+  @@index([empresaId, stockProductId])
+  @@index([empresaId, category, visibility])
+  @@index([empresaId, brand, visibility])
+  @@index([empresaId, revision])
+}
+
+// ProductOffer is an immutable, tenant/conversation-scoped snapshot.  Its
+// expiry and material versions are revalidated before any downstream action.
+model ProductOffer {
+  id                    String                    @id @default(cuid())
+  empresaId             Int
+  conversationId        Int?
+  customerId            Int?
+  catalogProductId      Int
+  stockProductId        Int
+  title                 String
+  shortDescription      String?
+  imageUrl              String?
+  price                 Decimal?
+  currency              String
+  availabilityStatus    String
+  availabilityLabel     String
+  commercialTermsJson   String                    @default("{}")
+  productUrl            String?
+  purchaseUrl           String?
+  allowedActionsJson    String                    @default("[]")
+  sourceFreshness       String
+  confidence            String
+  manualConfirmationRequired Boolean              @default(true)
+  createdAt             DateTime                  @default(now())
+  expiresAt             DateTime
+  catalogRevision       Int
+  stockMaterialVersion  Int?
+  policyVersion         String
+  correlationId         String?
+  status                String                    @default("ACTIVE")
+  empresa               Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversaCanal         ConversaCanal?            @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  cliente               Cliente?                  @relation("ProductOfferCustomer", fields: [empresaId, customerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogProduct        CommercialCatalogProduct  @relation(fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  stockProduct          ProdutoEstoque             @relation("ProductOfferStockProduct", fields: [empresaId, stockProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  interests             AICommerceProductInterest[] @relation("AICommerceInterestOffer")
+  opportunityDrafts     AICommerceOpportunityDraft[] @relation("AICommerceDraftOffer")
+  handoffs              AICommerceHandoff[] @relation("AICommerceHandoffOffer")
+
+  @@unique([empresaId, id])
+  @@index([empresaId, conversationId, createdAt])
+  @@index([empresaId, customerId, createdAt])
+  @@index([empresaId, catalogProductId, createdAt])
+  @@index([empresaId, expiresAt, status])
+}
+
+model AICommerceSettings {
+  id                       Int       @id @default(autoincrement())
+  empresaId                Int
+  enabled                  Boolean   @default(false)
+  mode                     String    @default("OFF")
+  mockEnabled              Boolean   @default(false)
+  allowedToolsJson         String    @default("[]")
+  maxTools                 Int       @default(5)
+  maxContextMessages       Int       @default(20)
+  maxProducts              Int       @default(3)
+  humanApprovalRequired    Boolean   @default(true)
+  catalogVisibilityPolicy String    @default("PUBLISHED")
+  exactQuantityPolicy     String    @default("HIDDEN")
+  stalePolicy             String    @default("NEEDS_CONFIRMATION")
+  noPricePolicy           String    @default("DO_NOT_QUOTE")
+  opportunityPolicy       String    @default("DRAFT_ONLY")
+  handoffPolicy           String    @default("HUMAN_ONLY")
+  retentionDays           Int       @default(30)
+  revision                Int       @default(1)
+  actorUsuarioId          Int?
+  correlationId           String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  empresa                 Empresa   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario            Usuario?  @relation("AICommerceSettingsActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@unique([empresaId])
+  @@index([empresaId, enabled, mode])
+  @@index([empresaId, revision])
+}
+
+model AICommerceRun {
+  id                String                    @id @default(cuid())
+  empresaId         Int
+  runId             String
+  conversationId    Int?
+  triggerMessageId  Int?
+  idempotencyKey    String
+  mode              String                    @default("OFF")
+  state             String                    @default("IDLE")
+  status            String                    @default("STARTED")
+  policyVersion     String                    @default("ai-commerce-policy.v1")
+  messageRevision   String?
+  correlationId     String?
+  eventJson         String                    @default("{}")
+  revision          Int                       @default(1)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  completedAt       DateTime?
+  retentionUntil    DateTime                  @default(now())
+  empresa           Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversation      ConversaCanal?            @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  triggerMessage    MensagemCanal?             @relation("AICommerceRunTriggerMessage", fields: [empresaId, triggerMessageId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  turns             AICommerceTurn[]
+  toolInvocations   AICommerceToolInvocation[]
+  decisions         AICommerceDecision[]
+  drafts            AICommerceDraft[]
+  policyDecisions   AICommercePolicyDecision[]
+  handoffs          AICommerceHandoff[]
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, runId])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, conversationId, createdAt])
+  @@index([empresaId, status, createdAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceTurn {
+  id                String                    @id @default(cuid())
+  empresaId         Int
+  runId             String
+  conversationId    Int?
+  turnNumber        Int                       @default(0)
+  state             String                    @default("DISCOVERY")
+  status            String                    @default("RECORDED")
+  decisionJson      String?
+  toolResultsJson   String?
+  latencyMs         Int?
+  correlationId     String?
+  eventJson         String                    @default("{}")
+  revision          Int                       @default(1)
+  occurredAt        DateTime                  @default(now())
+  retentionUntil    DateTime                  @default(now())
+  empresa           Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run               AICommerceRun             @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  conversation      ConversaCanal?            @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  toolInvocations   AICommerceToolInvocation[]
+  decisions         AICommerceDecision[]
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, runId, turnNumber])
+  @@index([empresaId, conversationId, occurredAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceToolInvocation {
+  id                    String          @id @default(cuid())
+  empresaId             Int
+  runId                 String?
+  turnId                String?
+  conversationId        Int?
+  name                  String          @default("unknown")
+  classification        String          @default("READ")
+  status                String          @default("RECORDED")
+  idempotencyKey        String?
+  inputJsonSanitized    String          @default("{}")
+  outputJsonSanitized   String?
+  errorCode             String?
+  latencyMs             Int?
+  correlationId         String?
+  eventJson             String          @default("{}")
+  revision              Int             @default(1)
+  occurredAt            DateTime        @default(now())
+  retentionUntil        DateTime        @default(now())
+  empresa               Empresa         @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run                   AICommerceRun?  @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  turn                  AICommerceTurn? @relation(fields: [empresaId, turnId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  conversation          ConversaCanal?  @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@index([empresaId, runId, occurredAt])
+  @@index([empresaId, name, status])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceDecision {
+  id                  String          @id @default(cuid())
+  empresaId           Int
+  runId               String
+  turnId              String?
+  conversationId      Int?
+  intent              String?
+  confidence          String?
+  nextAction          String?
+  missingInformationJson String?
+  requestedToolsJson  String?
+  draftResponse       String?
+  offerIdsJson        String?
+  handoffReason       String?
+  safetyFlagsJson     String?
+  policyFlagsJson     String?
+  decisionJson        String          @default("{}")
+  correlationId      String?
+  eventJson           String          @default("{}")
+  revision            Int             @default(1)
+  occurredAt          DateTime        @default(now())
+  retentionUntil      DateTime        @default(now())
+  empresa             Empresa         @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run                 AICommerceRun   @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  turn                AICommerceTurn? @relation(fields: [empresaId, turnId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  conversation        ConversaCanal? @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  drafts              AICommerceDraft[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId, runId, occurredAt])
+  @@index([empresaId, conversationId, occurredAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceDraft {
+  id                    String             @id @default(cuid())
+  empresaId             Int
+  runId                 String
+  conversationId        Int
+  decisionId            String?
+  status                String             @default("PENDING_APPROVAL")
+  textSanitized         String?
+  offersJson            String              @default("[]")
+  questionsJson         String              @default("[]")
+  actionsJson           String              @default("[]")
+  warningsJson          String              @default("[]")
+  requiresHumanApproval Boolean             @default(true)
+  conversationRevision  String?
+  revision              Int                 @default(1)
+  expiresAt             DateTime
+  approvedAt            DateTime?
+  rejectedAt            DateTime?
+  actorUsuarioId        Int?
+  correlationId         String?
+  eventJson             String              @default("{}")
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  retentionUntil        DateTime            @default(now())
+  empresa               Empresa             @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run                   AICommerceRun       @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  conversation          ConversaCanal       @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  decision              AICommerceDecision? @relation(fields: [empresaId, decisionId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario          Usuario?            @relation("AICommerceDraftAuditActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  policyDecisions       AICommercePolicyDecision[]
+  handoffs              AICommerceHandoff[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId, conversationId, status])
+  @@index([empresaId, expiresAt, status])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommercePolicyDecision {
+  id                String             @id @default(cuid())
+  empresaId         Int
+  runId             String
+  conversationId    Int?
+  draftId           String?
+  action            String             @default("UNSPECIFIED")
+  status            String             @default("RECORDED")
+  reasonCode        String?
+  detailsJson       String              @default("{}")
+  actorUsuarioId    Int?
+  correlationId     String?
+  eventJson         String              @default("{}")
+  revision          Int                 @default(1)
+  occurredAt        DateTime            @default(now())
+  retentionUntil    DateTime           @default(now())
+  empresa           Empresa             @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run               AICommerceRun       @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  conversation      ConversaCanal?      @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  draft             AICommerceDraft?    @relation(fields: [empresaId, draftId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario      Usuario?            @relation("AICommercePolicyActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@index([empresaId, runId, occurredAt])
+  @@index([empresaId, draftId, occurredAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceHandoff {
+  id                String             @id @default(cuid())
+  empresaId         Int
+  runId             String?
+  conversationId    Int?
+  draftId           String?
+  opportunityDraftId String?
+  offerId           String?
+  reason            String             @default("UNSPECIFIED")
+  summarySanitized  String?
+  queueKey          String?
+  status            String             @default("REQUESTED")
+  idempotencyKey    String?
+  actorUsuarioId    Int?
+  correlationId     String?
+  eventJson         String             @default("{}")
+  revision          Int                @default(1)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  retentionUntil    DateTime           @default(now())
+  empresa           Empresa            @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  run               AICommerceRun?     @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  conversation      ConversaCanal?     @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  draft             AICommerceDraft?   @relation(fields: [empresaId, draftId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  opportunityDraft  AICommerceOpportunityDraft? @relation("AICommerceOpportunityHandoff", fields: [empresaId, opportunityDraftId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  offer             ProductOffer?      @relation("AICommerceHandoffOffer", fields: [empresaId, offerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario      Usuario?           @relation("AICommerceHandoffActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, conversationId, status])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceProductInterest {
+  id                 String                    @id @default(cuid())
+  empresaId          Int
+  conversationId     Int
+  customerId         Int?
+  offerId            String
+  catalogProductId   Int
+  desiredQuantity    Decimal?
+  preferencesJson    String                    @default("{}")
+  status             String                    @default("REGISTERED")
+  source             String                    @default("HUMAN_APPROVED")
+  idempotencyKey     String
+  actorUsuarioId     Int?
+  correlationId      String?
+  revision           Int                       @default(1)
+  eventJson          String                    @default("{}")
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  retentionUntil     DateTime
+  empresa            Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversation       ConversaCanal             @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  customer           Cliente?                  @relation("AICommerceInterestCustomer", fields: [empresaId, customerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  offer              ProductOffer              @relation("AICommerceInterestOffer", fields: [empresaId, offerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogProduct     CommercialCatalogProduct  @relation("AICommerceInterestCatalogProduct", fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario       Usuario?                 @relation("AICommerceInterestActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, conversationId, status])
+  @@index([empresaId, offerId, createdAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model AICommerceOpportunityDraft {
+  id                 String                    @id @default(cuid())
+  empresaId          Int
+  conversationId     Int
+  customerId         Int?
+  primaryOfferId     String?
+  catalogProductId   Int?
+  offerIdsJson       String                    @default("[]")
+  summarySanitized   String
+  status             String                    @default("DRAFT")
+  idempotencyKey     String
+  actorUsuarioId     Int?
+  correlationId      String?
+  revision           Int                       @default(1)
+  eventJson          String                    @default("{}")
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  retentionUntil     DateTime
+  empresa            Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversation       ConversaCanal             @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  customer           Cliente?                  @relation("AICommerceDraftCustomer", fields: [empresaId, customerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  primaryOffer       ProductOffer?             @relation("AICommerceDraftOffer", fields: [empresaId, primaryOfferId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogProduct     CommercialCatalogProduct? @relation("AICommerceDraftCatalogProduct", fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario       Usuario?                 @relation("AICommerceDraftActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  handoffs            AICommerceHandoff[] @relation("AICommerceOpportunityHandoff")
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, conversationId, status])
+  @@index([empresaId, retentionUntil])
+}
+
+model MapeamentoProdutoExterno {
+  id                Int                @id @default(autoincrement())
+  empresaId         Int
+  fonteId           Int
+  sourceProductId   String
+  produtoEstoqueId  Int?
+  estado            StockMappingStatus @default(UNMATCHED)
+  evidenciaJson     String?
+  sourceVersion     String
+  revision          Int                @default(1)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  empresa           Empresa            @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fonte             FonteEstoque       @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  produtoEstoque    ProdutoEstoque?    @relation(fields: [empresaId, produtoEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([empresaId, fonteId, sourceProductId])
+  @@index([empresaId, produtoEstoqueId, estado])
+}
+
+model LocalEstoque {
+  id                 Int              @id @default(autoincrement())
+  empresaId          Int
+  fonteId            Int?
+  externalLocationId String?
+  nome               String
+  tipo               StockLocationType @default(UNKNOWN)
+  parentId           Int?
+  ativo              Boolean          @default(true)
+  revision           Int              @default(1)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  empresa            Empresa          @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fonte              FonteEstoque?    @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  pai                LocalEstoque?    @relation("LocalEstoqueHierarquia", fields: [empresaId, parentId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  filhos             LocalEstoque[]   @relation("LocalEstoqueHierarquia")
+  saldos             SaldoEstoque[]
+  avaliacoesRegraEstoque AvaliacaoRegraEstoque[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId, fonteId, externalLocationId])
+  @@index([empresaId, parentId])
+}
+
+model LoteEstoque {
+  id                 Int                     @id @default(autoincrement())
+  empresaId          Int
+  produtoEstoqueId   Int
+  fonteId            Int
+  sourceLotId        String?
+  codigoLote         String?
+  // ISO day strings are portable across SQLite/PostgreSQL. The precision
+  // enum tells whether the value is YYYY-MM-DD, YYYY-MM, YYYY or unknown.
+  validadeEm         String?
+  precisaoValidade   StockLotExpiryPrecision @default(UNKNOWN)
+  estado             StockLotStatus          @default(UNKNOWN)
+  sourceUpdatedAt    DateTime?
+  observedAt         DateTime                @default(now())
+  revision           Int                     @default(1)
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  empresa            Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  produtoEstoque     ProdutoEstoque          @relation(fields: [empresaId, produtoEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  fonte              FonteEstoque            @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  saldos             SaldoEstoque[]
+  avaliacoesRegraEstoque AvaliacaoRegraEstoque[]
+
+  @@unique([empresaId, id])
+  @@index([empresaId, produtoEstoqueId, estado])
+  @@index([empresaId, fonteId, sourceLotId])
+  @@index([empresaId, fonteId, codigoLote])
+  @@index([empresaId, validadeEm])
+}
+
+model SaldoEstoque {
+  id                        Int                     @id @default(autoincrement())
+  empresaId                 Int
+  produtoEstoqueId          Int
+  loteId                    Int?
+  localId                   Int?
+  fonteAutoritativaId       Int
+  unidade                   String
+  onHand                    Decimal                 @default(0)
+  reserved                  Decimal?
+  available                 Decimal?
+  quarantined               Decimal?
+  damaged                   Decimal?
+  inTransit                 Decimal?
+  semanticaDisponivel       StockAvailableSemantics @default(UNKNOWN)
+  quantityRelevantForExpiry Boolean                 @default(false)
+  sourceUpdatedAt           DateTime?
+  observedAt                DateTime                @default(now())
+  freshnessEstado           StockFreshnessState     @default(UNKNOWN)
+  dataConfidence            StockDataConfidence     @default(UNKNOWN)
+  sourceVersion             String
+  revision                  Int                     @default(1)
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+  empresa                   Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  produtoEstoque            ProdutoEstoque          @relation(fields: [empresaId, produtoEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  lote                      LoteEstoque?            @relation(fields: [empresaId, loteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  local                     LocalEstoque?           @relation(fields: [empresaId, localId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  fonteAutoritativa         FonteEstoque            @relation("SaldoEstoqueFonteAutoritativa", fields: [empresaId, fonteAutoritativaId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([empresaId, produtoEstoqueId])
+  @@index([empresaId, loteId])
+  @@index([empresaId, localId])
+  @@index([empresaId, fonteAutoritativaId])
+  @@index([empresaId, freshnessEstado, observedAt])
+}
+
+model ObservacaoEstoque {
+  id                 Int                   @id @default(autoincrement())
+  empresaId          Int
+  fonteId            Int
+  syncRunId          Int
+  sourceEntityType   String
+  sourceRecordId     String
+  sourceVersion      String
+  checksum           String
+  observedAt         DateTime              @default(now())
+  dataQuality        StockDataConfidence  @default(UNKNOWN)
+  warningsJson       String?
+  appliedAt          DateTime?
+  retentionUntil     DateTime
+  empresa            Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fonte              FonteEstoque          @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  syncRun            ExecucaoSincronizacaoEstoque  @relation(fields: [empresaId, syncRunId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, fonteId, sourceEntityType, sourceRecordId, sourceVersion])
+  @@index([empresaId, fonteId, checksum])
+  @@index([empresaId, retentionUntil])
+}
+
+model ProblemaQualidadeEstoque {
+  id                     Int                     @id @default(autoincrement())
+  empresaId              Int
+  fonteId                Int
+  // Source-level quality may exist before a specific synchronization run.
+  syncRunId              Int?
+  tipo                   String
+  severidade             String
+  targetRef              String?
+  estado                 StockQualityState       @default(OPEN)
+  firstSeenAt            DateTime                @default(now())
+  lastSeenAt             DateTime                @default(now())
+  resolvedAt             DateTime?
+  detailsSanitizedJson   String?
+  retentionUntil         DateTime
+  revision               Int                     @default(1)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  empresa                Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fonte                  FonteEstoque            @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  syncRun                ExecucaoSincronizacaoEstoque? @relation(fields: [empresaId, syncRunId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([empresaId, estado, lastSeenAt])
+  @@index([empresaId, fonteId, tipo])
+  @@index([empresaId, retentionUntil])
+}
+
+model EventoAuditoriaEstoque {
+  id                    Int                 @id @default(autoincrement())
+  empresaId             Int
+  actorType             StockAuditActorType
+  actorUsuarioId        Int?
+  actorSystemKey        String?
+  action                String
+  beforeJsonSanitized   String?
+  afterJsonSanitized    String?
+  correlationId         String?
+  createdAt             DateTime            @default(now())
+  empresa               Empresa             @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario          Usuario?            @relation("EventoAuditoriaEstoqueActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([empresaId, action, createdAt])
+  @@index([empresaId, actorUsuarioId, createdAt])
+}
+
+model EventoOutboxEstoque {
+  id                    Int                @id @default(autoincrement())
+  empresaId             Int
+  eventType             String
+  aggregateType         String
+  aggregateId           String
+  materialVersion       Int
+  payloadStructuredJson String?
+  status                StockOutboxStatus  @default(PENDING)
+  attempts              Int                @default(0)
+  availableAt           DateTime           @default(now())
+  leaseOwner            String?
+  leaseExpiresAt        DateTime?
+  processedAt           DateTime?
+  correlationId         String?
+  retentionUntil        DateTime
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  empresa               Empresa            @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, eventType, aggregateType, aggregateId, materialVersion])
+  @@index([empresaId, status, availableAt])
+  @@index([empresaId, leaseExpiresAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model ImportacaoEstoque {
+  id              Int                @id @default(autoincrement())
+  empresaId       Int
+  fonteId         Int
+  actorUsuarioId  Int
+  status          StockImportStatus  @default(PREVIEW)
+  schemaVersion   String
+  fileHash        String
+  safeFilename    String
+  byteSize        Int
+  rowCount        Int                @default(0)
+  acceptedCount   Int                @default(0)
+  rejectedCount   Int                @default(0)
+  idempotencyKey  String
+  correlationId   String?
+  revision        Int                @default(1)
+  expiresAt       DateTime
+  retentionUntil  DateTime
+  syncRunId       Int?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  empresa         Empresa            @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fonte           FonteEstoque       @relation(fields: [empresaId, fonteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  actorUsuario    Usuario            @relation("ImportacaoEstoqueActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  syncRun         ExecucaoSincronizacaoEstoque? @relation(fields: [empresaId, syncRunId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  linhas          LinhaImportacaoEstoque[]
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, fonteId, fileHash, schemaVersion])
+  @@index([empresaId, status, expiresAt])
+  @@index([empresaId, actorUsuarioId, createdAt])
+  @@index([empresaId, retentionUntil])
+}
+
+model LinhaImportacaoEstoque {
+  id                       Int                   @id @default(autoincrement())
+  empresaId                Int
+  importacaoId             Int
+  rowNumber                Int
+  rowChecksum              String
+  sourceRecordId           String
+  sourceVersion            String?
+  status                   StockImportRowStatus  @default(PENDING)
+  normalizedJsonSanitized  String?
+  warningsJson             String?
+  errorsJson               String?
+  appliedAt                DateTime?
+  retentionUntil           DateTime
+  revision                 Int                   @default(1)
+  empresa                  Empresa               @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  importacao               ImportacaoEstoque     @relation(fields: [empresaId, importacaoId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, importacaoId, rowNumber])
+  @@index([empresaId, importacaoId, rowChecksum])
+  @@index([empresaId, retentionUntil])
+}
+
+// E3 rule configuration/evidence. Evaluation reads only committed canonical
+// state; source payloads are never accepted as rule input.
+model ConfiguracaoRegraEstoque {
+  id                       Int      @id @default(autoincrement())
+  empresaId                Int
+  ruleType                 String
+  scopeType                String   @default("TENANT")
+  scopeKey                 String   @default("TENANT")
+  enabled                  Boolean  @default(false)
+  expiryWindowDays         Int?
+  freshnessSlaMinutes      Int?
+  timezone                 String?
+  requiredCapabilitiesJson String?
+  priorityBandsJson       String?
+  recipientPolicyJson     String?
+  suppressionPolicyJson   String?
+  revision                 Int      @default(1)
+  actorRef                 String?
+  correlationId            String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  empresa                  Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, ruleType, scopeType, scopeKey])
+  @@unique([empresaId, id])
+  @@index([empresaId, ruleType, enabled])
+  @@index([empresaId, updatedAt])
+}
+
+model OverrideEstoque {
+  id                       Int      @id @default(autoincrement())
+  empresaId                Int
+  ruleType                 String
+  targetType               String
+  targetId                 String
+  enabled                  Boolean?
+  thresholdJson            String?
+  freshnessSlaMinutes     Int?
+  priority                 String?
+  recipientPolicyJson     String?
+  revision                 Int      @default(1)
+  actorRef                 String?
+  correlationId            String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  empresa                  Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, ruleType, targetType, targetId])
+  @@unique([empresaId, id])
+  @@index([empresaId, ruleType, targetType, targetId])
+  @@index([empresaId, updatedAt])
+}
+
+model AvaliacaoRegraEstoque {
+  id                       Int       @id @default(autoincrement())
+  empresaId                Int
+  schemaVersion             String
+  ruleType                 String
+  sourceConnectionId       Int?
+  scopeJson                String?
+  produtoEstoqueId        Int?
+  loteEstoqueId           Int?
+  localEstoqueId          Int?
+  requiredCapabilitiesJson String?
+  capabilitiesObservedJson String?
+  enabledEffective         Boolean
+  thresholdJson            String?
+  evaluationTime           DateTime
+  tenantTimezone           String
+  freshnessRequirement     String?
+  freshnessObserved        String?
+  quantitySemantic         String?
+  quantityRelevant         Boolean?
+  expiryDate               String?
+  expiryPrecision          String?
+  matched                  Boolean
+  noMatchReason            String?
+  priority                 String?
+  occurrenceKey            String
+  materialVersion          Int
+  materialChange           Boolean       @default(false)
+  destinationJson          String?
+  resolutionCandidate      String?
+  suppressionPolicyJson    String?
+  confidence               String?
+  correlationId            String?
+  evaluatedAt              DateTime      @default(now())
+  retentionUntil           DateTime
+  empresa                  Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  produtoEstoque           ProdutoEstoque? @relation(fields: [empresaId, produtoEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  loteEstoque              LoteEstoque?  @relation(fields: [empresaId, loteEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  localEstoque             LocalEstoque? @relation(fields: [empresaId, localEstoqueId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  fonte                    FonteEstoque? @relation("AvaliacaoRegraEstoqueFonte", fields: [empresaId, sourceConnectionId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@index([empresaId, ruleType, evaluatedAt])
+  @@index([empresaId, occurrenceKey, materialVersion])
+  @@index([empresaId, matched, evaluatedAt])
+  @@index([empresaId, retentionUntil])
+}
+
 enum ChaveFuncionalidade {
   LEADS_COMMUNICATION
   SITE_LEAD_CAPTURE
@@ -1432,6 +2412,7 @@ enum ChaveFuncionalidade {
   MESSENGER_INBOUND
   EMAIL_INTEGRATION
   EMAIL_INBOUND
+  AI_COMMERCE
 }
 
 enum GatilhoAutomacao {
@@ -1727,4 +2708,141 @@ enum StatusImportacao {
   CONCLUIDO_COM_ERROS
   FALHOU
   CANCELADO
+}
+
+enum StockSourceType {
+  INTERNAL
+  GENERIC_API_PULL
+  GENERIC_WEBHOOK_PUSH
+  DATABASE_READONLY
+  FILE_IMPORT_CSV
+  FILE_IMPORT_XLSX
+  MANUAL_CONTROLLED
+  VENDOR_SPECIFIC
+}
+
+enum StockSourceStatus {
+  DRAFT
+  VALIDATING
+  ACTIVE
+  DEGRADED
+  AUTH_ERROR
+  DISABLED
+  ARCHIVED
+}
+
+enum StockSyncMode {
+  FULL
+  DELTA
+  WEBHOOK
+  IMPORT
+  MANUAL
+}
+
+enum StockSyncStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  RETRY_WAIT
+  FAILED
+  CANCELLED
+  QUARANTINED
+  SUPERSEDED
+}
+
+enum StockImportStatus {
+  PREVIEW
+  READY
+  PROCESSING
+  APPLIED
+  PARTIAL
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum StockImportRowStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  APPLIED
+  QUARANTINED
+}
+
+enum StockMappingStatus {
+  MATCHED
+  UNMATCHED
+  AMBIGUOUS
+  MANUALLY_CONFIRMED
+  REJECTED
+  ARCHIVED
+}
+
+enum StockFreshnessState {
+  FRESH
+  AGING
+  STALE
+  UNKNOWN
+  PARTIAL
+  SYNC_FAILED
+}
+
+enum StockDataConfidence {
+  HIGH
+  MEDIUM
+  LOW
+  UNKNOWN
+}
+
+enum StockLotStatus {
+  ACTIVE
+  EXHAUSTED
+  DISPOSED
+  ARCHIVED
+  UNKNOWN
+}
+
+enum StockLotExpiryPrecision {
+  DAY
+  MONTH
+  YEAR
+  UNKNOWN
+}
+
+enum StockLocationType {
+  DEPOT
+  STORE
+  ROOM
+  SHELF
+  VIRTUAL
+  QUARANTINE
+  UNKNOWN
+}
+
+enum StockAvailableSemantics {
+  EXPLICIT
+  DERIVED_ON_HAND_MINUS_RESERVED
+  UNAVAILABLE
+  UNKNOWN
+}
+
+enum StockQualityState {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  QUARANTINED
+}
+
+enum StockOutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  QUARANTINED
+}
+
+enum StockAuditActorType {
+  USER
+  SYSTEM
 }

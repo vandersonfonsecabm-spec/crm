@@ -1,0 +1,4 @@
+SOL_EXTRA_HIGH_E5_PRE_MIGRATION
+
+Official production pre-migration approval: NOT GRANTED.
+No production migration, deploy, flag or canary was attempted.

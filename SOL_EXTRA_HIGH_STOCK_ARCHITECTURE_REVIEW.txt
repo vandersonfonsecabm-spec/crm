@@ -1,0 +1,39 @@
+SOL EXTRA HIGH — REVISÃO FINAL DA ARQUITETURA DE ESTOQUE
+
+CURRENT_STATE_AS_OF=2026-08-23T17:51:15Z
+BASELINE_SHA=a5a280c3ebc54741ced02a77d4da5ec51834d583
+ARCHITECTURE_VERSION=E1-v1.0
+DOCUMENT_STATUS=FINAL
+
+ESCOPO REVIEW
+- baseline/tag/worktree e separação da branch histórica;
+- independência de Bling/fornecedor, mas acesso truthful por adapters;
+- modelo canônico, mapping, lotes, validade, quantidade, unidade e freshness;
+- full/delta/webhook/import/manual, idempotência, leases, retries, quarantine;
+- multi-source authority, tenant/security, secrets, audit e observabilidade;
+- rules → única H8, occurrence/lifecycle, recipients e deep links;
+- outbox/reliability, migration/rollout/rollback e estratégia de testes;
+- decisões de produto parametrizadas, sem feature inventada.
+
+EVIDÊNCIA
+- `META_STOCK_CURRENT_STATE_AND_ARCHITECTURE_MAP.md` separa runtime atual, histórico e proposta.
+- `META_STOCK_CANONICAL_DATA_MODEL.md` contém entidades, chaves, FKs, ERD e semântica.
+- `META_STOCK_SOURCE_ADAPTER_AND_SYNC_CONTRACT.md` contém capability/conformance/sync.
+- `META_STOCK_NOTIFICATION_H8_CONTRACT.md` reutiliza H8 sem segunda Central.
+- `META_STOCK_API_UI_SECURITY_CONTRACT.md` cobre API/UI/tenant/threat model.
+- `META_STOCK_MIGRATION_ROLLOUT_ROLLBACK_PLAN.md` mantém tudo aditivo/OFF.
+- `META_STOCK_TEST_STRATEGY_AND_DATASET.md` cobre unit, property, concurrency, security, E2E e performance.
+- ADR-001…ADR-012 e decision register estão completos.
+
+FINDINGS
+- CRITICAL aberto: 0
+- HIGH aberto: 0
+- MEDIUM acionável aberto: 0
+- LOW acionável aberto: 0
+- A limitação do produto legado sem `empresaId` direto foi convertida em guardrail explícito: não reutilizar como camada canônica sem migração tenant-safe futura.
+- A branch 618a contém logs/arquitetura antiga; foi preservada e classificada, não importada.
+
+VEREDITO
+SOL_EXTRA_HIGH_STOCK_ARCHITECTURE_VERDICT=STOCK_ARCHITECTURE_CONTRACT_APPROVED
+
+Este veredito aprova somente arquitetura/contratos/documentos. Não aprova implementação, migration, credencial, integração Bling, flag, deploy ou release.

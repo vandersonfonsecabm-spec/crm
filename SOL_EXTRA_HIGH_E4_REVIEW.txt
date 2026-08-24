@@ -1,0 +1,4 @@
+SOL_EXTRA_HIGH_E4_REVIEW
+
+Source UI: PASS on focal tests, lint and build.
+Browser screenshot/a11y visual gate: BLOCKED because no browser automation surface was callable in this environment.

@@ -529,7 +529,7 @@ export type CommunicationConversation = {
   lembrete?: { id: number; dataHora: string; status: string; titulo: string } | null;
 };
 
-export type NotificationTargetKind = "CONVERSATION" | "FOLLOW_UP" | "DEAL";
+export type NotificationTargetKind = "CONVERSATION" | "FOLLOW_UP" | "DEAL" | "ESTOQUE_LOTE" | "ESTOQUE_PRODUTO" | "ESTOQUE_FONTE";
 
 export type NotificationItem = {
   id: number;
@@ -545,6 +545,7 @@ export type NotificationItem = {
   nova: boolean;
   adiada: boolean;
   destino: { tipo: NotificationTargetKind; id: number; rota: string } | null;
+  estoque?: { tipo: NotificationTargetKind; id: number; subId?: number | null; snapshot?: unknown; materialVersion?: number | null; sourceObservedAt?: string | null; resolutionState?: string } | null;
 };
 
 export type NotificationListResponse = {
@@ -2079,6 +2080,27 @@ export async function consultarCatalogoComercial(params: HubCatalogQueryParams =
 export async function fetchHubProdutosEstoque(params: HubEstoqueQueryParams = {}) {
   const response = await requestApiGetAuthenticated<ApiPaginatedResponse<HubProdutoEstoque> | HubProdutoEstoque[]>("/hub/produtos" + toQueryString(params));
   return normalizePaginatedResponse(response, { page: params.page, limit: params.limit });
+}
+
+export type StockSource = { id: number; nome?: string; tipoFonte?: string; statusCiclo?: string; updatedAt?: string; [key: string]: unknown };
+export type StockProduct = { id: number; nomeExibicao?: string; skuCanonico?: string | null; barcodeCanonico?: string | null; unidadeCanonica?: string; revision?: number; updatedAt?: string };
+export type StockLot = { id: number; produtoEstoqueId?: number; fonteId?: number; codigoLote?: string | null; validadeEm?: string | null; precisaoValidade?: string; estado?: string; observedAt?: string };
+export type StockBalance = { id: number; produtoEstoqueId?: number; loteId?: number | null; onHand?: string | null; available?: string | null; freshnessEstado?: string | null; dataConfidence?: string | null; observedAt?: string | null };
+export type StockQualityIssue = { id: number; tipo?: string; severidade?: string; estado?: string; targetRef?: string; lastSeenAt?: string | null };
+export type StockImportPreview = { id: number; status?: string; rowCount?: number; acceptedCount?: number; rejectedCount?: number; revision?: number; safeFilename?: string | null; linhas?: Array<{ rowNumber?: number; status?: string; errorsJson?: unknown; warningsJson?: unknown }> };
+export type StockImportPreviewEnvelope = { replayed?: boolean; importacao?: StockImportPreview; capabilities?: unknown; source?: unknown };
+export type StockList<T> = { items: T[]; nextCursor?: string | null };
+
+export async function fetchStockSources() { return requestApiGetAuthenticated<StockList<StockSource>>("/estoque/fontes"); }
+export async function fetchStockProducts() { return requestApiGetAuthenticated<StockList<StockProduct>>("/estoque/produtos"); }
+export async function fetchStockLots() { return requestApiGetAuthenticated<StockList<StockLot>>("/estoque/lotes"); }
+export async function fetchStockSource(id: number) { return requestApiGetAuthenticated<{ item: StockSource }>(`/estoque/fontes/${id}`); }
+export async function fetchStockProduct(id: number) { return requestApiGetAuthenticated<{ item: StockProduct }>(`/estoque/produtos/${id}`); }
+export async function fetchStockLot(id: number) { return requestApiGetAuthenticated<{ item: StockLot }>(`/estoque/lotes/${id}`); }
+export async function fetchStockFreshness() { return requestApiGetAuthenticated<StockList<StockBalance>>("/estoque/freshness"); }
+export async function fetchStockQualityIssues() { return requestApiGetAuthenticated<StockList<StockQualityIssue>>("/estoque/problemas-qualidade"); }
+export async function previewStockCsv(payload: { fonteId: number; content: string; filename?: string; delimiter?: "comma" | "semicolon" }) {
+  return requestApiWrite<{ item: StockImportPreviewEnvelope }>("POST", "/estoque/importacoes/preview", payload);
 }
 
 export async function fetchQualidadeDados() {

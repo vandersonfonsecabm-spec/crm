@@ -1,0 +1,5 @@
+SOL_EXTRA_HIGH_E3_REVIEW
+
+Source evaluator/projection boundary: PASS.
+Only four approved rule types are active; reserved events are gated and H8 uses the existing Notificacao table.
+Live canary: NOT EXECUTED.

@@ -1,0 +1,35 @@
+LUNAMAX EXECUTOR SCORECARD — E1
+
+CURRENT_STATE_AS_OF=2026-08-23T17:51:15Z
+BASELINE_SHA=a5a280c3ebc54741ced02a77d4da5ec51834d583
+ARCHITECTURE_VERSION=E1-v1.0
+DOCUMENT_STATUS=FINAL
+
+GOAL=source-agnostic stock architecture feeding the existing H8
+WORKTREE=architecture/stock-source-agnostic-v1
+BASELINE_PRESERVED=PASS
+RUNTIME_MUTATION=NO
+DATABASE_MUTATION=NO
+DEPLOYMENT=NO
+HISTORICAL_WORK=archive/estoque-local-618a289 preserved/read-only
+REFERENCE_ADAPTER=FILE_IMPORT_CSV
+OUTBOX=PostgreSQL transactional outbox consumed by existing worker
+H8_INTEGRATION=single projection/lifecycle; no second Center
+TENANT_SECURITY=direct tenant key/FKs/context server-side
+THREAT_MODEL=PASS
+TEST_STRATEGY=PASS
+ADR_SET=ADR-001..ADR-012
+DECISION_REGISTER=PASS
+IMPLEMENTATION_HANDOFF=PASS
+DOCUMENTS=13 final architecture artifacts + skills report
+ARCH_CRITICAL_OPEN=0
+ARCH_HIGH_OPEN=0
+ARCH_MEDIUM_ACTIONABLE_OPEN=0
+ARCH_LOW_ACTIONABLE_OPEN=0
+FINAL_STATE=STOCK_ARCHITECTURE_CONTRACT_APPROVED
+
+OPTIMIZAÇÕES DE EXECUÇÃO
+- Reutilizada a evidência de freeze/runtime sem repetir auditoria global.
+- Queries de banco foram somente agregadas/read-only.
+- Erros de shell (`!`/globs, regex com parênteses, `head`, caminho do handoff) foram corrigidos focalmente antes de continuar.
+- Nenhum código histórico foi copiado e nenhum deploy/migration foi repetido.
