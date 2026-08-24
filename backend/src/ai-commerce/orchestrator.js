@@ -163,6 +163,7 @@ function createAICommerceOrchestrator({
     const approval = validateApproval({ ...input, mode: stored.mode, empresaId: stored.empresaId, conversationId: stored.conversationId, draftRevision: input.draftRevision || stored.revision });
     if (stored.empresaId !== approval.empresaId || stored.conversationId !== approval.conversationId) throw policyError("AI_DRAFT_CONTEXT_MISMATCH", "Rascunho fora do tenant ou conversa.", 403);
     if (String(input.conversationRevision || "") !== String(stored.conversationRevision || input.conversationRevision || "")) throw policyError("AI_DRAFT_CONVERSATION_CHANGED", "A conversa mudou antes da aprovacao.", 409);
+    if (stored.approvedAction || stored.rejected) throw policyError("AI_DRAFT_CONFLICT", "Rascunho alterado por outro aprovador.", 409);
     approvalLocks.add(draftId);
     const expectedRevision = Number(stored.revision) || 1;
     let claimed = false;

@@ -174,6 +174,17 @@ test("human can reject a draft without executing a tool", async () => {
   assert.equal(executed, 0);
 });
 
+test("sequential in-memory approval replay is rejected after the first effect", async () => {
+  let effects = 0;
+  const connection = { generateCommercialDecision: async () => ({ intent: "PRODUCT_SEARCH", confidence: 0.5, nextAction: "OFFER_READY", requestedTools: [], draftResponse: "Produto encontrado." }) };
+  const orchestrator = createAICommerceOrchestrator({ connection, featureGate: async () => true, toolRegistry: { execute: async () => { effects += 1; return {}; } } });
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 14, messageRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
+  const input = { draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 2, conversationRevision: "", approvalToken: "a", idempotencyKey: "a" };
+  await orchestrator.approve(input);
+  await assert.rejects(() => orchestrator.approve({ ...input, approvalToken: "b", idempotencyKey: "b", draftRevision: 2 }), { code: "AI_DRAFT_CONFLICT" });
+  assert.equal(effects, 1);
+});
+
 test("customer-safe sanitization serializes dates and Decimal prices", () => {
   class Decimal {
     constructor(value) { this.value = value; }

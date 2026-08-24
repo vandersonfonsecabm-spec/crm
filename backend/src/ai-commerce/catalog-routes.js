@@ -33,7 +33,10 @@ function mountCatalogRoutes({ app, prisma, authenticate, requireRole, enabledFor
 
   app.get("/catalogo-comercial", ...readGuard, route(async (req, res, empresaId) => res.json(await catalog.list({ empresaId, cursor: req.query.cursor, limit: req.query.limit, includeHidden: isManager(req), category: req.query.category, brand: req.query.brand, visibility: isManager(req) ? req.query.visibility : null }))));
   app.get("/catalogo-comercial/produtos", ...readGuard, route(async (req, res, empresaId) => res.json(await catalog.list({ empresaId, cursor: req.query.cursor, limit: req.query.limit, includeHidden: isManager(req), category: req.query.category, brand: req.query.brand, visibility: isManager(req) ? req.query.visibility : null }))));
-  app.get("/catalogo-comercial/produtos/:id", ...readGuard, route(async (req, res, empresaId) => res.json({ item: await catalog.get(empresaId, req.params.id, { includeHidden: isManager(req) }) })));
+  app.get("/catalogo-comercial/produtos/:id", ...readGuard, route(async (req, res, empresaId) => {
+    const product = await catalog.get(empresaId, req.params.id, { includeHidden: isManager(req) });
+    return res.json({ item: catalog.normalizePublic(product) });
+  }));
   app.post("/catalogo-comercial/produtos", ...writeGuard, route(async (req, res, empresaId) => res.status(201).json({ item: await catalog.create({ empresaId, data: req.body || {}, actorUsuarioId: req.auth?.usuarioId }) })));
   app.patch("/catalogo-comercial/produtos/:id", ...writeGuard, route(async (req, res, empresaId) => res.json({ item: await catalog.update({ empresaId, catalogProductId: req.params.id, data: req.body || {}, expectedRevision: req.body?.revision ?? null }) })));
   app.post("/catalogo-comercial/produtos/:id/publicar", ...writeGuard, route(async (req, res, empresaId) => res.json({ item: await catalog.publish({ empresaId, catalogProductId: req.params.id, expectedRevision: req.body?.revision ?? null }) })));
