@@ -21,6 +21,7 @@ const MAX_TURNS = 6;
 function createAICommerceOrchestrator({
   connection = new UnconfiguredCommerceAIConnection(),
   toolRegistry,
+  offerService,
   audit,
   prisma,
   featureGate,
@@ -111,7 +112,7 @@ function createAICommerceOrchestrator({
         await auditCall(audit, "recordTurn", { ...baseContext, turn: turn + 1, state, decision, toolResults });
       }
       if (turn >= MAX_TURNS) throw policyError("AI_TOOL_LOOP_LIMIT", "Loop de ferramentas excedeu o limite.", 422);
-      const allOffers = collectOffers(toolResults, input.offers);
+      const allOffers = await materializeOffers({ toolResults, explicitOffers: input.offers, offerService, context: baseContext, customerId: input.customerId });
       const draft = buildDraft(decision, allOffers, { empresaId, conversationId, conversationRevision: input.conversationRevision, mode, now });
       const result = freezeResult({
         schemaVersion: "AICommerceRun.v1",
@@ -204,6 +205,32 @@ function collectOffers(toolResults, explicit) {
   return values.slice(0, 3);
 }
 
+async function materializeOffers({ toolResults, explicitOffers, offerService, context, customerId }) {
+  const offers = collectOffers(toolResults, explicitOffers);
+  if (!offerService?.create) return offers;
+  const availabilityRows = Array.isArray(toolResults?.getSellableAvailability) ? toolResults.getSellableAvailability : [];
+  for (const row of availabilityRows.slice(0, 3)) {
+    if (!row || row.offerId || row.status === "NOT_SELLABLE" || row.availabilityStatus === "NOT_SELLABLE") continue;
+    const catalogProductId = row.catalogProductId;
+    if (!catalogProductId) continue;
+    try {
+      const offer = await offerService.create({
+        empresaId: context.empresaId,
+        catalogProductId,
+        conversationId: context.conversationId,
+        customerId: positiveId(customerId),
+        correlationId: context.correlationId,
+      });
+      if (offer) offers.push(offer);
+    } catch (error) {
+      // A stale/invalid offer is a policy signal, not a reason to invent a
+      // product or price. The draft remains grounded without that offer.
+      await auditCall(null, "recordPolicyDecision", { context, status: "OFFER_MATERIALIZATION_BLOCKED", errorCode: String(error?.code || "OFFER_FAILED") });
+    }
+  }
+  return offers.slice(0, 3);
+}
+
 function stateForDecision(decision) {
   const action = String(decision?.nextAction || "").toUpperCase();
   if (action.includes("CLARIFY")) return STATES.CLARIFYING;
@@ -254,4 +281,4 @@ async function auditCall(audit, method, payload) { if (audit && typeof audit[met
 function freezeResult(value) { return Object.freeze({ ...value }); }
 function positiveId(value) { const parsed = Number(value); return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null; }
 
-module.exports = { MAX_TURNS, createAICommerceOrchestrator, buildDraft, collectOffers, stateForDecision };
+module.exports = { MAX_TURNS, createAICommerceOrchestrator, buildDraft, collectOffers, materializeOffers, stateForDecision };
