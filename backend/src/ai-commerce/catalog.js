@@ -110,7 +110,8 @@ function createCommercialCatalogService({ prisma, clock = () => new Date(), poli
     if (!existing) throw new CommerceCatalogError("COMMERCE_CATALOG_PRODUCT_NOT_FOUND", "Produto comercial nao encontrado.", 404);
     if (expectedRevision !== null && Number(expectedRevision) !== existing.revision) throw new CommerceCatalogError("COMMERCE_CATALOG_CONFLICT", "Produto comercial foi alterado por outro operador.", 409);
     const rawNormalized = normalizeProductInput(data, { partial: true });
-    const normalized = validateUrls({ ...rawNormalized, allowedLinkDomain: rawNormalized.allowedLinkDomain ?? existing.allowedLinkDomain });
+    const mergedForValidation = validateUrls({ ...existing, ...rawNormalized, allowedLinkDomain: rawNormalized.allowedLinkDomain ?? existing.allowedLinkDomain });
+    const normalized = Object.fromEntries(Object.keys(rawNormalized).map((key) => [key, mergedForValidation[key]]));
     if (normalized.stockProductId !== undefined) await assertStockProduct(tenantId, normalized.stockProductId);
     const merged = { ...existing, ...normalized };
     if (merged.visibility === VISIBILITY.PUBLISHED && merged.sellabilityPolicy !== "STOCK_CANONICAL_ONLY") throw new CommerceCatalogError("COMMERCE_PUBLISH_POLICY_INVALID", "Produto publicado deve usar politica de estoque canonico.", 422);
