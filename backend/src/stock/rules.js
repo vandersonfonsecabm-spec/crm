@@ -80,7 +80,7 @@ function evaluateStockState({ ruleType, state = {}, config = {}, capabilities = 
   const observed = capabilityValues(capabilities);
   const missing = hasRequiredCapabilities(type, capabilities);
   const canonicalRevision = Number(state.revision || state.balance?.revision || state.lot?.revision) || 1;
-  const lifecycleMaterialOffset = type === "STOCK_LOT_EXPIRING" ? 1 : type === "STOCK_LOT_EXPIRED" ? 2 : 0;
+  const lifecycleMaterialOffset = type === "STOCK_LOT_EXPIRING" || type === "STOCK_DATA_STALE" ? 1 : type === "STOCK_LOT_EXPIRED" || type === "STOCK_SYNC_FAILED" ? 2 : 0;
   const base = {
     schemaVersion: RULE_SCHEMA_VERSION,
     ruleType: type,

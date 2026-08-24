@@ -48,6 +48,7 @@ test("stale and failed rules coalesce by source/error family and require explici
   const failed = evaluateStockState({ ruleType: "STOCK_SYNC_FAILED", state: { empresaId: 4, sourceConnectionId: 9, syncFailed: true, retriesExhausted: true, errorFamily: "TIMEOUT" }, config: { enabled: true }, capabilities: caps });
   assert.equal(stale.match, true);
   assert.equal(failed.match, true);
+  assert.notEqual(stale.materialVersion, failed.materialVersion);
   assert.match(stale.occurrenceKey, /STOCK_DATA_STALE/);
   assert.match(failed.occurrenceKey, /TIMEOUT/);
 });
