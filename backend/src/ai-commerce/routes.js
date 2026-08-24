@@ -48,6 +48,7 @@ function mountAICommerceRoutes({
 
   router.put("/settings", express.json({ limit: "32kb" }), async (req, res) => {
     try {
+      if (!["ADMIN", "GERENTE"].includes(req.auth?.papel)) return res.status(403).json({ error: { code: "AI_SETTINGS_FORBIDDEN", message: "Permissao insuficiente para configurar a fundacao." } });
       const item = await writeSettings({ prisma, settingsService, empresaId: req.aiCommerceContext.empresaId, actorUsuarioId: req.aiCommerceContext.actorUsuarioId, body: req.body || {} });
       return res.json({ item: publicSettings(item) });
     } catch (error) { return sendError(res, error); }
