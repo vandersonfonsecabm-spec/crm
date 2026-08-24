@@ -96,6 +96,13 @@ function validateCommercialDraft(draft, { empresaId, conversationId, offers = []
   });
   const text = sanitizeString(draft.text, 2000);
   if (containsForbiddenOutput(text)) throw policyError("AI_RESPONSE_POLICY_BLOCKED", "Resposta contem informacao interna ou envio automatico.", 422);
+  if (/\bR\$\s*\d|\bUSD\s*\d|\bEUR\s*\d/i.test(text) && !productOffers.some((offer) => offer.price !== null && offer.price !== undefined)) {
+    throw policyError("AI_RESPONSE_PRICE_NOT_GROUNDED", "Preco da resposta nao possui oferta validada.", 422);
+  }
+  if (/(dispon[ií]vel|em estoque|tem estoque)/i.test(text)) {
+    const grounded = productOffers.some((offer) => ["AVAILABLE", "LOW_AVAILABILITY"].includes(String(offer.availabilityStatus || "").toUpperCase()));
+    if (!grounded) throw policyError("AI_RESPONSE_AVAILABILITY_NOT_GROUNDED", "Disponibilidade da resposta nao possui evidencia valida.", 422);
+  }
   return Object.freeze({
     schemaVersion: "CommerceAssistantDraft.v1",
     draftId: sanitizeString(draft.draftId, 160),
