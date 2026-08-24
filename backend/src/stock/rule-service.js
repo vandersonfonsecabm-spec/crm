@@ -162,11 +162,21 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
     const configByType = new Map(configs.map((config) => [config.ruleType, config]));
     const overrideByKey = new Map(overrides.map((override) => [`${override.ruleType}:${override.targetType}:${override.targetId}`, override]));
     const sourceScopeIds = [...new Set(sourceRows.map((row) => Number(row.id)).filter((id) => Number.isSafeInteger(id) && id > 0))];
-    const [checkpointRows, recentRuns, notificationRows, sourceOutboxRows] = await Promise.all([
+    const notificationMaxPromise = sourceScopeIds.length && typeof prisma.notificacao?.groupBy === "function"
+      ? prisma.notificacao.groupBy({ by: ["stockTargetId"], where: { empresaId: tenantId, stockTargetType: "ESTOQUE_FONTE", stockTargetId: { in: sourceScopeIds } }, _max: { stockMaterialVersion: true } })
+      : sourceScopeIds.length && typeof prisma.notificacao?.findFirst === "function"
+        ? Promise.all(sourceScopeIds.map((sourceId) => prisma.notificacao.findFirst({ where: { empresaId: tenantId, stockTargetType: "ESTOQUE_FONTE", stockTargetId: sourceId }, orderBy: { stockMaterialVersion: "desc" }, select: { stockTargetId: true, stockMaterialVersion: true } })))
+        : Promise.resolve([]);
+    const sourceOutboxMaxPromise = sourceScopeIds.length && typeof prisma.eventoOutboxEstoque?.groupBy === "function"
+      ? prisma.eventoOutboxEstoque.groupBy({ by: ["aggregateId"], where: { empresaId: tenantId, aggregateType: "FonteEstoque", aggregateId: { in: sourceScopeIds.map(String) } }, _max: { materialVersion: true } })
+      : sourceScopeIds.length && typeof prisma.eventoOutboxEstoque?.findFirst === "function"
+        ? Promise.all(sourceScopeIds.map((sourceId) => prisma.eventoOutboxEstoque.findFirst({ where: { empresaId: tenantId, aggregateType: "FonteEstoque", aggregateId: String(sourceId) }, orderBy: { materialVersion: "desc" }, select: { aggregateId: true, materialVersion: true } })))
+        : Promise.resolve([]);
+    const [checkpointRows, recentRuns, notificationMaxRows, sourceOutboxMaxRows] = await Promise.all([
       sourceScopeIds.length && typeof prisma.checkpointSincronizacaoEstoque?.findMany === "function" ? prisma.checkpointSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } } }) : [],
       sourceScopeIds.length && typeof prisma.execucaoSincronizacaoEstoque?.findMany === "function" ? prisma.execucaoSincronizacaoEstoque.findMany({ where: { empresaId: tenantId, fonteId: { in: sourceScopeIds } }, orderBy: [{ startedAt: "desc" }, { id: "desc" }] }) : [],
-      sourceScopeIds.length && typeof prisma.notificacao?.findMany === "function" ? prisma.notificacao.findMany({ where: { empresaId: tenantId, stockTargetType: "ESTOQUE_FONTE", stockTargetId: { in: sourceScopeIds } }, select: { stockTargetId: true, stockMaterialVersion: true } }) : [],
-      sourceScopeIds.length && typeof prisma.eventoOutboxEstoque?.findMany === "function" ? prisma.eventoOutboxEstoque.findMany({ where: { empresaId: tenantId, aggregateType: "FonteEstoque", aggregateId: { in: sourceScopeIds.map(String) } }, select: { aggregateId: true, materialVersion: true } }) : [],
+      notificationMaxPromise,
+      sourceOutboxMaxPromise,
     ]);
     const checkpointBySource = new Map(checkpointRows.map((row) => [row.fonteId, row]));
     const latestRunBySource = new Map();
@@ -179,8 +189,8 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
       list.push(value);
       durableVersionsBySource.set(Number(sourceId), list);
     };
-    for (const row of notificationRows) recordDurableVersion(row.stockTargetId, row.stockMaterialVersion);
-    for (const row of sourceOutboxRows) recordDurableVersion(Number(row.aggregateId), row.materialVersion);
+    for (const row of notificationMaxRows) if (row) recordDurableVersion(row.stockTargetId, row._max?.stockMaterialVersion ?? row.stockMaterialVersion);
+    for (const row of sourceOutboxMaxRows) if (row) recordDurableVersion(Number(row.aggregateId), row._max?.materialVersion ?? row.materialVersion);
     const pageBalances = balances.slice(0, safeLimit);
     const stateItems = pageBalances.map((balance) => ({ balance, state: {
         empresaId: tenantId,
