@@ -213,16 +213,23 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         if (eventType === "StockRuleResolved.v1" && !["QUANTITY_NOT_POSITIVE", "OUTSIDE_WINDOW", "FRESHNESS_WITHIN_SLA", "RETRIES_NOT_EXHAUSTED"].includes(effectiveEvaluation.noMatchReason)) eventType = null;
         if (eventType === "StockRuleResolved.v1" && ruleType === "STOCK_SYNC_FAILED" && state.latestRunHealthy !== true) eventType = null;
         if (stableSameMatch) eventType = null;
-        const stableNoMatch = !effectiveEvaluation.match && previous?.matched === false && previous.materialChange === true && eventType === null;
+        const identicalNoMatch = !effectiveEvaluation.match && previous?.matched === false && Number(previous.materialVersion || 0) === Number(effectiveEvaluation.materialVersion || 0) && previous.noMatchReason === effectiveEvaluation.noMatchReason && previous.freshnessObserved === effectiveEvaluation.freshnessObserved && previous.quantityRelevant === effectiveEvaluation.quantityRelevant;
+        const stableNoMatch = identicalNoMatch && eventType === null;
         const nonEffectiveLifecycleNoMatch = balance && !effectiveEvaluation.match && ((ruleType === "STOCK_LOT_EXPIRED" && effectiveEvaluation.noMatchReason === "NOT_EXPIRED") || (ruleType === "STOCK_LOT_EXPIRING" && effectiveEvaluation.noMatchReason === "ALREADY_EXPIRED"));
         const skipEvaluationPersist = stableSameMatch || stableNoMatch || nonEffectiveLifecycleNoMatch;
         const event = eventType ? eventForEvaluation(evaluationWithChange, eventType, now) : null;
         const projectionEvent = eventType ? eventForEvaluation(evaluationWithChange, "StockProjectionRequested.v1", now) : null;
         const extraResolutions = !balance && ruleType === "STOCK_SYNC_FAILED" && state.latestRunHealthy === true
-          ? (state.openSyncFailures || []).filter((failure) => failure.occurrenceKey !== effectiveEvaluation.occurrenceKey).map((failure) => {
-            const resolution = { ...evaluationWithChange, match: false, noMatchReason: "RETRIES_NOT_EXHAUSTED", occurrenceKey: failure.occurrenceKey, materialVersion: Math.max(Number(failure.materialVersion || 0) + 1, Number(evaluationWithChange.materialVersion || 1)), materialChange: true, correlationId: failure.correlationId || evaluationWithChange.correlationId };
+          ? (() => {
+            const usedVersions = new Set([Number(evaluationWithChange.materialVersion || 1)]);
+            return (state.openSyncFailures || []).filter((failure) => failure.occurrenceKey !== effectiveEvaluation.occurrenceKey).map((failure) => {
+            let materialVersion = Math.max(Number(failure.materialVersion || 0) + 1, Number(evaluationWithChange.materialVersion || 1));
+            while (usedVersions.has(materialVersion)) materialVersion += 1;
+            usedVersions.add(materialVersion);
+            const resolution = { ...evaluationWithChange, match: false, noMatchReason: "RETRIES_NOT_EXHAUSTED", occurrenceKey: failure.occurrenceKey, materialVersion, materialChange: true, correlationId: failure.correlationId || evaluationWithChange.correlationId };
             return { data: evaluationData(resolution, retentionUntil), event: eventForEvaluation(resolution, "StockRuleResolved.v1", now), projectionEvent: eventForEvaluation(resolution, "StockProjectionRequested.v1", now) };
-          })
+            });
+          })()
           : [];
         const apply = async (tx) => {
           if (!skipEvaluationPersist) await tx.avaliacaoRegraEstoque.create({ data });
