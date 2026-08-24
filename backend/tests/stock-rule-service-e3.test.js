@@ -64,3 +64,36 @@ test("rule service evaluates stale state at source scope even without balances",
   assert.equal(result.matched, 1);
   assert.ok(prisma.evaluations.some((row) => row.ruleType === "STOCK_DATA_STALE" && row.matched === true));
 });
+
+test("expiry lifecycle emits one effective occurrence and resolves only after quantity goes zero", async () => {
+  const evaluations = [];
+  const outbox = [];
+  const state = { onHand: "2.000000" };
+  const prisma = {
+    saldoEstoque: { findMany: async () => [{ id: 1, empresaId: 3, produtoEstoqueId: 10, loteId: 11, localId: 12, fonteAutoritativaId: 2, onHand: state.onHand, quantityRelevantForExpiry: true, semanticaDisponivel: "DECLARED", freshnessEstado: "FRESH", dataConfidence: "HIGH", revision: 1, lote: { id: 11, validadeEm: "2026-08-30", precisaoValidade: "DAY", revision: 1 }, local: { id: 12, nome: "A" }, produtoEstoque: { id: 10, nomeExibicao: "Produto" }, fonteAutoritativa: { id: 2, nome: "CSV", statusCiclo: "ACTIVE" } }] },
+    configuracaoRegraEstoque: { findMany: async () => [
+      { ruleType: "STOCK_LOT_EXPIRING", enabled: true, expiryWindowDays: 7, scopeType: "TENANT", scopeKey: "TENANT" },
+      { ruleType: "STOCK_LOT_EXPIRED", enabled: true, scopeType: "TENANT", scopeKey: "TENANT" },
+    ] },
+    capacidadeFonteEstoque: { findMany: async () => ["LOT_IDENTIFIER", "EXPIRATION_DATE", "ON_HAND_QUANTITY", "UNIT_OF_MEASURE"].map((codigo) => ({ fonteId: 2, codigo, suportada: true })) },
+    fonteEstoque: { findMany: async () => [] },
+    checkpointSincronizacaoEstoque: { findMany: async () => [] },
+    execucaoSincronizacaoEstoque: { findMany: async () => [] },
+    overrideEstoque: { findMany: async () => [] },
+    avaliacaoRegraEstoque: {
+      findFirst: async ({ where }) => [...evaluations].reverse().find((row) => row.empresaId === where.empresaId && row.occurrenceKey === where.occurrenceKey && row.ruleType === where.ruleType) || null,
+      create: async ({ data }) => { const row = { id: evaluations.length + 1, ...data }; evaluations.push(row); return row; },
+    },
+    eventoOutboxEstoque: { create: async ({ data }) => { outbox.push(data); return data; }, findFirst: async () => null },
+  };
+  prisma.$transaction = async (callback) => callback(prisma);
+  const env = { STOCK_DOMAIN_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "3" };
+  const service = createStockRuleService({ prisma, env });
+  await service.evaluateTenant(3, { now: new Date("2026-08-23T12:00:00Z") });
+  assert.equal(outbox.filter((row) => row.eventType === "StockRuleResolved.v1").length, 0);
+  await service.evaluateTenant(3, { now: new Date("2026-08-31T12:00:00Z") });
+  assert.equal(outbox.filter((row) => row.eventType === "StockRuleResolved.v1").length, 0);
+  state.onHand = "0.000000";
+  await service.evaluateTenant(3, { now: new Date("2026-09-01T12:00:00Z") });
+  assert.equal(outbox.filter((row) => row.eventType === "StockRuleResolved.v1").length, 1);
+});

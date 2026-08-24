@@ -154,7 +154,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
     }
     let evaluated = 0; let matched = 0; let resolved = 0;
     for (const { balance, state } of stateItems) {
-      const ruleTypes = balance ? ["STOCK_LOT_EXPIRING", "STOCK_LOT_EXPIRED"] : ["STOCK_DATA_STALE", "STOCK_SYNC_FAILED"];
+      const ruleTypes = balance ? ["STOCK_LOT_EXPIRED", "STOCK_LOT_EXPIRING"] : ["STOCK_DATA_STALE", "STOCK_SYNC_FAILED"];
       for (const ruleType of ruleTypes) {
         const baseConfig = configByType.get(ruleType) || { ruleType, enabled: false };
         const targetType = state.loteEstoqueId ? "ESTOQUE_LOTE" : state.produtoEstoqueId ? "ESTOQUE_PRODUTO" : "ESTOQUE_FONTE";
@@ -174,11 +174,13 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         evaluated += 1;
         if (evaluation.match) matched += 1;
         const retentionUntil = new Date(now.getTime() + DEFAULT_RETENTION_DAYS * 86400000);
-        const previous = await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: evaluation.occurrenceKey }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] });
+        const previous = await prisma.avaliacaoRegraEstoque.findFirst({ where: { empresaId: tenantId, occurrenceKey: evaluation.occurrenceKey, ruleType }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] });
         const materialChange = Boolean(previous && previous.materialVersion !== evaluation.materialVersion);
         const evaluationWithChange = { ...evaluation, materialChange };
         const data = evaluationData(evaluationWithChange, retentionUntil);
-        const eventType = evaluation.match ? "StockRuleMatched.v1" : (previous?.matched ? "StockRuleResolved.v1" : null);
+        let eventType = evaluation.match ? "StockRuleMatched.v1" : (previous?.matched ? "StockRuleResolved.v1" : null);
+        if (balance && ruleType === "STOCK_LOT_EXPIRED" && !evaluation.match && evaluation.noMatchReason === "NOT_EXPIRED") eventType = null;
+        if (balance && ruleType === "STOCK_LOT_EXPIRING" && !evaluation.match && evaluation.noMatchReason === "ALREADY_EXPIRED") eventType = null;
         const event = eventType ? eventForEvaluation(evaluationWithChange, eventType, now) : null;
         const projectionEvent = eventType ? eventForEvaluation(evaluationWithChange, "StockProjectionRequested.v1", now) : null;
         const apply = async (tx) => {

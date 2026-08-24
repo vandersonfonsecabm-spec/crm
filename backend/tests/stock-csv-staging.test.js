@@ -66,7 +66,7 @@ test("preview, replay por idempotencia, confirmacao CAS e staging duravel nao pe
         schemaVersion: "stock-csv.v1",
         byteSize: 42,
         fileHash: "a".repeat(64),
-        capabilities: { PRODUCT_IDENTITY: true },
+        capabilities: { PRODUCT_IDENTITY: true, UNIT_OF_MEASURE: true },
         rowCount: 2,
         acceptedCount: 1,
         rejectedCount: 1,

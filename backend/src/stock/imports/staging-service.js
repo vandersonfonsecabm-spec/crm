@@ -109,7 +109,7 @@ function createStockImportService({
             sourceVersion: line.sourceVersion,
             status: line.status,
             normalizedJsonSanitized: line.normalized ? JSON.stringify(line.normalized) : null,
-            warningsJson: JSON.stringify(line.warnings),
+            warningsJson: JSON.stringify({ items: line.warnings, capabilityManifest: parsed.capabilities }),
             errorsJson: JSON.stringify(line.errors),
             retentionUntil,
             revision: 1,
@@ -467,7 +467,7 @@ function safeJson(value) {
   if (!value) return [];
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed : Array.isArray(parsed?.items) ? parsed.items : [];
   } catch {
     return [];
   }
@@ -476,7 +476,9 @@ function safeJson(value) {
 async function promoteCapabilities(tx, { empresaId, fonteId, lines, now }) {
   if (typeof tx?.capacidadeFonteEstoque?.upsert !== "function") return;
   const values = { PRODUCT_IDENTITY: false, SOURCE_VERSION: false, LOT_IDENTIFIER: false, EXPIRATION_DATE: false, LOCATION: false, ON_HAND_QUANTITY: false, RESERVED_QUANTITY: false, AVAILABLE_QUANTITY: false, QUARANTINED_QUANTITY: false, UNIT_OF_MEASURE: false, SOURCE_UPDATED_AT: false, IMPORT_BATCH: true };
+  let manifest = null;
   for (const line of lines || []) {
+    try { const metadata = line.warningsJson ? JSON.parse(line.warningsJson) : null; if (metadata?.capabilityManifest) manifest = metadata.capabilityManifest; } catch {}
     let normalized = null;
     try { normalized = line.normalizedJsonSanitized ? JSON.parse(line.normalizedJsonSanitized) : null; } catch { normalized = null; }
     if (!normalized) continue;
@@ -492,6 +494,9 @@ async function promoteCapabilities(tx, { empresaId, fonteId, lines, now }) {
     if (quantities.quarantined !== null && quantities.quarantined !== undefined) values.QUARANTINED_QUANTITY = true;
     if (normalized.unit || normalized.unitOfMeasure) values.UNIT_OF_MEASURE = true;
     if (normalized.sourceUpdatedAt) values.SOURCE_UPDATED_AT = true;
+  }
+  if (manifest && typeof manifest === "object") {
+    for (const codigo of Object.keys(values)) if (typeof manifest[codigo] === "boolean") values[codigo] = manifest[codigo];
   }
   const semantics = { quantityRelevantForExpiry: values.ON_HAND_QUANTITY, quantitySemantic: values.ON_HAND_QUANTITY ? "ON_HAND" : "UNKNOWN", promotedAt: now.toISOString() };
   for (const [codigo, suportada] of Object.entries(values)) {

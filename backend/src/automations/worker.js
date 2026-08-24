@@ -185,8 +185,9 @@ function startAutomationWorker({
       try {
         const stockResult = await stockWorker.processDue({ now, limit: config.batchSize, leaseOwner: workerId, leaseMs: config.leaseMs });
         if (Array.isArray(stockResult?.failedTenants) && stockResult.failedTenants.length) {
-          stockFailed = true;
           eventLogger.error("worker_poll_error", new Error("STOCK_TENANT_CYCLE_PARTIAL_FAILURE"), { durationMs: elapsedMs(startedAt), subsystem: "stock_core", failedTenantCount: stockResult.failedTenants.length });
+          const activeTenants = Number(stockResult.tenants || 0);
+          stockFailed = activeTenants > 0 && stockResult.failedTenants.length >= activeTenants;
         }
       } catch (error) {
         stockFailed = true;
