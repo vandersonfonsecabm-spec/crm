@@ -132,8 +132,10 @@ test("customer-safe sanitization serializes dates and Decimal prices", () => {
     constructor(value) { this.value = value; }
     toJSON() { return this.value; }
   }
-  const safe = sanitizeData({ price: new Decimal("1499.90"), expiresAt: new Date("2026-08-24T12:00:00Z") });
+  const prismaDecimalShape = { s: 1, e: 3, d: [1499, 9000000], toJSON: () => "1499.90", toString: () => "1499.90" };
+  const safe = sanitizeData({ price: new Decimal("1499.90"), prismaDecimalShape, expiresAt: new Date("2026-08-24T12:00:00Z") });
   assert.equal(safe.price, "1499.90");
+  assert.equal(typeof safe.prismaDecimalShape, "string");
   assert.equal(safe.expiresAt, "2026-08-24T12:00:00.000Z");
 });
 

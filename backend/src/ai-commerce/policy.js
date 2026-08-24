@@ -189,7 +189,7 @@ function sanitizeCustomer(value) {
 function sanitizeData(value, depth = 0) {
   if (depth > 4 || value === null || value === undefined) return value ?? null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
-  if (value && typeof value === "object" && (value.constructor?.name === "Decimal" || value.constructor?.name === "PrismaDecimal")) {
+  if (value && typeof value === "object" && isDecimalLike(value)) {
     return typeof value.toJSON === "function" ? String(value.toJSON()) : String(value);
   }
   if (typeof value === "string") return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").slice(0, 4000);
@@ -197,6 +197,13 @@ function sanitizeData(value, depth = 0) {
   if (Array.isArray(value)) return value.slice(0, 30).map((item) => sanitizeData(item, depth + 1));
   if (typeof value === "object") return Object.fromEntries(Object.keys(value).slice(0, 80).map((key) => [/password|token|secret|cookie|authorization|credential|database|dsn|chain.?of.?thought|prompt/i.test(key) ? key : String(key).slice(0, 120), /password|token|secret|cookie|authorization|credential|database|dsn|chain.?of.?thought|prompt/i.test(key) ? "[redacted]" : sanitizeData(value[key], depth + 1)]));
   return null;
+}
+
+function isDecimalLike(value) {
+  const keys = Object.keys(value || {});
+  return value.constructor?.name === "Decimal"
+    || value.constructor?.name === "PrismaDecimal"
+    || (keys.includes("s") && keys.includes("e") && keys.includes("d") && Array.isArray(value.d));
 }
 
 function sanitizeString(value, max) { return String(value || "").replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, max); }
