@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowUpRight, Bot, CheckCircle2, Clock3, Handshake, MessageSquareText, RefreshCw, ShieldAlert, Sparkles, UserRound, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Bot, CheckCircle2, Clock3, Handshake, MessageSquareText, ShieldAlert, Sparkles, UserRound, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ApiHttpError } from "../../services/crmApi";
 import { approveAICommerceDraft, rejectAICommerceDraft, registerAICommerceInterest, runAICommerceAssistant } from "../../services/aiCommerceApi";
