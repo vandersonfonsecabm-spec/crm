@@ -3,7 +3,7 @@
 | Claim | Status | Evidence |
 |---|---|---|
 | E2_SOURCE_IDENTITY | PASS | integrated HEAD `5c286e7` ancestor/worktree |
-| E2_STOCK_CORE_VALIDATED | PASS (source/isolated SQL) | final code checkpoint `efcfc5f`; 39 stock-focused backend tests; Neon disposable SQL rehearsal |
+| E2_STOCK_CORE_VALIDATED | PASS (source/isolated SQL) | final code checkpoint `5068dab5`; 42 stock-focused backend tests; Neon disposable SQL rehearsal |
 | POSTGRES_EMPTY_REHEARSAL | PASS (SQL-level isolated) | Disposable Neon branch: 13 migration packages, 70 tables, 101 stock indexes, 45 stock FKs; branch deleted |
 | POSTGRES_RESTORE_REHEARSAL | PARTIAL | prior synthetic representative branch evidence; no official dump/restore |
 | E2_POSTGRES_FUNCTIONAL | PASS (SQL-level) | disposable PostgreSQL schema assertions and same-tenant insert |
