@@ -89,12 +89,12 @@ function createCommercialToolRegistry({
     try {
       result = await handlers.get(name)(safeInput, safeContext);
     } catch (error) {
-      await recordAudit(audit, "tool", { name, context: safeContext, input: safeInput, status: "FAILED", errorCode: String(error?.code || "TOOL_FAILED"), durationMs: Date.now() - startedAt });
+      await recordAudit(audit, "tool", { name, classification: definition.classification, context: safeContext, input: safeInput, status: "FAILED", errorCode: String(error?.code || "TOOL_FAILED"), durationMs: Date.now() - startedAt });
       throw error;
     }
     const normalizedResult = name === "searchCommercialCatalog" ? normalizeSearchResult(result) : result;
     const safeResult = sanitizeData(normalizedResult);
-    await recordAudit(audit, "tool", { name, context: safeContext, input: safeInput, output: safeResult, status: "SUCCEEDED", durationMs: Date.now() - startedAt });
+    await recordAudit(audit, "tool", { name, classification: definition.classification, context: safeContext, input: safeInput, output: safeResult, status: "SUCCEEDED", durationMs: Date.now() - startedAt });
     return safeResult;
   }
 

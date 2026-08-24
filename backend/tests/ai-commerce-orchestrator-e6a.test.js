@@ -8,6 +8,7 @@ const {
 } = require("../src/ai-commerce/connection");
 const { createCommercialToolRegistry } = require("../src/ai-commerce/tools");
 const { createAICommerceOrchestrator } = require("../src/ai-commerce/orchestrator");
+const { createAICommerceAudit } = require("../src/ai-commerce/audit");
 const { MODES, buildSanitizedContext, isAllowedHttpsUrl } = require("../src/ai-commerce/policy");
 const { FEATURE_KEYS, isGlobalFeatureEnabled } = require("../src/tenant-features/service");
 
@@ -96,4 +97,19 @@ test("AI feature gate is globally fail-closed by default", () => {
   assert.equal(FEATURE_KEYS.AI_COMMERCE, "AI_COMMERCE");
   assert.equal(isGlobalFeatureEnabled(FEATURE_KEYS.AI_COMMERCE, {}), false);
   assert.equal(isGlobalFeatureEnabled(FEATURE_KEYS.AI_COMMERCE, { AI_COMMERCE_ENABLED: "true" }), true);
+});
+
+test("audit maps required tenant-scoped run fields and redacts prompt data", async () => {
+  const writes = [];
+  const model = {
+    findFirst: async () => null,
+    create: async ({ data }) => { writes.push(data); return data; },
+  };
+  const audit = createAICommerceAudit({ prisma: { aICommerceRun: model }, logger: { info() {}, warn() {} } });
+  await audit.recordRunStarted({ empresaId: 1, conversationId: 2, runId: "run-1", idempotencyKey: "idem-1", state: "DISCOVERY", prompt: "secret" });
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].empresaId, 1);
+  assert.equal(writes[0].idempotencyKey, "idem-1");
+  assert.ok(writes[0].retentionUntil instanceof Date);
+  assert.equal(writes[0].eventJson.includes("secret"), false);
 });

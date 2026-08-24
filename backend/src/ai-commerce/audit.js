@@ -13,6 +13,10 @@ function createAICommerceAudit({ prisma, logger = console, now = () => new Date(
       if (!model || typeof model.create !== "function") continue;
       try {
         const data = normalizeModelData(kind, safe);
+        if (kind === "run" && typeof model.findFirst === "function" && typeof model.update === "function") {
+          const existing = await model.findFirst({ where: { empresaId: safe.empresaId, idempotencyKey: String(safe.idempotencyKey || "") } });
+          if (existing) return model.update({ where: { id: existing.id }, data: { ...data, revision: { increment: 1 }, updatedAt: data.occurredAt, completedAt: ["COMPLETED", "FAILED"].includes(data.status) ? data.occurredAt : undefined } });
+        }
         return await model.create({ data });
       } catch (error) {
         logger.warn?.("ai_commerce_audit_persist_failed", { kind, model: modelName, code: String(error?.code || "AUDIT_WRITE_FAILED") });
@@ -54,17 +58,102 @@ function modelCandidates(kind) {
 function normalizeModelData(kind, payload) {
   // Model adapters may map this envelope to their exact Prisma fields. The
   // generic fields intentionally avoid prompts, provider secrets and raw PII.
-  return {
+  const occurredAt = payload.occurredAt instanceof Date ? payload.occurredAt : new Date(payload.occurredAt || Date.now());
+  const retentionUntil = payload.retentionUntil ? new Date(payload.retentionUntil) : new Date(occurredAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const base = {
     ...(payload.empresaId ? { empresaId: payload.empresaId } : {}),
     ...(payload.conversationId ? { conversationId: payload.conversationId } : {}),
     ...(payload.runId ? { runId: String(payload.runId).slice(0, 128) } : {}),
     ...(payload.turnId ? { turnId: String(payload.turnId).slice(0, 128) } : {}),
     status: String(payload.status || "RECORDED").slice(0, 40),
-    schemaVersion: AUDIT_SCHEMA_VERSION,
     correlationId: String(payload.correlationId || "").slice(0, 128) || null,
     eventJson: JSON.stringify(payload),
-    occurredAt: payload.occurredAt instanceof Date ? payload.occurredAt : new Date(payload.occurredAt || Date.now()),
+    occurredAt,
+    retentionUntil: Number.isNaN(retentionUntil.getTime()) ? new Date(occurredAt.getTime() + 30 * 24 * 60 * 60 * 1000) : retentionUntil,
   };
+  if (kind === "run") return {
+    ...base,
+    idempotencyKey: String(payload.idempotencyKey || `audit:${payload.runId || occurredAt.getTime()}`).slice(0, 200),
+    mode: String(payload.mode || "OFF").slice(0, 40),
+    state: String(payload.state || "IDLE").slice(0, 40),
+    policyVersion: String(payload.policyVersion || "ai-commerce-policy.v1").slice(0, 100),
+    messageRevision: payload.messageRevision === undefined ? null : String(payload.messageRevision).slice(0, 80),
+    revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+  };
+  if (kind === "turn") return {
+    ...base,
+    turnNumber: Number.isSafeInteger(payload.turn) ? payload.turn : 0,
+    state: String(payload.state || "DISCOVERY").slice(0, 40),
+    decisionJson: JSON.stringify(payload.decision || {}),
+    toolResultsJson: JSON.stringify(payload.toolResults || {}),
+    latencyMs: Number.isFinite(payload.durationMs) ? Math.max(0, Math.round(payload.durationMs)) : null,
+    revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+  };
+  if (kind === "tool") return {
+    ...base,
+    name: String(payload.name || "unknown").slice(0, 100),
+    classification: String(payload.classification || "READ").slice(0, 40),
+    idempotencyKey: payload.idempotencyKey ? String(payload.idempotencyKey).slice(0, 200) : null,
+    inputJsonSanitized: JSON.stringify(payload.input || {}),
+    outputJsonSanitized: payload.output === undefined ? null : JSON.stringify(payload.output),
+    errorCode: payload.errorCode ? String(payload.errorCode).slice(0, 100) : null,
+    latencyMs: Number.isFinite(payload.durationMs) ? Math.max(0, Math.round(payload.durationMs)) : null,
+    revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+  };
+  if (kind === "decision") return {
+    ...base,
+    intent: payload.decision?.intent ? String(payload.decision.intent).slice(0, 100) : null,
+    confidence: payload.decision?.confidence ? String(payload.decision.confidence).slice(0, 40) : null,
+    nextAction: payload.decision?.nextAction ? String(payload.decision.nextAction).slice(0, 100) : null,
+    missingInformationJson: JSON.stringify(payload.decision?.missingInformation || []),
+    requestedToolsJson: JSON.stringify(payload.decision?.requestedTools || []),
+    draftResponse: payload.decision?.draftResponse ? String(payload.decision.draftResponse).slice(0, 2000) : null,
+    offerIdsJson: JSON.stringify(payload.decision?.offerIds || []),
+    handoffReason: payload.decision?.handoffReason ? String(payload.decision.handoffReason).slice(0, 500) : null,
+    safetyFlagsJson: JSON.stringify(payload.decision?.safetyFlags || []),
+    policyFlagsJson: JSON.stringify(payload.decision?.policyFlags || []),
+    decisionJson: JSON.stringify(payload.decision || {}),
+    revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+  };
+  if (kind === "draft") {
+    const draft = payload.draft || {};
+    return {
+      ...base,
+      runId: String(payload.runId || draft.runId || "").slice(0, 128),
+      conversationId: payload.conversationId || draft.conversationId,
+      textSanitized: String(draft.text || "").slice(0, 2000),
+      offersJson: JSON.stringify(draft.productOffers || []),
+      questionsJson: JSON.stringify(draft.questions || []),
+      actionsJson: JSON.stringify(draft.actions || []),
+      warningsJson: JSON.stringify(draft.warnings || []),
+      requiresHumanApproval: draft.requiresHumanApproval !== false,
+      conversationRevision: draft.conversationRevision ? String(draft.conversationRevision).slice(0, 80) : null,
+      revision: Number.isSafeInteger(draft.revision) ? draft.revision : 1,
+      expiresAt: draft.expiresAt ? new Date(draft.expiresAt) : new Date(occurredAt.getTime() + 15 * 60 * 1000),
+      actorUsuarioId: payload.actorUsuarioId || null,
+    };
+  }
+  if (kind === "policy") return {
+    ...base,
+    action: String(payload.action || "UNSPECIFIED").slice(0, 100),
+    reasonCode: payload.reasonCode ? String(payload.reasonCode).slice(0, 120) : null,
+    detailsJson: JSON.stringify(payload.details || {}),
+    draftId: payload.draftId || null,
+    actorUsuarioId: payload.actorUsuarioId || null,
+    revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+  };
+  if (kind === "handoff") return {
+    ...base,
+    reason: String(payload.reason || "Handoff solicitado.").slice(0, 500),
+    summarySanitized: payload.summary ? String(payload.summary).slice(0, 1500) : null,
+    draftId: payload.draftId || null,
+    offerId: payload.offerId || null,
+    queueKey: payload.queueKey || null,
+    idempotencyKey: payload.idempotencyKey || null,
+    actorUsuarioId: payload.actorUsuarioId || null,
+    revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
+  };
+  return base;
 }
 
 function sanitizeAuditPayload(payload = {}) {
