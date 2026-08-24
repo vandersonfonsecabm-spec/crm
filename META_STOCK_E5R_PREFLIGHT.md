@@ -3,13 +3,13 @@
 CURRENT_STATE_AS_OF=2026-08-23
 REPORT_TIMEZONE=America/Sao_Paulo (BRT)
 SOURCE_CHECKPOINT_REQUESTED=c398bbe5b3794c342fe3a630dcff65421a97e485
-SOURCE_CHECKPOINT_EFFECTIVE=317d4ed0a55920649d64f0fcd903904df006babd
+SOURCE_CHECKPOINT_EFFECTIVE=19a6c7b7bd47deeb150350173e8da4f5cb6c9bf8
 RELEASE_BRANCH=release/stock-mvp-e5r
-STOCK_MVP_RELEASE_COMMIT=317d4ed0a55920649d64f0fcd903904df006babd
+STOCK_MVP_RELEASE_COMMIT=19a6c7b7bd47deeb150350173e8da4f5cb6c9bf8
 BASELINE_SHA=a5a280c3ebc54741ced02a77d4da5ec51834d583
 HISTORICAL_618A_PRESERVED=PASS
 
-The requested checkpoint exists and is an ancestor of the candidate. Later commits are the causal source-rule material-version fix (`2ed75b2`), the final source-gate documentation commit (`fff712d`), the E5R preflight reports (`9860c72`), the focused sync-failure family/version correction plus timestamp reconciliation (`78b4050`), the durable run-sequence material-version floor with retention regression proof (`4b30871`), and the INTEGER-bounded durable floor plus PostgreSQL boundary tests (`317d4ed`). No unrelated drift was found.
+The requested checkpoint exists and is an ancestor of the candidate. Later commits are the causal source-rule material-version fix (`2ed75b2`), the final source-gate documentation commit (`fff712d`), the E5R preflight reports (`9860c72`), the focused sync-failure family/version correction plus timestamp reconciliation (`78b4050`), the durable run-sequence material-version floor with retention regression proof (`4b30871`), the INTEGER-bounded durable floor plus PostgreSQL boundary tests (`317d4ed`), and the stale-rule floor needed to prevent same-cycle outbox collisions (`19a6c7b`). No unrelated drift was found.
 
 OFFICIAL_ENVIRONMENT_IDENTIFIED=PASS
 - Railway project: glistening-playfulness (`ddfbf66c-e274-47b1-9493-286232d2f426`)
