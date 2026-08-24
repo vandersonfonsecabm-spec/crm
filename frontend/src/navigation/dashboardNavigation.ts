@@ -55,6 +55,9 @@ const legacyDashboardPathnames = new Set(["/"]);
 
 const dashboardDetailRoutes = new Map([
   ["/integracoes/whatsapp", { page: "integracoes" as const, detail: "whatsapp" as const }],
+  ["/catalogo-comercial", { page: "comercial" as const, detail: "catalogo-comercial" as const }],
+  ["/catalogo-comercial/produtos", { page: "comercial" as const, detail: "catalogo-comercial-produtos" as const }],
+  ["/configuracoes/ia-comercial", { page: "comercial" as const, detail: "ia-comercial" as const }],
 ]);
 const stockSubroutes = new Set([
   "/estoque/produtos",
