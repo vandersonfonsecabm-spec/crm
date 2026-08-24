@@ -77,7 +77,7 @@ CREATE TABLE "AICommerceTurn" (
   "occurredAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "retentionUntil" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "AICommerceTurn_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
-  CONSTRAINT "AICommerceTurn_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "runId") ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT "AICommerceTurn_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceTurn_empresaId_conversationId_fkey" FOREIGN KEY ("empresaId", "conversationId") REFERENCES "ConversaCanal"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT
 );
 CREATE UNIQUE INDEX "AICommerceTurn_empresaId_id_key" ON "AICommerceTurn"("empresaId", "id");
@@ -105,7 +105,7 @@ CREATE TABLE "AICommerceToolInvocation" (
   "occurredAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "retentionUntil" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "AICommerceToolInvocation_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
-  CONSTRAINT "AICommerceToolInvocation_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "runId") ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT "AICommerceToolInvocation_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceToolInvocation_empresaId_turnId_fkey" FOREIGN KEY ("empresaId", "turnId") REFERENCES "AICommerceTurn"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceToolInvocation_empresaId_conversationId_fkey" FOREIGN KEY ("empresaId", "conversationId") REFERENCES "ConversaCanal"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT
 );
@@ -138,7 +138,7 @@ CREATE TABLE "AICommerceDecision" (
   "occurredAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "retentionUntil" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "AICommerceDecision_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
-  CONSTRAINT "AICommerceDecision_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "runId") ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT "AICommerceDecision_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceDecision_empresaId_turnId_fkey" FOREIGN KEY ("empresaId", "turnId") REFERENCES "AICommerceTurn"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceDecision_empresaId_conversationId_fkey" FOREIGN KEY ("empresaId", "conversationId") REFERENCES "ConversaCanal"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT
 );
@@ -172,7 +172,7 @@ CREATE TABLE "AICommerceDraft" (
   "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "retentionUntil" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "AICommerceDraft_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
-  CONSTRAINT "AICommerceDraft_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "runId") ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT "AICommerceDraft_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceDraft_empresaId_conversationId_fkey" FOREIGN KEY ("empresaId", "conversationId") REFERENCES "ConversaCanal"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceDraft_empresaId_decisionId_fkey" FOREIGN KEY ("empresaId", "decisionId") REFERENCES "AICommerceDecision"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceDraft_empresaId_actorUsuarioId_fkey" FOREIGN KEY ("empresaId", "actorUsuarioId") REFERENCES "Usuario"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT
@@ -199,7 +199,7 @@ CREATE TABLE "AICommercePolicyDecision" (
   "occurredAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "retentionUntil" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "AICommercePolicyDecision_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
-  CONSTRAINT "AICommercePolicyDecision_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "runId") ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT "AICommercePolicyDecision_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommercePolicyDecision_empresaId_conversationId_fkey" FOREIGN KEY ("empresaId", "conversationId") REFERENCES "ConversaCanal"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommercePolicyDecision_empresaId_draftId_fkey" FOREIGN KEY ("empresaId", "draftId") REFERENCES "AICommerceDraft"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommercePolicyDecision_empresaId_actorUsuarioId_fkey" FOREIGN KEY ("empresaId", "actorUsuarioId") REFERENCES "Usuario"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT
@@ -230,7 +230,7 @@ CREATE TABLE "AICommerceHandoff" (
   "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "retentionUntil" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "AICommerceHandoff_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
-  CONSTRAINT "AICommerceHandoff_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "runId") ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT "AICommerceHandoff_empresaId_runId_fkey" FOREIGN KEY ("empresaId", "runId") REFERENCES "AICommerceRun"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceHandoff_empresaId_conversationId_fkey" FOREIGN KEY ("empresaId", "conversationId") REFERENCES "ConversaCanal"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceHandoff_empresaId_draftId_fkey" FOREIGN KEY ("empresaId", "draftId") REFERENCES "AICommerceDraft"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "AICommerceHandoff_empresaId_opportunityDraftId_fkey" FOREIGN KEY ("empresaId", "opportunityDraftId") REFERENCES "AICommerceOpportunityDraft"("empresaId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
