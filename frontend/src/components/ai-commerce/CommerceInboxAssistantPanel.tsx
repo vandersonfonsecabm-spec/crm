@@ -64,7 +64,7 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
       approvalKeys.current[draft.id] = keys;
       const next = await approveAICommerceDraft(draft.id, { action, revision: draft.revision, conversationRevision: conversationRevision ?? undefined, ...keys });
       if (action === "INSERT_COMPOSER") {
-        if (next.draft.text && onInsertComposer) onInsertComposer(next.draft.text);
+        if (next.draft?.text && onInsertComposer) onInsertComposer(next.draft.text);
         setFeedback("Rascunho inserido no composer existente. O envio continua sendo uma ação humana separada.");
       } else if (action === "REGISTER_INTEREST") {
         setFeedback("Interesse registrado com aprovação humana.");
