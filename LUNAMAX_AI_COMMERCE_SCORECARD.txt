@@ -9,15 +9,19 @@ MOCK/ORCHESTRATION/HITL: PASS
 INBOX/UI REGRESSION: PASS (194/194 frontend tests)
 SQLITE REHEARSAL: PASS
 PRISMA OFFICIAL RUNNER: BLOCKED_GENERIC_ENGINE_ERROR
-POSTGRES OFFICIAL MIGRATION: NOT_EXECUTED
-PRODUCTION DEPLOY: NOT_EXECUTED
-LIVE CANARY: NOT_EXECUTED
+POSTGRES OFFICIAL MIGRATION: PASS_ADDITIVE (157/157 tenant/FK gate)
+PRODUCTION DEPLOY: PASS_OFF (Railway API/worker + Vercel merge SHA)
+LIVE CANARY: BLOCKED_SESSION (no authenticated controlled tenant)
+PRODUCTION VISUAL QA: BLOCKED_SESSION (login gate; no authenticated screen)
 FINAL STATE: OFF / FOUNDATION READY
 
-SCORE=SOURCE_READY_WITH_OPERATIONAL_RELEASE_BLOCK
+SCORE=FOUNDATION_OFF_DEPLOYED_WITH_CANARY_AND_VISUAL_GATES_OPEN
 
 The command had strong guardrails but was not executable literally. The major
 improvements were canonical stock authority, isolated opportunity drafts,
 granular approvals/CAS, deny-by-default tool/mode gates, finite retention,
 safe URLs, prompt-injection blocking, existing Inbox reuse and explicit
-separation of source/rehearsal/deployment claims.
+separation of source/rehearsal/deployment claims. The release protocol was
+adapted at the backup step because Railway Hobby does not provide managed
+Backups/PITR: a protected logical backup and isolated restore supplied the
+recoverability evidence without printing or shipping production data.
