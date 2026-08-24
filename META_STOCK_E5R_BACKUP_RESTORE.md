@@ -2,7 +2,7 @@
 
 PRODUCTION_BACKUP=PASS
 - Target: official Railway PostgreSQL `Postgres-u_yI`
-- Created before any official write on 2026-08-24
+- Created before any official write on 2026-08-23 BRT (filesystem timestamps 23:08–23:09 local)
 - Custom dump: `%TEMP%\stock-e5r-official-20260824\production-pre-stock.dump`
 - Size: 353310 bytes
 - SHA-256: `d6fe92195748e7cc7d52d54ceb055b6f050740e8147ebce0d88f11e06e72e18a`

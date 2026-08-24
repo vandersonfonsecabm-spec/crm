@@ -136,3 +136,51 @@ test("a healthy run resolves the latest sync failure occurrence", async () => {
   const third = await service.evaluateTenant(3);
   assert.equal(third.resolved, 0);
 });
+
+test("different sync failure families receive distinct monotonic material versions", async () => {
+  const evaluations = [];
+  const outboxRows = [];
+  const run = { id: 1, fonteId: 2, estado: "FAILED", retryCount: 3, revision: 3, errorClass: "TIMEOUT", correlationId: "sync-failure" };
+  const prisma = {
+    saldoEstoque: { findMany: async () => [] },
+    fonteEstoque: { findMany: async () => [{ id: 2, statusCiclo: "ACTIVE" }] },
+    configuracaoRegraEstoque: { findMany: async () => [{ ruleType: "STOCK_SYNC_FAILED", enabled: true, scopeType: "TENANT", scopeKey: "TENANT" }] },
+    capacidadeFonteEstoque: { findMany: async () => [] },
+    checkpointSincronizacaoEstoque: { findMany: async () => [] },
+    execucaoSincronizacaoEstoque: { findMany: async () => [run] },
+    avaliacaoRegraEstoque: {
+      findMany: async ({ where }) => evaluations.filter((row) => row.empresaId === where.empresaId && row.sourceConnectionId === where.sourceConnectionId && row.ruleType === where.ruleType),
+      findFirst: async ({ where }) => {
+        const rows = evaluations.filter((row) => row.empresaId === where.empresaId
+          && (!where.sourceConnectionId || row.sourceConnectionId === where.sourceConnectionId)
+          && (!where.occurrenceKey || row.occurrenceKey === where.occurrenceKey)
+          && (!where.ruleType || row.ruleType === where.ruleType)
+          && (where.matched === undefined || row.matched === where.matched));
+        return rows.at(-1) || null;
+      },
+      create: async ({ data }) => { const row = { id: evaluations.length + 1, ...data }; evaluations.push(row); return row; },
+    },
+    eventoOutboxEstoque: {
+      create: async ({ data }) => {
+        if (outboxRows.some((row) => row.empresaId === data.empresaId && row.eventType === data.eventType && row.aggregateType === data.aggregateType && row.aggregateId === data.aggregateId && row.materialVersion === data.materialVersion)) {
+          const error = new Error("unique outbox conflict");
+          error.code = "P2002";
+          throw error;
+        }
+        outboxRows.push(data);
+        return data;
+      },
+      findFirst: async ({ where }) => outboxRows.find((row) => row.empresaId === where.empresaId && row.eventType === where.eventType && row.aggregateType === where.aggregateType && row.aggregateId === where.aggregateId && row.materialVersion === where.materialVersion) || null,
+    },
+  };
+  prisma.$transaction = async (callback) => callback(prisma);
+  const service = createStockRuleService({ prisma, env: { STOCK_DOMAIN_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "3" }, clock: () => new Date("2026-08-23T12:00:00Z") });
+
+  await service.evaluateTenant(3);
+  run.errorClass = "AUTH";
+  await assert.doesNotReject(() => service.evaluateTenant(3));
+
+  const matched = outboxRows.filter((row) => row.eventType === "StockRuleMatched.v1");
+  assert.equal(matched.length, 2);
+  assert.notEqual(matched[0].materialVersion, matched[1].materialVersion);
+});

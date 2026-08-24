@@ -77,6 +77,38 @@ function eventForEvaluation(evaluation, eventType, now) {
   });
 }
 
+function latestRowsByOccurrence(rows = []) {
+  const latest = new Map();
+  for (const row of rows) {
+    const key = String(row?.occurrenceKey || "");
+    if (!key) continue;
+    const previous = latest.get(key);
+    if (!previous) {
+      latest.set(key, row);
+      continue;
+    }
+    const previousTime = asDate(previous.evaluatedAt, new Date(0)).getTime();
+    const currentTime = asDate(row.evaluatedAt, new Date(0)).getTime();
+    if (currentTime > previousTime || (currentTime === previousTime && Number(row.id || 0) > Number(previous.id || 0))) latest.set(key, row);
+  }
+  return latest;
+}
+
+function syncFailureMaterialVersion({ empresaId, sourceId, revision, errorFamily, failureHistory }) {
+  const safeRevision = Number.isSafeInteger(Number(revision)) && Number(revision) > 0 ? Number(revision) : 1;
+  const baseVersion = safeRevision * 10 + 2;
+  const occurrenceKey = `${empresaId}:STOCK_SYNC_FAILED:${sourceId}:${errorFamily || "UNKNOWN"}`;
+  const latest = latestRowsByOccurrence(failureHistory);
+  const current = latest.get(occurrenceKey);
+  const currentVersion = Number(current?.materialVersion);
+  if (current?.matched === true && Number.isSafeInteger(currentVersion) && currentVersion > 0) return currentVersion;
+  const maxVersion = failureHistory.reduce((max, row) => {
+    const value = Number(row?.materialVersion);
+    return Number.isSafeInteger(value) && value > max ? value : max;
+  }, 0);
+  return Math.max(baseVersion, maxVersion + 1);
+}
+
 function createStockRuleService({ prisma, env = process.env, clock = () => new Date(), logger = console } = {}) {
   if (!prisma) throw new StockError("STOCK_UNAVAILABLE", "Prisma de estoque ausente.", undefined, 503);
 
@@ -152,16 +184,23 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
       const failureHistory = typeof prisma.avaliacaoRegraEstoque?.findMany === "function"
         ? await prisma.avaliacaoRegraEstoque.findMany({ where: { empresaId: tenantId, sourceConnectionId: source.id, ruleType: "STOCK_SYNC_FAILED" }, orderBy: [{ evaluatedAt: "desc" }, { id: "desc" }] })
         : [];
-      const latestFailureState = new Map();
-      for (const row of failureHistory) if (!latestFailureState.has(row.occurrenceKey)) latestFailureState.set(row.occurrenceKey, row);
+      const latestFailureState = latestRowsByOccurrence(failureHistory);
       const openSyncFailures = [...latestFailureState.values()].filter((row) => row.matched === true);
       const previousErrorFamily = previousFailure?.occurrenceKey ? String(previousFailure.occurrenceKey).split(":").at(-1) : null;
+      const errorFamily = latestRun?.errorClass || previousErrorFamily || "UNKNOWN";
+      const failureMaterialVersion = syncFailureMaterialVersion({
+        empresaId: tenantId,
+        sourceId: source.id,
+        revision: latestRun?.revision || checkpoint?.revision || 1,
+        errorFamily,
+        failureHistory,
+      });
       const staleBaseConfig = configByType.get("STOCK_DATA_STALE") || {};
       const staleOverride = overrideByKey.get(`STOCK_DATA_STALE:ESTOQUE_FONTE:${source.id}`);
       let staleConfig = staleBaseConfig;
       if (staleOverride) staleConfig = { ...staleBaseConfig, freshnessSlaMinutes: staleOverride.freshnessSlaMinutes ?? staleBaseConfig.freshnessSlaMinutes };
       const freshness = classifyFreshness({ lastSuccessfulSyncAt: checkpoint?.lastSuccessfulSyncAt, slaMs: Number(staleConfig.freshnessSlaMinutes || 0) * 60000, now });
-      stateItems.push({ balance: null, state: { empresaId: tenantId, sourceConnectionId: source.id, freshnessEstado: freshness, sourceFreshnessEvidence: Boolean(checkpoint?.lastSuccessfulSyncAt), latestRunHealthy: latestRun?.estado === "SUCCEEDED", syncFailed: failedRun?.estado === "FAILED", retriesExhausted: failedRun?.estado === "FAILED" && Number(failedRun.retryCount || 0) >= 3, errorFamily: latestRun?.errorClass || previousErrorFamily || "UNKNOWN", openSyncFailures, revision: Number(latestRun?.revision || checkpoint?.revision || 1), correlationId: latestRun?.correlationId || previousFailure?.correlationId || `stock-rule:${tenantId}:source:${source.id}` } });
+      stateItems.push({ balance: null, state: { empresaId: tenantId, sourceConnectionId: source.id, freshnessEstado: freshness, sourceFreshnessEvidence: Boolean(checkpoint?.lastSuccessfulSyncAt), latestRunHealthy: latestRun?.estado === "SUCCEEDED", syncFailed: failedRun?.estado === "FAILED", retriesExhausted: failedRun?.estado === "FAILED" && Number(failedRun.retryCount || 0) >= 3, errorFamily, failureMaterialVersion, openSyncFailures, revision: Number(latestRun?.revision || checkpoint?.revision || 1), correlationId: latestRun?.correlationId || previousFailure?.correlationId || `stock-rule:${tenantId}:source:${source.id}` } });
     }
     let evaluated = 0; let matched = 0; let resolved = 0;
     for (const { balance, state } of stateItems) {
@@ -187,7 +226,7 @@ function createStockRuleService({ prisma, env = process.env, clock = () => new D
         const observedCapabilities = { ...(capabilityBySource.get(state.sourceConnectionId) || {}) };
         if (!balance && state.sourceFreshnessEvidence) observedCapabilities.SOURCE_UPDATED_AT = true;
         const effectiveCapabilities = { capabilities: observedCapabilities };
-        const evaluation = evaluateStockState({ ruleType, state, config, capabilities: effectiveCapabilities, now });
+        const evaluation = evaluateStockState({ ruleType, state: ruleType === "STOCK_SYNC_FAILED" ? { ...state, materialVersion: state.failureMaterialVersion } : state, config, capabilities: effectiveCapabilities, now });
         if (config.priority) evaluation.priority = config.priority;
         evaluated += 1;
         if (evaluation.match) matched += 1;
