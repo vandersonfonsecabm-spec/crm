@@ -77,7 +77,7 @@ test("preview, replay por idempotencia, confirmacao CAS e staging duravel nao pe
             sourceRecordId: "product-1",
             sourceVersion: "manual:version-1",
             status: "ACCEPTED",
-            normalized: { sourceProductId: "product-1", sourceVersion: "manual:version-1", quantities: { on_hand: "2.000000" } },
+            normalized: { sourceProductId: "product-1", sourceVersion: "manual:version-1", unit: "UN", quantities: { on_hand: "2.000000" } },
             warnings: [],
             errors: [],
           },
@@ -139,6 +139,7 @@ test("preview, replay por idempotencia, confirmacao CAS e staging duravel nao pe
   assert.equal(prisma.state.lines.find((line) => line.status === "APPLIED").appliedAt.toISOString(), now.toISOString());
   assert.equal(prisma.state.audits.some((audit) => audit.action === "STOCK_IMPORT_CONFIRMED"), true);
   assert.equal(prisma.state.capabilities[0].versao, "stock-csv.v1");
+  assert.equal(prisma.state.capabilities.find((row) => row.codigo === "UNIT_OF_MEASURE").suportada, true);
 });
 
 test("confirmacao recusa staging acima do limite antes de chamar o aplicador", async () => {

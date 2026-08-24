@@ -490,7 +490,7 @@ async function promoteCapabilities(tx, { empresaId, fonteId, lines, now }) {
     if (quantities.reserved !== null && quantities.reserved !== undefined) values.RESERVED_QUANTITY = true;
     if (quantities.available !== null && quantities.available !== undefined) values.AVAILABLE_QUANTITY = true;
     if (quantities.quarantined !== null && quantities.quarantined !== undefined) values.QUARANTINED_QUANTITY = true;
-    if (normalized.unitOfMeasure) values.UNIT_OF_MEASURE = true;
+    if (normalized.unit || normalized.unitOfMeasure) values.UNIT_OF_MEASURE = true;
     if (normalized.sourceUpdatedAt) values.SOURCE_UPDATED_AT = true;
   }
   const semantics = { quantityRelevantForExpiry: values.ON_HAND_QUANTITY, quantitySemantic: values.ON_HAND_QUANTITY ? "ON_HAND" : "UNKNOWN", promotedAt: now.toISOString() };

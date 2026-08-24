@@ -183,7 +183,11 @@ function startAutomationWorker({
     }
     if (stockEnabled) {
       try {
-        await stockWorker.processDue({ now, limit: config.batchSize, leaseOwner: workerId, leaseMs: config.leaseMs });
+        const stockResult = await stockWorker.processDue({ now, limit: config.batchSize, leaseOwner: workerId, leaseMs: config.leaseMs });
+        if (Array.isArray(stockResult?.failedTenants) && stockResult.failedTenants.length) {
+          stockFailed = true;
+          eventLogger.error("worker_poll_error", new Error("STOCK_TENANT_CYCLE_PARTIAL_FAILURE"), { durationMs: elapsedMs(startedAt), subsystem: "stock_core", failedTenantCount: stockResult.failedTenants.length });
+        }
       } catch (error) {
         stockFailed = true;
         eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "stock_core" });
