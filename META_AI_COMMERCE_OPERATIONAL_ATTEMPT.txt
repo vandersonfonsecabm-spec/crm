@@ -23,6 +23,8 @@ PREVIEW BUILD
   smallest UI fix was committed and pushed as `0fbd3bcb`.
 - Preview deployment `dpl_7GcexRMqBfGdSWKdMBQjEKwK7eHq` is READY and has exact
   Git metadata for branch `feature/ai-commerce-e6a`.
+- Latest documentation-bundle preview `dpl_85gWzvQMhk8YjrHfAJswtzRkt2sv` is
+  READY at the same branch alias, with Git SHA `ae3614d118b8731dae1c6213423f1f4e25ba2f8a`.
 - Browser opened the preview but authentication could not be validated on the
   preview origin. Feature-screen visual QA was not claimed.
 

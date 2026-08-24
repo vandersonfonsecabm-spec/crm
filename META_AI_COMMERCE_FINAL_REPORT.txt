@@ -141,6 +141,9 @@ LIMITAÇÕES E GATES NÃO DECLARADOS COMO PASS
   `0fbd3bcbfbd884f740e4d1e0c5afd372fd88e3e9`, and preview deployment
   `dpl_7GcexRMqBfGdSWKdMBQjEKwK7eHq` became READY at alias
   `crm-git-feature-ai-commerce-e6a-vand-s-projects.vercel.app`.
+- After the documentation bundle push, the latest branch preview
+  `dpl_85gWzvQMhk8YjrHfAJswtzRkt2sv` also reached READY; its Git SHA is
+  `ae3614d118b8731dae1c6213423f1f4e25ba2f8a`.
 - Browser access to that preview reached the CRM auth gate but could not
   validate a session on the preview origin. No feature-screen screenshot or
   authenticated visual pass was claimed.
