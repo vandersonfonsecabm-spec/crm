@@ -254,11 +254,12 @@ DECISÃO FINAL
 AI_COMMERCE_FOUNDATION_PRODUCTION_OFF_READY
 
 Isso significa: a fundação de catálogo, verdade de estoque, ofertas, mock,
-ferramentas, orquestrador, auditoria, Inbox e HITL está publicada com schema
-aditivo, API/worker/frontend OFF e health/ready verdes. Falta somente ativar um
-tenant controlado com sessão administrativa verificável e executar a prova
-visual autenticada. Depois disso, uma missão própria poderá conectar UM
-provedor real; nenhum modelo real é necessário ou permitido nesta etapa.
+ferramentas, orquestrador, auditoria, Inbox e HITL está publicada e validada
+em produção com estado final OFF. O canário live Mock e a QA visual
+autenticada foram concluídos com PASS. Nenhum modelo real foi conectado,
+nenhum auto-reply foi habilitado e nenhum outbound foi introduzido. A próxima
+missão pode implementar exatamente UM conector para o provedor/modelo real
+escolhido.
 
 REFERÊNCIAS DE SEGURANÇA UTILIZADAS
 

@@ -23,5 +23,5 @@ adiciona somente migrations aditivas posteriores:
 As migrations oficiais foram aplicadas somente depois de backup lógico
 protegido, restore/rehearsal isolado e gate de integridade. API, worker e
 frontend foram publicados com a fundação AI OFF no merge SHA
-`a45eba71aede67546cf1459b0955e80e6586bff9`. O canário Mock API passou e foi
-revertido; somente a prova visual autenticada permanece pendente.
+`a45eba71aede67546cf1459b0955e80e6586bff9`. O canário Mock API e a prova
+visual autenticada passaram e foram revertidos para o estado OFF.
