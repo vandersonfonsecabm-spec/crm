@@ -53,7 +53,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260823180000_add_stock_core_e2": "8aa52ca292f1fa175278ec4bb3f7a9906e2176e80f19922a19c7c520470220eb",
     "20260823200000_add_stock_rules_h8_projection": "ec802084d3d4149a5026cd7c670586e671a327073809168333dcc68ea574eafd",
     "20260824150000_add_ai_commerce_catalog_foundation": "724f2e21d329d3d7548201e91de7fc3bd87e6d7f686f9a5c144e620853e5cb0f",
-    "20260824160000_add_ai_commerce_persistent_audit_effects": "e0f864286b85e93ab433b83c9661be40b87bc33fa48455fd2cebb79302eeec9d",
+    "20260824160000_add_ai_commerce_persistent_audit_effects": "fb90ee7c62783fb5369cca2736b0c0b23e31a8d7861a5d484fece44640bd02b6",
   }),
   postgresql: Object.freeze({
     "20260728090000_postgres_baseline": "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
@@ -71,7 +71,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260823200000_add_stock_rules_h8_projection": "c09ea359fbf9608989a99a06f8130c380be470756118c2f2e765931844fdc8d3",
     "20260824120000_fix_stock_postgres_enum_types": "6aaa84e0889bb889f6085188e3778ddde5290197921bf577117db485bc3c0fad",
     "20260824150000_add_ai_commerce_catalog_foundation": "29e51644720f34ffe1c66b9e8a156f6986090ef1733440deafc7e8ece3564988",
-    "20260824160000_add_ai_commerce_persistent_audit_effects": "466a71c757a3e79d759e488c57965a4599a02a79c2bc598cbffb5018d17eb2f5",
+    "20260824160000_add_ai_commerce_persistent_audit_effects": "e491d9342ddced5a5769a0030d586e337bc55867ce2564803f4a8e623f9230cc",
   }),
 });
 
@@ -257,8 +257,8 @@ const MIGRATION_REGISTRY = Object.freeze({
   "20260824160000_add_ai_commerce_persistent_audit_effects": Object.freeze({
     relationCount: EXPECTED_RELATION_COUNT,
     relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
-    sqliteSha256: "e0f864286b85e93ab433b83c9661be40b87bc33fa48455fd2cebb79302eeec9d",
-    postgresSha256: "466a71c757a3e79d759e488c57965a4599a02a79c2bc598cbffb5018d17eb2f5",
+    sqliteSha256: "fb90ee7c62783fb5369cca2736b0c0b23e31a8d7861a5d484fece44640bd02b6",
+    postgresSha256: "e491d9342ddced5a5769a0030d586e337bc55867ce2564803f4a8e623f9230cc",
   }),
 });
 

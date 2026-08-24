@@ -134,3 +134,17 @@ test("audit maps required tenant-scoped run fields and redacts prompt data", asy
   assert.ok(writes[0].retentionUntil instanceof Date);
   assert.equal(writes[0].eventJson.includes("secret"), false);
 });
+
+test("audit atualiza o run persistido sem recriar nem alterar chaves", async () => {
+  const updates = [];
+  const model = {
+    findFirst: async () => ({ id: "run-1", empresaId: 1, idempotencyKey: "idem-1" }),
+    create: async () => { throw new Error("create should not run"); },
+    update: async ({ data }) => { updates.push(data); return data; },
+  };
+  const audit = createAICommerceAudit({ prisma: { aICommerceRun: model }, logger: { info() {}, warn() {} } });
+  await audit.recordRunCompleted({ empresaId: 1, conversationId: 2, runId: "run-1", idempotencyKey: "idem-1", state: "DONE" });
+  assert.equal(updates.length, 1);
+  assert.equal(Object.prototype.hasOwnProperty.call(updates[0], "id"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(updates[0], "createdAt"), false);
+});

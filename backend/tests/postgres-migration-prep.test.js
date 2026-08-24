@@ -96,12 +96,14 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260823180000_add_stock_core_e2",
       "20260823200000_add_stock_rules_h8_projection",
       "20260824120000_fix_stock_postgres_enum_types",
+      "20260824150000_add_ai_commerce_catalog_foundation",
+      "20260824160000_add_ai_commerce_persistent_audit_effects",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260824120000_fix_stock_postgres_enum_types",
+        "20260824160000_add_ai_commerce_persistent_audit_effects",
         "migration.sql",
       ),
     );
@@ -111,7 +113,7 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "migration.sql",
     ));
     assert.equal(
-      crypto.createHash("sha256").update(baseline).digest("hex"),
+      crypto.createHash("sha256").update(Buffer.from(baseline.toString("utf8").replace(/\r\n/g, "\n"))).digest("hex"),
       "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
     );
     const incremental = fs.readFileSync(path.join(

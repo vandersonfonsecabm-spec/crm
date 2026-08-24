@@ -227,6 +227,7 @@ async function materializeOffers({ toolResults, explicitOffers, offerService, co
         conversationId: context.conversationId,
         customerId: positiveId(customerId),
         correlationId: context.correlationId,
+        internal: true,
       });
       if (offer) offers.push(offer);
     } catch (error) {
@@ -359,6 +360,7 @@ async function claimPersistedRun({ prisma, baseContext, input, settings, now }) 
   const retentionUntil = new Date(now().getTime() + 30 * 24 * 60 * 60 * 1000);
   try {
     const row = await model.create({ data: {
+      id: baseContext.runId,
       empresaId: baseContext.empresaId,
       runId: baseContext.runId,
       conversationId: baseContext.conversationId,

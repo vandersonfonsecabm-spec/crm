@@ -145,12 +145,12 @@ function normalizeSettings(body = {}) {
     maxContextMessages: clamp(body.maxContextMessages, 1, 20, 20),
     maxProducts: clamp(body.maxProducts, 1, 3, 3),
     humanApprovalRequired: true,
-    catalogVisibilityPolicy: String(value.catalogVisibilityPolicy || "PUBLISHED").slice(0, 80),
-    exactQuantityPolicy: String(value.exactQuantityPolicy || "HIDDEN").slice(0, 80),
-    stalePolicy: String(value.stalePolicy || "NEEDS_CONFIRMATION").slice(0, 80),
-    noPricePolicy: String(value.noPricePolicy || "DO_NOT_QUOTE").slice(0, 80),
-    opportunityPolicy: String(value.opportunityPolicy || "DRAFT_ONLY").slice(0, 80),
-    handoffPolicy: String(value.handoffPolicy || "HUMAN_ONLY").slice(0, 80),
+    catalogVisibilityPolicy: String(body.catalogVisibilityPolicy || "PUBLISHED").slice(0, 80),
+    exactQuantityPolicy: String(body.exactQuantityPolicy || "HIDDEN").slice(0, 80),
+    stalePolicy: String(body.stalePolicy || "NEEDS_CONFIRMATION").slice(0, 80),
+    noPricePolicy: String(body.noPricePolicy || "DO_NOT_QUOTE").slice(0, 80),
+    opportunityPolicy: String(body.opportunityPolicy || "DRAFT_ONLY").slice(0, 80),
+    handoffPolicy: String(body.handoffPolicy || "HUMAN_ONLY").slice(0, 80),
   };
 }
 
@@ -165,12 +165,12 @@ function publicSettings(item) {
     maxContextMessages: Number(value.maxContextMessages) || 20,
     maxProducts: Number(value.maxProducts) || 3,
     humanApprovalRequired: true,
-    catalogVisibilityPolicy: "PUBLISHED_ONLY",
-    exactQuantityPolicy: "HIDDEN_BY_DEFAULT",
-    stalePolicy: "NEEDS_CONFIRMATION",
-    noPricePolicy: "DO_NOT_QUOTE",
-    opportunityPolicy: "DRAFT_ONLY",
-    handoffPolicy: "HUMAN_SELLER",
+    catalogVisibilityPolicy: String(value.catalogVisibilityPolicy || "PUBLISHED_ONLY"),
+    exactQuantityPolicy: String(value.exactQuantityPolicy || "HIDDEN_BY_DEFAULT"),
+    stalePolicy: String(value.stalePolicy || "NEEDS_CONFIRMATION"),
+    noPricePolicy: String(value.noPricePolicy || "DO_NOT_QUOTE"),
+    opportunityPolicy: String(value.opportunityPolicy || "DRAFT_ONLY"),
+    handoffPolicy: String(value.handoffPolicy || "HUMAN_SELLER"),
     revision: Number(value.revision) || 1,
     realProviderConnected: false,
     autoReply: false,
@@ -183,10 +183,18 @@ function redactRun(result) {
   return {
     ...result,
     toolResults: sanitizeToolResults(result.toolResults),
+    draft: result.draft ? { ...result.draft, productOffers: Array.isArray(result.draft.productOffers) ? result.draft.productOffers.map(redactOffer) : [] } : null,
     decision: result.decision ? { ...result.decision, requestedTools: Array.isArray(result.decision.requestedTools) ? result.decision.requestedTools.map((item) => ({ name: item.name, version: item.version, input: item.input })) : [] } : null,
     autoSend: false,
     outbound: 0,
   };
+}
+
+function redactOffer(offer) {
+  if (!offer || typeof offer !== "object") return offer;
+  const copy = { ...offer };
+  for (const field of ["empresaId", "stockProductId", "conversationId", "customerId", "catalogProductId"]) delete copy[field];
+  return copy;
 }
 
 function sanitizeToolResults(value) {

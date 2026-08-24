@@ -24,6 +24,18 @@ const { mountAutomationRoutes } = require("./automations/routes");
 const { mountPlatformRoutes } = require("./platform/routes");
 const { mountNotificationRoutes } = require("./notifications/routes");
 const { mountStockRoutes } = require("./stock/routes");
+const { mountCatalogRoutes } = require("./ai-commerce/catalog-routes");
+const { mountAICommerceRoutes } = require("./ai-commerce/routes");
+const { createCommercialCatalogService } = require("./ai-commerce/catalog");
+const { createSellableAvailabilityService } = require("./ai-commerce/availability");
+const { createCommercialSearchService } = require("./ai-commerce/search");
+const { createProductOfferService } = require("./ai-commerce/offer");
+const { createCommercialToolRegistry, READ_TOOLS } = require("./ai-commerce/tools");
+const { createAICommerceAudit } = require("./ai-commerce/audit");
+const { createAICommerceOrchestrator } = require("./ai-commerce/orchestrator");
+const { MockCommerceAIConnection, UnconfiguredCommerceAIConnection } = require("./ai-commerce/connection");
+const { createAICommerceEffects } = require("./ai-commerce/effects");
+const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("./tenant-features/service");
 const { isValidCpfCnpj } = require("./customer-360/service");
 const { createAgendaService } = require("./agenda/service");
 const {
@@ -110,6 +122,74 @@ const commercialAuth = [requireAuth, requireCommercialTenant];
 const customerLifecycleAuth = [requireAuth, requireCommercialTenant, requireRole("ADMIN", "GERENTE")];
 const agendaService = createAgendaService({ prisma });
 
+// E6A commerce services are constructed only when the generated Prisma client
+// contains the additive foundation models. This preserves startup compatibility
+// for the pre-E6A runtime while the feature remains deny-by-default.
+let aiCommerceRuntime = null;
+if (prisma.commercialCatalogProduct && prisma.productOffer) {
+  const aiCatalog = createCommercialCatalogService({ prisma });
+  const aiAvailability = createSellableAvailabilityService({ prisma, catalogService: aiCatalog });
+  const aiSearch = createCommercialSearchService({ prisma, availabilityService: aiAvailability });
+  const aiOffer = createProductOfferService({ prisma, catalogService: aiCatalog, availabilityService: aiAvailability });
+  const aiAudit = createAICommerceAudit({ prisma });
+  const aiEffects = createAICommerceEffects({ prisma, offerService: aiOffer });
+  const aiMockEnabled = process.env.AI_COMMERCE_MOCK_ENABLED === "true"
+    && process.env.AI_COMMERCE_RUNTIME_CANARY_APPROVED === "true";
+  const aiAllowlist = String(process.env.AI_COMMERCE_TENANT_ALLOWLIST || "")
+    .split(",")
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isSafeInteger(value) && value > 0);
+  const aiConnection = aiMockEnabled
+    ? new MockCommerceAIConnection({ enabled: true, allowlist: aiAllowlist })
+    : new UnconfiguredCommerceAIConnection();
+  const settingsResolver = async (empresaId) => {
+    const model = prisma.aiCommerceSettings || prisma.aICommerceSettings;
+    const row = await model?.findUnique?.({ where: { empresaId } });
+    if (!row) return { enabled: false, mode: "OFF", mockEnabled: false, allowedTools: [], revision: 1, policyVersion: "ai-commerce-policy.v1" };
+    let allowedTools = [];
+    try { allowedTools = JSON.parse(row.allowedToolsJson || "[]"); } catch { allowedTools = []; }
+    return { ...row, allowedTools, mockEnabled: row.mockEnabled === true, policyVersion: "ai-commerce-policy.v1" };
+  };
+  const featureGate = (empresaId) => isFeatureEnabledForTenant({ prisma, empresaId, featureKey: FEATURE_KEYS.AI_COMMERCE, env: process.env });
+  const aiToolRegistry = createCommercialToolRegistry({
+    audit: aiAudit,
+    services: {
+      searchCommercialCatalog: (input, context) => aiSearch.search({ empresaId: context.empresaId, query: input.query, ...(input.filters || {}) }),
+      getProductDetails: (input, context) => aiCatalog.get(context.empresaId, input.catalogProductId),
+      getSellableAvailability: (input, context) => aiAvailability.getSellableAvailability({ empresaId: context.empresaId, catalogProductId: input.catalogProductId, quantity: input.requestedQuantity, locationId: input.locationId }),
+      getProductAlternatives: async (input, context) => {
+        const product = await aiCatalog.get(context.empresaId, input.catalogProductId);
+        return (await aiSearch.search({ empresaId: context.empresaId, query: product.category || product.title, category: product.category, limit: input.limit || 3 })).items.filter((item) => String(item.product?.id) !== String(product.id));
+      },
+      getPurchaseLink: async (input, context) => {
+        const product = await aiCatalog.get(context.empresaId, input.catalogProductId);
+        return { catalogProductId: product.id, purchaseUrl: product.purchaseUrl || null, productUrl: product.productUrl || null, available: Boolean(product.purchaseUrl || product.productUrl) };
+      },
+      registerProductInterest: (input, context) => aiEffects.registerProductInterest(input, context),
+      createOpportunityDraft: (input, context) => aiEffects.createOpportunityDraft(input, context),
+      handoffToSalesperson: (input, context) => aiEffects.handoffToSalesperson(input, context),
+    },
+    authorizeTool: async ({ name, context }) => {
+      const settings = await settingsResolver(context.empresaId);
+      if (settings.mode === "OFF" || settings.enabled !== true) return false;
+      // Empty is an explicit deny-by-default policy, not an implicit
+      // "allow every read tool" switch. Operators must opt each tool in.
+      if (!Array.isArray(settings.allowedTools) || !settings.allowedTools.includes(name)) return false;
+      return READ_TOOLS.includes(name) || context.mode === "HUMAN_APPROVAL";
+    },
+  });
+  const aiOrchestrator = createAICommerceOrchestrator({
+    connection: aiConnection,
+    toolRegistry: aiToolRegistry,
+    offerService: aiOffer,
+    audit: aiAudit,
+    prisma,
+    featureGate,
+    settingsResolver,
+  });
+  aiCommerceRuntime = { aiCatalog, aiAvailability, aiSearch, aiOffer, aiAudit, aiConnection, aiOrchestrator, aiToolRegistry };
+}
+
 auth.mountRoutes(app);
 mountIntegrationHubRoutes({ app, prisma, authenticate: requireAuth, requireRole });
 mountSiteLeadAdminRoutes({ app, prisma, authenticate: requireAuth, requireRole });
@@ -125,6 +205,25 @@ mountNotificationRoutes({ app, prisma, authenticate: requireAuth });
 // E2 stock routes are mounted before the legacy 410 guard. The guard remains
 // responsible for the historical movement/catalog paths below.
 mountStockRoutes({ app, prisma, authenticate: requireAuth, requireRole, env: process.env });
+if (aiCommerceRuntime) {
+  mountCatalogRoutes({
+    app,
+    prisma,
+    authenticate: requireAuth,
+    requireRole,
+    enabledForTenant: (empresaId) => isFeatureEnabledForTenant({ prisma, empresaId, featureKey: FEATURE_KEYS.AI_COMMERCE, env: process.env }),
+    env: process.env,
+  });
+  mountAICommerceRoutes({
+    app,
+    prisma,
+    authenticate: requireAuth,
+    requireRole,
+    orchestrator: aiCommerceRuntime.aiOrchestrator,
+    connection: aiCommerceRuntime.aiConnection,
+    env: process.env,
+  });
+}
 
 app.use(
   ["/categorias-produtos", "/produtos", "/estoque"],

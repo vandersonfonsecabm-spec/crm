@@ -22,8 +22,8 @@ after(async () => {
   removeDatabase(databasePath);
 });
 
-test("todas as 113 relacoes tenant-scoped mapeadas usam FK composta", async () => {
-  assert.equal(relationSpecs.length, 117);
+test("todas as 157 relacoes tenant-scoped mapeadas usam FK composta", async () => {
+  assert.equal(relationSpecs.length, 157);
   for (const [, childTable, childField, parentTable, tenantField = "empresaId"] of relationSpecs) {
     const rows = await prisma.$queryRawUnsafe(`PRAGMA foreign_key_list("${childTable}")`);
     const grouped = Map.groupBy(rows, (row) => Number(row.id));

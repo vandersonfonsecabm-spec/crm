@@ -15,7 +15,14 @@ function createAICommerceAudit({ prisma, logger = console, now = () => new Date(
         const data = normalizeModelData(kind, safe);
         if (kind === "run" && typeof model.findFirst === "function" && typeof model.update === "function") {
           const existing = await model.findFirst({ where: { empresaId: safe.empresaId, idempotencyKey: String(safe.idempotencyKey || "") } });
-          if (existing) return model.update({ where: { id: existing.id }, data: { ...data, revision: { increment: 1 }, updatedAt: data.occurredAt, completedAt: ["COMPLETED", "FAILED"].includes(data.status) ? data.occurredAt : undefined } });
+          if (existing) {
+            const mutable = { ...data };
+            delete mutable.id;
+            delete mutable.empresaId;
+            delete mutable.idempotencyKey;
+            delete mutable.createdAt;
+            return model.update({ where: { id: existing.id }, data: { ...mutable, revision: { increment: 1 }, updatedAt: data.occurredAt, completedAt: ["COMPLETED", "FAILED"].includes(data.status) ? data.occurredAt : undefined } });
+          }
         }
         if (kind === "draft" && safe.draft?.draftId && typeof model.findFirst === "function" && typeof model.update === "function") {
           const existing = await model.findFirst({ where: { id: String(safe.draft.draftId), empresaId: safe.empresaId } });
@@ -77,6 +84,9 @@ function normalizeModelData(kind, payload) {
   };
   if (kind === "run") return {
     ...base,
+    // Child audit rows reference the durable AICommerceRun primary key. The
+    // orchestrator deliberately uses the opaque runId as that key so SQLite,
+    // PostgreSQL and the tenant relation gate share one invariant.
     id: String(payload.runId || `audit-${occurredAt.getTime()}`).slice(0, 128),
     idempotencyKey: String(payload.idempotencyKey || `audit:${payload.runId || occurredAt.getTime()}`).slice(0, 200),
     mode: String(payload.mode || "OFF").slice(0, 40),

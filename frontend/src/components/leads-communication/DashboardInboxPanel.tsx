@@ -33,6 +33,7 @@ import { CommunicationDrawer, CommunicationModal } from "./CommunicationOverlay"
 import { ConversationSlaBadge, ConversationStatusBadge, DetailRow } from "./communicationPresentation";
 import { channelLabel, conversationStatusLabels, formatCommunicationDate, formatCommunicationDateTime, formatCommunicationDayLabel, formatCommunicationTime, initials } from "./communicationFormatters";
 import InboxCommercialPanel from "./InboxCommercialPanel";
+import CommerceInboxAssistantPanel from "../ai-commerce/CommerceInboxAssistantPanel";
 import "./LeadsCommunication.css";
 
 type InboxPanelProps = {
@@ -311,6 +312,7 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
     Boolean(search.trim()),
   ].filter(Boolean).length;
   const selectedChannel = getChannelPresentation(conversation?.canalIntegracao.tipo);
+  const latestInboundMessage = useMemo(() => [...messages].reverse().find((message) => message.direcao === "ENTRADA") ?? null, [messages]);
   const hasInlineContext = Boolean(conversation && !compactInboxContext);
   const hasContextDrawer = Boolean(conversation && compactInboxContext && contextOpen);
   const selectedSlaException = isSlaException(conversation?.sla ?? null);
@@ -763,7 +765,7 @@ export function InboxContextContent({ conversation, history, onOpenBusiness, sho
         <summary>Atendimento</summary>
         <dl><DetailRow label="Canal" value={channelLabel(conversation.canalIntegracao.tipo, conversation.canalIntegracao.nome)} /><DetailRow label="Estado" value={<ConversationStatusBadge status={conversation.status} />} /><DetailRow label="SLA" value={<ConversationSlaBadge sla={conversation.sla} />} /><DetailRow label="Responsável" value={conversation.responsavelPrincipal?.nome ?? "Fila compartilhada"} /><DetailRow label="Criada em" value={<AccessibleCommunicationDate label="Criada em" value={conversation.createdAt} />} /><DetailRow label="Última atividade" value={<AccessibleCommunicationDate label="Última atividade" value={conversation.ultimaMensagemEm} />} />{conversation.lembrarDepoisEm && <DetailRow label="Lembrar depois" value={<AccessibleCommunicationDate label="Lembrar depois" value={conversation.lembrarDepoisEm} />} />}</dl>
       </details>
-      {showCommercialPanel && <details className="inbox-context-disclosure"><summary>Comercial</summary><div className="inbox-context-commercial"><InboxCommercialPanel conversationId={conversation.id} key={conversation.id} onOpenBusiness={onOpenBusiness} /></div></details>}
+      {showCommercialPanel && <details className="inbox-context-disclosure"><summary>Comercial</summary><div className="inbox-context-commercial"><InboxCommercialPanel conversationId={conversation.id} key={conversation.id} onOpenBusiness={onOpenBusiness} /><CommerceInboxAssistantPanel conversationId={conversation.id} conversationRevision={latestInboundMessage?.id ?? null} latestMessage={latestInboundMessage?.texto ?? null} messageRevision={latestInboundMessage?.id ?? null} onInsertComposer={setComposerText} sourceMessageId={latestInboundMessage?.id ?? null} /></div></details>}
       <section className="inbox-context-section inbox-context-history">
         <div className="mb-2 flex items-center gap-2"><History size={13} /><h4>Histórico de atendimento</h4></div>
         {history.length ? <ol className="space-y-2">{history.map((entry) => <li className="inbox-context-history-item" key={entry.id}><p className="font-medium">{historyLabel(entry.acaoAtendimento ?? entry.tipo, entry.responsavelAnterior?.nome, entry.responsavelNovo?.nome, entry.estadoAnterior, entry.estadoNovo)}</p><p className="mt-0.5 text-[var(--text-muted)]">Por {entry.alteradoPor?.nome ?? "Usuário removido"} · <AccessibleCommunicationDate label="Histórico" value={entry.createdAt} /></p>{entry.motivo && <p className="mt-1">{entry.motivo}</p>}</li>)}</ol> : <p className="text-xs text-[var(--text-muted)]">Nenhuma ação registrada.</p>}

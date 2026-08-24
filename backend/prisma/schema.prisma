@@ -1792,7 +1792,7 @@ model AICommerceTurn {
   occurredAt        DateTime                  @default(now())
   retentionUntil    DateTime                  @default(now())
   empresa           Empresa                   @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  run               AICommerceRun             @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  run               AICommerceRun             @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   conversation      ConversaCanal?            @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   toolInvocations   AICommerceToolInvocation[]
   decisions         AICommerceDecision[]
@@ -1823,7 +1823,7 @@ model AICommerceToolInvocation {
   occurredAt            DateTime        @default(now())
   retentionUntil        DateTime        @default(now())
   empresa               Empresa         @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  run                   AICommerceRun?  @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  run                   AICommerceRun?  @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   turn                  AICommerceTurn? @relation(fields: [empresaId, turnId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   conversation          ConversaCanal?  @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
 
@@ -1856,7 +1856,7 @@ model AICommerceDecision {
   occurredAt          DateTime        @default(now())
   retentionUntil      DateTime        @default(now())
   empresa             Empresa         @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  run                 AICommerceRun   @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  run                 AICommerceRun   @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   turn                AICommerceTurn? @relation(fields: [empresaId, turnId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   conversation        ConversaCanal? @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   drafts              AICommerceDraft[]
@@ -1892,7 +1892,7 @@ model AICommerceDraft {
   updatedAt             DateTime            @updatedAt
   retentionUntil        DateTime            @default(now())
   empresa               Empresa             @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  run                   AICommerceRun       @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  run                   AICommerceRun       @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   conversation          ConversaCanal       @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   decision              AICommerceDecision? @relation(fields: [empresaId, decisionId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   actorUsuario          Usuario?            @relation("AICommerceDraftAuditActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -1922,7 +1922,7 @@ model AICommercePolicyDecision {
   occurredAt        DateTime            @default(now())
   retentionUntil    DateTime           @default(now())
   empresa           Empresa             @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  run               AICommerceRun       @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  run               AICommerceRun       @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   conversation      ConversaCanal?      @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   draft             AICommerceDraft?    @relation(fields: [empresaId, draftId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   actorUsuario      Usuario?            @relation("AICommercePolicyActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
@@ -1939,6 +1939,7 @@ model AICommerceHandoff {
   runId             String?
   conversationId    Int?
   draftId           String?
+  opportunityDraftId String?
   offerId           String?
   reason            String             @default("UNSPECIFIED")
   summarySanitized  String?
@@ -1953,9 +1954,10 @@ model AICommerceHandoff {
   updatedAt         DateTime           @updatedAt
   retentionUntil    DateTime           @default(now())
   empresa           Empresa            @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  run               AICommerceRun?     @relation(fields: [empresaId, runId], references: [empresaId, runId], onDelete: Restrict, onUpdate: Restrict)
+  run               AICommerceRun?     @relation(fields: [empresaId, runId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   conversation      ConversaCanal?     @relation(fields: [empresaId, conversationId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   draft             AICommerceDraft?   @relation(fields: [empresaId, draftId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  opportunityDraft  AICommerceOpportunityDraft? @relation("AICommerceOpportunityHandoff", fields: [empresaId, opportunityDraftId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   offer             ProductOffer?      @relation("AICommerceHandoffOffer", fields: [empresaId, offerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   actorUsuario      Usuario?           @relation("AICommerceHandoffActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
 
@@ -2022,6 +2024,7 @@ model AICommerceOpportunityDraft {
   primaryOffer       ProductOffer?             @relation("AICommerceDraftOffer", fields: [empresaId, primaryOfferId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   catalogProduct     CommercialCatalogProduct? @relation("AICommerceDraftCatalogProduct", fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   actorUsuario       Usuario?                 @relation("AICommerceDraftActor", fields: [empresaId, actorUsuarioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  handoffs            AICommerceHandoff[] @relation("AICommerceOpportunityHandoff")
 
   @@unique([empresaId, id])
   @@unique([empresaId, idempotencyKey])

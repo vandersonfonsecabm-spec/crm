@@ -215,7 +215,7 @@ CREATE TABLE "AICommerceHandoff" (
   "runId" TEXT,
   "conversationId" INTEGER,
   "draftId" TEXT,
-  
+  "opportunityDraftId" TEXT,
   "offerId" TEXT,
   "reason" TEXT NOT NULL DEFAULT 'UNSPECIFIED',
   "summarySanitized" TEXT,

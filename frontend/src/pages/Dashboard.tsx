@@ -37,6 +37,7 @@ import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomati
 import DashboardPlatformTenantsPanel from "../components/dashboard/DashboardPlatformTenantsPanel";
 import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
 import StockControlPanel from "../components/stock/StockControlPanel";
+import { CommerceCatalogPanel, CommerceSettingsPanel } from "../components/ai-commerce";
 import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegrationsPanel";
 import DashboardSiteLeadIntegrationPanel from "../components/dashboard/DashboardSiteLeadIntegrationPanel";
 import DashboardUserSecurityPanel from "../components/dashboard/DashboardUserSecurityPanel";
@@ -1012,7 +1013,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                   />
                 </>
               )}
-              {activePage === "comercial" && (
+              {activePage === "comercial" && resolvedNavigation.detail === "catalogo-comercial" && <CommerceCatalogPanel />}
+              {activePage === "comercial" && resolvedNavigation.detail === "ia-comercial" && <CommerceSettingsPanel />}
+              {activePage === "comercial" && !resolvedNavigation.detail && (
                 <DashboardControlCenter
                   clients={clients}
                   summary={dashboardSummary}
