@@ -10,6 +10,25 @@ RESULTADO
 
 SAAS_POST_E6A_GLOBAL_AUDIT_PASS
 
+COMANDO ORIGINAL: FALHAS E ADAPTAÇÕES
+
+O comando GA2 estava forte em escopo e segurança, mas não era executável
+literalmente sem ajustes. Ele trazia referências de runtime/documentação
+desalinhadas, exigia oito papéis quando o ambiente autorizou quatro posições,
+tratava o runner PostgreSQL genérico como se fosse uma prova disponível e
+misturava a prova de source com a prova de produção. Também havia uma falha
+real no produto (aprovação HITL concorrente antes do CAS), além de contratos de
+testes que ainda esperavam o estado anterior ao E6A.
+
+Adaptei sem reduzir o objetivo: usei quatro posições efetivas (root + três
+auditores read-only), parti da árvore de produção a45, corrigi a concorrência,
+redaction, settings, catálogo, rotas/OFF e preço stale, atualizei fixtures e
+runner para as 39 migrations reais, mantive PostgreSQL-only separado e não
+transformei a limitação genérica do runner em PASS. A prova visual foi feita no
+domínio canônico autenticado, por SPA, nos seis viewports; o alias que falhou
+não foi usado como evidência. Nenhuma migration, dado oficial ou IA real foi
+alterado.
+
 A auditoria foi executada com quatro posições efetivas: root + três agentes
 read-only. O runtime pós-E6A foi identificado corretamente em `a45eba7`, sem
 usar a branch principal local suja. A auditoria encontrou defeitos causais e

@@ -11,6 +11,14 @@ HITL concurrency, future connection context, settings merge semantics,
 catalog filters, raw catalog detail serialization, stale price rendering,
 product routing, OFF gating and stale E6A documentation.
 
+The original GA2 command required adaptation: its baseline/docs refs were
+stale, its eight-role cap exceeded the authorized four positions, and its
+generic PostgreSQL runner was unavailable. The final audit preserved the
+objective by using four real positions, a source/runtime manifest, isolated
+SQLite rehearsal plus separate PG limitation, and canonical authenticated
+browser evidence. These are explicit evidence qualifiers, not hidden PASS
+inflation.
+
 Production API, worker and frontend are healthy and component-parity verified.
 The authenticated canonical-domain browser proof passed after the deployment:
 six viewports, SPA navigation, OFF catalog/settings, Inbox no-send semantics and
