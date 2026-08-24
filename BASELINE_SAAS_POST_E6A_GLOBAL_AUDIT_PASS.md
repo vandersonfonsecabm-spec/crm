@@ -3,13 +3,13 @@
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
 FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
-FINAL_RUNTIME_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c (source baseline; API/worker/Vercel eda)
+FINAL_RUNTIME_SHA=e18121ec91ab0278c72856048fea5411db407cbb (Vercel docs-only; API/worker eda; source tag eda)
 DOCUMENT_STATUS=FROZEN
 
 The annotated tag `saas-post-e6a-global-audit-pass-2026-08-24` points exactly to
 the final source baseline SHA `eda455912c5ddecb8ae42766f56e2397dce0085c`.
-API and worker run eda; Vercel production is READY at
-`eda455912c5ddecb8ae42766f56e2397dce0085c` (frontend code lineage ca9744b),
+API and worker run eda; Vercel production is READY at docs-only commit
+`e18121ec91ab0278c72856048fea5411db407cbb` (frontend code lineage ca9744b),
 and the canonical authenticated six-viewport smoke passed.
 
 AI remains OFF, the real provider is NO, auto-reply is NO, outbound is zero,

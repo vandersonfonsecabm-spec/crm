@@ -3,14 +3,14 @@
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
 FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
-FINAL_RUNTIME_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c (source baseline; API/worker b9, Vercel ca)
+FINAL_RUNTIME_SHA=e18121ec91ab0278c72856048fea5411db407cbb (Vercel docs-only; source/API/worker baseline eda)
 DOCUMENT_STATUS=FINAL_CLAIMS_PASS
 
 | Claim | Status | Evidence |
 |---|---|---|
 | SOURCE_IDENTITY | PASS | GitHub master and clean GA2 source baseline at eda4559; tag resolves to eda |
 | GIT_RELEASE_INTEGRITY | PASS | fast-forward from a45 through eda; report artifacts committed in the final docs commit |
-| OFFICIAL_SHA_PARITY | PASS_MANIFEST | API/worker/Vercel deployments report eda; frontend runtime tree is unchanged from ca |
+| OFFICIAL_SHA_PARITY | PASS_MANIFEST | API/worker eda; Vercel e181 docs-only redeploy; frontend runtime tree unchanged from ca |
 | DATABASE_INTEGRITY | PASS | existing Postgres tenant/FK/orphan gate; no GA2 schema delta |
 | MIGRATION_INTEGRITY | PASS | no GA2 migration; prior E6A history unchanged |
 | RECOVERY_READINESS | PASS_LOGICAL | protected logical backup/restore evidence retained |

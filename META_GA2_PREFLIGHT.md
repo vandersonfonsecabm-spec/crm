@@ -3,7 +3,7 @@
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
 FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
-FINAL_RUNTIME_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c (source baseline; API/worker/Vercel deployed at eda)
+FINAL_RUNTIME_SHA=e18121ec91ab0278c72856048fea5411db407cbb (Vercel docs-only deploy; source baseline/tag eda)
 DOCUMENT_STATUS=GA2_PREFLIGHT_COMPLETE
 
 Runtime base was resolved from GitHub `origin/master`, not from the dirty
@@ -14,7 +14,8 @@ and remote master points to `eda4559`.
 Official Railway target: project `glistening-playfulness`, environment
 `production`, API deployment `c5e36ec7` and worker deployment `dcf18b0f`, both
 SUCCESS/RUNNING at `eda4559`. Official database: Postgres-u_yI. Vercel
-production final: `dpl_B2BvtXXKqn2wbZ6RqgC1uN1jA3eF`, READY, commit `eda4559`.
+production final: `dpl_CL2ewq4mD1h7GTTwVu4T1fRuZeJ7`, READY, commit `e18121e`
+(docs-only after source baseline eda).
 
 Health/readiness remained green. AI flags remained OFF, allowlist deny-all,
 provider absent and outbound zero. No schema or migration changed in GA2.
