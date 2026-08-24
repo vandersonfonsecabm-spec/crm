@@ -1,15 +1,18 @@
 import { AlertTriangle, ArrowUpRight, Bot, CheckCircle2, Clock3, Handshake, MessageSquareText, ShieldAlert, Sparkles, UserRound, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiHttpError } from "../../services/crmApi";
-import { approveAICommerceDraft, rejectAICommerceDraft, registerAICommerceInterest, runAICommerceAssistant } from "../../services/aiCommerceApi";
-import type { AICommerceAssistantResult, AICommerceProductOffer } from "../../services/aiCommerceApi";
-import { Badge, Button, ErrorState, Input, LoadingState, Surface } from "../ui";
+import { approveAICommerceDraft, runAICommerceAssistant } from "../../services/aiCommerceApi";
+import type { AICommerceAssistantResult, AICommerceMode } from "../../services/aiCommerceApi";
+import { Badge, Button, ErrorState, LoadingState, Surface } from "../ui";
 import ProductOfferCard from "./ProductOfferCard";
 
 type CommerceInboxAssistantPanelProps = {
   conversationId: number;
   sourceMessageId?: number | null;
   conversationRevision?: number | null;
+  messageRevision?: number | null;
+  latestMessage?: string | null;
+  mode?: Exclude<AICommerceMode, "OFF">;
   onInsertComposer?: (text: string) => void;
 };
 
@@ -19,13 +22,13 @@ type CommerceInboxAssistantPanelProps = {
  * signature: every recommendation carries a freshness/approval rail back to stock;
  * reject: no purple “AI magic”, no second composer, no one-click send.
  */
-export default function CommerceInboxAssistantPanel({ conversationId, conversationRevision = null, onInsertComposer, sourceMessageId = null }: CommerceInboxAssistantPanelProps) {
+export default function CommerceInboxAssistantPanel({ conversationId, conversationRevision = null, latestMessage = null, messageRevision = null, mode = "SUGGESTION_ONLY", onInsertComposer, sourceMessageId = null }: CommerceInboxAssistantPanelProps) {
   const [result, setResult] = useState<AICommerceAssistantResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [busyAction, setBusyAction] = useState("");
-  const [rejectReason, setRejectReason] = useState("");
+  const approvalKeys = useRef<Record<string, { approvalToken: string; idempotencyKey: string }>>({});
 
   useEffect(() => {
     setResult(null);
@@ -34,7 +37,7 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
   }, [conversationId]);
 
   const draftStale = Boolean(result?.draft && conversationRevision !== null && result.conversationRevision !== null && result.conversationRevision !== conversationRevision);
-  const hasApprovalMode = result?.mode === "HUMAN_APPROVAL" || result?.mode === "SUGGESTION_ONLY";
+  const hasApprovalMode = result?.mode === "HUMAN_APPROVAL";
   const draft = result?.draft ?? null;
 
   async function runAssistant() {
@@ -42,7 +45,7 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
     setError("");
     setFeedback("");
     try {
-      const next = await runAICommerceAssistant({ conversationId, sourceMessageId: sourceMessageId ?? undefined, mode: "SUGGESTION_ONLY" });
+      const next = await runAICommerceAssistant({ conversationId, sourceMessageId: sourceMessageId ?? undefined, messageRevision: messageRevision ?? undefined, conversationRevision: conversationRevision ?? undefined, latestMessage: latestMessage ?? undefined, mode });
       setResult(next);
     } catch (nextError) {
       setError(assistantErrorMessage(nextError));
@@ -57,7 +60,9 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
     setError("");
     setFeedback("");
     try {
-      const next = await approveAICommerceDraft(draft.id, { action, revision: draft.revision, conversationRevision: conversationRevision ?? undefined });
+      const keys = approvalKeys.current[draft.id] ?? { approvalToken: `approval-${draft.id}`, idempotencyKey: `approval-${draft.id}-${action}` };
+      approvalKeys.current[draft.id] = keys;
+      const next = await approveAICommerceDraft(draft.id, { action, revision: draft.revision, conversationRevision: conversationRevision ?? undefined, ...keys });
       if (action === "INSERT_COMPOSER") {
         if (next.draft.text && onInsertComposer) onInsertComposer(next.draft.text);
         setFeedback("Rascunho inserido no composer existente. O envio continua sendo uma ação humana separada.");
@@ -69,36 +74,6 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
         setFeedback("Handoff solicitado com o contexto desta conversa.");
       }
       setResult((current) => current ? { ...current, draft: next.draft } : current);
-    } catch (nextError) {
-      setError(assistantErrorMessage(nextError));
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function registerInterest(offer: AICommerceProductOffer) {
-    if (!draft || draftStale || busyAction) return;
-    setBusyAction(`interest-${offer.offerId}`);
-    setError("");
-    try {
-      await registerAICommerceInterest({ offerId: offer.offerId, conversationId, draftRevision: draft.revision });
-      setFeedback(`Interesse em “${offer.title}” registrado para revisão humana.`);
-    } catch (nextError) {
-      setError(assistantErrorMessage(nextError));
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function rejectDraft() {
-    if (!draft || draftStale || busyAction) return;
-    setBusyAction("reject");
-    setError("");
-    try {
-      await rejectAICommerceDraft(draft.id, { revision: draft.revision, reason: rejectReason.trim() || undefined });
-      setResult((current) => current ? { ...current, draft: null } : current);
-      setRejectReason("");
-      setFeedback("Sugestão rejeitada. Nenhuma mensagem foi enviada.");
     } catch (nextError) {
       setError(assistantErrorMessage(nextError));
     } finally {
@@ -134,14 +109,13 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
       </Surface>
 
       {result.warnings.length > 0 && <div aria-live="polite" className="rounded-[8px] border border-[var(--warning-border)] bg-[var(--warning-subtle)] px-3 py-2 text-[11px] text-[var(--warning)]"><strong>Avisos de política:</strong> {result.warnings.join(" · ")}</div>}
-      {result.offers.length > 0 && <section aria-label="Ofertas sugeridas" className="space-y-2"><div className="flex items-center justify-between gap-2"><div><h2 className="text-sm font-semibold text-[var(--text-primary)]">Ofertas sugeridas</h2><p className="text-[11px] text-[var(--text-muted)]">Máximo de 3 ofertas · snapshot revalidável</p></div><Badge variant="info">{result.offers.length} oferta(s)</Badge></div><div className="grid gap-3 lg:grid-cols-2">{result.offers.slice(0, 3).map((offer) => <ProductOfferCard busy={busyAction === `interest-${offer.offerId}`} key={offer.offerId} offer={offer} onInterest={(nextOffer) => void registerInterest(nextOffer)} />)}</div></section>}
+      {result.offers.length > 0 && <section aria-label="Ofertas sugeridas" className="space-y-2"><div className="flex items-center justify-between gap-2"><div><h2 className="text-sm font-semibold text-[var(--text-primary)]">Ofertas sugeridas</h2><p className="text-[11px] text-[var(--text-muted)]">Máximo de 3 ofertas · snapshot revalidável</p></div><Badge variant="info">{result.offers.length} oferta(s)</Badge></div><div className="grid gap-3 lg:grid-cols-2">{result.offers.slice(0, 3).map((offer) => <ProductOfferCard busy={Boolean(busyAction)} key={offer.offerId} offer={offer} onInterest={hasApprovalMode && draft ? () => void approve("REGISTER_INTEREST") : undefined} />)}</div></section>}
 
       {draft && <Surface>
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--border-default)] p-4"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold text-[var(--text-primary)]">Rascunho para revisão</h2><Badge variant={draftStale ? "danger" : hasApprovalMode ? "warning" : "neutral"}>{draftStale ? "Conversa mudou" : draft.requiresHumanApproval ? "Aprovação obrigatória" : "Somente leitura"}</Badge></div><p className="mt-1 text-[11px] text-[var(--text-muted)]">Revisão {draft.revision} · expira {draft.expiresAt ? formatDateTime(draft.expiresAt) : "sem data informada"}</p></div><UserRound aria-hidden="true" className="text-[var(--text-muted)]" size={15} /></div>
         {draftStale && <div className="flex items-start gap-2 border-b border-[var(--danger-border)] bg-[var(--danger-subtle)] px-4 py-3 text-[11px] text-[var(--danger)]"><AlertTriangle className="mt-0.5 shrink-0" size={13} />A conversa recebeu uma alteração. Gere uma nova sugestão antes de aprovar este rascunho.</div>}
         <div className="space-y-3 p-4"><p className="whitespace-pre-wrap rounded-[5px] border border-[var(--border-default)] bg-[var(--bg-muted)] p-3 text-xs leading-5 text-[var(--text-primary)]">{draft.text || "Nenhum texto sugerido; faça uma pergunta de esclarecimento."}</p>{draft.questions.length > 0 && <div><p className="text-[10px] font-semibold uppercase tracking-[.08em] text-[var(--text-muted)]">Perguntas sugeridas</p><ul className="mt-1.5 list-disc space-y-1 pl-5 text-[11px] text-[var(--text-secondary)]">{draft.questions.slice(0, 4).map((question) => <li key={question}>{question}</li>)}</ul></div>}{draft.handoffReason && <p className="flex items-start gap-1.5 text-[11px] text-[var(--warning)]"><Handshake className="mt-0.5 shrink-0" size={13} />{draft.handoffReason}</p>}
-          <Input aria-label="Motivo da rejeição (opcional)" maxLength={240} onChange={(event) => setRejectReason(event.target.value)} placeholder="Motivo da rejeição (opcional)" value={rejectReason} />
-          <div className="flex flex-wrap gap-2 border-t border-[var(--border-default)] pt-3"><Button disabled={Boolean(busyAction) || draftStale} leftIcon={<ArrowUpRight size={12} />} loading={busyAction === "INSERT_COMPOSER"} onClick={() => void approve("INSERT_COMPOSER")} size="sm" variant="primary">Inserir no composer</Button><Button disabled={Boolean(busyAction) || draftStale} leftIcon={<CheckCircle2 size={12} />} loading={busyAction === "REGISTER_INTEREST"} onClick={() => void approve("REGISTER_INTEREST")} size="sm" variant="secondary">Aprovar interesse</Button><Button disabled={Boolean(busyAction) || draftStale} loading={busyAction === "CREATE_OPPORTUNITY_DRAFT"} onClick={() => void approve("CREATE_OPPORTUNITY_DRAFT")} size="sm" variant="secondary">Criar oportunidade rascunho</Button><Button disabled={Boolean(busyAction) || draftStale} leftIcon={<Handshake size={12} />} loading={busyAction === "HANDOFF"} onClick={() => void approve("HANDOFF")} size="sm" variant="secondary">Aprovar handoff</Button><Button disabled={Boolean(busyAction) || draftStale} leftIcon={<XCircle size={12} />} loading={busyAction === "reject"} onClick={() => void rejectDraft()} size="sm" variant="ghost">Rejeitar</Button></div>
+          <div className="flex flex-wrap gap-2 border-t border-[var(--border-default)] pt-3"><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} leftIcon={<ArrowUpRight size={12} />} loading={busyAction === "INSERT_COMPOSER"} onClick={() => void approve("INSERT_COMPOSER")} size="sm" variant="primary">Inserir no composer</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} leftIcon={<CheckCircle2 size={12} />} loading={busyAction === "REGISTER_INTEREST"} onClick={() => void approve("REGISTER_INTEREST")} size="sm" variant="secondary">Aprovar interesse</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} loading={busyAction === "CREATE_OPPORTUNITY_DRAFT"} onClick={() => void approve("CREATE_OPPORTUNITY_DRAFT")} size="sm" variant="secondary">Criar oportunidade rascunho</Button><Button disabled={!hasApprovalMode || Boolean(busyAction) || draftStale} leftIcon={<Handshake size={12} />} loading={busyAction === "HANDOFF"} onClick={() => void approve("HANDOFF")} size="sm" variant="secondary">Aprovar handoff</Button></div>
         </div>
       </Surface>}
 

@@ -183,7 +183,8 @@ export async function fetchAICommerceCatalog(params: AICommerceCatalogQuery = {}
     page: clampInteger(params.page, 1, 100000, 1),
     limit: clampInteger(params.limit, 1, 20, 20),
   });
-  return request<AICommercePage<AICommerceCatalogProduct>>(`/ai-commerce/catalog${query}`);
+  const response = await request<{ items?: AICommerceCatalogProduct[]; data?: AICommerceCatalogProduct[]; nextCursor?: string | null }>(`/catalogo-comercial${query}`);
+  return normalizeCatalogPage(response);
 }
 
 export async function searchAICommerceCatalog(params: AICommerceCatalogQuery = {}) {
@@ -193,69 +194,58 @@ export async function searchAICommerceCatalog(params: AICommerceCatalogQuery = {
     page: clampInteger(params.page, 1, 100000, 1),
     limit: clampInteger(params.limit, 1, 20, 20),
   });
-  return request<AICommercePage<AICommerceCatalogProduct>>(`/ai-commerce/catalog/search${query}`);
+  const response = await request<{ items?: AICommerceCatalogProduct[]; data?: AICommerceCatalogProduct[]; nextCursor?: string | null }>(`/catalogo-comercial/busca${query}`);
+  return normalizeCatalogPage(response);
 }
 
 export async function fetchAICommerceCatalogProduct(id: number) {
   assertPositiveId(id, "catalogProductId");
-  return request<AICommerceCatalogProduct>(`/ai-commerce/catalog/${id}`);
+  const response = await request<{ item?: AICommerceCatalogProduct }>(`/catalogo-comercial/produtos/${id}`);
+  if (!response.item) throw new ApiHttpError("Produto comercial não encontrado.", 404, "COMMERCE_CATALOG_PRODUCT_NOT_FOUND");
+  return response.item;
 }
 
 export async function previewAICommerceOffer(payload: { catalogProductId: number; conversationId?: number; quantity?: number }) {
   assertPositiveId(payload.catalogProductId, "catalogProductId");
   if (payload.conversationId !== undefined) assertPositiveId(payload.conversationId, "conversationId");
-  return request<{ offer: AICommerceProductOffer }>("/ai-commerce/offers/preview", { method: "POST", body: payload });
+  const response = await request<{ item?: AICommerceProductOffer }>("/catalogo-comercial/ofertas/preview", { method: "POST", body: payload });
+  if (!response.item) throw new ApiHttpError("Não foi possível gerar a oferta comercial.", 422, "COMMERCE_OFFER_INVALID");
+  return { offer: response.item };
 }
 
 export async function fetchAICommerceSettings() {
-  return request<AICommerceSettings>("/ai-commerce/settings");
+  const response = await request<{ item?: AICommerceSettings }>("/ai-commerce/settings");
+  return response.item ?? defaultAICommerceSettings();
 }
 
 export async function updateAICommerceSettings(payload: Partial<Pick<AICommerceSettings, "enabled" | "mode" | "allowedTools" | "maxTools" | "maxContextMessages" | "maxProducts" | "humanApprovalRequired" | "catalogVisibilityPolicy" | "exactQuantityPolicy" | "stalePolicy" | "noPricePolicy">> & { revision: number }) {
   if (!Number.isSafeInteger(payload.revision) || payload.revision < 0) throw new Error("Revisão de configuração inválida.");
-  return request<AICommerceSettings>("/ai-commerce/settings", { method: "PATCH", body: payload });
+  const response = await request<{ item?: AICommerceSettings }>("/ai-commerce/settings", { method: "PUT", body: payload });
+  return response.item ?? defaultAICommerceSettings();
 }
 
 export async function fetchAICommerceConnectionStatus() {
-  return request<AICommerceConnectionStatus>("/ai-commerce/connection/status");
+  const response = await request<{ item?: Record<string, unknown> }>("/ai-commerce/connection/status");
+  return normalizeConnectionStatus(response.item);
 }
 
 export async function validateMockAICommerceConnection() {
-  return request<AICommerceConnectionStatus>("/ai-commerce/connection/mock/validate", { method: "POST", body: {} });
+  const response = await request<{ item?: Record<string, unknown> }>("/ai-commerce/mock/validate", { method: "POST", body: {} });
+  return normalizeConnectionStatus(response.item);
 }
 
-export async function runAICommerceAssistant(payload: { conversationId: number; sourceMessageId?: number; mode: Exclude<AICommerceMode, "OFF"> }) {
+export async function runAICommerceAssistant(payload: { conversationId: number; sourceMessageId?: number; messageRevision?: number; conversationRevision?: number; latestMessage?: string; mode: Exclude<AICommerceMode, "OFF">; enabled?: boolean; mockEnabled?: boolean; messages?: Array<{ id?: number; direction: "INBOUND" | "OUTBOUND"; text: string }> }) {
   assertPositiveId(payload.conversationId, "conversationId");
   if (payload.sourceMessageId !== undefined) assertPositiveId(payload.sourceMessageId, "sourceMessageId");
-  return request<AICommerceAssistantResult>(`/ai-commerce/conversations/${payload.conversationId}/assistant-runs`, { method: "POST", body: payload });
+  const response = await request<{ item?: Record<string, unknown> }>("/ai-commerce/runs", { method: "POST", body: { ...payload, messageId: payload.sourceMessageId, messages: payload.messages?.slice(-20) } });
+  return normalizeAssistantResult(response.item);
 }
 
-export async function approveAICommerceDraft(id: string, payload: { revision: number; conversationRevision?: number; action: "INSERT_COMPOSER" | "REGISTER_INTEREST" | "CREATE_OPPORTUNITY_DRAFT" | "HANDOFF" }) {
+export async function approveAICommerceDraft(id: string, payload: { revision: number; conversationRevision?: number; action: "INSERT_COMPOSER" | "REGISTER_INTEREST" | "CREATE_OPPORTUNITY_DRAFT" | "HANDOFF"; approvalToken?: string; idempotencyKey?: string }) {
   assertOpaqueId(id, "draftId");
-  return request<{ draft: AICommerceDraft; applied: boolean }>(`/ai-commerce/drafts/${encodeURIComponent(id)}/approve`, { method: "POST", body: payload });
-}
-
-export async function rejectAICommerceDraft(id: string, payload: { revision: number; reason?: string }) {
-  assertOpaqueId(id, "draftId");
-  return request<{ rejected: boolean }>(`/ai-commerce/drafts/${encodeURIComponent(id)}/reject`, { method: "POST", body: { ...payload, reason: clampText(payload.reason, 240) });
-}
-
-export async function registerAICommerceInterest(payload: { offerId: string; conversationId: number; draftRevision: number }) {
-  assertOpaqueId(payload.offerId, "offerId");
-  assertPositiveId(payload.conversationId, "conversationId");
-  return request<{ registered: boolean }>("/ai-commerce/interests", { method: "POST", body: payload });
-}
-
-export async function createAICommerceOpportunityDraft(payload: { draftId: string; conversationId: number; draftRevision: number }) {
-  assertOpaqueId(payload.draftId, "draftId");
-  assertPositiveId(payload.conversationId, "conversationId");
-  return request<{ created: boolean; opportunityDraftId?: string }>("/ai-commerce/opportunity-drafts", { method: "POST", body: payload });
-}
-
-export async function requestAICommerceHandoff(payload: { draftId: string; conversationId: number; draftRevision: number; reason: string }) {
-  assertOpaqueId(payload.draftId, "draftId");
-  assertPositiveId(payload.conversationId, "conversationId");
-  return request<{ requested: boolean }>("/ai-commerce/handoffs", { method: "POST", body: { ...payload, reason: clampText(payload.reason, 500) });
+  const response = await request<{ item?: Record<string, unknown> }>(`/ai-commerce/drafts/${encodeURIComponent(id)}/approve`, { method: "POST", body: { ...payload, action: toBackendApprovalAction(payload.action), approvalToken: payload.approvalToken || createOpaqueKey("approval"), idempotencyKey: payload.idempotencyKey || createOpaqueKey("approval-idem"), draftRevision: payload.revision } });
+  const item = response.item ?? {};
+  return { draft: normalizeDraft(item.draft as Record<string, unknown> | null | undefined), applied: item.status === "APPROVED" || item.action !== undefined };
 }
 
 export function isOfferExpired(offer: Pick<AICommerceProductOffer, "expiresAt">, now = Date.now()) {
@@ -276,7 +266,142 @@ export function isSafeCommerceUrl(value: string | null | undefined, allowedDomai
   }
 }
 
-async function request<T>(path: string, options: { method?: "GET" | "POST" | "PATCH"; body?: unknown } = {}): Promise<T> {
+function normalizeCatalogPage(value: { items?: AICommerceCatalogProduct[]; data?: AICommerceCatalogProduct[]; nextCursor?: string | null }): AICommercePage<AICommerceCatalogProduct> {
+  const data = Array.isArray(value.items) ? value.items : Array.isArray(value.data) ? value.data : [];
+  return { data: data.slice(0, 20), page: 1, limit: 20, total: data.length, totalPages: data.length ? 1 : 0 };
+}
+
+function normalizeAssistantResult(value?: Record<string, unknown>): AICommerceAssistantResult {
+  const result = value ?? {};
+  const decision = (result.decision && typeof result.decision === "object" ? result.decision : {}) as Record<string, unknown>;
+  const draftValue = result.draft && typeof result.draft === "object" ? result.draft as Record<string, unknown> : null;
+  const toolResults = result.toolResults && typeof result.toolResults === "object" ? result.toolResults as Record<string, unknown> : {};
+  const offers = Array.isArray(draftValue?.productOffers) ? draftValue.productOffers : collectOfferValues(toolResults);
+  const trace = Object.entries(toolResults).slice(0, 5).map(([name, raw]) => ({
+    name,
+    classification: isSideEffectTool(name) ? "SIDE_EFFECT" as const : "READ" as const,
+    status: "COMPLETED" as const,
+    safeSummary: Array.isArray(raw) ? `${raw.length} resultado(s) sanitizado(s)` : "Resultado sanitizado",
+  }));
+  return {
+    runId: String(result.runId ?? ""),
+    mode: normalizeModeValue(result.mode),
+    connectionStatus: "MOCK_AVAILABLE",
+    intent: typeof decision.intent === "string" ? decision.intent : null,
+    confidence: confidenceNumber(decision.confidence),
+    missingInformation: arrayOfStrings(draftValue?.questions ?? decision.missingInformation),
+    draft: normalizeDraft(draftValue),
+    offers: offers.map((item) => normalizeOffer(item)).filter((item): item is AICommerceProductOffer => item !== null).slice(0, 3),
+    toolTrace: trace,
+    warnings: arrayOfStrings(draftValue?.warnings ?? decision.safetyFlags),
+    conversationRevision: result.conversationRevision === undefined ? null : Number(result.conversationRevision),
+    sourceMessageId: null,
+  };
+}
+
+function normalizeDraft(value?: Record<string, unknown> | null): AICommerceDraft | null {
+  if (!value) return null;
+  const handoff = value.handoff && typeof value.handoff === "object" ? value.handoff as Record<string, unknown> : null;
+  return {
+    id: String(value.draftId ?? value.id ?? ""),
+    revision: Number.isSafeInteger(value.revision) ? Number(value.revision) : 1,
+    text: String(value.text ?? ""),
+    offers: (Array.isArray(value.productOffers) ? value.productOffers : []).map((item) => normalizeOffer(item)).filter((item): item is AICommerceProductOffer => item !== null),
+    questions: arrayOfStrings(value.questions),
+    warnings: arrayOfStrings(value.warnings),
+    handoffReason: handoff && typeof handoff.reason === "string" ? handoff.reason : null,
+    requiresHumanApproval: true,
+    expiresAt: typeof value.expiresAt === "string" ? value.expiresAt : null,
+    conversationId: Number(value.conversationId) || 0,
+    sourceMessageId: null,
+    createdAt: undefined,
+  };
+}
+
+function normalizeOffer(value: unknown): AICommerceProductOffer | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const offerId = String(item.offerId ?? item.id ?? "");
+  const title = String(item.title ?? "");
+  if (!offerId || !title) return null;
+  return {
+    offerId,
+    catalogProductId: Number(item.catalogProductId ?? item.productId) || 0,
+    stockProductId: Number(item.stockProductId) || null,
+    title,
+    shortDescription: typeof item.shortDescription === "string" ? item.shortDescription : null,
+    imageUrl: typeof item.imageUrl === "string" ? item.imageUrl : null,
+    price: typeof item.price === "number" || typeof item.price === "string" ? item.price : null,
+    currency: typeof item.currency === "string" ? item.currency : null,
+    priceStatus: typeof item.priceStatus === "string" ? item.priceStatus as AICommercePriceStatus : "MISSING",
+    availabilityStatus: typeof item.availabilityStatus === "string" ? item.availabilityStatus as AICommerceAvailabilityStatus : "UNKNOWN",
+    availabilityLabel: String(item.availabilityLabel ?? item.customerSafeMessage ?? "Confirmar com vendedor"),
+    allowedActions: Array.isArray(item.allowedActions) ? item.allowedActions.map(String) : [],
+    sourceFreshness: typeof item.sourceFreshness === "string" ? item.sourceFreshness as AICommerceProductOffer["sourceFreshness"] : "UNKNOWN",
+    confidence: typeof item.confidence === "string" ? item.confidence as AICommerceProductOffer["confidence"] : "UNKNOWN",
+    manualConfirmationRequired: item.manualConfirmationRequired !== false,
+    createdAt: String(item.createdAt ?? new Date().toISOString()),
+    expiresAt: String(item.expiresAt ?? new Date(Date.now() + 15 * 60 * 1000).toISOString()),
+    catalogRevision: Number(item.catalogRevision) || 1,
+    stockMaterialVersion: Number(item.stockMaterialVersion) || null,
+    policyVersion: typeof item.policyVersion === "string" ? item.policyVersion : null,
+    correlationId: typeof item.correlationId === "string" ? item.correlationId : null,
+    productUrl: typeof item.productUrl === "string" ? item.productUrl : null,
+    purchaseUrl: typeof item.purchaseUrl === "string" ? item.purchaseUrl : null,
+  };
+}
+
+function collectOfferValues(toolResults: Record<string, unknown>) {
+  return Object.values(toolResults).flatMap((value) => Array.isArray(value) ? value : [value]);
+}
+
+function arrayOfStrings(value: unknown) {
+  return (Array.isArray(value) ? value : []).map((item) => String(item)).filter(Boolean).slice(0, 20);
+}
+
+function confidenceNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (value === "HIGH") return 0.9;
+  if (value === "MEDIUM") return 0.65;
+  if (value === "LOW") return 0.35;
+  return null;
+}
+
+function isSideEffectTool(name: string) {
+  return ["registerProductInterest", "createOpportunityDraft", "handoffToSalesperson"].includes(name);
+}
+
+function normalizeModeValue(value: unknown): AICommerceMode {
+  return value === "SHADOW" || value === "SUGGESTION_ONLY" || value === "HUMAN_APPROVAL" ? value : "OFF";
+}
+
+function normalizeConnectionStatus(value?: Record<string, unknown>): AICommerceConnectionStatus {
+  const connected = value?.providerConnected === true || value?.realProviderConnected === true;
+  const mockReady = value?.mock === true && value?.status === "READY";
+  return {
+    status: connected ? "REAL_NOT_CONNECTED" : mockReady ? "MOCK_AVAILABLE" : "NOT_CONNECTED",
+    realProviderConnected: false,
+    realConnectorImplemented: false,
+    autoReplyEnabled: false,
+    lastValidatedAt: typeof value?.lastValidatedAt === "string" ? value.lastValidatedAt : null,
+    message: connected ? "Conector real não está implementado nesta missão." : mockReady ? "Mock disponível sem rede externa." : "Nenhuma conexão está ativa; o modo OFF permanece seguro.",
+  };
+}
+
+function defaultAICommerceSettings(): AICommerceSettings {
+  return { enabled: false, mode: "OFF", allowedTools: [], maxTools: 5, maxContextMessages: 20, maxProducts: 3, humanApprovalRequired: true, revision: 1 };
+}
+
+function toBackendApprovalAction(action: "INSERT_COMPOSER" | "REGISTER_INTEREST" | "CREATE_OPPORTUNITY_DRAFT" | "HANDOFF") {
+  return ({ INSERT_COMPOSER: "insertComposer", REGISTER_INTEREST: "registerProductInterest", CREATE_OPPORTUNITY_DRAFT: "createOpportunityDraft", HANDOFF: "handoffToSalesperson" } as const)[action];
+}
+
+function createOpaqueKey(prefix: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function request<T>(path: string, options: { method?: "GET" | "POST" | "PUT" | "PATCH"; body?: unknown } = {}): Promise<T> {
   const session = getAuthSession();
   if (!session?.token) throw new ApiHttpError("Sessão expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
   const headers = new Headers({ Authorization: `Bearer ${session.token}` });
