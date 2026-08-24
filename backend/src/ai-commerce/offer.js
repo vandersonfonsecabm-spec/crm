@@ -25,6 +25,14 @@ function createProductOfferService({ prisma, catalogService, availabilityService
     if (catalog.visibility !== VISIBILITY.PUBLISHED || catalog.archivedAt || catalog.sellabilityPolicy !== "STOCK_CANONICAL_ONLY") throw new CommerceCatalogError("COMMERCE_PRODUCT_NOT_SELLABLE", "Produto comercial nao pode ser ofertado.", 422);
     if (conversationId !== null && conversationId !== undefined) conversationId = positiveId(conversationId, "COMMERCE_CONVERSATION_ID_INVALID");
     if (customerId !== null && customerId !== undefined) customerId = positiveId(customerId, "COMMERCE_CUSTOMER_ID_INVALID");
+    if (conversationId !== null && prisma.conversaCanal?.findFirst) {
+      const conversation = await prisma.conversaCanal.findFirst({ where: { id: conversationId, empresaId: tenantId } });
+      if (!conversation) throw new CommerceCatalogError("COMMERCE_CONVERSATION_NOT_FOUND", "Conversa nao encontrada.", 404);
+    }
+    if (customerId !== null && prisma.cliente?.findFirst) {
+      const customer = await prisma.cliente.findFirst({ where: { id: customerId, empresaId: tenantId } });
+      if (!customer) throw new CommerceCatalogError("COMMERCE_CUSTOMER_NOT_FOUND", "Cliente nao encontrado.", 404);
+    }
     const availability = await availabilityService.getSellableAvailability({ empresaId: tenantId, catalogProductId: catalog.id, now });
     if (availability.status === AVAILABILITY_STATUS.NOT_SELLABLE) throw new CommerceCatalogError("COMMERCE_PRODUCT_NOT_SELLABLE", "Produto comercial nao pode ser ofertado.", 422);
     const expiresAt = new Date(new Date(now).getTime() + Math.min(1440, Math.max(1, Number(effectivePolicy.offerTtlMinutes) || 15)) * 60 * 1000);
