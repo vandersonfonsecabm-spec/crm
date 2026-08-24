@@ -266,13 +266,15 @@ async function loadPersistedDraft({ prisma, draftId, empresaId }) {
   const row = await model.findFirst({ where: { id: String(draftId), empresaId: positiveId(empresaId) } });
   if (!row || String(row.status || "").toUpperCase() !== "PENDING_APPROVAL") return null;
   if (row.expiresAt && new Date(row.expiresAt).getTime() <= Date.now()) return null;
+  const runModel = prisma?.aICommerceRun || prisma?.aiCommerceRun;
+  const runRow = runModel?.findFirst ? await runModel.findFirst({ where: { empresaId: positiveId(empresaId), runId: row.runId }, select: { mode: true, correlationId: true } }) : null;
   return {
     runId: row.runId,
     empresaId: row.empresaId,
     conversationId: row.conversationId,
     conversationRevision: row.conversationRevision || "",
-    mode: MODES.HUMAN_APPROVAL,
-    correlationId: row.correlationId || null,
+    mode: normalizeMode(runRow?.mode || MODES.HUMAN_APPROVAL),
+    correlationId: row.correlationId || runRow?.correlationId || null,
     revision: Number(row.revision) || 1,
     draft: {
       draftId: String(row.id),
