@@ -86,7 +86,7 @@ function validateCommercialDraft(draft, { empresaId, conversationId, offers = []
   const allowedOfferIds = new Set((Array.isArray(offers) ? offers : []).map((offer) => String(offer?.offerId || offer?.id || "")));
   const productOffers = (Array.isArray(draft.productOffers) ? draft.productOffers : []).slice(0, MAX_OFFERS).map((offer) => {
     const offerId = String(offer?.offerId || "");
-    if (!offerId || (allowedOfferIds.size > 0 && !allowedOfferIds.has(offerId))) throw policyError("AI_OFFER_NOT_GROUNDED", "Oferta nao pertence ao contexto.", 409);
+    if (!offerId || !allowedOfferIds.has(offerId)) throw policyError("AI_OFFER_NOT_GROUNDED", "Oferta nao pertence ao contexto.", 409);
     if (positiveId(offer.empresaId) && positiveId(offer.empresaId) !== positiveId(empresaId)) throw policyError("AI_OFFER_TENANT_MISMATCH", "Oferta de outro tenant.", 403);
     if (positiveId(offer.conversationId) && positiveId(offer.conversationId) !== positiveId(conversationId)) throw policyError("AI_OFFER_CONVERSATION_MISMATCH", "Oferta de outra conversa.", 409);
     if (offer.expiresAt && new Date(offer.expiresAt).getTime() <= Date.now()) throw policyError("AI_OFFER_EXPIRED", "Oferta expirada.", 409);
