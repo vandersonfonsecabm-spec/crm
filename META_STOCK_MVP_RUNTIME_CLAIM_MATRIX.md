@@ -11,7 +11,7 @@
 | E2_CONCURRENCY_POSTGRES | PARTIAL | lease/CAS focused tests; two-live Prisma workers not run |
 | E2_TENANT_ISOLATION_POSTGRES | PASS (isolated) | cross-tenant composite FK insert rejected |
 | E2_OUTBOX_POSTGRES | PASS (schema/focused) | outbox indexes, dedupe, lease and retry tests |
-| BACKEND_FULL_SUITE | BLOCKED | official isolated Prisma runner stopped at generic engine error; 39 stock-focused tests pass |
+| BACKEND_FULL_SUITE | BLOCKED | official isolated Prisma runner stopped at generic engine error; 42 stock-focused tests pass |
 | FRONTEND_FULL_SUITE | PASS | 190/190; lint/build pass |
 | TENANT_GATE | PASS | architecture/pre-migration 117 relations |
 | E3_PRODUCT_DECISIONS_FROZEN | PASS | decisions document |
