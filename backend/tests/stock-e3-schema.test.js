@@ -6,6 +6,7 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const sqlite = fs.readFileSync(path.join(root, "prisma/migrations/20260823200000_add_stock_rules_h8_projection/migration.sql"), "utf8");
 const postgres = fs.readFileSync(path.join(root, "prisma-postgres/migrations/20260823200000_add_stock_rules_h8_projection/migration.sql"), "utf8");
+const postgresEnumFix = fs.readFileSync(path.join(root, "prisma-postgres/migrations/20260824120000_fix_stock_postgres_enum_types/migration.sql"), "utf8");
 
 test("E3 migration is additive, mirrored and keeps the existing H8 center", () => {
   for (const sql of [sqlite, postgres]) {
@@ -29,4 +30,15 @@ test("E3 evaluation FKs are composite tenant-scoped", () => {
     assert.match(sql, /AvaliacaoRegraEstoque_empresaId_sourceConnectionId_fkey/);
     assert.match(sql, /\("empresaId", "produtoEstoqueId"\)/);
   }
+});
+
+test("PostgreSQL corrective migration aligns stock enum columns with Prisma", () => {
+  assert.match(postgresEnumFix, /CREATE TYPE "StockSourceType" AS ENUM/);
+  assert.match(postgresEnumFix, /CREATE TYPE "StockImportStatus" AS ENUM/);
+  assert.match(postgresEnumFix, /ALTER COLUMN "tipoFonte" TYPE "StockSourceType"/);
+  assert.match(postgresEnumFix, /ALTER COLUMN "status" TYPE "StockOutboxStatus"/);
+  assert.match(postgresEnumFix, /stock_lot_validade_precision_ck/);
+  assert.match(postgresEnumFix, /stock_import_active_file_uq/);
+  assert.match(postgresEnumFix, /^BEGIN;\s*$/m);
+  assert.match(postgresEnumFix, /COMMIT;\s*$/m);
 });

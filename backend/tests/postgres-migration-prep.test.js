@@ -95,12 +95,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260823152000_add_distributed_rate_limit",
       "20260823180000_add_stock_core_e2",
       "20260823200000_add_stock_rules_h8_projection",
+      "20260824120000_fix_stock_postgres_enum_types",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260823200000_add_stock_rules_h8_projection",
+        "20260824120000_fix_stock_postgres_enum_types",
         "migration.sql",
       ),
     );

@@ -67,6 +67,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260823152000_add_distributed_rate_limit": "42428c27f70749c8f923d2580bf5b8291abcd64eb8ba0ebbe0dd11ea0f7cd013",
     "20260823180000_add_stock_core_e2": "900e386b93ab1eb9d0f2eda8472a173c6fec4e8aa4227de342cdd4b6532fd549",
     "20260823200000_add_stock_rules_h8_projection": "c09ea359fbf9608989a99a06f8130c380be470756118c2f2e765931844fdc8d3",
+    "20260824120000_fix_stock_postgres_enum_types": "6aaa84e0889bb889f6085188e3778ddde5290197921bf577117db485bc3c0fad",
   }),
 });
 
@@ -236,6 +237,12 @@ const MIGRATION_REGISTRY = Object.freeze({
     relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
     sqliteSha256: "ec802084d3d4149a5026cd7c670586e671a327073809168333dcc68ea574eafd",
     postgresSha256: "c09ea359fbf9608989a99a06f8130c380be470756118c2f2e765931844fdc8d3",
+  }),
+  "20260824120000_fix_stock_postgres_enum_types": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: null,
+    postgresSha256: "6aaa84e0889bb889f6085188e3778ddde5290197921bf577117db485bc3c0fad",
   }),
 });
 
