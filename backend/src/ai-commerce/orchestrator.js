@@ -76,6 +76,8 @@ function createAICommerceOrchestrator({
       idempotencyKey,
       approvedActions: input.approvedActions || {},
     };
+    const claim = await claimPersistedRun({ prisma, baseContext, input, settings, now });
+    if (claim?.existing) return freezeResult({ ...claim.existing, idempotentReplay: true, status: claim.existing.status || "IN_PROGRESS" });
     await auditCall(audit, "recordRunStarted", { ...baseContext, status: "STARTED", state: STATES.DISCOVERY });
     let state = STATES.DISCOVERY;
     let decision;
@@ -350,6 +352,36 @@ async function getExistingRun({ prisma, idempotencyKey, runs }) {
   }
   return null;
 }
+
+async function claimPersistedRun({ prisma, baseContext, input, settings, now }) {
+  const model = prisma?.aICommerceRun || prisma?.aiCommerceRun;
+  if (!model?.create) return { existing: null };
+  const retentionUntil = new Date(now().getTime() + 30 * 24 * 60 * 60 * 1000);
+  try {
+    const row = await model.create({ data: {
+      empresaId: baseContext.empresaId,
+      runId: baseContext.runId,
+      conversationId: baseContext.conversationId,
+      triggerMessageId: positiveId(input.messageId || input.latestMessageId),
+      idempotencyKey: baseContext.idempotencyKey,
+      mode: baseContext.mode,
+      state: STATES.DISCOVERY,
+      status: "STARTED",
+      policyVersion: settings.policyVersion || "ai-commerce-policy.v1",
+      messageRevision: input.messageRevision === undefined ? null : String(input.messageRevision),
+      correlationId: baseContext.correlationId,
+      eventJson: JSON.stringify({ schemaVersion: "AICommerceRunStarted.v1" }),
+      retentionUntil,
+    } });
+    return { row, existing: null };
+  } catch (error) {
+    if (!isUniqueConflict(error)) throw error;
+    const existing = model.findFirst ? await model.findFirst({ where: { empresaId: baseContext.empresaId, idempotencyKey: baseContext.idempotencyKey } }) : null;
+    return { existing };
+  }
+}
+
+function isUniqueConflict(error) { return error?.code === "P2002" || /unique|duplicate/i.test(String(error?.message || "")); }
 
 async function auditCall(audit, method, payload) { if (audit && typeof audit[method] === "function") return audit[method](payload); return undefined; }
 function freezeResult(value) { return Object.freeze({ ...value }); }
