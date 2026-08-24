@@ -104,7 +104,8 @@ function syncFailureMaterialVersion({ empresaId, sourceId, runId, revision, erro
   const numericRunId = Number(runId);
   if (Number.isSafeInteger(numericRunId) && numericRunId > MAX_PRISMA_INT) throw new StockError("STOCK_CONFLICT", "Sequencia de sincronizacao excedeu o limite de materialVersion.");
   const safeRunId = Number.isSafeInteger(numericRunId) && numericRunId > 0 ? numericRunId : 0;
-  const baseVersion = safeRunId || (safeRevision * 10 + 2);
+  const revisionVersion = safeRevision <= Math.floor((MAX_PRISMA_INT - 2) / 10) ? safeRevision * 10 + 2 : MAX_PRISMA_INT;
+  const baseVersion = Math.max(safeRunId, revisionVersion);
   const occurrenceKey = `${empresaId}:STOCK_SYNC_FAILED:${sourceId}:${errorFamily || "UNKNOWN"}`;
   const latest = latestRowsByOccurrence(failureHistory);
   const current = latest.get(occurrenceKey);
