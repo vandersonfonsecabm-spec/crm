@@ -122,7 +122,7 @@ function createCommercialProposalService({ prisma }) {
         },
       });
       if (updated.count !== 1) throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
-      await tx.itemPropostaComercial.deleteMany({ where: { propostaId: id } });
+      await tx.itemPropostaComercial.deleteMany({ where: { empresaId: context.empresaId, propostaId: id } });
       await tx.itemPropostaComercial.createMany({
         data: totals.itens.map((item) => itemStorageData(tx, id, context, item)),
       });
@@ -411,6 +411,7 @@ function parseItem(value, index) {
       ordem: index,
     };
   }
+  if (body.itemType === "CATALOG_ITEM") invalid("Item catalogado exige productOfferId.", "CATALOG_OFFER_REQUIRED");
   if (body.itemType !== undefined && body.itemType !== "LEGACY_ITEM") invalid("itemType invalido para item legado.", "LEGACY_ITEM_TYPE_INVALID");
   const forbidden = [
     "catalogProductId", "stockProductId", "currency", "currencySnapshot", "productNameSnapshot", "skuSnapshot", "unitPriceSnapshot",
@@ -552,6 +553,7 @@ async function materializeCatalogItem(client, context, item, { clienteId, now })
   if (Number(catalog.stockProductId) !== Number(offer.stockProductId) || Number(stock.id) !== Number(offer.stockProductId)) {
     throw conflict("PROPOSAL_OFFER_CONTEXT_CONFLICT", "A oferta nao possui produto de estoque consistente.");
   }
+  if (stock.ativo === false) throw conflict("PRODUCT_UNAVAILABLE", "O produto de estoque nao esta ativo.");
   if (catalog.visibility !== "PUBLISHED" || catalog.archivedAt) throw conflict("PROPOSAL_CATALOG_CHANGED", "O produto catalogado nao esta publicado.");
   if (Number(catalog.revision) !== Number(offer.catalogRevision)) throw conflict("PROPOSAL_CATALOG_CHANGED", "O catalogo mudou desde a oferta.");
   const priceStatus = resolvePriceStatus(catalog, offer);
