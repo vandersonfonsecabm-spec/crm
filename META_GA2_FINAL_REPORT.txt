@@ -117,7 +117,8 @@ Os 15 documentos gerados e incluídos no ZIP são:
 Suplemento de toolchain incluído no pacote: `docs/TOOLCHAIN_CONTRACT.md`.
 
 Pacote: META_GA2_REPORTS_20260824.zip
-SHA-256 do pacote: 28a40438f314a0b6ffa0222d6c36bf05d4fbeafffbbbd4a560b805633265606c
+SHA-256 do pacote: informado na mensagem de entrega; não é embutido no
+próprio ZIP para evitar uma referência autorreferente.
 
 HISTÓRICO DE COMMITS E RELEASE
 
