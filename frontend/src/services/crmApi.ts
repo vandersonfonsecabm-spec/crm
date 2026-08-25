@@ -2644,11 +2644,27 @@ export function resolveApiBaseUrl({
   if (!production) return configuredApiUrl || "http://localhost:3001";
   if (isOfficialProductionHost(hostname)) return "/api";
   if (!configuredApiUrl || isOfficialProductionApi(configuredApiUrl)) return "";
-  return configuredApiUrl;
+  const normalized = configuredApiUrl.replace(/\/+$/, "");
+  return isSafeConfiguredApiUrl(normalized) ? normalized : "";
 }
 
 function isOfficialProductionHost(hostname?: string) {
   return OFFICIAL_PRODUCTION_HOSTS.has(String(hostname || "").trim().toLowerCase());
+}
+
+function isSafeConfiguredApiUrl(apiUrl: string) {
+  if (apiUrl === "/api") return true;
+  try {
+    const url = new URL(apiUrl);
+    return url.protocol === "https:"
+      && !url.username
+      && !url.password
+      && url.pathname === "/"
+      && !url.search
+      && !url.hash;
+  } catch {
+    return false;
+  }
 }
 
 function isOfficialProductionApi(apiUrl: string) {

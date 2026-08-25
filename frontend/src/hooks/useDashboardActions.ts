@@ -38,6 +38,12 @@ type UseDashboardActionsParams = {
   setPage: Dispatch<SetStateAction<number>>;
 };
 
+export function toCsvCell(value: unknown) {
+  const text = String(value ?? "");
+  const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${safeText.replace(/"/g, '""')}"`;
+}
+
 export default function useDashboardActions({
   clients,
   setClients,
@@ -364,7 +370,7 @@ export default function useDashboardActions({
       String(getLeadScore(client)),
     ]);
 
-    const csv = [header, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+    const csv = [header, ...rows].map((row) => row.map(toCsvCell).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
