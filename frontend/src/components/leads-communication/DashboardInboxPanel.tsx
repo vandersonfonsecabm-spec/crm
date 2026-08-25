@@ -90,7 +90,9 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
   const [busy, setBusy] = useState(false);
   const [teamUsers, setTeamUsers] = useState<LeadsCommunicationUser[]>([]);
   const listRequest = useRef(0);
+  const listAbortController = useRef<AbortController | null>(null);
   const detailRequest = useRef(0);
+  const detailAbortController = useRef<AbortController | null>(null);
   const syncedInitialConversationId = useRef<number | null | undefined>(undefined);
   const hasList = useRef(false);
   const idempotencyKey = useRef<string | null>(null);
@@ -133,10 +135,13 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
 
   const loadList = useCallback(async (background = false) => {
     const sequence = ++listRequest.current;
+    listAbortController.current?.abort();
+    const controller = new AbortController();
+    listAbortController.current = controller;
     if (background || hasList.current) setListRefreshing(true); else setListLoading(true);
     if (!background) setListError("");
     try {
-      const response = await fetchCommunicationConversations(listQuery);
+      const response = await fetchCommunicationConversations(listQuery, { signal: controller.signal });
       if (sequence !== listRequest.current) return;
       const lastAvailablePage = Math.max(1, response.pagination.totalPages);
       if (listQuery.page > lastAvailablePage) {
@@ -146,47 +151,34 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
       setList(response);
       hasList.current = true;
     } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) return;
       if (sequence === listRequest.current && !background) setListError(errorMessage(error));
     } finally {
       if (sequence === listRequest.current) { setListLoading(false); setListRefreshing(false); }
+      if (listAbortController.current === controller) listAbortController.current = null;
     }
   }, [listQuery]);
 
   useEffect(() => {
-    let active = true;
-    const sequence = ++listRequest.current;
-    async function loadInitialList() {
-      if (hasList.current) setListRefreshing(true); else setListLoading(true);
-      setListError("");
-      try {
-        const response = await fetchCommunicationConversations(listQuery);
-        if (!active || sequence !== listRequest.current) return;
-        const lastAvailablePage = Math.max(1, response.pagination.totalPages);
-        if (listQuery.page > lastAvailablePage) {
-          setPage(lastAvailablePage);
-          return;
-        }
-        setList(response);
-        hasList.current = true;
-      } catch (error) {
-        if (active && sequence === listRequest.current) setListError(errorMessage(error));
-      } finally {
-        if (active && sequence === listRequest.current) { setListLoading(false); setListRefreshing(false); }
-      }
-    }
-    void loadInitialList();
-    return () => { active = false; };
-  }, [listQuery]);
+    void loadList();
+    return () => { listAbortController.current?.abort(); };
+  }, [loadList]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void loadList(true);
     }, 20000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      listAbortController.current?.abort();
+    };
   }, [loadList]);
 
   const loadDetail = useCallback(async (id: number, background = false) => {
     const sequence = ++detailRequest.current;
+    detailAbortController.current?.abort();
+    const controller = new AbortController();
+    detailAbortController.current = controller;
     if (!background) {
       setDetailLoading(true);
       setDetailError("");
@@ -194,7 +186,7 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
       lastMessageId.current = null;
     }
     try {
-      const { detail, historyList, messagePage, noteList } = await fetchConversationBundle(id);
+      const { detail, historyList, messagePage, noteList } = await fetchConversationBundle(id, controller.signal);
       if (sequence !== detailRequest.current) return;
       const nextLastMessageId = messagePage.data.at(-1)?.id ?? null;
       const keepAtLatest = !background || isNearMessageEnd(messageViewport.current);
@@ -216,9 +208,11 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
         }).catch(() => undefined);
       }
     } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) return;
       if (sequence === detailRequest.current && !background) setDetailError(errorMessage(error));
     } finally {
       if (sequence === detailRequest.current && !background) setDetailLoading(false);
+      if (detailAbortController.current === controller) detailAbortController.current = null;
     }
   }, [currentUserId, loadList]);
 
@@ -232,6 +226,7 @@ export default function DashboardInboxPanel({ authSession, initialConversationId
     return () => {
       window.clearTimeout(initialLoad);
       window.clearInterval(timer);
+      detailAbortController.current?.abort();
     };
   }, [loadDetail, selectedId]);
 
@@ -988,12 +983,13 @@ function createIdempotencyKey() {
   return `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-async function fetchConversationBundle(id: number) {
+async function fetchConversationBundle(id: number, signal?: AbortSignal) {
+  const options = signal ? { signal } : undefined;
   const [detail, messagePage, noteList, historyList] = await Promise.all([
-    fetchCommunicationConversation(id),
-    fetchLatestCommunicationMessages(id),
-    fetchCommunicationNotes(id),
-    fetchCommunicationConversationHistory(id),
+    fetchCommunicationConversation(id, options),
+    fetchLatestCommunicationMessages(id, signal),
+    fetchCommunicationNotes(id, options),
+    fetchCommunicationConversationHistory(id, options),
   ]);
   return { detail, historyList, messagePage, noteList };
 }
@@ -1019,15 +1015,16 @@ function localDayKey(value?: string | null) {
   return timestamp ? new Intl.DateTimeFormat("pt-BR", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(timestamp)) : null;
 }
 
-async function fetchLatestCommunicationMessages(id: number) {
-  const firstPage = await fetchCommunicationMessages(id, { page: 1, limit: 100 });
+async function fetchLatestCommunicationMessages(id: number, signal?: AbortSignal) {
+  const options = signal ? { signal } : undefined;
+  const firstPage = await fetchCommunicationMessages(id, { page: 1, limit: 100 }, options);
   if (firstPage.pagination.totalPages <= 1) return firstPage;
 
   const lastPageNumber = firstPage.pagination.totalPages;
-  const lastPage = await fetchCommunicationMessages(id, { page: lastPageNumber, limit: 100 });
+  const lastPage = await fetchCommunicationMessages(id, { page: lastPageNumber, limit: 100 }, options);
   if (lastPage.data.length >= 100 || lastPageNumber === 1) return lastPage;
 
-  const previousPage = await fetchCommunicationMessages(id, { page: lastPageNumber - 1, limit: 100 });
+  const previousPage = await fetchCommunicationMessages(id, { page: lastPageNumber - 1, limit: 100 }, options);
   return {
     ...lastPage,
     data: [...previousPage.data, ...lastPage.data].slice(-100),
@@ -1052,6 +1049,10 @@ function useCompactInboxContext() {
   }, [query]);
 
   return compact;
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function errorMessage(error: unknown) {

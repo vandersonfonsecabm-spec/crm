@@ -34,8 +34,8 @@ test("Lote 8 aplica a composição Inbox aos contratos reais sem criar operaçõ
   assert.match(api, /acquireCommunicationReplyLease\(id: number/);
   assert.match(api, /releaseCommunicationReplyLease\(id: number/);
 
-  assert.match(inbox, /fetchCommunicationConversations\(listQuery\)/);
-  assert.match(inbox, /fetchConversationBundle\(id\)/);
+  assert.match(inbox, /fetchCommunicationConversations\(listQuery(?:, \{ signal: controller\.signal \})?\)/);
+  assert.match(inbox, /fetchConversationBundle\(id(?:, controller\.signal)?\)/);
   assert.match(inbox, /canUseSimulatedReply\(conversation\)/);
   assert.match(inbox, /canChangeConversation && <details className="inbox-actions-menu/);
   assert.match(inbox, /renewCommunicationReplyLease/);

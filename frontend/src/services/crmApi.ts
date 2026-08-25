@@ -2384,8 +2384,8 @@ export async function fetchCommunicationLeadHistory(id: number) {
   return requestApiGetAuthenticated<AssignmentHistoryEntry[]>(`/leads/${id}/historico-atribuicao`);
 }
 
-export async function fetchCommunicationConversations(params: ConversationQuery = {}) {
-  return requestApiGetAuthenticated<ApiPaginatedResponse<CommunicationConversation>>(`/conversas${toQueryString(params)}`);
+export async function fetchCommunicationConversations(params: ConversationQuery = {}, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<CommunicationConversation>>(`/conversas${toQueryString(params)}`, options);
 }
 
 export type CommunicationAttentionSummary = {
@@ -2398,8 +2398,8 @@ export async function fetchCommunicationAttentionSummary() {
   return requestApiGetAuthenticated<CommunicationAttentionSummary>("/conversas/resumo");
 }
 
-export async function fetchCommunicationConversation(id: number) {
-  return requestApiGetAuthenticated<CommunicationConversation>(`/conversas/${id}`);
+export async function fetchCommunicationConversation(id: number, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<CommunicationConversation>(`/conversas/${id}`, options);
 }
 
 export async function fetchInboxCommercialContext(id: number) {
@@ -2465,8 +2465,8 @@ export async function reopenCommunicationConversation(id: number, motivo?: strin
   return requestApiWrite<CommunicationConversation>("POST", `/conversas/${id}/reabrir`, motivo ? { motivo } : {});
 }
 
-export async function fetchCommunicationMessages(id: number, params: { page?: number; limit?: number } = {}) {
-  return requestApiGetAuthenticated<ApiPaginatedResponse<CommunicationMessage>>(`/conversas/${id}/mensagens${toQueryString(params)}`);
+export async function fetchCommunicationMessages(id: number, params: { page?: number; limit?: number } = {}, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<CommunicationMessage>>(`/conversas/${id}/mensagens${toQueryString(params)}`, options);
 }
 
 export async function markCommunicationConversationRead(id: number) {
@@ -2477,16 +2477,16 @@ export async function sendSimulatedCommunicationMessage(id: number, payload: { e
   return requestApiWrite<CommunicationMessage>("POST", `/conversas/${id}/mensagens/simuladas`, { ...payload, direcao: "SAIDA" });
 }
 
-export async function fetchCommunicationNotes(id: number) {
-  return requestApiGetAuthenticated<InternalConversationNote[]>(`/conversas/${id}/notas-internas`);
+export async function fetchCommunicationNotes(id: number, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<InternalConversationNote[]>(`/conversas/${id}/notas-internas`, options);
 }
 
 export async function createCommunicationNote(id: number, conteudo: string) {
   return requestApiWrite<InternalConversationNote>("POST", `/conversas/${id}/notas-internas`, { conteudo });
 }
 
-export async function fetchCommunicationConversationHistory(id: number) {
-  return requestApiGetAuthenticated<AssignmentHistoryEntry[]>(`/conversas/${id}/historico-atribuicao`);
+export async function fetchCommunicationConversationHistory(id: number, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<AssignmentHistoryEntry[]>(`/conversas/${id}/historico-atribuicao`, options);
 }
 
 export async function acquireCommunicationReplyLease(id: number) {
