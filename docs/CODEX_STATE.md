@@ -1,5 +1,24 @@
 # Estado atual do CRM
 
+## V71 — proposta ↔ catálogo V1 (2026-08-25)
+
+- O contrato aprovado está em
+  `docs/COMMERCIAL_PROPOSAL_CATALOG_CONTRACT_V1.md`. A V1 separa
+  `CATALOG_ITEM` de `LEGACY_ITEM`, congela preço/moeda/status/SKU/unidade no
+  item, mantém ProductOffer como evidência de origem e deixa desconto fora.
+- O candidato adiciona migration aditiva SQLite/PostgreSQL para
+  `ItemPropostaComercial.empresaId`, quatro FKs compostas tenant-scoped,
+  checks de tipo, snapshots, ações de histórico e backfill determinístico dos
+  itens existentes como `LEGACY_ITEM`. Nenhuma migration foi aplicada ao banco
+  oficial e nenhum deploy foi iniciado neste lote.
+- Revalidação server-side ocorre apenas antes de transições materiais de itens
+  catalogados; preço, moeda, revisão, validade, estoque e freshness divergentes
+  retornam `PROPOSAL_REVALIDATION_REQUIRED` sem alteração silenciosa.
+- Sandbox migration `2/2`, testes de serviço `4/4`, PDF/contrato `7/7`,
+  frontend global `197/197`, build e lint passaram. PostgreSQL descartável real
+  continua bloqueado por ambiente; a suíte global isolada permanece limitada
+  pela ausência autorizada do `dev.db` nesta worktree.
+
 ## V70 — frontend polling safety (2026-08-25)
 
 - O commit `fbe33dc08e1a9149cfd349b26173dcce6dcad380` reduziu o polling da

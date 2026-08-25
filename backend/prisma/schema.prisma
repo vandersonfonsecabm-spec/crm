@@ -226,6 +226,7 @@ model Empresa {
   historicosAtribuicao       HistoricoAtribuicao[]
   historicosQualificacaoConversa HistoricoQualificacaoConversa[]
   propostasComerciais          PropostaComercial[]
+  itensPropostasComerciais     ItemPropostaComercial[]
   historicosPropostasComerciais HistoricoPropostaComercial[]
   historicosAcompanhamentos    HistoricoAcompanhamento[]
   automacaoRegras              AutomacaoRegra[]
@@ -1144,20 +1145,41 @@ model PropostaComercial {
 }
 
 model ItemPropostaComercial {
-  id                       Int                @id @default(autoincrement())
+  id                       Int                        @id @default(autoincrement())
+  empresaId                Int
+  empresa                  Empresa                    @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   propostaId               Int
-  proposta                 PropostaComercial  @relation(fields: [propostaId], references: [id], onDelete: Cascade)
+  proposta                 PropostaComercial          @relation(fields: [empresaId, propostaId], references: [empresaId, id], onDelete: Cascade, onUpdate: Restrict)
+  itemType                 TipoItemPropostaComercial  @default(LEGACY_ITEM)
+  productOfferId           String?
+  productOffer             ProductOffer?              @relation("ItemPropostaComercialProductOffer", fields: [empresaId, productOfferId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  catalogProductId         Int?
+  catalogProduct           CommercialCatalogProduct?  @relation("ItemPropostaComercialCatalogProduct", fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  stockProductId           Int?
+  stockProduct             ProdutoEstoque?            @relation("ItemPropostaComercialStockProduct", fields: [empresaId, stockProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   descricao                String
+  productNameSnapshot      String?
+  skuSnapshot              String?
+  unitSnapshot             String?
   quantidade               Decimal
   valorUnitarioCentavos    Int
-  descontoCentavos         Int                @default(0)
+  currencySnapshot         String?
+  priceStatusSnapshot      String?
+  offerExpiresAt           DateTime?
+  catalogRevision          Int?
+  stockMaterialVersion     Int?
+  descontoCentavos         Int                        @default(0)
   subtotalCentavos         Int
   totalCentavos            Int
-  ordem                    Int                @default(0)
-  createdAt                DateTime           @default(now())
-  updatedAt                DateTime           @updatedAt
+  ordem                    Int                        @default(0)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
 
-  @@index([propostaId, ordem])
+  @@unique([empresaId, id])
+  @@index([empresaId, propostaId, ordem])
+  @@index([empresaId, productOfferId])
+  @@index([empresaId, catalogProductId])
+  @@index([empresaId, stockProductId])
 }
 
 model HistoricoPropostaComercial {
@@ -1606,6 +1628,7 @@ model ProdutoEstoque {
   avaliacoesRegraEstoque   AvaliacaoRegraEstoque[]
   catalogosComerciais      CommercialCatalogProduct[]
   ofertasProduto            ProductOffer[] @relation("ProductOfferStockProduct")
+  itensPropostasComerciais  ItemPropostaComercial[] @relation("ItemPropostaComercialStockProduct")
 
   @@unique([empresaId, id])
   @@index([empresaId, skuCanonico])
@@ -1648,6 +1671,7 @@ model CommercialCatalogProduct {
   empresa             Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   stockProduct        ProdutoEstoque @relation(fields: [empresaId, stockProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   offers              ProductOffer[]
+  itensPropostasComerciais ItemPropostaComercial[] @relation("ItemPropostaComercialCatalogProduct")
   interests           AICommerceProductInterest[] @relation("AICommerceInterestCatalogProduct")
   opportunityDrafts   AICommerceOpportunityDraft[] @relation("AICommerceDraftCatalogProduct")
 
@@ -1695,6 +1719,7 @@ model ProductOffer {
   cliente               Cliente?                  @relation("ProductOfferCustomer", fields: [empresaId, customerId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   catalogProduct        CommercialCatalogProduct  @relation(fields: [empresaId, catalogProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
   stockProduct          ProdutoEstoque             @relation("ProductOfferStockProduct", fields: [empresaId, stockProductId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  itensPropostasComerciais ItemPropostaComercial[] @relation("ItemPropostaComercialProductOffer")
   interests             AICommerceProductInterest[] @relation("AICommerceInterestOffer")
   opportunityDrafts     AICommerceOpportunityDraft[] @relation("AICommerceDraftOffer")
   handoffs              AICommerceHandoff[] @relation("AICommerceHandoffOffer")
@@ -2637,11 +2662,19 @@ enum StatusPropostaComercial {
   CANCELADA
 }
 
+enum TipoItemPropostaComercial {
+  CATALOG_ITEM
+  LEGACY_ITEM
+}
+
 enum TipoAcaoPropostaComercial {
   CRIAR
   ATUALIZAR
   ALTERAR_STATUS
   DUPLICAR_VERSAO
+  ADICIONAR_ITEM_CATALOGADO
+  REVALIDAR
+  REVALIDACAO_RECUSADA
 }
 
 enum PapelUsuario {

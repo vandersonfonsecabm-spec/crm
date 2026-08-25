@@ -31,15 +31,15 @@ const {
 const backendDir = path.resolve(__dirname, "..");
 const migrationDir = path.join(backendDir, "prisma", "migrations");
 const currentMigration = "20260801123000_enforce_tenant_safe_relations";
-const latestMigration = "20260824160000_add_ai_commerce_persistent_audit_effects";
+const latestMigration = "20260825170000_add_commercial_proposal_catalog_items";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 const historicalSourceDatabase = requiredEnv("CRM_TEST_SOURCE_DATABASE_PATH");
 
-test("arquitetura atual cobre as 157 relacoes e as excecoes documentadas", () => {
+test("arquitetura atual cobre as 161 relacoes e as excecoes documentadas", () => {
   const result = inspectArchitecture();
   assert.deepEqual(result.failures, []);
-  assert.equal(result.relationCount, 157);
+  assert.equal(result.relationCount, 161);
   assert.equal(result.relationManifestHash, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(tenantRelationManifestHash(), EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(MIGRATION_REGISTRY[currentMigration].relationManifestSha256, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
@@ -211,8 +211,8 @@ test("pre-migration preserva o upgrade canonico SQLite de 9 para 32 migrations",
       migrationName: latestMigration,
     });
     assert.equal(result.safe, true);
-    assert.equal(result.relationCount, 157);
-  assert.ok(result.checkedRelationCount > 0 && result.checkedRelationCount < 157);
+    assert.equal(result.relationCount, 161);
+  assert.ok(result.checkedRelationCount > 0 && result.checkedRelationCount < 161);
   } finally {
     removeDatabase(databasePath);
   }
@@ -262,7 +262,7 @@ test("pre-migration inspeciona a relacao quando a coluna pendente ja existe", ()
   assert.equal(relationSpecsForExistingSchema(tables, {
     columnsByTable,
     unavailableRelationKeys: new Set(["IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao"]),
-  }).length, 157);
+  }).length, 161);
 
   columnsByTable.get("IntegracaoOAuthState").delete("usuarioId");
   assert.throws(

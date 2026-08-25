@@ -101,12 +101,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260824120000_fix_stock_postgres_enum_types",
       "20260824150000_add_ai_commerce_catalog_foundation",
       "20260824160000_add_ai_commerce_persistent_audit_effects",
+      "20260825170000_add_commercial_proposal_catalog_items",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260824160000_add_ai_commerce_persistent_audit_effects",
+        "20260825170000_add_commercial_proposal_catalog_items",
         "migration.sql",
       ),
     );
@@ -194,6 +195,20 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(stockRulesMigration, /OverrideEstoque/);
     assert.match(stockRulesMigration, /AvaliacaoRegraEstoque/);
     assert.doesNotMatch(stockRulesMigration, /^\s*(?:DROP|DELETE|UPDATE|TRUNCATE)\b/im);
+    const commercialProposalCatalogMigration = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260825170000_add_commercial_proposal_catalog_items",
+      "migration.sql",
+    ), "utf8");
+    assert.match(commercialProposalCatalogMigration, /^BEGIN;\s*$/m);
+    assert.match(commercialProposalCatalogMigration, /ITEM_PROPOSTA_COMERCIAL_PARENT_MISSING/);
+    assert.match(commercialProposalCatalogMigration, /CREATE TYPE "TipoItemPropostaComercial"/);
+    assert.match(commercialProposalCatalogMigration, /ADD VALUE IF NOT EXISTS 'REVALIDACAO_RECUSADA'/);
+    assert.match(commercialProposalCatalogMigration, /UPDATE "ItemPropostaComercial" AS "item"/);
+    assert.match(commercialProposalCatalogMigration, /DROP CONSTRAINT "ItemPropostaComercial_propostaId_fkey"/);
+    assert.match(commercialProposalCatalogMigration, /FOREIGN KEY \("empresaId", "productOfferId"\) REFERENCES "ProductOffer"\("empresaId", "id"\) ON DELETE RESTRICT/);
+    assert.match(commercialProposalCatalogMigration, /ItemPropostaComercial_catalog_contract_ck/);
+    assert.doesNotMatch(commercialProposalCatalogMigration, /^\s*(?:DELETE|TRUNCATE|DROP TABLE)\b/im);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

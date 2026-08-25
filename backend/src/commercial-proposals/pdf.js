@@ -52,8 +52,10 @@ function proposalLines(proposal) {
   if (proposal.descricao) lines.push(...wrap(`Descricao: ${proposal.descricao}`));
   lines.push("", "ITENS");
   proposal.itens.forEach((item, index) => {
-    lines.push(...wrap(`${index + 1}. ${item.descricao}`));
-    lines.push(`   ${item.quantidade} x ${money(item.valorUnitarioCentavos)} | desconto ${money(item.descontoCentavos)} | total ${money(item.totalCentavos)}`);
+    const rendered = renderItemSnapshot(item);
+    lines.push(...wrap(`${index + 1}. ${rendered.descricao}`));
+    if (rendered.metadata.length) lines.push(...wrap(`   ${rendered.metadata.join(" | ")}`));
+    lines.push(`   ${item.quantidade} x ${money(item.valorUnitarioCentavos, rendered.currency)} | desconto ${money(item.descontoCentavos, rendered.currency)} | total ${money(item.totalCentavos, rendered.currency)}`);
   });
   lines.push(
     "",
@@ -65,6 +67,60 @@ function proposalLines(proposal) {
   if (proposal.observacoes) lines.push("", ...wrap(`Observacoes: ${proposal.observacoes}`));
   lines.push("", "Documento gerado pelo CRM. O estado ENVIADA nao representa envio por canal externo.");
   return lines;
+}
+
+/**
+ * Return only persisted item data for PDF rendering.
+ *
+ * Catalog prices and names are snapshots captured on the proposal item. The
+ * current catalog must never be queried while generating a historical PDF;
+ * doing so would make an old proposal change when the catalog changes. Legacy
+ * rows do not have snapshot fields and deliberately retain their old output.
+ */
+function renderItemSnapshot(item) {
+  const catalog = isCatalogItem(item);
+  if (!catalog) return { descricao: item.descricao, currency: "BRL", metadata: [] };
+
+  const descricao = item.productNameSnapshot || item.descricao || "Item de catalogo";
+  const catalogRevision = safeRevision(item.catalogRevision);
+  const metadata = [
+    item.skuSnapshot ? `SKU ${item.skuSnapshot}` : null,
+    item.unitSnapshot ? `Unidade ${item.unitSnapshot}` : null,
+    item.priceStatusSnapshot ? `Preco ${item.priceStatusSnapshot}` : null,
+    safeDateLabel(item.offerExpiresAt, "Oferta valida ate"),
+    catalogRevision ? `Revisao comercial ${catalogRevision}` : null,
+  ].filter(Boolean);
+  return {
+    descricao,
+    currency: safeCurrency(item.currencySnapshot),
+    metadata,
+  };
+}
+
+function safeRevision(value) {
+  const revision = Number(value);
+  return Number.isSafeInteger(revision) && revision > 0 ? revision : null;
+}
+
+function safeCurrency(value) {
+  const currency = String(value || "BRL").trim().toUpperCase();
+  return currency === "BRL" ? currency : "BRL";
+}
+
+function safeDateLabel(value, prefix) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${prefix} ${formatDate(date)}`;
+}
+
+function isCatalogItem(item) {
+  if (item?.itemType === "LEGACY_ITEM") return false;
+  return item?.itemType === "CATALOG_ITEM"
+    || item?.productNameSnapshot != null
+    || item?.productOfferId != null
+    || item?.catalogProductId != null
+    || item?.stockProductId != null;
 }
 
 function contentStream(lines) {
@@ -101,8 +157,10 @@ function pdfText(value) {
     .replace(/([\\()])/g, "\\$1");
 }
 
-function money(cents) {
-  return `R$ ${(Number(cents || 0) / 100).toFixed(2).replace(".", ",")}`;
+function money(cents, currency = "BRL") {
+  const value = (Number(cents || 0) / 100).toFixed(2).replace(".", ",");
+  if (!currency || currency === "BRL") return `R$ ${value}`;
+  return `${currency} ${value}`;
 }
 
 function formatDate(value) {
@@ -110,4 +168,4 @@ function formatDate(value) {
   return `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
 }
 
-module.exports = { generateProposalPdf };
+module.exports = { generateProposalPdf, isCatalogItem, proposalLines, renderItemSnapshot };

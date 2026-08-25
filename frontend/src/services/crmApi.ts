@@ -636,9 +636,12 @@ export type Customer360TimelineResponse = {
 };
 
 export type CommercialProposalStatus = "RASCUNHO" | "PRONTA" | "ENVIADA" | "ACEITA" | "RECUSADA" | "VENCIDA" | "CANCELADA";
+export type CommercialProposalItemType = "CATALOG_ITEM" | "LEGACY_ITEM";
+export type CommercialProposalPriceStatus = "AVAILABLE" | "ON_REQUEST" | "UNAVAILABLE" | "STALE";
 
 export type CommercialProposalItem = {
   id: number;
+  itemType: CommercialProposalItemType;
   descricao: string;
   quantidade: string;
   valorUnitarioCentavos: number;
@@ -646,6 +649,18 @@ export type CommercialProposalItem = {
   subtotalCentavos: number;
   totalCentavos: number;
   ordem: number;
+  /** Persisted catalog identity/price snapshot; absent on legacy rows. */
+  productOfferId?: string | null;
+  catalogProductId?: number | null;
+  stockProductId?: number | null;
+  productNameSnapshot?: string | null;
+  skuSnapshot?: string | null;
+  unitSnapshot?: string | null;
+  currencySnapshot?: "BRL" | null;
+  priceStatusSnapshot?: CommercialProposalPriceStatus | null;
+  offerExpiresAt?: string | null;
+  catalogRevision?: number | null;
+  stockMaterialVersion?: number | null;
 };
 
 export type CommercialProposal = {
@@ -697,7 +712,23 @@ export type CommercialProposalPayload = {
   condicoesComerciais?: string | null;
   descontoGeralCentavos: number;
   revisao?: number;
-  itens: Array<{ descricao: string; quantidade: string; valorUnitarioCentavos: number; descontoCentavos: number }>;
+  itens: Array<CommercialProposalLegacyItemPayload | CommercialProposalCatalogItemPayload>;
+};
+
+/** Legacy/manual items keep the existing contract and are still supported. */
+export type CommercialProposalLegacyItemPayload = {
+  itemType?: "LEGACY_ITEM";
+  descricao: string;
+  quantidade: string;
+  valorUnitarioCentavos: number;
+  descontoCentavos: number;
+};
+
+/** Catalog items identify an offer; the server resolves and snapshots its price. */
+export type CommercialProposalCatalogItemPayload = {
+  itemType: "CATALOG_ITEM";
+  productOfferId: string;
+  quantidade: string;
 };
 
 export type CommercialPriority = "BAIXA" | "MEDIA" | "ALTA" | "CRITICA";
@@ -2347,11 +2378,11 @@ export async function fetchCommercialProposal(id: number) {
 }
 
 export async function createCommercialProposal(negocioId: number, payload: CommercialProposalPayload) {
-  return requestApiWrite<CommercialProposal>("POST", `/negocios/${negocioId}/propostas`, payload as unknown as Record<string, unknown>);
+  return requestApiWrite<CommercialProposal>("POST", `/negocios/${negocioId}/propostas`, serializeCommercialProposalPayload(payload));
 }
 
 export async function updateCommercialProposal(id: number, payload: CommercialProposalPayload & { revisao: number }) {
-  return requestApiWrite<CommercialProposal>("PATCH", `/propostas/${id}/rascunho`, payload as unknown as Record<string, unknown>);
+  return requestApiWrite<CommercialProposal>("PATCH", `/propostas/${id}/rascunho`, serializeCommercialProposalPayload(payload));
 }
 
 export async function changeCommercialProposalStatus(id: number, status: CommercialProposalStatus, revisao: number) {
@@ -2378,6 +2409,36 @@ export async function fetchCommercialProposalPdf(id: number) {
     throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
   return response.blob();
+}
+
+/**
+ * Whitelist proposal inputs before they cross the API boundary. A catalog
+ * item's price is authoritative only after the server resolves its offer, so
+ * no client-supplied price or snapshot field is forwarded for that variant.
+ */
+export function serializeCommercialProposalPayload(payload: CommercialProposalPayload): Record<string, unknown> {
+  return {
+    titulo: payload.titulo,
+    descricao: payload.descricao,
+    validade: payload.validade,
+    observacoes: payload.observacoes,
+    condicoesComerciais: payload.condicoesComerciais,
+    descontoGeralCentavos: payload.descontoGeralCentavos,
+    ...(payload.revisao === undefined ? {} : { revisao: payload.revisao }),
+    itens: payload.itens.map((item) => item.itemType === "CATALOG_ITEM"
+      ? {
+          itemType: "CATALOG_ITEM",
+          productOfferId: item.productOfferId,
+          quantidade: item.quantidade,
+        }
+      : {
+          ...(item.itemType ? { itemType: "LEGACY_ITEM" } : {}),
+          descricao: item.descricao,
+          quantidade: item.quantidade,
+          valorUnitarioCentavos: item.valorUnitarioCentavos,
+          descontoCentavos: item.descontoCentavos,
+        }),
+  };
 }
 
 export async function fetchCommunicationLeadHistory(id: number) {
