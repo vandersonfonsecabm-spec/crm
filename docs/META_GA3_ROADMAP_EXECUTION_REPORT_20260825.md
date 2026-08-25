@@ -262,3 +262,50 @@ requests/polling no Inbox.
   `META_GA3_REPORTS_20260825_DELIVERY_FINAL.zip`.
 - Este documento é a consolidação específica da execução do roadmap e não
   substitui os gates externos ainda bloqueados.
+
+## 12. Reauditoria do vertical comercial
+
+Foi feita uma verificação focal adicional do plano `Proposta Comercial → fluxo
+humano → Customer 360`, reutilizando os testes e contratos do mesmo estado de
+fonte.
+
+### O que já existe
+
+- Propostas possuem listagem, detalhe, criação de rascunho, edição com revisão,
+  transição de status, versionamento, histórico e PDF.
+- A proposta é tenant-scoped, exige Negocio/Cliente existentes, usa CAS de
+  revisão e mantém histórico de autor/status.
+- O painel frontend de propostas já está integrado ao drawer de Negócios.
+- Customer 360 já agrega cadastro, negócios, propostas, mensagens, follow-ups,
+  notas, qualificações e timeline paginada/filtrável.
+- A Inbox já possui qualificação comercial e abertura/vínculo do Negocio real.
+- O Kanban de Negócios já é a fonte de pipeline existente.
+
+### Evidência focal reutilizada/confirmada
+
+- Frontend H3/H5/H2/Onda 4: `11/11 PASS` nesta reauditoria.
+- Backend H3/H5/H2 e migrations correspondentes já possuíam evidência sandbox
+  válida no mesmo contrato; não foram repetidos contra `dev.db`.
+- Não foi encontrada necessidade de criar Customer360, timeline, pipeline,
+  H8 ou proposta paralelos.
+
+### Gaps reais que não foram mascarados
+
+- `ItemPropostaComercial` ainda é textual e não guarda referência/snapshot de
+  ProductOffer, preço materialVersion ou disponibilidade.
+- Não existe política aprovada de limite de desconto por cargo/aprovação.
+- A proposta não deve ser marcada como venda/reserva sem revalidação de preço e
+  estoque definida pelo produto.
+- OrderDraft, reserva, pagamento e pedido externo continuam fora do escopo.
+
+Esses pontos exigem decisão de produto e/ou contrato de dados. Implementá-los
+automaticamente agora criaria comportamento financeiro sem autoridade definida.
+
+### Decisão desta reauditoria
+
+`COMMERCIAL_VERTICAL_EXISTING_FOUNDATION=PASS`
+
+`COMMERCIAL_NEW_SCHEMA_OR_ORDER=DEFERRED_PRODUCT_DECISION`
+
+Nenhuma alteração de código foi necessária nesta segunda passagem; somente a
+documentação foi complementada.
