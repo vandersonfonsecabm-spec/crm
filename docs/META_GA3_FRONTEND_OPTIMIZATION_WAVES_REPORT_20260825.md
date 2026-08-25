@@ -1,18 +1,19 @@
 # GA3 — relatório de ondas de otimização frontend
 
 Data: 25/08/2026
-Worktree: `C:\Users\vande\crm-saas-frontend-bundle`
-Branch: `feature/ga3-bundle-slice`
-Head: `a53bd571ddab11da6d3986b562230bc5228db6f1`
+Worktree: `C:\Users\vande\crm-saas-frontend-bundle-release`
+Branch: `feature/ga3-bundle-release`
+Head: `55aac370880fb17b46d5da88f6320613bf8e742f`
 
 ## Baseline congelada
 
 - V1 proposal/catalog permanece separada e sem deploy.
 - O bundle usa a linha do candidato local, não a branch suja
   `feature/postgres-migration-prep`.
-- Entry inicial: 284,61 kB minificado / 89,04 kB gzip.
+- Entry inicial: 284,05 kB minificado / 88,83 kB gzip.
 - Dashboard diferido: 589,26 kB / 145,19 kB gzip.
-- Baseline histórica pré-split: 869,81 kB / 231,53 kB gzip.
+- Baseline `origin/master` pré-split: 869,25 kB / 231,30 kB gzip.
+- Redução causal: 67,3% minificado / 61,6% gzip.
 
 ## Wave 0 — mapa e baseline
 
@@ -25,7 +26,7 @@ redução do total transferível após abrir o Dashboard.
 PASS. `App → Dashboard` usa `React.lazy`, fallback acessível e boundary de erro
 com retry. A sessão e as props do Dashboard permaneceram iguais.
 
-Evidência: `199/199` testes frontend, build, lint, teste focal do split e
+Evidência: `198/198` testes frontend, `19/19` autenticação, build, lint, teste focal do split e
 revisão adversarial PASS.
 
 ## Wave 2 — requests, polling e waterfalls
@@ -73,15 +74,15 @@ compatibilidade. Não houve alteração de lockfile ou instalação.
 
 ## Wave 6 — preview/release
 
-BLOCKED_EXTERNAL.
+PASS frontend-only.
 
-- O candidato da worktree não foi publicado.
-- O preview Vercel existente usa rewrite `/api/*` para a API Railway oficial;
-  não é um ambiente de mutação isolado.
-- Não foi feito login mutável no preview nem canário de produção.
-- Não há CI oficial no repositório.
-- QA autenticado do candidato requer preview isolado ou ambiente local com API
-  não produtiva.
+- Staging Railway/Vercel isolado validou login sintético, rotas diretas,
+  refresh, logout/login, mobile, console e CORS sem requests equivalentes na
+  produção.
+- O Preview Vercel do SHA da release ficou READY e foi promovido ao Vercel
+  oficial sem alterar backend, worker, migration ou V1.
+- Não há CI oficial no repositório; os gates locais reproduzíveis foram
+  executados no SHA da release.
 
 ## Resultado
 
@@ -91,12 +92,13 @@ GA3_REQUEST_WAVE=NO_CHANGE_WITH_EXISTING_FIXES
 GA3_REACT_RENDER_WAVE=NO_CHANGE_NO_PROFILER
 GA3_A11Y_WAVE=SEPARATE_MISSION
 GA3_CODE_REMOVAL=NONE_WITHOUT_PROOF
-GA3_PREVIEW_RELEASE=BLOCKED_API_ISOLATION
-PRODUCTION=UNCHANGED
+GA3_PREVIEW_RELEASE=PASS
+GA3_PRODUCTION_FRONTEND_ONLY=PASS
+PRODUCTION_BACKEND=UNCHANGED
 ```
 
 ## Próxima ação segura
 
-Criar preview com API isolada ou executar QA read-only/local. Só depois medir
-rotas autenticadas, LCP/INP/CLS, requests, memória e chunk failure real. Não
-fazer segundo split enquanto a fronteira de rota não for medida.
+Não fazer segundo split enquanto a fronteira de rota não for medida. Métricas
+autenticadas de LCP/INP/CLS, memória e chunk failure real permanecem uma missão
+posterior de performance.

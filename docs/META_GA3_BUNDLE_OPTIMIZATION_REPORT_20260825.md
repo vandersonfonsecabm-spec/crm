@@ -29,9 +29,9 @@ props, fallback e recuperação.
 
 | Métrica | Antes | Depois |
 |---|---:|---:|
-| JS inicial minificado | 869,81 kB | 284,61 kB |
-| JS inicial gzip | 231,53 kB | 89,04 kB |
-| Redução inicial | — | 585,20 kB / 67,3% |
+| JS inicial minificado | 869,25 kB | 284,05 kB |
+| JS inicial gzip | 231,30 kB | 88,83 kB |
+| Redução inicial | — | 585,20 kB / 67,3% minificado / 61,6% gzip |
 | Dashboard diferido | — | 589,26 kB / 145,19 kB gzip |
 
 O total transferível não desaparece; parte dele foi movida para o primeiro
@@ -40,7 +40,7 @@ rotas públicas/login.
 
 ## Validações
 
-- frontend global: `199/199 PASS`;
+- frontend global: `198/198 PASS`;
 - teste de autenticação focado: `19/19 PASS`;
 - build TypeScript/Vite: PASS;
 - lint: PASS;
@@ -54,7 +54,8 @@ rotas públicas/login.
 - Não foi feito um segundo split sem medir uma fronteira segura.
 - O teste de falha de chunk é estático; uma simulação real de 404/MIME depende
   de browser autenticado/deploy.
-- Nenhum deploy, push, migration ou alteração backend foi feito.
+- A release frontend-only foi publicada no Vercel oficial; não houve migration,
+  alteração backend ou alteração no worker.
 
 ## Estado
 
@@ -64,5 +65,5 @@ AUTH_ROUTE_CONTRACT=PASS
 FRONTEND_REGRESSION=PASS
 DASHBOARD_CHUNK_WARNING=ADVISORY
 V1_POSTGRES_REAL_REHEARSAL=BLOCKED_ENVIRONMENT
-PRODUCTION=UNCHANGED
+PRODUCTION_FRONTEND_ONLY=PASS
 ```
