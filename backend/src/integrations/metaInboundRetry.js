@@ -13,6 +13,7 @@ const FAILURE_STATE = Object.freeze({
 
 const DEFAULT_RETRY_POLICY = Object.freeze({
   maxAttempts: 3,
+  maxContentionAttempts: 8,
   leaseMs: 30_000,
   baseDelayMs: 25,
   maxDelayMs: 250,
@@ -20,6 +21,7 @@ const DEFAULT_RETRY_POLICY = Object.freeze({
 
 const RETRY_POLICY_LIMITS = Object.freeze({
   maxAttempts: [1, 5],
+  maxContentionAttempts: [1, 20],
   leaseMs: [1_000, 5 * 60_000],
   baseDelayMs: [0, 5_000],
   maxDelayMs: [0, 30_000],
@@ -41,6 +43,11 @@ function normalizeRetryPolicy(input = {}) {
       input?.maxAttempts,
       DEFAULT_RETRY_POLICY.maxAttempts,
       ...RETRY_POLICY_LIMITS.maxAttempts,
+    ),
+    maxContentionAttempts: boundedInteger(
+      input?.maxContentionAttempts,
+      DEFAULT_RETRY_POLICY.maxContentionAttempts,
+      ...RETRY_POLICY_LIMITS.maxContentionAttempts,
     ),
     leaseMs: boundedInteger(
       input?.leaseMs,

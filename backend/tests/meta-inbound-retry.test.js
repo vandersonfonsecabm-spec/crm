@@ -4,6 +4,7 @@ const {
   FAILURE_STATE,
   calculateBackoffWithJitter,
   claimMetaInboundWebhook,
+  normalizeRetryPolicy,
   recordMetaInboundFailure,
 } = require("../src/integrations/metaInboundRetry");
 
@@ -134,6 +135,12 @@ test("payload permanente nao e reaberto e nao atualiza estado por uma posse perd
   assert.equal(row.erroResumo, FAILURE_STATE.PERMANENT);
   assert.equal(row.tentativas, 1);
   assert.equal(channelRow.lastFailureCode, "MESSENGER_EVENT_PAYLOAD_INVALID");
+});
+
+test("contenção tem orçamento separado do retry de erro", () => {
+  const policy = normalizeRetryPolicy({ maxAttempts: 3, maxContentionAttempts: 10 });
+  assert.equal(policy.maxAttempts, 3);
+  assert.equal(policy.maxContentionAttempts, 10);
 });
 
 function retryableError() {

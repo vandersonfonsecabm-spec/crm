@@ -98,7 +98,7 @@ async function processAcceptedEvent({
       throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
     }
     if (claim.state === "LEASE_ACTIVE" || claim.state === "CAS_CONFLICT") {
-      if (contentionAttempts >= policy.maxAttempts - 1) {
+      if (contentionAttempts >= policy.maxContentionAttempts - 1) {
         throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
       }
       contentionAttempts += 1;
@@ -153,7 +153,7 @@ async function processAcceptedEvent({
       }
       if (failure.state === "PROCESSED") return;
       if (failure.state === "LEASE_LOST" || failure.state === "CAS_CONFLICT") {
-        if (contentionAttempts >= policy.maxAttempts - 1) {
+        if (contentionAttempts >= policy.maxContentionAttempts - 1) {
           throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
         }
         contentionAttempts += 1;
