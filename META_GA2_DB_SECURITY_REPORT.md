@@ -6,6 +6,22 @@ FINAL_SOURCE_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (no schema delta)
 DOCUMENT_STATUS=POST_GA2_MAINTENANCE_PASS_WITH_OFFICIAL_PG_CLUSTER_LIMITATION
 
+## Maintenance 2 overlay
+
+CURRENT_STATE_AS_OF=2026-08-24 BRT
+START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+FINAL_SOURCE_SHA=c81328d
+FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+DOCUMENT_STATUS=MAINTENANCE_2_SECURITY_AND_DB_SOURCE_PASS_WITH_EXTERNAL_PG_GATE
+
+The query telemetry layer never logs SQL, parameters, credentials, raw error
+messages or tenant identifiers. `pg_stat_statements` support is read-only and
+rejects official URLs. Meta retry state uses existing tenant/canal/provider
+CAS fields only; no schema or migration was added. The historical 202.98s
+checkpoint remains a monitored non-actionable outlier with no recurrence in the
+observed window. A real disposable PostgreSQL rehearsal is still required to
+turn the external gate into PASS.
+
 No GA2 migration or schema change occurred. Existing PostgreSQL E6A migration
 history, tenant/FK gate, backup and restore evidence remain valid because no
 related schema files changed. Official Postgres-u_yI remained healthy.

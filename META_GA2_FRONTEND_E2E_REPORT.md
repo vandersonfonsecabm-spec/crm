@@ -6,6 +6,18 @@ FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
 FINAL_RUNTIME_SHA=e18121ec91ab0278c72856048fea5411db407cbb (Vercel docs-only redeploy; frontend code lineage ca9744b/eda4559)
 DOCUMENT_STATUS=SOURCE_AND_BROWSER_PASS
 
+## Maintenance 2 overlay
+
+CURRENT_STATE_AS_OF=2026-08-24 BRT
+START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+FINAL_SOURCE_SHA=c81328d
+FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+DOCUMENT_STATUS=NO_FRONTEND_DELTA_REUSED_VALID_BROWSER_EVIDENCE
+
+This continuation changed no frontend files, routes or visual surfaces. The
+previous authenticated six-viewport evidence remains valid; the new work is
+backend/tooling only and was not deployed.
+
 Frontend full suite: 194/194 PASS. TypeScript noEmit, lint and Vite build
 passed; the only build advisory is the existing >500 kB bundle warning.
 Focused E6A/navigation tests passed. The shell reuses the existing Inbox and

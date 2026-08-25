@@ -217,3 +217,77 @@ MAINTENANCE_SOURCE_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 AI_REAL_PROVIDER_CONNECTED=NO
 AI_AUTO_REPLY_ENABLED=NO
 AI_EXTERNAL_OUTBOUND=0
+
+======================================================================
+PÓS-GA2 — LOTE DE MANUTENÇÃO 2 (RECONCILIAÇÃO AUTORITATIVA)
+======================================================================
+
+CURRENT_STATE_AS_OF=2026-08-24 BRT
+START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+FINAL_SOURCE_SHA=c81328d
+FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (produção não alterada)
+DOCUMENT_STATUS=MAINTENANCE_2_SOURCE_COMPLETE_RUNTIME_UNCHANGED
+
+O lote seguinte foi executado de forma focal, sem reabrir a auditoria global:
+
+1. OBSERVABILIDADE PRISMA/POSTGRESQL
+
+- `backend/src/database/query-observability.js` é opt-in e OFF por padrão;
+- mede eventos `query`/`error`, fingerprints opacos bounded, duração, média,
+  máximo, contagem lenta e códigos P2024/P2028/P2034/timeout;
+- logs não carregam SQL, parâmetros, URL, credencial, tenant ou mensagem bruta;
+- `observe(operation, fn)` mede fronteiras de transação sem quebrar o fluxo;
+- `backend/scripts/pg-stat-statements.cjs` e o runbook são somente leitura e
+  nunca criam/resetam a extensão;
+- testes de observabilidade + pg_stat_statements: 9/9 PASS.
+
+2. RETRY SEGURO META (CAPABILITIES CONTINUAM OFF)
+
+- WhatsApp, Instagram e Messenger agora usam helper compartilhado com CAS,
+  lease pelo `updatedAt`, `tentativas` bounded (padrão 3), backoff exponencial
+  com jitter, classificação retryable/permanent/exhausted e recuperação de
+  PROCESSANDO vencido;
+- processors aceitam lease opcional e preservam o comportamento direto sem
+  lease; nenhuma rota, flag, schema, migration, worker novo ou outbound foi
+  introduzido;
+- evidência em sandbox derivado de 39 migrations: helper 3/3, WhatsApp 12/12,
+  Instagram 8/8, Messenger 9/9 e processor WhatsApp 11/11 PASS;
+- a ativação de qualquer canal real ainda exige canário tenant-scoped e nova
+  confirmação de flags.
+
+3. RUNNER POSTGRESQL REAL DESCARTÁVEL
+
+- `cd backend && npm run test:postgres:real` (ou `npm --prefix backend run ...`)
+  cria imagem `postgres:16-alpine` pinada, container/volume/porta aleatórios,
+  aguarda healthcheck, delega migrations + suíte PG ao runner isolado, coleta
+  evidência sanitizada e remove recursos em `finally`;
+- `--dry-run` não consulta Docker; URL externa exige confirmação explícita e
+  rejeita alvos oficiais;
+- testes do comando: 9/9 PASS; dry-run PASS;
+- execução real nesta máquina: BLOCKED_ENVIRONMENT, código 1 esperado, porque
+  Docker/daemon não está instalado/disponível. Evidência sanitizada atual:
+  `%TEMP%\\crm-postgres-real\\20260825014954844-3372-5bf0546d6341.log`,
+  SHA-256 `c0117c1c56f2d2e36467317e726d089b3d4c1664fa7b986c77ba8fd3d2f8e0b1`;
+- nenhum container, volume, migration oficial, reinício ou deploy foi feito.
+
+4. DEPENDÊNCIAS E OUTLIER
+
+- `exceljs@4.4.0` permanece; `uuid@11.1.1` override/lock e `npm audit
+  --omit=dev` = zero vulnerabilidades de produção;
+- checkpoint histórico de 202,98 s continua monitorado, sem reincidência na
+  janela observada; agora há instrumentação opt-in para correlacionar uma nova
+  ocorrência antes de qualquer correção especulativa.
+
+RELEASE RECONCILIATION
+
+- commit local candidato: `c81328d`;
+- runtime oficial preservado em `0c058e5` (API/worker), sem deploy deste lote;
+- AI_COMMERCE_ENABLED=false;
+- AI_COMMERCE_MOCK_ENABLED=false;
+- AI_COMMERCE_RUNTIME_CANARY_APPROVED=false;
+- AI_COMMERCE_TENANT_ALLOWLIST=0;
+- AI_REAL_PROVIDER_CONNECTED=NO;
+- AI_AUTO_REPLY_ENABLED=NO;
+- AI_EXTERNAL_OUTBOUND=0;
+- prova PostgreSQL real continua pendente somente de Docker/cluster descartável;
+- não há PASS de produção para query p95/pg_stat_statements até essa prova.

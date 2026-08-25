@@ -6,6 +6,21 @@ FINAL_SOURCE_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (API/worker maintenance)
 DOCUMENT_STATUS=POST_GA2_MAINTENANCE_PASS_WITH_PG_ENV_LIMITATION
 
+## Maintenance 2 overlay
+
+CURRENT_STATE_AS_OF=2026-08-24 BRT
+START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+FINAL_SOURCE_SHA=c81328d
+FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+DOCUMENT_STATUS=MAINTENANCE_2_BACKEND_SOURCE_COMPLETE_RUNTIME_UNCHANGED
+
+Prisma query/error observability is opt-in, sanitized and bounded; it does not
+change the worker default. Meta webhook retry is now bounded/CAS/lease-aware in
+all three processors/orchestrators, with provider-specific integration evidence:
+WhatsApp 12/12, Instagram 8/8, Messenger 9/9 and direct processor 11/11. No
+worker, outbound path, route, flag, schema or migration changed. The real
+PostgreSQL cluster gate remains blocked only by unavailable Docker/URL.
+
 Backend E6A/catalog focused suite: 25/25 PASS before the final UI-only ca
 commit; latest backend-focused orchestrator suite: 21/21 PASS. Node syntax
 checks passed for changed modules. The canonical isolated SQLite node-suite

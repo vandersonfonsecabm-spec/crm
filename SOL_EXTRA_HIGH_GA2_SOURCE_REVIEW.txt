@@ -6,6 +6,14 @@ VERDICT=APPROVED
 HIGH_OPEN=0
 CRITICAL_OPEN=0
 
+MAINTENANCE_2_CURRENT_STATE_AS_OF=2026-08-24 BRT
+MAINTENANCE_2_START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+MAINTENANCE_2_FINAL_SOURCE_SHA=c81328d
+MAINTENANCE_2_FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+MAINTENANCE_2_VERDICT=SOURCE_READY_RUNTIME_UNCHANGED
+MAINTENANCE_2_EVIDENCE=query/pg_stat 9/9; Meta 3/3+12/12+8/8+9/9+11/11; PG command 9/9
+MAINTENANCE_2_EXTERNAL_GATE=REAL_POSTGRES_CLUSTER_REQUIRES_DOCKER_OR_DISPOSABLE_URL
+
 The exact source includes the race/CAS and redaction fixes, route and OFF-gate
 corrections, settings merge preservation, filter semantics, reject audit path
 and stale-price rendering fix. Backend focused tests are 21/21 latest; frontend

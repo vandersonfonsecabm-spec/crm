@@ -6,6 +6,21 @@ FINAL_SOURCE_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (API/worker maintenance; frontend unchanged)
 DOCUMENT_STATUS=POST_GA2_MAINTENANCE_RUNTIME_PASS_WITH_PG_LIMITATION
 
+## Maintenance 2 overlay
+
+CURRENT_STATE_AS_OF=2026-08-24 BRT
+START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+FINAL_SOURCE_SHA=c81328d
+FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+DOCUMENT_STATUS=SOURCE_CANDIDATE_READY_NO_DEPLOY
+
+The source candidate is local at `c81328d`; production API/worker remain the
+previously reconciled `0c058e5` runtime because this batch was not deployed.
+The real PG command is ready and fails closed without Docker. No production
+variable, flag, migration, database, restart or external Meta channel was
+changed. Focused source checks and the sanitized Docker-unavailable evidence
+are recorded in the final report.
+
 Remote master advanced by the safe maintenance source fix `0c058e5` after the
 GA2 runtime commits. Railway deployed API `371e473d-ea01-48d5-aa84-3f7ddc200ba4`
 and worker `5292c1c6-b034-41e1-a305-1190887f5461`, both SUCCESS/RUNNING. The
