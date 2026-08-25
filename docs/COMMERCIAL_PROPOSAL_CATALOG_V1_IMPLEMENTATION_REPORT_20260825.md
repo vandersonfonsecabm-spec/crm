@@ -2,7 +2,8 @@
 
 Data: 25/08/2026
 Contrato: `docs/COMMERCIAL_PROPOSAL_CATALOG_CONTRACT_V1.md`
-Commit local: `23c038de562a2023a66ea241aa0be710a291258a`
+Commits locais: `23c038de562a2023a66ea241aa0be710a291258a` + decimal guard
+`401e5e549c72e9e65191013043df8c989dbfb7cb`
 Estado: candidato local, sem push/deploy e sem migration oficial
 
 ## Resultado
