@@ -1,5 +1,22 @@
 # Estado atual do CRM
 
+## V70 — frontend polling safety (2026-08-25)
+
+- O commit `fbe33dc08e1a9149cfd349b26173dcce6dcad380` reduziu o polling da
+  Inbox para 20s e adicionou `AbortController` para cancelar consultas de
+  lista, conversa, mensagens, histórico e notas quando a seleção muda ou o
+  componente desmonta. Isso evita respostas antigas sobrescrevendo estado e
+  reduz chamadas concorrentes sem alterar layout, contrato de dados ou regras
+  de negócio.
+- Frontend `196/196 PASS`, build TypeScript/Vite e lint PASS. O bundle único
+  (~869 kB minificado/~231 kB gzip) permanece apenas como advisory medido;
+  nenhum code-split foi feito sem orçamento de produto aprovado.
+- Vercel preview e domínio canônico responderam HTTP 200; Railway não recebeu
+  mudança de backend. API `/health` respondeu 200 e `/ready` respondeu
+  `database=ok`. AI, Meta e outbound permanecem OFF/zero.
+- `backend/prisma/dev.db` não foi acessado nem alterado; nenhuma migration,
+  schema ou dado oficial mudou.
+
 ## V69 — GA3 final runtime hardening (2026-08-25)
 
 - Código final/runtime: `cf7e87f961b05996d4e806ab7bcfd657b2b111f0`; master/release
