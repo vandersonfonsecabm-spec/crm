@@ -38,13 +38,13 @@ FINDINGS_ACCEPTED_NON_ACTIONABLE=3
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-FINAL_SOURCE_SHA=271d7c5
+FINAL_SOURCE_SHA=28fba94
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 DOCUMENT_STATUS=MAINTENANCE_2_FINDINGS_RECONCILED
 
 | ID | DOMAIN | SEVERITY | STATUS | EVIDENCE | FIX / LIMIT |
 |---|---|---:|---|---|---|
-| MAINT-008 | DB observability | MEDIUM | RESOLVED_SOURCE | query/error listeners opt-in, bounded fingerprints, 9/9 tests | Runtime remains OFF until controlled canary |
+| MAINT-008 | DB observability | MEDIUM | RESOLVED_SOURCE | query/error listeners opt-in before maintenance proxy, bounded fingerprints, 10/10 tests | Runtime remains OFF until controlled canary |
 | MAINT-009 | PostgreSQL tooling | MEDIUM | BLOCKED_EXTERNAL | `test:postgres:real --dry-run` PASS; real run exits 1 because Docker daemon is unavailable | Run against disposable cluster when Docker/admin or external disposable URL exists |
 | MAINT-010 | Meta inbound | HIGH readiness | RESOLVED_SOURCE | helper 3/3; WhatsApp 12/12; Instagram 8/8; Messenger 9/9; processor 11/11 | Channels remain OFF; activation requires tenant canary |
 | MAINT-011 | PostgreSQL checkpoint | MEDIUM | ACCEPTED_NON_ACTIONABLE | historical 202.98s outlier; no recurrence in observed window | Monitor with new telemetry; fix only on recurrence/correlation |

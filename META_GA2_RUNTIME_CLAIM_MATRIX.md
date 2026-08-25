@@ -64,18 +64,18 @@ AI_EXTERNAL_OUTBOUND=0
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-FINAL_SOURCE_SHA=271d7c5
+FINAL_SOURCE_SHA=28fba94
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 DOCUMENT_STATUS=MAINTENANCE_2_SOURCE_CLAIMS_WITH_RUNTIME_UNCHANGED
 
 | Claim | Status | Evidence |
 |---|---|---|
-| PRISMA_QUERY_OBSERVABILITY_SOURCE | PASS | opt-in query/error listeners, bounded fingerprints; query + pg_stat tests 9/9 |
+| PRISMA_QUERY_OBSERVABILITY_SOURCE | PASS | opt-in query/error listeners before maintenance proxy, bounded fingerprints; query + pg_stat tests 10/10 |
 | PG_STAT_STATEMENTS_REAL_CLUSTER | BLOCKED_EXTERNAL | read-only script and SQL prepared; no Docker/temporary cluster available |
 | POSTGRES_REAL_RUNNER_COMMAND | PASS_READY | `test:postgres:real` dry-run and focused command suite 9/9 |
 | META_WEBHOOK_RETRY_SOURCE | PASS | CAS/lease/backoff/exhaustion; helper 3/3 and provider suites 12/12, 8/8, 9/9, processor 11/11 |
 | META_REAL_CHANNELS | OFF | no route/gate/outbound change; activation remains a future tenant-canary gate |
-| PRODUCTION_RUNTIME_FOR_MAINTENANCE_2 | UNCHANGED | current API/worker remains 0c058e5; 271d7c5 is local source candidate and was not deployed |
+| PRODUCTION_RUNTIME_FOR_MAINTENANCE_2 | UNCHANGED | current API/worker remains 0c058e5; 28fba94 is local source candidate and was not deployed |
 | CHECKPOINT_202S_REINCIDENCE | NOT_OBSERVED | single historical outlier; query telemetry now available for next controlled observation |
 
 AI_REAL_PROVIDER_CONNECTED=NO

@@ -10,12 +10,12 @@ DOCUMENT_STATUS=FROZEN
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-FINAL_SOURCE_SHA=271d7c5
+FINAL_SOURCE_SHA=28fba94
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 DOCUMENT_STATUS=FROZEN_BASELINE_PRESERVED_SOURCE_CANDIDATE_NOT_DEPLOYED
 
 The immutable `saas-post-e6a-maintenance-audit-pass-2026-08-25` tag remains at
-0c058e5. The 271d7c5 continuation is a local source candidate only; no tag was
+0c058e5. The 28fba94 continuation is a local source candidate only; no tag was
 moved and no production deployment was initiated. Real PostgreSQL execution is
 the sole external test gate still pending.
 

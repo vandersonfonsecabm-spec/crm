@@ -224,7 +224,7 @@ PÓS-GA2 — LOTE DE MANUTENÇÃO 2 (RECONCILIAÇÃO AUTORITATIVA)
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-FINAL_SOURCE_SHA=271d7c5
+FINAL_SOURCE_SHA=28fba94
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (produção não alterada)
 DOCUMENT_STATUS=MAINTENANCE_2_SOURCE_COMPLETE_RUNTIME_UNCHANGED
 
@@ -239,7 +239,8 @@ O lote seguinte foi executado de forma focal, sem reabrir a auditoria global:
 - `observe(operation, fn)` mede fronteiras de transação sem quebrar o fluxo;
 - `backend/scripts/pg-stat-statements.cjs` e o runbook são somente leitura e
   nunca criam/resetam a extensão;
-- testes de observabilidade + pg_stat_statements: 9/9 PASS.
+- testes de observabilidade + pg_stat_statements: 10/10 PASS (inclui o caso
+  combinado com o proxy de manutenção somente leitura).
 
 2. RETRY SEGURO META (CAPABILITIES CONTINUAM OFF)
 
@@ -280,7 +281,7 @@ O lote seguinte foi executado de forma focal, sem reabrir a auditoria global:
 
 RELEASE RECONCILIATION
 
-- commit local candidato: `271d7c5`;
+- commit local candidato: `28fba94`;
 - runtime oficial preservado em `0c058e5` (API/worker), sem deploy deste lote;
 - AI_COMMERCE_ENABLED=false;
 - AI_COMMERCE_MOCK_ENABLED=false;

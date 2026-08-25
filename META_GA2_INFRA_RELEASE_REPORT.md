@@ -10,11 +10,11 @@ DOCUMENT_STATUS=POST_GA2_MAINTENANCE_RUNTIME_PASS_WITH_PG_LIMITATION
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-FINAL_SOURCE_SHA=271d7c5
+FINAL_SOURCE_SHA=28fba94
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 DOCUMENT_STATUS=SOURCE_CANDIDATE_READY_NO_DEPLOY
 
-The source candidate is local at `271d7c5`; production API/worker remain the
+The source candidate is local at `28fba94`; production API/worker remain the
 previously reconciled `0c058e5` runtime because this batch was not deployed.
 The real PG command is ready and fails closed without Docker. No production
 variable, flag, migration, database, restart or external Meta channel was
