@@ -136,7 +136,7 @@ async function writeSettings({ prisma, settingsService, empresaId, actorUsuarioI
   const data = normalizeSettings(body, current || defaultSettings(empresaId));
   if (typeof settingsService?.update === "function") return settingsService.update({ empresaId, actorUsuarioId, expectedRevision, data });
   const model = prisma.aiCommerceSettings || prisma.aICommerceSettings;
-  if (!model?.upsert) return { ...defaultSettings(empresaId), ...data, actorUsuarioId };
+  if (!model) return { ...defaultSettings(empresaId), ...data, actorUsuarioId };
   const persistenceData = { ...data, allowedToolsJson: JSON.stringify(data.allowedTools || []) };
   delete persistenceData.allowedTools;
   if (expectedRevision !== null) {
@@ -162,6 +162,7 @@ async function writeSettings({ prisma, settingsService, empresaId, actorUsuarioI
     const current = await model.findUnique({ where: { empresaId }, select: { revision: true } });
     if (current) throw routeError("AI_SETTINGS_REVISION_REQUIRED", "Informe a revisao atual da configuracao.", 409);
   }
+  if (typeof model.upsert !== "function") return { ...defaultSettings(empresaId), ...data, actorUsuarioId };
   return model.upsert({
     where: { empresaId },
     create: { empresaId, ...persistenceData, revision: 1, actorUsuarioId },
