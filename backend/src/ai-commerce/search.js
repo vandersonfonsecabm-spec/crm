@@ -14,7 +14,7 @@ function createCommercialSearchService({ prisma, catalogService = null, availabi
   if (!prisma?.commercialCatalogProduct) throw new Error("COMMERCIAL_SEARCH_PRISMA_MODEL_MISSING");
   const effectivePolicy = { ...DEFAULT_POLICY, ...policy };
 
-  async function search({ empresaId, query = "", category = null, brand = null, minPrice = null, maxPrice = null, availability = null, visibility = null, limit = effectivePolicy.maxSearchCandidates } = {}) {
+  async function search({ empresaId, query = "", category = null, brand = null, minPrice = null, maxPrice = null, availability = null, visibility = null, includeAvailability = false, limit = effectivePolicy.maxSearchCandidates } = {}) {
     const tenantId = requireTenantId(empresaId);
     const normalizedQuery = normalizeSearchText(query);
     const take = Math.min(effectivePolicy.maxSearchCandidates, Math.max(1, Number(limit) || effectivePolicy.maxSearchCandidates));
@@ -29,13 +29,26 @@ function createCommercialSearchService({ prisma, catalogService = null, availabi
     if (brand) where.brand = String(brand).trim();
     if (minPrice !== null && minPrice !== undefined && minPrice !== "") where.commercialPrice = { ...(where.commercialPrice || {}), gte: assertPrice(minPrice) };
     if (maxPrice !== null && maxPrice !== undefined && maxPrice !== "") where.commercialPrice = { ...(where.commercialPrice || {}), lte: assertPrice(maxPrice) };
-    const rows = await prisma.commercialCatalogProduct.findMany({ where, orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: Math.min(200, Math.max(20, take * 10)) });
+    const scanLimit = Math.min(200, Math.max(take, take * 10));
+    // Search uses one bounded catalog query with a minimal projection. Availability
+    // is opt-in; otherwise tools call it explicitly, avoiding an N+1 query loop.
+    const rows = await prisma.commercialCatalogProduct.findMany({
+      where,
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      take: scanLimit,
+      select: {
+        id: true, stockProductId: true, title: true, shortDescription: true, category: true, brand: true, model: true,
+        tagsJson: true, synonymsJson: true, attributesJson: true, primaryImageUrl: true, commercialPrice: true,
+        currency: true, priceStatus: true, productUrl: true, purchaseUrl: true, revision: true, visibility: true, archivedAt: true,
+        updatedAt: true,
+      },
+    });
     const ranked = rows.map((row) => ({ row, score: scoreRow(row, normalizedQuery) })).filter(({ score }) => !normalizedQuery || score > 0).sort((a, b) => b.score - a.score || a.row.id - b.row.id);
     const filtered = [];
     for (const candidate of ranked) {
       if (filtered.length >= take) break;
       let availabilityResult = null;
-      if (availability || availabilityService) {
+      if (availability || includeAvailability) {
         if (!availabilityService?.getSellableAvailability) throw new CommerceCatalogError("COMMERCE_AVAILABILITY_UNAVAILABLE", "Disponibilidade indisponivel.", 503);
         availabilityResult = await availabilityService.getSellableAvailability({ empresaId: tenantId, catalogProductId: candidate.row.id });
         if (availability && availabilityResult.status !== availability) continue;

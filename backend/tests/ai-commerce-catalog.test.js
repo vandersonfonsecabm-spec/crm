@@ -51,14 +51,22 @@ test("catalog defaults hidden, binds canonical tenant product and rejects unappr
 
 test("availability is fail-closed for stale, unknown and expired canonical balances", () => {
   const now = new Date("2026-08-24T12:00:00Z");
-  const fresh = evaluateBalances({ now, balances: [{ id: 1, fonteAutoritativa: { statusCiclo: "ACTIVE" }, semanticaDisponivel: "EXPLICIT", available: 4, freshnessEstado: "FRESH", dataConfidence: "HIGH", revision: 1, unidade: "UN" }] });
+  const fresh = evaluateBalances({ now, balances: [{ id: 1, fonteAutoritativaId: 8, fonteAutoritativa: { statusCiclo: "ACTIVE" }, semanticaDisponivel: "EXPLICIT", available: 4, freshnessEstado: "FRESH", dataConfidence: "HIGH", revision: 1, unidade: "UN" }] });
   assert.equal(fresh.status, "AVAILABLE");
-  const stale = evaluateBalances({ now, balances: [{ id: 1, fonteAutoritativa: { statusCiclo: "ACTIVE" }, semanticaDisponivel: "EXPLICIT", available: 4, freshnessEstado: "STALE", dataConfidence: "HIGH" }] });
+  const stale = evaluateBalances({ now, balances: [{ id: 1, fonteAutoritativaId: 8, fonteAutoritativa: { statusCiclo: "ACTIVE" }, semanticaDisponivel: "EXPLICIT", available: 4, freshnessEstado: "STALE", dataConfidence: "HIGH", unidade: "UN" }] });
   assert.equal(stale.status, "DATA_STALE");
-  const unknown = evaluateBalances({ now, balances: [{ id: 1, fonteAutoritativa: { statusCiclo: "ACTIVE" }, semanticaDisponivel: "UNKNOWN", onHand: 4, freshnessEstado: "FRESH", dataConfidence: "HIGH" }] });
+  const unknown = evaluateBalances({ now, balances: [{ id: 1, fonteAutoritativaId: 8, fonteAutoritativa: { statusCiclo: "ACTIVE" }, semanticaDisponivel: "UNKNOWN", onHand: 4, freshnessEstado: "FRESH", dataConfidence: "HIGH", unidade: "UN" }] });
   assert.equal(unknown.status, "UNKNOWN");
-  const expired = evaluateBalances({ now, balances: [{ id: 1, fonteAutoritativa: { statusCiclo: "ACTIVE" }, lote: { estado: "ACTIVE", validadeEm: "2026-08-23", precisaoValidade: "DAY" }, semanticaDisponivel: "EXPLICIT", available: 4, freshnessEstado: "FRESH", dataConfidence: "HIGH" }] });
+  const expired = evaluateBalances({ now, balances: [{ id: 1, fonteAutoritativaId: 8, fonteAutoritativa: { statusCiclo: "ACTIVE" }, lote: { estado: "ACTIVE", validadeEm: "2026-08-23", precisaoValidade: "DAY" }, semanticaDisponivel: "EXPLICIT", available: 4, freshnessEstado: "FRESH", dataConfidence: "HIGH", unidade: "UN" }] });
   assert.equal(expired.status, "NEEDS_CONFIRMATION");
+});
+
+test("availability never sums incompatible units, duplicate observations or tied authoritative sources", () => {
+  const base = (overrides = {}) => ({ id: 1, fonteAutoritativaId: 8, fonteAutoritativa: { id: 8, statusCiclo: "ACTIVE", prioridade: 10 }, semanticaDisponivel: "EXPLICIT", available: "2.000000", freshnessEstado: "FRESH", dataConfidence: "HIGH", unidade: "UN", ...overrides });
+  assert.equal(evaluateBalances({ balances: [base(), base({ id: 2, localId: 2, unidade: "KG" })] }).reasonCode, "INCOMPATIBLE_UNITS");
+  assert.equal(evaluateBalances({ balances: [base(), base({ id: 2 })] }).reasonCode, "DUPLICATE_BALANCE_OBSERVATION");
+  assert.equal(evaluateBalances({ balances: [base(), base({ id: 2, fonteAutoritativaId: 9, fonteAutoritativa: { id: 9, statusCiclo: "ACTIVE", prioridade: 10 } })] }).reasonCode, "MULTIPLE_AUTHORITATIVE_SOURCES");
+  assert.equal(evaluateBalances({ balances: [base({ available: "999999999999999999999999999999.000000" })] }).reasonCode, "QUANTITY_OVERFLOW");
 });
 
 test("deterministic search is tenant-scoped and bounded", async () => {
@@ -83,6 +91,19 @@ test("availability endpoint redacts internal balance evidence unless explicitly 
   assert.equal(internal.stockProductId, 7);
 });
 
+test("search keeps the catalog scan bounded/minimal and does not trigger availability N+1 by default", async () => {
+  const prisma = fakePrisma();
+  let calls = 0;
+  const catalog = createCommercialCatalogService({ prisma });
+  const availabilityBase = createSellableAvailabilityService({ prisma, catalogService: catalog });
+  const availability = { getSellableAvailability: async (input) => { calls += 1; return availabilityBase.getSellableAvailability(input); } };
+  const search = createCommercialSearchService({ prisma, availabilityService: availability });
+  await search.search({ empresaId: 1, query: "rocadeira", limit: 3 });
+  assert.equal(calls, 0);
+  await search.search({ empresaId: 1, query: "rocadeira", includeAvailability: true, limit: 3 });
+  assert.equal(calls, 1);
+});
+
 test("ProductOffer snapshots price/availability and expires or revalidates materially", async () => {
   const prisma = fakePrisma();
   const catalog = createCommercialCatalogService({ prisma });
@@ -96,4 +117,23 @@ test("ProductOffer snapshots price/availability and expires or revalidates mater
   assert.equal(valid.valid, true);
   const expired = await offers.get({ empresaId: 1, offerId: created.offerId, now: new Date("2026-08-25T12:01:00Z") });
   assert.equal(expired.valid, false);
+});
+
+test("ProductOffer preview reuses an active tenant/conversation/product snapshot and caps active previews", async () => {
+  const prisma = fakePrisma();
+  const catalog = createCommercialCatalogService({ prisma });
+  const availability = createSellableAvailabilityService({ prisma, catalogService: catalog });
+  const offers = createProductOfferService({ prisma, catalogService: catalog, availabilityService: availability, clock: () => new Date("2026-08-24T12:00:00Z") });
+  const originalFindFirst = prisma.productOffer.findFirst;
+  prisma.productOffer.findFirst = async ({ where }) => {
+    if (where.catalogProductId) return prisma.offers.find((item) => item.empresaId === where.empresaId && item.conversationId === where.conversationId && item.catalogProductId === where.catalogProductId && item.status === "ACTIVE") || null;
+    return originalFindFirst({ where });
+  };
+  const first = await offers.create({ empresaId: 1, catalogProductId: 1, conversationId: 44 });
+  const replay = await offers.create({ empresaId: 1, catalogProductId: 1, conversationId: 44 });
+  assert.equal(replay.offerId, first.offerId);
+  assert.equal(prisma.offers.length, 1);
+  prisma.productOffer.findFirst = originalFindFirst;
+  prisma.productOffer.count = async () => 20;
+  await assert.rejects(() => offers.create({ empresaId: 1, catalogProductId: 1, conversationId: 45 }), (error) => error.code === "COMMERCE_OFFER_CAP_REACHED");
 });

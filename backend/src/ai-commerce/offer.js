@@ -18,8 +18,36 @@ function createProductOfferService({ prisma, catalogService, availabilityService
   if (!catalogService?.get) throw new Error("PRODUCT_OFFER_CATALOG_SERVICE_MISSING");
   if (!availabilityService?.getSellableAvailability) throw new Error("PRODUCT_OFFER_AVAILABILITY_SERVICE_MISSING");
   const effectivePolicy = { ...DEFAULT_POLICY, ...policy };
+  const inFlightPreviews = new Map();
+  const maxActiveOffersPerConversation = Math.min(100, Math.max(1, Number(effectivePolicy.maxActiveOffersPerConversation) || 20));
 
-  async function create({ empresaId, catalogProductId, conversationId = null, customerId = null, correlationId = null, now = clock(), internal = false } = {}) {
+  async function create(input = {}) {
+    const empresaId = requireTenantId(input.empresaId);
+    const catalogProductId = positiveId(input.catalogProductId, "COMMERCE_CATALOG_PRODUCT_ID_INVALID");
+    const conversationId = input.conversationId === null || input.conversationId === undefined ? null : positiveId(input.conversationId, "COMMERCE_CONVERSATION_ID_INVALID");
+    const key = conversationId === null ? null : `${empresaId}:${conversationId}:${catalogProductId}`;
+    if (!key) return createFresh({ ...input, empresaId, catalogProductId, conversationId });
+    if (inFlightPreviews.has(key)) return inFlightPreviews.get(key);
+    const task = (async () => {
+      const now = input.now || clock();
+      if (typeof prisma.productOffer.findFirst === "function") {
+        const existing = await prisma.productOffer.findFirst({ where: { empresaId, conversationId, catalogProductId, status: "ACTIVE", expiresAt: { gt: now } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+        if (existing) {
+          const reusable = await get({ empresaId, offerId: existing.id, revalidate: true, now, internal: input.internal === true });
+          if (reusable.valid) return reusable;
+        }
+      }
+      if (typeof prisma.productOffer.count === "function") {
+        const activeCount = await prisma.productOffer.count({ where: { empresaId, conversationId, status: "ACTIVE", expiresAt: { gt: now } } });
+        if (activeCount >= maxActiveOffersPerConversation) throw new CommerceCatalogError("COMMERCE_OFFER_CAP_REACHED", "Limite de ofertas ativas nesta conversa atingido.", 409);
+      }
+      return createFresh({ ...input, empresaId, catalogProductId, conversationId, now });
+    })();
+    inFlightPreviews.set(key, task);
+    try { return await task; } finally { inFlightPreviews.delete(key); }
+  }
+
+  async function createFresh({ empresaId, catalogProductId, conversationId = null, customerId = null, correlationId = null, now = clock(), internal = false } = {}) {
     const tenantId = requireTenantId(empresaId);
     const catalog = await catalogService.get(tenantId, catalogProductId, { includeHidden: true });
     if (catalog.visibility !== VISIBILITY.PUBLISHED || catalog.archivedAt || catalog.sellabilityPolicy !== "STOCK_CANONICAL_ONLY") throw new CommerceCatalogError("COMMERCE_PRODUCT_NOT_SELLABLE", "Produto comercial nao pode ser ofertado.", 422);
