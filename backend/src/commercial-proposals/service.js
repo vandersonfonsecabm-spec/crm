@@ -831,6 +831,7 @@ async function recordRevalidationRejection(client, context, proposal, details) {
 }
 
 function decimalToCentsRoundHalfUp(value) {
+  if (typeof value === "number") invalid("Preco catalogado deve ser Decimal ou texto decimal.", "CATALOG_PRICE_DECIMAL_REQUIRED");
   const text = value === null || value === undefined ? "" : String(value).trim();
   if (!/^\d+(?:\.\d+)?$/.test(text)) invalid("Preco catalogado invalido.", "CATALOG_PRICE_INVALID");
   const [wholeText, fractionText = ""] = text.split(".");
