@@ -15,3 +15,9 @@ and the canonical authenticated six-viewport smoke passed.
 AI remains OFF, the real provider is NO, auto-reply is NO, outbound is zero,
 H7/H8/stock are preserved and the Prisma runner remains a documented tooling
 blocker rather than a false PASS.
+
+Maintenance follow-up source: `0c058e5bc7663dc278d6ae4b26bd76816fc57eb6`.
+Maintenance tag: `saas-post-e6a-maintenance-audit-pass-2026-08-25`.
+This tag adds only bounded runner/retry/lease/telemetry/dependency maintenance;
+the original GA2 tag remains immutable and continues to identify the original
+foundation baseline.

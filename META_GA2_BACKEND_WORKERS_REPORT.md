@@ -2,9 +2,9 @@
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
-FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
-FINAL_RUNTIME_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c (API/worker automatic redeploy; backend lineage b9)
-DOCUMENT_STATUS=GLOBAL_PASS
+FINAL_SOURCE_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (API/worker maintenance)
+DOCUMENT_STATUS=POST_GA2_MAINTENANCE_PASS_WITH_PG_ENV_LIMITATION
 
 Backend E6A/catalog focused suite: 25/25 PASS before the final UI-only ca
 commit; latest backend-focused orchestrator suite: 21/21 PASS. Node syntax
@@ -39,3 +39,10 @@ now expects the current 39-migration tree and emits bounded per-file starts /
 timeouts; H11 follows the latest migration instead of a historical name; and
 legacy capability/webhook assertions accept the current E6A contract. The
 protected dev.db and official Postgres were not modified.
+
+Maintenance delta `0c058e5` added isolated PostgreSQL test-client workspaces,
+bounded stock retry/lease handling for P2028/P2034, stock cycle telemetry and
+automation lease-exhaustion events. Focused tests passed: PG harness 22/22,
+stock sync 14/14, stock worker 9/9, automation observability 14/14. The global
+SQLite suite passed with log SHA
+`b16cec52c1602d71d6fd666215aa905571d5e49741f63b0fe98d42c037335fed`.

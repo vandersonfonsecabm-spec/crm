@@ -2,9 +2,9 @@
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
-FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
-FINAL_RUNTIME_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c (source baseline; no DB delta)
-DOCUMENT_STATUS=PASS_WITH_ISOLATED_RUNNER_AND_OFFICIAL_PG_LIMITATION
+FINAL_SOURCE_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (no schema delta)
+DOCUMENT_STATUS=POST_GA2_MAINTENANCE_PASS_WITH_OFFICIAL_PG_CLUSTER_LIMITATION
 
 No GA2 migration or schema change occurred. Existing PostgreSQL E6A migration
 history, tenant/FK gate, backup and restore evidence remain valid because no
@@ -32,3 +32,11 @@ non-actionable for this release; no blind `audit fix --force` was run.
 Historical failed PostgreSQL password attempts were correlated to removed old
 Railway API deployments and private service traffic; no public ingress was
 observed in the current window. Current API/worker connections succeed.
+
+Maintenance fixed the shared-client runner race and proved the isolated
+PostgreSQL harness 22/22. A real PostgreSQL cluster was still unavailable
+locally, so no production or disposable PostgreSQL migration was attempted.
+The dependency graph now fixes uuid 11.1.1 under ExcelJS 4.4.0 and the
+production audit reports zero vulnerabilities. The historical 202.98s
+checkpoint remains a monitored infrastructure outlier; current health/ready
+and worker cycles are normal.

@@ -2,8 +2,8 @@
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
-FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
-FINAL_RUNTIME_SHA=e18121ec91ab0278c72856048fea5411db407cbb (Vercel docs-only; source/API/worker baseline eda)
+FINAL_SOURCE_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (API/worker maintenance; frontend unchanged)
 DOCUMENT_STATUS=FINAL_CLAIMS_PASS
 
 | Claim | Status | Evidence |
@@ -42,10 +42,10 @@ DOCUMENT_STATUS=FINAL_CLAIMS_PASS
 | MULTI_TAB_GLOBAL | PASS_SOURCE | existing session/multitab suite |
 | PERFORMANCE_GLOBAL | PASS_WITH_ADVISORIES | bounded code; historical DB outliers observed |
 | OBSERVABILITY_GLOBAL | PASS | health/ready/deploy/log evidence |
-| DEPENDENCY_AUDIT | ACCEPTED_NON_ACTIONABLE | ExcelJS/uuid path reviewed; no force fix |
+| DEPENDENCY_AUDIT | PASS | uuid 11.1.1 override, npm ci/import regression and audit zero |
 | TOOLCHAIN_INTEGRITY | PASS | tsc/lint/build and runtime manifests |
 | BUILD_REPRODUCIBILITY | PASS | Vite build and Railway/Vercel deploys |
-| BACKEND_FULL_SUITE | PASS | confirmation log SHA `40a81acee6c0a7828287d984fb265a47932cde82f42d182d4baeeae08ccb30dc`; canonical isolated SQLite node-suite exit 0, H11 15/15; PG-only cases intentionally separate |
+| BACKEND_FULL_SUITE | PASS | maintenance log SHA `b16cec52c1602d71d6fd666215aa905571d5e49741f63b0fe98d42c037335fed`; SQLite exit 0, H11 15/15; PG harness 22/22 without real cluster |
 | FRONTEND_FULL_SUITE | PASS | 194/194 |
 | TENANT_GATE | PASS_REUSED | 157 relation gate, no schema delta |
 | E2E_GLOBAL | PASS | authenticated canonical-domain SPA smoke for Central/catalog/settings/Inbox |
@@ -53,8 +53,8 @@ DOCUMENT_STATUS=FINAL_CLAIMS_PASS
 | PRODUCTION_SMOKE | PASS | API/ready/frontend HTTP 200 |
 | ROLLBACK_AVAILABLE | PASS_MANIFEST | previous Railway/Vercel deployments and flags |
 | FINAL_RECURSIVE_AUDIT | PASS_FOCUSED | three domain audits plus root integration |
-| GA2_FINAL_RUNTIME_RECONCILIATION | PASS | Git, Railway, Vercel, health, flags and browser evidence reconciled |
-| POST_E6A_BASELINE_FROZEN | PASS | annotated tag created and verified at eda455912c5ddecb8ae42766f56e2397dce0085c |
+| GA2_FINAL_RUNTIME_RECONCILIATION | PASS_WITH_MAINTENANCE_LIMITATION | Git, Railway, health, flags and maintenance deploy reconciled; real PG cluster unavailable |
+| POST_E6A_BASELINE_FROZEN | PASS | original tag eda preserved; maintenance tag 0c058e5 created |
 
 AI_REAL_PROVIDER_CONNECTED=NO
 AI_AUTO_REPLY_ENABLED=NO

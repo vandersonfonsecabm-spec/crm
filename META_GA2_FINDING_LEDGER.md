@@ -33,3 +33,15 @@ FINDINGS_BLOCKED=0
 FINDINGS_TOTAL=16
 FINDINGS_RESOLVED=13
 FINDINGS_ACCEPTED_NON_ACTIONABLE=3
+
+## Pós-GA2 maintenance findings
+
+| ID | Severity | Finding | Status | Fix/evidence |
+|---|---|---|---|---|
+| MAINT-001 | MEDIUM | Prisma SQLite/PG clients compartilhavam output e corriam no Windows | RESOLVED | 0c058e5; workspace/loader isolado, PG harness 22/22 |
+| MAINT-002 | MODERATE | ExcelJS transitivamente resolvia uuid vulnerável | RESOLVED | 6695b78; uuid 11.1.1 override, audit zero, XLSX/import 1/1 |
+| MAINT-003 | MEDIUM | P2028/P2034 podiam ser quarantined no primeiro erro do stock outbox | RESOLVED | 82c15ba; retry bounded + teste stock worker 9/9 |
+| MAINT-004 | MEDIUM | Sync inteiro sem limite/timeout/margem de lease | RESOLVED | 0c058e5; batch 100, timeout/CAS/retry accounting, sync 14/14 |
+| MAINT-005 | LOW | Exaustão de jobs não tinha evento observável | RESOLVED | 0c058e5; `job_attempts_exhausted`, automação 14/14 |
+| MAINT-006 | LOW | Checkpoint isolado de 202.98s sem histogramas de query | ACCEPTED_NON_ACTIONABLE | sem reincidência; monitoramento/pg_stat_statements fica pendente |
+| MAINT-007 | LOW | Webhooks Meta OFF ainda não têm retry P2028 bounded | ACCEPTED_NON_ACTIONABLE | capability OFF; requisito congelado antes de futura ativação |

@@ -19,6 +19,12 @@ SQLite rehearsal plus separate PG limitation, and canonical authenticated
 browser evidence. These are explicit evidence qualifiers, not hidden PASS
 inflation.
 
+The post-GA2 maintenance pass then fixed the runner’s shared Prisma output,
+transient stock P2028/P2034 handling, sync lease/timeout accounting, job
+exhaustion telemetry and the ExcelJS/uuid dependency graph. The maintenance
+source is `0c058e5`; the official PostgreSQL cluster was not available for a
+real migration rehearsal, so that limitation remains explicit.
+
 Production API, worker and frontend are healthy and component-parity verified.
 The authenticated canonical-domain browser proof passed after the deployment:
 six viewports, SPA navigation, OFF catalog/settings, Inbox no-send semantics and

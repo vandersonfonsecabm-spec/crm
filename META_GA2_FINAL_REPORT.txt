@@ -2,10 +2,10 @@ Auditoria global pós-E6A — relatório final
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=a45eba71aede67546cf1459b0955e80e6586bff9
-FINAL_SOURCE_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c
-FINAL_RUNTIME_SHA=eda455912c5ddecb8ae42766f56e2397dce0085c (source/runtime baseline; later documentation-only Vercel deploys)
+FINAL_SOURCE_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (API/worker maintenance runtime; frontend unchanged)
 FINAL_DOCUMENTATION_HEAD=DOCUMENTATION_ONLY_AFTER_SOURCE_TAG
-DOCUMENT_STATUS=GA2_FINAL_PASS
+DOCUMENT_STATUS=POST_GA2_MAINTENANCE_COMPLETE_WITH_PG_ENV_LIMITATION
 
 RESULTADO
 
@@ -54,8 +54,8 @@ VALIDAÇÃO
   terminou com exit 0 em todos os arquivos não-PostgreSQL; os testes
   exclusivamente PostgreSQL continuam separados pelo runner oficial bloqueado.
 - Frontend: 194/194 PASS, TypeScript noEmit PASS, lint PASS, Vite build PASS.
-- Railway API deployment `c5e36ec7-92d6-4c0c-843f-98ff4eb9d650` and worker
-  deployment `dcf18b0f-4d35-4d8c-9ce1-52c5e6c2d366`: SUCCESS/RUNNING at eda.
+- Railway API deployment `371e473d-ea01-48d5-aa84-3f7ddc200ba4` and worker
+  deployment `5292c1c6-b034-41e1-a305-1190887f5461`: SUCCESS/RUNNING at 0c.
   Vercel latest verified docs-only deployment
   `dpl_6TLhWra6vJqixjWJXD4GEaPEX738`: READY; health/ready e frontend HTTP
   200; Postgres database OK.
@@ -114,6 +114,8 @@ Os 15 documentos gerados e incluídos no ZIP são:
 14. LUNAMAX_GA2_SCORECARD.txt
 15. BASELINE_SAAS_POST_E6A_GLOBAL_AUDIT_PASS.md
 
+Suplemento de toolchain incluído no pacote: `docs/TOOLCHAIN_CONTRACT.md`.
+
 Pacote: META_GA2_REPORTS_20260824.zip
 SHA-256 do pacote: 28a40438f314a0b6ffa0222d6c36bf05d4fbeafffbbbd4a560b805633265606c
 
@@ -160,3 +162,57 @@ A E6B pode escolher exatamente um provedor, implementar um único conector,
 configurar credencial scoped e testar structured output/tool calling em
 shadow, suggestion-only e human approval. Nenhuma reconstrução de catálogo,
 estoque, ProductOffer, ferramentas, Inbox ou auditoria é necessária.
+
+PÓS-GA2 — PENDÊNCIAS AUDITADAS E TRATADAS
+
+1. RUNNER POSTGRESQL
+
+O defeito causal foi identificado: SQLite e PostgreSQL geravam o Prisma Client
+no mesmo `backend/node_modules/.prisma/client`, deixando DLLs temporárias
+órfãs e criando corrida de engine no Windows. O runner agora usa workspace
+descartável em `%TEMP%\\crm-prisma-tests\\postgres-prisma-*`, client isolado,
+loader `NODE_OPTIONS` somente nos testes e limpeza segura. A regressão do
+harness passou 22/22 e o probe alcançou a tentativa de conexão, retornando
+`ECONNREFUSED` esperado para `127.0.0.1:1`, sem encerramento prematuro do
+engine. Não havia Docker, psql, initdb ou URL PostgreSQL descartável disponível;
+portanto a bateria contra cluster real continua pendente de ambiente.
+
+2. EXCELJS/UUID
+
+O advisory transitivo foi corrigido sem downgrade: `exceljs` permanece 4.4.0 e
+`uuid` foi fixado em 11.1.1 no override e lockfile. `npm ci`, `npm ls`,
+`require('exceljs')`, leitura do XLSX de fixture, `importacao-manual.test.js`
+isolado e `npm audit --omit=dev` passaram com zero vulnerabilidades.
+
+3. P2028/P2034, LEASES E OBSERVABILIDADE
+
+- stock outbox trata P2028/P2034 e timeouts Prisma como retryable bounded;
+- sync de estoque limita lote a 100, aplica maxWait/timeout, exige margem de
+  lease e faz cleanup/CAS com retry accounting;
+- worker emite `stock_worker_cycle` com duração limitada e failedTenants;
+- exaustão de jobs automáticos emite `job_attempts_exhausted` sanitizado;
+- testes causais passaram: stock worker 9/9, sync 14/14 e automação 14/14;
+- suíte SQLite global de manutenção passou com exit 0; log SHA-256:
+  `b16cec52c1602d71d6fd666215aa905571d5e49741f63b0fe98d42c037335fed`.
+
+4. MONITORAMENTO DE PRODUÇÃO
+
+Após o deploy `0c058e5`, API/worker permaneceram SUCCESS/RUNNING, health/ready
+e banco OK, flags AI OFF, ciclos de estoque regulares e sem P2028 observado.
+O checkpoint histórico de 202,98s permanece como outlier único; não houve
+reincidência na janela observada. Ainda falta instrumentação de query latency
+Prisma/pg_stat_statements e um cluster PostgreSQL descartável para fechar a
+prova completa. Isso fica explicitamente como manutenção acompanhada, não como
+PASS inventado.
+
+5. LIMITES FORA DO LOTE ATIVO
+
+Meta webhook channels continuam OFF e não receberam uma nova política de
+retry P2028 nesta manutenção; qualquer ativação futura deve exigir retry
+bounded, backoff, lease e teste específico antes de ligar a capability.
+
+MAINTENANCE_SOURCE_TAG=saas-post-e6a-maintenance-audit-pass-2026-08-25
+MAINTENANCE_SOURCE_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
+AI_REAL_PROVIDER_CONNECTED=NO
+AI_AUTO_REPLY_ENABLED=NO
+AI_EXTERNAL_OUTBOUND=0
