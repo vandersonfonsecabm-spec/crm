@@ -23,7 +23,6 @@ test("dashboard chunk failures have an accessible recovery state", async () => {
   assert.match(app, /role="status"/);
   assert.match(app, /Carregando painel/);
 });
-
 test("rare dashboard modules stay deferred behind the existing loading primitive", async () => {
   const dashboard = await readFile(path.join(frontendDir, "src/pages/Dashboard.tsx"), "utf8");
   for (const moduleName of [
