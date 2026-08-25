@@ -2,8 +2,8 @@ Auditoria GA3 de performance, segurança, confiabilidade, arquitetura e code hea
 
 CURRENT_STATE_AS_OF=2026-08-25 BRT
 START_SOURCE_SHA=25b36e639612275abc826f36f8f89a66fd06701a
-CURRENT_SOURCE_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
-FINAL_RUNTIME_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
+CURRENT_SOURCE_SHA=cf7e87f961b05996d4e806ab7bcfd657b2b111f0
+FINAL_RUNTIME_SHA=cf7e87f961b05996d4e806ab7bcfd657b2b111f0
 DOCUMENT_STATUS=GA3_PASS_WITH_EXPLICIT_EXTERNAL_LIMITATIONS
 
 RESULTADO
@@ -24,11 +24,11 @@ O que foi corrigido
 
 Provas
 
-- E6A focal integrado: 43/43 PASS.
+- E6A focal integrado: 45/45 PASS.
 - Backend global em sandbox com cópia temporária do fixture protegido: exit 0; tenant gates/migrations passaram; `backend/prisma/dev.db` original permaneceu SHA `6116ca…42533`.
 - Frontend: 195/195, TypeScript/Vite build e lint PASS.
-- Railway API/worker em `d6b665e`: deployments `59c6142f`/`482ac3c0` SUCCESS; startup migrations concluídas; health/ready 200/database ok.
-- Vercel production `dpl_65YLScSrTpiZNnaB5aCiLc2FYwhX` READY em `a3c0600`; a árvore frontend é idêntica entre `a3c0600` e `d6b665e`, alias canonical HTTP 200.
+- Railway API/worker em `cf7e87f`: deployments `6fe8c55f`/`e9fcc843` SUCCESS; startup migrations concluídas; health/ready 200/database ok.
+- Vercel production `dpl_65YLScSrTpiZNnaB5aCiLc2FYwhX` READY em `a3c0600`; a árvore frontend é idêntica entre `a3c0600` e `cf7e87f`, alias canonical HTTP 200.
 - Flags AI/Meta OFF, outbound 0; worker ciclos sem falhas.
 
 Pendências honestas

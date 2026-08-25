@@ -2,8 +2,8 @@
 
 CURRENT_STATE_AS_OF=2026-08-25 BRT
 START_SOURCE_SHA=25b36e639612275abc826f36f8f89a66fd06701a
-CURRENT_SOURCE_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
-FINAL_RUNTIME_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
+CURRENT_SOURCE_SHA=cf7e87f961b05996d4e806ab7bcfd657b2b111f0
+FINAL_RUNTIME_SHA=cf7e87f961b05996d4e806ab7bcfd657b2b111f0
 DOCUMENT_STATUS=GA3_LEDGER_WITH_EXTERNAL_GATES
 
 | ID | Severidade | Domínio | Causa/evidência | Correção/estado |
@@ -21,6 +21,8 @@ DOCUMENT_STATUS=GA3_LEDGER_WITH_EXTERNAL_GATES
 | GA3-REL-011 | MEDIUM | ProductOffer | previews repetidos cresciam linhas ativas | Corrigido em `d6b665e`; reuse/in-flight lock/cap por conversa |
 | GA3-SEC-012 | MEDIUM | Tools/audit | schemas eram declarativos, redaction não cobria apiKey/privateKey/accessKey | Corrigido em `cf5c999`; validação strict, redaction recursiva, payload cap |
 | GA3-REL-013 | MEDIUM | Effects | corrida P2002 podia responder 500 apesar de efeito único | Corrigido em `cf5c999`; reconciliação idempotente e teste causal |
+| GA3-SEC-019 | HIGH | Effects | replay sequencial de opportunity/handoff retornava linha anterior só por chave | Corrigido em `cf7e87f`; revalidação de conversa/ofertas/parents + testes |
+| GA3-SEC-020 | HIGH | Redaction | profundidade >5 devolvia objeto original | Corrigido em `cf7e87f`; marcador `[truncated]` + teste profundo |
 | GA3-OPS-014 | MEDIUM | PostgreSQL | checkpoint histórico de 247s (com outros outliers) | ABERTO_ADVISORY: monitorar/correlacionar; sem tuning especulativo |
 | GA3-ENV-015 | BLOCKED_EXTERNAL | PostgreSQL | sem Docker/psql/initdb/URL descartável | Runner plug-and-play pronto; prova real não inventada |
 | GA3-ENV-016 | BLOCKED_EXTERNAL | pg_stat_statements | extensão/cluster descartável não disponível | Script read-only pronto; sem CREATE/RESET |

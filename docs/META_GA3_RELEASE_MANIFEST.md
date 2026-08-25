@@ -2,20 +2,20 @@
 
 CURRENT_STATE_AS_OF=2026-08-25 BRT
 START_SOURCE_SHA=25b36e639612275abc826f36f8f89a66fd06701a
-FINAL_SOURCE_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
-FINAL_RUNTIME_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
+FINAL_SOURCE_SHA=cf7e87f961b05996d4e806ab7bcfd657b2b111f0
+FINAL_RUNTIME_SHA=cf7e87f961b05996d4e806ab7bcfd657b2b111f0
 DOCUMENT_STATUS=GA3_RELEASE_RECONCILED
 
 | Componente | Ref/deployment | Estado |
 |---|---|---|
-| Git master | `d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950` | PASS |
-| Git release/ga2-post-e6a | `d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950` | PASS |
-| Railway API | `59c6142f-a594-4f27-a66a-a6d786320fd1` | SUCCESS/RUNNING |
-| Railway worker | `482ac3c0-c8dd-4fe5-808a-df59ee8ddd54` | SUCCESS/RUNNING |
+| Git master | `cf7e87f961b05996d4e806ab7bcfd657b2b111f0` | PASS |
+| Git release/ga2-post-e6a | `cf7e87f961b05996d4e806ab7bcfd657b2b111f0` | PASS |
+| Railway API | `6fe8c55f-b7d3-4179-9d1e-56a8c4a596f6` | SUCCESS/RUNNING |
+| Railway worker | `e9fcc843-43d4-4899-a886-05593251b8e2` | SUCCESS/RUNNING |
 | Vercel canonical project | `dpl_65YLScSrTpiZNnaB5aCiLc2FYwhX` at `a3c0600` | READY; frontend tree parity PASS |
 | PostgreSQL | official Railway target | ready/database ok; 16 migrations |
 
-Vercel did not need a new frontend build after d6: `git diff a3c0600..d6b665e -- frontend` is empty. Backend/worker received the d6 runtime delta.
+Vercel did not need a new frontend build after cf7: `git diff a3c0600..cf7e87f -- frontend` is empty. Backend/worker received the cf7 runtime delta.
 
 Flags at reconciliation:
 

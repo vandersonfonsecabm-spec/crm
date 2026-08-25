@@ -1,5 +1,20 @@
 # Estado atual do CRM
 
+## V69 — GA3 final runtime hardening (2026-08-25)
+
+- Código final: `cf7e87f961b05996d4e806ab7bcfd657b2b111f0`; master/release
+  apontam para esse SHA. API Railway `6fe8c55f` e worker `e9fcc843` estão
+  SUCCESS/RUNNING; migrations de startup, health/ready e banco OK.
+- Sol bloqueadores corrigidos: replay sequencial de opportunity/handoff agora
+  revalida parents/ofertas/conversa; redaction profunda trunca em `[truncated]`.
+  E6A focal final `45/45 PASS`; regressão global isolada exit 0.
+- Tag imutável de runtime: `saas-ga3-final-pass-2026-08-25` aponta para
+  `cf7e87f`. A tag intermediária `saas-ga3-performance-security-reliability-pass-2026-08-25`
+  permanece intacta em d6 como histórico.
+- Vercel continua READY em `dpl_65YLScSrTpiZNnaB5aCiLc2FYwhX` na árvore
+  frontend equivalente; AI/Meta/outbound permanecem OFF/zero. PostgreSQL real,
+  pg_stat_statements ao vivo e checkpoint >200s continuam gates/advisory honestos.
+
 ## V68 — GA3 performance/security/reliability (2026-08-25)
 
 - Código final da rodada: `d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950`; master e
