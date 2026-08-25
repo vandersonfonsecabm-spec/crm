@@ -1,0 +1,39 @@
+GA3 TEST EVIDENCE (sanitized)
+
+CURRENT_STATE_AS_OF=2026-08-25 BRT
+CODE_SHA=cf7e87f961b05996d4e806ab7bcfd657b2b111f0
+RUNTIME_SHA=cf7e87f961b05996d4e806ab7bcfd657b2b111f0
+DOCUMENT_STATUS=EVIDENCE_SUMMARY_NO_SECRETS
+
+FOCUSED
+
+- `node --test backend/tests/ai-commerce-orchestrator-e6a.test.js backend/tests/ai-commerce-catalog.test.js backend/tests/ai-commerce-effects-e6a.test.js`: 45/45 PASS.
+- `node --check` for availability/search/offer/tools/audit/effects/routes/orchestrator/server: PASS.
+- `git diff --check`: PASS.
+
+FRONTEND
+
+- Auth/bootstrap focused: 19/19 PASS.
+- Full frontend: 195/195 PASS.
+- TypeScript/Vite build: PASS.
+- ESLint: PASS.
+
+GLOBAL BACKEND
+
+- `node scripts/run-isolated-prisma-tests.cjs node-suite` in a temporary worktree from this code SHA: exit 0.
+- Tenant architecture/pre/post migration gates: PASS; no orphan/cross-tenant rows in synthetic gate.
+- PostgreSQL-only files remain intentionally excluded from SQLite suite.
+- Protected fixture source hash before/after: `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+
+RUNTIME
+
+- Railway API deployment `6fe8c55f-b7d3-4179-9d1e-56a8c4a596f6`: SUCCESS/RUNNING.
+- Railway worker deployment `e9fcc843-43d4-4899-a886-05593251b8e2`: SUCCESS/RUNNING.
+- `/health` 200, `/ready` 200 with `database=ok`, unauthenticated `/auth/me` 401.
+- Worker cycles after deploy: `failedCount=0`, `failedTenants=[]`.
+
+EXTERNAL LIMITS
+
+- Real disposable PostgreSQL cluster: BLOCKED_ENVIRONMENT (Docker/psql/initdb/URL absent).
+- Live pg_stat_statements: BLOCKED_EXTERNAL; read-only script is prepared and rejects official URLs.
+- No load test or production EXPLAIN ANALYZE was run.
