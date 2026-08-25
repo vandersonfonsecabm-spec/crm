@@ -300,52 +300,51 @@ test("assinatura, mapeamento e falha pos-intake permanecem fechados e sanitizado
   const payload = failureSimulator.text({ id: `test-failure-${suffix}` });
   const firstReceiptAt = new Date("2026-07-30T20:00:00.000Z");
   const failureAt = new Date("2026-07-30T20:00:01.000Z");
-  const recoveryReceiptAt = new Date("2026-07-30T20:00:02.000Z");
+  let transientAttempts = 0;
   const failingOrchestrator = createWhatsAppWebhookOrchestrator({
     prisma,
     intake: createWhatsAppWebhookIntake({ prisma, clock: () => firstReceiptAt }),
-    processEvent: async () => {
-      const error = new Error("payload=private token=private");
-      error.code = "unsafe payload=private";
-      throw error;
+    processEvent: async (input) => {
+      transientAttempts += 1;
+      if (transientAttempts === 1) {
+        const error = new Error("payload=private token=private");
+        error.code = "P2028";
+        throw error;
+      }
+      return processWhatsAppWebhookEvent(input);
     },
     clock: () => failureAt,
+    retryPolicy: { baseDelayMs: 0, maxDelayMs: 0 },
+    waitForRetry: async () => {},
   });
-  await assert.rejects(
-    failingOrchestrator(payload),
-    (error) => error.code === "WEBHOOK_PROCESSING_UNAVAILABLE",
-  );
+  assert.deepEqual(await failingOrchestrator(payload), { accepted: true });
+
   const durableEvent = await prisma.eventoWebhook.findFirstOrThrow({
     where: { empresaId: failureFixture.tenant.id, externalEventId: `test-failure-${suffix}` },
   });
   const failedChannel = await prisma.canalIntegracao.findUniqueOrThrow({
     where: { id: failureFixture.channel.id },
   });
-  assert.equal(durableEvent.statusProcessamento, "RECEBIDO");
+  assert.equal(durableEvent.statusProcessamento, "PROCESSADO");
+  assert.equal(durableEvent.tentativas, 2);
+  assert.equal(durableEvent.erroCodigo, null);
+  assert.equal(durableEvent.erroResumo, null);
   assert.ok(failedChannel.lastFailureAt instanceof Date);
   assert.equal(failedChannel.lastFailureAt.toISOString(), failureAt.toISOString());
-  assert.equal(failedChannel.lastFailureCode, "WHATSAPP_EVENT_PROCESSING_UNAVAILABLE");
+  assert.equal(failedChannel.lastFailureCode, "P2028");
   assert.equal(JSON.stringify(failedChannel).includes("private"), false);
   assert.deepEqual(await commercialCounts(failureFixture.tenant.id), {
-    contacts: 0,
-    clients: 0,
-    leads: 0,
-    conversations: 0,
-    messages: 0,
+    contacts: 1,
+    clients: 1,
+    leads: 1,
+    conversations: 1,
+    messages: 1,
   });
-  const lifecycle = createWhatsappInboundLifecycleService({ prisma, logger: { info() {} } });
-  assert.equal((await lifecycle.getStatus({ tenantId: failureFixture.tenant.id })).state, "ERROR");
-
-  const recovered = await createWhatsAppWebhookOrchestrator({
-    prisma,
-    intake: createWhatsAppWebhookIntake({ prisma, clock: () => recoveryReceiptAt }),
-  })(payload);
-  assert.deepEqual(recovered, { accepted: true });
+  assert.deepEqual(await createWhatsAppWebhookOrchestrator({ prisma })(payload), { accepted: true });
   assert.equal(await prisma.eventoWebhook.count({
     where: { empresaId: failureFixture.tenant.id, externalEventId: `test-failure-${suffix}` },
   }), 1);
   assert.equal((await commercialCounts(failureFixture.tenant.id)).messages, 1);
-  assert.equal((await lifecycle.getStatus({ tenantId: failureFixture.tenant.id })).state, "CONNECTED");
 });
 
 test("pausa entre intake e processor bloqueia conclusao sem marcar falha", async () => {
@@ -399,32 +398,44 @@ test("falha concorrente atrasada nao sobrescreve processamento concluido", async
   const waitForSuccess = new Promise((resolve) => { releaseFailure = resolve; });
   const delayedFailure = createWhatsAppWebhookOrchestrator({
     prisma,
-    processEvent: async () => {
-      signalFailureStarted();
-      await waitForSuccess;
-      const error = new Error("Falha sintetica atrasada.");
-      error.code = "WHATSAPP_DELAYED_FAILURE";
-      throw error;
+    processEvent: async (input) => {
+      if (signalFailureStarted) {
+        const signal = signalFailureStarted;
+        signalFailureStarted = null;
+        signal();
+        await waitForSuccess;
+        const error = new Error("Falha sintetica atrasada.");
+        error.code = "P2028";
+        throw error;
+      }
+      return processWhatsAppWebhookEvent(input);
     },
+    retryPolicy: { baseDelayMs: 0, maxDelayMs: 0 },
+    waitForRetry: async () => {},
   });
 
   const delayedResult = delayedFailure(payload);
   await failureStarted;
-  assert.deepEqual(await createWhatsAppWebhookOrchestrator({ prisma })(payload), { accepted: true });
-  releaseFailure();
   await assert.rejects(
-    delayedResult,
+    createWhatsAppWebhookOrchestrator({
+      prisma,
+      retryPolicy: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 },
+      waitForRetry: async () => {},
+    })(payload),
     (error) => error.status === 503 && error.code === "WEBHOOK_PROCESSING_UNAVAILABLE",
   );
+  releaseFailure();
+  assert.deepEqual(await delayedResult, { accepted: true });
 
   const event = await prisma.eventoWebhook.findFirstOrThrow({
     where: { empresaId: fixture.tenant.id, externalEventId: `test-failure-race-${suffix}` },
   });
   const channel = await prisma.canalIntegracao.findUniqueOrThrow({ where: { id: fixture.channel.id } });
   assert.equal(event.statusProcessamento, "PROCESSADO");
+  assert.equal(event.tentativas, 2);
   assert.ok(event.processadoEm instanceof Date);
-  assert.equal(channel.lastFailureAt, null);
-  assert.equal(channel.lastFailureCode, null);
+  assert.ok(channel.lastFailureAt instanceof Date);
+  assert.equal(channel.lastFailureCode, "P2028");
   assert.deepEqual(await commercialCounts(fixture.tenant.id), {
     contacts: 1,
     clients: 1,
