@@ -1859,6 +1859,15 @@ export function shouldInvalidateAuthSession(error: unknown) {
   return error instanceof ApiHttpError && error.status === 401;
 }
 
+export async function resolveDashboardSession(
+  initialAuthSession: AuthSession | null | undefined,
+  retryCount: number,
+  fetchSession: () => Promise<AuthSession | null> = fetchAuthMe,
+) {
+  if (initialAuthSession && retryCount === 0) return initialAuthSession;
+  return fetchSession();
+}
+
 export async function fetchClienteDetailFromBackend(id: number | string) {
   const response = await requestApiGetAuthenticated<ApiCliente>(`/clientes/${id}`);
   return mapApiClienteToClient(response);

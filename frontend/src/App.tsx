@@ -12,6 +12,7 @@ import {
   refreshAuthSession,
   shouldInvalidateAuthSession,
 } from "./services/crmApi";
+import type { AuthSession } from "./services/crmApi";
 
 type PublicSecurityMode = "recovery" | "reset" | "invite";
 
@@ -25,6 +26,7 @@ function getPublicSecurityMode(pathname: string): PublicSecurityMode | null {
 function App() {
   const [authState, setAuthState] = useState<"checking" | "authenticated" | "unauthenticated" | "unavailable">("checking");
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
+  const [validatedSession, setValidatedSession] = useState<AuthSession | null>(null);
   const [publicPath, setPublicPath] = useState(() => window.location.pathname);
   const securityMode = getPublicSecurityMode(publicPath);
 
@@ -42,12 +44,18 @@ function App() {
       cleanupLegacyBypassStorage();
       try {
         if (!getAuthSession()) await refreshAuthSession();
-        await fetchAuthMe();
-        if (active) setAuthState("authenticated");
+        const session = await fetchAuthMe();
+        if (active) {
+          setValidatedSession(session);
+          setAuthState("authenticated");
+        }
       } catch (error) {
         if (shouldInvalidateAuthSession(error)) {
           clearAuthSession();
-          if (active) setAuthState("unauthenticated");
+          if (active) {
+            setValidatedSession(null);
+            setAuthState("unauthenticated");
+          }
           return;
         }
         if (active) setAuthState("unavailable");
@@ -61,6 +69,7 @@ function App() {
   }, [authCheckAttempt, securityMode]);
 
   function entrar() {
+    setValidatedSession(getAuthSession());
     setAuthState("authenticated");
   }
 
@@ -76,12 +85,14 @@ function App() {
       // A local logout still clears the browser session if the server is unavailable.
     } finally {
       clearAuthSession();
+      setValidatedSession(null);
       setAuthState("unauthenticated");
     }
   }
 
   function returnToLogin() {
     clearAuthSession();
+    setValidatedSession(null);
     setAuthState("unauthenticated");
   }
 
@@ -120,7 +131,7 @@ function App() {
     );
   }
 
-  return <Dashboard onLogout={sair} />;
+  return <Dashboard initialAuthSession={validatedSession} onLogout={sair} />;
 }
 
 export default App;

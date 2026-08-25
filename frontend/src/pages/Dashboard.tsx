@@ -53,7 +53,7 @@ import WhatsappExternalConfirmDialog from "../components/dashboard/WhatsappExter
 import type { WhatsappExternalRequest } from "../components/dashboard/WhatsappExternalConfirmDialog";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
-import { ApiHttpError, canAccessIntegrations, clearAuthSession, fetchAuthMe, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchCommunicationAttentionSummary, fetchDashboardSummaryFromBackend, getAuthSession, shouldInvalidateAuthSession } from "../services/crmApi";
+import { ApiHttpError, canAccessIntegrations, clearAuthSession, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchCommunicationAttentionSummary, fetchDashboardSummaryFromBackend, getAuthSession, resolveDashboardSession, shouldInvalidateAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession, NotificationTargetKind } from "../services/crmApi";
 import { resolveTenantFeatureAccess } from "../config/featureFlags";
 import { Button, EmptyState, ErrorState } from "../components/ui";
@@ -70,6 +70,7 @@ import {
 import { resetDashboardPageScroll } from "../navigation/dashboardScroll";
 
 type DashboardProps = {
+  initialAuthSession?: AuthSession | null;
   onLogout: () => void;
 };
 
@@ -90,7 +91,7 @@ export function useCloseCustomerDrawerOnPageKeyChange(
   }, [invalidateSession, pageKey, setDrawerOpen]);
 }
 
-export default function Dashboard({ onLogout }: DashboardProps) {
+export default function Dashboard({ initialAuthSession, onLogout }: DashboardProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const contentRef = useRef<HTMLElement | null>(null);
@@ -133,7 +134,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [clientPagination, setClientPagination] = useState({ page: 1, limit: 8, total: 0, totalPages: 0 });
   const [backendLoadError, setBackendLoadError] = useState("");
   const [backendLoadRequest, setBackendLoadRequest] = useState(0);
-  const [authSession, setAuthSession] = useState<AuthSession | null>(() => getAuthSession());
+  const [authSession, setAuthSession] = useState<AuthSession | null>(() => initialAuthSession ?? getAuthSession());
   const [whatsappExternalRequest, setWhatsappExternalRequest] = useState<WhatsappExternalRequest | null>(null);
   const [blingReturnMessage, setBlingReturnMessage] = useState("");
   const [agendaCreateRequestKey, setAgendaCreateRequestKey] = useState(0);
@@ -278,13 +279,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     let ignore = false;
 
     async function loadBackendSession() {
-      const savedSession = getAuthSession();
+      const savedSession = initialAuthSession ?? getAuthSession();
       setAuthSession(savedSession);
       setBackendLoadError("");
       setDashboardSummaryLoadState("loading");
 
       try {
-        const refreshedSession = await fetchAuthMe();
+        const refreshedSession = await resolveDashboardSession(initialAuthSession, backendLoadRequest);
         if (!ignore) setAuthSession(refreshedSession);
 
         try {
@@ -316,7 +317,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     return () => {
       ignore = true;
     };
-  }, [backendLoadRequest, onLogout]);
+  }, [backendLoadRequest, initialAuthSession, onLogout]);
 
   useEffect(() => {
     let ignore = false;

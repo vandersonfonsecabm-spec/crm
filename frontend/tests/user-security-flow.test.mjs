@@ -93,6 +93,34 @@ test("fluxos públicos e autenticados de segurança permanecem separados", async
   assert.doesNotMatch(`${api}\n${publicFlow}\n${panel}`, /console\.log\([^\n]*(?:token|senha|secret)/i);
 });
 
+test("bootstrap reutiliza a sessao validada pelo App e reserva /auth/me para retries", async () => {
+  const [app, dashboard, apiSource] = await Promise.all([
+    source("src/App.tsx"),
+    source("src/pages/Dashboard.tsx"),
+    source("src/services/crmApi.ts"),
+  ]);
+
+  assert.match(app, /const \[validatedSession, setValidatedSession\] = useState<AuthSession \| null>\(null\);/);
+  assert.match(app, /const session = await fetchAuthMe\(\);[\s\S]*setValidatedSession\(session\);/);
+  assert.match(app, /<Dashboard initialAuthSession=\{validatedSession\} onLogout=\{sair\} \/>/);
+  assert.match(dashboard, /initialAuthSession\?: AuthSession \| null;/);
+  assert.match(dashboard, /resolveDashboardSession\(initialAuthSession, backendLoadRequest\)/);
+  assert.match(apiSource, /export async function resolveDashboardSession\(/);
+
+  let authMeRequests = 0;
+  const fetchSession = async () => {
+    authMeRequests += 1;
+    return { token: "validated", usuario: { nome: "Teste" } };
+  };
+  const validatedSession = { token: "validated", usuario: { nome: "Teste" } };
+  await api.resolveDashboardSession(validatedSession, 0, fetchSession);
+  assert.equal(authMeRequests, 0);
+  await api.resolveDashboardSession(validatedSession, 1, fetchSession);
+  assert.equal(authMeRequests, 1);
+  await api.resolveDashboardSession(undefined, 0, fetchSession);
+  assert.equal(authMeRequests, 2);
+});
+
 test("refresh 401 preserva a autenticacao definitiva para o logout local", async (t) => {
   t.after(resetAuthTestState);
   seedAccessToken("access-token-invalido");
@@ -389,7 +417,7 @@ test("produção encaminha auth pelo mesmo host antes do fallback da SPA", async
 test("falha transitória no reload preserva retry e oferece retorno local ao login", async () => {
   const app = await source("src/App.tsx");
 
-  assert.match(app, /function returnToLogin\(\) \{\s*clearAuthSession\(\);\s*setAuthState\("unauthenticated"\);\s*\}/);
+  assert.match(app, /function returnToLogin\(\) \{\s*clearAuthSession\(\);\s*setValidatedSession\(null\);\s*setAuthState\("unauthenticated"\);\s*\}/);
   assert.match(app, /onRetry=\{\(\) => \{\s*setAuthState\("checking"\);\s*setAuthCheckAttempt\(\(attempt\) => attempt \+ 1\);\s*\}\}/);
   assert.match(app, /<Button onClick=\{returnToLogin\} size="sm" variant="ghost">Voltar ao login<\/Button>/);
 });
