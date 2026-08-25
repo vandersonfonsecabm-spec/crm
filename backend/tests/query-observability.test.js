@@ -121,3 +121,23 @@ test("createPrismaClient conecta a observabilidade sem abrir o banco no teste", 
   ]);
   assert.deepEqual(client.listeners.map((item) => item.event), ["query", "error"]);
 });
+
+test("listeners sao anexados antes do proxy de manutencao somente leitura", () => {
+  let rawClient;
+  class FakePrismaClient {
+    constructor() { rawClient = this; this.listeners = []; }
+    $on(event, handler) { this.listeners.push({ event, handler }); }
+    $extends() { return { maintenanceProxy: true }; }
+  }
+  const client = createPrismaClient({
+    PrismaClientClass: FakePrismaClient,
+    env: {
+      NODE_ENV: "test",
+      CRM_TEST_DATABASE_URL: `file:${path.join(os.tmpdir(), "crm-prisma-tests", "query-observability-maintenance.db")}`,
+      CRM_PRISMA_QUERY_OBSERVABILITY: "true",
+      CRM_MAINTENANCE_READ_ONLY: "true",
+    },
+  });
+  assert.deepEqual(client, { maintenanceProxy: true });
+  assert.deepEqual(rawClient.listeners.map((item) => item.event), ["query", "error"]);
+});

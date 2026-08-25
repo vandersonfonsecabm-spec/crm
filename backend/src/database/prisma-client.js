@@ -37,13 +37,14 @@ function createPrismaClient(options = {}) {
     ? { log: [{ emit: "event", level: "query" }, { emit: "event", level: "error" }] }
     : {};
   const finalize = (client) => {
-    const guarded = applyMaintenanceReadOnlyGuard(client, { env });
-    attachPrismaQueryObservability(guarded, {
+    // Attach before the maintenance `$extends`: the extended proxy deliberately
+    // exposes only query methods and may not retain Prisma's `$on` event API.
+    attachPrismaQueryObservability(client, {
       env,
       logger: options.logger,
       now: options.now,
     });
-    return guarded;
+    return applyMaintenanceReadOnlyGuard(client, { env });
   };
   if (env.NODE_ENV !== "test") {
     return finalize(new PrismaClientClass(prismaClientOptions));
