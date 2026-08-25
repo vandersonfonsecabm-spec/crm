@@ -65,8 +65,8 @@ AI_EXTERNAL_OUTBOUND=0
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 FINAL_SOURCE_SHA=43f6e51
-FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-DOCUMENT_STATUS=MAINTENANCE_2_SOURCE_CLAIMS_WITH_RUNTIME_UNCHANGED
+FINAL_RUNTIME_SHA=0a052577787f463a306ea1f6724aa8ae83fbe066
+DOCUMENT_STATUS=MAINTENANCE_2_PRODUCTION_RECONCILED_WITH_PG_EXTERNAL_GATE
 
 | Claim | Status | Evidence |
 |---|---|---|
@@ -75,7 +75,9 @@ DOCUMENT_STATUS=MAINTENANCE_2_SOURCE_CLAIMS_WITH_RUNTIME_UNCHANGED
 | POSTGRES_REAL_RUNNER_COMMAND | PASS_READY | `test:postgres:real` dry-run and focused command suite 9/9 |
 | META_WEBHOOK_RETRY_SOURCE | PASS | CAS/lease/backoff/exhaustion; helper 3/3 and provider suites 12/12, 8/8, 9/9, processor 11/11 |
 | META_REAL_CHANNELS | OFF | no route/gate/outbound change; activation remains a future tenant-canary gate |
-| PRODUCTION_RUNTIME_FOR_MAINTENANCE_2 | PENDING_DEPLOY_RECONCILIATION | candidate 43f6e51 is ready for the authorized deploy; current API/worker remain 0c058e5 until Railway reports the new deployment |
+| PRODUCTION_RUNTIME_FOR_MAINTENANCE_2 | PASS | API/worker deploys SUCCESS on Git commit 0a05257; final API redeploy a46f7145 health/ready 200 and AI/Meta OFF |
+| PRISMA_PROFILING_WINDOW | PASS_CONTROLLED_OFF | API-only 50ms threshold window on deploy 3d4d666c; no slow/error telemetry; final variable false on a46f7145 |
+| GA3_READONLY_BASELINE | PASS_INITIAL | HTTP p95 5ms/max87; worker cycle p95 416ms/max1077; 7 PG checkpoints max48.012s; no FATAL/PANIC sample |
 | CHECKPOINT_202S_REINCIDENCE | NOT_OBSERVED | single historical outlier; query telemetry now available for next controlled observation |
 
 AI_REAL_PROVIDER_CONNECTED=NO

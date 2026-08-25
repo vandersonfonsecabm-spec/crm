@@ -225,8 +225,8 @@ PÓS-GA2 — LOTE DE MANUTENÇÃO 2 (RECONCILIAÇÃO AUTORITATIVA)
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 FINAL_SOURCE_SHA=43f6e51
-FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (produção não alterada)
-DOCUMENT_STATUS=MAINTENANCE_2_SOURCE_COMPLETE_RUNTIME_UNCHANGED
+FINAL_RUNTIME_SHA=0a052577787f463a306ea1f6724aa8ae83fbe066 (API/worker reconciliados)
+DOCUMENT_STATUS=MAINTENANCE_2_PRODUCTION_RECONCILED_WITH_PG_EXTERNAL_GATE
 
 O lote seguinte foi executado de forma focal, sem reabrir a auditoria global:
 
@@ -269,7 +269,8 @@ O lote seguinte foi executado de forma focal, sem reabrir a auditoria global:
   Docker/daemon não está instalado/disponível. Evidência sanitizada atual:
   `%TEMP%\\crm-postgres-real\\20260825014954844-3372-5bf0546d6341.log`,
   SHA-256 `c0117c1c56f2d2e36467317e726d089b3d4c1664fa7b986c77ba8fd3d2f8e0b1`;
-- nenhum container, volume, migration oficial, reinício ou deploy foi feito.
+- nenhum container/volume PostgreSQL descartável foi criado; não houve migration
+  nova. O deploy oficial foi executado somente após a regressão completa.
 
 4. DEPENDÊNCIAS E OUTLIER
 
@@ -282,7 +283,12 @@ O lote seguinte foi executado de forma focal, sem reabrir a auditoria global:
 RELEASE RECONCILIATION
 
 - commit candidato validado para publicação: `43f6e51`;
-- runtime oficial preservado em `0c058e5` (API/worker), sem deploy deste lote;
+- runtime oficial publicado em `0a05257` (API/worker), descendente do source
+  corrigido `43f6e51`;
+- API Railway: deploy `ca0873b5-f909-4b47-81da-8e8849412bb2` SUCCESS;
+- worker Railway: deploy `100c1542-c64e-4c01-a8b7-6dacb0d62184` SUCCESS;
+- API final após profiling OFF: deploy `a46f7145-2b96-468c-bc9b-ab14fa354c3f`
+  SUCCESS; `/health` e `/ready` 200, database=ok;
 - AI_COMMERCE_ENABLED=false;
 - AI_COMMERCE_MOCK_ENABLED=false;
 - AI_COMMERCE_RUNTIME_CANARY_APPROVED=false;
@@ -291,7 +297,13 @@ RELEASE RECONCILIATION
 - AI_AUTO_REPLY_ENABLED=NO;
 - AI_EXTERNAL_OUTBOUND=0;
 - prova PostgreSQL real continua pendente somente de Docker/cluster descartável;
-- não há PASS de produção para query p95/pg_stat_statements até essa prova.
+- profiling controlado: API deploy `3d4d666c-605b-4cca-8cbb-f7487fbf8836`,
+  `CRM_PRISMA_QUERY_OBSERVABILITY=true`, threshold 50 ms, sem sampling
+  percentual; janela encerrou sem `prisma_slow_query` ou `prisma_database_error`,
+  e a variável voltou para `false` no deploy final `a46f7145`;
+- baseline GA3 read-only: HTTP 2 requests p50/p95 5 ms, max 87 ms; worker 82
+  ciclos p50 334 ms, p95 416 ms, max 1077 ms, failedCount=0; PostgreSQL 7
+  checkpoints, máximo 48.012 s, zero FATAL/PANIC/auth failures;
 - A regressão backend completa foi executada em worktree temporária do
   candidato, usando apenas cópia de fixture protegida e sandbox: 526 testes
   descobertos, 523 pass, 0 fail e 3 skips explícitos de provas que exigem URL

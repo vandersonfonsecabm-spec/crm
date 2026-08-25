@@ -11,8 +11,8 @@ DOCUMENT_STATUS=POST_GA2_MAINTENANCE_PASS_WITH_PG_ENV_LIMITATION
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 FINAL_SOURCE_SHA=43f6e51
-FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-DOCUMENT_STATUS=MAINTENANCE_2_BACKEND_SOURCE_COMPLETE_RUNTIME_UNCHANGED
+FINAL_RUNTIME_SHA=0a052577787f463a306ea1f6724aa8ae83fbe066
+DOCUMENT_STATUS=MAINTENANCE_2_BACKEND_PRODUCTION_RECONCILED
 
 Prisma query/error observability is opt-in, sanitized and bounded; it does not
 change the worker default. Meta webhook retry is now bounded/CAS/lease-aware in
@@ -20,6 +20,12 @@ all three processors/orchestrators, with provider-specific integration evidence:
 WhatsApp 12/12, Instagram 8/8, Messenger 9/9 and direct processor 11/11. No
 worker, outbound path, route, flag, schema or migration changed. The real
 PostgreSQL cluster gate remains blocked only by unavailable Docker/URL.
+
+Production reconciliation: API deploy `a46f7145` is SUCCESS with health/ready
+200 and database OK; worker deploy `100c1542` is SUCCESS/RUNNING. The API-only
+50 ms profiling window (`3d4d666c`) emitted no slow/error telemetry, and the
+final observability variable is false. GA3 read-only baseline: 82 worker cycles,
+p95 416 ms, max 1077 ms, failedCount 0.
 
 Backend E6A/catalog focused suite: 25/25 PASS before the final UI-only ca
 commit; latest backend-focused orchestrator suite: 21/21 PASS. Node syntax

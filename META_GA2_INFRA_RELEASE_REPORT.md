@@ -11,15 +11,15 @@ DOCUMENT_STATUS=POST_GA2_MAINTENANCE_RUNTIME_PASS_WITH_PG_LIMITATION
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 FINAL_SOURCE_SHA=43f6e51
-FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-DOCUMENT_STATUS=SOURCE_CANDIDATE_READY_NO_DEPLOY
+FINAL_RUNTIME_SHA=0a052577787f463a306ea1f6724aa8ae83fbe066
+DOCUMENT_STATUS=PRODUCTION_PUBLISHED_AND_RECONCILED
 
-The source candidate is `43f6e51`; production API/worker remain the
-previously reconciled `0c058e5` runtime because this batch was not deployed.
-The real PG command is ready and fails closed without Docker. No production
-variable, flag, migration, database, restart or external Meta channel was
-changed. Focused source checks and the sanitized Docker-unavailable evidence
-are recorded in the final report.
+The source candidate `43f6e51` was published as Git commit `0a05257`. Railway
+API/worker deployments `ca0873b5`, `100c1542` succeeded, followed by the
+API-only profiling deployment `3d4d666c` and final OFF redeploy `a46f7145`.
+Health/ready remained 200 with database OK. No migration/schema delta or
+external Meta channel was introduced. The real PG command remains fail-closed
+until Docker or a disposable URL exists.
 
 Remote master advanced by the safe maintenance source fix `0c058e5` after the
 GA2 runtime commits. Railway deployed API `371e473d-ea01-48d5-aa84-3f7ddc200ba4`

@@ -11,10 +11,11 @@ DOCUMENT_STATUS=GA2_PREFLIGHT_COMPLETE
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 FINAL_SOURCE_SHA=43f6e51
-FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-DOCUMENT_STATUS=MAINTENANCE_2_PREFLIGHT_COMPLETE_NO_PRODUCTION_WRITE
+FINAL_RUNTIME_SHA=0a052577787f463a306ea1f6724aa8ae83fbe066
+DOCUMENT_STATUS=MAINTENANCE_2_PREFLIGHT_AND_RELEASE_RECONCILED
 
-The continuation began from the reconciled 0c runtime. The GA2 worktree has no
+The continuation began from the reconciled 0c runtime and published candidate
+43f6e51 as Git commit 0a05257. The GA2 worktree has no
 `backend/prisma/dev.db`; this known layout divergence was not worked around by
 copying or writing any protected database. All new tests used fakes or a
 temporary migration-derived sandbox. Docker/daemon availability was checked

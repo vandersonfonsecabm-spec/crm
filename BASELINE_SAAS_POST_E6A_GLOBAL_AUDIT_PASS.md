@@ -11,13 +11,14 @@ DOCUMENT_STATUS=FROZEN
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 FINAL_SOURCE_SHA=43f6e51
-FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-DOCUMENT_STATUS=FROZEN_BASELINE_PRESERVED_SOURCE_CANDIDATE_NOT_DEPLOYED
+FINAL_RUNTIME_SHA=0a052577787f463a306ea1f6724aa8ae83fbe066
+DOCUMENT_STATUS=FROZEN_BASELINE_PRESERVED_PRODUCTION_RECONCILED
 
 The immutable `saas-post-e6a-maintenance-audit-pass-2026-08-25` tag remains at
-0c058e5. The 43f6e51 continuation is the source candidate published by this batch; no tag was
-moved and no production deployment was initiated. Real PostgreSQL execution is
-the sole external test gate still pending.
+0c058e5. The 43f6e51 continuation was published as Git commit 0a05257; no tag
+was moved. API/worker deployments are SUCCESS, health/ready are green, and the
+final profiling flag is OFF. Real PostgreSQL execution is the sole external
+test gate still pending.
 
 The annotated tag `saas-post-e6a-global-audit-pass-2026-08-24` points exactly to
 the final source baseline SHA `eda455912c5ddecb8ae42766f56e2397dce0085c`.

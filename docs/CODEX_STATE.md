@@ -1,5 +1,19 @@
 # Estado atual do CRM
 
+## V67 - publicacao da manutencao pos-GA2 (2026-08-25)
+
+- Source candidato corrigido: `43f6e51`; commit publicado no master: `0a05257`.
+- API Railway: `ca0873b5` e redeploy final OFF `a46f7145`, ambos SUCCESS;
+  worker: `100c1542`, SUCCESS/RUNNING. `/health` e `/ready` HTTP 200 com banco OK.
+- Regressao backend completa em sandbox autorizado: 526 testes descobertos,
+  523 pass, 0 falhas e 3 skips explícitos de provas PostgreSQL descartável.
+- `CRM_PRISMA_QUERY_OBSERVABILITY` foi ligado somente na API, threshold 50 ms,
+  por janela controlada no deploy `3d4d666c`; não houve evento lento/erro e a
+  variável voltou a `false` no redeploy `a46f7145`.
+- AI/Meta permanecem OFF, allowlist vazia e outbound zero. Nenhuma migration ou
+  alteração de dados foi feita. O runner PostgreSQL real segue pendente apenas
+  de Docker/URL descartável autorizada.
+
 Data da verificacao: 13/08/2026.
 
 ## Checkpoint V48 pre-producao — consultar Git para os refs atuais
