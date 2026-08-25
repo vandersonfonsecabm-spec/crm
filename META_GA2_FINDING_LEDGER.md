@@ -29,6 +29,9 @@ CRITICAL_ACTIONABLE_OPEN=0
 HIGH_ACTIONABLE_OPEN=0
 MEDIUM_ACTIONABLE_OPEN=0
 LOW_ACTIONABLE_OPEN=0
+
+| MAINT-012 | Meta contention | MEDIUM | RESOLVED | duplicate synthetic pilot initially returned 503 under active lease; separate bounded contention budget added in d065c3f and affected pilot passed 1/1 |
+| MAINT-013 | Regression contract | LOW | RESOLVED | WhatsApp lifecycle tests aligned to retry/exhaustion semantics; full authorized backend regression 526 discovered / 0 failures |
 FINDINGS_BLOCKED=0
 FINDINGS_TOTAL=16
 FINDINGS_RESOLVED=13
@@ -38,7 +41,7 @@ FINDINGS_ACCEPTED_NON_ACTIONABLE=3
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-FINAL_SOURCE_SHA=28fba94
+FINAL_SOURCE_SHA=43f6e51
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 DOCUMENT_STATUS=MAINTENANCE_2_FINDINGS_RECONCILED
 

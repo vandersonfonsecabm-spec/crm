@@ -224,7 +224,7 @@ PÓS-GA2 — LOTE DE MANUTENÇÃO 2 (RECONCILIAÇÃO AUTORITATIVA)
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-FINAL_SOURCE_SHA=28fba94
+FINAL_SOURCE_SHA=43f6e51
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6 (produção não alterada)
 DOCUMENT_STATUS=MAINTENANCE_2_SOURCE_COMPLETE_RUNTIME_UNCHANGED
 
@@ -281,7 +281,7 @@ O lote seguinte foi executado de forma focal, sem reabrir a auditoria global:
 
 RELEASE RECONCILIATION
 
-- commit local candidato: `28fba94`;
+- commit candidato validado para publicação: `43f6e51`;
 - runtime oficial preservado em `0c058e5` (API/worker), sem deploy deste lote;
 - AI_COMMERCE_ENABLED=false;
 - AI_COMMERCE_MOCK_ENABLED=false;
@@ -292,9 +292,11 @@ RELEASE RECONCILIATION
 - AI_EXTERNAL_OUTBOUND=0;
 - prova PostgreSQL real continua pendente somente de Docker/cluster descartável;
 - não há PASS de produção para query p95/pg_stat_statements até essa prova.
-- `npm --prefix backend test` no candidato atual foi bloqueado antes dos casos
-  porque o runner isolado exige o `backend/prisma/dev.db` protegido, ausente
-  nesta worktree; não foi criado, copiado ou aberto nenhum banco protegido.
-- A cobertura causal desta mudança é a suíte focal 21/21 e as suítes Meta
-  derivadas de migrations (12/12, 8/8, 9/9, 11/11); o log global anterior não
-  é promovido automaticamente a uma nova execução completa deste candidato.
+- A regressão backend completa foi executada em worktree temporária do
+  candidato, usando apenas cópia de fixture protegida e sandbox: 526 testes
+  descobertos, 523 pass, 0 fail e 3 skips explícitos de provas que exigem URL
+  PostgreSQL descartável. Log sanitizado:
+  `C:\\Users\\vande\\AppData\\Local\\Temp\\crm-793a604-full.log`,
+  SHA-256 `1B98DA61A1B47DCCAB8D7E57BD04146A9791A948211F017300205360334654DA`.
+- A ausência do `dev.db` na worktree GA2 continua documentada; nenhum banco
+  protegido foi criado, alterado ou usado como fallback dentro dela.

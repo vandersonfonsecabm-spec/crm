@@ -45,7 +45,7 @@ DOCUMENT_STATUS=FINAL_CLAIMS_PASS
 | DEPENDENCY_AUDIT | PASS | uuid 11.1.1 override, npm ci/import regression and audit zero |
 | TOOLCHAIN_INTEGRITY | PASS | tsc/lint/build and runtime manifests |
 | BUILD_REPRODUCIBILITY | PASS | Vite build and Railway/Vercel deploys |
-| BACKEND_FULL_SUITE | PASS_REUSED_WITH_CURRENT_ENV_BLOCK | prior maintenance log SHA `b16cec52c1602d71d6fd666215aa905571d5e49741f63b0fe98d42c037335fed` remains valid for unchanged suite; current runner stops before cases because protected dev.db is absent |
+| BACKEND_FULL_SUITE | PASS | authorized temporary worktree regression discovered 526 tests, 523 pass, 0 fail, 3 explicit PostgreSQL URL skips; log SHA `1B98DA61A1B47DCCAB8D7E57BD04146A9791A948211F017300205360334654DA` |
 | FRONTEND_FULL_SUITE | PASS | 194/194 |
 | TENANT_GATE | PASS_REUSED | 157 relation gate, no schema delta |
 | E2E_GLOBAL | PASS | authenticated canonical-domain SPA smoke for Central/catalog/settings/Inbox |
@@ -64,7 +64,7 @@ AI_EXTERNAL_OUTBOUND=0
 
 CURRENT_STATE_AS_OF=2026-08-24 BRT
 START_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
-FINAL_SOURCE_SHA=28fba94
+FINAL_SOURCE_SHA=43f6e51
 FINAL_RUNTIME_SHA=0c058e5bc7663dc278d6ae4b26bd76816fc57eb6
 DOCUMENT_STATUS=MAINTENANCE_2_SOURCE_CLAIMS_WITH_RUNTIME_UNCHANGED
 
@@ -75,7 +75,7 @@ DOCUMENT_STATUS=MAINTENANCE_2_SOURCE_CLAIMS_WITH_RUNTIME_UNCHANGED
 | POSTGRES_REAL_RUNNER_COMMAND | PASS_READY | `test:postgres:real` dry-run and focused command suite 9/9 |
 | META_WEBHOOK_RETRY_SOURCE | PASS | CAS/lease/backoff/exhaustion; helper 3/3 and provider suites 12/12, 8/8, 9/9, processor 11/11 |
 | META_REAL_CHANNELS | OFF | no route/gate/outbound change; activation remains a future tenant-canary gate |
-| PRODUCTION_RUNTIME_FOR_MAINTENANCE_2 | UNCHANGED | current API/worker remains 0c058e5; 28fba94 is local source candidate and was not deployed |
+| PRODUCTION_RUNTIME_FOR_MAINTENANCE_2 | PENDING_DEPLOY_RECONCILIATION | candidate 43f6e51 is ready for the authorized deploy; current API/worker remain 0c058e5 until Railway reports the new deployment |
 | CHECKPOINT_202S_REINCIDENCE | NOT_OBSERVED | single historical outlier; query telemetry now available for next controlled observation |
 
 AI_REAL_PROVIDER_CONNECTED=NO
