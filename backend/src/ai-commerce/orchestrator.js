@@ -50,10 +50,17 @@ function createAICommerceOrchestrator({
       return freezeResult({ state: STATES.IDLE, mode: MODES.OFF, status: "OFF", noExecution: true, empresaId, conversationId });
     }
     const messageId = input.messageId || input.latestMessageId;
-    const idempotencyKey = input.idempotencyKey || makeIdempotencyKey({ empresaId, conversationId, messageId, messageRevision: input.messageRevision, policyRevision: settings.revision || input.policyRevision || "1" });
-    const existing = await getExistingRun({ prisma, idempotencyKey, runs });
+    if (!positiveId(messageId)) {
+      throw policyError("AI_CONTEXT_MESSAGE_REQUIRED", "Mensagem de origem obrigatoria para executar a fundacao comercial.", 422);
+    }
+    const idempotencyKey = input.idempotencyKey === undefined || input.idempotencyKey === null || input.idempotencyKey === ""
+      ? makeIdempotencyKey({ empresaId, conversationId, messageId, messageRevision: input.messageRevision, policyRevision: settings.revision || input.policyRevision || "1" })
+      : normalizeRunIdempotencyKey(input.idempotencyKey);
+    const existing = await getExistingRun({ prisma, idempotencyKey, empresaId, conversationId, runs });
     if (existing) return freezeResult({ ...existing, idempotentReplay: true });
-    const runId = String(input.runId || crypto.randomUUID()).slice(0, 128);
+    // Run identity is server-owned. A caller-provided id could collide with a
+    // different tenant because AICommerceRun.id is globally unique.
+    const runId = crypto.randomUUID();
     const context = buildSanitizedContext({
       empresaId,
       conversationId,
@@ -76,7 +83,9 @@ function createAICommerceOrchestrator({
       correlationId: String(input.correlationId || `ai-${runId}`).slice(0, 128),
       mode,
       idempotencyKey,
-      approvedActions: input.approvedActions || {},
+      // Public runs can only produce drafts. Granular approvals are injected
+      // exclusively by approve() after the persisted draft CAS succeeds.
+      approvedActions: {},
     };
     const claim = await claimPersistedRun({ prisma, baseContext, input, settings, now });
     if (claim?.existing) return freezeResult({ ...claim.existing, idempotentReplay: true, status: claim.existing.status || "IN_PROGRESS" });
@@ -102,7 +111,7 @@ function createAICommerceOrchestrator({
         state = stateForDecision(decision);
         for (const request of requests) {
           try {
-            const result = await toolRegistry.execute(request.name, request.input, { ...baseContext, mode, approvedActions: input.approvedActions || {} });
+            const result = await toolRegistry.execute(request.name, request.input, { ...baseContext, mode, approvedActions: {} });
             if (!Array.isArray(toolResults[request.name])) toolResults[request.name] = [];
             if (Array.isArray(result)) toolResults[request.name].push(...result.slice(0, 20));
             else toolResults[request.name].push(result);
@@ -141,14 +150,14 @@ function createAICommerceOrchestrator({
         outbound: 0,
         createdAt: now().toISOString(),
       });
-      runs.set(idempotencyKey, result);
+      runs.set(runScopeKey({ empresaId, conversationId, idempotencyKey }), result);
       if (draft?.draftId) drafts.set(draft.draftId, { ...result, revision: 1 });
       await auditCall(audit, "recordDraft", { ...baseContext, draft, state: result.state });
       await auditCall(audit, "recordRunCompleted", { ...baseContext, status: result.status, state: result.state, draftId: draft?.draftId });
       return result;
     } catch (error) {
       const failed = freezeResult({ schemaVersion: "AICommerceRun.v1", runId, idempotencyKey, empresaId, conversationId, mode, state: STATES.ERROR, status: "FAILED", errorCode: String(error?.code || "AI_COMMERCE_RUN_FAILED"), requiresHumanApproval: false, autoSend: false, outbound: 0 });
-      runs.set(idempotencyKey, failed);
+      runs.set(runScopeKey({ empresaId, conversationId, idempotencyKey }), failed);
       await auditCall(audit, "recordRunFailed", { ...baseContext, status: failed.status, state: failed.state, errorCode: failed.errorCode });
       throw Object.assign(error, { runId, idempotencyKey });
     }
@@ -231,7 +240,25 @@ function createAICommerceOrchestrator({
     }
   }
 
-  return Object.freeze({ run, approve, reject, getRun: (idempotencyKey) => runs.get(String(idempotencyKey)) || null, getDraft: (draftId) => drafts.get(String(draftId)) || null, reset: () => { runs.clear(); drafts.clear(); approvalLocks.clear(); toolRegistry.reset?.(); } });
+  return Object.freeze({
+    run,
+    approve,
+    reject,
+    getRun: (idempotencyKey, empresaId = null, conversationId = null) => {
+      const key = String(idempotencyKey || "");
+      const tenantId = positiveId(empresaId);
+      const conversation = positiveId(conversationId);
+      for (const result of runs.values()) {
+        if (result.idempotencyKey !== key) continue;
+        if (tenantId && result.empresaId !== tenantId) continue;
+        if (conversation && result.conversationId !== conversation) continue;
+        return result;
+      }
+      return null;
+    },
+    getDraft: (draftId) => drafts.get(String(draftId)) || null,
+    reset: () => { runs.clear(); drafts.clear(); approvalLocks.clear(); toolRegistry.reset?.(); },
+  });
 }
 
 function buildDraft(decision, offers, { empresaId, conversationId, conversationRevision = "", mode, now }) {
@@ -264,8 +291,31 @@ function collectOffers(toolResults, explicit) {
 }
 
 async function materializeOffers({ toolResults, explicitOffers, offerService, context, customerId }) {
-  const offers = collectOffers(toolResults, explicitOffers);
-  if (!offerService?.create) return offers;
+  const offers = collectOffers(toolResults, []);
+  const explicit = Array.isArray(explicitOffers) ? explicitOffers.slice(0, 3) : [];
+  if (explicit.length > 0) {
+    if (!offerService?.get) {
+      throw policyError("AI_OFFER_VALIDATION_UNAVAILABLE", "A validacao da oferta comercial esta indisponivel.", 503);
+    }
+    for (const candidate of explicit) {
+      const offerId = String(candidate?.offerId || candidate?.id || "").trim();
+      if (!offerId) throw policyError("AI_OFFER_NOT_GROUNDED", "Oferta comercial sem identificador valido.", 409);
+      const validated = await offerService.get({
+        empresaId: context.empresaId,
+        offerId,
+        revalidate: true,
+        internal: true,
+      });
+      if (!validated?.valid || validated.status !== "ACTIVE") {
+        throw policyError("AI_OFFER_NOT_GROUNDED", "Oferta comercial expirou ou mudou.", 409);
+      }
+      if (Number(validated.conversationId) !== Number(context.conversationId)) {
+        throw policyError("AI_OFFER_CONTEXT_MISMATCH", "Oferta comercial fora da conversa autorizada.", 403);
+      }
+      offers.push(validated);
+    }
+  }
+  if (!offerService?.create) return offers.slice(0, 3);
   const availabilityRows = Array.isArray(toolResults?.getSellableAvailability) ? toolResults.getSellableAvailability : [];
   for (const row of availabilityRows.slice(0, 3)) {
     if (!row || row.offerId || row.status === "NOT_SELLABLE" || row.availabilityStatus === "NOT_SELLABLE") continue;
@@ -402,12 +452,17 @@ async function resolveSettings({ empresaId, input, settingsResolver }) {
 function defaultSettings() { return { enabled: false, mode: MODES.OFF, mockEnabled: false, revision: 1, policyVersion: "ai-commerce-policy.v1" }; }
 function modeRank(mode) { return ({ [MODES.OFF]: 0, [MODES.SHADOW]: 1, [MODES.SUGGESTION_ONLY]: 2, [MODES.HUMAN_APPROVAL]: 3 })[normalizeMode(mode)] || 0; }
 
-async function getExistingRun({ prisma, idempotencyKey, runs }) {
-  const memory = runs.get(idempotencyKey);
+function runScopeKey({ empresaId, conversationId, idempotencyKey }) {
+  return `${positiveId(empresaId) || 0}:${positiveId(conversationId) || 0}:${String(idempotencyKey || "")}`;
+}
+
+async function getExistingRun({ prisma, idempotencyKey, empresaId, conversationId, runs }) {
+  const scope = runScopeKey({ empresaId, conversationId, idempotencyKey });
+  const memory = runs.get(scope);
   if (memory) return memory;
   const model = prisma?.aICommerceRun || prisma?.aiCommerceRun;
   if (model?.findFirst) {
-    const row = await model.findFirst({ where: { idempotencyKey } });
+    const row = await model.findFirst({ where: { empresaId, conversationId, idempotencyKey } });
     if (row) return row;
   }
   return null;
@@ -437,7 +492,11 @@ async function claimPersistedRun({ prisma, baseContext, input, settings, now }) 
     return { row, existing: null };
   } catch (error) {
     if (!isUniqueConflict(error)) throw error;
-    const existing = model.findFirst ? await model.findFirst({ where: { empresaId: baseContext.empresaId, idempotencyKey: baseContext.idempotencyKey } }) : null;
+    const existing = model.findFirst ? await model.findFirst({ where: { empresaId: baseContext.empresaId, conversationId: baseContext.conversationId, idempotencyKey: baseContext.idempotencyKey } }) : null;
+    if (!existing && model.findFirst) {
+      const conflictingScope = await model.findFirst({ where: { empresaId: baseContext.empresaId, idempotencyKey: baseContext.idempotencyKey }, select: { conversationId: true } });
+      if (conflictingScope) throw policyError("AI_IDEMPOTENCY_CONTEXT_CONFLICT", "Chave idempotente pertence a outra conversa.", 409);
+    }
     return { existing };
   }
 }
@@ -447,5 +506,10 @@ function isUniqueConflict(error) { return error?.code === "P2002" || /unique|dup
 async function auditCall(audit, method, payload) { if (audit && typeof audit[method] === "function") return audit[method](payload); return undefined; }
 function freezeResult(value) { return Object.freeze({ ...value }); }
 function positiveId(value) { const parsed = Number(value); return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null; }
+function normalizeRunIdempotencyKey(value) {
+  const key = String(value || "").trim();
+  if (!/^[A-Za-z0-9:_-]{8,200}$/.test(key)) throw policyError("AI_IDEMPOTENCY_INVALID", "Chave idempotente invalida.", 422);
+  return key;
+}
 
 module.exports = { MAX_TURNS, createAICommerceOrchestrator, buildDraft, collectOffers, materializeOffers, stateForDecision };

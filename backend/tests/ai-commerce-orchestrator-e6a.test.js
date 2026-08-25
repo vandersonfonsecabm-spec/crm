@@ -9,6 +9,7 @@ const {
 const { createCommercialToolRegistry } = require("../src/ai-commerce/tools");
 const { createAICommerceOrchestrator } = require("../src/ai-commerce/orchestrator");
 const { createAICommerceAudit } = require("../src/ai-commerce/audit");
+const { publicRunInput, resolveRunContext, writeSettings } = require("../src/ai-commerce/routes");
 const { MODES, buildSanitizedContext, isAllowedHttpsUrl, sanitizeData } = require("../src/ai-commerce/policy");
 const { FEATURE_KEYS, isGlobalFeatureEnabled } = require("../src/tenant-features/service");
 
@@ -201,6 +202,158 @@ test("AI feature gate is globally fail-closed by default", () => {
   assert.equal(FEATURE_KEYS.AI_COMMERCE, "AI_COMMERCE");
   assert.equal(isGlobalFeatureEnabled(FEATURE_KEYS.AI_COMMERCE, {}), false);
   assert.equal(isGlobalFeatureEnabled(FEATURE_KEYS.AI_COMMERCE, { AI_COMMERCE_ENABLED: "true" }), true);
+});
+
+test("idempotencia de run permanece tenant/conversa-scoped e runId e server-owned", async () => {
+  const orchestrator = createAICommerceOrchestrator({
+    connection: { generateCommercialDecision: async () => ({ nextAction: "ASK_CLARIFYING_QUESTION", draftResponse: "Qual produto?" }) },
+    toolRegistry: { execute: async () => null, reset() {} },
+    featureGate: async () => true,
+    settingsResolver: async () => ({ enabled: true, mode: MODES.SHADOW, mockEnabled: true, revision: 1 }),
+  });
+  const first = await orchestrator.run({ empresaId: 1, conversationId: 10, messageId: 100, idempotencyKey: "shared-key", runId: "forged-run", mode: MODES.SHADOW, latestMessage: "a" });
+  const second = await orchestrator.run({ empresaId: 2, conversationId: 20, messageId: 200, idempotencyKey: "shared-key", runId: "forged-run", mode: MODES.SHADOW, latestMessage: "b" });
+  assert.equal(first.idempotentReplay, undefined);
+  assert.equal(second.idempotentReplay, undefined);
+  assert.equal(first.empresaId, 1);
+  assert.equal(second.empresaId, 2);
+  assert.notEqual(first.runId, "forged-run");
+  assert.notEqual(second.runId, "forged-run");
+});
+
+test("lookup persistido de run inclui tenant e conversa", async () => {
+  const lookups = [];
+  const orchestrator = createAICommerceOrchestrator({
+    prisma: {
+      aiCommerceRun: {
+        findFirst: async ({ where }) => { lookups.push(where); return null; },
+        create: async ({ data }) => data,
+      },
+    },
+    connection: { generateCommercialDecision: async () => ({ nextAction: "ASK_CLARIFYING_QUESTION", draftResponse: "Qual produto?" }) },
+    toolRegistry: { execute: async () => null, reset() {} },
+    featureGate: async () => true,
+    settingsResolver: async () => ({ enabled: true, mode: MODES.SHADOW, mockEnabled: true, revision: 1 }),
+  });
+  await orchestrator.run({ empresaId: 1, conversationId: 10, messageId: 100, idempotencyKey: "scoped-key", mode: MODES.SHADOW, latestMessage: "a" });
+  assert.deepEqual(lookups[0], { empresaId: 1, conversationId: 10, idempotencyKey: "scoped-key" });
+});
+
+test("oferta explicita adulterada nao passa sem revalidacao server-side", async () => {
+  const orchestrator = createAICommerceOrchestrator({
+    connection: { generateCommercialDecision: async () => ({ nextAction: "DRAFT_RESPONSE", draftResponse: "Produto custa R$ 1 e esta disponivel" }) },
+    toolRegistry: { execute: async () => null, reset() {} },
+    offerService: { get: async () => ({ valid: false, status: "STALE" }) },
+    featureGate: async () => true,
+    settingsResolver: async () => ({ enabled: true, mode: MODES.SHADOW, mockEnabled: true, revision: 1 }),
+  });
+  await assert.rejects(
+    () => orchestrator.run({ empresaId: 1, conversationId: 10, messageId: 100, mode: MODES.SHADOW, latestMessage: "produto", offers: [{ offerId: "forged", price: 1, availabilityStatus: "AVAILABLE" }] }),
+    { code: "AI_OFFER_NOT_GROUNDED" },
+  );
+});
+
+test("oferta explicita valida tenant e conversa antes de entrar no draft", async () => {
+  const orchestrator = createAICommerceOrchestrator({
+    connection: { generateCommercialDecision: async () => ({ nextAction: "DRAFT_RESPONSE", draftResponse: "Produto custa R$ 10", offerIds: ["offer-real"] }) },
+    toolRegistry: { execute: async () => null, reset() {} },
+    offerService: { get: async ({ empresaId, offerId, internal }) => ({ valid: true, status: "ACTIVE", empresaId, conversationId: 10, offerId, price: 10, availabilityStatus: "AVAILABLE", internal }) },
+    featureGate: async () => true,
+    settingsResolver: async () => ({ enabled: true, mode: MODES.SHADOW, mockEnabled: true, revision: 1 }),
+  });
+  const result = await orchestrator.run({ empresaId: 1, conversationId: 10, messageId: 100, mode: MODES.SHADOW, latestMessage: "produto", offers: [{ offerId: "offer-real", price: 99999, availabilityStatus: "OUT_OF_STOCK" }] });
+  assert.equal(result.draft.productOffers[0].offerId, "offer-real");
+  assert.equal(result.draft.productOffers[0].price, 10);
+});
+
+test("public run input remove aprovacao e identidade controladas pelo cliente", () => {
+  const safe = publicRunInput({ empresaId: 1, actorUsuarioId: 999, approvedActions: { registerProductInterest: true }, mode: MODES.HUMAN_APPROVAL, messageId: 1, latestMessage: "forjado", customer: { id: 999 }, channel: { type: "EVIL" }, catalogContext: { secret: "x" } }, {
+    conversationId: 10,
+    messageId: 100,
+    latestMessage: "verdade do banco",
+    messages: [{ id: 100, direction: "INBOUND", text: "verdade do banco" }],
+    customerId: 11,
+    customer: { id: 11, name: "Cliente real" },
+    channel: "WHATSAPP_META",
+    conversationState: "ABERTA",
+    messageRevision: "100",
+    conversationRevision: "100",
+  });
+  assert.equal(Object.hasOwn(safe, "approvedActions"), false);
+  assert.equal(Object.hasOwn(safe, "actorUsuarioId"), false);
+  assert.equal(safe.mode, MODES.HUMAN_APPROVAL);
+  assert.equal(safe.latestMessage, "verdade do banco");
+  assert.equal(safe.messages[0].text, "verdade do banco");
+  assert.equal(safe.customer.id, 11);
+  assert.equal(safe.channel, "WHATSAPP_META");
+  assert.equal(Object.hasOwn(safe, "catalogContext"), false);
+});
+
+test("run publico nunca executa side effect por approvedActions forgado", async () => {
+  let effects = 0;
+  const tools = createCommercialToolRegistry({ services: { registerProductInterest: async () => { effects += 1; return { ok: true }; } } });
+  const orchestrator = createAICommerceOrchestrator({
+    connection: { generateCommercialDecision: async () => ({ nextAction: "OFFER_READY", requestedTools: [{ name: "registerProductInterest", version: "v1", input: { offerId: "offer-1" } }], draftResponse: "Preciso de aprovacao humana." }) },
+    toolRegistry: tools,
+    featureGate: async () => true,
+    settingsResolver: async () => ({ enabled: true, mode: MODES.HUMAN_APPROVAL, mockEnabled: true, revision: 1 }),
+  });
+  const result = await orchestrator.run({ empresaId: 1, conversationId: 10, messageId: 100, mode: MODES.HUMAN_APPROVAL, latestMessage: "Tenho interesse", approvedActions: { registerProductInterest: true } });
+  assert.equal(effects, 0);
+  assert.equal(result.state, "AWAITING_APPROVAL");
+});
+
+test("contexto server-side exige conversa e mensagem do mesmo tenant", async () => {
+  const prisma = {
+    conversaCanal: { findFirst: async ({ where }) => where.empresaId === 1 && where.id === 10 ? {
+      id: 10,
+      empresaId: 1,
+      status: "ABERTA",
+      contatoCanal: { id: 20, empresaId: 1, clienteId: 11, nome: "Contato", cliente: { id: 11, empresaId: 1, nome: "Cliente real", status: "Lead" } },
+      canalIntegracao: { id: 30, empresaId: 1, tipo: "WHATSAPP_META", nome: "WhatsApp", modoTeste: false },
+      responsavel: { id: 40, empresaId: 1, nome: "Vendedor" },
+    } : null },
+    mensagemCanal: {
+      findFirst: async ({ where }) => where.empresaId === 1 && where.conversaCanalId === 10 && where.id === 100 ? { id: 100, empresaId: 1, conversaCanalId: 10, direcao: "ENTRADA", texto: "verdade do banco", createdAt: new Date() } : null,
+      findMany: async () => [{ id: 100, direcao: "ENTRADA", texto: "verdade do banco", createdAt: new Date() }],
+    },
+  };
+  const resolved = await resolveRunContext({ prisma, empresaId: 1, body: { conversationId: 10, messageId: 100, latestMessage: "verdade do banco", messageRevision: 100, conversationRevision: 100 } });
+  assert.equal(resolved.latestMessage, "verdade do banco");
+  assert.equal(resolved.customerId, 11);
+  assert.equal(resolved.channel, "WHATSAPP_META");
+  await assert.rejects(() => resolveRunContext({ prisma, empresaId: 1, body: { conversationId: 10, messageId: 100, latestMessage: "mensagem forjada" } }), { code: "AI_CONTEXT_MESSAGE_MISMATCH" });
+  await assert.rejects(() => resolveRunContext({ prisma, empresaId: 1, body: { conversationId: 10, messageId: 100, customerId: 999 } }), { code: "AI_CUSTOMER_CONTEXT_MISMATCH" });
+  await assert.rejects(() => resolveRunContext({ prisma, empresaId: 2, body: { conversationId: 10, messageId: 100 } }), { code: "AI_CONVERSATION_NOT_FOUND" });
+  await assert.rejects(() => resolveRunContext({ prisma, empresaId: 1, body: { conversationId: 10, messageId: 101 } }), { code: "AI_MESSAGE_NOT_FOUND" });
+});
+
+test("settings usa CAS atomico e rejeita revision TOCTOU", async () => {
+  let updateCalls = 0;
+  const model = {
+    findUnique: async () => ({ revision: 3 }),
+    updateMany: async () => { updateCalls += 1; return { count: 0 }; },
+    upsert: async () => { throw new Error("upsert nao deveria ser usado no CAS"); },
+  };
+  await assert.rejects(
+    () => writeSettings({ prisma: { aiCommerceSettings: model }, empresaId: 1, actorUsuarioId: 2, body: { revision: 2, mode: MODES.SHADOW } }),
+    { code: "AI_SETTINGS_CONFLICT" },
+  );
+  assert.equal(updateCalls, 1);
+});
+
+test("settings CAS incrementa revision somente quando a revisao esperada coincide", async () => {
+  let captured;
+  let reads = 0;
+  const model = {
+    findUnique: async () => ({ revision: reads++ === 0 ? 2 : 3 }),
+    updateMany: async ({ where, data }) => { captured = { where, data }; return { count: 1 }; },
+    upsert: async () => { throw new Error("upsert nao deveria ser usado no CAS"); },
+  };
+  const result = await writeSettings({ prisma: { aiCommerceSettings: model }, empresaId: 1, actorUsuarioId: 2, body: { revision: 2, mode: MODES.SUGGESTION_ONLY } });
+  assert.equal(captured.where.revision, 2);
+  assert.equal(captured.data.revision.increment, 1);
+  assert.equal(result.revision, 3);
 });
 
 

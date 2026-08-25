@@ -71,8 +71,12 @@ function mountAICommerceRoutes({
       if (!orchestrator || typeof orchestrator.run !== "function") return res.status(503).json({ error: { code: "AI_COMMERCE_UNAVAILABLE", message: "Fundacao comercial indisponivel." } });
       const body = req.body || {};
       rejectForeignTenant(body, req.aiCommerceContext.empresaId);
+      const context = await resolveRunContext({ prisma, body, empresaId: req.aiCommerceContext.empresaId });
+      const safeBody = publicRunInput(body, context);
       const result = await orchestrator.run({
-        ...body,
+        ...safeBody,
+        conversationId: context.conversationId,
+        messageId: context.messageId,
         empresaId: req.aiCommerceContext.empresaId,
         actorUsuarioId: req.aiCommerceContext.actorUsuarioId,
       });
@@ -82,7 +86,7 @@ function mountAICommerceRoutes({
 
   router.get("/runs/:key", async (req, res) => {
     try {
-      const result = orchestrator?.getRun?.(req.params.key);
+      const result = orchestrator?.getRun?.(req.params.key, req.aiCommerceContext.empresaId);
       if (!result || result.empresaId !== req.aiCommerceContext.empresaId) return res.status(404).json({ error: { code: "AI_RUN_NOT_FOUND", message: "Execucao nao encontrada." } });
       return res.json({ item: redactRun(result) });
     } catch (error) { return sendError(res, error); }
@@ -135,9 +139,28 @@ async function writeSettings({ prisma, settingsService, empresaId, actorUsuarioI
   if (!model?.upsert) return { ...defaultSettings(empresaId), ...data, actorUsuarioId };
   const persistenceData = { ...data, allowedToolsJson: JSON.stringify(data.allowedTools || []) };
   delete persistenceData.allowedTools;
-  if (expectedRevision !== null && model.findUnique) {
+  if (expectedRevision !== null) {
+    if (!model.findUnique || !model.updateMany) throw routeError("AI_SETTINGS_CAS_UNAVAILABLE", "A configuracao nao pode ser alterada com seguranca agora.", 503);
     const current = await model.findUnique({ where: { empresaId }, select: { revision: true } });
-    if (current && Number(current.revision) !== expectedRevision) throw routeError("AI_SETTINGS_CONFLICT", "Configuracao alterada por outro operador.", 409);
+    if (!current) {
+      if (![0, 1].includes(expectedRevision) || typeof model.create !== "function") throw routeError("AI_SETTINGS_CONFLICT", "Configuracao alterada por outro operador.", 409);
+      try {
+        return await model.create({ data: { empresaId, ...persistenceData, revision: 1, actorUsuarioId } });
+      } catch (error) {
+        if (error?.code === "P2002") throw routeError("AI_SETTINGS_CONFLICT", "Configuracao alterada por outro operador.", 409);
+        throw error;
+      }
+    }
+    const changed = await model.updateMany({
+      where: { empresaId, revision: expectedRevision },
+      data: { ...persistenceData, revision: { increment: 1 }, actorUsuarioId },
+    });
+    if (changed.count !== 1) throw routeError("AI_SETTINGS_CONFLICT", "Configuracao alterada por outro operador.", 409);
+    return model.findUnique({ where: { empresaId } });
+  }
+  if (expectedRevision === null && model.findUnique) {
+    const current = await model.findUnique({ where: { empresaId }, select: { revision: true } });
+    if (current) throw routeError("AI_SETTINGS_REVISION_REQUIRED", "Informe a revisao atual da configuracao.", 409);
   }
   return model.upsert({
     where: { empresaId },
@@ -229,6 +252,118 @@ function sanitizeToolResults(value) {
 function rejectForeignTenant(body, empresaId) {
   if (body && body.empresaId !== undefined && positiveId(body.empresaId) !== positiveId(empresaId)) throw routeError("AI_TENANT_CONTEXT_INVALID", "Tenant nao autorizado.", 403);
 }
+
+async function resolveRunContext({ prisma, body = {}, empresaId } = {}) {
+  const tenantId = positiveId(empresaId);
+  const conversationId = positiveId(body.conversationId);
+  const messageId = positiveId(body.messageId || body.latestMessageId);
+  if (!tenantId || !conversationId || !messageId) throw routeError("AI_CONTEXT_INVALID", "Tenant, conversa e mensagem sao obrigatorios.", 422);
+  if (!prisma?.conversaCanal?.findFirst || !prisma?.mensagemCanal?.findFirst) {
+    throw routeError("AI_CONTEXT_UNAVAILABLE", "Contexto da conversa indisponivel para validacao.", 503);
+  }
+  const conversation = await prisma.conversaCanal.findFirst({
+    where: { id: conversationId, empresaId: tenantId },
+    select: {
+      id: true,
+      empresaId: true,
+      status: true,
+      responsavelId: true,
+      contatoCanal: {
+        select: {
+          id: true,
+          empresaId: true,
+          clienteId: true,
+          nome: true,
+          cliente: { select: { id: true, empresaId: true, nome: true, status: true } },
+        },
+      },
+      canalIntegracao: { select: { id: true, empresaId: true, tipo: true, nome: true, modoTeste: true } },
+      responsavel: { select: { id: true, empresaId: true, nome: true } },
+    },
+  });
+  if (!conversation || conversation.empresaId !== tenantId) throw routeError("AI_CONVERSATION_NOT_FOUND", "Conversa nao encontrada.", 404);
+  const message = await prisma.mensagemCanal.findFirst({
+    where: { id: messageId, empresaId: tenantId, conversaCanalId: conversationId },
+    select: { id: true, empresaId: true, conversaCanalId: true, direcao: true, texto: true, createdAt: true },
+  });
+  if (!message || message.empresaId !== tenantId || message.conversaCanalId !== conversationId) throw routeError("AI_MESSAGE_NOT_FOUND", "Mensagem nao encontrada.", 404);
+  if (message.direcao !== "ENTRADA") throw routeError("AI_MESSAGE_CONTEXT_INVALID", "A mensagem de contexto deve ser recebida pelo CRM.", 409);
+  if (body.latestMessage !== undefined && body.latestMessage !== null && String(body.latestMessage) !== String(message.texto || "")) {
+    throw routeError("AI_CONTEXT_MESSAGE_MISMATCH", "A mensagem informada nao corresponde ao registro autenticado.", 409);
+  }
+  const expectedRevision = String(message.id);
+  if (body.messageRevision !== undefined && body.messageRevision !== null && body.messageRevision !== "" && String(body.messageRevision) !== expectedRevision) {
+    throw routeError("AI_MESSAGE_REVISION_STALE", "A mensagem mudou antes da execucao comercial.", 409);
+  }
+  if (body.conversationRevision !== undefined && body.conversationRevision !== null && body.conversationRevision !== "" && String(body.conversationRevision) !== expectedRevision) {
+    throw routeError("AI_CONVERSATION_REVISION_STALE", "A conversa mudou antes da execucao comercial.", 409);
+  }
+  const contact = conversation.contatoCanal;
+  if (contact && (contact.empresaId !== tenantId || contact.cliente?.empresaId && contact.cliente.empresaId !== tenantId)) {
+    throw routeError("AI_CONTEXT_TENANT_MISMATCH", "O contexto da conversa nao pertence ao tenant autenticado.", 403);
+  }
+  if (contact?.clienteId && (!contact.cliente || contact.cliente.id !== contact.clienteId)) {
+    throw routeError("AI_CONTEXT_INTEGRITY_INVALID", "O cliente da conversa nao pode ser validado com seguranca.", 503);
+  }
+  const channel = conversation.canalIntegracao;
+  if (channel && channel.empresaId !== tenantId) throw routeError("AI_CONTEXT_TENANT_MISMATCH", "O canal nao pertence ao tenant autenticado.", 403);
+  const assigned = conversation.responsavel;
+  if (assigned && assigned.empresaId !== tenantId) throw routeError("AI_CONTEXT_TENANT_MISMATCH", "O responsavel nao pertence ao tenant autenticado.", 403);
+  const customerId = positiveId(contact?.clienteId);
+  if (body.customerId !== undefined && body.customerId !== null && body.customerId !== "") {
+    const suppliedCustomerId = positiveId(body.customerId);
+    if (!suppliedCustomerId) throw routeError("AI_CUSTOMER_CONTEXT_INVALID", "Cliente invalido.", 422);
+    if (suppliedCustomerId !== customerId) throw routeError("AI_CUSTOMER_CONTEXT_MISMATCH", "O cliente nao pertence a conversa autenticada.", 403);
+  }
+  const messages = prisma.mensagemCanal.findMany
+    ? await prisma.mensagemCanal.findMany({
+      where: { empresaId: tenantId, conversaCanalId: conversationId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 20,
+      select: { id: true, direcao: true, texto: true, createdAt: true },
+    })
+    : [message];
+  return {
+    conversationId,
+    messageId,
+    customerId,
+    latestMessage: String(message.texto || "").slice(0, 4000),
+    messages: messages.slice().reverse().map((item) => ({
+      id: item.id,
+      direction: item.direcao === "SAIDA" ? "OUTBOUND" : "INBOUND",
+      text: String(item.texto || "").slice(0, 4000),
+      createdAt: item.createdAt || null,
+    })),
+    customer: contact?.cliente ? { id: contact.cliente.id, name: contact.cliente.nome, status: contact.cliente.status } : null,
+    channel: channel ? String(channel.tipo || "") : null,
+    conversationState: String(conversation.status || ""),
+    sellerAssignment: assigned ? { usuarioId: assigned.id, name: assigned.nome } : null,
+    messageRevision: expectedRevision,
+    conversationRevision: expectedRevision,
+  };
+}
+
+function publicRunInput(body, context = {}) {
+  const source = body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const safe = {
+    idempotencyKey: source.idempotencyKey,
+    correlationId: source.correlationId,
+    mode: source.mode,
+    offers: source.offers,
+    conversationId: context.conversationId,
+    messageId: context.messageId,
+    customerId: context.customerId,
+    latestMessage: context.latestMessage,
+    messages: context.messages,
+    customer: context.customer,
+    channel: context.channel,
+    conversationState: context.conversationState,
+    sellerAssignment: context.sellerAssignment,
+    messageRevision: context.messageRevision,
+    conversationRevision: context.conversationRevision,
+  };
+  return Object.fromEntries(Object.entries(safe).filter(([, value]) => value !== undefined));
+}
 function defaultSettings(empresaId) { return { empresaId, enabled: false, mode: MODES.OFF, allowedTools: [], maxTools: 5, maxContextMessages: 20, maxProducts: 3, humanApprovalRequired: true, revision: 1 }; }
 function parseAllowedTools(value) {
   if (Array.isArray(value)) return value.map(String).filter((name) => TOOL_NAMES.includes(name)).slice(0, 8);
@@ -239,4 +374,4 @@ function positiveId(value) { const parsed = Number(value); return Number.isSafeI
 function routeError(code, message, status = 400) { const error = new Error(message); error.code = code; error.status = status; return error; }
 function sendError(res, error) { const status = Number.isInteger(error?.status) ? error.status : 500; return res.status(status).json({ error: { code: String(error?.code || "AI_COMMERCE_ERROR"), message: status >= 500 ? "Operacao comercial indisponivel." : String(error?.message || "Requisicao invalida.") } }); }
 
-module.exports = { mountAICommerceRoutes, normalizeSettings, publicSettings, redactRun };
+module.exports = { mountAICommerceRoutes, normalizeSettings, publicSettings, redactRun, publicRunInput, resolveRunContext, writeSettings };
