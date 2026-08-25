@@ -20,6 +20,7 @@
     "db:tenant-gate": "node scripts/tenant-isolation-gate.cjs",
     "db:migrate:postgres:empty": "node scripts/postgres-prisma.cjs migrate-empty",
     "db:postgres:check": "node scripts/check-postgres-connection.cjs",
+    "db:pg:stats:readonly": "node scripts/pg-stat-statements.cjs --check",
     "db:import:sqlite-to-postgres": "node scripts/migrate-sqlite-to-postgres.cjs",
     "cutover:postgres:dry-run": "node scripts/postgres-cutover-workflow.cjs --dry-run",
     "smoke:postgres:readonly": "node scripts/postgres-cutover-smoke.cjs",
@@ -29,6 +30,7 @@
     "railway:start": "npm run start:production",
     "test": "node scripts/run-isolated-prisma-tests.cjs node-suite",
     "test:postgres": "node scripts/run-postgres-tests.cjs",
+    "test:postgres:real": "node scripts/test-postgres-real.cjs",
     "test:auth": "node --test tests/auth.integration.test.js"
   },
   "keywords": [],

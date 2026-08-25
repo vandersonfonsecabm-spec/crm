@@ -1,6 +1,20 @@
 const { createWhatsAppWebhookIntake } = require("./whatsappWebhookIntake");
 const { processWhatsAppWebhookEvent } = require("./whatsappWebhookProcessor");
+const {
+  FAILURE_STATE,
+  calculateBackoffWithJitter,
+  claimMetaInboundWebhook,
+  normalizeRetryPolicy,
+  recordMetaInboundFailure,
+  wait,
+} = require("./metaInboundRetry");
 
+const PROVIDER = "WHATSAPP";
+const CHANNEL = Object.freeze({
+  type: "WHATSAPP_META",
+  key: "whatsapp-meta-inbound-real",
+  failureFallback: "WHATSAPP_EVENT_PROCESSING_UNAVAILABLE",
+});
 const PROCESSING_CONFLICT_CODES = new Set([
   "WHATSAPP_EVENT_UNSUPPORTED",
   "WHATSAPP_EVENT_INTEGRATION_INVALID",
@@ -27,69 +41,149 @@ function createWhatsAppWebhookOrchestrator({
   intake = createWhatsAppWebhookIntake({ prisma }),
   processEvent = processWhatsAppWebhookEvent,
   clock = () => new Date(),
+  retryPolicy,
+  waitForRetry = wait,
+  random = Math.random,
 } = {}) {
-  if (!prisma || typeof intake !== "function" || typeof processEvent !== "function") {
+  if (!prisma || typeof intake !== "function" || typeof processEvent !== "function"
+    || typeof clock !== "function" || typeof waitForRetry !== "function" || typeof random !== "function") {
     throw new Error("Dependencias invalidas para a orquestracao WhatsApp.");
   }
+  const policy = normalizeRetryPolicy(retryPolicy);
 
   return async function orchestrateWhatsAppWebhook(payload, { env = process.env } = {}) {
     const intakeResult = await intake(payload, { env });
     const events = readAcceptedEvents(intakeResult);
-
     for (const event of events) {
-      try {
-        await processEvent({ prisma, eventoWebhookId: event.eventoWebhookId });
-      } catch (error) {
-        await recordProcessingFailure(prisma, event.eventoWebhookId, error, clock).catch(() => {});
-        throw mapProcessingError(error);
-      }
+      await processAcceptedEvent({
+        prisma,
+        eventoWebhookId: event.eventoWebhookId,
+        processEvent,
+        clock,
+        policy,
+        waitForRetry,
+        random,
+      });
     }
-
     return { accepted: true };
   };
 }
 
-async function recordProcessingFailure(prisma, eventoWebhookId, error, clock) {
-  const occurredAt = clock();
-  if (!(occurredAt instanceof Date) || Number.isNaN(occurredAt.getTime())) return;
-  await prisma.$transaction(async (tx) => {
-    const reserved = await tx.eventoWebhook.updateMany({
-      where: {
-        id: eventoWebhookId,
-        provedor: "WHATSAPP",
-        statusProcessamento: "RECEBIDO",
-        processadoEm: null,
-      },
-      data: { statusProcessamento: "RECEBIDO" },
-    });
-    if (reserved.count !== 1) return;
-    const event = await tx.eventoWebhook.findUnique({
-      where: { id: eventoWebhookId },
-      select: { empresaId: true, canalIntegracaoId: true },
-    });
-    if (!event) return;
-    await tx.canalIntegracao.updateMany({
-      where: {
-        id: event.canalIntegracaoId,
-        empresaId: event.empresaId,
-        tipo: "WHATSAPP_META",
-        chaveInterna: "whatsapp-meta-inbound-real",
-        modoTeste: false,
-        ativo: true,
-        status: "ATIVO",
-      },
-      data: {
-        lastFailureAt: occurredAt,
-        lastFailureCode: safeFailureCode(error?.code),
-      },
-    });
-  });
+async function processAcceptedEvent({
+  prisma,
+  eventoWebhookId,
+  processEvent,
+  clock,
+  policy,
+  waitForRetry,
+  random,
+}) {
+  let contentionAttempts = 0;
+  while (true) {
+    let claim;
+    try {
+      claim = await claimMetaInboundWebhook({
+        prisma,
+        eventoWebhookId,
+        provider: PROVIDER,
+        clock,
+        policy,
+      });
+    } catch {
+      throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
+    }
+
+    if (claim.state === "PROCESSED") return;
+    if (claim.state === FAILURE_STATE.PERMANENT) {
+      throw orchestrationError(409, "WEBHOOK_PROCESSING_CONFLICT");
+    }
+    if (claim.state === FAILURE_STATE.EXHAUSTED) {
+      throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
+    }
+    if (claim.state === "LEASE_ACTIVE" || claim.state === "CAS_CONFLICT") {
+      if (contentionAttempts >= policy.maxAttempts - 1) {
+        throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
+      }
+      contentionAttempts += 1;
+      await waitForRetry(calculateBackoffWithJitter({
+        attempt: contentionAttempts,
+        policy,
+        random,
+      }));
+      continue;
+    }
+    if (claim.state !== "CLAIMED") {
+      throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
+    }
+
+    try {
+      const processed = await processEvent({
+        prisma,
+        eventoWebhookId,
+        lease: claim.lease,
+      });
+      if (processed?.processed !== true) {
+        const error = new Error("WHATSAPP_EVENT_PROCESSOR_INVALID_RESULT");
+        error.code = "WHATSAPP_EVENT_PROCESSOR_INVALID_RESULT";
+        throw error;
+      }
+      return;
+    } catch (error) {
+      let failure;
+      try {
+        failure = await recordMetaInboundFailure({
+          prisma,
+          eventoWebhookId,
+          provider: PROVIDER,
+          lease: claim.lease,
+          error,
+          channel: CHANNEL,
+          permanentCodes: PROCESSING_CONFLICT_CODES,
+          clock,
+          policy,
+        });
+      } catch {
+        throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
+      }
+
+      if (failure.state === FAILURE_STATE.RETRYABLE) {
+        await waitForRetry(calculateBackoffWithJitter({
+          attempt: claim.lease.attempt,
+          policy,
+          random,
+        }));
+        continue;
+      }
+      if (failure.state === "PROCESSED") return;
+      if (failure.state === "LEASE_LOST" || failure.state === "CAS_CONFLICT") {
+        if (contentionAttempts >= policy.maxAttempts - 1) {
+          throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
+        }
+        contentionAttempts += 1;
+        await waitForRetry(calculateBackoffWithJitter({
+          attempt: contentionAttempts,
+          policy,
+          random,
+        }));
+        continue;
+      }
+      throw mapProcessingError(error, failure.state);
+    }
+  }
 }
 
-function safeFailureCode(value) {
-  return typeof value === "string" && /^[A-Z0-9_]{1,80}$/.test(value)
-    ? value
-    : "WHATSAPP_EVENT_PROCESSING_UNAVAILABLE";
+async function recordProcessingFailure(prisma, eventoWebhookId, error, clock, { lease, retryPolicy } = {}) {
+  return recordMetaInboundFailure({
+    prisma,
+    eventoWebhookId,
+    provider: PROVIDER,
+    lease,
+    error,
+    channel: CHANNEL,
+    permanentCodes: PROCESSING_CONFLICT_CODES,
+    clock,
+    policy: retryPolicy,
+  });
 }
 
 function readAcceptedEvents(result) {
@@ -106,8 +200,9 @@ function readAcceptedEvents(result) {
   return events;
 }
 
-function mapProcessingError(error) {
-  if (error?.name === "WhatsAppWebhookProcessingError" && PROCESSING_CONFLICT_CODES.has(error.code)) {
+function mapProcessingError(error, state) {
+  if (state === FAILURE_STATE.PERMANENT
+    || (error?.name === "WhatsAppWebhookProcessingError" && PROCESSING_CONFLICT_CODES.has(error.code))) {
     return orchestrationError(409, "WEBHOOK_PROCESSING_CONFLICT");
   }
   return orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");

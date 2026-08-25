@@ -4,6 +4,7 @@ const { createAutomationService } = require("../automations/service");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
 const { applyInboundConversationActivity } = require("../leads-communication/inboundActivity");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/service");
+const { isMatchingLease } = require("./metaInboundRetry");
 const {
   EVENT_TYPE,
   EVENT_TYPES,
@@ -19,7 +20,7 @@ const PROCESSABLE_STATUS = "RECEBIDO";
 const PROCESSING_STATUS = "PROCESSANDO";
 const PROCESSED_STATUS = "PROCESSADO";
 
-async function processWhatsAppWebhookEvent({ prisma, eventoWebhookId }) {
+async function processWhatsAppWebhookEvent({ prisma, eventoWebhookId, lease = null }) {
   if (!prisma) throw processingError("WHATSAPP_EVENT_PROCESSOR_INVALID_INPUT");
   if (!Number.isInteger(eventoWebhookId) || eventoWebhookId < 1) {
     throw processingError("WHATSAPP_EVENT_PROCESSOR_INVALID_INPUT");
@@ -29,25 +30,25 @@ async function processWhatsAppWebhookEvent({ prisma, eventoWebhookId }) {
   validateEventOwnership(event);
   await requireProcessingCapabilities(prisma, event.empresaId);
 
-  return processWithUniqueRecovery(prisma, eventoWebhookId, true);
+  return processWithUniqueRecovery(prisma, eventoWebhookId, true, lease);
 }
 
-async function processWithUniqueRecovery(prisma, eventoWebhookId, allowUniqueRecovery) {
+async function processWithUniqueRecovery(prisma, eventoWebhookId, allowUniqueRecovery, lease) {
   try {
     return await prisma.$transaction(
-      (tx) => processTransaction(tx, eventoWebhookId),
+      (tx) => processTransaction(tx, eventoWebhookId, lease),
       { maxWait: 5000, timeout: 10000 },
     );
   } catch (error) {
     if (isProcessingError(error)) throw error;
     if (isUniqueConflict(error) && allowUniqueRecovery) {
-      return processWithUniqueRecovery(prisma, eventoWebhookId, false);
+      return processWithUniqueRecovery(prisma, eventoWebhookId, false, lease);
     }
     throw processingError("WHATSAPP_EVENT_PROCESSING_UNAVAILABLE");
   }
 }
 
-async function processTransaction(tx, eventoWebhookId) {
+async function processTransaction(tx, eventoWebhookId, lease) {
   let event = await loadEvent(tx, eventoWebhookId);
   validateEventOwnership(event);
   await requireProcessingCapabilities(tx, event.empresaId);
@@ -59,27 +60,33 @@ async function processTransaction(tx, eventoWebhookId) {
     else await verifyTerminalEvent(tx, event);
     return result(true);
   }
-  if (event.statusProcessamento !== PROCESSABLE_STATUS || event.processadoEm !== null) {
-    throw processingError("WHATSAPP_EVENT_STATE_INVALID");
-  }
-
-  const claim = await tx.eventoWebhook.updateMany({
-    where: {
-      id: event.id,
-      empresaId: event.empresaId,
-      canalIntegracaoId: event.canalIntegracaoId,
-      statusProcessamento: PROCESSABLE_STATUS,
-      processadoEm: null,
-    },
-    data: { statusProcessamento: PROCESSING_STATUS },
-  });
-  if (claim.count !== 1) {
-    event = await loadEvent(tx, eventoWebhookId);
-    if (event?.statusProcessamento === PROCESSED_STATUS && event.processadoEm) {
-      await verifyProcessedChain(tx, event, atomic);
-      return result(true);
+  if (lease) {
+    if (!isMatchingLease(event, lease)) {
+      throw processingError("WHATSAPP_EVENT_LEASE_LOST");
     }
-    throw processingError("WHATSAPP_EVENT_CONCURRENCY_CONFLICT");
+  } else {
+    if (event.statusProcessamento !== PROCESSABLE_STATUS || event.processadoEm !== null) {
+      throw processingError("WHATSAPP_EVENT_STATE_INVALID");
+    }
+
+    const claim = await tx.eventoWebhook.updateMany({
+      where: {
+        id: event.id,
+        empresaId: event.empresaId,
+        canalIntegracaoId: event.canalIntegracaoId,
+        statusProcessamento: PROCESSABLE_STATUS,
+        processadoEm: null,
+      },
+      data: { statusProcessamento: PROCESSING_STATUS },
+    });
+    if (claim.count !== 1) {
+      event = await loadEvent(tx, eventoWebhookId);
+      if (event?.statusProcessamento === PROCESSED_STATUS && event.processadoEm) {
+        await verifyProcessedChain(tx, event, atomic);
+        return result(true);
+      }
+      throw processingError("WHATSAPP_EVENT_CONCURRENCY_CONFLICT");
+    }
   }
 
   if (atomic.kind === EVENT_TYPES.TEXT) {
@@ -113,10 +120,13 @@ async function processTransaction(tx, eventoWebhookId) {
       externalEventId: event.externalEventId,
       payloadHash: event.payloadHash,
       payloadJson: event.payloadJson,
+      ...(lease ? { updatedAt: lease.updatedAt, tentativas: lease.attempt } : {}),
     },
     data: {
       statusProcessamento: PROCESSED_STATUS,
       processadoEm: completedAt,
+      erroCodigo: null,
+      erroResumo: null,
     },
   });
   if (completed.count !== 1) throw processingError("WHATSAPP_EVENT_STATE_INVALID");

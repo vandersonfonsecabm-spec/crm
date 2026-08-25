@@ -40,6 +40,7 @@ let legacySiteEvent;
 let processorCallCount;
 let failProcessorCall;
 let failProcessorCode;
+let alwaysFailProcessor;
 let observedDurableEvents;
 
 before(async () => {
@@ -94,6 +95,7 @@ beforeEach(async () => {
   processorCallCount = 0;
   failProcessorCall = null;
   failProcessorCode = "WHATSAPP_EVENT_PROCESSING_UNAVAILABLE";
+  alwaysFailProcessor = false;
   observedDurableEvents = [];
 
   const empresaIds = [empresaA.id, empresaB.id];
@@ -147,7 +149,7 @@ test("intake devolve IDs apenas internamente e confirma a transacao antes do pro
   assert.equal(response.text.includes(String(first.events[0].eventoWebhookId)), false);
   assert.deepEqual(observedDurableEvents, [{
     id: first.events[0].eventoWebhookId,
-    status: "RECEBIDO",
+    status: "PROCESSANDO",
   }]);
 });
 
@@ -200,34 +202,19 @@ test("retry depois do sucesso permanece integralmente idempotente", async () => 
   assert.equal(await prisma.eventoWebhook.count({ where: { externalEventId: "wamid.f1b3.retry" } }), 1);
 });
 
-test("falha apos o intake retorna 503, preserva o evento e permite retomada", async () => {
+test("P2028 retryable reexecuta com backoff e preserva uma cadeia unica", async () => {
   failProcessorCall = 1;
+  failProcessorCode = "P2028";
   const body = bodyFor("wamid.f1b3.resume");
-  const failed = await rawRequest(body);
-  assert.equal(failed.status, 503);
-  assert.deepEqual(failed.body, {
-    erro: "Requisicao nao aceita.",
-    codigo: "WEBHOOK_PROCESSING_UNAVAILABLE",
-  });
-  const pending = await prisma.eventoWebhook.findFirstOrThrow({
+  const response = await rawRequest(body);
+  assert.equal(response.status, 200);
+  const event = await prisma.eventoWebhook.findFirstOrThrow({
     where: { externalEventId: "wamid.f1b3.resume" },
   });
-  assert.equal(pending.statusProcessamento, "RECEBIDO");
-  assert.equal(pending.processadoEm, null);
-  assert.ok(pending.payloadJson);
-  assert.ok(pending.payloadHash);
-  assert.deepEqual(await chainCounts(), {
-    clients: 0,
-    contacts: 0,
-    leads: 0,
-    conversations: 0,
-    messages: 0,
-  });
-
-  failProcessorCall = null;
-  processorCallCount = 0;
-  assert.equal((await rawRequest(body)).status, 200);
-  assert.equal(await prisma.eventoWebhook.count({ where: { externalEventId: "wamid.f1b3.resume" } }), 1);
+  assert.equal(event.statusProcessamento, "PROCESSADO");
+  assert.equal(event.tentativas, 2);
+  assert.equal(event.erroCodigo, null);
+  assert.equal(event.erroResumo, null);
   assert.deepEqual(await chainCounts(), {
     clients: 1,
     contacts: 1,
@@ -235,31 +222,23 @@ test("falha apos o intake retorna 503, preserva o evento e permite retomada", as
     conversations: 1,
     messages: 1,
   });
+  assert.equal(await prisma.eventoWebhook.count({ where: { externalEventId: "wamid.f1b3.resume" } }), 1);
 });
 
-test("falha no segundo evento preserva o lote e retry conclui somente o pendente", async () => {
+test("falha retryable no segundo evento conclui somente o pendente sem duplicar o lote", async () => {
   failProcessorCall = 2;
+  failProcessorCode = "P2028";
   const body = bodyForMessages([
     message("wamid.f1b3.partial.1", "Primeira"),
     message("wamid.f1b3.partial.2", "Segunda"),
   ]);
-  assert.equal((await rawRequest(body)).status, 503);
+  assert.equal((await rawRequest(body)).status, 200);
   const events = await prisma.eventoWebhook.findMany({
     where: { externalEventId: { in: ["wamid.f1b3.partial.1", "wamid.f1b3.partial.2"] } },
     orderBy: { id: "asc" },
   });
-  assert.deepEqual(events.map((event) => event.statusProcessamento), ["PROCESSADO", "RECEBIDO"]);
-  assert.equal((await chainCounts()).messages, 1);
-
-  failProcessorCall = null;
-  processorCallCount = 0;
-  assert.equal((await rawRequest(body)).status, 200);
-  assert.equal(await prisma.eventoWebhook.count({
-    where: {
-      externalEventId: { in: ["wamid.f1b3.partial.1", "wamid.f1b3.partial.2"] },
-      statusProcessamento: "PROCESSADO",
-    },
-  }), 2);
+  assert.deepEqual(events.map((event) => event.statusProcessamento), ["PROCESSADO", "PROCESSADO"]);
+  assert.deepEqual(events.map((event) => event.tentativas), [1, 2]);
   assert.deepEqual(await chainCounts(), {
     clients: 1,
     contacts: 1,
@@ -267,6 +246,12 @@ test("falha no segundo evento preserva o lote e retry conclui somente o pendente
     conversations: 1,
     messages: 2,
   });
+  assert.equal(await prisma.eventoWebhook.count({
+    where: {
+      externalEventId: { in: ["wamid.f1b3.partial.1", "wamid.f1b3.partial.2"] },
+      statusProcessamento: "PROCESSADO",
+    },
+  }), 2);
 });
 
 test("conflito material do processador retorna 409 sem apagar o intake", async () => {
@@ -278,8 +263,59 @@ test("conflito material do processador retorna 409 sem apagar o intake", async (
     erro: "Requisicao nao aceita.",
     codigo: "WEBHOOK_PROCESSING_CONFLICT",
   });
-  assert.equal(await prisma.eventoWebhook.count({ where: { externalEventId: "wamid.f1b3.conflict" } }), 1);
+  const event = await prisma.eventoWebhook.findFirstOrThrow({ where: { externalEventId: "wamid.f1b3.conflict" } });
+  assert.equal(event.statusProcessamento, "FALHOU");
+  assert.equal(event.erroResumo, "PERMANENT");
+  assert.equal(event.tentativas, 1);
   assert.equal((await chainCounts()).messages, 0);
+});
+
+test("retry retryable esgota tentativas sem criar cadeia parcial", async () => {
+  alwaysFailProcessor = true;
+  failProcessorCode = "P2028";
+  const response = await rawRequest(bodyFor("wamid.f1b3.exhausted"));
+  assert.equal(response.status, 503);
+  const event = await prisma.eventoWebhook.findFirstOrThrow({
+    where: { externalEventId: "wamid.f1b3.exhausted" },
+  });
+  assert.equal(event.statusProcessamento, "FALHOU");
+  assert.equal(event.erroResumo, "EXHAUSTED");
+  assert.equal(event.erroCodigo, "P2028");
+  assert.equal(event.tentativas, 3);
+  assert.deepEqual(await chainCounts(), {
+    clients: 0,
+    contacts: 0,
+    leads: 0,
+    conversations: 0,
+    messages: 0,
+  });
+});
+
+test("lease PROCESSANDO vencido e recuperado por CAS sem duplicar a mensagem", async () => {
+  const payload = validPayload({ messages: [message("wamid.f1b3.stale-lease")] });
+  const intake = createWhatsAppWebhookIntake({ prisma });
+  const accepted = await intake(payload);
+  const eventId = accepted.events[0].eventoWebhookId;
+  await prisma.eventoWebhook.update({
+    where: { id: eventId },
+    data: {
+      statusProcessamento: "PROCESSANDO",
+      tentativas: 1,
+      updatedAt: new Date(Date.now() - 60_000),
+    },
+  });
+
+  const recovered = createWhatsAppWebhookOrchestrator({
+    prisma,
+    retryPolicy: { leaseMs: 1_000, baseDelayMs: 0, maxDelayMs: 0 },
+    waitForRetry: async () => {},
+  });
+  assert.deepEqual(await recovered(payload), { accepted: true });
+
+  const event = await prisma.eventoWebhook.findUniqueOrThrow({ where: { id: eventId } });
+  assert.equal(event.statusProcessamento, "PROCESSADO");
+  assert.equal(event.tentativas, 2);
+  assert.equal(await prisma.mensagemCanal.count({ where: { externalId: "wamid.f1b3.stale-lease" } }), 1);
 });
 
 test("duas requisicoes equivalentes concorrentes criam uma unica cadeia", async () => {
@@ -381,7 +417,7 @@ async function controlledProcessor(args) {
     select: { id: true, statusProcessamento: true },
   });
   observedDurableEvents.push({ id: stored.id, status: stored.statusProcessamento });
-  if (processorCallCount === failProcessorCall) {
+  if (alwaysFailProcessor || processorCallCount === failProcessorCall) {
     const error = new Error("Falha controlada do processador.");
     error.name = "WhatsAppWebhookProcessingError";
     error.code = failProcessorCode;

@@ -441,32 +441,42 @@ test("mapeamento ausente e falha pos-intake permanecem fechados e recuperaveis",
   const payload = failureSimulator.text({ id: `instagram-failure-${suffix}` });
   const receiptAt = new Date("2026-07-30T20:00:00.000Z");
   const failureAt = new Date("2026-07-30T20:00:01.000Z");
+  let transientAttempts = 0;
   const failing = createInstagramWebhookOrchestrator({
     prisma,
     intake: createInstagramWebhookIntake({ prisma, clock: () => receiptAt }),
-    processEvent: async () => {
-      const error = new Error("payload=private token=private");
-      error.code = "unsafe payload=private";
-      throw error;
+    processEvent: async (input) => {
+      transientAttempts += 1;
+      if (transientAttempts === 1) {
+        const error = new Error("payload=private token=private");
+        error.code = "P2028";
+        throw error;
+      }
+      return processInstagramWebhookEvent(input);
     },
     clock: () => failureAt,
+    retryPolicy: { baseDelayMs: 0, maxDelayMs: 0 },
+    waitForRetry: async () => {},
   });
-  await assert.rejects(failing(payload), (error) => error.code === "WEBHOOK_PROCESSING_UNAVAILABLE");
+  assert.deepEqual(await failing(payload), { accepted: true });
 
   const event = await prisma.eventoWebhook.findFirstOrThrow({
     where: { empresaId: fixture.tenant.id, externalEventId: `instagram-failure-${suffix}` },
   });
   const failedChannel = await prisma.canalIntegracao.findUniqueOrThrow({ where: { id: fixture.channel.id } });
-  assert.equal(event.statusProcessamento, "RECEBIDO");
+  assert.equal(event.statusProcessamento, "PROCESSADO");
+  assert.equal(event.tentativas, 2);
+  assert.equal(event.erroCodigo, null);
+  assert.equal(event.erroResumo, null);
   assert.equal(failedChannel.lastFailureAt.toISOString(), failureAt.toISOString());
-  assert.equal(failedChannel.lastFailureCode, "INSTAGRAM_EVENT_PROCESSING_UNAVAILABLE");
+  assert.equal(failedChannel.lastFailureCode, "P2028");
   assert.equal(JSON.stringify(failedChannel).includes("private"), false);
   assert.deepEqual(await commercialCounts(fixture.tenant.id), {
-    contacts: 0,
-    clients: 0,
-    leads: 0,
-    conversations: 0,
-    messages: 0,
+    contacts: 1,
+    clients: 1,
+    leads: 1,
+    conversations: 1,
+    messages: 1,
   });
 
   assert.deepEqual(await createInstagramWebhookOrchestrator({ prisma })(payload), { accepted: true });
@@ -495,23 +505,34 @@ test("falha concorrente atrasada nao sobrescreve processamento concluido", async
   });
   const delayedFailure = createInstagramWebhookOrchestrator({
     prisma,
-    processEvent: async () => {
-      signalFailureStarted();
-      await waitForSuccess;
-      const error = new Error("Falha sintetica atrasada.");
-      error.code = "INSTAGRAM_DELAYED_FAILURE";
-      throw error;
+    processEvent: async (input) => {
+      if (signalFailureStarted) {
+        const signal = signalFailureStarted;
+        signalFailureStarted = null;
+        signal();
+        await waitForSuccess;
+        const error = new Error("Falha sintetica atrasada.");
+        error.code = "P2028";
+        throw error;
+      }
+      return processInstagramWebhookEvent(input);
     },
+    retryPolicy: { baseDelayMs: 0, maxDelayMs: 0 },
+    waitForRetry: async () => {},
   });
 
   const delayedResult = delayedFailure(payload);
   await failureStarted;
-  assert.deepEqual(await createInstagramWebhookOrchestrator({ prisma })(payload), { accepted: true });
-  releaseFailure();
   await assert.rejects(
-    delayedResult,
+    createInstagramWebhookOrchestrator({
+      prisma,
+      retryPolicy: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 },
+      waitForRetry: async () => {},
+    })(payload),
     (error) => error.status === 503 && error.code === "WEBHOOK_PROCESSING_UNAVAILABLE",
   );
+  releaseFailure();
+  assert.deepEqual(await delayedResult, { accepted: true });
 
   const event = await prisma.eventoWebhook.findFirstOrThrow({
     where: { empresaId: fixture.tenant.id, externalEventId: `instagram-failure-race-${suffix}` },
@@ -520,9 +541,10 @@ test("falha concorrente atrasada nao sobrescreve processamento concluido", async
     where: { id: fixture.channel.id },
   });
   assert.equal(event.statusProcessamento, "PROCESSADO");
+  assert.equal(event.tentativas, 2);
   assert.equal(event.processadoEm instanceof Date, true);
-  assert.equal(channel.lastFailureAt, null);
-  assert.equal(channel.lastFailureCode, null);
+  assert.ok(channel.lastFailureAt instanceof Date);
+  assert.equal(channel.lastFailureCode, "P2028");
   assert.deepEqual(await commercialCounts(fixture.tenant.id), {
     contacts: 1,
     clients: 1,
