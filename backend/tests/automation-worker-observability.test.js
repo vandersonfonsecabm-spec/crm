@@ -559,6 +559,70 @@ test("erro permanente precoce encerra sem declarar tentativas esgotadas", async 
   assert.equal(job.nextAttemptAt, null);
 });
 
+test("reconciliacao de lease expirado registra exaustao com contexto operacional sanitizado", async () => {
+  const tenant = await seedTenant("worker-logs-reconcile-exhausted");
+  const context = adminContext(tenant);
+  const rule = await internalEventRule(context, "Reconciliacao observavel");
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  await service.enqueueLeadCreated({
+    tx: prisma,
+    empresaId: tenant.empresa.id,
+    leadId: lead.id,
+    originalEventId: "worker-reconcile-exhausted",
+    occurredAt: lead.createdAt,
+  });
+  const job = await prisma.automacaoAcaoJob.findFirstOrThrow({ where: { empresaId: tenant.empresa.id } });
+  const now = new Date(Date.now() + 1000);
+  const expiredAt = new Date(now.getTime() - 5000);
+  await prisma.automacaoAcaoJob.update({
+    where: { id: job.id },
+    data: {
+      status: "PROCESSANDO",
+      leaseOwner: "worker-stale",
+      leaseExpiresAt: expiredAt,
+      tentativas: 3,
+      erroCodigo: "P2028",
+      erroResumo: "Database operation failed.",
+    },
+  });
+  const capture = logCapture({ workerInstanceId: "worker-reconcile-exhausted" });
+
+  const result = await service.processDueJobs({
+    now,
+    leaseOwner: "worker-reconcile",
+    maxAttempts: 3,
+    onEvent: capture.observer.event,
+  });
+
+  assert.equal(result.processed, 0);
+  const exhausted = capture.entries().find((entry) => entry.event === "job_attempts_exhausted");
+  assert.ok(exhausted);
+  assert.equal(exhausted.tenantId, tenant.empresa.id);
+  assert.equal(exhausted.jobId, job.id);
+  assert.equal(exhausted.executionId, job.execucaoId);
+  assert.equal(exhausted.attempt, 3);
+  assert.equal(exhausted.maxAttempts, 3);
+  assert.equal(exhausted.status, "FALHA_DEFINITIVA");
+  assert.equal(exhausted.failureReason, "ATTEMPTS_EXHAUSTED");
+  assert.equal(exhausted.errorCode, "P2028");
+  assert.equal(exhausted.final, true);
+  assert.equal(exhausted.retryable, true);
+  assert.equal(exhausted.willRetry, false);
+  assert.equal(exhausted.leaseUntil, expiredAt.toISOString());
+  assert.ok(Number.isFinite(exhausted.durationMs));
+  assert.ok(exhausted.durationMs >= 0 && exhausted.durationMs <= 10 * 60 * 1000);
+  assert.doesNotMatch(capture.text(), /worker-stale|secret|password|token|@/i);
+
+  const reconciled = await prisma.automacaoAcaoJob.findUniqueOrThrow({ where: { id: job.id } });
+  assert.equal(reconciled.status, "FALHA_DEFINITIVA");
+  assert.equal(reconciled.leaseOwner, null);
+  assert.equal(reconciled.leaseExpiresAt, null);
+  assert.equal(reconciled.erroCodigo, "ATTEMPTS_EXHAUSTED");
+  const execution = await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: job.execucaoId } });
+  assert.equal(execution.status, "FALHA_DEFINITIVA");
+});
+
 test("lease recuperado e registrado somente depois da expiracao real", async () => {
   const tenant = await seedTenant("worker-logs-lease");
   const context = adminContext(tenant);

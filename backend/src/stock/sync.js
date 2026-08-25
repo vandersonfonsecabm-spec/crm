@@ -11,6 +11,10 @@ const TRANSITIONS = Object.freeze({
   RETRY_WAIT: ["RUNNING", "FAILED", "CANCELLED", "QUARANTINED"],
   SUCCEEDED: [], PARTIAL: ["RETRY_WAIT"], FAILED: ["RETRY_WAIT"], CANCELLED: [], QUARANTINED: [], SUPERSEDED: [],
 });
+const MAX_SYNC_RECORDS_PER_TRANSACTION = 100;
+const SYNC_TRANSACTION_OPTIONS = Object.freeze({ maxWait: 1000, timeout: 10000 });
+const FAILURE_TRANSACTION_OPTIONS = Object.freeze({ maxWait: 1000, timeout: 5000 });
+const MIN_PROCESS_LEASE_REMAINING_MS = SYNC_TRANSACTION_OPTIONS.maxWait + SYNC_TRANSACTION_OPTIONS.timeout + 1000;
 
 function createStockSyncService({ prisma, canonicalService, adapterRegistry = new Map(), clock = () => new Date(), env = process.env, logger = console } = {}) {
   if (!prisma || !canonicalService) throw new Error("prisma e canonicalService obrigatorios");
@@ -46,6 +50,29 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
       && expiresAt.getTime() > now.getTime();
   }
 
+  function hasExpiredRunLease(run, now = clock()) {
+    if (run?.estado !== "RUNNING") return false;
+    const expiresAt = run?.leaseExpiresAt ? new Date(run.leaseExpiresAt) : null;
+    return !expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() <= now.getTime();
+  }
+
+  function assertProcessingLeaseBudget(run, now = clock()) {
+    const expiresAt = run?.leaseExpiresAt ? new Date(run.leaseExpiresAt) : null;
+    if (!expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() - now.getTime() <= MIN_PROCESS_LEASE_REMAINING_MS) {
+      throw new StockError("STOCK_UNAVAILABLE", "Lease da sincronizacao sem tempo suficiente para processar o lote.");
+    }
+  }
+
+  function assertBoundedRecordBatch(records) {
+    if (records.length > MAX_SYNC_RECORDS_PER_TRANSACTION) {
+      throw new StockError("STOCK_INVALID", "Lote de sincronizacao excede o limite transacional.");
+    }
+  }
+
+  function expiredLeaseRecoveryError() {
+    return new StockError("STOCK_UNAVAILABLE", "Lease da sincronizacao expirou antes da conclusao.");
+  }
+
   async function createRun({ empresaId, fonteId, modo = "IMPORT", actorUsuarioId, correlationId, snapshotGeneration = null, importacaoId = null }) {
     assertSyncEnabled(empresaId);
     const write = async (tx) => {
@@ -75,20 +102,32 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
     return prisma.execucaoSincronizacaoEstoque.findFirst({ where: { id: runId, empresaId } });
   }
 
-  async function acquireLease({ empresaId, runId, owner, leaseMs = 30000 }) {
+  async function acquireLease({ empresaId, runId, owner, leaseMs = 30000, recoveryAttempt = false }) {
     assertSyncEnabled(empresaId);
     const boundedOwner = leaseOwner(owner);
     const current = await prisma.execucaoSincronizacaoEstoque.findFirst({ where: { id: runId, empresaId } });
     if (!current) return null;
-    await requireActiveSource({ empresaId, fonteId: current.fonteId });
     const now = clock();
+    if (hasExpiredRunLease(current, now)) {
+      if (recoveryAttempt) return null;
+      const recovered = await failOwnedRun({
+        empresaId,
+        runId,
+        owner: current.leaseOwner,
+        run: current,
+        error: expiredLeaseRecoveryError(),
+      });
+      if (!recovered) return null;
+      return acquireLease({ empresaId, runId, owner: boundedOwner, leaseMs, recoveryAttempt: true });
+    }
+    await requireActiveSource({ empresaId, fonteId: current.fonteId });
     const expires = new Date(now.getTime() + Math.max(5000, Math.min(10 * 60 * 1000, Number(leaseMs) || 30000)));
     const result = await prisma.execucaoSincronizacaoEstoque.updateMany({
       where: {
         id: runId,
         empresaId,
         revision: current.revision,
-        OR: [{ estado: "PENDING" }, { estado: "RETRY_WAIT" }, { estado: "RUNNING", OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }] }],
+        OR: [{ estado: "PENDING" }, { estado: "RETRY_WAIT" }],
       },
       data: { estado: "RUNNING", leaseOwner: boundedOwner, leaseExpiresAt: expires, revision: { increment: 1 }, updatedAt: now },
     });
@@ -141,11 +180,13 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
       }
       throw error;
     }
-    const acquired = run.estado === "RUNNING" ? run : await acquireLease({ empresaId, runId, owner: boundedOwner });
+    const acquired = run.estado === "RUNNING" && ownsLiveLease(run, boundedOwner) ? run : await acquireLease({ empresaId, runId, owner: boundedOwner });
     if (!acquired) throw new StockError("STOCK_CONFLICT", "Lease indisponivel.");
     if (!ownsLiveLease(acquired, boundedOwner)) throw leaseLostError("Lease da sincronizacao nao pertence ao worker.");
     let accepted = 0; let duplicate = 0;
     try {
+      assertBoundedRecordBatch(records);
+      assertProcessingLeaseBudget(acquired);
       await prisma.$transaction(async (tx) => {
         for (const record of records) {
           const result = await canonicalService.applyNormalizedRecord({ empresaId, fonteId, syncRunId: runId, envelope: record, slaMs, tx });
@@ -157,7 +198,7 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
         if (changed.count !== 1) throw leaseLostError("Lease perdida antes do commit.");
         const event = buildStockEvent({ type: "StockSyncCompleted.v1", empresaId, syncRunId: runId, aggregateType: "StockSyncRun", aggregateId: String(runId), materialVersion: (acquired.revision || 1) + 1, correlationId: acquired.correlationId, payload: { accepted, rejected: 0, duplicate, mode } });
         await appendStockOutbox({ tx, event });
-      });
+      }, SYNC_TRANSACTION_OPTIONS);
       return { runId, accepted, rejected: 0, duplicate, partial: false, errorCode: null };
     } catch (error) {
       await failOwnedRun({ empresaId, runId, owner: boundedOwner, run: acquired, error });
@@ -179,7 +220,7 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
     }
     const event = buildStockEvent({ type: "StockSyncStarted.v1", empresaId, syncRunId: runId, aggregateType: "StockSyncRun", aggregateId: String(runId), materialVersion: acquired.revision, correlationId: acquired.correlationId, payload: { adapterType, mode } });
     try {
-      await prisma.$transaction((tx) => appendStockOutbox({ tx, event }));
+      await prisma.$transaction((tx) => appendStockOutbox({ tx, event }), FAILURE_TRANSACTION_OPTIONS);
       let sourceRecords = records;
       if (!sourceRecords) sourceRecords = mode === "IMPORT" ? await adapter.pullFullSnapshot(context) : await adapter.pullChanges(context, context?.cursor);
       return await processRecords({ empresaId, fonteId, runId, records: sourceRecords, mode, owner: boundedOwner, cursor: context?.cursor, generation: context?.generation });
@@ -193,7 +234,9 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
     if (error?.syncLeaseLost === true) return false;
     const failedAt = clock();
     const expectedLeaseExpiresAt = run?.leaseExpiresAt ? new Date(run.leaseExpiresAt) : null;
-    if (!expectedLeaseExpiresAt || Number.isNaN(expectedLeaseExpiresAt.getTime()) || expectedLeaseExpiresAt.getTime() <= failedAt.getTime()) return false;
+    if (run?.leaseExpiresAt && Number.isNaN(expectedLeaseExpiresAt.getTime())) return false;
+    const expectedOwner = owner === undefined ? null : owner;
+    const expectedRevision = Number.isSafeInteger(Number(run?.revision)) ? Number(run.revision) : null;
     try {
       const transition = async (tx) => {
         const changed = await tx.execucaoSincronizacaoEstoque.updateMany({
@@ -201,8 +244,8 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
             id: runId,
             empresaId,
             estado: "RUNNING",
-            leaseOwner: owner,
-            AND: [{ leaseExpiresAt: expectedLeaseExpiresAt }, { leaseExpiresAt: { gt: failedAt } }],
+            leaseOwner: expectedOwner,
+            AND: [{ leaseExpiresAt: expectedLeaseExpiresAt }, ...(expectedRevision === null ? [] : [{ revision: expectedRevision }])],
           },
         data: { estado: Number(run?.retryCount || 0) + 1 >= 3 ? "FAILED" : "RETRY_WAIT", retryCount: { increment: 1 }, errorClass: String(error?.code || "STOCK_SYNC_FAILED").slice(0, 120), leaseOwner: null, leaseExpiresAt: null, revision: { increment: 1 }, updatedAt: failedAt },
         });
@@ -210,8 +253,13 @@ function createStockSyncService({ prisma, canonicalService, adapterRegistry = ne
         await emitFailureEvent({ tx, empresaId, run, runId, error });
         return true;
       };
-      return prisma.$transaction ? await prisma.$transaction(transition) : await transition(prisma);
-    } catch {
+      return prisma.$transaction ? await prisma.$transaction(transition, FAILURE_TRANSACTION_OPTIONS) : await transition(prisma);
+    } catch (cleanupError) {
+      try {
+        logger.warn?.("stock_sync_failure_cleanup_failed", { runId, code: String(cleanupError?.code || "STOCK_SYNC_CLEANUP_FAILED").slice(0, 120) });
+      } catch {
+        // Diagnostics must not mask the original failure or block lease recovery.
+      }
       return false;
     }
   }

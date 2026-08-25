@@ -666,7 +666,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
   }
 
   async function claimDueJob({ now, leaseOwner, config, onEvent }) {
-    await reconcileExhaustedJobs(now, config.maxAttempts);
+    await reconcileExhaustedJobs(now, config.maxAttempts, onEvent);
     const candidates = await prisma.automacaoAcaoJob.findMany({
       where: dueJobWhere(now, config.maxAttempts),
       orderBy: [{ nextAttemptAt: "asc" }, { id: "asc" }],
@@ -713,7 +713,8 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     return null;
   }
 
-  async function reconcileExhaustedJobs(now, maxAttempts) {
+  async function reconcileExhaustedJobs(now, maxAttempts, onEvent) {
+    const reconciliationStartedAt = Date.now();
     const stuckJobs = await prisma.automacaoAcaoJob.findMany({
       where: {
         tentativas: { gte: maxAttempts },
@@ -722,7 +723,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
           { status: "PROCESSANDO", leaseExpiresAt: { lte: now } },
         ],
       },
-      select: { id: true, empresaId: true, execucaoId: true },
+      select: { id: true, empresaId: true, execucaoId: true, tentativas: true, leaseExpiresAt: true, erroCodigo: true },
       take: 100,
     });
     for (const stuckJob of stuckJobs) {
@@ -745,7 +746,25 @@ function createAutomationService({ prisma, env = process.env, logger = console }
           erroResumo: "Tentativas esgotadas apos recuperacao de lease.",
         },
       });
-      if (updated.count === 1) await refreshExecutionStatus(prisma, stuckJob.empresaId, stuckJob.execucaoId);
+      if (updated.count === 1) {
+        notifyWorkerEvent(onEvent, "job_attempts_exhausted", {
+          tenantId: stuckJob.empresaId,
+          jobId: stuckJob.id,
+          executionId: stuckJob.execucaoId,
+          attempt: stuckJob.tentativas,
+          maxAttempts,
+          status: "FALHA_DEFINITIVA",
+          durationMs: boundedReconciliationDuration(reconciliationStartedAt),
+          leaseUntil: stuckJob.leaseExpiresAt,
+          final: true,
+          permanent: false,
+          retryable: true,
+          willRetry: false,
+          failureReason: "ATTEMPTS_EXHAUSTED",
+          errorCode: stuckJob.erroCodigo || "AUTOMATION_WORKER_ERROR",
+        });
+        await refreshExecutionStatus(prisma, stuckJob.empresaId, stuckJob.execucaoId);
+      }
     }
   }
 
@@ -1515,6 +1534,10 @@ function boundedInteger(raw, fallback, min, max) {
 
 function elapsedMs(startedAt) {
   return Math.max(0, Date.now() - startedAt);
+}
+
+function boundedReconciliationDuration(startedAt) {
+  return Math.min(10 * 60 * 1000, elapsedMs(startedAt));
 }
 
 function dueJobWhere(now, maxAttempts) {

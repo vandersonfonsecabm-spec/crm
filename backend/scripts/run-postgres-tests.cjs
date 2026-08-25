@@ -1,13 +1,18 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
-const { resolvePrismaCli, sanitize } = require("./postgres-prisma.cjs");
+const {
+  cleanupPostgresTestWorkspace,
+  createPostgresTestWorkspace,
+  sanitize,
+} = require("./postgres-prisma.cjs");
 const { createPrismaFailure, sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation-log-utils.cjs");
 
 const backendDir = path.resolve(__dirname, "..");
 
 function main(options = {}) {
   const runCommand = options.runCommand || run;
-  const restoreCommand = options.restoreCommand || restoreSqlitePrismaClient;
+  const createWorkspace = options.createWorkspace || createPostgresTestWorkspace;
+  const cleanupWorkspace = options.cleanupWorkspace || cleanupPostgresTestWorkspace;
   const envSource = options.env || process.env;
   const databaseUrl = String(envSource.POSTGRES_TEST_DATABASE_URL || "").trim();
   if (!/^postgres(ql)?:\/\//i.test(databaseUrl)) {
@@ -24,13 +29,18 @@ function main(options = {}) {
     DATABASE_URL: databaseUrl,
     AUTOMATION_WORKER_ENABLED: "false",
   };
+  let workspace = null;
   let originalError = null;
+  let cleanupError = null;
   try {
-    runCommand("node", ["scripts/postgres-prisma.cjs", "validate"], env);
-    runCommand("node", ["scripts/postgres-prisma.cjs", "generate"], env);
-    runCommand("node", ["--test", "tests/tenant-isolation-pending-migrations-postgres.test.js"], env);
-    runCommand("node", ["scripts/postgres-prisma.cjs", "migrate-empty"], {
-      ...env,
+    workspace = createWorkspace();
+    const prismaArgs = (command) => ["scripts/postgres-prisma.cjs", command, "--test-workspace", workspace.root];
+    const testEnv = { ...env, NODE_OPTIONS: appendNodeRequire(env.NODE_OPTIONS, workspace.clientLoaderPath) };
+    runCommand("node", prismaArgs("validate"), env);
+    runCommand("node", prismaArgs("generate"), env);
+    runCommand("node", ["--test", "tests/tenant-isolation-pending-migrations-postgres.test.js"], testEnv);
+    runCommand("node", prismaArgs("migrate-empty"), {
+      ...testEnv,
       CRM_POSTGRES_MIGRATE_CONFIRM: "apply-empty-postgres",
     });
     for (const file of [
@@ -41,34 +51,33 @@ function main(options = {}) {
       "tests/email-inbound-lifecycle.test.js",
       "tests/email-inbound-processing.test.js",
     ]) {
-      runCommand("node", ["--test", file], env);
+      runCommand("node", ["--test", file], testEnv);
     }
   } catch (error) {
     originalError = error;
   } finally {
-    try {
-      restoreCommand({ env: envSource, runCommand });
-    } catch (restoreError) {
-      const message = sanitize(restoreError.stack || restoreError.message);
-      if (!originalError) {
-        throw restoreError;
+    if (workspace) {
+      try {
+        cleanupWorkspace(workspace.root);
+      } catch (error) {
+        cleanupError = error;
       }
-      console.error(`[postgres-tests] Falha ao restaurar Prisma Client SQLite apos erro original: ${message}`);
     }
+  }
+  if (cleanupError) {
+    if (!originalError) throw cleanupError;
+    const message = sanitize(cleanupError.stack || cleanupError.message);
+    console.error(`[postgres-tests] Falha ao limpar workspace PostgreSQL apos erro original: ${message}`);
   }
   if (originalError) {
     throw originalError;
   }
 }
 
-function restoreSqlitePrismaClient({ env = process.env, runCommand = run } = {}) {
-  runCommand(process.execPath, [resolvePrismaCli(), "generate", "--schema", "prisma/schema.prisma"], {
-    ...env,
-    DATABASE_URL: "file:./prisma/dev.db",
-    CRM_TEST_DATABASE_PROVIDER: "",
-    CRM_TEST_DATABASE_URL: "",
-    CRM_TEST_POSTGRES_ALLOW: "",
-  });
+function appendNodeRequire(nodeOptions, loaderPath) {
+  const normalizedPath = path.resolve(loaderPath).replace(/\\/g, "/");
+  const escapedPath = /\s/.test(normalizedPath) ? `"${normalizedPath.replace(/"/g, '\\"')}"` : normalizedPath;
+  return [String(nodeOptions || "").trim(), `--require=${escapedPath}`].filter(Boolean).join(" ");
 }
 
 function run(command, args, env) {
@@ -100,4 +109,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { main, restoreSqlitePrismaClient };
+module.exports = { appendNodeRequire, main };

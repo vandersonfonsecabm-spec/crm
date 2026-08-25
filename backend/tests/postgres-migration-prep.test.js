@@ -13,10 +13,13 @@ const { postgresUrlFromEnv } = require("../scripts/check-postgres-connection.cjs
 const { resolveSqliteDatabasePath } = require("../scripts/start-production.cjs");
 const { copyWithinTransaction, convertValue, orderedTables, sanitizeError } = require("../scripts/migrate-sqlite-to-postgres.cjs");
 const {
+  cleanupPostgresTestWorkspace,
+  createPostgresTestWorkspace,
   latestMigrationSqlPath,
   postgresSchemaText,
   postgresSchemaWithClientOutput,
   preparePostgresWorkspace,
+  parsePostgresCliArguments,
   sanitize,
 } = require("../scripts/postgres-prisma.cjs");
 const {
@@ -26,7 +29,7 @@ const {
   runPrismaForProvider,
   runtimePrismaConfig,
 } = require("../scripts/prisma-runtime.cjs");
-const { main: runPostgresTests, restoreSqlitePrismaClient } = require("../scripts/run-postgres-tests.cjs");
+const { main: runPostgresTests } = require("../scripts/run-postgres-tests.cjs");
 
 test("preparacao PostgreSQL deriva provider sem alterar o schema canonico SQLite", () => {
   const sqliteSchema = [
@@ -196,50 +199,51 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
   }
 });
 
-test("runner PostgreSQL restaura Prisma Client SQLite apos sucesso", () => {
+test("runner PostgreSQL usa workspace e client isolados sem regenerar SQLite", () => {
   const calls = [];
+  const cleaned = [];
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-prisma-tests-runner-"));
   runPostgresTests({
     env: { POSTGRES_TEST_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test" },
+    createWorkspace: () => ({ root, clientLoaderPath: path.join(root, "loader.cjs") }),
+    cleanupWorkspace: (workspaceRoot) => cleaned.push(workspaceRoot),
     runCommand: (command, args, env) => calls.push({ command, args, env }),
   });
-  const last = calls.at(-1);
-  assert.match(last.args.join(" "), /generate --schema prisma[\\/]schema\.prisma/);
-  assert.equal(last.env.DATABASE_URL, "file:./prisma/dev.db");
-  assert.equal(last.env.CRM_TEST_DATABASE_PROVIDER, "");
-  assert.equal(calls.filter((call) => call.args.includes("generate")).length, 2);
+  assert.equal(cleaned.length, 1);
+  assert.equal(cleaned[0], root);
+  assert.equal(calls.filter((call) => call.args.includes("generate")).length, 1);
+  assert.equal(calls.filter((call) => call.args.includes("migrate-empty")).length, 1);
+  assert.ok(calls.filter((call) => call.args.includes("--test-workspace") && call.args.includes(root)).length >= 2);
+  const pgTestCall = calls.find((call) => call.args.some((arg) => String(arg).includes("tenant-isolation-pending-migrations-postgres.test.js")));
+  assert.ok(pgTestCall);
+  assert.match(pgTestCall.env.NODE_OPTIONS, /loader\.cjs/);
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("runner PostgreSQL restaura Prisma Client SQLite apos falha sem esconder o erro original", () => {
+test("runner PostgreSQL limpa workspace isolado apos falha sem esconder o erro original", () => {
   const calls = [];
+  const cleaned = [];
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-prisma-tests-runner-fail-"));
   const original = new Error("falha controlada do teste PostgreSQL");
   assert.throws(() => runPostgresTests({
     env: { POSTGRES_TEST_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test" },
+    createWorkspace: () => ({ root, clientLoaderPath: path.join(root, "loader.cjs") }),
+    cleanupWorkspace: (workspaceRoot) => cleaned.push(workspaceRoot),
     runCommand: (command, args, env) => {
       calls.push({ command, args, env });
       if (args.includes("migrate-empty")) throw original;
     },
   }), /falha controlada/);
-  const last = calls.at(-1);
-  assert.match(last.args.join(" "), /generate --schema prisma[\\/]schema\.prisma/);
-  assert.equal(last.env.DATABASE_URL, "file:./prisma/dev.db");
+  assert.deepEqual(cleaned, [root]);
+  assert.equal(calls.filter((call) => call.args.includes("generate")).length, 1);
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("restauracao do Prisma Client SQLite limpa variaveis temporarias PostgreSQL", () => {
-  const calls = [];
-  restoreSqlitePrismaClient({
-    env: {
-      DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
-      CRM_TEST_DATABASE_PROVIDER: "postgresql",
-      CRM_TEST_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test",
-      CRM_TEST_POSTGRES_ALLOW: "true",
-    },
-    runCommand: (command, args, env) => calls.push({ command, args, env }),
-  });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].env.DATABASE_URL, "file:./prisma/dev.db");
-  assert.equal(calls[0].env.CRM_TEST_DATABASE_PROVIDER, "");
-  assert.equal(calls[0].env.CRM_TEST_DATABASE_URL, "");
-  assert.equal(calls[0].env.CRM_TEST_POSTGRES_ALLOW, "");
+test("argumentos do runner aceitam somente workspace temporario explicito", () => {
+  const parsed = parsePostgresCliArguments(["--test-workspace", path.join(os.tmpdir(), "crm-prisma-tests", "probe")]);
+  assert.equal(parsed.positional.length, 0);
+  assert.match(parsed.workspaceOptions.root, /crm-prisma-tests/);
+  assert.throws(() => parsePostgresCliArguments(["--test-workspace"]), /exige/);
 });
 
 test("guard de teste PostgreSQL exige URL e confirmacao explicita", () => {

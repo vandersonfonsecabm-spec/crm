@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { runGate } = require("./tenant-isolation-gate.cjs");
@@ -22,17 +23,19 @@ const workspaceRoot = path.join(
   ".cache",
   "crm-postgres-prisma",
 );
+const postgresTestWorkspaceRoot = path.join(os.tmpdir(), "crm-prisma-tests");
 const migrationName = "20260728090000_postgres_baseline";
 
 function preparePostgresWorkspace(options = {}) {
-  const root = options.root || path.join(workspaceRoot, stableWorkspaceId());
+  const root = path.resolve(options.root || path.join(workspaceRoot, stableWorkspaceId()));
   const prismaDir = path.join(root, "prisma");
   const migrationsDir = path.join(prismaDir, "migrations");
   const migrationDir = path.join(migrationsDir, migrationName);
   const schemaPath = path.join(prismaDir, "schema.prisma");
+  const clientOutput = path.resolve(options.clientOutput || path.join(backendDir, "node_modules", ".prisma", "client"));
+  const clientLoaderPath = options.writeClientLoader ? path.join(root, "prisma-client-alias.cjs") : null;
   fs.mkdirSync(prismaDir, { recursive: true });
-  const clientOutput = path.join(backendDir, "node_modules", ".prisma", "client").replace(/\\/g, "/");
-  fs.writeFileSync(schemaPath, postgresSchemaWithClientOutput(postgresSchemaText(fs.readFileSync(sqliteSchemaPath, "utf8")), clientOutput));
+  fs.writeFileSync(schemaPath, postgresSchemaWithClientOutput(postgresSchemaText(fs.readFileSync(sqliteSchemaPath, "utf8")), clientOutput.replace(/\\/g, "/")));
   fs.rmSync(migrationsDir, { recursive: true, force: true });
   if (Object.hasOwn(options, "migrationSql")) {
     fs.mkdirSync(migrationDir, { recursive: true });
@@ -41,7 +44,74 @@ function preparePostgresWorkspace(options = {}) {
   } else {
     fs.cpSync(versionedPostgresMigrationsDir, migrationsDir, { recursive: true });
   }
-  return { root, prismaDir, migrationsDir, migrationDir, schemaPath, migrationName };
+  if (clientLoaderPath) writePostgresClientLoader(clientLoaderPath, clientOutput);
+  return { root, prismaDir, migrationsDir, migrationDir, schemaPath, migrationName, clientOutput, clientLoaderPath };
+}
+
+function createPostgresTestWorkspace() {
+  fs.mkdirSync(postgresTestWorkspaceRoot, { recursive: true });
+  const root = fs.mkdtempSync(path.join(postgresTestWorkspaceRoot, "postgres-prisma-"));
+  try {
+    return preparePostgresWorkspace({ root, clientOutput: path.join(root, "client"), writeClientLoader: true });
+  } catch (error) {
+    cleanupPostgresTestWorkspace(root);
+    throw error;
+  }
+}
+
+function cleanupPostgresTestWorkspace(root) {
+  const safeRoot = assertPostgresTestWorkspaceRoot(root);
+  fs.rmSync(safeRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+}
+
+function postgresTestWorkspaceOptions(root) {
+  const safeRoot = assertPostgresTestWorkspaceRoot(root);
+  return { root: safeRoot, clientOutput: path.join(safeRoot, "client"), writeClientLoader: true };
+}
+
+function assertPostgresTestWorkspaceRoot(value) {
+  const root = path.resolve(String(value || ""));
+  if (!isPathInside(root, postgresTestWorkspaceRoot)) throw new Error("Workspace PostgreSQL de teste deve permanecer em %TEMP%\\crm-prisma-tests.");
+  if (fs.existsSync(root)) {
+    const stat = fs.lstatSync(root);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("Workspace PostgreSQL de teste deve ser um diretorio regular.");
+    const realRoot = path.resolve(fs.realpathSync.native(root));
+    if (!isPathInside(realRoot, postgresTestWorkspaceRoot)) throw new Error("Workspace PostgreSQL de teste nao pode resolver fora de %TEMP%\\crm-prisma-tests.");
+  }
+  return root;
+}
+
+function isPathInside(candidate, parent) {
+  const relative = path.relative(path.resolve(parent), path.resolve(candidate));
+  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+function writePostgresClientLoader(loaderPath, clientOutput) {
+  const clientDefaultPath = path.join(path.resolve(clientOutput), "default.js");
+  fs.writeFileSync(loaderPath, [
+    'const Module = require("node:module");',
+    `const clientDefaultPath = ${JSON.stringify(clientDefaultPath)};`,
+    "const originalResolveFilename = Module._resolveFilename;",
+    "Module._resolveFilename = function(request, parent, isMain, options) {",
+    '  if (request === ".prisma/client/default") return clientDefaultPath;',
+    "  return originalResolveFilename.call(this, request, parent, isMain, options);",
+    "};",
+    "",
+  ].join("\n"));
+  return loaderPath;
+}
+
+function parsePostgresCliArguments(rawArgs) {
+  const positional = [];
+  let testWorkspace = null;
+  for (let index = 0; index < rawArgs.length; index += 1) {
+    const value = rawArgs[index];
+    if (value !== "--test-workspace") { positional.push(value); continue; }
+    if (testWorkspace || index + 1 >= rawArgs.length) throw new Error("--test-workspace exige exatamente um diretorio temporario.");
+    testWorkspace = rawArgs[index + 1];
+    index += 1;
+  }
+  return { positional, workspaceOptions: testWorkspace ? postgresTestWorkspaceOptions(testWorkspace) : {} };
 }
 
 function latestMigrationSqlPath(migrationsDir) {
@@ -151,13 +221,16 @@ async function main() {
   if (!command || !["schema", "migration-sql", "validate", "generate", "migrate-empty"].includes(command)) {
     throw new Error("Comando esperado: schema, migration-sql, validate, generate ou migrate-empty.");
   }
-  const workspace = preparePostgresWorkspace();
+  const parsed = parsePostgresCliArguments(process.argv.slice(3));
+  if (command !== "migration-sql" && parsed.positional.length !== 0) throw new Error(`${command} nao aceita argumentos posicionais.`);
+  if (command === "migration-sql" && parsed.positional.length > 1) throw new Error("migration-sql aceita no maximo um caminho de saida.");
+  const workspace = preparePostgresWorkspace(parsed.workspaceOptions);
   if (command === "schema") {
     console.log(workspace.schemaPath);
     return;
   }
   if (command === "migration-sql") {
-    const output = process.argv[3];
+    const output = parsed.positional[0];
     const sqlPath = latestMigrationSqlPath(workspace.migrationsDir);
     if (output) {
       const target = path.resolve(output);
@@ -209,12 +282,17 @@ if (require.main === module) {
 }
 
 module.exports = {
+  cleanupPostgresTestWorkspace,
+  createPostgresTestWorkspace,
   generatePostgresMigrationSql,
   latestMigrationName,
   latestMigrationSqlPath,
+  parsePostgresCliArguments,
+  postgresTestWorkspaceOptions,
   postgresSchemaWithClientOutput,
   postgresSchemaText,
   preparePostgresWorkspace,
   resolvePrismaCli,
   sanitize,
+  writePostgresClientLoader,
 };

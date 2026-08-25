@@ -68,6 +68,220 @@ test("sync direct lease acquisition requires an active source before mutating a 
   assert.equal(updates.length, 0);
 });
 
+test("sync bounds an interactive transaction below its active lease", async () => {
+  const now = new Date();
+  const run = {
+    id: 6,
+    empresaId: 1,
+    fonteId: 4,
+    estado: "RUNNING",
+    leaseOwner: "worker-a",
+    leaseExpiresAt: new Date(now.getTime() + 30000),
+    revision: 3,
+    correlationId: "sync-bounded-transaction",
+  };
+  const transactionOptions = [];
+  const prisma = {
+    fonteEstoque: { findFirst: async () => ({ id: 4, empresaId: 1, statusCiclo: "ACTIVE" }) },
+    execucaoSincronizacaoEstoque: {
+      findFirst: async () => ({ ...run }),
+      updateMany: async () => ({ count: 1 }),
+    },
+    checkpointSincronizacaoEstoque: {
+      findFirst: async () => null,
+      create: async ({ data }) => ({ id: 1, ...data }),
+    },
+    eventoOutboxEstoque: { create: async ({ data }) => data },
+    $transaction: async (callback, options) => {
+      transactionOptions.push(options);
+      return callback(prisma);
+    },
+  };
+  const service = createStockSyncService({
+    prisma,
+    canonicalService: { applyNormalizedRecord: async () => ({ duplicate: false }) },
+    env: ENABLED_ENV,
+    clock: () => now,
+  });
+
+  await service.processRecords({ empresaId: 1, fonteId: 4, runId: 6, owner: "worker-a", records: [{}] });
+
+  assert.deepEqual(transactionOptions, [{ maxWait: 1000, timeout: 10000 }]);
+});
+
+test("sync rejects an oversized batch through owned retry accounting", async () => {
+  const now = new Date();
+  const run = {
+    id: 16,
+    empresaId: 1,
+    fonteId: 4,
+    estado: "RUNNING",
+    leaseOwner: "worker-a",
+    leaseExpiresAt: new Date(now.getTime() + 30000),
+    revision: 3,
+    retryCount: 0,
+    correlationId: "sync-batch-bound",
+  };
+  const updates = [];
+  const transactionOptions = [];
+  const prisma = {
+    fonteEstoque: { findFirst: async () => ({ id: 4, empresaId: 1, statusCiclo: "ACTIVE" }) },
+    execucaoSincronizacaoEstoque: {
+      findFirst: async () => ({ ...run }),
+      updateMany: async (query) => { updates.push(query); return { count: 1 }; },
+    },
+    eventoOutboxEstoque: { create: async ({ data }) => data },
+    $transaction: async (callback, options) => {
+      transactionOptions.push(options);
+      return callback(prisma);
+    },
+  };
+  const service = createStockSyncService({
+    prisma,
+    canonicalService: { applyNormalizedRecord: async () => { throw new Error("must not process oversized batch"); } },
+    env: ENABLED_ENV,
+    clock: () => now,
+    logger: { warn() {} },
+  });
+
+  await assert.rejects(
+    service.processRecords({ empresaId: 1, fonteId: 4, runId: 16, owner: "worker-a", records: Array.from({ length: 101 }, () => ({})) }),
+    (error) => error.code === "STOCK_INVALID",
+  );
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].data.estado, "RETRY_WAIT");
+  assert.equal(updates[0].data.retryCount.increment, 1);
+  assert.deepEqual(transactionOptions, [{ maxWait: 1000, timeout: 5000 }]);
+});
+
+test("sync accounts for a P2028 after the original lease expires", async () => {
+  const initial = new Date();
+  const leaseExpiresAt = new Date(initial.getTime() + 30000);
+  let currentNow = initial;
+  let transactionCall = 0;
+  const transactionOptions = [];
+  const updates = [];
+  const run = {
+    id: 17,
+    empresaId: 1,
+    fonteId: 4,
+    estado: "RUNNING",
+    leaseOwner: "worker-a",
+    leaseExpiresAt,
+    revision: 4,
+    retryCount: 0,
+    correlationId: "sync-p2028-expired-lease",
+  };
+  const prisma = {
+    fonteEstoque: { findFirst: async () => ({ id: 4, empresaId: 1, statusCiclo: "ACTIVE" }) },
+    execucaoSincronizacaoEstoque: {
+      findFirst: async () => ({ ...run }),
+      updateMany: async (query) => { updates.push(query); return { count: 1 }; },
+    },
+    eventoOutboxEstoque: { create: async ({ data }) => data },
+    $transaction: async (callback, options) => {
+      transactionOptions.push(options);
+      transactionCall += 1;
+      if (transactionCall === 1) {
+        currentNow = new Date(leaseExpiresAt.getTime() + 1);
+        const error = new Error("Transaction expired");
+        error.code = "P2028";
+        throw error;
+      }
+      return callback(prisma);
+    },
+  };
+  const service = createStockSyncService({
+    prisma,
+    canonicalService: { applyNormalizedRecord: async () => ({ duplicate: false }) },
+    env: ENABLED_ENV,
+    clock: () => currentNow,
+    logger: { warn() {} },
+  });
+
+  await assert.rejects(
+    service.processRecords({ empresaId: 1, fonteId: 4, runId: 17, owner: "worker-a", records: [{}] }),
+    (error) => error.code === "P2028",
+  );
+  assert.equal(updates.length, 1);
+  assert.deepEqual(updates[0].where.AND, [{ leaseExpiresAt }, { revision: 4 }]);
+  assert.equal(updates[0].data.estado, "RETRY_WAIT");
+  assert.equal(updates[0].data.retryCount.increment, 1);
+  assert.deepEqual(transactionOptions, [
+    { maxWait: 1000, timeout: 10000 },
+    { maxWait: 1000, timeout: 5000 },
+  ]);
+});
+
+test("sync replay accounts for an expired lease before granting a replacement", async () => {
+  const now = new Date();
+  const expiredLeaseAt = new Date(now.getTime() - 1);
+  let state = {
+    id: 20,
+    empresaId: 1,
+    fonteId: 4,
+    estado: "RUNNING",
+    leaseOwner: "worker-stale",
+    leaseExpiresAt: expiredLeaseAt,
+    revision: 6,
+    retryCount: 0,
+    correlationId: "sync-expired-replay",
+  };
+  const updates = [];
+  const transactionOptions = [];
+  const prisma = {
+    fonteEstoque: { findFirst: async () => ({ id: 4, empresaId: 1, statusCiclo: "ACTIVE" }) },
+    execucaoSincronizacaoEstoque: {
+      findFirst: async () => ({ ...state }),
+      updateMany: async (query) => {
+        updates.push(query);
+        if (query.where.estado === "RUNNING" && query.where.leaseOwner === "worker-stale") {
+          state = {
+            ...state,
+            estado: query.data.estado,
+            retryCount: state.retryCount + query.data.retryCount.increment,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            revision: state.revision + query.data.revision.increment,
+          };
+          return { count: 1 };
+        }
+        if (query.where.revision === state.revision && Array.isArray(query.where.OR)) {
+          state = {
+            ...state,
+            estado: query.data.estado,
+            leaseOwner: query.data.leaseOwner,
+            leaseExpiresAt: query.data.leaseExpiresAt,
+            revision: state.revision + query.data.revision.increment,
+          };
+          return { count: 1 };
+        }
+        return { count: 0 };
+      },
+    },
+    eventoOutboxEstoque: { create: async ({ data }) => data },
+    $transaction: async (callback, options) => {
+      transactionOptions.push(options);
+      return callback(prisma);
+    },
+  };
+  const service = createStockSyncService({
+    prisma,
+    canonicalService: {},
+    env: ENABLED_ENV,
+    clock: () => now,
+  });
+
+  const acquired = await service.acquireLease({ empresaId: 1, runId: 20, owner: "worker-new" });
+
+  assert.equal(acquired.leaseOwner, "worker-new");
+  assert.equal(acquired.retryCount, 1);
+  assert.equal(updates.length, 2);
+  assert.deepEqual(updates[0].where.AND, [{ leaseExpiresAt: expiredLeaseAt }, { revision: 6 }]);
+  assert.equal(updates[0].data.retryCount.increment, 1);
+  assert.deepEqual(transactionOptions, [{ maxWait: 1000, timeout: 5000 }]);
+});
+
 test("sync lease loss at final CAS does not release or fail a lease it no longer owns", async () => {
   const now = new Date();
   const run = {
