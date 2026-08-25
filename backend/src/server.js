@@ -36,6 +36,7 @@ const { createAICommerceOrchestrator } = require("./ai-commerce/orchestrator");
 const { MockCommerceAIConnection, UnconfiguredCommerceAIConnection } = require("./ai-commerce/connection");
 const { createAICommerceEffects } = require("./ai-commerce/effects");
 const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("./tenant-features/service");
+const { parseAllowlist } = require("./stock/flags");
 const { isValidCpfCnpj } = require("./customer-360/service");
 const { createAgendaService } = require("./agenda/service");
 const {
@@ -135,10 +136,9 @@ if (prisma.commercialCatalogProduct && prisma.productOffer) {
   const aiEffects = createAICommerceEffects({ prisma, offerService: aiOffer });
   const aiMockEnabled = process.env.AI_COMMERCE_MOCK_ENABLED === "true"
     && process.env.AI_COMMERCE_RUNTIME_CANARY_APPROVED === "true";
-  const aiAllowlist = String(process.env.AI_COMMERCE_TENANT_ALLOWLIST || "")
-    .split(",")
-    .map((value) => Number(value.trim()))
-    .filter((value) => Number.isSafeInteger(value) && value > 0);
+  // Keep AI tenant parsing fail-closed like stock: one malformed token must
+  // not silently enable a valid subset of the requested allowlist.
+  const aiAllowlist = [...parseAllowlist(process.env.AI_COMMERCE_TENANT_ALLOWLIST)];
   const aiConnection = aiMockEnabled
     ? new MockCommerceAIConnection({ enabled: true, allowlist: aiAllowlist })
     : new UnconfiguredCommerceAIConnection();

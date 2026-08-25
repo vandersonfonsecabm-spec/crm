@@ -72,6 +72,17 @@ test("deterministic search is tenant-scoped and bounded", async () => {
   assert.equal((await search.search({ empresaId: 2, query: "rocadeira" })).items.length, 0);
 });
 
+test("availability endpoint redacts internal balance evidence unless explicitly internal", async () => {
+  const prisma = fakePrisma();
+  const catalog = createCommercialCatalogService({ prisma });
+  const availability = createSellableAvailabilityService({ prisma, catalogService: catalog });
+  const external = await availability.getSellableAvailability({ empresaId: 1, catalogProductId: 1 });
+  const internal = await availability.getSellableAvailability({ empresaId: 1, catalogProductId: 1, internal: true });
+  assert.deepEqual(external.evidence, []);
+  assert.equal(internal.evidence[0].id, 4);
+  assert.equal(internal.stockProductId, 7);
+});
+
 test("ProductOffer snapshots price/availability and expires or revalidates materially", async () => {
   const prisma = fakePrisma();
   const catalog = createCommercialCatalogService({ prisma });

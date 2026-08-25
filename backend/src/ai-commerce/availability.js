@@ -60,7 +60,10 @@ function createSellableAvailabilityService({ prisma, clock = () => new Date(), p
       quantityRequested: requested === null ? undefined : requested,
       unit: evaluated.unit,
       stockMaterialVersion: evaluated.stockMaterialVersion,
-      evidence: evaluated.evidence,
+      // Balance/source/lot identifiers are internal audit material. The
+      // customer-facing availability endpoint must remain customer-safe;
+      // tool/audit callers can opt into the evidence explicitly.
+      evidence: internal ? evaluated.evidence : [],
     };
     if (internal) response.stockProductId = catalog.stockProductId;
     return response;
