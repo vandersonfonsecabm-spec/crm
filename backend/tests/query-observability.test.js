@@ -115,5 +115,9 @@ test("createPrismaClient conecta a observabilidade sem abrir o banco no teste", 
     },
   });
   assert.equal(client.options.datasourceUrl.endsWith("query-observability.db"), true);
+  assert.deepEqual(client.options.log, [
+    { emit: "event", level: "query" },
+    { emit: "event", level: "error" },
+  ]);
   assert.deepEqual(client.listeners.map((item) => item.event), ["query", "error"]);
 });

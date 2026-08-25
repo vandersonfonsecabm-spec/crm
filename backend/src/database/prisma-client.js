@@ -2,7 +2,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { PrismaClient } = require("@prisma/client");
 const { applyMaintenanceReadOnlyGuard } = require("./maintenance-read-only");
-const { attachPrismaQueryObservability } = require("./query-observability");
+const { attachPrismaQueryObservability, envEnabled } = require("./query-observability");
 
 const TEST_DATABASE_ROOT = path.resolve(os.tmpdir(), "crm-prisma-tests");
 const REPOSITORY_ROOT = path.resolve(__dirname, "..", "..", "..");
@@ -33,6 +33,9 @@ function validateTestDatabaseUrl(rawUrl, options = {}) {
 function createPrismaClient(options = {}) {
   const env = options.env || process.env;
   const PrismaClientClass = options.PrismaClientClass || PrismaClient;
+  const prismaClientOptions = envEnabled(env)
+    ? { log: [{ emit: "event", level: "query" }, { emit: "event", level: "error" }] }
+    : {};
   const finalize = (client) => {
     const guarded = applyMaintenanceReadOnlyGuard(client, { env });
     attachPrismaQueryObservability(guarded, {
@@ -43,13 +46,16 @@ function createPrismaClient(options = {}) {
     return guarded;
   };
   if (env.NODE_ENV !== "test") {
-    return finalize(new PrismaClientClass());
+    return finalize(new PrismaClientClass(prismaClientOptions));
   }
   if (String(env.CRM_TEST_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql") {
-    return finalize(new PrismaClientClass({ datasourceUrl: validateTestPostgresUrl(env.CRM_TEST_DATABASE_URL, env) }));
+    return finalize(new PrismaClientClass({
+      ...prismaClientOptions,
+      datasourceUrl: validateTestPostgresUrl(env.CRM_TEST_DATABASE_URL, env),
+    }));
   }
   const datasourceUrl = validateTestDatabaseUrl(env.CRM_TEST_DATABASE_URL, options);
-  return finalize(new PrismaClientClass({ datasourceUrl }));
+  return finalize(new PrismaClientClass({ ...prismaClientOptions, datasourceUrl }));
 }
 
 function validateTestPostgresUrl(rawUrl, env = process.env) {
