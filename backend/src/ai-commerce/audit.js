@@ -219,7 +219,8 @@ function sanitizeAuditPayload(payload = {}) {
 }
 
 function redactSensitiveAuditData(value, depth = 0) {
-  if (depth > 5 || value === null || value === undefined) return value ?? null;
+  if (depth > 5) return "[truncated]";
+  if (value === null || value === undefined) return value ?? null;
   if (Array.isArray(value)) return value.slice(0, 100).map((item) => redactSensitiveAuditData(item, depth + 1));
   if (typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).slice(0, 100).map(([key, item]) => [

@@ -50,7 +50,7 @@ function createAICommerceEffects({ prisma, offerService, clock = () => new Date(
     if (!model?.findFirst || !model?.create) throw effectError("AI_INTEREST_UNAVAILABLE", "Registro de interesse indisponivel.", 503);
     const existing = await model.findFirst({ where: { empresaId, idempotencyKey } });
     if (existing) {
-      if (existing.offerId !== offer.offerId || existing.conversationId !== conversationId) throw effectError("AI_INTEREST_IDEMPOTENCY_CONFLICT", "Chave de interesse reutilizada com dados diferentes.", 409);
+      if (existing.offerId !== offer.offerId || Number(existing.conversationId) !== conversationId || (customerId !== null && Number(existing.customerId || 0) !== Number(customerId))) throw effectError("AI_INTEREST_IDEMPOTENCY_CONFLICT", "Chave de interesse reutilizada com dados diferentes.", 409);
       return publicEffect(existing, "interest");
     }
     const now = clock();
@@ -89,7 +89,12 @@ function createAICommerceEffects({ prisma, offerService, clock = () => new Date(
     const model = prisma.aICommerceOpportunityDraft || prisma.aiCommerceOpportunityDraft;
     if (!model?.findFirst || !model?.create) throw effectError("AI_DRAFT_UNAVAILABLE", "Rascunho de oportunidade indisponivel.", 503);
     const existing = await model.findFirst({ where: { empresaId, idempotencyKey } });
-    if (existing) return publicEffect(existing, "opportunityDraft");
+    if (existing) {
+      const existingOfferIds = parseOfferIds(existing.offerIdsJson, existing.primaryOfferId);
+      const requestedOfferIds = offers.map((offer) => String(offer.offerId));
+      if (Number(existing.conversationId) !== conversationId || (customerId !== null && Number(existing.customerId || 0) !== Number(customerId)) || !sameOfferIds(existingOfferIds, requestedOfferIds)) throw effectError("AI_DRAFT_IDEMPOTENCY_CONFLICT", "Chave de oportunidade reutilizada com dados diferentes.", 409);
+      return publicEffect(existing, "opportunityDraft");
+    }
     const now = clock();
     const row = await createWithIdempotencyRace({ model, where: { empresaId, idempotencyKey }, data: {
       empresaId,
@@ -125,7 +130,10 @@ function createAICommerceEffects({ prisma, offerService, clock = () => new Date(
     const model = prisma.aICommerceHandoff || prisma.aiCommerceHandoff;
     if (!model?.findFirst || !model?.create) throw effectError("AI_HANDOFF_UNAVAILABLE", "Handoff comercial indisponivel.", 503);
     const existing = await model.findFirst({ where: { empresaId, idempotencyKey } });
-    if (existing) return publicEffect(existing, "handoff");
+    if (existing) {
+      if (Number(existing.conversationId) !== conversationId || String(existing.draftId || "") !== String(draftId || "") || String(existing.opportunityDraftId || "") !== String(opportunityDraftId || "") || String(existing.offerId || "") !== String(input.offerId || "")) throw effectError("AI_HANDOFF_IDEMPOTENCY_CONFLICT", "Chave de handoff reutilizada com dados diferentes.", 409);
+      return publicEffect(existing, "handoff");
+    }
     const now = clock();
     const row = await createWithIdempotencyRace({ model, where: { empresaId, idempotencyKey }, data: {
       empresaId,
@@ -186,6 +194,18 @@ async function createWithIdempotencyRace({ model, where, data, onExisting, confl
   }
 }
 function isUniqueConflict(error) { return error?.code === "P2002" || /unique|duplicate/i.test(String(error?.message || "")); }
+function parseOfferIds(value, fallback) {
+  try {
+    const parsed = JSON.parse(String(value || "[]"));
+    if (Array.isArray(parsed)) return parsed.map((item) => String(item)).filter(Boolean).slice(0, 3);
+  } catch {}
+  return fallback ? [String(fallback)] : [];
+}
+function sameOfferIds(left, right) {
+  const a = [...new Set(left.map(String))].sort();
+  const b = [...new Set(right.map(String))].sort();
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
 function boundedText(value) { const text = String(value || "").trim(); return text ? text.slice(0, 500) : null; }
 function boundedKey(value, code) { const text = String(value || "").trim(); if (!/^[A-Za-z0-9:_-]{8,200}$/.test(text)) throw effectError(code, "Idempotencia obrigatoria.", 422); return text; }
 function positiveOptional(value) { if (value === null || value === undefined || value === "") return null; return requirePositiveId(value, "AI_CUSTOMER_ID_INVALID"); }

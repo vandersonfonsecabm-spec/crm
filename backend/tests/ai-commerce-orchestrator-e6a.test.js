@@ -119,6 +119,15 @@ test("tool and audit redaction covers apiKey/privateKey/accessKey recursively", 
   assert.equal(safe.input.apiKey, "[redacted]");
   assert.equal(safe.input.nested.private_key, "[redacted]");
   assert.equal(safe.input.nested.access_key, "[redacted]");
+  let deep = { apiKey: "deep-secret" };
+  for (let index = 0; index < 8; index += 1) deep = { nested: deep };
+  const deepTools = createCommercialToolRegistry({ services: { searchCommercialCatalog: async (input) => [input] } });
+  const deepToolResult = await deepTools.execute("searchCommercialCatalog", { query: "deep", filters: { attributes: deep } }, { empresaId: 1, runId: "redaction-deep" });
+  assert.equal(JSON.stringify(deepToolResult).includes("deep-secret"), false);
+  assert.equal(JSON.stringify(deepToolResult).includes("[truncated]"), true);
+  const deepAudit = audit.sanitize({ input: deep });
+  assert.equal(JSON.stringify(deepAudit).includes("deep-secret"), false);
+  assert.equal(JSON.stringify(deepAudit).includes("[truncated]"), true);
 });
 
 test("tool invocation counters expire and do not grow without bound", async () => {
@@ -151,6 +160,37 @@ test("effects reconcile a P2002 idempotency race to the winner row", async () =>
   const result = await effects.registerProductInterest({ offerId: "offer-1" }, { empresaId: 1, conversationId: 7, actorUsuarioId: 2, idempotencyKey: "interest-race-1" });
   assert.equal(result.id, "interest-1");
   assert.equal(result.customerSafe, true);
+});
+
+test("opportunity replay revalidates conversation and offer set before returning existing", async () => {
+  const prisma = {
+    usuario: { findFirst: async () => ({ id: 2, papel: "ADMIN" }) },
+    cliente: { findFirst: async () => null },
+    aICommerceOpportunityDraft: {
+      findFirst: async () => ({ id: "opp-1", empresaId: 1, conversationId: 7, customerId: null, primaryOfferId: "offer-1", offerIdsJson: JSON.stringify(["offer-1"]), status: "DRAFT", revision: 1 }),
+      create: async () => { throw new Error("create should not run"); },
+    },
+  };
+  const effects = createAICommerceEffects({ prisma, offerService: { get: async ({ offerId }) => ({ valid: true, status: "ACTIVE", conversationId: 7, offerId, catalogProductId: 4 }) } });
+  const replay = await effects.createOpportunityDraft({ offerIds: ["offer-1"] }, { empresaId: 1, conversationId: 7, actorUsuarioId: 2, idempotencyKey: "opportunity-replay-1" });
+  assert.equal(replay.id, "opp-1");
+  await assert.rejects(() => effects.createOpportunityDraft({ offerIds: ["offer-1"] }, { empresaId: 1, conversationId: 8, actorUsuarioId: 2, idempotencyKey: "opportunity-replay-1" }), { code: "AI_OFFER_CONTEXT_MISMATCH" });
+});
+
+test("handoff replay revalidates draft/opportunity/offer context before returning existing", async () => {
+  const prisma = {
+    usuario: { findFirst: async () => ({ id: 2, papel: "ADMIN" }) },
+    aICommerceDraft: { findFirst: async () => null },
+    aICommerceOpportunityDraft: { findFirst: async () => null },
+    aICommerceHandoff: {
+      findFirst: async () => ({ id: "handoff-1", empresaId: 1, conversationId: 7, draftId: null, opportunityDraftId: null, offerId: "offer-1", status: "REQUESTED", revision: 1 }),
+      create: async () => { throw new Error("create should not run"); },
+    },
+  };
+  const effects = createAICommerceEffects({ prisma, offerService: { get: async ({ offerId }) => ({ valid: true, status: "ACTIVE", conversationId: 7, offerId, catalogProductId: 4 }) } });
+  const replay = await effects.handoffToSalesperson({ reason: "seller", offerId: "offer-1" }, { empresaId: 1, conversationId: 7, actorUsuarioId: 2, idempotencyKey: "handoff-replay-1" });
+  assert.equal(replay.id, "handoff-1");
+  await assert.rejects(() => effects.handoffToSalesperson({ reason: "seller", offerId: "offer-1" }, { empresaId: 1, conversationId: 8, actorUsuarioId: 2, idempotencyKey: "handoff-replay-1" }), { code: "AI_OFFER_CONTEXT_MISMATCH" });
 });
 
 test("tool audit usa idempotência por invocação, não a chave única do run", async () => {
