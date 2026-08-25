@@ -3,7 +3,7 @@
 ## V69 — GA3 final runtime hardening (2026-08-25)
 
 - Código final/runtime: `cf7e87f961b05996d4e806ab7bcfd657b2b111f0`; master/release
-  apontam para o overlay documental `c885729`. API Railway `6fe8c55f` e worker `e9fcc843` estão
+  apontam para um overlay documental sem mudança de runtime. API Railway `6fe8c55f` e worker `e9fcc843` estão
   SUCCESS/RUNNING; migrations de startup, health/ready e banco OK.
 - Sol bloqueadores corrigidos: replay sequencial de opportunity/handoff agora
   revalida parents/ofertas/conversa; redaction profunda trunca em `[truncated]`.
