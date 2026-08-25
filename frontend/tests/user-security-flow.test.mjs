@@ -398,6 +398,7 @@ test("produção encaminha auth pelo mesmo host antes do fallback da SPA", async
   const [vercelConfig, rootVercelConfig] = [JSON.parse(vercelConfigSource), JSON.parse(await source("../vercel.json"))];
 
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "crm-murex-six-83.vercel.app" }), "/api");
+  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "crm-vand-s-projects.vercel.app" }), "/api");
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app", configuredApiUrl: "https://api-homolog.example" }), "https://api-homolog.example");
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app", configuredApiUrl: "https://api-production-875f9.up.railway.app" }), "");
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app" }), "");

@@ -3,7 +3,10 @@ import { isAuthRefreshCoordinationError, runAuthRefreshSingleFlight } from "./au
 
 const runtimeEnv = import.meta.env as ImportMetaEnv | undefined;
 const configuredApiUrl = runtimeEnv?.VITE_API_URL?.trim();
-const CANONICAL_PRODUCTION_HOST = "crm-murex-six-83.vercel.app";
+const OFFICIAL_PRODUCTION_HOSTS = new Set([
+  "crm-murex-six-83.vercel.app",
+  "crm-vand-s-projects.vercel.app",
+]);
 const OFFICIAL_PRODUCTION_API_ORIGIN = "https://api-production-875f9.up.railway.app";
 const API_URL = resolveApiBaseUrl({
   configuredApiUrl,
@@ -2639,9 +2642,13 @@ export function resolveApiBaseUrl({
   production: boolean;
 }) {
   if (!production) return configuredApiUrl || "http://localhost:3001";
-  if (hostname?.toLowerCase() === CANONICAL_PRODUCTION_HOST) return "/api";
+  if (isOfficialProductionHost(hostname)) return "/api";
   if (!configuredApiUrl || isOfficialProductionApi(configuredApiUrl)) return "";
   return configuredApiUrl;
+}
+
+function isOfficialProductionHost(hostname?: string) {
+  return OFFICIAL_PRODUCTION_HOSTS.has(String(hostname || "").trim().toLowerCase());
 }
 
 function isOfficialProductionApi(apiUrl: string) {
