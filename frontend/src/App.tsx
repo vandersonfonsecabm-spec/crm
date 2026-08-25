@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Button, ErrorState } from "./components/ui";
-import Dashboard from "./pages/Dashboard";
 import { Login } from "./pages/Login";
 import PublicSecurityFlow from "./pages/PublicSecurityFlow";
 import {
@@ -13,6 +12,44 @@ import {
   shouldInvalidateAuthSession,
 } from "./services/crmApi";
 import type { AuthSession } from "./services/crmApi";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+
+type DashboardBoundaryProps = { children: ReactNode };
+type DashboardBoundaryState = { hasError: boolean };
+
+class DashboardBoundary extends Component<DashboardBoundaryProps, DashboardBoundaryState> {
+  state: DashboardBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): DashboardBoundaryState {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <main className="login-shell flex min-h-screen items-center justify-center px-4" role="alert">
+          <div className="w-full max-w-md">
+            <ErrorState
+              description="O painel não carregou. Atualize a página para tentar novamente sem perder sua sessão."
+              onRetry={() => window.location.reload()}
+              title="Não foi possível carregar o painel"
+            />
+          </div>
+        </main>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function DashboardLoading() {
+  return (
+    <main className="login-shell flex min-h-screen items-center justify-center px-4" aria-busy="true">
+      <p aria-live="polite" className="text-sm text-slate-400" role="status">Carregando painel...</p>
+    </main>
+  );
+}
 
 type PublicSecurityMode = "recovery" | "reset" | "invite";
 
@@ -131,7 +168,13 @@ function App() {
     );
   }
 
-  return <Dashboard initialAuthSession={validatedSession} onLogout={sair} />;
+  return (
+    <DashboardBoundary>
+      <Suspense fallback={<DashboardLoading />}>
+        <Dashboard initialAuthSession={validatedSession} onLogout={sair} />
+      </Suspense>
+    </DashboardBoundary>
+  );
 }
 
 export default App;
