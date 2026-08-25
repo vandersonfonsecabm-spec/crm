@@ -1,0 +1,35 @@
+LUNAMAX GA3 SCORECARD
+
+CURRENT_STATE_AS_OF=2026-08-25 BRT
+START_SOURCE_SHA=25b36e639612275abc826f36f8f89a66fd06701a
+FINAL_SOURCE_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
+FINAL_RUNTIME_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
+DOCUMENT_STATUS=GA3_COMPLETE_WITH_EXTERNAL_GATES
+
+AGENTS_ACTUALLY_USED=6 scoped specialists + root
+PEAK_SIMULTANEOUS_SUBAGENTS=3
+OVERLAPPING_FILE_MUTATIONS=0 by ownership plan
+DUPLICATE_PRODUCTION_DEPLOYS=0 (automatic deploy per authorized push only)
+FINDINGS_HIGH_RESOLVED=4
+FINDINGS_MEDIUM_RESOLVED=9
+FINDINGS_ADVISORY_OPEN=1 (checkpoint IO)
+FINDINGS_BLOCKED_EXTERNAL=2 (real PG / live pg_stat)
+
+SCOPES
+
+- Security/backend: `ga2_security_backend` — runs/context/approval/offer/settings.
+- Frontend: `ga2_frontend_product` — session bootstrap regression.
+- Infra/DB: `ga2_infra_db` — runtime, PostgreSQL, worker, checkpoints.
+- Architecture/release: `e6a_release_command_review` — legacy/dead/component map.
+- Catalog: `e6a_catalog_backend` — availability/search/ProductOffer.
+- Tools/effects: `e6a_orchestrator_backend` — schemas/redaction/idempotency.
+
+EVIDENCE
+
+- E6A combined tests: 43/43 PASS.
+- Backend global isolated runner: exit 0; PostgreSQL-only intentionally separate.
+- Frontend: 195/195, build PASS, lint PASS.
+- API/worker: SUCCESS/RUNNING; health/ready/database OK.
+- Protected fixture hash unchanged: `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+
+No score is claimed for a live disposable PostgreSQL cluster because none was available.

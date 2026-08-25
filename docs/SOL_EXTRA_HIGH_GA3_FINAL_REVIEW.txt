@@ -1,0 +1,24 @@
+SOL EXTRA HIGH — GA3 FINAL REVIEW
+
+CURRENT_STATE_AS_OF=2026-08-25 BRT
+START_SOURCE_SHA=25b36e639612275abc826f36f8f89a66fd06701a
+FINAL_SOURCE_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
+FINAL_RUNTIME_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
+DOCUMENT_STATUS=SOL_REVIEWED_WITH_EXTERNAL_GATES
+
+VERDICT=SHIP_WITH_EXPLICIT_EXTERNAL_LIMITATIONS
+
+Adversarial checks reviewed:
+
+- cross-tenant idempotency/replay, foreign IDs and client context spoofing;
+- forged price/availability/ProductOffer and stale revalidation;
+- approval bypass, duplicate effects, P2002 race, settings TOCTOU;
+- unknown tool fields, required fields, nested credential redaction and audit caps;
+- mixed units, duplicate balances, authority ties, precision/overflow;
+- search query bound/N+1 and repeated preview growth;
+- auth bootstrap duplicate, production flags and no outbound;
+- worker startup, health/readiness, stock cycles and migration gates.
+
+All causal test gates relevant to the changes passed. The verdict does not turn
+the missing disposable PostgreSQL cluster, live pg_stat_statements, load test,
+or historical checkpoint advisory into PASS.

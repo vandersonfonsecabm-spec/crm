@@ -1,0 +1,48 @@
+Auditoria GA3 de performance, segurança, confiabilidade, arquitetura e code health
+
+CURRENT_STATE_AS_OF=2026-08-25 BRT
+START_SOURCE_SHA=25b36e639612275abc826f36f8f89a66fd06701a
+CURRENT_SOURCE_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
+FINAL_RUNTIME_SHA=d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950
+DOCUMENT_STATUS=GA3_PASS_WITH_EXPLICIT_EXTERNAL_LIMITATIONS
+
+RESULTADO
+
+GA3_PERFORMANCE_SECURITY_RELIABILITY_CODE_HEALTH_PASS_WITH_EXTERNAL_GATES
+
+O que foi corrigido
+
+- Replay cross-tenant de idempotency, runId controlado pelo cliente e contexto AI spoofável.
+- Bypass de aprovação HITL por approvedActions no run público.
+- Oferta ProductOffer adulterada/sem revalidação.
+- Settings TOCTOU sem CAS.
+- Evidence interno de estoque na resposta externa e parser de allowlist permissivo.
+- Busca N+1/overfetch, soma de estoque sem unidade/autoridade/precisão e preview sem reuse/cap.
+- Tool schemas incompletos, redaction de chaves ausente, contador de ferramentas e auditoria sem limites.
+- Corrida P2002 de efeitos idempotentes.
+- Chamada `/auth/me` duplicada no bootstrap frontend.
+
+Provas
+
+- E6A focal integrado: 43/43 PASS.
+- Backend global em sandbox com cópia temporária do fixture protegido: exit 0; tenant gates/migrations passaram; `backend/prisma/dev.db` original permaneceu SHA `6116ca…42533`.
+- Frontend: 195/195, TypeScript/Vite build e lint PASS.
+- Railway API/worker em `d6b665e`: deployments `59c6142f`/`482ac3c0` SUCCESS; startup migrations concluídas; health/ready 200/database ok.
+- Vercel production `dpl_65YLScSrTpiZNnaB5aCiLc2FYwhX` READY em `a3c0600`; a árvore frontend é idêntica entre `a3c0600` e `d6b665e`, alias canonical HTTP 200.
+- Flags AI/Meta OFF, outbound 0; worker ciclos sem falhas.
+
+Pendências honestas
+
+- `POSTGRES_REAL_REHEARSAL=BLOCKED_ENVIRONMENT`: Docker/psql/initdb/URL temporária não disponíveis. O comando `npm --prefix backend run test:postgres:real -- --dry-run` e o runner read-only estão prontos; não houve PASS artificial.
+- `PG_STAT_STATEMENTS_LIVE=BLOCKED_EXTERNAL`: script só leitura rejeita URLs oficiais e não cria/resetta extensão.
+- Checkpoint histórico ~247s: advisory aberto para monitoramento/correlação; sem tuning especulativo.
+- Não foi executado load test 5–100 nem EXPLAIN ANALYZE de produção; medir isso requer janela própria/autorização.
+
+Estado de segurança
+
+AI_REAL_PROVIDER_CONNECTED=NO
+AI_AUTO_REPLY_ENABLED=NO
+AI_EXTERNAL_OUTBOUND=0
+META_REAL_CHANNELS=OFF
+
+Nenhuma migration, schema, backup oficial, dado oficial ou credencial foi alterado pela GA3. A nova baseline só deve ser congelada depois de anexar este pacote e confirmar o SHA final documental.

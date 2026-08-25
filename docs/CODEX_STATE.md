@@ -1,5 +1,27 @@
 # Estado atual do CRM
 
+## V68 — GA3 performance/security/reliability (2026-08-25)
+
+- Código final da rodada: `d6b665ea8c1cb8eb6d4e80a3f3210aa2ee433950`; master e
+  release apontam para esse SHA. API Railway `59c6142f` e worker `482ac3c0`
+  estão SUCCESS/RUNNING; startup concluiu migrations e `/health`/`/ready` 200
+  com banco OK.
+- Correções causais: contexto AI tenant-scoped, idempotência/runId server-owned,
+  ProductOffer revalidado, aprovação sem bypass, settings CAS, evidence
+  redaction, allowlist fail-closed, schemas/redaction/TTL de tools, efeitos
+  P2002 idempotentes, disponibilidade sem mistura de fontes/unidades, busca
+  sem N+1 por padrão e previews bounded, além do bootstrap frontend sem
+  `/auth/me` duplicado.
+- E6A combinado `43/43 PASS`; regressão backend global isolada no fixture
+  temporário terminou exit 0; frontend `195/195`, build e lint PASS. O fixture
+  protegido permaneceu SHA `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- Vercel production permanece READY em `dpl_65YLScSrTpiZNnaB5aCiLc2FYwhX`,
+  SHA `a3c0600`; a árvore frontend não mudou entre `a3c0600` e `d6b665e`.
+- AI/Mock/canary/Meta/outbound permanecem OFF/zero. `POSTGRES_REAL_REHEARSAL`
+  e `PG_STAT_STATEMENTS_LIVE` seguem BLOCKED_EXTERNAL por falta de Docker/URL
+  descartável; checkpoint histórico ~247s é advisory monitorado, sem tuning
+  especulativo. Nenhuma migration/schema/dado oficial foi alterado.
+
 ## V67 - publicacao da manutencao pos-GA2 (2026-08-25)
 
 - Source candidato corrigido: `43f6e51`; commit publicado no master: `0a05257`.
