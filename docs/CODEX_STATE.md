@@ -1712,3 +1712,26 @@ integracoes autorizadas.
   anexadas e o relatório foi colado na conversa fixada do SaaS. O seletor do
   Chrome bloqueou o upload dos documentos locais; eles permanecem disponíveis
   no diretório para recuperação.
+
+## GA3 — otimização inicial do bundle (2026-08-25)
+
+- A release frontend-only está na branch `feature/ga3-bundle-release`, SHA
+  `7641e88b40b439d783a43e92b2cc3cb00123017c`, publicada no Vercel oficial
+  pelo deployment `dpl_2qD6wmXDU111Lrzg9FnXPJCpDfa8` em READY.
+- O diff da release contém somente `frontend/src/App.tsx`, o teste do split e
+  dois relatórios documentais. Nenhum backend, schema, migration, worker ou V1
+  de propostas foi incluído.
+- Baseline `origin/master`: JS inicial 869,25 kB / 231,30 kB gzip. Após o
+  split: 284,05 kB / 88,83 kB gzip; redução de 67,3% minificado e 61,6% gzip.
+  O chunk assíncrono do Dashboard permanece 589,26 kB / 145,19 kB gzip como
+  advisory; nenhum segundo split foi aplicado.
+- Gates no SHA da release: frontend 198/198, split 2/2, TypeScript, build,
+  lint e `git diff --check` PASS.
+- O staging Railway/Vercel `ga3-bundle-staging` permanece sintético, sem
+  worker e com IA, Meta, automações e outbound desligados. O QA autenticado
+  passou no Dashboard, rotas diretas, refresh, logout/login, console e
+  viewport 390x844; requests equivalentes na API de produção durante o QA
+  foram zero.
+- Smoke pós-promoção por GET confirmou frontend, rota direta, `/api/health`,
+  `/api/ready` e referência ao chunk lazy. QA autenticado em produção não foi
+  executado por desenho; a autenticação foi validada no staging isolado.
