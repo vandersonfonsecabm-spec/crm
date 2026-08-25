@@ -3,7 +3,7 @@
 Data: 25/08/2026
 Worktree: `C:\Users\vande\crm-saas-frontend-bundle-release`
 Branch: `feature/ga3-bundle-release`
-Head: `55aac370880fb17b46d5da88f6320613bf8e742f`
+Head: `b957a4bf353ef444b73be36af3b23dccac73a7ec`
 
 ## Baseline congelada
 

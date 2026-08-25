@@ -1715,9 +1715,10 @@ integracoes autorizadas.
 
 ## GA3 — otimização inicial do bundle (2026-08-25)
 
-- A release frontend-only está na branch `feature/ga3-bundle-release`, SHA
-  `7641e88b40b439d783a43e92b2cc3cb00123017c`, publicada no Vercel oficial
-  pelo deployment `dpl_2qD6wmXDU111Lrzg9FnXPJCpDfa8` em READY.
+- A release frontend-only está na branch `feature/ga3-bundle-release`; o
+  candidato runtime é `7641e88b40b439d783a43e92b2cc3cb00123017c` e o SHA final
+  documental é `b957a4bf353ef444b73be36af3b23dccac73a7ec`, publicado no Vercel
+  oficial pelo deployment final em READY.
 - O diff da release contém somente `frontend/src/App.tsx`, o teste do split e
   dois relatórios documentais. Nenhum backend, schema, migration, worker ou V1
   de propostas foi incluído.
