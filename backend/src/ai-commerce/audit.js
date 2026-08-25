@@ -79,7 +79,7 @@ function normalizeModelData(kind, payload) {
     ...(payload.turnId ? { turnId: String(payload.turnId).slice(0, 128) } : {}),
     status: String(payload.status || "RECORDED").slice(0, 40),
     correlationId: String(payload.correlationId || "").slice(0, 128) || null,
-    eventJson: JSON.stringify(payload),
+    eventJson: safeJson(payload, 64000),
     retentionUntil: Number.isNaN(retentionUntil.getTime()) ? new Date(occurredAt.getTime() + 30 * 24 * 60 * 60 * 1000) : retentionUntil,
   };
   if (kind === "run") return {
@@ -101,8 +101,8 @@ function normalizeModelData(kind, payload) {
     ...base,
     turnNumber: Number.isSafeInteger(payload.turn) ? payload.turn : 0,
     state: String(payload.state || "DISCOVERY").slice(0, 40),
-    decisionJson: JSON.stringify(payload.decision || {}),
-    toolResultsJson: JSON.stringify(payload.toolResults || {}),
+    decisionJson: safeJson(payload.decision || {}, 24000),
+    toolResultsJson: safeJson(payload.toolResults || {}, 32000),
     latencyMs: Number.isFinite(payload.durationMs) ? Math.max(0, Math.round(payload.durationMs)) : null,
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
     occurredAt,
@@ -121,8 +121,8 @@ function normalizeModelData(kind, payload) {
     name: String(payload.name || "unknown").slice(0, 100),
     classification: String(payload.classification || "READ").slice(0, 40),
     idempotencyKey: payload.idempotencyKey || context.idempotencyKey ? String(payload.idempotencyKey || context.idempotencyKey).slice(0, 200) : null,
-    inputJsonSanitized: JSON.stringify(payload.input || {}),
-    outputJsonSanitized: payload.output === undefined ? null : JSON.stringify(payload.output),
+    inputJsonSanitized: safeJson(payload.input || {}, 24000),
+    outputJsonSanitized: payload.output === undefined ? null : safeJson(payload.output, 32000),
     errorCode: payload.errorCode ? String(payload.errorCode).slice(0, 100) : null,
     latencyMs: Number.isFinite(payload.durationMs) ? Math.max(0, Math.round(payload.durationMs)) : null,
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
@@ -138,14 +138,14 @@ function normalizeModelData(kind, payload) {
     intent: payload.decision?.intent ? String(payload.decision.intent).slice(0, 100) : null,
     confidence: payload.decision?.confidence ? String(payload.decision.confidence).slice(0, 40) : null,
     nextAction: payload.decision?.nextAction ? String(payload.decision.nextAction).slice(0, 100) : null,
-    missingInformationJson: JSON.stringify(payload.decision?.missingInformation || []),
-    requestedToolsJson: JSON.stringify(payload.decision?.requestedTools || []),
+    missingInformationJson: safeJson(payload.decision?.missingInformation || [], 8000),
+    requestedToolsJson: safeJson(payload.decision?.requestedTools || [], 16000),
     draftResponse: payload.decision?.draftResponse ? String(payload.decision.draftResponse).slice(0, 2000) : null,
-    offerIdsJson: JSON.stringify(payload.decision?.offerIds || []),
+    offerIdsJson: safeJson(payload.decision?.offerIds || [], 4000),
     handoffReason: payload.decision?.handoffReason ? String(payload.decision.handoffReason).slice(0, 500) : null,
-    safetyFlagsJson: JSON.stringify(payload.decision?.safetyFlags || []),
-    policyFlagsJson: JSON.stringify(payload.decision?.policyFlags || []),
-    decisionJson: JSON.stringify(payload.decision || {}),
+    safetyFlagsJson: safeJson(payload.decision?.safetyFlags || [], 4000),
+    policyFlagsJson: safeJson(payload.decision?.policyFlags || [], 4000),
+    decisionJson: safeJson(payload.decision || {}, 24000),
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
     occurredAt,
     };
@@ -157,10 +157,10 @@ function normalizeModelData(kind, payload) {
       runId: String(payload.runId || draft.runId || "").slice(0, 128),
       conversationId: payload.conversationId || draft.conversationId,
       textSanitized: String(draft.text || "").slice(0, 2000),
-      offersJson: JSON.stringify(draft.productOffers || []),
-      questionsJson: JSON.stringify(draft.questions || []),
-      actionsJson: JSON.stringify(draft.actions || []),
-      warningsJson: JSON.stringify(draft.warnings || []),
+      offersJson: safeJson(draft.productOffers || [], 32000),
+      questionsJson: safeJson(draft.questions || [], 8000),
+      actionsJson: safeJson(draft.actions || [], 8000),
+      warningsJson: safeJson(draft.warnings || [], 8000),
       requiresHumanApproval: draft.requiresHumanApproval !== false,
       conversationRevision: draft.conversationRevision ? String(draft.conversationRevision).slice(0, 80) : null,
       revision: Number.isSafeInteger(draft.revision) ? draft.revision : 1,
@@ -174,7 +174,7 @@ function normalizeModelData(kind, payload) {
     ...base,
     action: String(payload.action || "UNSPECIFIED").slice(0, 100),
     reasonCode: payload.reasonCode ? String(payload.reasonCode).slice(0, 120) : null,
-    detailsJson: JSON.stringify(payload.details || {}),
+    detailsJson: safeJson(payload.details || {}, 16000),
     draftId: payload.draftId || null,
     actorUsuarioId: payload.actorUsuarioId || null,
     revision: Number.isSafeInteger(payload.revision) ? payload.revision : 1,
@@ -196,18 +196,38 @@ function normalizeModelData(kind, payload) {
   return base;
 }
 
+function safeJson(value, maxBytes) {
+  let serialized;
+  try { serialized = JSON.stringify(value); } catch { return JSON.stringify({ truncated: true, reason: "SERIALIZATION_FAILED" }); }
+  if (Buffer.byteLength(serialized, "utf8") <= maxBytes) return serialized;
+  return JSON.stringify({ truncated: true, reason: "AUDIT_PAYLOAD_LIMIT", maxBytes });
+}
+
 function sanitizeAuditPayload(payload = {}) {
-  const source = payload && typeof payload === "object" && payload.occurredAt instanceof Date
-    ? { ...payload, occurredAt: payload.occurredAt.toISOString() }
+  const source = payload && typeof payload === "object"
+    ? {
+      ...payload,
+      ...(payload.occurredAt instanceof Date ? { occurredAt: payload.occurredAt.toISOString() } : {}),
+      ...(payload.retentionUntil instanceof Date ? { retentionUntil: payload.retentionUntil.toISOString() } : {}),
+    }
     : payload;
   const safe = sanitizeData(source);
   if (!safe || typeof safe !== "object") return {};
-  const forbidden = ["prompt", "rawPrompt", "systemPrompt", "chainOfThought", "chain_of_thought", "reasoning", "secret", "token", "cookie", "authorization", "credential", "password", "databaseUrl"];
+  const forbidden = ["prompt", "rawPrompt", "systemPrompt", "chainOfThought", "chain_of_thought", "reasoning", "secret", "token", "cookie", "authorization", "credential", "password", "databaseUrl", "apiKey", "api_key", "privateKey", "private_key", "accessKey", "access_key"];
   for (const key of Object.keys(safe)) if (forbidden.some((fragment) => key.toLowerCase().includes(fragment.toLowerCase()))) safe[key] = "[redacted]";
-  if (safe.input) safe.input = sanitizeData(safe.input);
-  if (safe.output) safe.output = sanitizeData(safe.output);
-  if (safe.context) safe.context = sanitizeData(safe.context);
-  return safe;
+  return redactSensitiveAuditData(safe);
+}
+
+function redactSensitiveAuditData(value, depth = 0) {
+  if (depth > 5 || value === null || value === undefined) return value ?? null;
+  if (Array.isArray(value)) return value.slice(0, 100).map((item) => redactSensitiveAuditData(item, depth + 1));
+  if (typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).slice(0, 100).map(([key, item]) => [
+    String(key).slice(0, 120),
+    /api.?key|private.?key|access.?key|password|token|secret|cookie|authorization|credential|database|dsn|chain.?of.?thought|prompt/i.test(key)
+      ? "[redacted]"
+      : redactSensitiveAuditData(item, depth + 1),
+  ]));
 }
 
 function auditError(code, message, status) { const error = new Error(message); error.name = "AICommerceAuditError"; error.code = code; error.status = status; return error; }

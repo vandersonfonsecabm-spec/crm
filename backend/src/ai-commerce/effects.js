@@ -54,7 +54,7 @@ function createAICommerceEffects({ prisma, offerService, clock = () => new Date(
       return publicEffect(existing, "interest");
     }
     const now = clock();
-    const row = await model.create({ data: {
+    const row = await createWithIdempotencyRace({ model, where: { empresaId, idempotencyKey }, data: {
       empresaId,
       conversationId,
       customerId,
@@ -69,7 +69,10 @@ function createAICommerceEffects({ prisma, offerService, clock = () => new Date(
       correlationId: boundedText(context.correlationId),
       eventJson: JSON.stringify({ schemaVersion: "ProductInterestRegistered.v1", offerId: offer.offerId }),
       retentionUntil: new Date(now.getTime() + retentionMs),
-    } });
+    }, onExisting: (existing) => {
+      if (existing.offerId !== offer.offerId || Number(existing.conversationId) !== conversationId) throw effectError("AI_INTEREST_IDEMPOTENCY_CONFLICT", "Chave de interesse reutilizada com dados diferentes.", 409);
+      return existing;
+    }, conflictCode: "AI_INTEREST_IDEMPOTENCY_RACE" });
     return publicEffect(row, "interest");
   }
 
@@ -88,7 +91,7 @@ function createAICommerceEffects({ prisma, offerService, clock = () => new Date(
     const existing = await model.findFirst({ where: { empresaId, idempotencyKey } });
     if (existing) return publicEffect(existing, "opportunityDraft");
     const now = clock();
-    const row = await model.create({ data: {
+    const row = await createWithIdempotencyRace({ model, where: { empresaId, idempotencyKey }, data: {
       empresaId,
       conversationId,
       customerId,
@@ -102,7 +105,10 @@ function createAICommerceEffects({ prisma, offerService, clock = () => new Date(
       correlationId: boundedText(context.correlationId),
       eventJson: JSON.stringify({ schemaVersion: "SalesOpportunityDraftCreated.v1", offerIds: offers.map((offer) => offer.offerId) }),
       retentionUntil: new Date(now.getTime() + retentionMs),
-    } });
+    }, onExisting: (existing) => {
+      if (Number(existing.conversationId) !== conversationId || String(existing.primaryOfferId || "") !== String(offers[0].offerId)) throw effectError("AI_DRAFT_IDEMPOTENCY_CONFLICT", "Chave de oportunidade reutilizada com dados diferentes.", 409);
+      return existing;
+    }, conflictCode: "AI_DRAFT_IDEMPOTENCY_RACE" });
     return publicEffect(row, "opportunityDraft");
   }
 
@@ -121,7 +127,7 @@ function createAICommerceEffects({ prisma, offerService, clock = () => new Date(
     const existing = await model.findFirst({ where: { empresaId, idempotencyKey } });
     if (existing) return publicEffect(existing, "handoff");
     const now = clock();
-    const row = await model.create({ data: {
+    const row = await createWithIdempotencyRace({ model, where: { empresaId, idempotencyKey }, data: {
       empresaId,
       runId: boundedText(context.runId),
       conversationId,
@@ -140,7 +146,10 @@ function createAICommerceEffects({ prisma, offerService, clock = () => new Date(
       correlationId: boundedText(context.correlationId),
       eventJson: JSON.stringify({ schemaVersion: "AIHandoffRequested.v1", queueKey: "COMMERCIAL_INBOX" }),
       retentionUntil: new Date(now.getTime() + retentionMs),
-    } });
+    }, onExisting: (existing) => {
+      if (Number(existing.conversationId) !== conversationId || String(existing.draftId || "") !== String(draftId || "") || String(existing.opportunityDraftId || "") !== String(opportunityDraftId || "") || String(existing.offerId || "") !== String(input.offerId || "")) throw effectError("AI_HANDOFF_IDEMPOTENCY_CONFLICT", "Chave de handoff reutilizada com dados diferentes.", 409);
+      return existing;
+    }, conflictCode: "AI_HANDOFF_IDEMPOTENCY_RACE" });
     return publicEffect(row, "handoff");
   }
 
@@ -166,6 +175,17 @@ function sanitizeObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).slice(0, 20).map(([key, item]) => [String(key).slice(0, 80), typeof item === "string" ? item.replace(/[\u0000-\u001F\u007F]/g, "").slice(0, 240) : item]));
 }
+async function createWithIdempotencyRace({ model, where, data, onExisting, conflictCode }) {
+  try {
+    return await model.create({ data });
+  } catch (error) {
+    if (!isUniqueConflict(error) || typeof model.findFirst !== "function") throw error;
+    const existing = await model.findFirst({ where });
+    if (!existing) throw effectError(conflictCode, "Concorrencia de idempotencia nao pode ser reconciliada.", 409);
+    return onExisting ? onExisting(existing) : existing;
+  }
+}
+function isUniqueConflict(error) { return error?.code === "P2002" || /unique|duplicate/i.test(String(error?.message || "")); }
 function boundedText(value) { const text = String(value || "").trim(); return text ? text.slice(0, 500) : null; }
 function boundedKey(value, code) { const text = String(value || "").trim(); if (!/^[A-Za-z0-9:_-]{8,200}$/.test(text)) throw effectError(code, "Idempotencia obrigatoria.", 422); return text; }
 function positiveOptional(value) { if (value === null || value === undefined || value === "") return null; return requirePositiveId(value, "AI_CUSTOMER_ID_INVALID"); }

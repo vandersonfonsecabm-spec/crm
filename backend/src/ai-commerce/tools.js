@@ -4,6 +4,8 @@ const { sanitizeData } = require("./connection");
 
 const TOOL_REGISTRY_VERSION = "AICommerceToolRegistry.v1";
 const MAX_TOOL_CALLS = 5;
+const TOOL_COUNTER_TTL_MS = 15 * 60 * 1000;
+const MAX_TOOL_COUNTER_ENTRIES = 10000;
 const READ_TOOLS = Object.freeze([
   "searchCommercialCatalog",
   "getProductDetails",
@@ -20,7 +22,20 @@ const TOOL_NAMES = Object.freeze([...READ_TOOLS, ...SIDE_EFFECT_TOOLS]);
 
 const TOOL_DEFINITIONS = Object.freeze({
   searchCommercialCatalog: definition("searchCommercialCatalog", "READ", {
-    type: "object", properties: { query: { type: "string", maxLength: 240 }, filters: { type: "object" } }, additionalProperties: false,
+    type: "object", properties: { query: { type: "string", maxLength: 240 }, filters: {
+      type: "object",
+      properties: {
+        category: { type: "string", maxLength: 120 },
+        brand: { type: "string", maxLength: 120 },
+        minPrice: { type: ["string", "number"], maxLength: 40 },
+        maxPrice: { type: ["string", "number"], maxLength: 40 },
+        availability: { type: "string", maxLength: 40 },
+        limit: { type: "integer", minimum: 1, maximum: 20 },
+        tags: { type: "array", maxItems: 20, items: { type: "string", maxLength: 80 } },
+        attributes: { type: "object", additionalProperties: true },
+      },
+      additionalProperties: false,
+    } }, additionalProperties: false,
   }),
   getProductDetails: definition("getProductDetails", "READ", {
     type: "object", required: ["catalogProductId"], properties: { catalogProductId: { type: ["string", "integer"], maxLength: 160 } }, additionalProperties: false,
@@ -35,13 +50,13 @@ const TOOL_DEFINITIONS = Object.freeze({
     type: "object", required: ["catalogProductId"], properties: { catalogProductId: { type: ["string", "integer"], maxLength: 160 } }, additionalProperties: false,
   }),
   registerProductInterest: definition("registerProductInterest", "SIDE_EFFECT", {
-    type: "object", required: ["offerId"], properties: { offerId: { type: "string", maxLength: 128 }, desiredQuantity: { type: "string", maxLength: 40 }, preferences: { type: "object" } }, additionalProperties: false,
+    type: "object", required: ["offerId"], properties: { offerId: { type: "string", maxLength: 128 }, desiredQuantity: { type: "string", maxLength: 40 }, customerId: { type: "integer", minimum: 1 }, preferences: { type: "object", additionalProperties: true } }, additionalProperties: false,
   }),
   createOpportunityDraft: definition("createOpportunityDraft", "SIDE_EFFECT", {
-    type: "object", required: ["offerIds"], properties: { offerIds: { type: "array", maxItems: 3 }, summary: { type: "string", maxLength: 1000 } }, additionalProperties: false,
+    type: "object", required: ["offerIds"], properties: { offerIds: { type: "array", minItems: 1, maxItems: 3, items: { type: "string", maxLength: 128 } }, customerId: { type: "integer", minimum: 1 }, summary: { type: "string", maxLength: 1000 } }, additionalProperties: false,
   }),
   handoffToSalesperson: definition("handoffToSalesperson", "SIDE_EFFECT", {
-    type: "object", required: ["reason"], properties: { reason: { type: "string", maxLength: 500 }, summary: { type: "string", maxLength: 1500 } }, additionalProperties: false,
+    type: "object", required: ["reason"], properties: { reason: { type: "string", maxLength: 500 }, summary: { type: "string", maxLength: 1500 }, draftId: { type: "string", maxLength: 160 }, opportunityDraftId: { type: "string", maxLength: 160 }, offerId: { type: "string", maxLength: 128 } }, additionalProperties: false,
   }),
 });
 
@@ -50,6 +65,8 @@ function createCommercialToolRegistry({
   authorizeTool,
   audit,
   maxToolCalls = MAX_TOOL_CALLS,
+  counterTtlMs = TOOL_COUNTER_TTL_MS,
+  maxCounterEntries = MAX_TOOL_COUNTER_ENTRIES,
 } = {}) {
   const handlers = new Map();
   const counter = new Map();
@@ -68,10 +85,13 @@ function createCommercialToolRegistry({
     if (input.empresaId !== undefined && positiveId(input.empresaId) !== tenantId) {
       throw toolError("AI_TENANT_CONTEXT_INVALID", "Tenant nao pode ser fornecido pela ferramenta.", 403);
     }
+    const now = Date.now();
+    purgeCounters(now, counter, Math.max(1000, Number(counterTtlMs) || TOOL_COUNTER_TTL_MS), Math.min(MAX_TOOL_COUNTER_ENTRIES, Math.max(100, Number(maxCounterEntries) || MAX_TOOL_COUNTER_ENTRIES)));
     const runKey = String(context.runId || context.correlationId || "run").slice(0, 128);
-    const used = counter.get(runKey) || 0;
+    const entry = counter.get(runKey);
+    const used = entry && now - entry.lastUsedAt <= Math.max(1000, Number(counterTtlMs) || TOOL_COUNTER_TTL_MS) ? entry.count : 0;
     if (used >= limit) throw toolError("AI_TOOL_CALL_LIMIT", "Limite de ferramentas por turno excedido.", 429);
-    counter.set(runKey, used + 1);
+    counter.set(runKey, { count: used + 1, lastUsedAt: now });
     const invocationNumber = used + 1;
     const auditIdempotencyKey = `${String(context.idempotencyKey || runKey)}:${name}:${invocationNumber}`.slice(0, 200);
     validateInput(name, input);
@@ -95,7 +115,7 @@ function createCommercialToolRegistry({
       throw error;
     }
     const normalizedResult = name === "searchCommercialCatalog" ? normalizeSearchResult(result) : result;
-    const safeResult = sanitizeData(normalizedResult);
+    const safeResult = redactSensitiveData(sanitizeData(normalizedResult));
     await recordAudit(audit, "tool", { name, classification: definition.classification, context: safeContext, input: safeInput, output: safeResult, idempotencyKey: auditIdempotencyKey, status: "SUCCEEDED", durationMs: Date.now() - startedAt });
     return safeResult;
   }
@@ -150,6 +170,8 @@ function requireApproval(name, context) {
 
 function validateInput(name, input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw toolError("AI_TOOL_INPUT_INVALID", "Entrada de ferramenta invalida.", 422);
+  const schema = TOOL_DEFINITIONS[name]?.inputSchema;
+  if (schema) validateSchemaValue(input, schema, "input");
   if (name === "searchCommercialCatalog") {
     if (input.query !== undefined && (typeof input.query !== "string" || input.query.length > 240)) throw toolError("AI_TOOL_INPUT_INVALID", "Consulta invalida.", 422);
   }
@@ -160,10 +182,70 @@ function validateInput(name, input) {
   if (name === "handoffToSalesperson" && (!String(input.reason || "").trim() || String(input.reason).length > 500)) throw toolError("AI_TOOL_INPUT_INVALID", "Motivo de handoff invalido.", 422);
 }
 
+function validateSchemaValue(value, schema, path) {
+  if (schema.required && typeof value === "object" && value !== null) {
+    for (const field of schema.required) {
+      if (!Object.prototype.hasOwnProperty.call(value, field) || value[field] === undefined || value[field] === null || value[field] === "") {
+        throw toolError("AI_TOOL_INPUT_REQUIRED", `Campo obrigatorio ausente: ${path}.${field}.`, 422);
+      }
+    }
+  }
+  const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+  if (!types.some((type) => matchesSchemaType(value, type))) throw toolError("AI_TOOL_INPUT_INVALID", `Tipo invalido em ${path}.`, 422);
+  if (typeof value === "string") {
+    if (schema.maxLength !== undefined && value.length > schema.maxLength) throw toolError("AI_TOOL_INPUT_INVALID", `Campo excede limite em ${path}.`, 422);
+    if (schema.minLength !== undefined && value.length < schema.minLength) throw toolError("AI_TOOL_INPUT_INVALID", `Campo abaixo do limite em ${path}.`, 422);
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw toolError("AI_TOOL_INPUT_INVALID", `Numero invalido em ${path}.`, 422);
+    if (schema.minimum !== undefined && value < schema.minimum) throw toolError("AI_TOOL_INPUT_INVALID", `Numero abaixo do limite em ${path}.`, 422);
+    if (schema.maximum !== undefined && value > schema.maximum) throw toolError("AI_TOOL_INPUT_INVALID", `Numero acima do limite em ${path}.`, 422);
+  }
+  if (Array.isArray(value)) {
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) throw toolError("AI_TOOL_INPUT_INVALID", `Lista excede limite em ${path}.`, 422);
+    if (schema.minItems !== undefined && value.length < schema.minItems) throw toolError("AI_TOOL_INPUT_INVALID", `Lista abaixo do limite em ${path}.`, 422);
+    if (schema.items) value.forEach((item, index) => validateSchemaValue(item, schema.items, `${path}[${index}]`));
+  }
+  if (isPlainObject(value) && schema.type === "object") {
+    const properties = schema.properties || {};
+    if (schema.additionalProperties !== true) {
+      const unknown = Object.keys(value).filter((key) => !Object.prototype.hasOwnProperty.call(properties, key));
+      if (unknown.length) throw toolError("AI_TOOL_INPUT_UNKNOWN_FIELD", `Campos nao permitidos em ${path}: ${unknown.join(", ")}.`, 422);
+    }
+    for (const [key, childSchema] of Object.entries(properties)) {
+      if (Object.prototype.hasOwnProperty.call(value, key) && value[key] !== undefined && value[key] !== null) validateSchemaValue(value[key], childSchema, `${path}.${key}`);
+    }
+  }
+}
+
+function matchesSchemaType(value, type) {
+  if (type === "object") return isPlainObject(value);
+  if (type === "array") return Array.isArray(value);
+  if (type === "integer") return Number.isSafeInteger(value);
+  if (type === "number") return typeof value === "number" && Number.isFinite(value);
+  if (type === "string") return typeof value === "string";
+  if (type === "boolean") return typeof value === "boolean";
+  return true;
+}
+
+function isPlainObject(value) { return Boolean(value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)); }
+
 function sanitizeToolInput(input) {
-  const safe = sanitizeData(input || {});
+  const safe = redactSensitiveData(sanitizeData(input || {}));
   if (safe && typeof safe === "object") delete safe.empresaId;
   return safe;
+}
+
+function redactSensitiveData(value, depth = 0) {
+  if (depth > 5 || value === null || value === undefined) return value ?? null;
+  if (Array.isArray(value)) return value.slice(0, 100).map((item) => redactSensitiveData(item, depth + 1));
+  if (typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).slice(0, 100).map(([key, item]) => [
+    String(key).slice(0, 120),
+    /api.?key|private.?key|access.?key|password|token|secret|cookie|authorization|credential|database|dsn/i.test(key)
+      ? "[redacted]"
+      : redactSensitiveData(item, depth + 1),
+  ]));
 }
 
 function normalizeSearchResult(result) {
@@ -211,6 +293,13 @@ function referenceId(value) {
   return /^[A-Za-z0-9_-]{1,160}$/.test(String(value || "").trim());
 }
 
+function purgeCounters(now, counter, ttlMs, maxEntries) {
+  for (const [key, entry] of counter.entries()) if (!entry || now - entry.lastUsedAt > ttlMs) counter.delete(key);
+  if (counter.size <= maxEntries) return;
+  const oldest = [...counter.entries()].sort((a, b) => (a[1]?.lastUsedAt || 0) - (b[1]?.lastUsedAt || 0));
+  for (const [key] of oldest.slice(0, counter.size - maxEntries)) counter.delete(key);
+}
+
 module.exports = {
   TOOL_REGISTRY_VERSION,
   MAX_TOOL_CALLS,
@@ -218,6 +307,8 @@ module.exports = {
   TOOL_NAMES,
   READ_TOOLS,
   SIDE_EFFECT_TOOLS,
+  TOOL_COUNTER_TTL_MS,
+  MAX_TOOL_COUNTER_ENTRIES,
   createCommercialToolRegistry,
   validateInput,
 };

@@ -10,6 +10,7 @@ const { createCommercialToolRegistry } = require("../src/ai-commerce/tools");
 const { createAICommerceOrchestrator } = require("../src/ai-commerce/orchestrator");
 const { createAICommerceAudit } = require("../src/ai-commerce/audit");
 const { publicRunInput, resolveRunContext, writeSettings } = require("../src/ai-commerce/routes");
+const { createAICommerceEffects } = require("../src/ai-commerce/effects");
 const { MODES, buildSanitizedContext, isAllowedHttpsUrl, sanitizeData } = require("../src/ai-commerce/policy");
 const { FEATURE_KEYS, isGlobalFeatureEnabled } = require("../src/tenant-features/service");
 
@@ -98,6 +99,58 @@ test("tool registry requires granular human approval for side effects", async ()
   await assert.rejects(() => tools.execute("registerProductInterest", { offerId: "offer-1" }, { empresaId: 1, conversationId: 1, mode: MODES.SUGGESTION_ONLY, runId: "r1" }), { code: "AI_TOOL_HUMAN_APPROVAL_REQUIRED" });
   const result = await tools.execute("registerProductInterest", { offerId: "offer-1" }, { empresaId: 1, conversationId: 1, mode: MODES.HUMAN_APPROVAL, actorUsuarioId: 2, approvedActions: { registerProductInterest: true }, idempotencyKey: "idem-1", runId: "r1" });
   assert.equal(result.id, "interest-1");
+});
+
+test("tool schemas reject missing required and unknown fields before authorization", async () => {
+  const tools = createCommercialToolRegistry({ services: { getProductDetails: async () => ({ ok: true }) }, authorizeTool: async () => { throw new Error("authorization must not run"); } });
+  await assert.rejects(() => tools.execute("getProductDetails", {}, { empresaId: 1, runId: "schema-required" }), { code: "AI_TOOL_INPUT_REQUIRED" });
+  await assert.rejects(() => tools.execute("getProductDetails", { catalogProductId: 1, tenantId: 1 }, { empresaId: 1, runId: "schema-unknown" }), { code: "AI_TOOL_INPUT_UNKNOWN_FIELD" });
+  await assert.rejects(() => tools.execute("searchCommercialCatalog", { filters: { arbitrary: "x" } }, { empresaId: 1, runId: "schema-nested" }), { code: "AI_TOOL_INPUT_UNKNOWN_FIELD" });
+});
+
+test("tool and audit redaction covers apiKey/privateKey/accessKey recursively", async () => {
+  const tools = createCommercialToolRegistry({ services: { searchCommercialCatalog: async () => [{ apiKey: "secret", nested: { privateKey: "private", accessKey: "access" } }] } });
+  const result = await tools.execute("searchCommercialCatalog", { query: "x", filters: { attributes: { api_key: "input-secret" } } }, { empresaId: 1, runId: "redaction-tool" });
+  assert.equal(result[0].apiKey, "[redacted]");
+  assert.equal(result[0].nested.privateKey, "[redacted]");
+  assert.equal(result[0].nested.accessKey, "[redacted]");
+  const audit = createAICommerceAudit({ logger: { info() {}, warn() {} } });
+  const safe = audit.sanitize({ input: { apiKey: "secret", nested: { private_key: "private", access_key: "access" } } });
+  assert.equal(safe.input.apiKey, "[redacted]");
+  assert.equal(safe.input.nested.private_key, "[redacted]");
+  assert.equal(safe.input.nested.access_key, "[redacted]");
+});
+
+test("tool invocation counters expire and do not grow without bound", async () => {
+  const originalNow = Date.now;
+  let now = 1000;
+  Date.now = () => now;
+  try {
+    const tools = createCommercialToolRegistry({ maxToolCalls: 1, counterTtlMs: 10, maxCounterEntries: 2, services: { searchCommercialCatalog: async () => [] } });
+    await tools.execute("searchCommercialCatalog", { query: "a" }, { empresaId: 1, runId: "ttl-run" });
+    await assert.rejects(() => tools.execute("searchCommercialCatalog", { query: "b" }, { empresaId: 1, runId: "ttl-run" }), { code: "AI_TOOL_CALL_LIMIT" });
+    now += 1001;
+    await tools.execute("searchCommercialCatalog", { query: "c" }, { empresaId: 1, runId: "ttl-run" });
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test("effects reconcile a P2002 idempotency race to the winner row", async () => {
+  let lookupCount = 0;
+  const winner = { id: "interest-1", empresaId: 1, conversationId: 7, offerId: "offer-1", status: "REGISTERED", revision: 1 };
+  const prisma = {
+    usuario: { findFirst: async () => ({ id: 2, papel: "ADMIN" }) },
+    cliente: { findFirst: async () => null },
+    aICommerceProductInterest: {
+      findFirst: async () => { lookupCount += 1; return lookupCount === 1 ? null : winner; },
+      create: async () => { const error = new Error("Unique constraint failed"); error.code = "P2002"; throw error; },
+    },
+  };
+  const effects = createAICommerceEffects({ prisma, offerService: { get: async () => ({ valid: true, status: "ACTIVE", conversationId: 7, offerId: "offer-1", catalogProductId: 4 }) } });
+  const result = await effects.registerProductInterest({ offerId: "offer-1" }, { empresaId: 1, conversationId: 7, actorUsuarioId: 2, idempotencyKey: "interest-race-1" });
+  assert.equal(result.id, "interest-1");
+  assert.equal(result.customerSafe, true);
 });
 
 test("tool audit usa idempotência por invocação, não a chave única do run", async () => {
