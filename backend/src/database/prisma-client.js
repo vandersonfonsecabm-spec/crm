@@ -36,6 +36,9 @@ function createPrismaClient(options = {}) {
   const prismaClientOptions = envEnabled(env)
     ? { log: [{ emit: "event", level: "query" }, { emit: "event", level: "error" }] }
     : {};
+  const instantiate = (clientOptions) => Object.keys(clientOptions).length > 0
+    ? new PrismaClientClass(clientOptions)
+    : new PrismaClientClass();
   const finalize = (client) => {
     // Attach before the maintenance `$extends`: the extended proxy deliberately
     // exposes only query methods and may not retain Prisma's `$on` event API.
@@ -47,16 +50,16 @@ function createPrismaClient(options = {}) {
     return applyMaintenanceReadOnlyGuard(client, { env });
   };
   if (env.NODE_ENV !== "test") {
-    return finalize(new PrismaClientClass(prismaClientOptions));
+    return finalize(instantiate(prismaClientOptions));
   }
   if (String(env.CRM_TEST_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql") {
-    return finalize(new PrismaClientClass({
+    return finalize(instantiate({
       ...prismaClientOptions,
       datasourceUrl: validateTestPostgresUrl(env.CRM_TEST_DATABASE_URL, env),
     }));
   }
   const datasourceUrl = validateTestDatabaseUrl(env.CRM_TEST_DATABASE_URL, options);
-  return finalize(new PrismaClientClass({ ...prismaClientOptions, datasourceUrl }));
+  return finalize(instantiate({ ...prismaClientOptions, datasourceUrl }));
 }
 
 function validateTestPostgresUrl(rawUrl, env = process.env) {
