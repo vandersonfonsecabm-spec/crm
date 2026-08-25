@@ -8,7 +8,7 @@ DOCUMENT_STATUS=GA3_COMPONENT_PARITY_RECONCILED
 
 | Claim | Estado | Evidência |
 |---|---|---|
-| SOURCE_IDENTITY | PASS_COMPONENT | runtime code tag `cf7e87f`; master/release documentation head `c885729`; worktree limpo |
+| SOURCE_IDENTITY | PASS_COMPONENT | runtime code tag `cf7e87f`; master/release are documentation-only overlays; exact branch ref is read from Git at delivery; worktree limpo |
 | OFFICIAL_SHA_PARITY | PASS_COMPONENT | Railway API `6fe8c55f` e worker `e9fcc843` em `cf7e87f`; Vercel `dpl_65YL...` READY em `a3c0600`, com árvore frontend idêntica entre os SHAs |
 | DATABASE_INTEGRITY | PASS | PostgreSQL oficial healthy; 16 migrations, 0 pendentes, locks 0 |
 | TENANT_ISOLATION | PASS | gates isolados sem órfãos/cross-tenant; context resolver e IDs tenant-scoped |
