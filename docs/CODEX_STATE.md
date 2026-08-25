@@ -1736,3 +1736,16 @@ integracoes autorizadas.
 - Smoke pós-promoção por GET confirmou frontend, rota direta, `/api/health`,
   `/api/ready` e referência ao chunk lazy. QA autenticado em produção não foi
   executado por desenho; a autenticação foi validada no staging isolado.
+
+## Auditoria pós-release GA3 (2026-08-25)
+
+- A auditoria encontrou e corrigiu alias oficial secundário sem CORS, exportação
+  CSV sem neutralização de fórmula/aspas e `VITE_API_URL` permissivo em Preview.
+  A API recebeu HSTS somente em produção. Frontend runtime final: `ebdf118`;
+  API hardening final: `57e90e4`.
+- O alias `crm-vand-s-projects.vercel.app` agora resolve `/api`, passa CORS
+  `204` e mantém origem maliciosa em `403`. A API oficial permaneceu sem
+  mutações de dados durante a auditoria.
+- A bateria final frontend terminou `199/199`, autenticação `19/19`, build,
+  TypeScript, lint e `git diff --check` PASS. Relatório sanitizado:
+  `docs/META_GA3_POST_RELEASE_FULL_AUDIT_20260825.md`.
