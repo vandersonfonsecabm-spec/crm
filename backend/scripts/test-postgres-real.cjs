@@ -226,6 +226,7 @@ function assertDockerAvailable(runDockerCommand) {
 }
 
 function startContainer({ image, containerName, volumeName }, runDockerCommand, password) {
+  const dataVolumeTarget = postgresDataVolumeTarget(image);
   const args = [
     "run",
     "--detach",
@@ -238,7 +239,7 @@ function startContainer({ image, containerName, volumeName }, runDockerCommand, 
     "--publish",
     "127.0.0.1::5432",
     "--volume",
-    `${volumeName}:/var/lib/postgresql/data`,
+    `${volumeName}:${dataVolumeTarget}`,
     "--health-cmd=pg_isready -U crm_test -d crm_test",
     "--health-interval=2s",
     "--health-timeout=3s",
@@ -256,6 +257,12 @@ function startContainer({ image, containerName, volumeName }, runDockerCommand, 
     throw new Error("O container PostgreSQL descartavel nao iniciou.");
   }
   return String(result.stdout).trim().split(/\s+/)[0];
+}
+
+function postgresDataVolumeTarget(image) {
+  const match = String(image || "").match(/^postgres:(\d+)/i);
+  const major = match ? Number(match[1]) : 0;
+  return major >= 18 ? "/var/lib/postgresql" : "/var/lib/postgresql/data";
 }
 
 function mappedPort(containerName, runDockerCommand) {
@@ -500,6 +507,7 @@ module.exports = {
   parseArguments,
   pgSuite,
   pgHarnessTestCount,
+  postgresDataVolumeTarget,
   safeRunId,
   sanitizeLogText,
   sourceManifestHash,

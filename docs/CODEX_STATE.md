@@ -8,8 +8,8 @@
   commit `afe830d40972d765d33fd1692c2663f4157c554c`.
 - `POSTGRES_REAL_REHEARSAL=PASS_LOCAL_CANDIDATE`: migration boundary, backfill,
   FKs/CHECKs, snapshots, revalidação, ROUND_HALF_UP, CAS e rollback atômico
-  passaram em PostgreSQL descartável. Frontend `197/197`, build e lint também
-  passaram no candidato exato.
+  passaram em PostgreSQL 18.4 descartável. Frontend `197/197`, build e lint
+  também passaram no candidato exato.
 - `POSTGRES_REAL_REHEARSAL` não está mais bloqueado por ambiente. Push, backup
   oficial, deploy, migration e smoke de produção continuam pendentes e não
   foram executados. Produção/staging e `backend/prisma/dev.db` permanecem
@@ -18,6 +18,8 @@
   restore drill e um único dono da migration; o startup normal da API executa
   migrations pendentes automaticamente, portanto canário mutável antes do
   migration gate é proibido.
+- O runner PostgreSQL foi ajustado para o layout de volume das imagens 18+;
+  a suíte completa e o rollback foram repetidos em `postgres:18.4` com PASS.
 
 ## V71 — proposta ↔ catálogo V1 (2026-08-25)
 

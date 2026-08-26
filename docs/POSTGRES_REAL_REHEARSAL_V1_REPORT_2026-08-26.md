@@ -114,3 +114,14 @@ PRODUCTION_DEPLOY=0
 ```
 
 O gate que faltava foi fechado no candidato local. A promoção para staging/produção continua sendo uma operação separada e ainda não foi iniciada.
+
+## Addendum de paridade PostgreSQL 18.4
+
+Após o primeiro rehearsal em `postgres:16-alpine`, o runner foi corrigido para
+o layout de volume das imagens PostgreSQL 18+. A suíte completa e o rollback
+foram repetidos com `POSTGRES_TEST_IMAGE=postgres:18.4`, ambos com `PASS`.
+
+```text
+POSTGRES_REAL_REHEARSAL_18_4=PASS
+POSTGRES_ROLLBACK_18_4=PASS
+```

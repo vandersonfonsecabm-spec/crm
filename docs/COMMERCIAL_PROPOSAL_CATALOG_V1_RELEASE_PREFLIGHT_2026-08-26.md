@@ -8,6 +8,9 @@ REMOTE_RELEASE_HEAD=ee051c7721cdce1eff7fa549207e99d8f7c651e6
 WORKTREE_CLEAN=true
 RUNTIME_DIFF_TESTED_TO_HEAD=EMPTY
 POSTGRES_REAL_REHEARSAL=PASS_LOCAL_CANDIDATE
+POSTGRES_TEST_IMAGE=postgres:18.4
+POSTGRES_REAL_REHEARSAL_18_4=PASS
+POSTGRES_ROLLBACK_18_4=PASS
 FRONTEND_TESTS=197/197
 FRONTEND_BUILD=PASS
 FRONTEND_LINT=PASS
@@ -39,6 +42,8 @@ SOURCE_MANIFEST_SHA256=b3ec354b392f238cf528abc4f96f5289ab5c5b6fa35062df9fac181e8
   mutações retornando `503`, nenhum runner concorrente e backup restaurável.
 - O startup normal não pode ser usado como “canário antes da migration”, pois
   executa `prisma migrate deploy`. Deve existir um único dono da migration.
+- O runner de rehearsal foi corrigido para montar imagens PostgreSQL 18+ em
+  `/var/lib/postgresql`; a suíte e o rollback foram repetidos em `18.4`.
 - Rollback distingue falha antes de novas escritas de recovery/forward-fix
   depois que o schema novo tiver dados; não existe `down migration` presumido.
 - `skuSnapshot` e `stockMaterialVersion` são os únicos snapshots nullable,
