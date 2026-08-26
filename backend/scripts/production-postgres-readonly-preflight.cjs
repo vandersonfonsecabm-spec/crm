@@ -47,6 +47,24 @@ async function main() {
       }
     }
     const activeMigrationRunners = Number((await scalar("SELECT COUNT(*)::int AS count FROM pg_stat_activity WHERE datname = current_database() AND (query ILIKE '%migrate deploy%' OR query ILIKE '%_prisma_migrations%') AND pid <> pg_backend_pid()")).count || 0);
+    const expectedConstraintNames = [
+      "ItemPropostaComercial_empresaId_fkey",
+      "ItemPropostaComercial_empresaId_propostaId_fkey",
+      "ItemPropostaComercial_empresaId_productOfferId_fkey",
+      "ItemPropostaComercial_empresaId_catalogProductId_fkey",
+      "ItemPropostaComercial_empresaId_stockProductId_fkey",
+      "ItemPropostaComercial_currencySnapshot_ck",
+      "ItemPropostaComercial_priceStatusSnapshot_ck",
+      "ItemPropostaComercial_catalog_contract_ck",
+    ];
+    const constraints = (await client.query("SELECT conname, contype, confdeltype, convalidated FROM pg_constraint WHERE conname = ANY($1) ORDER BY conname", [expectedConstraintNames])).rows;
+    const indexes = (await client.query("SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND indexname = ANY($1) ORDER BY indexname", [[
+      "ItemPropostaComercial_empresaId_id_key",
+      "ItemPropostaComercial_empresaId_propostaId_ordem_idx",
+      "ItemPropostaComercial_empresaId_productOfferId_idx",
+      "ItemPropostaComercial_empresaId_catalogProductId_idx",
+      "ItemPropostaComercial_empresaId_stockProductId_idx",
+    ]])).rows.map((row) => row.indexname);
     await client.query("ROLLBACK");
     console.log(JSON.stringify({
       status: "passed",
@@ -55,6 +73,8 @@ async function main() {
       extensions,
       migrations,
       tableState,
+      constraints,
+      indexes,
       activeMigrationRunners,
       maintenanceReadOnly: String(process.env.CRM_MAINTENANCE_READ_ONLY || ""),
       workerFlag: String(process.env.AUTOMATION_WORKER_ENABLED || "absent"),

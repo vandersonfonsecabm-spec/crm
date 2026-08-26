@@ -32,6 +32,8 @@ for (const service of ["api", "Postgres-u_yI"]) {
     proxyPort: get("RAILWAY_TCP_PROXY_PORT") || null,
     pgUser: get("PGUSER") || null,
     passwordPresent: Boolean(get("PGPASSWORD")),
+    maintenanceReadOnly: get("CRM_MAINTENANCE_READ_ONLY") || "absent",
+    automationWorkerEnabled: get("AUTOMATION_WORKER_ENABLED") || "absent",
   }, null, 2));
 }
 
