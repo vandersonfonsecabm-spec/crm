@@ -314,12 +314,15 @@ export default function ClientModal({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4">
-      <form
-        ref={dialogRef}
+      <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="client-modal-title"
         aria-describedby="client-modal-description"
+        className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-lg p-4 text-slate-900 shadow-2xl"
+      >
+      <form
+        ref={dialogRef}
         onSubmit={handleSubmit}
         onKeyDown={(event) => {
           if (event.key === "Escape" && !isBusy) {
@@ -328,7 +331,6 @@ export default function ClientModal({
             else onClose();
           }
         }}
-        className="saas-panel max-h-[calc(100vh-32px)] w-full max-w-2xl overflow-y-auto rounded-lg p-4 text-slate-900 shadow-2xl"
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
@@ -632,6 +634,7 @@ export default function ClientModal({
           )}
         </div>
       </form>
+      </div>
     </div>
   );
 }
