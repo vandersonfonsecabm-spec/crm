@@ -471,6 +471,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
   } = useDashboardActions({
     clients,
     setClients,
+    onClientListChanged: () => setBackendLoadRequest((current) => current + 1),
     selectedClient,
     setSelectedClientDetail,
     selectedId,

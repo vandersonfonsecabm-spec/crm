@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 class MemoryStorage {
@@ -150,6 +151,15 @@ test("clientes usam paginação e filtros no servidor", async () => {
   assert.match(urls[0], /status=Proposta/);
   assert.match(urls[0], /quente=true/);
   assert.match(urls[0], /sortBy=value/);
+});
+
+test("criação de cliente invalida a lista paginada e importa os hooks em runtime", async () => {
+  const source = await readFile(new URL("../src/hooks/useDashboardActions.ts", import.meta.url), "utf8");
+
+  assert.match(source, /import \{ useRef, useState \} from "react"/);
+  assert.match(source, /onClientListChanged\?: \(\) => void/);
+  assert.match(source, /onClientListChanged\?\.\(\);/);
+  assert.doesNotMatch(source, /setClients\(\(current\) => \[syncedClient, \.\.\.current\]\)/);
 });
 
 test("contexto da Agenda possui limite previsível de duas chamadas", async () => {
