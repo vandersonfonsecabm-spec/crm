@@ -87,7 +87,6 @@ const LazyWhatsAppConnectionPanel = lazy(async () => {
   const module = await import("../components/integrations/WhatsAppConnectionPanel");
   return { default: module.WhatsAppConnectionPanel };
 });
-
 // Shared only with the behavioral focus fixture so it exercises the production layout cycle.
 // eslint-disable-next-line react-refresh/only-export-components
 export function useCloseCustomerDrawerOnPageKeyChange(
@@ -141,6 +140,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
   const [showArchivedClients, setShowArchivedClients] = useState(false);
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
+  const lastClientLoadPageRef = useRef<ActivePage | null>(null);
   const [isBooting, setIsBooting] = useState(true);
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
   const [dashboardSummaryLoadState, setDashboardSummaryLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -334,6 +334,9 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
   }, [backendLoadRequest, initialAuthSession, onLogout]);
 
   useEffect(() => {
+    const pageChanged = lastClientLoadPageRef.current !== activePage;
+    lastClientLoadPageRef.current = activePage;
+
     if (!CLIENT_DATA_PAGES.has(activePage)) return;
 
     let ignore = false;
@@ -374,7 +377,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
         setClientsLoadState("error");
         setBackendLoadError("Não foi possível carregar os dados agora. Sua sessão foi preservada.");
       }
-    }, 250);
+    }, pageChanged ? 0 : 250);
 
     return () => {
       ignore = true;
