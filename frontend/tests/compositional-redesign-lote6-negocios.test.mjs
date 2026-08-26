@@ -34,8 +34,9 @@ test("Lote 6 mantém Kanban horizontal legível, estados neutros e vazio por eta
   ]);
   const board = panel.slice(panel.indexOf("export function NegociosKanbanBoard"), panel.indexOf("export function BusinessCard"));
 
-  assert.match(board, /className="negocios-board-scroll overflow-x-auto pb-1" data-negocios-board-scroll/);
-  assert.match(board, /<h3 id=\{`negocios-stage-\$\{stage\}`\}>\{stageLabels\[stage\]\}<\/h3>/);
+  assert.match(board, /className="negocios-board-scroll overflow-x-auto pb-1" data-negocios-board-scroll tabIndex=\{0\}/);
+  assert.match(board, /aria-label="Quadro de Negócios"/);
+  assert.match(board, /<h2 id=\{`negocios-stage-\$\{stage\}`\}>\{stageLabels\[stage\]\}<\/h2>/);
   assert.match(board, /aria-label=\{stageBusinesses\.length === 1 \? "1 negócio" : `\$\{stageBusinesses\.length\} negócios`\}/);
   assert.match(board, /Sem negócios nesta etapa/);
   assert.doesNotMatch(panel, /Nenhum Negócio encontrado|Etapa vazia/);

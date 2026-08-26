@@ -303,7 +303,7 @@ export function NegociosKanbanBoard({
   onOpenBusiness,
 }: NegociosKanbanBoardProps) {
   return (
-    <div className="negocios-board-scroll overflow-x-auto pb-1" data-negocios-board-scroll>
+    <div aria-label="Quadro de Negócios" className="negocios-board-scroll overflow-x-auto pb-1" data-negocios-board-scroll tabIndex={0}>
       <div className="negocios-board">
         {stages.map((stage) => {
           const stageBusinesses = businesses.filter((business) => business.etapa === stage);
@@ -322,7 +322,7 @@ export function NegociosKanbanBoard({
               }}
             >
               <header className="negocios-stage-header">
-                <h3 id={`negocios-stage-${stage}`}>{stageLabels[stage]}</h3>
+                <h2 id={`negocios-stage-${stage}`}>{stageLabels[stage]}</h2>
                 <span aria-label={stageBusinesses.length === 1 ? "1 negócio" : `${stageBusinesses.length} negócios`} className="negocios-stage-count">{stageBusinesses.length}</span>
               </header>
               <div className="negocios-stage-list space-y-2">
