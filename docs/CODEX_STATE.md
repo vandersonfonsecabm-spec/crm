@@ -51,6 +51,19 @@
   operações irreversíveis. Se a tag apontar para outro SHA ou o schema divergir,
   usar HARD_STOP antes de qualquer escrita.
 
+## V76 — higiene da infraestrutura pós-release (2026-08-26)
+
+- O inventário read-only confirmou `Postgres-u_yI` como banco oficial da API e
+  worker. `Postgres` e `Postgres-MpW9` estão online, com volumes próprios e
+  dados, mas nenhum URL de conexão da API/worker aponta para eles. Ambos ficam
+  intocados até a finalidade e o proprietário serem comprovados.
+- A comparação redigida confirmou endpoint e banco iguais entre API e Postgres
+  oficial, mas senha diferente (`credentialMatch=false`). O helper foi
+  endurecido para usar a fonte efetiva `POSTGRES_DATABASE_URL || DATABASE_URL`
+  e nunca emitir valores; nenhuma rotação/sincronização foi feita.
+- O relatório sanitizado está em `docs/POST_RELEASE_INFRA_HYGIENE_REPORT_2026-08-26.md`.
+  Não houve alteração de produção, migration, deploy, restart ou exclusão.
+
 > **V72 é um snapshot histórico supersedido pela V73/V74.** Os gates de
 > produção pendentes abaixo registram o estado anterior à janela oficial.
 
