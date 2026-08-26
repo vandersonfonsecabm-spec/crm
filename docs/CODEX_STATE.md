@@ -38,6 +38,19 @@
   sincronização automática; mapear a variável autoritativa e rotacionar em
   janela dedicada é o próximo passo seguro caso o drift seja confirmado.
 
+## V75 — auditoria do comando autônomo de release (2026-08-26)
+
+- O comando foi corrigido e executado como reconciliação idempotente: a V1 já
+  estava publicada, a migration já estava aplicada, a tag já apontava para o
+  runtime e os serviços estavam saudáveis. Nenhum push, deploy, migration,
+  freeze, restart, tag ou escrita foi repetido.
+- O relatório da auditoria do comando está em
+  `docs/COMMERCIAL_PROPOSAL_CATALOG_V1_AUTONOMOUS_RELEASE_COMMAND_AUDIT_2026-08-26.md`.
+- A regra corrigida para futuras execuções é: detectar primeiro o estado
+  publicado; se a V1 estiver completa, validar read-only e não reaplicar
+  operações irreversíveis. Se a tag apontar para outro SHA ou o schema divergir,
+  usar HARD_STOP antes de qualquer escrita.
+
 > **V72 é um snapshot histórico supersedido pela V73/V74.** Os gates de
 > produção pendentes abaixo registram o estado anterior à janela oficial.
 
