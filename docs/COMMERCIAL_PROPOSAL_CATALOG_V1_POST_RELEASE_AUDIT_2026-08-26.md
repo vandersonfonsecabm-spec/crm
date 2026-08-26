@@ -43,6 +43,14 @@ POST_RELEASE_BACKUP_RESTORE_DRILL=PASS
   entradas, 17 migrations e zero falhas.
 - Nenhum segredo foi encontrado no Git, nos documentos ou nos scripts auditados.
 
+## Achado de código não reproduzido
+
+Um reviewer levantou a hipótese de um fallback `stockMaterialVersion || 0`.
+Uma busca focal no estado atual não encontrou esse fallback em código, testes,
+schema ou migration; apenas o campo canônico nullable aparece. Portanto não há
+correção de runtime justificada neste lote e o alerta foi classificado como
+falso positivo no estado atual.
+
 ## Correções aplicadas nesta varredura
 
 1. Os dois preflights pré-release foram marcados como snapshots históricos
