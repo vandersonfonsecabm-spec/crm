@@ -75,6 +75,24 @@
 - Relatório: `docs/POST_RELEASE_INFRA_HYGIENE_STAGE1_3_REPORT_2026-08-26.md`.
   A observação não substitui uma janela histórica longa nem smoke autenticado.
 
+## V78 — auditoria de limpeza dos Postgres extras (2026-08-26)
+
+- A auditoria global cobriu todos os projetos/environments Railway acessíveis,
+  referências de conexão, repositório/GitHub e metadados Vercel. Confirmou
+  `Postgres--e25` como staging usado por `ga3-bundle-api` e um Postgres separado
+  no projeto `crm-postgres-test`; nenhum deles deve ser confundido com os dois
+  candidatos de production.
+- `Postgres` (83 tabelas, 16 migrations, dados até 28/07) e `Postgres-MpW9`
+  (41 tabelas, 1 migration, dados até 28/07) foram inspecionados somente em
+  read-only e classificados `UNKNOWN_PRESERVE`. Ambos possuem volumes e dados;
+  nenhum backup adicional, stop ou delete foi executado.
+- A inspeção pública inicial do banco oficial falhou com credencial stale
+  (`28P01`); o probe foi corrigido para usar endpoint público com a credencial
+  efetiva da API, e o banco oficial passou com 17 migrations/zero falhas.
+- Relatório completo: `docs/POST_RELEASE_DATABASE_CLEANUP_REPORT_2026-08-26.md`.
+  Qualquer limpeza futura exige identificação do consumidor de tráfego, dono e
+  finalidade; `Postgres-u_yI` permanece protegido por ID e volume.
+
 > **V72 é um snapshot histórico supersedido pela V73/V74.** Os gates de
 > produção pendentes abaixo registram o estado anterior à janela oficial.
 
