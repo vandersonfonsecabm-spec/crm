@@ -9,6 +9,38 @@
 - O freeze de escrita foi aplicado e removido somente após migration/smoke; `health`/`ready` permaneceram disponíveis. A observação pós-release foi curta (`PASS_SHORT_WINDOW`), e não havia propostas reais para smoke legacy/PDF sem criar dados. Testes mutáveis/cross-tenant continuam restritos ao rehearsal/staging.
 - Desconto, IA real, Meta, outbound, pedidos, pagamento e reserva permanecem fora da V1. Relatório canônico: `docs/COMMERCIAL_PROPOSAL_CATALOG_V1_PRODUCTION_RELEASE_REPORT_2026-08-26.md`.
 
+## V74 — auditoria pós-release da V1 (2026-08-26)
+
+- A varredura read-only pós-release confirmou worktree/branch remota alinhadas
+  em `e5d26a2`, tag apontando para `eb1cadb`, API e worker `SUCCESS`,
+  `/health`/`/ready` 200 com banco OK, Vercel canônico 200 e zero eventos de
+  erro recentes nos logs consultados.
+- Os preflights anteriores receberam banners de snapshot histórico e o
+  contrato V1 recebeu addendum operacional; seus resultados originais não foram
+  reescritos. O relatório específico está em
+  `docs/COMMERCIAL_PROPOSAL_CATALOG_V1_POST_RELEASE_AUDIT_2026-08-26.md`.
+- O inventário Railway mostra dois serviços Postgres adicionais online
+  (`Postgres` e `Postgres-MpW9`) além do oficial `Postgres-u_yI`. Nenhum foi
+  parado ou removido porque a finalidade/dependências não estão comprovadas;
+  mapear antes de qualquer limpeza.
+- Um reviewer reportou possível saída não sanitizada de variáveis em uma
+  consulta operacional anterior. Não há valor em Git, docs ou artefatos, a
+  consulta não foi repetida e nenhuma rotação foi feita automaticamente. Se o
+  incidente for confirmado, tratar em janela dedicada de rotação, sem expor
+  segredos nem interromper produção por tentativa.
+- O backup pós-migration foi criado e restaurado em PostgreSQL 18.6
+  descartável: 7.574.293 bytes, SHA-256
+  `1d1f46505cc397acb60f0a95de05b99e55b28082f2a6fab355b0a79464fb20d9`, 1.201
+  entradas, 17 migrations e zero falhas. O dump contém dados reais e permanece
+  fora do repositório/anexos.
+- A checagem de conexão redigida confirmou o mesmo endpoint, mas credenciais
+  diferentes entre API e serviço Postgres (`credentialMatch=false`). Não houve
+  sincronização automática; mapear a variável autoritativa e rotacionar em
+  janela dedicada é o próximo passo seguro caso o drift seja confirmado.
+
+> **V72 é um snapshot histórico supersedido pela V73/V74.** Os gates de
+> produção pendentes abaixo registram o estado anterior à janela oficial.
+
 ## V72 — gate PostgreSQL real da proposta ↔ catálogo (2026-08-26)
 
 - O candidato local `release/ga2-post-e6a` está no HEAD

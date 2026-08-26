@@ -1,4 +1,9 @@
 # Preflight de release — Proposta ↔ Catálogo V1
+> **SNAPSHOT HISTÓRICO — SUPERSEDIDO PELA V73 (2026-08-26).** Este documento
+> registra o preflight antes da operação oficial. Os valores `NOT_RUN` abaixo
+> são evidência histórica e não representam o estado atual da produção. Para o
+> estado vigente, consulte `COMMERCIAL_PROPOSAL_CATALOG_V1_PRODUCTION_RELEASE_REPORT_2026-08-26.md`.
+
 
 ```text
 RELEASE_CANDIDATE_BRANCH=release/ga2-post-e6a

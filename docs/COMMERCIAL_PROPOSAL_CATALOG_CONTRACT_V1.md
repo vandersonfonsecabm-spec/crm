@@ -165,8 +165,8 @@ Material changes continue to use the existing `ATUALIZAR` and
 DISCOUNT_POLICY_STATUS=DEFERRED
 AI_DISCOUNT_AUTHORITY=NOT_IMPLEMENTED
 AUTOMATIC_DISCOUNT=DISABLED
-POSTGRES_REAL_REHEARSAL=PASS_LOCAL_CANDIDATE
-PRODUCTION_MIGRATION=NOT_RUN
+POSTGRES_REAL_REHEARSAL_AT_APPROVAL=PASS_LOCAL_CANDIDATE
+PRODUCTION_MIGRATION_AT_APPROVAL=NOT_RUN
 META_REAL_CHANNELS=OFF
 AI_REAL_CONNECTOR=OFF
 OUTBOUND=0
@@ -175,3 +175,16 @@ OUTBOUND=0
 Approval of this document authorizes implementation of the additive catalog
 item/snapshot/revalidation contract only. It does not authorize discount rules,
 orders, payments, external channels or irreversible production data changes.
+
+## Operational status addendum — 2026-08-26
+
+The contract decisions above remain frozen. The historical
+`POSTGRES_REAL_REHEARSAL=PASS_LOCAL_CANDIDATE` and
+`PRODUCTION_MIGRATION=NOT_RUN` values describe the approval/implementation
+checkpoint, not the current production state. The V1 migration was later
+applied once to the official PostgreSQL 18.6 database under the authorized
+release procedure. Current deployment, backup/restore and schema evidence is
+recorded in
+`docs/COMMERCIAL_PROPOSAL_CATALOG_V1_PRODUCTION_RELEASE_REPORT_2026-08-26.md`.
+This addendum does not authorize discount, external integrations, destructive
+restore, or any new production change.

@@ -1,4 +1,10 @@
 # Execução do preflight de liberação — 2026-08-26
+> **SNAPSHOT HISTÓRICO — SUPERSEDIDO PELA V73 (2026-08-26).** Este arquivo
+> preserva a execução do preflight anterior à janela oficial. Os gates
+> `NOT_RUN` e o hard stop descritos aqui foram posteriormente resolvidos; não
+> use este snapshot para decidir o estado atual. Consulte o relatório de
+> produção V1 para a evidência vigente.
+
 
 ## Resultado
 

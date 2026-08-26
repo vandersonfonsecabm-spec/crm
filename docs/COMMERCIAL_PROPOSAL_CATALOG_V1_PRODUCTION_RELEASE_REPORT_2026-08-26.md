@@ -98,3 +98,5 @@ Antes da migration, o banco tinha 16 migrations e `v1Applied=false`.
 ## Estado final
 
 Produção está com a migration V1 aplicada, API e frontend saudáveis, worker compatível ativo e backup restaurável comprovado. Desconto, IA real, Meta, outbound, pedidos, pagamento e reserva continuam fora da V1.
+
+Auditoria read-only posterior: `docs/COMMERCIAL_PROPOSAL_CATALOG_V1_POST_RELEASE_AUDIT_2026-08-26.md`.
