@@ -786,3 +786,14 @@ estiver dentro do escopo autorizado, ela deve ser aplicada e verificada na
 sequência. Esta regra não autoriza push, deploy, migration, escrita em
 produção, restore, exclusão, credencial ou comunicação externa sem a
 autorização/protocolo específicos exigidos pelas regras superiores.
+
+Falha corrigível não deve virar parada prematura:
+
+- informar imediatamente ao usuário o erro, a causa provável e a correção que
+  será aplicada;
+- corrigir de forma focal, repetir somente a validação afetada e continuar a
+  sequência no mesmo ciclo;
+- não omitir, marcar como PASS ou abandonar etapas silenciosamente;
+- usar HARD_STOP somente quando continuar puder causar dano, perda de dados,
+  exposição de segredo, execução no alvo errado, ação irreversível sem
+  autorização ou quando a correção exigida mudar materialmente o escopo.
