@@ -22,3 +22,12 @@ test("Inbox detail and list polling carry abort signals and ignore cancellation"
   assert.match(api, /fetchCommunicationConversations\(params: ConversationQuery = \{\}, options: \{ signal\?: AbortSignal \} = \{\}\)/);
   assert.match(api, /fetchCommunicationMessages\(id: number, params: \{ page\?: number; limit\?: number \} = \{\}, options: \{ signal\?: AbortSignal \} = \{\}\)/);
 });
+
+test("Dashboard skips the client-list request on routes that do not render client data", async () => {
+  const dashboard = await source("src/pages/Dashboard.tsx");
+
+  assert.match(dashboard, /const CLIENT_DATA_PAGES = new Set<ActivePage>\(\[/);
+  assert.match(dashboard, /"dashboard",\s*"comercial",\s*"leads",\s*"clientes",\s*"kanban",\s*"agenda"/s);
+  assert.match(dashboard, /if \(!CLIENT_DATA_PAGES\.has\(activePage\)\) return;/);
+  assert.match(dashboard, /fetchClientesFromBackend\(\{/);
+});

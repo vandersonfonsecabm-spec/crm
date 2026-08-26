@@ -23,3 +23,20 @@ test("dashboard chunk failures have an accessible recovery state", async () => {
   assert.match(app, /role="status"/);
   assert.match(app, /Carregando painel/);
 });
+
+test("rare dashboard modules stay deferred behind the existing loading primitive", async () => {
+  const dashboard = await readFile(path.join(frontendDir, "src/pages/Dashboard.tsx"), "utf8");
+  for (const moduleName of [
+    "DashboardAgendaPanel",
+    "StockControlPanel",
+    "DashboardIntegrationsPanel",
+    "DashboardUserSecurityPanel",
+    "DashboardAutomationsPanel",
+    "DashboardPlatformTenantsPanel",
+  ]) {
+    assert.match(dashboard, new RegExp(`lazy\\(.*${moduleName}`, "s"));
+  }
+  assert.match(dashboard, /<Suspense fallback=\{<LoadingState rows=\{\d+\} \/>\}>/);
+  assert.doesNotMatch(dashboard, /import DashboardAgendaPanel from/);
+  assert.doesNotMatch(dashboard, /import StockControlPanel from/);
+});
