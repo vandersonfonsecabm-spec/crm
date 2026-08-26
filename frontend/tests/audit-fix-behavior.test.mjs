@@ -162,6 +162,18 @@ test("criação de cliente invalida a lista paginada e importa os hooks em runti
   assert.doesNotMatch(source, /setClients\(\(current\) => \[syncedClient, \.\.\.current\]\)/);
 });
 
+test("login valida a sessão completa antes de montar o Dashboard", async () => {
+  const [login, app] = await Promise.all([
+    readFile(new URL("../src/pages/Login.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/App.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(login, /onLogin: \(\) => void \| Promise<void>/);
+  assert.match(login, /await onLogin\(\);/);
+  assert.match(app, /const session = await fetchAuthMe\(\{ allowRefresh: false \}\);/);
+  assert.match(app, /setValidatedSession\(session\);/);
+});
+
 test("contexto da Agenda possui limite previsível de duas chamadas", async () => {
   seedToken();
   const urls = [];

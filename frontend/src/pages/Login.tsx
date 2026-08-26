@@ -4,7 +4,7 @@ import { Button, Input } from "../components/ui";
 import { loginWithBackend } from "../services/crmApi";
 
 type LoginProps = {
-  onLogin: () => void;
+  onLogin: () => void | Promise<void>;
   onOpenRecovery: () => void;
 };
 
@@ -26,7 +26,7 @@ export function Login({ onLogin, onOpenRecovery }: LoginProps) {
 
     try {
       await loginWithBackend(email.trim(), senha, empresaSlug.trim() || undefined);
-      onLogin();
+      await onLogin();
     } catch {
       setMessage("Não foi possível conectar com estes dados. Revise o e-mail, a senha e a disponibilidade do serviço.");
     } finally {

@@ -68,9 +68,21 @@ function App() {
     };
   }, [authCheckAttempt, securityMode]);
 
-  function entrar() {
-    setValidatedSession(getAuthSession());
-    setAuthState("authenticated");
+  async function entrar() {
+    try {
+      const session = await fetchAuthMe({ allowRefresh: false });
+      setValidatedSession(session);
+      setAuthState("authenticated");
+    } catch (error) {
+      if (shouldInvalidateAuthSession(error)) {
+        clearAuthSession();
+        setValidatedSession(null);
+        setAuthState("unauthenticated");
+        return;
+      }
+      setValidatedSession(getAuthSession());
+      setAuthState("unavailable");
+    }
   }
 
   function navigatePublic(pathname: string) {
