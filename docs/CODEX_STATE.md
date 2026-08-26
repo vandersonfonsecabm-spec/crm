@@ -1,5 +1,14 @@
 # Estado atual do CRM
 
+## V73 — publicação da Proposta ↔ Catálogo V1 (2026-08-26)
+
+- A release operacional foi concluída no runtime `eb1cadb8a692dea99a1c0edc888504d22be15a33`, com a migration `20260825170000_add_commercial_proposal_catalog_items` aplicada uma única vez no PostgreSQL oficial 18.6. O banco terminou com 17 migrations, zero falhas, zero `empresaId` nulo e zero runner concorrente.
+- A tag imutável `commercial-proposal-catalog-v1-production-pass-2026-08-26` aponta para o runtime publicado. A branch documental `release/ga2-post-e6a` está limpa e alinhada ao remoto em `46e551471d6097f9193ddc419ba0794c1d4eed49`; os commits posteriores ao runtime alteram somente ferramentas/documentação.
+- Backup oficial custom-format fora do repositório foi restaurado em PostgreSQL 18.6 descartável: `pg_restore --list` com 1.191 entradas, 16 migrations restauradas e zero falhas. O dump contém dados reais, permanece fora do Git e não foi anexado.
+- API Railway ficou saudável nos deployments candidatos `af132eb5-ce27-4332-a0af-6aa424200369` e `5bdfb9e8-2e36-4a8c-a177-9595efc36ac5`; Vercel produção está READY em `dpl_GzT5h7Q7paK6mLr7ExAxbkBFFABh`; o worker compatível `db381e6e-3b3a-4c67-a3b9-06a3d52c74d5` executou ciclos sem falhas.
+- O freeze de escrita foi aplicado e removido somente após migration/smoke; `health`/`ready` permaneceram disponíveis. A observação pós-release foi curta (`PASS_SHORT_WINDOW`), e não havia propostas reais para smoke legacy/PDF sem criar dados. Testes mutáveis/cross-tenant continuam restritos ao rehearsal/staging.
+- Desconto, IA real, Meta, outbound, pedidos, pagamento e reserva permanecem fora da V1. Relatório canônico: `docs/COMMERCIAL_PROPOSAL_CATALOG_V1_PRODUCTION_RELEASE_REPORT_2026-08-26.md`.
+
 ## V72 — gate PostgreSQL real da proposta ↔ catálogo (2026-08-26)
 
 - O candidato local `release/ga2-post-e6a` está no HEAD

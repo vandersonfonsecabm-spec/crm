@@ -21,7 +21,8 @@ AI_DISCOUNT_AUTHORITY=NOT_IMPLEMENTED
 ## Candidato e publicação
 
 - Runtime efetivamente publicado: `eb1cadb8a692dea99a1c0edc888504d22be15a33`.
-- Branch remota do candidato, após as ferramentas operacionais: `9a7b91e94bfe8b7012c46ff15244e85afa041732`.
+- Branch remota documental do candidato: `46e551471d6097f9193ddc419ba0794c1d4eed49`.
+- Tag imutável do runtime publicado: `commercial-proposal-catalog-v1-production-pass-2026-08-26`, apontando para `eb1cadb8a692dea99a1c0edc888504d22be15a33`.
 - API Railway oficial: projeto `glistening-playfulness`, produção, serviço `api`.
 - API deployment candidato sob maintenance: `af132eb5-ce27-4332-a0af-6aa424200369`.
 - API redeploy normal: `5bdfb9e8-2e36-4a8c-a177-9595efc36ac5`.
@@ -92,7 +93,7 @@ Antes da migration, o banco tinha 16 migrations e `v1Applied=false`.
 
 - A observação pós-release foi curta, não uma janela prolongada.
 - Não havia propostas reais para validar abertura de legacy/PDF sem criar dados.
-- O runtime final da API/Vercel é `eb1cadb`; commits posteriores são ferramentas/documentação sem alteração nos paths de runtime do produto.
+- O runtime final da API/Vercel/worker é `eb1cadb`; commits posteriores são ferramentas/documentação sem alteração nos paths de runtime do produto.
 
 ## Estado final
 
