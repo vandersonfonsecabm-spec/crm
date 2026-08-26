@@ -171,7 +171,7 @@ test("pre-migration aceita somente tabelas novas da migration registrada", () =>
   existingTables.add("AutomacaoExecucao");
   existingTables.add("Lead");
   existingTables.add("Negocio");
-  assert.equal(relationSpecsForExistingSchema(existingTables, { allowedMissingTables: createdTables }).length, 153);
+  assert.equal(relationSpecsForExistingSchema(existingTables, { allowedMissingTables: createdTables }).length, 157);
 
   existingTables.delete("Cliente");
   assert.throws(
@@ -236,7 +236,7 @@ test("pre-migration admite somente a relacao exata ligada a migration Meta pende
     columnsByTable,
     unavailableRelationKeys: new Set(["IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao"]),
   };
-  assert.equal(relationSpecsForExistingSchema(tables, options).length, 155);
+  assert.equal(relationSpecsForExistingSchema(tables, options).length, 159);
   assert.throws(
     () => relationSpecsForExistingSchema(tables, { ...options, unavailableRelationKeys: new Set() }),
     { code: "TENANT_GATE_SCHEMA_INCOMPLETE" },
@@ -270,6 +270,31 @@ test("pre-migration inspeciona a relacao quando a coluna pendente ja existe", ()
       columnsByTable,
       unavailableRelationKeys: new Set(["IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao"]),
     }),
+    { code: "TENANT_GATE_SCHEMA_INCOMPLETE" },
+  );
+});
+
+test("pre-migration admite relacoes tenant-scoped cujo tenant key nasce na migration", () => {
+  const architecture = inspectArchitecture();
+  const tables = new Set(architecture.discovered.models.keys());
+  const columnsByTable = new Map(
+    [...architecture.discovered.models].map(([name, model]) => [
+      name,
+      new Set(model.fields.filter((field) => field.kind === "scalar").map((field) => field.name)),
+    ]),
+  );
+  columnsByTable.get("ItemPropostaComercial").delete("empresaId");
+  const unavailableRelationKeys = new Set([
+    "ItemPropostaComercial.propostaId->PropostaComercial",
+    "ItemPropostaComercial.productOfferId->ProductOffer",
+    "ItemPropostaComercial.catalogProductId->CommercialCatalogProduct",
+    "ItemPropostaComercial.stockProductId->ProdutoEstoque",
+  ]);
+  const result = relationSpecsForExistingSchema(tables, { columnsByTable, unavailableRelationKeys });
+  assert.equal(result.some((spec) => spec[1] === "ItemPropostaComercial"), false);
+  assert.equal(result.length, 157);
+  assert.throws(
+    () => relationSpecsForExistingSchema(tables, { columnsByTable }),
     { code: "TENANT_GATE_SCHEMA_INCOMPLETE" },
   );
 });

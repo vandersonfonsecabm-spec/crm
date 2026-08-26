@@ -68,7 +68,11 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
     );
     const preSeven = await runGate({ mode: "pre-migration", ...gateOptions });
     assert.equal(preSeven.safe, true);
-    assert.equal(preSeven.checkedRelationCount, 88);
+    // All prior catalog/stock migrations are applied here; only the four
+    // proposal-item relations that gain empresaId remain unavailable.
+    assert.equal(preSeven.checkedRelationCount, 157);
+
+    await seedLegacyProposalItem(client);
 
     runPrismaDeploy(workspace.schemaPath);
     const post = await runGate({ mode: "post-migration", ...gateOptions });
@@ -78,8 +82,20 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
     assert.equal(post.safe, true);
     assert.equal(post.checkedRelationCount, 161);
     assert.deepEqual(post.totals, { orphaned: 0, crossed: 0 });
-    assert.equal(post.constraints.checkedForeignKeys, 234);
+    assert.equal(post.constraints.checkedForeignKeys, 243);
     assert.equal(post.constraints.checkedUniqueParents, 30);
+    const backfilled = (await client.query(
+      'SELECT "empresaId", "itemType", "descricao", "productOfferId", "catalogProductId", "stockProductId" FROM "ItemPropostaComercial" WHERE "id" = $1',
+      [9001],
+    )).rows[0];
+    assert.deepEqual(backfilled, {
+      empresaId: 9001,
+      itemType: "LEGACY_ITEM",
+      descricao: "Legacy PostgreSQL rehearsal",
+      productOfferId: null,
+      catalogProductId: null,
+      stockProductId: null,
+    });
   } finally {
     try {
       if (ownsEmptyTarget) {
@@ -92,6 +108,36 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
     }
   }
 });
+
+async function seedLegacyProposalItem(client) {
+  const now = "2026-08-25T17:00:00.000Z";
+  for (const statement of [
+    `
+    INSERT INTO "Empresa" ("id", "nome", "slug", "ativo", "createdAt", "updatedAt")
+    VALUES (9001, 'PostgreSQL rehearsal', 'postgresql-rehearsal-v1', TRUE, $1, $1)
+    `,
+    `
+    INSERT INTO "Usuario" ("id", "empresaId", "nome", "email", "senhaHash", "papel", "ativo", "createdAt", "updatedAt")
+    VALUES (9001, 9001, 'Rehearsal Admin', 'rehearsal-9001@example.test', 'hash', 'ADMIN', TRUE, $1, $1)
+    `,
+    `
+    INSERT INTO "Cliente" ("id", "empresaId", "nome", "createdAt")
+    VALUES (9001, 9001, 'Rehearsal Customer', $1)
+    `,
+    `
+    INSERT INTO "Negocio" ("id", "empresaId", "clienteId", "etapa", "createdAt", "updatedAt")
+    VALUES (9001, 9001, 9001, 'NOVO', $1, $1)
+    `,
+    `
+    INSERT INTO "PropostaComercial" ("id", "empresaId", "clienteId", "negocioId", "autorId", "codigo", "titulo", "validade", "updatedAt")
+    VALUES (9001, 9001, 9001, 9001, 9001, 'PG-REHEARSAL-9001', 'Legacy PostgreSQL rehearsal', '2026-09-01T00:00:00.000Z', $1)
+    `,
+    `
+    INSERT INTO "ItemPropostaComercial" ("id", "propostaId", "descricao", "quantidade", "valorUnitarioCentavos", "descontoCentavos", "subtotalCentavos", "totalCentavos", "ordem", "createdAt", "updatedAt")
+    VALUES (9001, 9001, 'Legacy PostgreSQL rehearsal', 1, 1250, 0, 1250, 1250, 0, $1, $1)
+    `,
+  ]) await client.query(statement, [now]);
+}
 
 function migrationDirectories(root) {
   return fs.readdirSync(root, { withFileTypes: true })

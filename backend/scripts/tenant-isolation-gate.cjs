@@ -268,6 +268,14 @@ const MIGRATION_REGISTRY = Object.freeze({
     relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
     sqliteSha256: "20d18cdec5fb781bb81572188a90f4b5e3f0feafe478f520c2bc910f6f5f2295",
     postgresSha256: "ee6535644e267c6490c98ec580b958db56926054e4cf66bdb522d1bd2fc68f05",
+    // This migration adds the tenant key to an existing proposal-item table.
+    // Its relations are not inspectable until the migration has run.
+    preMigrationUnavailableTenantRelations: Object.freeze([
+      "ItemPropostaComercial.propostaId->PropostaComercial",
+      "ItemPropostaComercial.productOfferId->ProductOffer",
+      "ItemPropostaComercial.catalogProductId->CommercialCatalogProduct",
+      "ItemPropostaComercial.stockProductId->ProdutoEstoque",
+    ]),
   }),
 });
 
@@ -722,6 +730,12 @@ async function pendingMigrationBoundary({ url, directory, migrationName, archite
       assertPendingRelationBoundary(architecture, key);
       if (pending.appTableCount > 0) unavailableRelationKeys.add(key);
     }
+    for (const key of registry.preMigrationUnavailableTenantRelations || []) {
+      if (!relationSpecs.some((spec) => relationSpecKey(spec) === key)) {
+        throw new GateFailure("TENANT_GATE_PENDING_RELATION_BOUNDARY_INVALID");
+      }
+      if (pending.appTableCount > 0) unavailableRelationKeys.add(key);
+    }
   }
   return { allowedMissingTables, pendingMigrations: pending, unavailableRelationKeys };
 }
@@ -919,6 +933,7 @@ function relationSpecsForExistingSchema(tables, {
     const childColumns = columnsByTable.get(child) || new Set();
     const parentColumns = columnsByTable.get(parent) || new Set();
     if (!childColumns.has(tenantKey) || !parentColumns.has("empresaId") || !parentColumns.has("id")) {
+      if (unavailableRelationKeys.has(relationSpecKey(spec))) return false;
       throw new GateFailure("TENANT_GATE_SCHEMA_INCOMPLETE");
     }
     if (childColumns.has(childField)) return true;

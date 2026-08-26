@@ -50,6 +50,7 @@ function main(options = {}) {
       "tests/next-follow-up-projection.test.js",
       "tests/email-inbound-lifecycle.test.js",
       "tests/email-inbound-processing.test.js",
+      "tests/commercial-proposal-catalog-v1-postgres.test.js",
     ]) {
       runCommand("node", ["--test", file], testEnv);
     }

@@ -23,8 +23,9 @@ const pgSuite = Object.freeze([
   "tests/next-follow-up-projection.test.js",
   "tests/email-inbound-lifecycle.test.js",
   "tests/email-inbound-processing.test.js",
+  "tests/commercial-proposal-catalog-v1-postgres.test.js",
 ]);
-const pgHarnessTestCount = 22;
+const pgHarnessTestCount = 23;
 
 function parseArguments(rawArgs = []) {
   const args = [...rawArgs];
