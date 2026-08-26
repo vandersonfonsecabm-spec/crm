@@ -72,6 +72,7 @@ async function main() {
     }
     const activityRows = (await client.query("SELECT application_name, state FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()")).rows;
     const tableStats = await scalar("SELECT MAX(last_analyze) AS last_analyze, MAX(last_autoanalyze) AS last_autoanalyze FROM pg_stat_all_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')");
+    const databaseStats = await scalar("SELECT numbackends::int AS num_backends, xact_commit::bigint AS xact_commit, xact_rollback::bigint AS xact_rollback, tup_inserted::bigint AS tuples_inserted, tup_updated::bigint AS tuples_updated, tup_deleted::bigint AS tuples_deleted, stats_reset FROM pg_stat_database WHERE datname = current_database()");
     const tableRowEstimates = (await client.query("SELECT relname AS table_name, n_live_tup::bigint AS estimated_rows, pg_total_relation_size(relid)::bigint AS relation_bytes, last_analyze, last_autoanalyze FROM pg_stat_user_tables ORDER BY relname")).rows;
     const keyTableNames = ["Empresa", "Usuario", "Cliente", "Lead", "Negocio", "PropostaComercial", "ItemPropostaComercial", "ProductOffer", "CommercialCatalogProduct", "MensagemCanal", "ConversaCanal", "Integracao", "MetaCredential", "Acompanhamento", "MovimentacaoEstoque", "Produto", "ProdutoEstoque", "LoteEstoque"];
     const existingTables = new Set(tables.filter((table) => table.table_schema === "public").map((table) => table.table_name));
@@ -107,6 +108,7 @@ async function main() {
         states: Object.fromEntries([...new Set(activityRows.map((row) => row.state || "unknown"))].sort().map((state) => [state, activityRows.filter((row) => (row.state || "unknown") === state).length])),
       },
       tableStats,
+      databaseStats,
       tableRowEstimates,
       keyTableCounts,
       recentTimestamps,

@@ -93,6 +93,21 @@
   Qualquer limpeza futura exige identificação do consumidor de tráfego, dono e
   finalidade; `Postgres-u_yI` permanece protegido por ID e volume.
 
+## V79 — origem/finalidade dos bancos extras (2026-08-26)
+
+- A investigação aprofundada confirmou que `Postgres` (83 tabelas, 16
+  migrations, dados até 28/07) e `Postgres-MpW9` (41 tabelas, uma migration,
+  dados até 28/07) são snapshots/clones com dados, não bancos vazios. Ambos
+  permanecem `UNKNOWN_PRESERVE`.
+- O histórico mostra deployments `autoupdate` em 23/08 e deployments removidos
+  em 28/07. API/worker continuam exclusivos do `Postgres-u_yI`; staging usa
+  `Postgres--e25`; o projeto `crm-postgres-test` possui outro serviço `Postgres`.
+  Nomes/hosts não são identidade suficiente.
+- O tráfego TCP observado no `Postgres` tem `peerServiceId` indisponível e pode
+  incluir o próprio probe via proxy; por isso não foi usado para declarar
+  ausência de consumidor. Não houve backup, stop ou delete.
+- Relatório: `docs/POST_RELEASE_DATABASE_ORIGIN_AUDIT_2026-08-26.md`.
+
 > **V72 é um snapshot histórico supersedido pela V73/V74.** Os gates de
 > produção pendentes abaixo registram o estado anterior à janela oficial.
 

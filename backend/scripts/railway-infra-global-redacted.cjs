@@ -64,9 +64,27 @@ function serviceSummary(projectId, environmentId, service) {
   const urlKeys = Object.keys(variables).filter((key) => /^(DATABASE_URL|DATABASE_PUBLIC_URL|POSTGRES_DATABASE_URL)$/i.test(key)).sort();
   const connectionMetadata = {};
   for (const key of urlKeys) connectionMetadata[key] = summarizeUrl(variables[key]);
+  const allVariableText = Object.values(variables).join("\n");
+  const allValueReferences = {
+    candidatePostgresService: {
+      exactId: allVariableText.includes("d22addf0-538b-4532-a288-b98a0a66ecae"),
+      privateHost: allVariableText.toLowerCase().includes("postgres.railway.internal"),
+      railwayInterpolation: /\$\{\{\s*Postgres\./i.test(allVariableText),
+    },
+    candidateMpW9Service: {
+      exactId: allVariableText.includes("c10e8f8d-8eaf-4ec8-8344-a485823051e9"),
+      privateHost: allVariableText.toLowerCase().includes("postgres-mpw9.railway.internal"),
+      railwayInterpolation: /\$\{\{\s*Postgres-MpW9\./i.test(allVariableText),
+    },
+    officialPostgresService: {
+      exactId: allVariableText.includes("e9d8a6b8-507b-45fb-92a8-3ab016f865a2"),
+      privateHost: allVariableText.toLowerCase().includes("postgres-uyi.railway.internal"),
+      railwayInterpolation: /\$\{\{\s*Postgres-u_yI\./i.test(allVariableText) || /\$\{\{\s*Postgres-uyi\./i.test(allVariableText),
+    },
+  };
   return {
     service: { id: service.id, name: service.name, status: service.status, deploymentId: service.deploymentId, deploymentStopped: service.deploymentStopped, volumes: service.volumes || [] },
-    variableRead: { status: "passed", variableNames: Object.keys(variables).sort(), connectionMetadata },
+    variableRead: { status: "passed", variableNames: Object.keys(variables).sort(), connectionMetadata, allValueReferences },
   };
 }
 
