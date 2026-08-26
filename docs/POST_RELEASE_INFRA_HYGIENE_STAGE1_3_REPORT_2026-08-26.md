@@ -47,7 +47,8 @@ de qualquer decisão de custo ou limpeza.
 
 ## Etapa 3 — observação de produção
 
-Foi consultado um lookback de 30 minutos e uma amostra atual:
+Foi consultado um lookback de 30 minutos e uma amostra atual; a observação do
+agente ocorreu em 26/08/2026 às 07:15:59 (horário local):
 
 - Railway API e worker: `SUCCESS`, online, réplica única, sem eventos de erro
   nos logs consultados;
@@ -56,6 +57,7 @@ Foi consultado um lookback de 30 minutos e uma amostra atual:
 - `/ready`: `{"status":"ready","service":"crm-agro-api","database":"ok"}`;
 - Vercel canônico: HTTP `200`;
 - worker permaneceu ativo; não foi reiniciado.
+- ciclos de estoque reportaram `failedTenants=[]` e `failedCount=0`.
 
 Esta é uma observação curta/lookback, não uma garantia de 24 horas. Não foram
 executados testes de escrita, login durante maintenance, alteração de catálogo,
