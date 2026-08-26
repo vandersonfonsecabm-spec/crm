@@ -21,7 +21,7 @@ AI_DISCOUNT_AUTHORITY=NOT_IMPLEMENTED
 ## Candidato e publicação
 
 - Runtime efetivamente publicado: `eb1cadb8a692dea99a1c0edc888504d22be15a33`.
-- Branch remota documental do candidato: `46e551471d6097f9193ddc419ba0794c1d4eed49`.
+- Branch documental: `release/ga2-post-e6a`, com os commits posteriores ao runtime restritos a ferramentas e documentação; o SHA atual deve ser consultado diretamente no Git.
 - Tag imutável do runtime publicado: `commercial-proposal-catalog-v1-production-pass-2026-08-26`, apontando para `eb1cadb8a692dea99a1c0edc888504d22be15a33`.
 - API Railway oficial: projeto `glistening-playfulness`, produção, serviço `api`.
 - API deployment candidato sob maintenance: `af132eb5-ce27-4332-a0af-6aa424200369`.
