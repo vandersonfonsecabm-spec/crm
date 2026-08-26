@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect -- route, polling and focus effects synchronize external dashboard state. */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   actionIntensity,
@@ -33,18 +33,7 @@ import DashboardTopbar from "../components/dashboard/DashboardTopbar";
 import DashboardOperationalSearch from "../components/dashboard/DashboardOperationalSearch";
 import DashboardControlCenter from "../components/dashboard/DashboardControlCenter";
 import DashboardKanbanBoard from "../components/dashboard/DashboardKanbanBoard";
-import DashboardAutomationsPanel from "../components/dashboard/DashboardAutomationsPanel";
-import DashboardPlatformTenantsPanel from "../components/dashboard/DashboardPlatformTenantsPanel";
-import DashboardAgendaPanel from "../components/dashboard/DashboardAgendaPanel";
-import StockControlPanel from "../components/stock/StockControlPanel";
 import { CommerceCatalogPanel, CommerceSettingsPanel } from "../components/ai-commerce";
-import DashboardIntegrationsPanel from "../components/dashboard/DashboardIntegrationsPanel";
-import DashboardSiteLeadIntegrationPanel from "../components/dashboard/DashboardSiteLeadIntegrationPanel";
-import DashboardUserSecurityPanel from "../components/dashboard/DashboardUserSecurityPanel";
-import {
-  WhatsAppConnectionPanel,
-  WhatsAppIntegrationCard,
-} from "../components/integrations/WhatsAppConnectionPanel";
 import DashboardInboxPanel from "../components/leads-communication/DashboardInboxPanel";
 import DashboardLeadsPanel from "../components/leads-communication/DashboardLeadsPanel";
 import DashboardNegociosKanbanPanel from "../components/negocios/DashboardNegociosKanbanPanel";
@@ -56,7 +45,7 @@ import useDashboardActions from "../hooks/useDashboardActions";
 import { ApiHttpError, canAccessIntegrations, clearAuthSession, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchCommunicationAttentionSummary, fetchDashboardSummaryFromBackend, getAuthSession, resolveDashboardSession, shouldInvalidateAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession, NotificationTargetKind } from "../services/crmApi";
 import { resolveTenantFeatureAccess } from "../config/featureFlags";
-import { Button, EmptyState, ErrorState } from "../components/ui";
+import { Button, EmptyState, ErrorState, LoadingState } from "../components/ui";
 import { LockKeyhole } from "lucide-react";
 
 import { emptyClient, statusList } from "../data/clientDefaults";
@@ -73,6 +62,31 @@ type DashboardProps = {
   initialAuthSession?: AuthSession | null;
   onLogout: () => void;
 };
+
+const CLIENT_DATA_PAGES = new Set<ActivePage>([
+  "dashboard",
+  "comercial",
+  "leads",
+  "clientes",
+  "kanban",
+  "agenda",
+]);
+
+const LazyDashboardAgendaPanel = lazy(() => import("../components/dashboard/DashboardAgendaPanel"));
+const LazyStockControlPanel = lazy(() => import("../components/stock/StockControlPanel"));
+const LazyDashboardIntegrationsPanel = lazy(() => import("../components/dashboard/DashboardIntegrationsPanel"));
+const LazyDashboardSiteLeadIntegrationPanel = lazy(() => import("../components/dashboard/DashboardSiteLeadIntegrationPanel"));
+const LazyDashboardUserSecurityPanel = lazy(() => import("../components/dashboard/DashboardUserSecurityPanel"));
+const LazyDashboardAutomationsPanel = lazy(() => import("../components/dashboard/DashboardAutomationsPanel"));
+const LazyDashboardPlatformTenantsPanel = lazy(() => import("../components/dashboard/DashboardPlatformTenantsPanel"));
+const LazyWhatsAppIntegrationCard = lazy(async () => {
+  const module = await import("../components/integrations/WhatsAppConnectionPanel");
+  return { default: module.WhatsAppIntegrationCard };
+});
+const LazyWhatsAppConnectionPanel = lazy(async () => {
+  const module = await import("../components/integrations/WhatsAppConnectionPanel");
+  return { default: module.WhatsAppConnectionPanel };
+});
 
 // Shared only with the behavioral focus fixture so it exercises the production layout cycle.
 // eslint-disable-next-line react-refresh/only-export-components
@@ -320,6 +334,8 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
   }, [backendLoadRequest, initialAuthSession, onLogout]);
 
   useEffect(() => {
+    if (!CLIENT_DATA_PAGES.has(activePage)) return;
+
     let ignore = false;
     const timeout = window.setTimeout(async () => {
       setClientsLoadState("loading");
@@ -989,10 +1005,14 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
                 <DashboardInboxPanel authSession={authSession} initialConversationId={inboxConversationId} onInitialConversationHandled={consumeInboxConversationTarget} onOpenBusiness={openKanbanBusiness} />
               )}
               {activePage === "usuarios" && authSession && (
-                <DashboardUserSecurityPanel mode="users" authSession={authSession} onToast={setToast} />
+                <Suspense fallback={<LoadingState rows={3} />}>
+                  <LazyDashboardUserSecurityPanel mode="users" authSession={authSession} onToast={setToast} />
+                </Suspense>
               )}
               {activePage === "perfil" && authSession && (
-                <DashboardUserSecurityPanel mode="profile" authSession={authSession} onToast={setToast} onLogout={onLogout} />
+                <Suspense fallback={<LoadingState rows={3} />}>
+                  <LazyDashboardUserSecurityPanel mode="profile" authSession={authSession} onToast={setToast} onLogout={onLogout} />
+                </Suspense>
               )}
               {activePage === "clientes" && (
                 <>
@@ -1048,32 +1068,50 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
               )}
 
               {activePage === "agenda" && (
-                <DashboardAgendaPanel
-                  clients={clients}
-                  createRequestKey={agendaCreateRequestKey}
-                  todayRequestKey={agendaTodayRequestKey}
-                  initialFollowUpId={agendaFollowUpId}
-                  initialFollowUpRequestKey={agendaFollowUpRequestKey}
-                  onTodayRequestHandled={() => setAgendaTodayRequestKey(0)}
-                  onSelectClient={handleSelectClient}
-                />
+                <Suspense fallback={<LoadingState rows={4} />}>
+                  <LazyDashboardAgendaPanel
+                    clients={clients}
+                    createRequestKey={agendaCreateRequestKey}
+                    todayRequestKey={agendaTodayRequestKey}
+                    initialFollowUpId={agendaFollowUpId}
+                    initialFollowUpRequestKey={agendaFollowUpRequestKey}
+                    onTodayRequestHandled={() => setAgendaTodayRequestKey(0)}
+                    onSelectClient={handleSelectClient}
+                  />
+                </Suspense>
               )}
 
-              {activePage === "estoque" && <StockControlPanel detail={resolvedNavigation.detail} />}
+              {activePage === "estoque" && (
+                <Suspense fallback={<LoadingState rows={4} />}>
+                  <LazyStockControlPanel detail={resolvedNavigation.detail} />
+                </Suspense>
+              )}
 
               {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
-                <WhatsAppIntegrationCard
-                  onOpen={() => navigate("/integracoes/whatsapp")}
-                  onUnauthorized={onLogout}
-                />
+                <Suspense fallback={<LoadingState rows={3} />}>
+                  <LazyWhatsAppIntegrationCard
+                    onOpen={() => navigate("/integracoes/whatsapp")}
+                    onUnauthorized={onLogout}
+                  />
+                </Suspense>
               )}
-              {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && siteLeadCaptureEnabled && <DashboardSiteLeadIntegrationPanel />}
-              {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && <DashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />}
+              {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && siteLeadCaptureEnabled && (
+                <Suspense fallback={<LoadingState rows={3} />}>
+                  <LazyDashboardSiteLeadIntegrationPanel />
+                </Suspense>
+              )}
+              {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
+                <Suspense fallback={<LoadingState rows={4} />}>
+                  <LazyDashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />
+                </Suspense>
+              )}
               {isWhatsAppIntegrationDetail && canManageIntegrations && (
-                <WhatsAppConnectionPanel
-                  onBack={() => navigate(getDashboardPath("integracoes"))}
-                  onUnauthorized={onLogout}
-                />
+                <Suspense fallback={<LoadingState rows={4} />}>
+                  <LazyWhatsAppConnectionPanel
+                    onBack={() => navigate(getDashboardPath("integracoes"))}
+                    onUnauthorized={onLogout}
+                  />
+                </Suspense>
               )}
 
               {usingNegociosKanban && authSession && (
@@ -1120,8 +1158,16 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
                 changeStatus={changeStatus}
               />}
 
-              {activePage === "automacoes" && <DashboardAutomationsPanel />}
-              {activePage === "platformTenants" && isPlatformOperator && <DashboardPlatformTenantsPanel />}
+              {activePage === "automacoes" && (
+                <Suspense fallback={<LoadingState rows={4} />}>
+                  <LazyDashboardAutomationsPanel />
+                </Suspense>
+              )}
+              {activePage === "platformTenants" && isPlatformOperator && (
+                <Suspense fallback={<LoadingState rows={4} />}>
+                  <LazyDashboardPlatformTenantsPanel />
+                </Suspense>
+              )}
             </div>
 
             {activePage !== "estoque" && activePage !== "integracoes" && activePage !== "platformTenants" && activePage !== "leads" && activePage !== "inbox" && activePage !== "usuarios" && activePage !== "perfil" && !usingNegociosKanban && customerDrawer}
