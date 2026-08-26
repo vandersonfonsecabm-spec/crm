@@ -757,3 +757,32 @@ Se nenhum meio disponível conseguir enviar um arquivo, informar claramente:
 Antes do envio, remover ou excluir do pacote segredos, tokens, cookies,
 credenciais, dumps com dados reais e qualquer conteúdo sensível proibido pelas
 regras de segurança deste projeto.
+
+============================================================
+24. REGRA PERMANENTE — ANALISAR, CORRIGIR E EXECUTAR TODO COMANDO
+============================================================
+
+Sempre que o usuário enviar um comando, a execução deve ocorrer no mesmo ciclo
+da análise, sem obediência mecânica e sem deixar a correção apenas no texto:
+
+1. ler o comando inteiro e identificar objetivo, escopo, dependências, riscos,
+   autorizações, critérios de sucesso e regras de parada;
+2. auditar contradições, falhas graves, caminhos incorretos, baseline vencido,
+   operações redundantes, lacunas de validação e riscos de Git, banco,
+   produção, navegador, credenciais ou envio de arquivos;
+3. corrigir somente o necessário para preservar o objetivo original, sem
+   inventar regra de negócio, ampliar escopo ou remover gate de segurança;
+4. executar imediatamente a menor sequência segura do comando corrigido;
+5. validar o efeito causal de cada lote e continuar enquanto os gates forem
+   satisfeitos;
+6. interromper somente quando houver hard stop real, nova autorização
+   necessária, divergência inexplicada, ambiguidade funcional material ou falha
+   repetida sem nova evidência;
+7. entregar no mesmo ciclo o resultado, as correções, os testes, as pendências,
+   as limitações e os artefatos/documentos enviados.
+
+"Analisar" não significa apenas emitir opinião: quando a correção for segura e
+estiver dentro do escopo autorizado, ela deve ser aplicada e verificada na
+sequência. Esta regra não autoriza push, deploy, migration, escrita em
+produção, restore, exclusão, credencial ou comunicação externa sem a
+autorização/protocolo específicos exigidos pelas regras superiores.
