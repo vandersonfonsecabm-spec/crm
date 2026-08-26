@@ -31,6 +31,8 @@
   --brand-border: #4e8870;
   --primary: var(--brand);
   --primary-hover: var(--brand-hover);
+  --accent-primary: var(--brand);
+  --accent-primary-hover: var(--brand-hover);
   --action-primary-bg: var(--brand);
   --action-primary-border: var(--brand);
   --action-primary-hover: var(--brand-hover);
@@ -88,6 +90,7 @@
   --sidebar-text-secondary: var(--text-secondary);
   --sidebar-text-muted: var(--text-tertiary);
   --bg-app: var(--canvas);
+  --bg-base: var(--canvas);
   --bg-surface: var(--surface);
   --bg-muted: var(--surface-muted);
   --bg-elevated: var(--surface-elevated);
