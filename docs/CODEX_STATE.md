@@ -64,6 +64,17 @@
 - O relatório sanitizado está em `docs/POST_RELEASE_INFRA_HYGIENE_REPORT_2026-08-26.md`.
   Não houve alteração de produção, migration, deploy, restart ou exclusão.
 
+## V77 — execução das etapas 1 e 3 de higiene (2026-08-26)
+
+- O mapeamento read-only confirmou os dois Postgres extras (`Postgres` e
+  `Postgres-MpW9`) como `UNMAPPED_ACTIVE_DATABASE`: ambos online, com volume e
+  sem referência nas URLs da API/worker. Nenhum foi parado ou removido.
+- A observação curta de produção às 07:15:59 confirmou API, worker e Postgres
+  oficial online; `/health=200`, `/ready=200` com banco OK, zero HTTP 5xx no
+  lookback, zero erros de API/worker e ciclos de estoque sem falhas.
+- Relatório: `docs/POST_RELEASE_INFRA_HYGIENE_STAGE1_3_REPORT_2026-08-26.md`.
+  A observação não substitui uma janela histórica longa nem smoke autenticado.
+
 > **V72 é um snapshot histórico supersedido pela V73/V74.** Os gates de
 > produção pendentes abaixo registram o estado anterior à janela oficial.
 
