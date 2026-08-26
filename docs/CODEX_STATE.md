@@ -1,5 +1,24 @@
 # Estado atual do CRM
 
+## V72 — gate PostgreSQL real da proposta ↔ catálogo (2026-08-26)
+
+- O candidato local `release/ga2-post-e6a` está no HEAD
+  `0dc7e3f4f8d44f3cdd1921991816e4d922d120d9`, com worktree limpa. O commit
+  `0dc7e3f` adiciona somente o relatório; o runtime testado permanece no
+  commit `afe830d40972d765d33fd1692c2663f4157c554c`.
+- `POSTGRES_REAL_REHEARSAL=PASS_LOCAL_CANDIDATE`: migration boundary, backfill,
+  FKs/CHECKs, snapshots, revalidação, ROUND_HALF_UP, CAS e rollback atômico
+  passaram em PostgreSQL descartável. Frontend `197/197`, build e lint também
+  passaram no candidato exato.
+- `POSTGRES_REAL_REHEARSAL` não está mais bloqueado por ambiente. Push, backup
+  oficial, deploy, migration e smoke de produção continuam pendentes e não
+  foram executados. Produção/staging e `backend/prisma/dev.db` permanecem
+  intocados.
+- A promoção deve usar maintenance read-only, worker parado, backup com
+  restore drill e um único dono da migration; o startup normal da API executa
+  migrations pendentes automaticamente, portanto canário mutável antes do
+  migration gate é proibido.
+
 ## V71 — proposta ↔ catálogo V1 (2026-08-25)
 
 - O contrato aprovado está em

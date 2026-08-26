@@ -30,6 +30,7 @@ AUDIT_REVALIDATION_SCOPE=MATERIAL_TRANSITIONS_ONLY
 DISCOUNT_POLICY_STATUS=DEFERRED
 AI_DISCOUNT_AUTHORITY=NOT_IMPLEMENTED
 AUTOMATIC_DISCOUNT=DISABLED
+CATALOG_OPTIONAL_SNAPSHOT_FIELDS=skuSnapshot,stockMaterialVersion
 ```
 
 ## Source-of-truth chain
@@ -99,6 +100,12 @@ The database must reject invalid `CATALOG_ITEM`/`LEGACY_ITEM` combinations with
 an enum or equivalent `CHECK`; service validation remains defense in depth.
 `ProductOffer` is never cascade-deleted into proposal items.
 
+The canonical SKU and stock material version are nullable at the source model,
+so V1 permits only these two snapshot fields to be null. A null value is not an
+authority bypass: if the canonical source later supplies a value or a version,
+material-transition revalidation reports the mismatch and blocks advancement.
+All other catalog snapshots required by the catalog-item CHECK remain present.
+
 ## Revalidation
 
 Only `CATALOG_ITEM` is revalidated, and only during a material transition:
@@ -158,7 +165,8 @@ Material changes continue to use the existing `ATUALIZAR` and
 DISCOUNT_POLICY_STATUS=DEFERRED
 AI_DISCOUNT_AUTHORITY=NOT_IMPLEMENTED
 AUTOMATIC_DISCOUNT=DISABLED
-POSTGRES_REAL_REHEARSAL=BLOCKED_ENVIRONMENT
+POSTGRES_REAL_REHEARSAL=PASS_LOCAL_CANDIDATE
+PRODUCTION_MIGRATION=NOT_RUN
 META_REAL_CHANNELS=OFF
 AI_REAL_CONNECTOR=OFF
 OUTBOUND=0
