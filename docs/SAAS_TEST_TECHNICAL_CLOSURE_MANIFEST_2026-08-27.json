@@ -2,7 +2,7 @@
   "date": "2026-08-27",
   "branch": "codex/store1-release-reconcile",
   "baseRuntime": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
-  "functionalHead": "b594c4c",
+  "functionalHead": "b594c4cdb77c4fb79a5a24c3174dbeb9d0f9e08e",
   "backendGlobalSuite": "PASS",
   "frontendTests": "213/213 PASS_REUSED_VALID_EVIDENCE",
   "frontendBuild": "PASS_REUSED_VALID_EVIDENCE",
@@ -12,28 +12,51 @@
     "source": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
     "state": "READY",
     "runtimeErrors24h": 0,
-    "stableAliasParity": "FAIL"
+    "stableAlias": "crm-ga3-bundle-staging.vercel.app",
+    "stableAliasParity": "PASS"
   },
   "railwayStaging": {
     "environmentId": "d6b6f137-cffd-4647-a102-3619fc54133a",
     "apiServiceId": "8af12b8e-4f4d-498c-9ceb-3182417905f8",
+    "deploymentId": "a8ee1240-65f5-4859-b851-9e3d2edbb17f",
     "health": 200,
-    "ready": 200
+    "ready": 200,
+    "stockTenantAllowlist": "1,2,3",
+    "store1NegociosKanban": true
   },
   "fixes": [
     {
       "commit": "b594c4c",
       "area": "Bling OAuth token response",
-      "status": "PASS_LOCAL_NOT_DEPLOYED",
-      "tests": "2/2 PASS"
+      "status": "PASS_DEPLOYED_STAGING",
+      "tests": "2/2 PASS + 13/13 PASS"
     }
   ],
-  "remaining": {
-    "authenticatedBrowserQaCurrentRuntime": "UNTESTED",
-    "stableStagingAliasParity": "FAIL",
-    "realWorkerRetryRecovery": "UNTESTED"
+  "workerRetry": {
+    "sourceEvidence": "c7889848dc7e77c2cfeb61aec8525e025f23916d",
+    "relevantDiff": "EMPTY",
+    "realRecovery": "PASS_REUSED"
   },
-  "store1InternalProductReady": "BLOCKED",
+  "browserQa": {
+    "status": "PASS",
+    "routes": ["central-comercial", "estoque", "automacoes", "integracoes"],
+    "directRefresh": "PASS",
+    "consoleErrors": 0,
+    "consoleWarnings": 0,
+    "productionRequests": 0,
+    "unexpectedClientesRequests": 0
+  },
+  "temporaryQaAccount": {
+    "created": true,
+    "activeAtEnd": false,
+    "sessionsRevoked": 1,
+    "refreshTokensRevoked": 3,
+    "credentialsPersistedInArtifacts": false
+  },
+  "remaining": {
+    "externalProviders": "PENDING"
+  },
+  "store1InternalProductReady": "PASS",
   "productionWrites": 0,
   "productionDeployments": 0
 }

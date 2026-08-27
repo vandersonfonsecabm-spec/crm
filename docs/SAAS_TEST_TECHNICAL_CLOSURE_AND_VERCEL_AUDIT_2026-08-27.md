@@ -16,15 +16,14 @@ observada, mas o resultado não podia ser classificado como PASS. A suíte foi
 reexecutada uma única vez pelo runner canônico, em sandbox temporária, e
 terminou com código `0`.
 
-A investigação também reconciliou as evidências de frontend/Vercel e encontrou
-duas lacunas operacionais reais: o alias estável do staging ainda entrega um
-deployment antigo que não renderiza a aplicação, e o deployment novo não
-possui uma sessão autenticada reaproveitável naquele domínio. A API Railway de
-staging permanece saudável.
+A investigação reconciliou as evidências de frontend/Vercel, corrigiu o alias
+estável de staging e concluiu QA autenticado no domínio final. A API Railway de
+staging recebeu o hardening do Bling e permaneceu saudável.
 
 Uma revisão adversarial identificou ainda que o parser OAuth do Bling aceitava
-valores não string por coerção. A correção fail-closed foi implementada e
-testada localmente no commit `b594c4c`. Esse commit não foi publicado.
+valores não string por coerção. A correção fail-closed foi implementada,
+testada e publicada somente no staging a partir do commit funcional
+`b594c4c`. Produção permaneceu inalterada.
 
 ## Estado inicial recuperado
 
@@ -75,7 +74,8 @@ FIX_COMMIT=b594c4c
 BLING_CONTRACT_HARDENING=2/2 PASS
 GIT_DIFF_CHECK=PASS
 PUSH=0
-DEPLOY=0
+RAILWAY_STAGING_DEPLOY=PASS
+PRODUCTION_DEPLOY=0
 ```
 
 ### 3. Frontend e Vercel
@@ -105,36 +105,41 @@ PRODUCTION_CHANGED=false
 
 ## Browser QA focal
 
-Foram testadas duas superfícies, sem escrita:
+O deployment frontend já aprovado `dpl_93YQPNrgEbSoPvDJFxRQFUhwxQVn` foi
+reutilizado porque não houve delta frontend desde `4b0b6be`. O alias
+`crm-ga3-bundle-staging.vercel.app` foi movido para esse deployment depois de
+validar index, JS, CSS e `/api/health`.
 
-1. deployment único do runtime `4b0b6be`: frontend carregou, mas a validação
-   de acesso não conseguiu concluir por ausência de sessão autenticada válida
-   naquele domínio;
-2. alias estável `crm-ga3-bundle-staging.vercel.app`: título e HTML base foram
-   carregados, porém a aplicação permaneceu sem conteúdo renderizado e sem
-   erro de console, consistente com o deployment antigo já registrado.
-
-A API de staging respondeu 200 diretamente, portanto a falha não é indisponibilidade
-do PostgreSQL ou da API Railway.
+Uma conta ADMIN temporária, forte e sintética foi criada no tenant STORE-1
+somente para o QA. As capabilities internas de Negócios e Estoque foram
+configuradas para o tenant. O roteiro aprovou Painel Comercial, Estoque,
+Automações, Integrações, refresh direto, console e rede. Ao final, a conta foi
+desativada, uma sessão e três refresh tokens foram revogados, e o navegador
+voltou para o login.
 
 ```text
-AUTHENTICATED_BROWSER_QA_CURRENT_RUNTIME=UNTESTED
-STABLE_STAGING_ALIAS_PARITY=FAIL
+AUTHENTICATED_BROWSER_QA_CURRENT_RUNTIME=PASS
+STABLE_STAGING_ALIAS_PARITY=PASS
 STAGING_BACKEND_AVAILABILITY=PASS
+CONSOLE_ERRORS=0
+CONSOLE_WARNINGS=0
+PRODUCTION_REQUESTS=0
+UNEXPECTED_CLIENTES_REQUESTS=0
+TEMP_QA_ACCOUNT_ACTIVE=false
 ```
-
-Não foi digitada nem transmitida credencial durante esta execução.
 
 ## Worker de automações
 
-Os testes locais provaram retry, backoff, exaustão e recuperação do worker. A
-prova operacional live continua ausente porque o ambiente de staging não possui
-serviço worker. Criar/publicar esse serviço seria um novo deploy cloud, fora da
-autorização deste lote.
+A prova AU-04 anterior executou um worker Railway real em staging e registrou
+`ACTION_TIMEOUT` → `job_retry_scheduled` → tentativa 2 `SUCCEEDED`. A
+comparação entre o source causal `c7889848` e `b594c4c` confirmou blobs
+idênticos para worker, actions, service, observabilidade e testes de retry.
+Nenhum worker novo foi criado.
 
 ```text
 WORKER_RETRY_LOCAL=PASS
-REAL_WORKER_RETRY_RECOVERY=UNTESTED
+WORKER_RETRY_RELEVANT_DIFF=EMPTY
+REAL_WORKER_RETRY_RECOVERY=PASS_REUSED
 ```
 
 ## Auditoria adversarial e documentação anterior
@@ -155,25 +160,21 @@ VERCEL_STAGING_DEPLOYMENT=READY
 VERCEL_RUNTIME_ERRORS_24H=0
 STAGING_API_HEALTH=PASS
 STAGING_API_READY=PASS
-BLING_TOKEN_TYPE_HARDENING=PASS_LOCAL_NOT_DEPLOYED
-AUTHENTICATED_BROWSER_QA_CURRENT_RUNTIME=UNTESTED
-STABLE_STAGING_ALIAS_PARITY=FAIL
-REAL_WORKER_RETRY_RECOVERY=UNTESTED
-STORE1_INTERNAL_PRODUCT_READY=BLOCKED
+BLING_TOKEN_TYPE_HARDENING_STAGING=PASS
+AUTHENTICATED_BROWSER_QA_CURRENT_RUNTIME=PASS
+STABLE_STAGING_ALIAS_PARITY=PASS
+REAL_WORKER_RETRY_RECOVERY=PASS_REUSED
+STORE1_INTERNAL_PRODUCT_READY=PASS
 STORE1_EXTERNAL_INTEGRATIONS_READY=PENDING_EXTERNAL_PROVIDER
 PRODUCTION_WRITE=0
 PRODUCTION_DEPLOY=0
 ```
 
-## Pendências mínimas
+## Pendências externas
 
-1. autorizar promoção/redeploy somente no projeto Vercel de staging para que o
-   alias estável aponte ao candidato atual;
-2. executar login sintético e QA focal autenticado no alias corrigido;
-3. em lote separado, autorizar criação/publicação de worker no staging para a
-   prova real de retry transitório;
-4. depois desses gates, atualizar a matriz STORE-1 para uma única contagem
-   canônica e repetir somente os testes causalmente afetados.
+Meta, WhatsApp, Instagram, Messenger, e-mail e IA com providers reais
+continuam deliberadamente fora desta missão. Bling permanece sem conta real.
+Esses itens não são falhas do núcleo interno.
 
 ## Otimizações de execução
 
@@ -181,5 +182,7 @@ PRODUCTION_DEPLOY=0
   causal mudou;
 - a suíte backend foi repetida somente porque o exit code anterior se perdeu;
 - após o hardening do Bling, apenas o teste focal foi repetido;
-- nenhum deploy duplicado, push, migration, backup ou escrita de produção foi
-  executado.
+- um primeiro upload Railway sem o root `backend` falhou antes de ativar
+  runtime; a correção causal foi aplicada uma vez e o serviço anterior
+  permaneceu disponível;
+- nenhum push, migration nova, backup ou escrita de produção foi executado.

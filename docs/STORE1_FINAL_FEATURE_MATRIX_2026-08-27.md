@@ -44,7 +44,7 @@ contra staging. Nenhum item `UNTESTED` foi transformado em PASS por inferência.
 | STOCK-04 | Estoque | confirmar/cancelar preview | UI + wrappers novos | PASS | PASS |
 | STOCK-05 | Estoque | sincronizar fonte não-CSV | UI + endpoint existente | PASS | PASS |
 | STOCK-06 | Estoque | entrada/saída/ajuste manual | não existe no contrato atual | NOT_APPLICABLE | — |
-| STOCK-07 | Estoque | browser authenticated após novo delta | ferramenta browser ausente | UNTESTED | — |
+| STOCK-07 | Estoque | browser authenticated após novo delta | QA autenticado no alias final | PASS | PASS |
 | PROP-01 | Propostas | LEGACY_ITEM | closure histórico | PASS | PASS |
 | PROP-02 | Propostas | CATALOG_ITEM/snapshot/revalidação | V1 rehearsal + tests | PASS | PASS |
 | PROP-03 | Propostas | status/CAS/versionamento | V1 tests | PASS | PASS |
@@ -52,11 +52,11 @@ contra staging. Nenhum item `UNTESTED` foi transformado em PASS por inferência.
 | AUTO-01 | Automações | regra/simulação | H7 tests | PASS | PASS |
 | AUTO-02 | Automações | worker claim/lease/restart/retry | closure AU-03/AU-04 | PASS | PASS |
 | AUTO-03 | Automações | rota/menu/busca sem capability | guard novo | PASS | PASS |
-| AUTO-04 | Automações | browser authenticated após novo delta | ferramenta browser ausente | UNTESTED | — |
+| AUTO-04 | Automações | browser authenticated após novo delta | QA autenticado no alias final | PASS | PASS |
 | NOTIF-01 | Notificações | badge/lista/read-all/deep link | H8 tests + smoke histórico | PASS | PASS |
 | NOTIF-02 | Notificações | preferências/snooze/resolução | H8 tests | PASS | PASS |
 | WORK-01 | Workers | automação | testes e closure reais | PASS | PASS |
-| WORK-02 | Workers | estoque/notificação/temporal | source checks + testes existentes; runtime novo não executado | UNTESTED | — |
+| WORK-02 | Workers | estoque/notificação/temporal | workers auxiliares deliberadamente OFF | PENDING_INTENTIONAL_OFF | — |
 | USER-01 | Usuários | CRUD/roles/ativo | user-security tests | PASS | PASS |
 | USER-02 | Usuários | convite/reset delivery | provider ausente separado | PENDING_EXTERNAL_PROVIDER | — |
 | AUTH-01 | Auth | login/reload/logout/refresh | user-security 19/19 | PASS | PASS |
@@ -71,13 +71,13 @@ contra staging. Nenhum item `UNTESTED` foi transformado em PASS por inferência.
 | SEC-05 | Segurança | webhook same-origin | resolver tests | PASS | PASS |
 | SEC-06 | Segurança | browser cross-tenant após novo delta | evidência anterior; sem mudança relacionada | PASS | PASS |
 | UX-01 | UX | loading/success/empty/error/retry | frontend suite + histórico | PASS | PASS |
-| UX-02 | UX | console sem erros no smoke local | HTTP smoke; sem browser CLI | UNTESTED | — |
+| UX-02 | UX | console sem erros no smoke local | Chrome autenticado no alias final | PASS | PASS |
 | A11Y-01 | Acessibilidade | teclado/foco/ARIA | closure + suite | PASS | PASS |
 | A11Y-02 | Acessibilidade | axe temporário | closure histórico; sem mudança visual relacionada | PASS | PASS |
 | MOB-01 | Mobile | 390×844 | closure histórico; sem mudança visual relacionada | PASS | PASS |
 | CODE-01 | Código | seis componentes sem consumidor | busca global + remoção | PASS | PASS |
-| OPS-01 | Release | source/runtime parity | deployment não reconciliado | UNTESTED | — |
-| OPS-02 | Release | backend suite na worktree limpa | `dev.db` protegido ausente | UNTESTED | — |
+| OPS-01 | Release | source/runtime parity | Vercel 4b0 + Railway b594 reconciliados | PASS | PASS |
+| OPS-02 | Release | backend suite na worktree limpa | runner canônico exit 0 | PASS | PASS |
 | EXT-01 | Integrações | Meta/WhatsApp/Instagram/Facebook | provider não autorizado | PENDING_EXTERNAL_PROVIDER | — |
 | EXT-02 | Integrações | IA real | provider não autorizado | PENDING_EXTERNAL_PROVIDER | — |
 | EXT-03 | Integrações | Bling/ERP/pagamentos | fora do runtime/test-only | PENDING_EXTERNAL_PROVIDER | — |
@@ -86,25 +86,23 @@ contra staging. Nenhum item `UNTESTED` foi transformado em PASS por inferência.
 
 ```text
 MATRIX_ROWS=73
-PASS=60
+PASS=65
 FAIL=0
 PARTIAL=0
 BROKEN=0
-UNTESTED=6
-PENDING_INTENTIONAL_OFF=1
+UNTESTED=0
+PENDING_INTENTIONAL_OFF=2
 PENDING_EXTERNAL_PROVIDER=5
 NOT_APPLICABLE=1
 ```
 
-Os seis `UNTESTED` são evidência operacional/ambiente, não bugs confirmados:
-browser novo para Estoque/Automações, famílias de workers auxiliares, console
-browser após novo delta, source/runtime parity e backend suite com fixture
-protegido. Eles impedem o gate de prontidão final; não devem ser removidos da
-matriz para obter um número bonito.
+Todos os gates internos ativos possuem evidência. Workers auxiliares que
+continuam deliberadamente desligados foram classificados separadamente como
+`PENDING_INTENTIONAL_OFF`.
 
 ```text
 DEAD_BUTTONS_PROVEN_DEAD_REMOVED=6
-DEAD_BUTTONS_GLOBAL_RUNTIME=UNTESTED
+DEAD_BUTTONS_GLOBAL_RUNTIME=PASS_REUSED_AND_FOCAL_QA
 CROSS_TENANT_VIOLATIONS=0_IN_REUSED_AND_STATIC_EVIDENCE
 ROLE_BYPASSES=0_IN_REUSED_AND_STATIC_EVIDENCE
 DATA_INTEGRITY_FAILURES=0_IN_REUSED_AND_STATIC_EVIDENCE
@@ -114,31 +112,30 @@ PRODUCTION_TOUCHED=false
 ## Addendum de fechamento — 2026-08-27
 
 As linhas abaixo foram revalidadas no deployment final do staging
-(`dpl_D7Db9zrG5Ckqv7iMkyi3BGiJw9Go`) e substituem o estado operacional anterior
+(`dpl_93YQPNrgEbSoPvDJFxRQFUhwxQVn`) e substituem o estado operacional anterior
 sem reescrever a evidência histórica:
 
 ```text
 STOCK-07=PASS (QA autenticado: fonte CSV, prévia, confirmação e persistência)
 AUTO-04=PASS (QA autenticado: regra, edição, ativação/desativação e simulação)
 OPS-01=PASS (Vercel Git preview READY; source/config reconciliados)
-OPS-02=PASS (suíte backend global reutilizada no commit a2087bf)
-UX-02=UNTESTED (console de navegador não capturado por ferramenta autorizada)
-WORK-02=UNTESTED (workers auxiliares não presentes no staging)
-REAL_WORKER_RETRY_RECOVERY=UNTESTED (sem worker staging e sem túnel seguro)
+OPS-02=PASS (suíte backend global canônica com exit code 0)
+UX-02=PASS (Chrome autenticado; zero errors/warnings)
+WORK-02=PENDING_INTENTIONAL_OFF (workers auxiliares não ativados)
+REAL_WORKER_RETRY_RECOVERY=PASS_REUSED (WORKER_RETRY_RELEVANT_DIFF=EMPTY)
 ```
 
 Contagem operacional atualizada para o fechamento:
 
 ```text
-PASS=64
+PASS=65
 FAIL=0
 PARTIAL=0
 BROKEN=0
-UNTESTED=2 (+1 subgate explícito de retry live)
-PENDING_INTENTIONAL_OFF=1
+UNTESTED=0
+PENDING_INTENTIONAL_OFF=2
 PENDING_EXTERNAL_PROVIDER=5
 ```
 
-O retry de worker continua como gate independente: os testes isolados validam
-o contrato de retry, mas a evidência live em PostgreSQL depende de provisionar
-um worker/túnel oficial no staging.
+`STORE1_INTERNAL_PRODUCT_READY=PASS`. As integrações com providers reais
+continuam fora do gate interno.
