@@ -48,8 +48,6 @@ correções de execução foram:
 ```text
 BRANCH=codex/store1-release-reconcile
 AUDITED_RUNTIME_SHA=4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f
-REPORT_SHA=2ee92a0
-REMOTE_HEAD=2ee92a0
 WORKTREE_CLEAN=true
 PROTECTED_DEV_DB_LINK=REMOVED
 
@@ -231,7 +229,6 @@ insegura.
 
 ```text
 RUNTIME_COMMIT=4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f
-REPORT_COMMIT=2ee92a0
 PUSH=PASS (origin/codex/store1-release-reconcile)
 STAGING_VERCEL_PREVIEW=PASS
 PRODUCTION_DEPLOY=NOT_EXECUTED

@@ -3,8 +3,6 @@
   "date": "2026-08-27",
   "branch": "codex/store1-release-reconcile",
   "runtimeCommit": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
-  "reportCommit": "2ee92a0",
-  "remoteHead": "2ee92a0",
   "production": {
     "writes": 0,
     "deployments": 0,
