@@ -1,0 +1,63 @@
+{
+  "report": "docs/EXTERNAL_INTEGRATIONS_READINESS_AUDIT_2026-08-27.md",
+  "date": "2026-08-27",
+  "branch": "codex/store1-release-reconcile",
+  "commit": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
+  "remoteHead": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
+  "production": {
+    "writes": 0,
+    "deployments": 0,
+    "variablesChanged": false,
+    "databaseChanged": false,
+    "health": 200,
+    "ready": 200,
+    "runtimeErrors24h": 0
+  },
+  "staging": {
+    "railwayEnvironmentId": "d6b6f137-cffd-4647-a102-3619fc54133a",
+    "database": "Postgres--e25",
+    "vercelProjectId": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
+    "vercelDeploymentId": "dpl_93YQPNrgEbSoPvDJFxRQFUhwxQVn",
+    "vercelState": "READY",
+    "mainJsMime": "application/javascript",
+    "mainCssMime": "text/css",
+    "runtimeErrors24h": 0
+  },
+  "integrations": [
+    { "name": "WhatsApp inbound", "status": "READY_FOR_PROVIDER_CONFIGURATION", "externalProvider": "PENDING_EXTERNAL_PROVIDER", "realOutbound": false },
+    { "name": "Instagram inbound/OAuth", "status": "READY_FOR_PROVIDER_CONFIGURATION", "externalProvider": "PENDING_EXTERNAL_PROVIDER", "realTransport": false },
+    { "name": "Messenger inbound", "status": "READY_FOR_PROVIDER_CONFIGURATION", "externalProvider": "PENDING_EXTERNAL_PROVIDER", "realOutbound": false },
+    { "name": "Email inbound", "status": "PARTIAL", "externalProvider": "PENDING_EXTERNAL_PROVIDER", "adapter": "GENERIC_SYNTHETIC_ONLY" },
+    { "name": "Bling", "status": "READY_FOR_PROVIDER_CONFIGURATION", "concurrencyAdvisory": true, "realAccount": false },
+    { "name": "AI Commerce", "status": "INTENTIONAL_OFF", "realProvider": "PENDING_EXTERNAL_PROVIDER", "realAccountConnected": false },
+    { "name": "Site Form", "status": "PASS", "externalProvider": "NOT_REQUIRED" }
+  ],
+  "tests": {
+    "frontend": "213/213 PASS",
+    "vercelConfig": "6/6 PASS",
+    "metaProviderTransport": "9/9 PASS",
+    "metaOAuth": "18/18 PASS",
+    "whatsappWebhook": "6/6 PASS",
+    "instagramWebhook": "8/8 PASS",
+    "messengerWebhook": "9/9 PASS",
+    "blingHardening": "2/2 PASS",
+    "blingIntegration": "13/13 PASS",
+    "npmAuditHigh": 0
+  },
+  "fixes": [
+    "Vercel filesystem phase before SPA fallback",
+    "Meta retry recovery clears only current webhook failure",
+    "Replay no longer advances lastWebhookAt",
+    "Webhook/lifecycle secrets require minimum length 8",
+    "Instagram status endpoint and dynamic readiness panel",
+    "Instagram configuration aliases documented",
+    "Bling token response validation",
+    "Bling ROUND_HALF_UP monetary conversion",
+    "Bling partial sync no longer claims last success",
+    "AI execution status no longer defaults to MOCK_AVAILABLE"
+  ],
+  "delivery": {
+    "fixedConversationUrl": "https://chatgpt.com/c/6a819f5c-b320-83e9-9fa1-02b11c312d1d",
+    "attachmentsPending": true
+  }
+}
