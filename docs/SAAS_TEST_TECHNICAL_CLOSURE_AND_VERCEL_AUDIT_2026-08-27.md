@@ -1,9 +1,12 @@
 # Fechamento técnico da SaaS em teste e auditoria Vercel
 
-Data: 2026-08-27  
-Branch: `codex/store1-release-reconcile`  
-Base auditada/deployada no staging: `4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f`  
-HEAD funcional local final: `b594c4c`  
+Data: 2026-08-27
+
+Branch: `codex/store1-release-reconcile`
+
+Base auditada/deployada no staging: `4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f`
+
+HEAD funcional local final: `b594c4c`
 
 ## Resumo executivo
 
