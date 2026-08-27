@@ -60,5 +60,8 @@
   "delivery": {
     "fixedConversationUrl": "https://chatgpt.com/c/6a819f5c-b320-83e9-9fa1-02b11c312d1d",
     "attachmentsPending": true
+  },
+  "artifactsSha256": {
+    "docs/EXTERNAL_INTEGRATIONS_READINESS_AUDIT_2026-08-27.md": "7c3dcb6f4ef2417b860ffc8e187cc01da8e6f1912455d718be8061886cfb9542"
   }
 }
