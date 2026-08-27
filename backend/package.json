@@ -33,6 +33,8 @@
     "test:postgres:real": "node scripts/test-postgres-real.cjs",
     "test:postgres:v1:rollback": "node scripts/rehearse-postgres-v1-rollback.cjs",
     "test:store1:staging-soak": "node scripts/run-store1-staging-soak.cjs",
+    "run:store1:staging-soak-launcher": "node scripts/run-store1-staging-soak-launcher.cjs",
+    "test:store1:staging-soak-job": "node --test tests/store1-staging-soak.test.js tests/store1-staging-soak-job.test.js",
     "test:auth": "node --test tests/auth.integration.test.js"
   },
   "keywords": [],

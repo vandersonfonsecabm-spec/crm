@@ -162,6 +162,167 @@ function defaultProbePath(target, kind) {
   return `${throughVercel ? "/api" : ""}/${kind}`;
 }
 
+function defaultAuthPath(target, kind) {
+  const throughVercel = normalizeHost(target.hostname) === "crm-ga3-bundle-staging.vercel.app";
+  return `${throughVercel ? "/api" : ""}/auth/${kind}`;
+}
+
+function extractRefreshCookie(response) {
+  const candidates = typeof response?.headers?.getSetCookie === "function"
+    ? response.headers.getSetCookie()
+    : [response?.headers?.get?.("set-cookie")].filter(Boolean);
+  for (const candidate of candidates) {
+    const match = String(candidate || "").match(/(?:^|[,;]\s*)crm_refresh_token=([^;,\s]+)/i);
+    if (match) return `crm_refresh_token=${match[1]}`;
+  }
+  return "";
+}
+
+function createRoleAuthLifecycle({ target, identities, fetchImpl = globalThis.fetch, now = Date.now, timeoutMs = DEFAULT_TIMEOUT_MS, refreshSkewMs = 120000 } = {}) {
+  if (!(target instanceof URL) || typeof fetchImpl !== "function") throw new SoakError("SOAK_AUTH_CONFIG_INVALID", "Auth lifecycle invalido.");
+  if (!Array.isArray(identities) || identities.length !== ROLE_NAMES.length) throw new SoakError("SOAK_AUTH_IDENTITIES_INVALID", "Tres identidades sinteticas obrigatorias.");
+  const states = new Map();
+  for (const identity of identities) {
+    const role = String(identity?.role || "").trim().toUpperCase();
+    const email = String(identity?.email || "").trim().toLowerCase();
+    const password = String(identity?.password || "");
+    const tenantId = Number(identity?.empresaId || identity?.tenantId);
+    if (!ROLE_NAMES.includes(role) || states.has(role) || !email.endsWith("@example.test") || password.length < 16 || !Number.isSafeInteger(tenantId) || tenantId < 1) {
+      throw new SoakError("SOAK_AUTH_IDENTITIES_INVALID", "Identidade sintetica invalida.");
+    }
+    states.set(role, { role, tenantId, email, password, accessToken: "", refreshCookie: "", expiresAtMs: 0, pending: null, disabled: false, loginFailures: 0, refreshFailures: 0, relogins: 0 });
+  }
+  if (states.size !== ROLE_NAMES.length) throw new SoakError("SOAK_AUTH_IDENTITIES_INVALID", "Roles sinteticas incompletas.");
+  const counters = { logins: 0, refreshes: 0, relogins: 0, validations: 0, failures: 0 };
+
+  async function validateIdentity(state) {
+    const url = assertSameOriginRequest(target, defaultAuthPath(target, "me"));
+    const response = await fetchImpl(url, {
+      method: "GET",
+      redirect: "manual",
+      headers: { Authorization: `Bearer ${state.accessToken}`, Origin: target.origin },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const payload = Number(response.status) === 200 && typeof response.json === "function" ? await response.json().catch(() => null) : null;
+    const user = payload?.usuario || payload?.user;
+    const empresaId = Number(user?.empresaId || payload?.empresa?.id);
+    if (!payload || payload.status !== "ATIVO" || payload.papel !== state.role || user?.papel !== state.role || user?.ativo !== true || empresaId !== state.tenantId) {
+      throw new SoakError("SOAK_AUTH_IDENTITY_MISMATCH", "Sessao nao corresponde a identidade sintetica esperada.");
+    }
+    counters.validations += 1;
+  }
+
+  async function authenticate(state, mode) {
+    const isRefresh = mode === "refresh";
+    const url = assertSameOriginRequest(target, defaultAuthPath(target, isRefresh ? "refresh" : "login"));
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetchImpl(url, {
+        method: "POST",
+        redirect: "manual",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: target.origin,
+          ...(isRefresh ? { Cookie: state.refreshCookie } : {}),
+        },
+        body: isRefresh ? undefined : JSON.stringify({ email: state.email, senha: state.password }),
+        signal: controller.signal,
+      });
+      if (Number(response.status) !== 200) {
+        const error = new SoakError(isRefresh ? "SOAK_AUTH_REFRESH_FAILED" : "SOAK_AUTH_LOGIN_FAILED", "Autenticacao sintetica recusada.");
+        error.status = Number(response.status);
+        throw error;
+      }
+      const payload = typeof response.json === "function" ? await response.json().catch(() => null) : null;
+      const accessToken = String(payload?.access_token || "");
+      const expiresAtMs = Date.parse(String(payload?.expires_at || ""));
+      const refreshCookie = extractRefreshCookie(response);
+      const responseUser = payload?.usuario || payload?.user;
+      const responseTenantId = Number(responseUser?.empresaId || payload?.empresa?.id);
+      if (!accessToken || !Number.isFinite(expiresAtMs) || expiresAtMs <= now() || !refreshCookie
+        || payload?.papel !== state.role || responseUser?.papel !== state.role || responseUser?.ativo !== true || responseTenantId !== state.tenantId) {
+        throw new SoakError("SOAK_AUTH_RESPONSE_INVALID", "Resposta de autenticacao sintetica invalida.");
+      }
+      state.accessToken = accessToken;
+      state.expiresAtMs = expiresAtMs;
+      state.refreshCookie = refreshCookie;
+      await validateIdentity(state);
+      if (isRefresh) {
+        counters.refreshes += 1;
+        state.refreshFailures = 0;
+      } else {
+        counters.logins += 1;
+        state.loginFailures = 0;
+      }
+    } catch (error) {
+      counters.failures += 1;
+      const rejected = [401, 403].includes(Number(error?.status));
+      const invalid = ["SOAK_AUTH_RESPONSE_INVALID", "SOAK_AUTH_IDENTITY_MISMATCH"].includes(error?.code);
+      if (isRefresh) {
+        state.refreshFailures += 1;
+        if (rejected) {
+          state.accessToken = "";
+          state.refreshCookie = "";
+          state.expiresAtMs = 0;
+        }
+        if (invalid || state.refreshFailures >= 3) state.disabled = true;
+      } else {
+        state.loginFailures += 1;
+        state.accessToken = "";
+        state.refreshCookie = "";
+        state.expiresAtMs = 0;
+        if (rejected || invalid || state.loginFailures >= 3) state.disabled = true;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function ensure(state) {
+    if (state.disabled) throw new SoakError("SOAK_AUTH_IDENTITY_DISABLED", "Identidade sintetica indisponivel.");
+    if (state.pending) return state.pending;
+    const needsLogin = !state.accessToken || !state.refreshCookie;
+    const needsRefresh = !needsLogin && state.expiresAtMs - now() <= refreshSkewMs;
+    if (!needsLogin && !needsRefresh) return;
+    state.pending = (async () => {
+      if (!needsRefresh) return authenticate(state, "login");
+      try {
+        return await authenticate(state, "refresh");
+      } catch (error) {
+        if ([401, 403].includes(Number(error?.status)) && state.relogins < 1 && !state.disabled) {
+          state.relogins += 1;
+          counters.relogins += 1;
+          return authenticate(state, "login");
+        }
+        throw error;
+      }
+    })().finally(() => { state.pending = null; });
+    return state.pending;
+  }
+
+  return Object.freeze({
+    async headersFor(role) {
+      const state = states.get(String(role || "").toUpperCase());
+      if (!state) throw new SoakError("SOAK_AUTH_ROLE_INVALID", "Role sintetica desconhecida.");
+      await ensure(state);
+      return { Authorization: `Bearer ${state.accessToken}` };
+    },
+    stats() { return { ...counters, roles: states.size }; },
+    destroy() {
+      for (const state of states.values()) {
+        state.email = "";
+        state.password = "";
+        state.accessToken = "";
+        state.refreshCookie = "";
+        state.expiresAtMs = 0;
+        state.disabled = true;
+      }
+    },
+  });
+}
+
 function resolveConfig({ env = process.env, testOverrides, allowTestOverrides = false, requireCredentials = true, testAllowedHosts = [] } = {}) {
   const target = assertStagingTarget({
     baseUrl: env.STORE1_SOAK_BASE_URL,
@@ -280,7 +441,7 @@ function createLedger(config, runId, startedAt) {
       health: { checks: 0, failures: 0 },
       ready: { checks: 0, failures: 0 },
       duplicates: 0,
-      jobs: { observations: 0, last: null, maxima: {} },
+      jobs: { observations: 0, invalidSnapshots: 0, baseline: null, final: null, deltas: null, last: null, maxima: {} },
       providerEgress: 0,
       productionRequests: 0,
     },
@@ -295,13 +456,25 @@ function createLedger(config, runId, startedAt) {
 
 function numericJobSnapshot(payload) {
   if (!payload || typeof payload !== "object") return null;
-  const allowed = ["total", "pending", "running", "succeeded", "failed", "stuck", "retries", "duplicates"];
+  const mapping = {
+    total: ["total", "jobs"],
+    pending: ["pending", "pendingJobs"],
+    running: ["running", "processingJobs"],
+    succeeded: ["succeeded", "succeededJobs"],
+    failed: ["failed", "failedJobs"],
+    cancelled: ["cancelled", "cancelledJobs"],
+    stuck: ["stuck"],
+    retries: ["retries"],
+    duplicates: ["duplicates"],
+  };
   const result = {};
-  for (const key of allowed) {
-    const value = Number(payload[key]);
-    if (Number.isFinite(value) && value >= 0) result[key] = value;
+  for (const [key, candidates] of Object.entries(mapping)) {
+    const source = candidates.find((candidate) => Object.hasOwn(payload, candidate));
+    if (!source) continue;
+    const value = payload[source];
+    if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) result[key] = value;
   }
-  return Object.keys(result).length ? result : null;
+  return ["total", "pending", "running", "succeeded", "failed"].every((key) => Number.isFinite(result[key])) ? result : null;
 }
 
 async function runStore1StagingSoak(options = {}) {
@@ -313,7 +486,7 @@ async function runStore1StagingSoak(options = {}) {
     env,
     testOverrides: options.testOverrides,
     allowTestOverrides: options.allowTestOverrides,
-    requireCredentials: true,
+    requireCredentials: !options.authLifecycle,
     testAllowedHosts: options.testAllowedHosts,
   });
   const fetchImpl = options.fetchImpl || globalThis.fetch;
@@ -329,16 +502,35 @@ async function runStore1StagingSoak(options = {}) {
     ledger.maxInflightObserved = Math.max(ledger.maxInflightObserved, active);
   });
 
-  const fingerprintUrl = assertSameOriginRequest(config.target, config.fingerprintPath);
-  const fingerprintResponse = await fetchImpl(fingerprintUrl, { method: "GET", redirect: "manual", headers: { "x-store1-soak-probe": config.probeToken }, signal: AbortSignal.timeout(config.timeoutMs) });
-  const fingerprint = fingerprintResponse.status === 200 && typeof fingerprintResponse.json === "function"
-    ? await fingerprintResponse.json().catch(() => null)
-    : null;
-  if (!fingerprint || fingerprint.environment !== "staging" || fingerprint.targetVerified !== true || fingerprint.databaseVerified !== true
-    || (config.sourceManifestSha256 && String(fingerprint.sourceManifestSha256 || "").toLowerCase() !== config.sourceManifestSha256)
-    || fingerprint.providersConnected !== false || fingerprint.outboundEnabled !== false) {
-    throw new SoakError("SOAK_RUNTIME_FINGERPRINT_MISMATCH", "Runtime staging nao corresponde ao candidato seguro.");
-  }
+  const recordJobSnapshot = (snapshot) => {
+    if (!snapshot) {
+      ledger.metrics.jobs.invalidSnapshots += 1;
+      return false;
+    }
+    ledger.metrics.jobs.observations += 1;
+    ledger.metrics.jobs.baseline ||= snapshot;
+    ledger.metrics.jobs.final = snapshot;
+    ledger.metrics.jobs.last = snapshot;
+    for (const [key, value] of Object.entries(snapshot)) ledger.metrics.jobs.maxima[key] = Math.max(ledger.metrics.jobs.maxima[key] || 0, value);
+    return true;
+  };
+
+  const executeJobProvider = async () => {
+    try {
+      const raw = await options.jobMetricsProvider();
+      if (!recordJobSnapshot(numericJobSnapshot(raw))) throw new SoakError("SOAK_JOBS_SNAPSHOT_INVALID", "Snapshot operacional de jobs invalido.");
+    } catch (error) {
+      ledger.metrics.failures += 1;
+      ledger.errors.push({ kind: "jobs", ...safeError(error) });
+    }
+  };
+
+  await verifyRuntimeFingerprint({ config, fetchImpl });
+
+  const headersForRole = async (role) => {
+    if (options.authLifecycle) return options.authLifecycle.headersFor(role.name);
+    return role.headers;
+  };
 
   const executeRequest = async ({ kind, requestPath, role, method = "GET", headers = {} }) => {
     const requestId = `${runId}:${kind}:${randomUUID()}`;
@@ -371,7 +563,7 @@ async function runStore1StagingSoak(options = {}) {
       latencies.push(latency);
       ledger.metrics.requests += 1;
       if (status >= 500) ledger.metrics.http5xx += 1;
-      if (status >= 200 && status < 400) ledger.metrics.success += 1;
+      if (status >= 200 && status < 300) ledger.metrics.success += 1;
       else ledger.metrics.failures += 1;
       if (kind === "health") {
         ledger.metrics.health.checks += 1;
@@ -385,21 +577,15 @@ async function runStore1StagingSoak(options = {}) {
         const roleMetric = ledger.roles[role];
         roleMetric.requests += 1;
         roleMetric.latencies.push(latency);
-        if (!(status >= 200 && status < 400)) roleMetric.failures += 1;
+        if (!(status >= 200 && status < 300)) roleMetric.failures += 1;
       }
       if (response.headers?.get?.("x-idempotent-replay") === "true" || response.headers?.get?.("x-duplicate") === "true") {
         ledger.metrics.duplicates += 1;
       }
       if (kind === "jobs") {
         const payload = typeof response.json === "function" ? await response.json().catch(() => null) : null;
-        const snapshot = numericJobSnapshot(payload);
-        ledger.metrics.jobs.observations += 1;
-        ledger.metrics.jobs.last = snapshot;
-        if (snapshot) {
-          for (const [key, value] of Object.entries(snapshot)) {
-            ledger.metrics.jobs.maxima[key] = Math.max(ledger.metrics.jobs.maxima[key] || 0, value);
-          }
-        }
+        const snapshot = status >= 200 && status < 300 ? numericJobSnapshot(payload) : null;
+        recordJobSnapshot(snapshot);
       }
       ledger.requestLedger.push({ id: requestIdHash, kind, role: role || null, status, latencyMs: latency });
       return { status, latency };
@@ -431,6 +617,7 @@ async function runStore1StagingSoak(options = {}) {
   try {
     const roleIndexes = Object.fromEntries(config.roles.map((role) => [role.name, 0]));
     for (const phase of config.phases) {
+      options.leaseContext?.assertOwned?.();
       const phaseStarted = now();
       const phaseRecord = { name: phase.name, startedAt: new Date(phaseStarted).toISOString(), iterations: 0, finishedAt: null };
       ledger.phases.push(phaseRecord);
@@ -440,12 +627,13 @@ async function runStore1StagingSoak(options = {}) {
           if (typeof options.restartHook === "function") {
             await options.restartHook({ targetHost: config.target.hostname, runId: ledger.runId });
           } else {
+            const adminRole = config.roles.find((role) => role.name === "ADMIN");
             const result = await executeRequest({
               kind: "restart",
               requestPath: config.restartPath,
               role: "ADMIN",
               method: "POST",
-              headers: config.roles.find((role) => role.name === "ADMIN").headers,
+              headers: await headersForRole(adminRole),
             });
             if (result.error || result.status < 200 || result.status >= 300) {
               throw new SoakError("SOAK_RESTART_FAILED", "Restart staging-only nao foi confirmado.");
@@ -459,23 +647,27 @@ async function runStore1StagingSoak(options = {}) {
       }
       const phaseEnd = phaseStarted + phase.durationMs;
       do {
+        options.leaseContext?.assertOwned?.();
         phaseRecord.iterations += 1;
+        const adminRole = config.roles.find((role) => role.name === "ADMIN");
+        const adminHeaders = await headersForRole(adminRole);
         const tasks = [
           { kind: "health", requestPath: config.healthPath },
           { kind: "ready", requestPath: config.readyPath },
-          { kind: "jobs", requestPath: config.jobsPath },
+          ...(options.jobMetricsProvider ? [{ operation: executeJobProvider }] : [{ kind: "jobs", requestPath: config.jobsPath, headers: adminHeaders }]),
         ];
         for (const role of config.roles) {
           const index = roleIndexes[role.name] % role.paths.length;
           roleIndexes[role.name] += 1;
-          tasks.push({ kind: "role", requestPath: role.paths[index], role: role.name, headers: role.headers });
+          tasks.push({ kind: "role", requestPath: role.paths[index], role: role.name, headers: await headersForRole(role) });
         }
-        await Promise.all(tasks.map((task) => limit(() => executeRequest(task))));
+        await Promise.all(tasks.map((task) => limit(() => task.operation ? task.operation() : executeRequest(task))));
         const remaining = phaseEnd - now();
         if (remaining > 0) await sleep(Math.min(phase.intervalMs, remaining));
       } while (now() < phaseEnd);
       phaseRecord.finishedAt = new Date(now()).toISOString();
     }
+    options.leaseContext?.assertOwned?.();
   } finally {
     ledger.cleanup.inflightDrained = true;
     if (typeof options.cleanupHook === "function") {
@@ -501,8 +693,24 @@ async function runStore1StagingSoak(options = {}) {
   }
   ledger.metrics.p95Ms = percentile(latencies, 95);
   ledger.metrics.p99Ms = percentile(latencies, 99);
+  ledger.metrics.auth = options.authLifecycle?.stats?.() || { mode: "STATIC", roles: config.roles.length };
+  const baselineJobs = ledger.metrics.jobs.baseline;
+  const finalJobs = ledger.metrics.jobs.final;
+  if (baselineJobs && finalJobs) {
+    const keys = ["total", "pending", "running", "succeeded", "failed", "cancelled", "stuck", "retries", "duplicates"];
+    ledger.metrics.jobs.deltas = Object.fromEntries(keys.map((key) => [key, (finalJobs[key] || 0) - (baselineJobs[key] || 0)]));
+    const coherent = [baselineJobs, finalJobs].every((snapshot) => snapshot.total === snapshot.pending + snapshot.running + snapshot.succeeded + snapshot.failed + (snapshot.cancelled || 0));
+    if (!coherent) ledger.blockers.push("JOBS_STATUS_INCOHERENT");
+    for (const key of ["failed", "stuck", "retries", "duplicates"]) if ((finalJobs[key] || 0) > (baselineJobs[key] || 0)) ledger.blockers.push(`JOBS_${key.toUpperCase()}_INCREASED`);
+    if (finalJobs.pending !== 0 || finalJobs.running !== 0) {
+      const justification = String(options.pendingRunningJustification || "").replace(/[\r\n\t]+/g, " ").trim().slice(0, 200);
+      if (!justification) ledger.blockers.push("JOBS_NOT_DRAINED");
+      else ledger.metrics.jobs.pendingRunningJustification = justification;
+    }
+  }
   ledger.finishedAt = new Date(now()).toISOString();
   if (ledger.metrics.http5xx > 0) ledger.blockers.push("HTTP_5XX");
+  if (ledger.metrics.failures > 0) ledger.blockers.push("REQUEST_FAILURES");
   if (ledger.metrics.health.failures > 0) ledger.blockers.push("HEALTH_FAILURE");
   if (ledger.metrics.ready.failures > 0) ledger.blockers.push("READY_FAILURE");
   if (ledger.metrics.providerEgress > 0) ledger.blockers.push("PROVIDER_EGRESS");
@@ -510,7 +718,9 @@ async function runStore1StagingSoak(options = {}) {
   if (ledger.maxInflightObserved > MAX_INFLIGHT) ledger.blockers.push("INFLIGHT_LIMIT");
   if (ledger.restart.status !== "PASS") ledger.blockers.push("RESTART_NOT_PROVEN");
   if (ledger.metrics.jobs.observations === 0) ledger.blockers.push("JOBS_NOT_OBSERVED");
+  if ((ledger.metrics.jobs.invalidSnapshots || 0) > 0 || !ledger.metrics.jobs.last) ledger.blockers.push("JOBS_SNAPSHOT_INVALID");
   if (Object.values(ledger.roles).some((role) => role.requests === 0)) ledger.blockers.push("ROLE_NOT_EXERCISED");
+  if (Object.values(ledger.roles).some((role) => role.failures > 0)) ledger.blockers.push("ROLE_FAILURES");
   if (ledger.cleanup.status !== "PASS") ledger.blockers.push("CLEANUP_FAILED");
   ledger.status = ledger.blockers.length ? "BLOCKED" : "PASS";
   const sanitized = sanitizeLedger(ledger);
@@ -522,6 +732,33 @@ async function runStore1StagingSoak(options = {}) {
     sanitized.ledgerPath = outputPath;
   }
   return sanitized;
+}
+
+async function verifyRuntimeFingerprint({ config, fetchImpl = globalThis.fetch } = {}) {
+  if (!config?.target || typeof fetchImpl !== "function") throw new SoakError("SOAK_RUNTIME_FINGERPRINT_CONFIG_INVALID", "Fingerprint config invalida.");
+  const fingerprintUrl = assertSameOriginRequest(config.target, config.fingerprintPath);
+  const fingerprintResponse = await fetchImpl(fingerprintUrl, {
+    method: "GET",
+    redirect: "manual",
+    headers: { "x-store1-soak-probe": config.probeToken },
+    signal: AbortSignal.timeout(config.timeoutMs),
+  });
+  const fingerprint = fingerprintResponse.status === 200 && typeof fingerprintResponse.json === "function"
+    ? await fingerprintResponse.json().catch(() => null)
+    : null;
+  if (!fingerprint || fingerprint.environment !== "staging" || fingerprint.targetVerified !== true || fingerprint.databaseVerified !== true
+    || (config.sourceManifestSha256 && String(fingerprint.sourceManifestSha256 || "").toLowerCase() !== config.sourceManifestSha256)
+    || fingerprint.providersConnected !== false || fingerprint.outboundEnabled !== false) {
+    throw new SoakError("SOAK_RUNTIME_FINGERPRINT_MISMATCH", "Runtime staging nao corresponde ao candidato seguro.");
+  }
+  return {
+    environment: "staging",
+    targetVerified: true,
+    databaseVerified: true,
+    providersConnected: false,
+    outboundEnabled: false,
+    sourceManifestSha256: String(fingerprint.sourceManifestSha256 || "").toLowerCase(),
+  };
 }
 
 function dryRunSummary(config) {
@@ -578,6 +815,7 @@ module.exports = {
   TARGET_CONFIRMATION,
   assertSameOriginRequest,
   assertStagingTarget,
+  createRoleAuthLifecycle,
   dryRunSummary,
   main,
   numericJobSnapshot,
@@ -587,4 +825,5 @@ module.exports = {
   roleConfigsFromEnv,
   runStore1StagingSoak,
   sanitizeLedger,
+  verifyRuntimeFingerprint,
 };
