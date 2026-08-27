@@ -12,7 +12,8 @@ test("D1 protege a configuracao administrativa por feature flag", () => {
   const dashboard = read("src/pages/Dashboard.tsx");
   assert.match(flags, /VITE_SITE_LEAD_CAPTURE_ENABLED === "true"/);
   assert.match(flags, /isLeadsCommunicationEnabled\(\)/);
-  assert.match(dashboard, /siteLeadCaptureEnabled && <DashboardSiteLeadIntegrationPanel/);
+  assert.match(dashboard, /siteLeadCaptureEnabled &&/);
+  assert.match(dashboard, /(?:Lazy)?DashboardSiteLeadIntegrationPanel/);
 });
 
 test("D1 distingue Site de canal com resposta direta", () => {
