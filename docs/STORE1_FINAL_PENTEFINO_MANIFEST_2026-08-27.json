@@ -4,7 +4,7 @@
   "candidate": {
     "branch": "codex/store1-release-reconcile",
     "source_head": "3599a0973ddf9a58e62bb285848f6861768be341",
-    "document_head": "d6627864f49fe561fb639ad7d89f2d63aa2fab7f",
+    "document_baseline_before_manifest_update": "d6627864f49fe561fb639ad7d89f2d63aa2fab7f",
     "base": "3151cec0d3950abd0364e90f340918aca0baf196",
     "worktree": "C:\\Users\\vande\\AppData\\Local\\Temp\\crm-store1-release-reconcile-20260827",
     "clean": true
