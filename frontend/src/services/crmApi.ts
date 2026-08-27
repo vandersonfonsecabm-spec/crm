@@ -2126,13 +2126,16 @@ export async function fetchHubProdutosEstoque(params: HubEstoqueQueryParams = {}
   return normalizePaginatedResponse(response, { page: params.page, limit: params.limit });
 }
 
-export type StockSource = { id: number; nome?: string; tipoFonte?: string; statusCiclo?: string; updatedAt?: string; [key: string]: unknown };
+export type StockSourceType = "INTERNAL" | "GENERIC_API_PULL" | "GENERIC_WEBHOOK_PUSH" | "DATABASE_READONLY" | "FILE_IMPORT_CSV" | "FILE_IMPORT_XLSX" | "MANUAL_CONTROLLED" | "VENDOR_SPECIFIC";
+export type StockSourceStatus = "DRAFT" | "VALIDATING" | "ACTIVE" | "DEGRADED" | "AUTH_ERROR" | "DISABLED" | "ARCHIVED";
+export type StockSource = { id: number; nome?: string; tipoFonte?: StockSourceType | string; statusCiclo?: StockSourceStatus | string; updatedAt?: string; [key: string]: unknown };
 export type StockProduct = { id: number; nomeExibicao?: string; skuCanonico?: string | null; barcodeCanonico?: string | null; unidadeCanonica?: string; revision?: number; updatedAt?: string };
 export type StockLot = { id: number; produtoEstoqueId?: number; fonteId?: number; codigoLote?: string | null; validadeEm?: string | null; precisaoValidade?: string; estado?: string; observedAt?: string };
 export type StockBalance = { id: number; produtoEstoqueId?: number; loteId?: number | null; onHand?: string | null; available?: string | null; freshnessEstado?: string | null; dataConfidence?: string | null; observedAt?: string | null };
 export type StockQualityIssue = { id: number; tipo?: string; severidade?: string; estado?: string; targetRef?: string; lastSeenAt?: string | null };
-export type StockImportPreview = { id: number; status?: string; rowCount?: number; acceptedCount?: number; rejectedCount?: number; revision?: number; safeFilename?: string | null; linhas?: Array<{ rowNumber?: number; status?: string; errorsJson?: unknown; warningsJson?: unknown }> };
+export type StockImportPreview = { id: number; empresaId?: number; fonteId?: number; status?: string; rowCount?: number; acceptedCount?: number; rejectedCount?: number; revision?: number; safeFilename?: string | null; expiresAt?: string | null; confirmedAt?: string | null; cancelledAt?: string | null; syncRunId?: number | null; linhas?: Array<{ rowNumber?: number; status?: string; errorsJson?: unknown; warningsJson?: unknown }> };
 export type StockImportPreviewEnvelope = { replayed?: boolean; importacao?: StockImportPreview; capabilities?: unknown; source?: unknown };
+export type StockSync = { id: number; fonteId?: number; estado?: string; startedAt?: string | null; finishedAt?: string | null; revision?: number };
 export type StockList<T> = { items: T[]; nextCursor?: string | null };
 
 export async function fetchStockSources() { return requestApiGetAuthenticated<StockList<StockSource>>("/estoque/fontes"); }
@@ -2143,8 +2146,26 @@ export async function fetchStockProduct(id: number) { return requestApiGetAuthen
 export async function fetchStockLot(id: number) { return requestApiGetAuthenticated<{ item: StockLot }>(`/estoque/lotes/${id}`); }
 export async function fetchStockFreshness() { return requestApiGetAuthenticated<StockList<StockBalance>>("/estoque/freshness"); }
 export async function fetchStockQualityIssues() { return requestApiGetAuthenticated<StockList<StockQualityIssue>>("/estoque/problemas-qualidade"); }
-export async function previewStockCsv(payload: { fonteId: number; content: string; filename?: string; delimiter?: "comma" | "semicolon" }) {
+export async function previewStockCsv(payload: { fonteId: number; content: string; filename?: string; delimiter?: "comma" | "semicolon"; idempotencyKey: string }) {
   return requestApiWrite<{ item: StockImportPreviewEnvelope }>("POST", "/estoque/importacoes/preview", payload);
+}
+export async function fetchStockImport(id: number) {
+  return requestApiGetAuthenticated<{ item: StockImportPreview }>(`/estoque/importacoes/${id}`);
+}
+export async function confirmStockImport(id: number, payload: { revision: number; allowPartial?: boolean }) {
+  return requestApiWrite<{ item: StockImportPreview }>("POST", `/estoque/importacoes/${id}/confirmar`, payload);
+}
+export async function cancelStockImport(id: number, revision: number) {
+  return requestApiWrite<{ item: StockImportPreview }>("POST", `/estoque/importacoes/${id}/cancelar`, { revision });
+}
+export async function createStockSource(payload: { tipoFonte: "FILE_IMPORT_CSV"; nome: string; configuracaoPublicaJson?: { delimiter?: "comma" | "semicolon"; encoding?: "utf8" } }) {
+  return requestApiWrite<{ item: StockSource }>("POST", "/estoque/fontes", payload as Record<string, unknown>);
+}
+export async function validateStockSource(id: number) {
+  return requestApiWrite<{ item: StockSource }>("POST", `/estoque/fontes/${id}/validar`, {});
+}
+export async function syncStockSource(id: number, payload: { modo?: "IMPORT" | "FULL_SNAPSHOT" | "INCREMENTAL"; snapshotGeneration?: string } = {}) {
+  return requestApiWrite<{ item: StockSync }>("POST", `/estoque/fontes/${id}/sincronizar`, payload as Record<string, unknown>);
 }
 
 export async function fetchQualidadeDados() {
