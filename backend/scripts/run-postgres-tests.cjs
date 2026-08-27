@@ -15,6 +15,7 @@ function main(options = {}) {
   const cleanupWorkspace = options.cleanupWorkspace || cleanupPostgresTestWorkspace;
   const envSource = options.env || process.env;
   const databaseUrl = String(envSource.POSTGRES_TEST_DATABASE_URL || "").trim();
+  const focus = String(envSource.CRM_POSTGRES_FOCUS || "").trim();
   if (!/^postgres(ql)?:\/\//i.test(databaseUrl)) {
     console.error("[postgres-tests] POSTGRES_TEST_DATABASE_URL ausente; testes PostgreSQL reais nao foram executados.");
     process.exitCode = 2;
@@ -43,7 +44,7 @@ function main(options = {}) {
       ...testEnv,
       CRM_POSTGRES_MIGRATE_CONFIRM: "apply-empty-postgres",
     });
-    for (const file of [
+    const testFiles = [
       "tests/postgres-migration-prep.test.js",
       "tests/auth-admin-concurrency-postgres.test.js",
       "tests/internal-automations-h7.test.js",
@@ -52,7 +53,12 @@ function main(options = {}) {
       "tests/email-inbound-lifecycle.test.js",
       "tests/email-inbound-processing.test.js",
       "tests/commercial-proposal-catalog-v1-postgres.test.js",
-    ]) {
+    ];
+    const focusedFile = focus
+      ? testFiles.find((file) => file === `tests/${focus}.test.js`)
+      : null;
+    if (focus && !focusedFile) throw new Error("CRM_POSTGRES_FOCUS nao pertence a suite PostgreSQL canonica.");
+    for (const file of focusedFile ? [focusedFile] : testFiles) {
       runCommand("node", ["--test", file], testEnv);
     }
   } catch (error) {

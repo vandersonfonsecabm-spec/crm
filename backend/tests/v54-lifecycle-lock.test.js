@@ -40,12 +40,14 @@ test("V54 lifecycle lock is shared, tenant-scoped and ordered", () => {
 
 test("V54 PostgreSQL concurrency proof runs only with an explicit disposable URL", { skip: !/^postgres(?:ql)?:/i.test(String(process.env.CRM_TEST_DATABASE_URL || "")) || process.env.CRM_TEST_POSTGRES_ALLOW !== "true" }, async () => {
   const { PrismaClient } = require("@prisma/client");
+  const { lockClientIdentity } = require("../src/shared/clientLifecycleLock");
   const first = new PrismaClient({ datasourceUrl: process.env.CRM_TEST_DATABASE_URL });
   const second = new PrismaClient({ datasourceUrl: process.env.CRM_TEST_DATABASE_URL });
   const suffix = `${process.pid}-${Date.now()}`;
   let empresa;
   try {
     empresa = await first.empresa.create({ data: { nome: `V54 lock ${suffix}`, slug: `v54-lock-${suffix}` } });
+    await first.$transaction((tx) => lockClientIdentity(tx, empresa.id, `email:lock-${suffix}@example.test`));
     const client = await first.cliente.create({ data: { empresaId: empresa.id, nome: "V54 synthetic lock", telefone: "5511999999999", status: "Lead" } });
     const holder = first.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Cliente" WHERE "empresaId" = ${empresa.id} AND id = ${client.id} FOR UPDATE`;

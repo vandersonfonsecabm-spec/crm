@@ -8,7 +8,7 @@ const { spawnSync } = require("node:child_process");
 
 const backendDir = path.resolve(__dirname, "..");
 const evidenceRoot = path.join(os.tmpdir(), "crm-postgres-real");
-const defaultImage = "postgres:16-alpine";
+const defaultImage = "postgres:18.6";
 const defaultHealthTimeoutMs = 120000;
 const defaultHealthIntervalMs = 1000;
 const logLimit = 120000;

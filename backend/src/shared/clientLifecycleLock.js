@@ -54,7 +54,7 @@ async function lockClientIdentity(tx, empresaId, identity) {
     throw new Error("Identidade de Cliente invalida para lock.");
   }
   if (!isPostgresRuntime()) return;
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${tenantId}:${normalizedIdentity}`}, 0))`;
+  await tx.$queryRaw`SELECT CAST(pg_advisory_xact_lock(hashtextextended(${`${tenantId}:${normalizedIdentity}`}, 0)) AS text) AS "lockResult"`;
 }
 
 async function lockClientIdentities(tx, empresaId, identities) {
