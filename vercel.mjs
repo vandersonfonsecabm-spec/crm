@@ -47,6 +47,9 @@ export default {
   routes: [
     { src: "^/(.*)$", headers: securityHeaders, continue: true },
     { src: "^/api/(.*)$", dest: `${apiOrigin}/$1` },
+    // Let Vercel serve built assets before the SPA fallback. Without this
+    // phase, /assets/*.js and /assets/*.css are rewritten to index.html.
+    { handle: "filesystem" },
     { src: "^/(.*)$", dest: "/index.html" },
   ],
 };

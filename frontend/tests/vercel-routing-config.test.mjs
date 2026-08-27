@@ -15,7 +15,7 @@ const stagingApi = "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app/$1"
 
 function loadConfig(configPath, { projectId, productionUrl, vercelUrl } = {}) {
   const moduleUrl = pathToFileURL(configPath).href;
-  const script = `import(${JSON.stringify(moduleUrl)}).then((module) => { const config = module.default ?? module.config; process.stdout.write(JSON.stringify(config.routes.slice(0, 3))); })`;
+  const script = `import(${JSON.stringify(moduleUrl)}).then((module) => { const config = module.default ?? module.config; process.stdout.write(JSON.stringify(config.routes)); })`;
   return spawnSync(process.execPath, ["--input-type=module", "-e", script], {
     env: {
       ...process.env,
@@ -40,6 +40,10 @@ for (const configPath of [rootConfig, frontendConfig]) {
     assert.equal(productionRoutes.find((route) => route.src === "^/api/(.*)$")?.dest, productionApi);
     assert.equal(stagingRoutes.find((route) => route.src === "^/api/(.*)$")?.dest, stagingApi);
     assert.notEqual(productionRoutes.find((route) => route.src === "^/api/(.*)$")?.dest, stagingRoutes.find((route) => route.src === "^/api/(.*)$")?.dest);
+    assert.equal(productionRoutes.find((route) => route.handle === "filesystem")?.handle, "filesystem");
+    assert.equal(stagingRoutes.find((route) => route.handle === "filesystem")?.handle, "filesystem");
+    assert.ok(productionRoutes.findIndex((route) => route.handle === "filesystem") < productionRoutes.findIndex((route) => route.dest === "/index.html"));
+    assert.ok(stagingRoutes.findIndex((route) => route.handle === "filesystem") < stagingRoutes.findIndex((route) => route.dest === "/index.html"));
     const configText = await readFile(configPath, "utf8");
     assert.match(configText, /Strict-Transport-Security/);
     assert.match(configText, /connect-src 'self';/);
