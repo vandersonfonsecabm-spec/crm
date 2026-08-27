@@ -109,4 +109,3 @@ Ao término, deve:
 - E-mail e IA possuem fundação provider-neutral, mas o adapter real depende de futura seleção de provider.
 - Meta, WhatsApp, Instagram, Messenger e Bling permanecem sem conta real conectada.
 - Este checkpoint será substituído pelo relatório final após a conclusão e validação do soak.
-
