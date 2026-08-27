@@ -2484,7 +2484,8 @@ app.get("/ready", async (req, res) => {
 app.get("/runtime-fingerprint", async (req, res) => {
   res.set("Cache-Control", "no-store");
   try {
-    const { buildRuntimeFingerprint } = require("./runtime-fingerprint");
+    const { buildRuntimeFingerprint, isStagingTarget, probeAuthorized } = require("./runtime-fingerprint");
+    if (!isStagingTarget(process.env) || !probeAuthorized(process.env, req.get("x-store1-soak-probe"))) return res.status(404).json({ erro: "Não encontrado." });
     return res.json(await buildRuntimeFingerprint({ env: process.env, prisma }));
   } catch {
     return res.status(503).json({ environment: "unknown", targetVerified: false, databaseVerified: false });

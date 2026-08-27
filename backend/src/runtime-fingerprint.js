@@ -9,11 +9,23 @@ const STAGING_IDS = Object.freeze({
 });
 
 function sourceManifestSha256(root = path.resolve(__dirname, "..")) {
+  if (sourceManifestSha256.cached) return sourceManifestSha256.cached;
   const files = [];
-  for (const relative of ["src", "prisma/schema.prisma", "prisma/migrations", "prisma-postgres/migrations", "package.json", "package-lock.json"]) collect(path.join(root, relative), root, files);
+  for (const relative of ["src", "scripts", "railway.json", "prisma/schema.prisma", "prisma/migrations", "prisma-postgres/migrations", "package.json", "package-lock.json"]) collect(path.join(root, relative), root, files);
   const hash = crypto.createHash("sha256");
   for (const file of files.sort()) hash.update(file).update("\0").update(fs.readFileSync(path.join(root, file))).update("\0");
-  return hash.digest("hex");
+  sourceManifestSha256.cached = hash.digest("hex");
+  return sourceManifestSha256.cached;
+}
+
+function isStagingTarget(env) {
+  return env.RAILWAY_PROJECT_ID === STAGING_IDS.project && env.RAILWAY_ENVIRONMENT_ID === STAGING_IDS.environment && env.RAILWAY_SERVICE_ID === STAGING_IDS.apiService;
+}
+
+function probeAuthorized(env, supplied) {
+  const expected = Buffer.from(String(env.STORE1_SOAK_PROBE_TOKEN || ""));
+  const actual = Buffer.from(String(supplied || ""));
+  return expected.length >= 32 && actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
 function collect(candidate, root, output) {
@@ -36,9 +48,7 @@ function outboundDisabled(env) {
 }
 
 async function buildRuntimeFingerprint({ env = process.env, prisma }) {
-  const targetVerified = env.RAILWAY_PROJECT_ID === STAGING_IDS.project
-    && env.RAILWAY_ENVIRONMENT_ID === STAGING_IDS.environment
-    && env.RAILWAY_SERVICE_ID === STAGING_IDS.apiService;
+  const targetVerified = isStagingTarget(env);
   const [metaCredentials, blingConnections] = prisma ? await Promise.all([
     prisma.metaCredential.count({ where: { status: "ATIVA", removedAt: null } }),
     prisma.integracao.count({ where: { tipo: "BLING", status: "ATIVA", ativo: true, credenciaisCriptografadas: { not: null } } }),
@@ -53,4 +63,4 @@ async function buildRuntimeFingerprint({ env = process.env, prisma }) {
   };
 }
 
-module.exports = { STAGING_IDS, buildRuntimeFingerprint, databaseVerified, outboundDisabled, sourceManifestSha256 };
+module.exports = { STAGING_IDS, buildRuntimeFingerprint, databaseVerified, isStagingTarget, outboundDisabled, probeAuthorized, sourceManifestSha256 };

@@ -178,10 +178,12 @@ function resolveConfig({ env = process.env, testOverrides, allowTestOverrides = 
   for (const requestPath of [jobsPath, restartPath].filter(Boolean)) assertSameOriginRequest(target, requestPath);
   const sourceSha = String(env.STORE1_SOAK_SOURCE_SHA || "").trim();
   const sourceManifestSha256 = String(env.STORE1_SOAK_SOURCE_MANIFEST_SHA256 || "").trim().toLowerCase();
+  const probeToken = String(env.STORE1_SOAK_PROBE_TOKEN || "");
   if (!/^[a-f0-9]{40}$/i.test(sourceSha) && !(env.NODE_ENV === "test" && /^[A-Za-z0-9._-]{7,80}$/.test(sourceSha))) {
     throw new SoakError("SOAK_SOURCE_SHA_REQUIRED", "SHA funcional exato obrigatorio.");
   }
   if (!/^[a-f0-9]{64}$/.test(sourceManifestSha256) && env.NODE_ENV !== "test") throw new SoakError("SOAK_SOURCE_MANIFEST_REQUIRED", "Manifesto calculado do runtime obrigatorio.");
+  if (probeToken.length < 32 && env.NODE_ENV !== "test") throw new SoakError("SOAK_PROBE_TOKEN_REQUIRED", "Token tecnico do probe obrigatorio.");
   return {
     target,
     phases,
@@ -194,6 +196,7 @@ function resolveConfig({ env = process.env, testOverrides, allowTestOverrides = 
     timeoutMs: DEFAULT_TIMEOUT_MS,
     sourceSha,
     sourceManifestSha256,
+    probeToken,
   };
 }
 
@@ -327,7 +330,7 @@ async function runStore1StagingSoak(options = {}) {
   });
 
   const fingerprintUrl = assertSameOriginRequest(config.target, config.fingerprintPath);
-  const fingerprintResponse = await fetchImpl(fingerprintUrl, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(config.timeoutMs) });
+  const fingerprintResponse = await fetchImpl(fingerprintUrl, { method: "GET", redirect: "manual", headers: { "x-store1-soak-probe": config.probeToken }, signal: AbortSignal.timeout(config.timeoutMs) });
   const fingerprint = fingerprintResponse.status === 200 && typeof fingerprintResponse.json === "function"
     ? await fingerprintResponse.json().catch(() => null)
     : null;
