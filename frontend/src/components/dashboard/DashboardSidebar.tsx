@@ -33,6 +33,7 @@ type DashboardSidebarProps = {
   canManageUsers?: boolean;
   isPlatformOperator?: boolean;
   leadsCommunicationEnabled?: boolean;
+  automationsEnabled?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
   attentionCount?: number | null;
@@ -61,6 +62,7 @@ export default function DashboardSidebar({
   canManageUsers = false,
   isPlatformOperator = false,
   leadsCommunicationEnabled = false,
+  automationsEnabled = false,
   collapsed = false,
   onToggle,
   attentionCount = null,
@@ -114,6 +116,7 @@ export default function DashboardSidebar({
         .filter((route) => !route.requiresIntegrationAccess || canManageIntegrations)
         .filter((route) => !route.requiresUserManagement || canManageUsers)
         .filter((route) => !route.requiresLeadsCommunication || leadsCommunicationEnabled)
+        .filter((route) => !route.requiresAutomationsAccess || automationsEnabled)
         .filter((route) => !route.requiresPlatformOperator || isPlatformOperator),
     }))
     .filter((group) => group.items.length > 0);

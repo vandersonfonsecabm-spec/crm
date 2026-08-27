@@ -19,6 +19,7 @@ type DashboardTopbarProps = {
   authSession: AuthSession | null;
   canManageIntegrations: boolean;
   leadsCommunicationEnabled: boolean;
+  automationsEnabled: boolean;
   onOpenNotificationTarget: (target: { tipo: NotificationTargetKind; id: number; rota: string }) => void;
   canManageNotifications: boolean;
   readOnly?: boolean;
@@ -37,6 +38,7 @@ export default function DashboardTopbar({
   authSession,
   canManageIntegrations,
   leadsCommunicationEnabled,
+  automationsEnabled,
   onOpenNotificationTarget,
   canManageNotifications,
   readOnly = false,
@@ -51,6 +53,7 @@ export default function DashboardTopbar({
             onCloseQuickActions={() => setShowQuickActions(false)}
             canManageIntegrations={canManageIntegrations}
             leadsCommunicationEnabled={leadsCommunicationEnabled}
+            automationsEnabled={automationsEnabled}
             readOnly={readOnly}
           />
         </div>

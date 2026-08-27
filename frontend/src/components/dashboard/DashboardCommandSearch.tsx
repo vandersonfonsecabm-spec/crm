@@ -10,6 +10,7 @@ type DashboardCommandSearchProps = {
   onCloseQuickActions: () => void;
   canManageIntegrations: boolean;
   leadsCommunicationEnabled: boolean;
+  automationsEnabled: boolean;
   readOnly?: boolean;
 };
 
@@ -27,6 +28,7 @@ export default function DashboardCommandSearch({
   onCloseQuickActions,
   canManageIntegrations,
   leadsCommunicationEnabled,
+  automationsEnabled,
   readOnly = false,
 }: DashboardCommandSearchProps) {
   const [commandSearch, setCommandSearch] = useState("");
@@ -135,7 +137,9 @@ export default function DashboardCommandSearch({
       { key: "page-kanban", label: "Negócios", type: "Página", searchText: "negocios funil comercial kanban oportunidades", action: () => onSetActivePage("kanban") },
       { key: "page-agenda", label: "Agenda", type: "Página", searchText: "agenda acompanhamentos calendario", action: () => onSetActivePage("agenda") },
       { key: "page-estoque", label: "Estoque", type: "Página", searchText: "estoque produtos inventario", action: () => onSetActivePage("estoque") },
-      { key: "page-automacoes", label: "Automações", type: "Página", searchText: "automacoes automacao inteligencia regras", action: () => onSetActivePage("automacoes") },
+      ...(automationsEnabled
+        ? [{ key: "page-automacoes", label: "Automações", type: "Página", searchText: "automacoes automacao inteligencia regras", action: () => onSetActivePage("automacoes") }]
+        : []),
       ...(canManageIntegrations
         ? [{ key: "page-integracoes", label: "Integrações", type: "Página administrativa", searchText: "integracoes integracao dados importacoes catalogo qualidade bling simulador whatsapp", action: () => onSetActivePage("integracoes") }]
         : []),
@@ -152,7 +156,7 @@ export default function DashboardCommandSearch({
       }));
 
     return [...pages, ...matchingClients].slice(0, 6);
-  }, [canManageIntegrations, clientResults, commandSearch, isSearching, leadsCommunicationEnabled, onSelectClient, onSetActivePage, searchError]);
+  }, [automationsEnabled, canManageIntegrations, clientResults, commandSearch, isSearching, leadsCommunicationEnabled, onSelectClient, onSetActivePage, searchError]);
 
   const boundedSelectedIndex = Math.min(selectedIndex, Math.max(commandResults.length - 1, 0));
 

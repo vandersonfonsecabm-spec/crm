@@ -167,6 +167,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
     leadsCommunication: leadsCommunicationEnabled,
     siteLeadCapture: siteLeadCaptureEnabled,
     negociosKanban: negociosKanbanEnabled,
+    automations: automationsEnabled,
   } = resolveTenantFeatureAccess(authSession?.capabilities);
   const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
   const aiCommerceEnabled = authSession?.capabilities?.aiCommerce === true;
@@ -177,7 +178,9 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
       ? "comercial"
       : requestedActivePage === "usuarios" && !canManageUsers
         ? "comercial"
-      : requestedActivePage;
+        : requestedActivePage === "automacoes" && !automationsEnabled
+          ? "comercial"
+          : requestedActivePage;
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -554,12 +557,17 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
       navigate(getDashboardPath("comercial"), { replace: true });
       return;
     }
+    if (page === "automacoes" && !automationsEnabled) {
+      setToast("Automações não estão habilitadas neste ambiente.");
+      navigate(getDashboardPath("comercial"), { replace: true });
+      return;
+    }
 
     const pathname = getDashboardPath(page);
     if (normalizeDashboardPathname(location.pathname) !== pathname) {
       navigate(pathname);
     }
-  }, [canManageIntegrations, canManageUsers, invalidateCustomerDrawerFocusSession, isPlatformOperator, leadsCommunicationEnabled, location.pathname, navigate, setToast]);
+  }, [automationsEnabled, canManageIntegrations, canManageUsers, invalidateCustomerDrawerFocusSession, isPlatformOperator, leadsCommunicationEnabled, location.pathname, navigate, setToast]);
 
   const handleSearchSelectClient = useCallback((clientId: number | null) => {
     if (clientId === null) return;
@@ -655,7 +663,12 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
       setToast("Acesso restrito à administração de usuários.");
       navigate(getDashboardPath("comercial"), { replace: true });
     }
+    if (requestedActivePage === "automacoes" && !automationsEnabled) {
+      setToast("Automações não estão habilitadas neste ambiente.");
+      navigate(getDashboardPath("comercial"), { replace: true });
+    }
   }, [
+    automationsEnabled,
     canManageIntegrations,
     canManageUsers,
     isPlatformOperator,
@@ -879,6 +892,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
           canManageUsers={canManageUsers}
           isPlatformOperator={isPlatformOperator}
           leadsCommunicationEnabled={leadsCommunicationEnabled}
+          automationsEnabled={automationsEnabled}
           collapsed={sidebarCollapsed}
           onToggle={() => setSidebarCollapsed((current) => !current)}
           attentionCount={inboxAttentionCount}
@@ -898,6 +912,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
             authSession={authSession}
             canManageIntegrations={canManageIntegrations}
             leadsCommunicationEnabled={leadsCommunicationEnabled}
+            automationsEnabled={automationsEnabled}
             onOpenNotificationTarget={openNotificationTarget}
             canManageNotifications={authSession?.papel === "ADMIN" || authSession?.papel === "GERENTE"}
           />
