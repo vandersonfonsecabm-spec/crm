@@ -1,0 +1,39 @@
+{
+  "date": "2026-08-27",
+  "branch": "codex/store1-release-reconcile",
+  "baseRuntime": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
+  "functionalHead": "b594c4c",
+  "backendGlobalSuite": "PASS",
+  "frontendTests": "213/213 PASS_REUSED_VALID_EVIDENCE",
+  "frontendBuild": "PASS_REUSED_VALID_EVIDENCE",
+  "frontendLint": "PASS_REUSED_VALID_EVIDENCE",
+  "vercel": {
+    "deploymentId": "dpl_93YQPNrgEbSoPvDJFxRQFUhwxQVn",
+    "source": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
+    "state": "READY",
+    "runtimeErrors24h": 0,
+    "stableAliasParity": "FAIL"
+  },
+  "railwayStaging": {
+    "environmentId": "d6b6f137-cffd-4647-a102-3619fc54133a",
+    "apiServiceId": "8af12b8e-4f4d-498c-9ceb-3182417905f8",
+    "health": 200,
+    "ready": 200
+  },
+  "fixes": [
+    {
+      "commit": "b594c4c",
+      "area": "Bling OAuth token response",
+      "status": "PASS_LOCAL_NOT_DEPLOYED",
+      "tests": "2/2 PASS"
+    }
+  ],
+  "remaining": {
+    "authenticatedBrowserQaCurrentRuntime": "UNTESTED",
+    "stableStagingAliasParity": "FAIL",
+    "realWorkerRetryRecovery": "UNTESTED"
+  },
+  "store1InternalProductReady": "BLOCKED",
+  "productionWrites": 0,
+  "productionDeployments": 0
+}
