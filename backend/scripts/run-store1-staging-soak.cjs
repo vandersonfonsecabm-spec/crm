@@ -177,9 +177,11 @@ function resolveConfig({ env = process.env, testOverrides, allowTestOverrides = 
   if (!restartPath && requireCredentials) throw new SoakError("SOAK_RESTART_PATH_REQUIRED", "Endpoint staging-only de restart obrigatorio.");
   for (const requestPath of [jobsPath, restartPath].filter(Boolean)) assertSameOriginRequest(target, requestPath);
   const sourceSha = String(env.STORE1_SOAK_SOURCE_SHA || "").trim();
+  const sourceManifestSha256 = String(env.STORE1_SOAK_SOURCE_MANIFEST_SHA256 || "").trim().toLowerCase();
   if (!/^[a-f0-9]{40}$/i.test(sourceSha) && !(env.NODE_ENV === "test" && /^[A-Za-z0-9._-]{7,80}$/.test(sourceSha))) {
     throw new SoakError("SOAK_SOURCE_SHA_REQUIRED", "SHA funcional exato obrigatorio.");
   }
+  if (!/^[a-f0-9]{64}$/.test(sourceManifestSha256) && env.NODE_ENV !== "test") throw new SoakError("SOAK_SOURCE_MANIFEST_REQUIRED", "Manifesto calculado do runtime obrigatorio.");
   return {
     target,
     phases,
@@ -191,6 +193,7 @@ function resolveConfig({ env = process.env, testOverrides, allowTestOverrides = 
     restartPath,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     sourceSha,
+    sourceManifestSha256,
   };
 }
 
@@ -328,7 +331,8 @@ async function runStore1StagingSoak(options = {}) {
   const fingerprint = fingerprintResponse.status === 200 && typeof fingerprintResponse.json === "function"
     ? await fingerprintResponse.json().catch(() => null)
     : null;
-  if (!fingerprint || fingerprint.environment !== "staging" || String(fingerprint.sourceSha || "").toLowerCase() !== config.sourceSha.toLowerCase()
+  if (!fingerprint || fingerprint.environment !== "staging" || fingerprint.targetVerified !== true || fingerprint.databaseVerified !== true
+    || (config.sourceManifestSha256 && String(fingerprint.sourceManifestSha256 || "").toLowerCase() !== config.sourceManifestSha256)
     || fingerprint.providersConnected !== false || fingerprint.outboundEnabled !== false) {
     throw new SoakError("SOAK_RUNTIME_FINGERPRINT_MISMATCH", "Runtime staging nao corresponde ao candidato seguro.");
   }

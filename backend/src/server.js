@@ -2481,16 +2481,14 @@ app.get("/ready", async (req, res) => {
   }
 });
 
-app.get("/runtime-fingerprint", (req, res) => {
+app.get("/runtime-fingerprint", async (req, res) => {
   res.set("Cache-Control", "no-store");
-  const environment = String(process.env.STORE1_RUNTIME_ENVIRONMENT || "").trim().toLowerCase();
-  const sourceSha = String(process.env.STORE1_SOURCE_SHA || "").trim().toLowerCase();
-  return res.json({
-    environment: environment === "staging" ? "staging" : "unknown",
-    sourceSha: /^[a-f0-9]{40}$/.test(sourceSha) ? sourceSha : null,
-    providersConnected: false,
-    outboundEnabled: false,
-  });
+  try {
+    const { buildRuntimeFingerprint } = require("./runtime-fingerprint");
+    return res.json(await buildRuntimeFingerprint({ env: process.env, prisma }));
+  } catch {
+    return res.status(503).json({ environment: "unknown", targetVerified: false, databaseVerified: false });
+  }
 });
 
 app.use((error, req, res, next) => {
