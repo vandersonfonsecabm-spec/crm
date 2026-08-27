@@ -30,8 +30,7 @@ import type {
   WhatsAppConnectionState,
   WhatsAppConnectionStatus,
 } from "./whatsappConnectionState";
-
-export const WHATSAPP_WEBHOOK_URL = "https://api-production-875f9.up.railway.app/webhooks/whatsapp";
+import { WHATSAPP_WEBHOOK_URL } from "./whatsappWebhook";
 
 type CommonProps = {
   onUnauthorized: () => void;
@@ -140,6 +139,11 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
   const details = useMemo(() => statusDetails(status), [status]);
 
   async function copyWebhookUrl() {
+    if (!WHATSAPP_WEBHOOK_URL) {
+      setCopyFeedback("URL indisponível neste ambiente");
+      window.setTimeout(() => setCopyFeedback(""), 2400);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(WHATSAPP_WEBHOOK_URL);
       setCopyFeedback("URL copiada");

@@ -24,8 +24,8 @@ export function verifyArchitecture({ root = repositoryRoot, overrides = {} } = {
   const rootPackage = readJson("package.json");
   const backendPackage = readJson("backend/package.json");
   const railway = readJson("backend/railway.json");
-  const vercel = readJson("vercel.json");
-  const frontendVercel = readJson("frontend/vercel.json");
+  const vercel = read("vercel.mjs");
+  const frontendVercel = read("frontend/vercel.mjs");
   const backendSchema = read("backend/prisma/schema.prisma");
   const architecture = read("docs/ARCHITECTURE.md");
   const deployment = read("docs/DEPLOYMENT.md");
@@ -96,11 +96,13 @@ export function verifyArchitecture({ root = repositoryRoot, overrides = {} } = {
   check(!/\.\.[\\/]prisma\b/i.test(railwayBuild), "Railway buildCommand nao pode referenciar o Prisma legado da raiz.");
   check(!/db\s+push|\bseed\b|\bnest\b/i.test(`${railwayBuild} ${railwayStart}`), "Railway contem comando destrutivo ou Nest.");
 
-  const vercelConfig = JSON.stringify(vercel);
-  const frontendVercelConfig = JSON.stringify(frontendVercel);
-  check(vercel.installCommand === "npm install --prefix frontend", "Vercel raiz deve instalar somente frontend/.");
-  check(vercel.buildCommand === "npm run build --prefix frontend", "Vercel raiz deve construir somente frontend/.");
-  check(vercel.outputDirectory === "frontend/dist", "Vercel raiz deve publicar frontend/dist.");
+  const vercelConfig = vercel;
+  const frontendVercelConfig = frontendVercel;
+  check(/installCommand:\s*[\"']npm install --prefix frontend[\"']/.test(vercel), "Vercel raiz deve instalar somente frontend/.");
+  check(/buildCommand:\s*[\"']npm run build --prefix frontend[\"']/.test(vercel), "Vercel raiz deve construir somente frontend/.");
+  check(/outputDirectory:\s*[\"']frontend\/dist[\"']/.test(vercel), "Vercel raiz deve publicar frontend/dist.");
+  check(/VERCEL_PROJECT_ID/.test(`${vercel} ${frontendVercel}`), "Vercel deve selecionar a API por identidade do projeto.");
+  check(/Unsupported Vercel project/.test(`${vercel} ${frontendVercel}`), "Vercel deve falhar fechado para projeto desconhecido.");
   check(!/backend|prisma|\bnest\b/i.test(`${vercelConfig} ${frontendVercelConfig}`), "Vercel nao pode iniciar backend, Prisma ou Nest.");
 
   check(!fs.existsSync(path.join(root, "render.yaml")), "render.yaml ativo deve permanecer removido da raiz.");

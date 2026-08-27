@@ -102,11 +102,14 @@ test("F1UI-1 apresenta status honesto, checklist e modal sem iniciar OAuth", () 
 
 test("F1UI-1 copia apenas a URL publica e nao persiste credenciais", () => {
   const panel = read("src/components/integrations/WhatsAppConnectionPanel.tsx");
+  const webhook = read("src/components/integrations/whatsappWebhook.ts");
   const hook = read("src/components/integrations/useWhatsAppConnectionStatus.ts");
   const mapper = read("src/components/integrations/whatsappConnectionState.ts");
-  const combined = `${panel}\n${hook}\n${mapper}`;
+  const combined = `${panel}\n${webhook}\n${hook}\n${mapper}`;
 
-  assert.match(panel, /https:\/\/api-production-875f9\.up\.railway\.app\/webhooks\/whatsapp/);
+  assert.match(webhook, /\/api\/webhooks\/whatsapp/);
+  assert.doesNotMatch(webhook, /api-production-875f9|ga3-bundle-api-ga3-bundle-staging/);
+  assert.match(webhook, /resolveWhatsAppWebhookUrl/);
   assert.match(panel, /navigator\.clipboard\.writeText\(WHATSAPP_WEBHOOK_URL\)/);
   assert.match(panel, /URL copiada/);
   assert.doesNotMatch(combined, /localStorage|sessionStorage/);
@@ -125,4 +128,13 @@ test("F1UI-1 mantem acoes futuras indisponiveis e recuperacao de erro", () => {
   assert.match(panel, /Não foi possível atualizar o status agora/);
   assert.match(panel, /onClick=\{\(\) => void refresh\(\)\}/);
   assert.match(panel, /data-testid="whatsapp-status-loading"/);
+});
+
+test("webhook usa somente a origem same-origin autorizada", async () => {
+  const { resolveWhatsAppWebhookUrl } = await import("../src/components/integrations/whatsappWebhook.ts");
+  assert.equal(resolveWhatsAppWebhookUrl("https://crm-murex-six-83.vercel.app"), "https://crm-murex-six-83.vercel.app/api/webhooks/whatsapp");
+  assert.equal(resolveWhatsAppWebhookUrl("https://crm-ga3-bundle-staging.vercel.app"), "https://crm-ga3-bundle-staging.vercel.app/api/webhooks/whatsapp");
+  assert.equal(resolveWhatsAppWebhookUrl("https://crm-ga3-bundle-staging-git-a1b2c3.vercel.app"), "https://crm-ga3-bundle-staging-git-a1b2c3.vercel.app/api/webhooks/whatsapp");
+  assert.equal(resolveWhatsAppWebhookUrl("https://evil.example"), "");
+  assert.equal(resolveWhatsAppWebhookUrl("http://crm-murex-six-83.vercel.app"), "");
 });

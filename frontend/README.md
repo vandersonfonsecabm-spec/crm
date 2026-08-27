@@ -5,8 +5,8 @@ This template provides a minimal setup to get React working in Vite with HMR and
 ## Produção: API e sessão
 
 No host canônico `crm-murex-six-83.vercel.app`, o cliente chama a API pelo
-prefixo same-origin `/api`. A primeira regra de rewrite em `vercel.json`
-encaminha esse prefixo ao backend antes do fallback da SPA, e o cookie HttpOnly
+prefixo same-origin `/api`. O `vercel.mjs` seleciona o destino do rewrite por
+identidade imutável do projeto Vercel antes do fallback da SPA, e o cookie HttpOnly
 de refresh precisa de `Path=/` para acompanhar `/api/auth/*` após o proxy.
 O access token permanece apenas em memória: não é gravado em `localStorage` ou
 `sessionStorage`.

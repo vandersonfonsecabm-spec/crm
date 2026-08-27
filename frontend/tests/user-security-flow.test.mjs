@@ -394,24 +394,22 @@ test("access token permanece somente em memória e logout preserva Web Storage s
 });
 
 test("produção encaminha auth pelo mesmo host antes do fallback da SPA", async () => {
-  const vercelConfigSource = await source("vercel.json");
-  const [vercelConfig, rootVercelConfig] = [JSON.parse(vercelConfigSource), JSON.parse(await source("../vercel.json"))];
+  const vercelConfigSource = await source("vercel.mjs");
+  const rootVercelConfigSource = await source("../vercel.mjs");
 
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "crm-murex-six-83.vercel.app" }), "/api");
-  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app", configuredApiUrl: "https://api-homolog.example" }), "https://api-homolog.example");
+  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app", configuredApiUrl: "https://api-homolog.example" }), "");
+  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "crm-ga3-bundle-staging.vercel.app", configuredApiUrl: "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app" }), "/api");
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app", configuredApiUrl: "https://api-production-875f9.up.railway.app" }), "");
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app" }), "");
-  assert.deepEqual(vercelConfig.rewrites.slice(0, 2), [
-    {
-      source: "/api/:path*",
-      destination: "https://api-production-875f9.up.railway.app/:path*",
-    },
-    {
-      source: "/(.*)",
-      destination: "/index.html",
-    },
-  ]);
-  assert.deepEqual(rootVercelConfig.rewrites.slice(0, 2), vercelConfig.rewrites.slice(0, 2));
+  assert.equal(api.resolveApiBaseUrl({ production: false, configuredApiUrl: "https://api-homolog.example" }), "http://localhost:3001");
+  assert.equal(api.resolveApiBaseUrl({ production: false, configuredApiUrl: "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app" }), "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app");
+  assert.match(vercelConfigSource, /VERCEL_PROJECT_ID/);
+  assert.match(vercelConfigSource, /prj_xAWKcwZGDQsT3pEZLUZ5YWf6lDFq/);
+  assert.match(vercelConfigSource, /prj_AJE06pNRGunJoguCNWee0RgZV6t8/);
+  assert.match(vercelConfigSource, /Unsupported Vercel project/);
+  assert.match(rootVercelConfigSource, /destination: `\$\{apiOrigin\}\/:\path\*`/);
+  assert.doesNotMatch(vercelConfigSource, /destination"\s*:\s*"https:\/\/api-production-875f9\.up\.railway\.app\/:path\*"/);
 });
 
 test("falha transitória no reload preserva retry e oferece retorno local ao login", async () => {

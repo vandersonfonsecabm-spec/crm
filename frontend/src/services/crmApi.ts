@@ -4,7 +4,10 @@ import { isAuthRefreshCoordinationError, runAuthRefreshSingleFlight } from "./au
 const runtimeEnv = import.meta.env as ImportMetaEnv | undefined;
 const configuredApiUrl = runtimeEnv?.VITE_API_URL?.trim();
 const CANONICAL_PRODUCTION_HOST = "crm-murex-six-83.vercel.app";
+const CANONICAL_STAGING_HOST = "crm-ga3-bundle-staging.vercel.app";
 const OFFICIAL_PRODUCTION_API_ORIGIN = "https://api-production-875f9.up.railway.app";
+const OFFICIAL_STAGING_API_ORIGIN = "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app";
+const LOCAL_API_ORIGINS = new Set(["http://localhost:3001", "http://127.0.0.1:3001"]);
 const API_URL = resolveApiBaseUrl({
   configuredApiUrl,
   hostname: typeof window === "undefined" ? "" : window.location.hostname,
@@ -2699,10 +2702,16 @@ export function resolveApiBaseUrl({
   hostname?: string;
   production: boolean;
 }) {
-  if (!production) return configuredApiUrl || "http://localhost:3001";
-  if (hostname?.toLowerCase() === CANONICAL_PRODUCTION_HOST) return "/api";
+  const normalizedHostname = hostname?.trim().toLowerCase() ?? "";
+  if (!production) {
+    if (!configuredApiUrl) return "http://localhost:3001";
+    return isApprovedDevelopmentApi(configuredApiUrl) ? configuredApiUrl : "http://localhost:3001";
+  }
+  if (normalizedHostname === CANONICAL_PRODUCTION_HOST || isStagingHost(normalizedHostname)) return "/api";
   if (!configuredApiUrl || isOfficialProductionApi(configuredApiUrl)) return "";
-  return configuredApiUrl;
+  // Production builds never send credentials to an arbitrary VITE_API_URL.
+  // Same-origin /api remains the only approved path for known Vercel projects.
+  return "";
 }
 
 function isOfficialProductionApi(apiUrl: string) {
@@ -2711,6 +2720,22 @@ function isOfficialProductionApi(apiUrl: string) {
   } catch {
     return false;
   }
+}
+
+function isOfficialStagingApi(apiUrl: string) {
+  try {
+    return new URL(apiUrl).origin === OFFICIAL_STAGING_API_ORIGIN;
+  } catch {
+    return false;
+  }
+}
+
+function isApprovedDevelopmentApi(apiUrl: string) {
+  return LOCAL_API_ORIGINS.has(apiUrl.replace(/\/$/, "")) || isOfficialStagingApi(apiUrl);
+}
+
+function isStagingHost(hostname: string) {
+  return hostname === CANONICAL_STAGING_HOST || hostname.startsWith(`${CANONICAL_STAGING_HOST.slice(0, -".vercel.app".length)}-`);
 }
 
 async function requestCliente(method: "POST" | "PATCH" | "PUT", path: string, payload: ClientePayload): Promise<ApiCliente>;

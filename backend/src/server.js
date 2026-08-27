@@ -69,6 +69,8 @@ app.use((req, res, next) => {
   res.set("Referrer-Policy", "strict-origin-when-cross-origin");
   res.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   res.set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+  res.set("Cache-Control", "no-store");
+  if (process.env.NODE_ENV === "production") res.set("Strict-Transport-Security", "max-age=31536000");
   next();
 });
 const PORT = process.env.PORT || 3001;
@@ -77,6 +79,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "https://crm-murex-six-83.vercel.app",
+  "https://crm-ga3-bundle-staging.vercel.app",
 ];
 const allowedOrigins = getAllowedOrigins();
 app.use(createMaintenanceReadOnlyMiddleware({
@@ -2544,13 +2547,33 @@ if (require.main === module) {
 }
 
 function getAllowedOrigins() {
-  const configuredOrigins = [process.env.FRONTEND_URL, process.env.ALLOWED_ORIGINS]
+  const rawOrigins = [process.env.FRONTEND_URL, process.env.ALLOWED_ORIGINS]
     .filter(Boolean)
     .flatMap((value) => String(value).split(","))
     .map((origin) => origin.trim())
     .filter(Boolean);
 
+  const configuredOrigins = rawOrigins.map((origin) => normalizeAllowedOrigin(origin));
+  if (configuredOrigins.some((origin) => origin === null)) {
+    throw new Error("Configuracao de CORS invalida; informe origens HTTPS exatas.");
+  }
+
   return configuredOrigins.length > 0 ? configuredOrigins : DEFAULT_ALLOWED_ORIGINS;
+}
+
+function normalizeAllowedOrigin(value) {
+  try {
+    const parsed = new URL(value);
+    const isLocal = process.env.NODE_ENV !== "production"
+      && parsed.protocol === "http:"
+      && ["localhost", "127.0.0.1"].includes(parsed.hostname);
+    if ((!isLocal && parsed.protocol !== "https:") || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+      return null;
+    }
+    return parsed.origin;
+  } catch {
+    return null;
+  }
 }
 
 module.exports = { app, prisma, startServer };
