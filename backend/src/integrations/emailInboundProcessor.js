@@ -10,7 +10,7 @@ const {
 } = require("./emailFoundation");
 const { readGlobalEmailConfiguration } = require("../platform/emailInboundProvisioning");
 const { createAutomationService } = require("../automations/service");
-const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { lockActiveClienteRow, lockClientIdentity } = require("../shared/clientLifecycleLock");
 const { applyInboundConversationActivity } = require("../leads-communication/inboundActivity");
 
 const PROVIDER = "EMAIL";
@@ -304,11 +304,33 @@ async function resolveClient(tx, event, contact, normalized) {
     await lockActiveClienteRow(tx, event.empresaId, client.id);
     return client;
   }
+  const email = String(normalized.from.address || "").trim().toLowerCase();
+  await lockClientIdentity(tx, event.empresaId, `email:${email}`);
+  const candidateRefs = await tx.$queryRaw`
+    SELECT "id"
+    FROM "Cliente"
+    WHERE "empresaId" = ${event.empresaId}
+      AND lower(trim("email")) = ${email}
+    ORDER BY "id" ASC
+    LIMIT 3
+  `;
+  const candidateIds = candidateRefs.map((row) => Number(row.id)).filter(Number.isSafeInteger);
+  const candidates = await tx.cliente.findMany({
+    where: { empresaId: event.empresaId, id: { in: candidateIds } },
+    orderBy: { id: "asc" },
+  });
+  if (candidates.length > 1) throw emailProcessingError("EMAIL_CLIENT_AMBIGUOUS", "Mais de um Cliente corresponde ao remetente de E-mail.");
+  if (candidates.length === 1) {
+    const client = candidates[0];
+    if (client.arquivadoEm !== null) throw emailProcessingError("EMAIL_CLIENT_ARCHIVED_READ_ONLY", "O cliente arquivado precisa ser restaurado antes de receber novos e-mails.");
+    await lockActiveClienteRow(tx, event.empresaId, client.id);
+    return client;
+  }
   return tx.cliente.create({ data: {
     empresaId: event.empresaId,
     nome: normalized.from.name || "Contato por e-mail",
     telefone: "",
-    email: normalized.from.address,
+    email,
     empresa: "",
     interesse: "",
     origem: "E-mail",

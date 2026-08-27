@@ -121,22 +121,20 @@ function commercialProductWhere(empresaId, filtros = {}) {
   const marca = clean(filtros.marca);
   const local = clean(filtros.local);
   const somenteDisponiveis = parseBooleanFilter(filtros.somenteDisponiveis || filtros.apenasDisponiveis);
+  const stockFilter = {};
 
   if (sku) where.sku = { contains: sku };
   if (codigoBarras) where.codigoBarras = { contains: codigoBarras };
   if (categoria) where.categoria = { contains: categoria };
   if (marca) where.marca = { contains: marca };
   if (local) {
-    where.estoques = {
-      some: {
-        OR: [{ localNome: { contains: local } }, { localExternalId: { contains: local } }],
-      },
-    };
+    stockFilter.OR = [{ localNome: { contains: local } }, { localExternalId: { contains: local } }];
   }
   if (somenteDisponiveis === true) {
     where.ativo = true;
-    where.estoques = { some: { disponivel: { gt: 0 } } };
+    stockFilter.disponivel = { gt: 0 };
   }
+  if (Object.keys(stockFilter).length) where.estoques = { some: stockFilter };
   if (q) {
     where.OR = [
       { nome: { contains: q } },
@@ -344,6 +342,7 @@ function clean(value) {
 
 module.exports = {
   createCommercialCatalogService,
+  commercialProductWhere,
   commercialProductResponse,
   isPromotionActive,
 };

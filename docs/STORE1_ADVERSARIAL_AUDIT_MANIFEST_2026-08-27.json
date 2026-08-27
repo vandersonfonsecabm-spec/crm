@@ -1,0 +1,35 @@
+{
+  "mission": "STORE1_ADVERSARIAL_CONTINUOUS_USE_AUDIT",
+  "date": "2026-08-27",
+  "baselineHead": "c328ecb627c1d0d68bd9ef90d2472f7ace26b979",
+  "branch": "codex/store1-release-reconcile",
+  "trackedDiffHash": "4c7ac504e350f83b6d850b8b046d7e910895c41c",
+  "productionChanged": false,
+  "stagingChanged": false,
+  "validation": {
+    "backendGlobalSuite": "PASS_EXIT_0",
+    "frontendTests": "216/216_PASS",
+    "frontendLint": "PASS",
+    "frontendBuild": "PASS",
+    "gitDiffCheck": "PASS",
+    "adversarialFinalReview": "SHIP",
+    "tenantIsolationRelations": 161,
+    "protectedDevDbSha256": "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533"
+  },
+  "findings": {
+    "fixed": 27,
+    "activeInternalFail": 0,
+    "postgresOnlyUntested": 3,
+    "externalReadinessPending": 2
+  },
+  "runtime": {
+    "candidateDeployed": false,
+    "finalAuthenticatedBrowserQa": "NOT_APPLICABLE_UNTIL_DEPLOY",
+    "productionRuntimeChanged": false
+  },
+  "verdict": {
+    "localCorrectedCandidate": "PASS",
+    "externalIntegrations": "PENDING_EXTERNAL_PROVIDER",
+    "finalRuntimeReleaseReadiness": "BLOCKED_NOT_DEPLOYED"
+  }
+}

@@ -682,15 +682,24 @@ function sanitizeOriginal(item) {
 }
 
 function sanitizeError(error) {
+  const code = String(error?.code || "BLING_SYNC_ERROR").slice(0, 80);
+  const safeMessages = {
+    BLING_CREDENTIALS_REQUIRED: "Credenciais do Bling ausentes.",
+    BLING_TOKEN_ERROR: "Não foi possível renovar a autenticação do Bling.",
+    BLING_TOKEN_RESPONSE_INVALID: "O Bling retornou uma credencial inválida.",
+    BLING_HTTP_ERROR: Number(error?.status) === 401 ? "A autenticação do Bling foi rejeitada." : "O Bling recusou a solicitação.",
+    BLING_TIMEOUT: "O Bling não respondeu dentro do prazo.",
+  };
   return {
-    code: error?.code || "BLING_SYNC_ERROR",
-    message: text(error?.message) || "Não foi possível sincronizar com o Bling.",
+    code,
+    message: safeMessages[code] || "Não foi possível sincronizar com o Bling.",
   };
 }
 
 function statusAfterSyncError(integracao, error) {
   if (!integracao?.ativo || !integracao?.credenciaisCriptografadas) return "ERRO";
-  if (["BLING_CREDENTIALS_REQUIRED", "BLING_TOKEN_ERROR"].includes(error?.code)) return "ERRO";
+  if (["BLING_CREDENTIALS_REQUIRED", "BLING_TOKEN_ERROR", "BLING_TOKEN_RESPONSE_INVALID"].includes(error?.code)) return "ERRO";
+  if (error?.code === "BLING_HTTP_ERROR" && Number(error?.status) === 401) return "ERRO";
   return "ATIVA";
 }
 
@@ -736,4 +745,4 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
-module.exports = { createBlingService, _private: { moneyToCents } };
+module.exports = { createBlingService, _private: { moneyToCents, sanitizeError, statusAfterSyncError } };

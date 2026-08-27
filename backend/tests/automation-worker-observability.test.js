@@ -165,6 +165,57 @@ test("worker_poll_error preserva diagnostico tecnico sem vazar dados sensiveis",
   assert.doesNotMatch(capture.text(), /db_password|token-value-123|session-secret|customer@example\.test|99999-8888|top-secret|eyJhbGci|private\.example/i);
 });
 
+test("worker observa falha parcial de notificacoes sem derrubar tenants saudaveis", async () => {
+  const capture = logCapture();
+  const scheduled = [];
+  const worker = startAutomationWorker({
+    notificationService: { async processDue() { return { tenants: 2, failed: 1, created: 3 }; } },
+    env: {
+      NODE_ENV: "production",
+      H8_NOTIFICATIONS_ENABLED: "true",
+      NOTIFICATIONS_WORKER_ENABLED: "true",
+      H8_NOTIFICATION_TENANT_ALLOWLIST: "1,2",
+      AUTOMATION_WORKER_POLL_INTERVAL_MS: "1000",
+    },
+    workerId: "worker-notification-partial",
+    logger: capture.logger,
+    setTimeoutImpl: (callback) => { scheduled.push(callback); return callback; },
+    clearTimeoutImpl() {},
+  });
+  scheduled.shift()();
+  await flushTasks();
+  await worker.stop();
+  const errors = capture.entries().filter((entry) => entry.event === "worker_poll_error" && entry.subsystem === "notifications");
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].failedTenantCount, 1);
+  assert.equal(capture.entries().some((entry) => entry.event === "worker_unhealthy"), false);
+});
+
+test("worker torna notificacoes unhealthy somente quando todos os tenants falham repetidamente", async () => {
+  const capture = logCapture();
+  const scheduled = [];
+  const worker = startAutomationWorker({
+    notificationService: { async processDue() { return { tenants: 2, failed: 2 }; } },
+    env: {
+      NODE_ENV: "production",
+      H8_NOTIFICATIONS_ENABLED: "true",
+      NOTIFICATIONS_WORKER_ENABLED: "true",
+      H8_NOTIFICATION_TENANT_ALLOWLIST: "1,2",
+      AUTOMATION_WORKER_POLL_INTERVAL_MS: "1000",
+    },
+    workerId: "worker-notification-full-failure",
+    logger: capture.logger,
+    setTimeoutImpl: (callback) => { scheduled.push(callback); return callback; },
+    clearTimeoutImpl() {},
+  });
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    scheduled.shift()();
+    await flushTasks();
+  }
+  await worker.stop();
+  assert.equal(capture.entries().filter((entry) => entry.event === "worker_unhealthy").length, 1);
+});
+
 test("sanitizacao cobre headers compostos, credenciais, PII e payload Prisma", () => {
   const cases = [
     ["Cookie: session=abc; refresh=def; tracking=ghi", ["session=abc", "refresh=def", "tracking=ghi"]],

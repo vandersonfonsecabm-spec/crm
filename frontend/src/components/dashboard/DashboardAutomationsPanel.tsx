@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Clock, FlaskConical, History, PauseCircle, PlayCircle, Plus, RefreshCw, RotateCcw, Settings2, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   activateAutomationRule,
   createAutomationRule,
@@ -105,8 +105,11 @@ export default function DashboardAutomationsPanel() {
   const [entityId, setEntityId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const loadSequenceRef = useRef(0);
+  const actionLockRef = useRef(false);
 
   const hasFailedJobs = executions.some((execution) => execution.jobs.some((job) => job.status === "FALHOU" || job.status === "FALHA_DEFINITIVA"));
   const orderedRules = useMemo(() => [...rules].sort((first, second) => first.prioridade - second.prioridade || first.id - second.id), [rules]);
@@ -118,9 +121,13 @@ export default function DashboardAutomationsPanel() {
 
   useEffect(() => {
     void load();
+    return () => {
+      loadSequenceRef.current += 1;
+    };
   }, []);
 
   async function load() {
+    const requestSequence = ++loadSequenceRef.current;
     setLoading(true);
     setError("");
     try {
@@ -130,6 +137,7 @@ export default function DashboardAutomationsPanel() {
         fetchAutomationRules({ limit: 50 }),
         fetchAutomationExecutions({ limit: 12 }),
       ]);
+      if (requestSequence !== loadSequenceRef.current) return;
       setSummary(summaryData);
       setOptions(optionsData);
       setForm((current) => optionsData.actions.includes(current.acao) || optionsData.actions.length === 0
@@ -138,13 +146,15 @@ export default function DashboardAutomationsPanel() {
       setRules(rulesData.data);
       setExecutions(executionData.data);
     } catch (requestError) {
-      setError(errorMessage(requestError));
+      if (requestSequence === loadSequenceRef.current) setError(errorMessage(requestError));
     } finally {
-      setLoading(false);
+      if (requestSequence === loadSequenceRef.current) setLoading(false);
     }
   }
 
   async function submitRule() {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
     setSaving(true);
     setError("");
     setMessage("");
@@ -157,11 +167,15 @@ export default function DashboardAutomationsPanel() {
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
+      actionLockRef.current = false;
       setSaving(false);
     }
   }
 
   async function toggleRule(rule: AutomationRule) {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
+    setActionBusy(`toggle:${rule.id}`);
     setError("");
     setMessage("");
     try {
@@ -170,10 +184,16 @@ export default function DashboardAutomationsPanel() {
       await load();
     } catch (requestError) {
       setError(errorMessage(requestError));
+    } finally {
+      actionLockRef.current = false;
+      setActionBusy(null);
     }
   }
 
   async function runSimulation() {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
+    setActionBusy("simulation");
     setError("");
     setMessage("");
     try {
@@ -183,10 +203,16 @@ export default function DashboardAutomationsPanel() {
       setSimulation(await simulateAutomationRule(payload));
     } catch (requestError) {
       setError(errorMessage(requestError));
+    } finally {
+      actionLockRef.current = false;
+      setActionBusy(null);
     }
   }
 
   async function retryJob(jobId: number) {
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
+    setActionBusy(`retry:${jobId}`);
     setError("");
     setMessage("");
     try {
@@ -195,6 +221,9 @@ export default function DashboardAutomationsPanel() {
       await load();
     } catch (requestError) {
       setError(errorMessage(requestError));
+    } finally {
+      actionLockRef.current = false;
+      setActionBusy(null);
     }
   }
 
@@ -275,7 +304,7 @@ export default function DashboardAutomationsPanel() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button onClick={() => { setForm(ruleToForm(rule, availableActions)); setSimulation(null); }} size="sm" variant="ghost">Editar</Button>
-                    <Button leftIcon={rule.ativa ? <PauseCircle size={14} /> : <PlayCircle size={14} />} onClick={() => void toggleRule(rule)} size="sm" variant={rule.ativa ? "subtle" : "primary"}>
+                    <Button disabled={Boolean(actionBusy) || saving} leftIcon={rule.ativa ? <PauseCircle size={14} /> : <PlayCircle size={14} />} loading={actionBusy === `toggle:${rule.id}`} onClick={() => void toggleRule(rule)} size="sm" variant={rule.ativa ? "subtle" : "primary"}>
                       {rule.ativa ? "Desativar" : "Ativar"}
                     </Button>
                   </div>
@@ -387,7 +416,7 @@ export default function DashboardAutomationsPanel() {
               </Select>
               <Input label="ID da entidade" min={1} onChange={(event) => setEntityId(event.target.value)} type="number" value={entityId} />
             </div>
-            <Button leftIcon={<FlaskConical size={14} />} onClick={() => void runSimulation()} size="sm" variant="secondary">Simular sem efeitos</Button>
+            <Button disabled={Boolean(actionBusy) || saving} leftIcon={<FlaskConical size={14} />} loading={actionBusy === "simulation"} onClick={() => void runSimulation()} size="sm" variant="secondary">Simular sem efeitos</Button>
             {simulation && (
               <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3 text-xs text-[var(--text-secondary)]">
                 <p className="font-semibold text-[var(--text-primary)]">{simulation.entidadeEncontrada ? "Entidade encontrada" : "Entidade nao encontrada"}</p>
@@ -428,7 +457,7 @@ export default function DashboardAutomationsPanel() {
                         {actionLabels[job.tipo]}
                         <strong>{executionStatusLabels[job.status] || job.status}</strong>
                         {(job.status === "FALHOU" || job.status === "FALHA_DEFINITIVA") && (
-                          <button className="inline-flex items-center text-[var(--primary)] hover:underline" onClick={() => void retryJob(job.id)} type="button">
+                          <button className="inline-flex items-center text-[var(--primary)] hover:underline disabled:cursor-not-allowed disabled:opacity-50" disabled={Boolean(actionBusy) || saving} onClick={() => void retryJob(job.id)} type="button">
                             <RotateCcw size={12} /> Retry
                           </button>
                         )}

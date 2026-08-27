@@ -158,9 +158,31 @@ test("fundacao multiempresa de canais isola, autoriza e nao altera CRM comercial
     canalIntegracaoId: created.body.id,
     conversaCanalId: newConversation.id,
     externalId: "msg-a-1",
-    texto: "Mensagem sintetica alterada",
+    texto: "Mensagem sintetica",
   });
   assert.equal(sameMessage.id, message.id);
+  await assert.rejects(
+    service.registerSimulatedMessage({
+      empresaId: adminA.empresaId,
+      canalIntegracaoId: created.body.id,
+      conversaCanalId: newConversation.id,
+      externalId: "msg-a-1",
+      texto: "Mensagem sintetica alterada",
+    }),
+    (error) => error.codigo === "CHANNEL_MESSAGE_REPLAY_CONFLICT",
+  );
+  const secondContact = await service.createOrFindChannelContact({ empresaId: adminA.empresaId, canalIntegracaoId: created.body.id, externalId: "contato-a-2" });
+  const secondConversation = await service.createOrFindOpenConversation({ empresaId: adminA.empresaId, canalIntegracaoId: created.body.id, contatoCanalId: secondContact.id });
+  await assert.rejects(
+    service.registerSimulatedMessage({
+      empresaId: adminA.empresaId,
+      canalIntegracaoId: created.body.id,
+      conversaCanalId: secondConversation.id,
+      externalId: "msg-a-1",
+      texto: "Mensagem sintetica",
+    }),
+    (error) => error.codigo === "CHANNEL_MESSAGE_REPLAY_CONFLICT",
+  );
   const contactB = await service.createOrFindChannelContact({ empresaId: adminB.empresaId, canalIntegracaoId: channelB.id, externalId: "contato-b-1" });
   const conversationB = await service.createOrFindOpenConversation({ empresaId: adminB.empresaId, canalIntegracaoId: channelB.id, contatoCanalId: contactB.id });
   await assert.rejects(

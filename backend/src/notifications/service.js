@@ -50,17 +50,16 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     const settings = await prisma.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId } });
     if (!settings?.habilitada) return { created: 0, updated: 0, resolved: 0, disabled: true };
     const sourceLimit = Math.min(Math.max(Number(limit) || MAX_SOURCE_ROWS, 1), MAX_SOURCE_ROWS);
-    const sourceCursor = sourceCursors.get(empresaId) || { followUp: 0, conversation: 0 };
+    const sourceCursor = sourceCursors.get(empresaId) || { followUp: null, conversation: null };
     const [followUps, conversations] = await Promise.all([
       prisma.acompanhamento.findMany({
-        where: { empresaId, status: { in: ACTIVE_FOLLOW_UP_STATUSES }, dataHora: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) } },
+        where: { empresaId, status: { in: ACTIVE_FOLLOW_UP_STATUSES }, dataHora: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) }, ...followUpCursorWhere(sourceCursor.followUp) },
         include: { responsavelUsuario: { select: { id: true, ativo: true, email: true } }, autor: { select: { id: true, ativo: true, email: true } }, negocio: { select: { id: true, responsavelId: true } }, conversaCanal: { select: { id: true, responsavelId: true } } },
         orderBy: [{ dataHora: "asc" }, { id: "asc" }],
-        skip: sourceCursor.followUp,
         take: sourceLimit,
       }),
       prisma.conversaCanal.findMany({
-        where: { empresaId, ...pendingConversationWhere(now) },
+        where: { empresaId, AND: [pendingConversationWhere(now), conversationCursorWhere(sourceCursor.conversation)] },
         select: {
           id: true,
           empresaId: true,
@@ -70,14 +69,13 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
           ultimaMensagemEm: true,
           contatoCanal: { select: { nome: true, cliente: { select: { nome: true } } } },
         },
-        orderBy: [{ aguardandoDesde: "asc" }, { id: "asc" }],
-        skip: sourceCursor.conversation,
+        orderBy: [{ ultimaMensagemEm: "asc" }, { id: "asc" }],
         take: sourceLimit,
       }),
     ]);
     sourceCursors.set(empresaId, {
-      followUp: followUps.length === sourceLimit ? sourceCursor.followUp + followUps.length : 0,
-      conversation: conversations.length === sourceLimit ? sourceCursor.conversation + conversations.length : 0,
+      followUp: followUps.length === sourceLimit ? { dataHora: followUps.at(-1).dataHora, id: followUps.at(-1).id } : null,
+      conversation: conversations.length === sourceLimit ? { ultimaMensagemEm: conversations.at(-1).ultimaMensagemEm, id: conversations.at(-1).id } : null,
     });
     const userIds = new Set();
     followUps.forEach((item) => { if (Number.isInteger(item.responsavelId)) userIds.add(item.responsavelId); if (Number.isInteger(item.autorId)) userIds.add(item.autorId); });
@@ -533,6 +531,26 @@ function recipientIdsForConversation(item, userById, managers) {
   return Number.isInteger(item.responsavelId) && userById.get(item.responsavelId) ? [item.responsavelId] : managers;
 }
 
+function followUpCursorWhere(cursor) {
+  if (!cursor) return {};
+  return {
+    OR: [
+      { dataHora: { gt: cursor.dataHora } },
+      { dataHora: cursor.dataHora, id: { gt: cursor.id } },
+    ],
+  };
+}
+
+function conversationCursorWhere(cursor) {
+  if (!cursor) return {};
+  return {
+    OR: [
+      { ultimaMensagemEm: { gt: cursor.ultimaMensagemEm } },
+      { ultimaMensagemEm: cursor.ultimaMensagemEm, id: { gt: cursor.id } },
+    ],
+  };
+}
+
 function pendingConversationWhere(now) {
   return {
     OR: [
@@ -713,6 +731,8 @@ module.exports = {
   ACTIVE_FOLLOW_UP_STATUSES,
   NOTIFICATION_TYPES,
   createNotificationService,
+  conversationCursorWhere,
+  followUpCursorWhere,
   pendingConversationWhere,
   parseTenantAllowlist,
   presentNotification,

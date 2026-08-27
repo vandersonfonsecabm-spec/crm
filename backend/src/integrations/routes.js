@@ -28,6 +28,8 @@ const TIPOS_INTEGRACAO = new Set(["BLING", "OMIE", "CONTA_AZUL", "TINY", "ALTERD
 const STATUS_INTEGRACAO = new Set(["PENDENTE", "ATIVA", "INATIVA", "ERRO"]);
 const FORMATOS_IMPORTACAO = new Set(["CSV", "XLSX", "XML", "JSON"]);
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
+const MAX_CONFIG_JSON_BYTES = 32 * 1024;
+const SENSITIVE_CONFIG_KEY = /(?:api.?key|access.?key|client.?secret|app.?secret|private.?key|access.?token|refresh.?token|auth(?:orization)?|password|passwd|senha|cookie|credential|secret|token)/i;
 
 function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const requireAdmin = [authenticate, requireRole("ADMIN")];
@@ -317,6 +319,8 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
         return res.json({ ok: true, sincronizacao: syncResponse(updated) });
       } catch (adapterError) {
         const now = new Date();
+        const adapterCode = safeAdapterErrorCode(adapterError);
+        const adapterMessage = safeAdapterErrorMessage(adapterError);
         const updated = await prisma.$transaction(async (tx) => {
           const failed = await tx.sincronizacaoIntegracao.update({
             where: { id: sync.id },
@@ -324,7 +328,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
               status: "FALHOU",
               finalizadaEm: now,
               itensComErro: 1,
-              mensagemErro: adapterError.message,
+              mensagemErro: adapterMessage,
             },
           });
           await tx.erroIntegracao.create({
@@ -332,8 +336,8 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
               empresaId: req.auth.empresaId,
               integracaoId: integracao.id,
               sincronizacaoId: failed.id,
-              codigo: adapterError.code || "CONNECTOR_ERROR",
-              mensagem: adapterError.message,
+              codigo: adapterCode,
+              mensagem: adapterMessage,
               detalhesSanitizados: JSON.stringify({ tipo: integracao.tipo }),
             },
           });
@@ -345,8 +349,8 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
         });
 
         return res.status(501).json({
-          erro: adapterError.message,
-          codigo: adapterError.code || "CONNECTOR_NOT_IMPLEMENTED",
+          erro: adapterMessage,
+          codigo: adapterCode,
           sincronizacao: syncResponse(updated),
         });
       }
@@ -792,7 +796,7 @@ function integrationResponse(integracao) {
     tipo: integracao.tipo,
     status: integracao.status,
     modo: integracao.modo,
-    configuracao: safeJson(integracao.configuracaoJson, {}),
+    configuracao: redactSensitiveConfig(safeJson(integracao.configuracaoJson, {})),
     possuiCredenciais: hasEncryptedCredentials(integracao.credenciaisCriptografadas),
     ultimaSincronizacaoEm: integracao.ultimaSincronizacaoEm,
     ultimoSucessoEm: integracao.ultimoSucessoEm,
@@ -815,12 +819,12 @@ function syncResponse(sync) {
     itensRecebidos: sync.itensRecebidos,
     itensProcessados: sync.itensProcessados,
     itensComErro: sync.itensComErro,
-    mensagemErro: sync.mensagemErro,
+    mensagemErro: redactSensitiveText(sync.mensagemErro),
     metadados: safeJson(sync.metadadosJson, null),
     erros: sync.erros?.map((erro) => ({
       id: erro.id,
       codigo: erro.codigo,
-      mensagem: erro.mensagem,
+      mensagem: redactSensitiveText(erro.mensagem),
       resolvido: erro.resolvido,
       createdAt: erro.createdAt,
     })),
@@ -895,7 +899,7 @@ function statusFromCode(code) {
   if (code === "BLING_CREDENTIALS_REQUIRED" || code === "BLING_INVALID_STATE" || code === "BLING_AUTH_CODE_REQUIRED") return 400;
   if (["BLING_TOKEN_ERROR", "BLING_TOKEN_RESPONSE_INVALID", "BLING_HTTP_ERROR", "BLING_TIMEOUT"].includes(code)) return 502;
   if (code === "INTEGRATION_NOT_FOUND" || code === "SYNC_NOT_FOUND" || code === "IMPORT_NOT_FOUND") return 404;
-  if (code === "IMPORT_DUPLICATE_FILE" || code === "IMPORT_INVALID_STATUS" || code === "IMPORT_CONFIRMATION_REQUIRED") return 409;
+  if (["IMPORT_DUPLICATE_FILE", "IMPORT_INVALID_STATUS", "IMPORT_CONFIRMATION_REQUIRED", "IMPORT_CONFLICT"].includes(code)) return 409;
   if (code === "IMPORT_CACHE_EXPIRED") return 410;
   if (code === "INTEGRATION_ACCESS_DENIED") return 403;
   if (code === "INTEGRATION_INVALID_TYPE" || code === "VALIDATION_ERROR" || code?.startsWith("IMPORT_")) return 400;
@@ -1011,11 +1015,69 @@ function httpError(status, message, code) {
 
 function stringifySafeConfig(value) {
   if (value === undefined || value === null || value === "") return "{}";
-  if (typeof value === "string") {
-    JSON.parse(value);
-    return value;
+  let parsed;
+  try {
+    parsed = typeof value === "string" ? JSON.parse(value) : value;
+  } catch {
+    throw httpError(400, "Configuração inválida.", "INTEGRATION_CONFIG_INVALID");
   }
-  return JSON.stringify(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw httpError(400, "Configuração deve ser um objeto JSON.", "INTEGRATION_CONFIG_INVALID");
+  }
+  assertNoSensitiveConfigKeys(parsed);
+  const serialized = JSON.stringify(parsed);
+  if (Buffer.byteLength(serialized, "utf8") > MAX_CONFIG_JSON_BYTES) {
+    throw httpError(400, "Configuração excede o limite permitido.", "INTEGRATION_CONFIG_INVALID");
+  }
+  return serialized;
+}
+
+function assertNoSensitiveConfigKeys(value, depth = 0) {
+  if (depth > 8) throw httpError(400, "Configuração profunda demais.", "INTEGRATION_CONFIG_INVALID");
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) {
+    if (SENSITIVE_CONFIG_KEY.test(normalizeSensitiveKey(key))) {
+      throw httpError(400, "Configuração contém campo sensível; use o armazenamento cifrado de credenciais.", "INTEGRATION_CONFIG_SENSITIVE_FIELD");
+    }
+    assertNoSensitiveConfigKeys(child, depth + 1);
+  }
+}
+
+function redactSensitiveConfig(value, depth = 0) {
+  if (depth > 8) return "[redacted]";
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((item) => redactSensitiveConfig(item, depth + 1));
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [
+    key,
+    SENSITIVE_CONFIG_KEY.test(normalizeSensitiveKey(key)) ? "[redacted]" : redactSensitiveConfig(child, depth + 1),
+  ]));
+}
+
+function normalizeSensitiveKey(value) {
+  return String(value || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+
+function safeAdapterErrorCode(error) {
+  const code = String(error?.code || error?.codigo || "CONNECTOR_ERROR").trim().toUpperCase();
+  return /^[A-Z0-9_]{2,80}$/.test(code) ? code : "CONNECTOR_ERROR";
+}
+
+function safeAdapterErrorMessage(error) {
+  const code = safeAdapterErrorCode(error);
+  if (code === "BLING_CREDENTIALS_REQUIRED") return "Credenciais do Bling ausentes.";
+  if (code === "BLING_NOT_CONFIGURED") return "Bling não configurado.";
+  if (code === "CONNECTOR_NOT_IMPLEMENTED") return "Conector não implementado.";
+  return "Não foi possível testar a integração.";
+}
+
+function redactSensitiveText(value) {
+  if (value === undefined || value === null || value === "") return value ?? null;
+  return String(value)
+    .replace(/(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "$1[redacted]")
+    .replace(/((?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
+    .replace(/([?&](?:api_key|client_secret|access_token|refresh_token|token)=)[^&\s]+/gi, "$1[redacted]")
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
+    .slice(0, 500);
 }
 
 function sanitizeCredentialInput(value) {
@@ -1073,6 +1135,15 @@ function clean(value) {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
 
-module.exports = { mountIntegrationHubRoutes, _private: { integrationError } };
+module.exports = {
+  mountIntegrationHubRoutes,
+  _private: {
+    integrationError,
+    stringifySafeConfig,
+    redactSensitiveConfig,
+    safeAdapterErrorMessage,
+    redactSensitiveText,
+  },
+};
 
 

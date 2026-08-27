@@ -122,7 +122,7 @@ export type AICommerceDraft = {
 export type AICommerceAssistantResult = {
   runId: string;
   mode: AICommerceMode;
-  connectionStatus: "NOT_CONNECTED" | "MOCK_AVAILABLE" | "REAL_NOT_CONNECTED";
+  connectionStatus: "NOT_CONNECTED" | "MOCK_AVAILABLE" | "REAL_NOT_CONNECTED" | "REAL_CONNECTED";
   intent?: string | null;
   confidence?: number | null;
   missingInformation: string[];
@@ -152,10 +152,10 @@ export type AICommerceSettings = {
 };
 
 export type AICommerceConnectionStatus = {
-  status: "NOT_CONNECTED" | "MOCK_AVAILABLE" | "REAL_NOT_CONNECTED";
-  realProviderConnected: false;
-  realConnectorImplemented: false;
-  autoReplyEnabled: false;
+  status: "NOT_CONNECTED" | "MOCK_AVAILABLE" | "REAL_NOT_CONNECTED" | "REAL_CONNECTED";
+  realProviderConnected: boolean;
+  realConnectorImplemented: boolean;
+  autoReplyEnabled: boolean;
   lastValidatedAt?: string | null;
   message?: string | null;
 };
@@ -389,7 +389,7 @@ function normalizeModeValue(value: unknown): AICommerceMode {
 
 function normalizeRunConnectionStatus(value: Record<string, unknown>): AICommerceAssistantResult["connectionStatus"] {
   const explicit = String(value.connectionStatus ?? "").toUpperCase();
-  if (explicit === "MOCK_AVAILABLE" || explicit === "REAL_NOT_CONNECTED" || explicit === "NOT_CONNECTED") {
+  if (explicit === "MOCK_AVAILABLE" || explicit === "REAL_NOT_CONNECTED" || explicit === "REAL_CONNECTED" || explicit === "NOT_CONNECTED") {
     return explicit;
   }
   return value.mock === true ? "MOCK_AVAILABLE" : "NOT_CONNECTED";
@@ -397,14 +397,16 @@ function normalizeRunConnectionStatus(value: Record<string, unknown>): AICommerc
 
 function normalizeConnectionStatus(value?: Record<string, unknown>): AICommerceConnectionStatus {
   const connected = value?.providerConnected === true || value?.realProviderConnected === true;
+  const connectorImplemented = value?.realConnectorImplemented === true;
+  const realConnected = connected && connectorImplemented;
   const mockReady = value?.mock === true && value?.status === "READY";
   return {
-    status: connected ? "REAL_NOT_CONNECTED" : mockReady ? "MOCK_AVAILABLE" : "NOT_CONNECTED",
-    realProviderConnected: false,
-    realConnectorImplemented: false,
-    autoReplyEnabled: false,
+    status: realConnected ? "REAL_CONNECTED" : connected ? "REAL_NOT_CONNECTED" : mockReady ? "MOCK_AVAILABLE" : "NOT_CONNECTED",
+    realProviderConnected: connected,
+    realConnectorImplemented: connectorImplemented,
+    autoReplyEnabled: realConnected && value?.autoReplyEnabled === true,
     lastValidatedAt: typeof value?.lastValidatedAt === "string" ? value.lastValidatedAt : null,
-    message: connected ? "Conector real não está implementado nesta missão." : mockReady ? "Mock disponível sem rede externa." : "Nenhuma conexão está ativa; o modo OFF permanece seguro.",
+    message: realConnected ? "Provider real conectado; respostas automáticas seguem a política do servidor." : connected ? "O provider respondeu, mas o conector real ainda não está habilitado." : mockReady ? "Mock disponível sem rede externa." : "Nenhuma conexão está ativa; o modo OFF permanece seguro.",
   };
 }
 

@@ -19,7 +19,11 @@ function getAllowedOrigins(env = process.env) {
     throw new Error("Configuracao de CORS invalida; informe origens HTTPS exatas.");
   }
 
-  return configuredOrigins.length > 0 ? configuredOrigins : [...DEFAULT_ALLOWED_ORIGINS];
+  if (configuredOrigins.length > 0) return configuredOrigins;
+  if (env.NODE_ENV === "production") {
+    throw new Error("Configuracao de CORS ausente em producao; informe origens HTTPS exatas.");
+  }
+  return [...DEFAULT_ALLOWED_ORIGINS];
 }
 
 function normalizeAllowedOrigin(value, env = process.env) {

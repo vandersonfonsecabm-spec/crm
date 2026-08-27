@@ -127,6 +127,17 @@ test("threading por In-Reply-To preserva conversa e remetente sem telefone", asy
   assert.equal(new Set(reopened.map((item) => item.chaveAberta)).size, 2);
 });
 
+test("inbound reutiliza Cliente existente pelo e-mail antes de criar cadastro", async () => {
+  const fixture = await seedActiveMailbox("email-existing-client");
+  const sender = "known@contact.example.test";
+  const existing = await prisma.cliente.create({ data: { empresaId: fixture.tenant.id, nome: "Known customer", telefone: "", email: "  Known@Contact.Example.Test  ", empresa: "Existing", interesse: "", origem: "CRM" } });
+  await simulatorFor(fixture.env).deliver({ mailboxAddress: fixture.mailbox, fromAddress: sender, messageId: `<known-${suffix}@events.example.test>`, subject: "Existing", text: "Reuse me" });
+  const counts = await commercialCounts(fixture.tenant.id);
+  assert.equal(counts.clients, 1);
+  const contact = await prisma.contatoCanal.findFirstOrThrow({ where: { empresaId: fixture.tenant.id, externalId: sender } });
+  assert.equal(contact.clienteId, existing.id);
+});
+
 test("inbound restaura estado coerente e preserva responsavel ao reabrir thread", async () => {
   const fixture = await seedActiveMailbox("email-inbound-status");
   const simulator = simulatorFor(fixture.env);

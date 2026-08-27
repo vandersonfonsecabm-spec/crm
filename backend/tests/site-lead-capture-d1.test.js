@@ -61,6 +61,18 @@ test("D1 capta formulario Site com seguranca, tenant e idempotencia", async () =
   assert.deepEqual(race.map((item) => item.status), [202, 202]);
   assert.equal(await prisma.eventoWebhook.count({ where: { canalIntegracaoId: integration.id, externalEventId: raceId } }), 1);
 
+  const sameIdentityBefore = await prisma.cliente.count({ where: { empresaId: adminA.empresaId } });
+  const concurrentIdentity = { telefone: "11977776666", email: "same-identity@d1.test" };
+  const separateSubmissions = await Promise.all([
+    publicRequest(integration.publicId, submission(crypto.randomUUID(), concurrentIdentity)),
+    publicRequest(integration.publicId, submission(crypto.randomUUID(), concurrentIdentity)),
+  ]);
+  assert.equal(separateSubmissions.every((item) => item.status === 202), true);
+  assert.equal(await prisma.cliente.count({ where: { empresaId: adminA.empresaId } }), sameIdentityBefore + 1);
+  assert.equal((await publicRequest(integration.publicId, submission(crypto.randomUUID(), { telefone: concurrentIdentity.telefone, email: "other-email@d1.test" }))).status, 202);
+  assert.equal((await publicRequest(integration.publicId, submission(crypto.randomUUID(), { telefone: "11966665555", email: concurrentIdentity.email }))).status, 202);
+  assert.equal(await prisma.cliente.count({ where: { empresaId: adminA.empresaId } }), sameIdentityBefore + 1);
+
   const existingClient = await prisma.cliente.create({ data: { empresaId: adminA.empresaId, nome: "Cliente Existente", telefone: "5511988887777", email: "preservar@d1.test", empresa: "Empresa preservada", cidade: "Sao Paulo", estado: "SP" } });
   await publicRequest(integration.publicId, submission(crypto.randomUUID(), { nome: "Nome recebido", telefone: "11 98888-7777", email: null, empresa: "Nao sobrescrever" }));
   const preserved = await prisma.cliente.findUnique({ where: { id: existingClient.id } });
@@ -81,6 +93,9 @@ test("D1 capta formulario Site com seguranca, tenant e idempotencia", async () =
   assert.equal((await publicRequest(integration.publicId, { ...submission(crypto.randomUUID()), empresaId: adminB.empresaId })).status, 400);
   assert.equal((await publicRequest(integration.publicId, submission(crypto.randomUUID(), { aceitePoliticaPrivacidade: false }))).status, 400);
   assert.equal((await publicRequest(integration.publicId, submission(crypto.randomUUID(), { email: "invalido", telefone: null }))).status, 400);
+  assert.equal((await publicRequest(integration.publicId, submission(crypto.randomUUID(), { paginaOrigem: "javascript:alert(1)" }))).status, 400);
+  assert.equal((await publicRequest(integration.publicId, submission(crypto.randomUUID(), { referrer: "file:///tmp/source" }))).status, 400);
+  assert.equal((await publicRequest(integration.publicId, submission(crypto.randomUUID(), { paginaOrigem: "https://user:pass@example.test/path" }))).status, 400);
   assert.equal((await publicRequest(integration.publicId, { ...submission(crypto.randomUUID()), desconhecido: true })).status, 400);
   assert.equal((await publicRequest(integration.publicId, { ...submission(crypto.randomUUID()), mensagem: "x".repeat(33000) })).status, 413);
   assert.equal((await publicRequest(integration.publicId, { ...submission(crypto.randomUUID()), mensagem: "x".repeat(120000) })).status, 413);

@@ -42,7 +42,7 @@ import WhatsappExternalConfirmDialog from "../components/dashboard/WhatsappExter
 import type { WhatsappExternalRequest } from "../components/dashboard/WhatsappExternalConfirmDialog";
 import useDashboardAnalytics from "../hooks/useDashboardAnalytics";
 import useDashboardActions from "../hooks/useDashboardActions";
-import { ApiHttpError, canAccessIntegrations, clearAuthSession, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchCommunicationAttentionSummary, fetchDashboardSummaryFromBackend, getAuthSession, resolveDashboardSession, shouldInvalidateAuthSession } from "../services/crmApi";
+import { ApiHttpError, canAccessIntegrations, clearAuthSession, CRM_DATA_CHANGED_EVENT, fetchClienteDetailFromBackend, fetchClientesFromBackend, fetchCommunicationAttentionSummary, fetchDashboardSummaryFromBackend, getAuthSession, resolveDashboardSession, shouldInvalidateAuthSession } from "../services/crmApi";
 import type { ApiDashboardSummary, AuthSession, NotificationTargetKind } from "../services/crmApi";
 import { resolveTenantFeatureAccess } from "../config/featureFlags";
 import { Button, EmptyState, ErrorState, LoadingState } from "../components/ui";
@@ -141,7 +141,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
   const lastClientLoadPageRef = useRef<ActivePage | null>(null);
-  const [isBooting, setIsBooting] = useState(true);
+  const [isBooting] = useState(false);
   const [dashboardSummary, setDashboardSummary] = useState<ApiDashboardSummary | null>(null);
   const [dashboardSummaryLoadState, setDashboardSummaryLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [clientsLoadState, setClientsLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -171,6 +171,19 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
   } = resolveTenantFeatureAccess(authSession?.capabilities);
   const canManageLeads = ["ADMIN", "GERENTE"].includes(authSession?.papel ?? authSession?.usuario.papel ?? "");
   const aiCommerceEnabled = authSession?.capabilities?.aiCommerce === true;
+
+  useEffect(() => {
+    let refreshTimer: number | undefined;
+    const refreshDashboardData = () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => setBackendLoadRequest((current) => current + 1), 120);
+    };
+    window.addEventListener(CRM_DATA_CHANGED_EVENT, refreshDashboardData);
+    return () => {
+      window.removeEventListener(CRM_DATA_CHANGED_EVENT, refreshDashboardData);
+      window.clearTimeout(refreshTimer);
+    };
+  }, []);
   const requestedActivePage = resolvedNavigation.page;
   const activePage = requestedActivePage === "integracoes" && !canManageIntegrations
     ? "comercial"
@@ -229,6 +242,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
     }
     let ignore = false;
     const loadAttention = async () => {
+      if (document.visibilityState === "hidden") return;
       try {
         const summary = await fetchCommunicationAttentionSummary();
         if (!ignore) {
@@ -241,10 +255,15 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
       }
     };
     void loadAttention();
-    const interval = window.setInterval(loadAttention, 20000);
+    const interval = window.setInterval(() => { void loadAttention(); }, 20000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void loadAttention();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       ignore = true;
       window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [authSession, leadsCommunicationEnabled]);
 
@@ -425,11 +444,6 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
   }, [isCustomerDrawerOpen, onLogout, selectedId]);
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => setIsBooting(false), 650);
-    return () => window.clearTimeout(timeout);
-  }, []);
-
-  useEffect(() => {
     resetDashboardPageScroll(contentRef.current, window);
   }, [activePage]);
 
@@ -493,7 +507,6 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
   } = useDashboardActions({
     clients,
     setClients,
-    onClientListChanged: () => setBackendLoadRequest((current) => current + 1),
     selectedClient,
     setSelectedClientDetail,
     selectedId,
@@ -638,8 +651,10 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
       openKanbanBusiness(id);
       return;
     }
-    handleSetActivePage("agenda");
-  }, [handleSetActivePage, openInboxConversation, openKanbanBusiness]);
+    setAgendaFollowUpId(id);
+    setAgendaFollowUpRequestKey((current) => current + 1);
+    navigate({ pathname: getDashboardPath("agenda"), search: `?acompanhamentoId=${encodeURIComponent(id)}` });
+  }, [navigate, openInboxConversation, openKanbanBusiness]);
 
   useEffect(() => {
     if (!resolvedNavigation.isKnown || resolvedNavigation.needsReplace) {
@@ -1120,7 +1135,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
               )}
               {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
                 <Suspense fallback={<LoadingState rows={4} />}>
-                  <LazyDashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />
+                  <LazyDashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} onUnauthorized={onLogout} />
                 </Suspense>
               )}
               {isWhatsAppIntegrationDetail && canManageIntegrations && (

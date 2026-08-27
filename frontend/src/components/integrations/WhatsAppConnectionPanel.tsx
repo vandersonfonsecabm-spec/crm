@@ -292,7 +292,7 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
             <p className="mt-0.5 text-[11px] leading-4 text-[var(--text-muted)]">A ativação avança apenas quando cada etapa for confirmada.</p>
           </div>
           <ol className="divide-y divide-[var(--border-default)]">
-            {connectionSteps(status.state).map((step, index) => (
+            {connectionSteps(status).map((step, index) => (
               <li className="flex min-w-0 items-start gap-3 px-4 py-3" key={step.label}>
                 <span
                   aria-label={step.done ? "Concluída" : "Pendente"}
@@ -397,24 +397,27 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
 
 function statusDetails(status: WhatsAppConnectionStatus) {
   const connected = status.state === "CONNECTED";
-  const configured = connected || status.state === "CONFIGURED_INACTIVE" || status.state === "PAUSED";
+  const identityConfigured = connected || status.state === "CONFIGURED_INACTIVE" || status.state === "WAITING_META_AUTH" || status.state === "PAUSED";
+  const authorized = status.credentialConfigured === true;
   return [
-    { label: "Integração", value: configured ? STATE_PRESENTATION[status.state].label : "Não configurada", icon: <CloudCog size={13} /> },
-    { label: "Número", value: configured ? "Número protegido pelo backend" : "Nenhum número conectado", icon: <Smartphone size={13} /> },
-    { label: "Conta Meta", value: configured ? "Autorização registrada" : "Aguardando autorização", icon: <ShieldCheck size={13} /> },
+    { label: "Integração", value: identityConfigured ? STATE_PRESENTATION[status.state].label : "Não configurada", icon: <CloudCog size={13} /> },
+    { label: "Número", value: identityConfigured ? "Identidade do número registrada" : "Nenhum número conectado", icon: <Smartphone size={13} /> },
+    { label: "Conta Meta", value: authorized ? "Credencial armazenada" : "Aguardando autorização", icon: <ShieldCheck size={13} /> },
     { label: "Webhook", value: status.verifiedAt ? "Conectado e validado na Meta" : "Preparado no CRM", icon: <CheckCircle2 size={13} /> },
     { label: "Recebimento", value: connected ? "Ativado" : "Desativado", icon: <MessageCircle size={13} /> },
     { label: "Envio", value: "Ainda não implementado", icon: <Send size={13} /> },
   ];
 }
 
-function connectionSteps(state: WhatsAppConnectionState) {
-  const authorized = ["CONFIGURED_INACTIVE", "CONNECTED", "PAUSED"].includes(state);
-  const webhookValidated = state === "CONNECTED" || state === "PAUSED";
+function connectionSteps(status: WhatsAppConnectionStatus) {
+  const state = status.state;
+  const authorized = status.credentialConfigured === true;
+  const numberLinked = ["CONFIGURED_INACTIVE", "WAITING_META_AUTH", "CONNECTED", "PAUSED"].includes(state);
+  const webhookValidated = Boolean(status.verifiedAt) && (state === "CONNECTED" || state === "PAUSED");
   return [
     { label: "Infraestrutura do CRM", done: true },
     { label: "Autorizar conta na Meta", done: authorized },
-    { label: "Vincular número do WhatsApp", done: authorized },
+    { label: "Vincular número do WhatsApp", done: numberLinked },
     { label: "Validar o webhook", done: webhookValidated },
     { label: "Ativar o recebimento", done: state === "CONNECTED" },
     { label: "Testar uma mensagem", done: false },

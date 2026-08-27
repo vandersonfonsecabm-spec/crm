@@ -68,7 +68,17 @@ function text(value, field, max, options = {}) {
 }
 
 function normalizeEmail(value) { const email = text(value, "email", 254); if (!email) return null; const normalized = email.toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) throw invalid("email invalido.", { email: "E-mail invalido." }); return normalized; }
-function optionalUrl(value, field) { const raw = text(value, field, 2048); if (!raw) return null; try { return new URL(raw).toString(); } catch { throw invalid(`${field} deve ser uma URL valida.`, { [field]: "URL invalida." }); } }
+function optionalUrl(value, field) {
+  const raw = text(value, field, 2048);
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error("UNSAFE_URL");
+    return parsed.toString();
+  } catch {
+    throw invalid(`${field} deve ser uma URL HTTP ou HTTPS valida.`, { [field]: "URL invalida." });
+  }
+}
 function optionalDate(value, field) { if (value === undefined || value === null || value === "") return null; const date = new Date(value); if (Number.isNaN(date.getTime())) throw invalid(`${field} invalido.`); return date; }
 function boolean(value, field) { if (typeof value !== "boolean") throw invalid(`${field} deve ser booleano.`); return value; }
 function requiredUuid(value, field) { const result = text(value, field, 64, { required: true }); if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(result)) throw invalid(`${field} invalido.`, { [field]: "Identificador invalido." }); return result.toLowerCase(); }

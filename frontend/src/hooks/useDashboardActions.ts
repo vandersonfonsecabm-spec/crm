@@ -15,7 +15,6 @@ import type { Client, Note, SortBy, Status } from "../types/dashboard";
 type UseDashboardActionsParams = {
   clients: Client[];
   setClients: Dispatch<SetStateAction<Client[]>>;
-  onClientListChanged?: () => void;
   selectedClient: Client | null;
   setSelectedClientDetail: Dispatch<SetStateAction<Client | null>>;
   selectedId: number | null;
@@ -42,7 +41,6 @@ type UseDashboardActionsParams = {
 export default function useDashboardActions({
   clients,
   setClients,
-  onClientListChanged,
   selectedClient,
   setSelectedClientDetail,
   selectedId,
@@ -215,7 +213,6 @@ export default function useDashboardActions({
       });
       setSelectedId(syncedClient.id);
       setCreating(null);
-      onClientListChanged?.();
       showToast("Cliente criado e sincronizado.");
     } catch {
       throw new Error("Não foi possível criar o cliente agora. Tente novamente.");

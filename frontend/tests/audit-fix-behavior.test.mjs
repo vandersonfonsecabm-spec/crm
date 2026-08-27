@@ -153,12 +153,15 @@ test("clientes usam paginação e filtros no servidor", async () => {
   assert.match(urls[0], /sortBy=value/);
 });
 
-test("criação de cliente invalida a lista paginada e importa os hooks em runtime", async () => {
-  const source = await readFile(new URL("../src/hooks/useDashboardActions.ts", import.meta.url), "utf8");
+test("criação de cliente invalida o resumo pelo write central sem callback duplicado", async () => {
+  const [source, apiSource] = await Promise.all([
+    readFile(new URL("../src/hooks/useDashboardActions.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/services/crmApi.ts", import.meta.url), "utf8"),
+  ]);
 
   assert.match(source, /import \{ useRef, useState \} from "react"/);
-  assert.match(source, /onClientListChanged\?: \(\) => void/);
-  assert.match(source, /onClientListChanged\?\.\(\);/);
+  assert.doesNotMatch(source, /onClientListChanged/);
+  assert.match(apiSource, /async function requestCliente[\s\S]*notifyDashboardDataChanged\(\)/);
   assert.doesNotMatch(source, /setClients\(\(current\) => \[syncedClient, \.\.\.current\]\)/);
 });
 

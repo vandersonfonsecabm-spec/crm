@@ -13,6 +13,8 @@ const API_URL = resolveApiBaseUrl({
   hostname: typeof window === "undefined" ? "" : window.location.hostname,
   production: runtimeEnv?.PROD === true,
 });
+const API_REQUEST_TIMEOUT_MS = 20_000;
+export const CRM_DATA_CHANGED_EVENT = "crm:data-changed";
 const LEGACY_TOKEN_KEY = "crm-auth-token";
 const USER_KEY = "crm-auth-user";
 const COMPANY_KEY = "crm-auth-company";
@@ -1701,7 +1703,7 @@ export async function fetchAuthMe(options: { allowRefresh?: boolean } = {}) {
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/auth/me`, {
+    response = await fetchWithTimeout(`${API_URL}/auth/me`, {
       credentials: "include",
       headers: buildHeaders(token),
     });
@@ -1750,7 +1752,7 @@ export async function loginWithBackend(email: string, senha: string, empresaSlug
     throw new Error("Sincronização indisponível.");
   }
 
-  const response = await fetch(`${API_URL}/auth/login`, {
+  const response = await fetchWithTimeout(`${API_URL}/auth/login`, {
     method: "POST",
     credentials: "include",
     headers: {
@@ -1781,7 +1783,7 @@ async function performAuthRefresh() {
   if (!hasRemoteApi()) throw new ApiHttpError("Servico indisponivel.", 0, "NETWORK_UNAVAILABLE");
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/auth/refresh`, { method: "POST", credentials: "include" });
+    response = await fetchWithTimeout(`${API_URL}/auth/refresh`, { method: "POST", credentials: "include" });
   } catch {
     throw new ApiHttpError("Nao foi possivel renovar a sessao agora.", 0, "NETWORK_ERROR");
   }
@@ -2791,6 +2793,7 @@ async function requestCliente(method: "POST" | "PATCH" | "PUT" | "DELETE", path:
     throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
+  notifyDashboardDataChanged();
   if (method === "DELETE") return null;
   return (await response.json()) as ApiCliente;
 }
@@ -2800,7 +2803,7 @@ async function requestApiGet<T>(path: string): Promise<T> {
     throw new Error("Nao foi possivel carregar os dados agora.");
   }
 
-  const response = await fetch(`${API_URL}${path}`);
+  const response = await fetchWithTimeout(`${API_URL}${path}`);
 
   if (!response.ok) {
     throw new Error("Nao foi possivel carregar os dados agora.");
@@ -2848,6 +2851,7 @@ async function requestApiMultipart<T>(path: string, body: FormData): Promise<T> 
     throw new Error(message);
   }
 
+  notifyDashboardDataChanged();
   return (await response.json()) as T;
 }
 
@@ -2898,6 +2902,7 @@ async function requestApiWrite<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", p
     throw new ApiHttpError(error.message, response.status, error.code, error.details);
   }
 
+  notifyDashboardDataChanged();
   return (await response.json()) as T;
 }
 
@@ -2906,7 +2911,8 @@ async function fetchAuthenticated(path: string, init: RequestInit = {}, allowRef
     if (!token) throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${token}`);
-    return fetch(`${API_URL}${path}`, { ...init, credentials: "include", headers });
+    const requestInit = { ...init, credentials: "include" as const, headers };
+    return isTimeoutSafeMethod(init.method) ? fetchWithTimeout(`${API_URL}${path}`, requestInit) : fetch(`${API_URL}${path}`, requestInit);
   };
 
   const token = getAuthToken();
@@ -2919,6 +2925,45 @@ async function fetchAuthenticated(path: string, init: RequestInit = {}, allowRef
   const refreshedToken = getAuthToken();
   if (!refreshedToken) throw new ApiHttpError("Sessao expirada. Entre novamente para continuar.", 401, "AUTH_TOKEN_REQUIRED");
   return request(refreshedToken);
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = API_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const sourceSignal = init.signal;
+  const abortFromSource = () => controller.abort(sourceSignal?.reason);
+
+  if (sourceSignal?.aborted) {
+    abortFromSource();
+  } else {
+    sourceSignal?.addEventListener("abort", abortFromSource, { once: true });
+  }
+
+  const timeoutId = globalThis.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (timedOut) {
+      throw new ApiHttpError("A solicitacao demorou mais do que o esperado. Tente novamente.", 0, "NETWORK_TIMEOUT");
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    sourceSignal?.removeEventListener("abort", abortFromSource);
+  }
+}
+
+function notifyDashboardDataChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(CRM_DATA_CHANGED_EVENT));
+}
+
+function isTimeoutSafeMethod(method?: string) {
+  const normalized = String(method || "GET").trim().toUpperCase();
+  return normalized === "GET" || normalized === "HEAD" || normalized === "OPTIONS";
 }
 
 function throwNetworkErrorUnlessApiHttpError(error: unknown, message: string): never {
@@ -3043,7 +3088,9 @@ function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
   const status = hasAuthoritativeStatus
     ? mapClienteStatus(cliente.status)
     : fallback?.status ?? mapClienteStatus(cliente.statusAntesDeArquivar ?? cliente.status);
-  const value = fallback?.value ?? cliente.valor ?? estimateValue(cliente);
+  const hasAuthoritativeValue = cliente.valor !== undefined && cliente.valor !== null && Number.isFinite(Number(cliente.valor));
+  const valueKnown = hasAuthoritativeValue ? true : fallback?.valueKnown === true;
+  const value = hasAuthoritativeValue ? Number(cliente.valor) : valueKnown ? fallback?.value ?? 0 : 0;
   const company =
     fallback?.company || cliente.empresa || cliente.fazenda || cliente.cidade || extractCompany(cliente) || "Cliente agro";
 
@@ -3059,10 +3106,11 @@ function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
     phone: cliente.telefone ?? "",
     email: cliente.email ?? "",
     value,
+    valueKnown,
     status,
     source: fallback?.source ?? cliente.origem ?? "Sincronizado",
     favorite: fallback?.favorite ?? Boolean(cliente.favorito),
-    hot: fallback?.hot ?? (Boolean(cliente.quente) || value >= 12000 || status === "Proposta"),
+    hot: fallback?.hot ?? (Boolean(cliente.quente) || (valueKnown && value >= 12000) || status === "Proposta"),
     lastContactDays: fallback?.lastContactDays ?? cliente.ultimoContato ?? 0,
     nextFollowUp: cliente.proximoFollowUp ?? fallback?.nextFollowUp ?? "Sem acompanhamento",
     tags: fallback?.tags?.length ? fallback.tags : parseTags(cliente.tags),
@@ -3085,7 +3133,7 @@ function clientToPayload(client: Client): ClientePayload {
     revisao: client.revision,
     interesse: client.company.trim() || undefined,
     status: client.status,
-    valor: client.value,
+    ...(client.valueKnown === false ? {} : { valor: client.value }),
     origem: client.source,
     favorito: client.favorite,
     quente: client.hot,
@@ -3111,11 +3159,6 @@ function mapClienteStatus(status?: string | null): Status {
   if (status === "Proposta") return "Proposta";
   if (status === "Contato") return "Contato";
   return "Novo";
-}
-
-function estimateValue(cliente: ApiCliente) {
-  const basis = `${cliente.nome}${cliente.email ?? ""}${cliente.telefone ?? ""}${cliente.interesse ?? ""}`.length;
-  return Math.max(3200, basis * 430);
 }
 
 function extractCompany(cliente: ApiCliente) {

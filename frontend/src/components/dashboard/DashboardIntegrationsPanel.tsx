@@ -15,7 +15,7 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import {
   cancelarImportacao,
@@ -145,7 +145,7 @@ type BlingSyncCounters = {
   erros?: number;
 };
 
-export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: { initialBlingNotice?: string }) {
+export default function DashboardIntegrationsPanel({ initialBlingNotice = "", onUnauthorized }: { initialBlingNotice?: string; onUnauthorized: () => void }) {
   const [state, setState] = useState<LoadState>("loading");
   const [activeView, setActiveView] = useState<IntegrationView>("overview");
   const [message, setMessage] = useState("");
@@ -187,6 +187,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
   const [whatsappSmokeError, setWhatsappSmokeError] = useState("");
   const [whatsappSmokeFirst, setWhatsappSmokeFirst] = useState<WhatsappSmokeCall | null>(null);
   const [whatsappSmokeRepeat, setWhatsappSmokeRepeat] = useState<WhatsappSmokeCall | null>(null);
+  const loadSequenceRef = useRef(0);
 
   const importPages = Math.max(1, Math.ceil(importsTotal / IMPORT_LIMIT));
   const catalogPages = Math.max(1, Math.ceil(catalogTotal / CATALOG_LIMIT));
@@ -197,6 +198,9 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
 
   useEffect(() => {
     void loadAll();
+    return () => {
+      loadSequenceRef.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [importsPage, catalogPage]);
 
@@ -210,10 +214,8 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
     if (!initialBlingNotice) return;
     const timeout = window.setTimeout(() => {
       setBlingMessage(initialBlingNotice);
-      void loadAll();
     }, 0);
     return () => window.clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialBlingNotice]);
 
   const filteredImports = useMemo(() => {
@@ -227,6 +229,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
   }, [importFormat, importSearch, importStatus, imports]);
 
   async function loadAll() {
+    const requestSequence = ++loadSequenceRef.current;
     try {
       const [importList, catalogList, qualityData, blingList, channelList] = await Promise.all([
         fetchImportacoes({ page: importsPage, limit: IMPORT_LIMIT }),
@@ -235,6 +238,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
         fetchIntegracoes({ tipo: "BLING", limit: 10 }),
         fetchCanais(),
       ]);
+      if (requestSequence !== loadSequenceRef.current) return;
       setImports(importList.data);
       setImportsTotal(importList.pagination.total);
       setCatalog(catalogList.data);
@@ -246,6 +250,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
       setState("success");
       setMessage("");
     } catch (error) {
+      if (requestSequence !== loadSequenceRef.current) return;
       setState("error");
       setMessage(errorText(error, "Não foi possível carregar as integrações."));
     }
@@ -656,7 +661,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
         </div>
       )}
 
-      {state === "success" && activeView === "overview" && <DashboardIntegrationReadinessPanel canalIntegracaoId={instagramChannelId} />}
+      {state === "success" && activeView === "overview" && <DashboardIntegrationReadinessPanel canalIntegracaoId={instagramChannelId} onUnauthorized={onUnauthorized} />}
 
       {state === "success" && activeView === "simulator" && (
         <WhatsappSimulationSection
@@ -1096,7 +1101,7 @@ function BlingSection({
   onSync: (id: number) => void;
   onDisconnect: (id: number) => void;
 }) {
-  const active = integrations.find((item) => item.tipo === "BLING" && item.ativo && item.possuiCredenciais && item.status !== "INATIVA");
+  const active = integrations.find((item) => item.tipo === "BLING" && item.ativo && item.possuiCredenciais && item.status === "ATIVA");
   const latest = active ?? integrations.find((item) => item.tipo === "BLING");
   const statusLabel = active ? (active.status === "ERRO" ? "Conectado com erro" : "Conectado") : latest ? "Desconectado" : "Não conectado";
   const status = active ? (active.status === "ERRO" ? "erro" : "conectado") : latest ? "desconectado" : "indisponivel";

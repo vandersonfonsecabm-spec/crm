@@ -101,8 +101,12 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     update.condicoesJson = JSON.stringify(data.condicoes);
     update.acoesJson = JSON.stringify(data.acoes);
     update.janelaJson = data.janela ? JSON.stringify(data.janela) : null;
-    const row = await prisma.automacaoRegra.update({ where: { id: rule.id }, data: update });
-    return presentRule(row);
+    const updated = await prisma.automacaoRegra.updateMany({
+      where: { id: rule.id, empresaId: context.empresaId, versao: rule.versao },
+      data: update,
+    });
+    if (updated.count !== 1) throw domainError(409, "AUTOMATION_RULE_CONFLICT", "A regra foi alterada por outra operacao.");
+    return presentRule(await prisma.automacaoRegra.findFirstOrThrow({ where: { id: rule.id, empresaId: context.empresaId } }));
   }
 
   async function activateRule(context, id) {
@@ -111,11 +115,16 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     const rule = await findRule(context, id);
     if (rule.ativa) return presentRule(rule);
     requireAvailableActions(safeJson(rule.acoesJson, null));
-    const row = await prisma.automacaoRegra.update({
-      where: { id: rule.id },
+    const updated = await prisma.automacaoRegra.updateMany({
+      where: { id: rule.id, empresaId: context.empresaId, versao: rule.versao, ativa: false },
       data: { ativa: true, activatedAt: new Date(), updatedById: context.usuarioId, versao: { increment: 1 } },
     });
-    return presentRule(row);
+    if (updated.count !== 1) {
+      const current = await prisma.automacaoRegra.findFirst({ where: { id: rule.id, empresaId: context.empresaId } });
+      if (!current?.ativa) throw domainError(409, "AUTOMATION_RULE_CONFLICT", "A regra foi alterada por outra operacao.");
+      return presentRule(current);
+    }
+    return presentRule(await prisma.automacaoRegra.findFirstOrThrow({ where: { id: rule.id, empresaId: context.empresaId } }));
   }
 
   async function deactivateRule(context, id) {
@@ -159,7 +168,7 @@ function createAutomationService({ prisma, env = process.env, logger = console }
       }
       if (rule.ativa) {
         const deactivated = await tx.automacaoRegra.updateMany({
-          where: { id: rule.id, empresaId: context.empresaId, ativa: true },
+          where: { id: rule.id, empresaId: context.empresaId, ativa: true, versao: rule.versao },
           data: { ativa: false, updatedById: context.usuarioId, versao: { increment: 1 } },
         });
         if (deactivated.count !== 1) {

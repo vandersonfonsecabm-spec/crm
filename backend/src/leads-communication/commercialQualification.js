@@ -126,7 +126,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
       observacao: body.observacao ?? qualification.observacao ?? undefined,
     }, {
       afterConvert: async (tx, conversion) => {
-        await attachFollowUp(tx, qualification.acompanhamentoId, conversion.negocio.id);
+        await attachFollowUp(tx, context.empresaId, qualification.acompanhamentoId, conversion.negocio.id);
         await createCommercialHistory(tx, context, before, {
           acao: "CRIAR_NEGOCIO",
           negocioId: conversion.negocio.id,
@@ -190,7 +190,7 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
       if (leadUpdate.count !== 1) {
         throw domainError(409, "COMMERCIAL_BUSINESS_LINK_CONFLICT", "Outro usuario alterou este Lead.");
       }
-      await attachFollowUp(tx, qualification.acompanhamentoId, business.id);
+      await attachFollowUp(tx, context.empresaId, qualification.acompanhamentoId, business.id);
       await createCommercialHistory(tx, context, conversation, {
         acao: "VINCULAR_NEGOCIO",
         negocioId: business.id,
@@ -325,8 +325,14 @@ async function createCommercialHistory(tx, context, conversation, data) {
   });
 }
 
-async function attachFollowUp(tx, followUpId, negocioId) {
-  await tx.acompanhamento.updateMany({ where: { id: followUpId, negocioId: null }, data: { negocioId } });
+async function attachFollowUp(tx, empresaId, followUpId, negocioId) {
+  const linked = await tx.acompanhamento.updateMany({
+    where: { id: followUpId, empresaId, negocioId: null },
+    data: { negocioId },
+  });
+  if (linked.count !== 1) {
+    throw domainError(409, "COMMERCIAL_FOLLOW_UP_CONFLICT", "O acompanhamento foi alterado antes do vínculo com o Negocio.");
+  }
 }
 
 function presentContext(conversation, context) {

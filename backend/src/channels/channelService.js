@@ -163,6 +163,19 @@ function createChannelService({ prisma }) {
       },
       update: {},
     });
+    const replayEquivalent = message.empresaId === empresaId
+      && message.canalIntegracaoId === channel.id
+      && message.conversaCanalId === conversation.id
+      && message.direcao === direcao
+      && message.tipo === tipo
+      && message.texto === cleanText
+      && message.simulada === true;
+    if (!replayEquivalent) {
+      const error = new Error("External ID da mensagem ja foi usado com outro payload.");
+      error.status = 409;
+      error.codigo = "CHANNEL_MESSAGE_REPLAY_CONFLICT";
+      throw error;
+    }
     await prisma.conversaCanal.update({
       where: { id: conversation.id },
       data: { primeiraMensagemEm: conversation.primeiraMensagemEm || now, ultimaMensagemEm: now },

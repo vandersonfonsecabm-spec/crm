@@ -33,10 +33,10 @@ const STATIC_READINESS_ITEMS: ReadinessItem[] = [
   },
 ];
 
-export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId }: { canalIntegracaoId?: number | null }) {
+export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, onUnauthorized }: { canalIntegracaoId?: number | null; onUnauthorized: () => void }) {
   const [instagramReadiness, setInstagramReadiness] = useState(localInstagramReadiness);
   const [instagramLoadState, setInstagramLoadState] = useState<"loading" | "ready" | "fallback">("loading");
-  const handleMessengerUnauthorized = useCallback(() => undefined, []);
+  const handleMessengerUnauthorized = useCallback(() => onUnauthorized(), [onUnauthorized]);
   const { loadState: messengerLoadState, refresh: refreshMessengerStatus, status: messengerStatus } = useMessengerConnectionStatus(handleMessengerUnauthorized);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -47,21 +47,26 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId }
   const [messengerCredentialMode, setMessengerCredentialMode] = useState<"create" | "replace">("create");
   useEffect(() => {
     let cancelled = false;
-    setInstagramLoadState("loading");
-    fetchInstagramOperationalStatus()
-      .then((status) => {
+    const loadInstagramStatus = async () => {
+      setInstagramLoadState("loading");
+      try {
+        const status = await fetchInstagramOperationalStatus();
         if (cancelled) return;
         setInstagramReadiness(deriveMetaInstagramReadiness({ ...status, source: "backend" }));
         setInstagramLoadState("ready");
-      })
-      .catch(() => {
+      } catch {
         if (cancelled) return;
         setInstagramReadiness(localInstagramReadiness);
         setInstagramLoadState("fallback");
-      });
+      }
+    };
+    void loadInstagramStatus();
     return () => { cancelled = true; };
   }, [canalIntegracaoId]);
-  const instagramAction = canalIntegracaoId ? async () => {
+  const instagramActionAllowed = Boolean(canalIntegracaoId)
+    && instagramLoadState === "ready"
+    && ["NOT_CONFIGURED", "WAITING_META_AUTH"].includes(instagramReadiness.state);
+  const instagramAction = instagramActionAllowed && canalIntegracaoId ? async () => {
     if (busy) return;
     setBusy(true);
     setError("");
@@ -180,7 +185,7 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId }
                 <Button aria-label="Conectar Instagram" disabled={!instagramAction || busy} onClick={instagramAction} size="sm" variant="secondary">
                   {busy ? "Iniciando…" : "Conectar Instagram"}
                 </Button>
-                {!canalIntegracaoId && <span className="text-[10px] font-medium text-[var(--text-tertiary)] md:text-right">Aguardando canal Instagram real</span>}
+                {!instagramActionAllowed && <span className="text-[10px] font-medium text-[var(--text-tertiary)] md:text-right">{!canalIntegracaoId ? "Aguardando canal Instagram real" : "Ação indisponível no estado atual"}</span>}
                 {error && <p className="max-w-56 text-[10px] font-medium text-[var(--danger)] md:text-right" role="alert">{error}</p>}
               </div>
             ) : item.key === "messenger-meta" ? (

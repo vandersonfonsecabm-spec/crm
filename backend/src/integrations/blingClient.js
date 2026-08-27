@@ -182,8 +182,10 @@ function normalizeTokenResponse(data = {}, { requireRefreshToken = false } = {})
   if (!accessToken || accessToken.length > 4096 || (requireRefreshToken && !refreshToken)) {
     throw blingError("BLING_TOKEN_RESPONSE_INVALID", "Resposta do Bling sem credenciais de token validas.");
   }
-  const expiresIn = Number(data.expires_in || data.expiresIn || 21600);
-  if (!Number.isFinite(expiresIn) || expiresIn <= 0) {
+  const hasExpiresIn = Object.hasOwn(data, "expires_in") || Object.hasOwn(data, "expiresIn");
+  const rawExpiresIn = Object.hasOwn(data, "expires_in") ? data.expires_in : data.expiresIn;
+  const expiresIn = hasExpiresIn ? Number(rawExpiresIn) : 21600;
+  if ((hasExpiresIn && (rawExpiresIn === null || rawExpiresIn === "" || typeof rawExpiresIn === "boolean")) || !Number.isFinite(expiresIn) || expiresIn <= 0) {
     throw blingError("BLING_TOKEN_RESPONSE_INVALID", "Resposta do Bling com expiracao invalida.");
   }
   return {

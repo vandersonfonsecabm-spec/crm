@@ -175,7 +175,17 @@ function startAutomationWorker({
     }
     if (notificationsEnabled && notificationService?.processDue) {
       try {
-        await notificationService.processDue({ now, limit: config.batchSize });
+        const notificationResult = await notificationService.processDue({ now, limit: config.batchSize });
+        if (Number(notificationResult?.failed || 0) > 0) {
+          const failedTenantCount = Number(notificationResult.failed || 0);
+          const activeTenants = Number(notificationResult.tenants || 0);
+          eventLogger.error("worker_poll_error", new Error("NOTIFICATION_TENANT_CYCLE_PARTIAL_FAILURE"), {
+            durationMs: elapsedMs(startedAt),
+            subsystem: "notifications",
+            failedTenantCount,
+          });
+          notificationsFailed = activeTenants > 0 && failedTenantCount >= activeTenants;
+        }
       } catch (error) {
         notificationsFailed = true;
         eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "notifications" });

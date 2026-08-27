@@ -2,8 +2,9 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { DEFAULT_ALLOWED_ORIGINS, getAllowedOrigins, normalizeAllowedOrigin } = require("../src/security/origin-policy");
 
-test("origens padrão são explícitas e incluem somente hosts CRM", () => {
-  assert.deepEqual(getAllowedOrigins({ NODE_ENV: "production" }), DEFAULT_ALLOWED_ORIGINS);
+test("produção sem configuração falha fechada e defaults ficam restritos ao desenvolvimento", () => {
+  assert.throws(() => getAllowedOrigins({ NODE_ENV: "production" }), /CORS ausente/);
+  assert.deepEqual(getAllowedOrigins({ NODE_ENV: "development" }), DEFAULT_ALLOWED_ORIGINS);
   assert.equal(DEFAULT_ALLOWED_ORIGINS.includes("https://crm-murex-six-83.vercel.app"), true);
   assert.equal(DEFAULT_ALLOWED_ORIGINS.includes("https://crm-ga3-bundle-staging.vercel.app"), true);
 });

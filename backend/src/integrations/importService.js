@@ -297,7 +297,6 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
 
   const validatedRows = await loadValidatedRows(importacao.id);
   const config = JSON.parse(importacao.mapeamentoJson || "{}");
-  const integration = await findOrCreateManualIntegration({ prisma, empresaId, formato: importacao.formato });
   const limits = getImportLimits();
   const now = new Date();
 
@@ -312,10 +311,9 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
   let priceUpdated = 0;
   const processingErrors = [];
 
-  await prisma.importacaoDados.update({
-    where: { id: importacao.id },
-    data: { status: "PROCESSANDO", iniciadaEm: now, integracaoId: integration.id },
-  });
+  await claimImportForProcessing({ prisma, importacaoId: importacao.id, empresaId, now });
+  const integration = await findOrCreateManualIntegration({ prisma, empresaId, formato: importacao.formato });
+  await prisma.importacaoDados.update({ where: { id: importacao.id }, data: { integracaoId: integration.id } });
 
   for (let start = 0; start < validatedRows.length; start += limits.batchSize) {
     const batch = validatedRows.slice(start, start + limits.batchSize);
@@ -369,15 +367,16 @@ async function processImportacao({ prisma, importacao, empresaId, usuarioId, bod
   }
 
   const finalStatus = importacao.linhasComErro > 0 || processingErrors.length ? "CONCLUIDO_COM_ERROS" : "CONCLUIDO";
-  const finished = await prisma.importacaoDados.update({
-    where: { id: importacao.id },
+  const finalized = await prisma.importacaoDados.updateMany({
+    where: { id: importacao.id, empresaId, status: "PROCESSANDO" },
     data: {
       status: finalStatus,
       finalizadaEm: new Date(),
       integracaoId: integration.id,
     },
-    include: { erros: true },
   });
+  if (finalized.count !== 1) throw httpError(409, "Importação perdeu a posse do processamento.", "IMPORT_CONFLICT");
+  const finished = await prisma.importacaoDados.findUnique({ where: { id: importacao.id }, include: { erros: true } });
 
   await prisma.integracao.update({
     where: { empresaId_id: { empresaId, id: integration.id } },
@@ -407,10 +406,12 @@ async function cancelImportacao({ prisma, importacao, empresaId }) {
   importacao = await loadTenantImport(prisma, importacao, empresaId);
   if (FINAL_IMPORT_STATUSES.has(importacao.status)) throw httpError(409, "Importação concluída não pode ser cancelada.", "IMPORT_INVALID_STATUS");
   if (importacao.status === "PROCESSANDO") throw httpError(409, "Importação em processamento não pode ser cancelada.", "IMPORT_INVALID_STATUS");
-  const updated = await prisma.importacaoDados.update({
-    where: { id: importacao.id },
+  const canceled = await prisma.importacaoDados.updateMany({
+    where: { id: importacao.id, empresaId, status: importacao.status },
     data: { status: "CANCELADO", finalizadaEm: new Date() },
   });
+  if (canceled.count !== 1) throw httpError(409, "Importação foi alterada antes do cancelamento.", "IMPORT_CONFLICT");
+  const updated = await prisma.importacaoDados.findUnique({ where: { id: importacao.id } });
   await removeImportCache(importacao.id);
   await removeValidatedRows(importacao.id);
   return updated;
@@ -837,6 +838,15 @@ function codedError(message, code) {
   return error;
 }
 
+async function claimImportForProcessing({ prisma, importacaoId, empresaId, now }) {
+  const claim = await prisma.importacaoDados.updateMany({
+    where: { id: importacaoId, empresaId, status: "PRONTO" },
+    data: { status: "PROCESSANDO", iniciadaEm: now },
+  });
+  if (claim.count !== 1) throw httpError(409, "Importação foi alterada antes do processamento.", "IMPORT_CONFLICT");
+  return true;
+}
+
 function httpError(status, message, code) {
   const error = new Error(message);
   error.status = status;
@@ -859,6 +869,7 @@ module.exports = {
   suggestMapping,
   getImportLimits,
   UPDATE_STRATEGIES,
+  claimImportForProcessing,
 };
 
 

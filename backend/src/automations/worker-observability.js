@@ -122,6 +122,7 @@ const NUMERIC_FIELDS = new Set([
   "maxAttempts",
   "durationMs",
   "consecutiveFailures",
+  "failedTenantCount",
   "pollIntervalMs",
   "syncRunId",
   "sourceConnectionId",

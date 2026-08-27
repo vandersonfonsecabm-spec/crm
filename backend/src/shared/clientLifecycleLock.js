@@ -47,4 +47,23 @@ async function lockActiveClienteRows(tx, empresaId, clienteIds) {
   return rows;
 }
 
-module.exports = { CANONICAL_CLIENT_STATUSES, isPostgresRuntime, lockClienteRow, lockActiveClienteRow, lockActiveClienteRows };
+async function lockClientIdentity(tx, empresaId, identity) {
+  const tenantId = Number(empresaId);
+  const normalizedIdentity = String(identity || "").trim().toLowerCase();
+  if (!Number.isSafeInteger(tenantId) || tenantId < 1 || !normalizedIdentity || normalizedIdentity.length > 512) {
+    throw new Error("Identidade de Cliente invalida para lock.");
+  }
+  if (!isPostgresRuntime()) return;
+  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${tenantId}:${normalizedIdentity}`}, 0))`;
+}
+
+async function lockClientIdentities(tx, empresaId, identities) {
+  const normalized = [...new Set((identities || [])
+    .map((identity) => String(identity || "").trim().toLowerCase())
+    .filter(Boolean))]
+    .sort();
+  if (!normalized.length) throw new Error("Identidade de Cliente invalida para lock.");
+  for (const identity of normalized) await lockClientIdentity(tx, empresaId, identity);
+}
+
+module.exports = { CANONICAL_CLIENT_STATUSES, isPostgresRuntime, lockClienteRow, lockActiveClienteRow, lockActiveClienteRows, lockClientIdentity, lockClientIdentities };

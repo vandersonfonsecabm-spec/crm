@@ -72,6 +72,15 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
   assert.equal(invalidType.status, 400);
   assert.equal(invalidType.body.codigo, "INTEGRATION_INVALID_TYPE");
 
+  const sensitiveConfig = await request("POST", "/integracoes", {
+    nome: "Config insegura",
+    tipo: "JSON",
+    configuracao: { nested: { clientSecret: "nao-persistir" } },
+  }, adminA.token);
+  assert.equal(sensitiveConfig.status, 400);
+  assert.equal(sensitiveConfig.body.codigo, "INTEGRATION_CONFIG_SENSITIVE_FIELD");
+  assert.equal(await prisma.integracao.count({ where: { empresaId: adminA.empresaId, nome: "Config insegura" } }), 0);
+
   const created = await request("POST", "/integracoes", {
     nome: "Bling Hub QA",
     tipo: "BLING",
@@ -91,10 +100,23 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
   assert.equal(storedIntegration.credenciaisCriptografadas.includes("segredo-nao-retornar"), false);
   assert.equal(storedIntegration.credenciaisCriptografadas.includes("refresh-nao-retornar"), false);
 
+  const legacyUnsafe = await prisma.integracao.create({
+    data: {
+      empresaId: adminA.empresaId,
+      nome: "Config legado",
+      tipo: "JSON",
+      configuracaoJson: JSON.stringify({ endpoint: "sandbox", nested: { accessToken: "legado-nao-retornar" } }),
+    },
+  });
+  const legacyRead = await request("GET", `/integracoes/${legacyUnsafe.id}`, undefined, adminA.token);
+  assert.equal(legacyRead.status, 200);
+  assert.equal(legacyRead.body.configuracao.nested.accessToken, "[redacted]");
+  assert.equal(JSON.stringify(legacyRead.body).includes("legado-nao-retornar"), false);
+
   const listA = await request("GET", "/integracoes", undefined, adminA.token);
   assert.equal(listA.status, 200);
-  assert.equal(listA.body.data.length, 1);
-  assert.equal(listA.body.data[0].id, created.body.id);
+  assert.equal(listA.body.data.length, 2);
+  assert.equal(listA.body.data.some((item) => item.id === created.body.id), true);
   assert.equal(JSON.stringify(listA.body).includes("segredo-nao-retornar"), false);
 
   const listB = await request("GET", "/integracoes", undefined, adminB.token);

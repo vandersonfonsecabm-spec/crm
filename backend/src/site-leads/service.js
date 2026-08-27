@@ -2,7 +2,7 @@ const crypto = require("node:crypto");
 const { normalizePhone } = require("../channels/phoneNormalizer");
 const { createAutomationService } = require("../automations/service");
 const { validateIntegrationCreate, validateIntegrationPatch, validateSubmission } = require("./validation");
-const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { lockActiveClienteRow, lockClientIdentities } = require("../shared/clientLifecycleLock");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 
 const PROVIDER = "SITE_FORM";
@@ -96,6 +96,10 @@ function createSiteLeadService({ prisma }) {
   async function resolveClient(tx, integration, payload) {
     let phone = null;
     if (payload.telefone) { try { phone = normalizePhone(payload.telefone, { defaultCountryCode: "55" }); } catch { throw validationError("Telefone invalido.", { telefone: "Telefone invalido." }); } }
+    await lockClientIdentities(tx, integration.empresaId, [
+      phone ? `site:phone:${phone}` : null,
+      payload.email ? `site:email:${payload.email}` : null,
+    ]);
     const clients = await tx.cliente.findMany({ where: { empresaId: integration.empresaId }, orderBy: { id: "asc" } });
     const matches = new Map();
     for (const client of clients) {

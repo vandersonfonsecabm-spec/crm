@@ -23,6 +23,7 @@ export type Client = {
   phone: string;
   email: string;
   value: number;
+  valueKnown?: boolean;
   status: Status;
   source: string;
   favorite: boolean;
