@@ -38,7 +38,7 @@ test("runner PostgreSQL real oferece dry-run sem consultar Docker", async () => 
   assert.equal(result.image, defaultImage);
   assert.equal(result.mode, "container");
   assert.equal(dockerCalls, 0);
-  assert.equal(result.harnessTests, 22);
+  assert.equal(result.harnessTests, 23);
   assert.ok(result.suite.length >= 7);
 });
 
