@@ -1,0 +1,87 @@
+{
+  "mission": "STORE-1 FINAL RELEASE CLOSURE",
+  "dateUtc": "2026-08-27",
+  "candidate": {
+    "branch": "codex/store1-release-reconcile",
+    "sourceHead": "49a30cfd4eff832dd108e0aaa55fefdf864279a3",
+    "baseRelease": "3151cec0d3950abd0364e90f340918aca0baf196",
+    "worktree": "C:\\Users\\vande\\AppData\\Local\\Temp\\crm-store1-release-reconcile-20260827",
+    "clean": true,
+    "remoteBranch": "origin/codex/store1-release-reconcile"
+  },
+  "production": {
+    "touched": false,
+    "writeRequests": 0,
+    "migration": false,
+    "deployments": 0,
+    "health": 200,
+    "ready": 200,
+    "vercelDeployment": "dpl_GzT5h7Q7paK6mLr7ExAxbkBFFABh",
+    "vercelSourceSha": "eb1cadb8a692dea99a1c0edc888504d22be15a33",
+    "railwayApiDeployment": "5bdfb9e8-2e36-4a8c-a177-9595efc36ac5"
+  },
+  "staging": {
+    "railwayEnvironment": "d6b6f137-cffd-4647-a102-3619fc54133a",
+    "railwayApiService": "8af12b8e-4f4d-498c-9ceb-3182417905f8",
+    "railwayDatabaseService": "f3a2862b-2371-4ab3-b4db-1e91680ee3b7",
+    "railwayDeployment": "e4e0ac0d-281d-4091-b970-29fb73d26cc3",
+    "vercelProject": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
+    "vercelDeployment": "dpl_D7Db9zrG5Ckqv7iMkyi3BGiJw9Go",
+    "vercelSourceSha": "49a30cfd4eff832dd108e0aaa55fefdf864279a3",
+    "health": 200,
+    "ready": 200,
+    "registrationClosed": true,
+    "temporaryFlagsRestored": true
+  },
+  "findings": {
+    "fixable": 1,
+    "fixed": 1,
+    "vercelGitConfigSchema": "FIXED_WITH_ROUTES_SRC_DEST",
+    "stagingPreviewOrigin": "BYPASSED_WITH_STABLE_ALIAS",
+    "providedTestAccount": "NOT_PROVISIONED_IN_STAGING",
+    "temporaryWorkerHarness": "REMOVED_AFTER_PRIVATE_DB_GATE"
+  },
+  "validation": {
+    "frontendTests": "213/213 PASS",
+    "frontendBuild": "PASS",
+    "frontendLint": "PASS",
+    "architectureTests": "3/3 PASS",
+    "vercelRoutingTests": "6/6 PASS",
+    "originPolicyTests": "4/4 PASS",
+    "backendGlobalSuite": "PASS_REUSED_FROM_A2087BF",
+    "npmAuditHigh": 0,
+    "vercelGitPreview": "READY",
+    "stagingBrowserQa": "PASS_TARGETED_STOCK_AUTOMATIONS",
+    "realWorkerRetryStaging": "UNTESTED_NO_WORKER_OR_SAFE_TUNNEL"
+  },
+  "qa": {
+    "stock": [
+      "login",
+      "create CSV source",
+      "validate source",
+      "preview 1 accepted 0 rejected",
+      "confirm APPLIED",
+      "refresh persistence"
+    ],
+    "automations": [
+      "create inactive rule",
+      "edit/version",
+      "activate/deactivate",
+      "simulation error without stack trace"
+    ],
+    "headers": "Vercel CSP/HSTS/no-store/security headers verified via HEAD",
+    "externalOutbound": 0
+  },
+  "pending": {
+    "internal": ["live PostgreSQL worker transient retry recovery"],
+    "external": ["Meta", "WhatsApp real", "Instagram", "Messenger", "IA real", "email delivery", "ERP/payments"],
+    "postgresExtras": "UNKNOWN_PRESERVE"
+  },
+  "readiness": "BLOCKED_ONLY_BY_REAL_WORKER_RETRY_EVIDENCE",
+  "fixedConversationDeliveryConfirmed": false,
+  "artifacts": [
+    "docs/STORE1_FINAL_RELEASE_CLOSURE_2026-08-27.md",
+    "docs/STORE1_FINAL_RELEASE_CLOSURE_MANIFEST_2026-08-27.json",
+    "docs/STORE1_FINAL_FEATURE_MATRIX_2026-08-27.md"
+  ]
+}

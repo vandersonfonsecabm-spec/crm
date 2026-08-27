@@ -110,3 +110,35 @@ ROLE_BYPASSES=0_IN_REUSED_AND_STATIC_EVIDENCE
 DATA_INTEGRITY_FAILURES=0_IN_REUSED_AND_STATIC_EVIDENCE
 PRODUCTION_TOUCHED=false
 ```
+
+## Addendum de fechamento — 2026-08-27
+
+As linhas abaixo foram revalidadas no deployment final do staging
+(`dpl_D7Db9zrG5Ckqv7iMkyi3BGiJw9Go`) e substituem o estado operacional anterior
+sem reescrever a evidência histórica:
+
+```text
+STOCK-07=PASS (QA autenticado: fonte CSV, prévia, confirmação e persistência)
+AUTO-04=PASS (QA autenticado: regra, edição, ativação/desativação e simulação)
+OPS-01=PASS (Vercel Git preview READY; source/config reconciliados)
+OPS-02=PASS (suíte backend global reutilizada no commit a2087bf)
+UX-02=UNTESTED (console de navegador não capturado por ferramenta autorizada)
+WORK-02=UNTESTED (workers auxiliares não presentes no staging)
+REAL_WORKER_RETRY_RECOVERY=UNTESTED (sem worker staging e sem túnel seguro)
+```
+
+Contagem operacional atualizada para o fechamento:
+
+```text
+PASS=64
+FAIL=0
+PARTIAL=0
+BROKEN=0
+UNTESTED=2 (+1 subgate explícito de retry live)
+PENDING_INTENTIONAL_OFF=1
+PENDING_EXTERNAL_PROVIDER=5
+```
+
+O retry de worker continua como gate independente: os testes isolados validam
+o contrato de retry, mas a evidência live em PostgreSQL depende de provisionar
+um worker/túnel oficial no staging.
