@@ -78,7 +78,10 @@
     "postgresExtras": "UNKNOWN_PRESERVE"
   },
   "readiness": "BLOCKED_ONLY_BY_REAL_WORKER_RETRY_EVIDENCE",
-  "fixedConversationDeliveryConfirmed": false,
+  "fixedConversationDeliveryConfirmed": true,
+  "fixedConversationDeliveryMethod": "browser_file_upload_verified_by_dom",
+  "fixedConversationUrl": "https://chatgpt.com/c/6a819f5c-b320-83e9-9fa1-02b11c312d1d",
+  "deliveredAtUtc": "2026-08-27T03:22:00Z",
   "artifacts": [
     "docs/STORE1_FINAL_RELEASE_CLOSURE_2026-08-27.md",
     "docs/STORE1_FINAL_RELEASE_CLOSURE_MANIFEST_2026-08-27.json",
