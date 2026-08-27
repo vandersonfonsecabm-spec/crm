@@ -15,7 +15,7 @@ function normalizeHost(value) {
 }
 
 function resolveApiOrigin() {
-  const projectId = String(process.env.VERCEL_PROJECT_ID || "").trim();
+  const projectId = String(process.env.CRM_VERCEL_PROJECT_ID || process.env.VERCEL_PROJECT_ID || "").trim();
   const projectOrigin = API_ORIGIN_BY_PROJECT[projectId];
   if (projectOrigin) return projectOrigin;
 

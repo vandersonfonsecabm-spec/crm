@@ -20,6 +20,7 @@ function loadConfig(configPath, { projectId, productionUrl, vercelUrl } = {}) {
     env: {
       ...process.env,
       VERCEL: "1",
+      CRM_VERCEL_PROJECT_ID: projectId ?? "",
       VERCEL_PROJECT_ID: projectId ?? "",
       VERCEL_PROJECT_PRODUCTION_URL: productionUrl ?? "",
       VERCEL_URL: vercelUrl ?? "",
