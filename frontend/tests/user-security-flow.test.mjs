@@ -408,8 +408,8 @@ test("produção encaminha auth pelo mesmo host antes do fallback da SPA", async
   assert.match(vercelConfigSource, /prj_xAWKcwZGDQsT3pEZLUZ5YWf6lDFq/);
   assert.match(vercelConfigSource, /prj_AJE06pNRGunJoguCNWee0RgZV6t8/);
   assert.match(vercelConfigSource, /Unsupported Vercel project/);
-  assert.match(rootVercelConfigSource, /destination: `\$\{apiOrigin\}\/:\path\*`/);
-  assert.doesNotMatch(vercelConfigSource, /destination"\s*:\s*"https:\/\/api-production-875f9\.up\.railway\.app\/:path\*"/);
+  assert.match(rootVercelConfigSource, /routes:\s*\[[\s\S]*?dest: `\$\{apiOrigin\}\/\$1`/);
+  assert.doesNotMatch(vercelConfigSource, /dest"\s*:\s*"https:\/\/api-production-875f9\.up\.railway\.app\/\$1"/);
 });
 
 test("falha transitória no reload preserva retry e oferece retorno local ao login", async () => {

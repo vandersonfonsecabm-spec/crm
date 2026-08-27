@@ -10,12 +10,12 @@ const rootConfig = path.resolve(frontendDir, "..", "vercel.mjs");
 const frontendConfig = path.resolve(frontendDir, "vercel.mjs");
 const productionProject = "prj_xAWKcwZGDQsT3pEZLUZ5YWf6lDFq";
 const stagingProject = "prj_AJE06pNRGunJoguCNWee0RgZV6t8";
-const productionApi = "https://api-production-875f9.up.railway.app/:path*";
-const stagingApi = "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app/:path*";
+const productionApi = "https://api-production-875f9.up.railway.app/$1";
+const stagingApi = "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app/$1";
 
 function loadConfig(configPath, { projectId, productionUrl, vercelUrl } = {}) {
   const moduleUrl = pathToFileURL(configPath).href;
-  const script = `import(${JSON.stringify(moduleUrl)}).then(({ config }) => process.stdout.write(JSON.stringify(config.rewrites.slice(0, 2))))`;
+  const script = `import(${JSON.stringify(moduleUrl)}).then((module) => { const config = module.default ?? module.config; process.stdout.write(JSON.stringify(config.routes.slice(0, 3))); })`;
   return spawnSync(process.execPath, ["--input-type=module", "-e", script], {
     env: {
       ...process.env,
@@ -35,9 +35,11 @@ for (const configPath of [rootConfig, frontendConfig]) {
     const staging = loadConfig(configPath, { projectId: stagingProject });
     assert.equal(production.status, 0, production.stderr);
     assert.equal(staging.status, 0, staging.stderr);
-    assert.equal(JSON.parse(production.stdout)[0].destination, productionApi);
-    assert.equal(JSON.parse(staging.stdout)[0].destination, stagingApi);
-    assert.notEqual(JSON.parse(production.stdout)[0].destination, JSON.parse(staging.stdout)[0].destination);
+    const productionRoutes = JSON.parse(production.stdout);
+    const stagingRoutes = JSON.parse(staging.stdout);
+    assert.equal(productionRoutes.find((route) => route.src === "^/api/(.*)$")?.dest, productionApi);
+    assert.equal(stagingRoutes.find((route) => route.src === "^/api/(.*)$")?.dest, stagingApi);
+    assert.notEqual(productionRoutes.find((route) => route.src === "^/api/(.*)$")?.dest, stagingRoutes.find((route) => route.src === "^/api/(.*)$")?.dest);
     const configText = await readFile(configPath, "utf8");
     assert.match(configText, /Strict-Transport-Security/);
     assert.match(configText, /connect-src 'self';/);
@@ -52,6 +54,6 @@ for (const configPath of [rootConfig, frontendConfig]) {
   test(`Vercel usa host conhecido somente como fallback de identidade (${path.basename(path.dirname(configPath))})`, () => {
     const staging = loadConfig(configPath, { productionUrl: "crm-ga3-bundle-staging.vercel.app" });
     assert.equal(staging.status, 0, staging.stderr);
-    assert.equal(JSON.parse(staging.stdout)[0].destination, stagingApi);
+    assert.equal(JSON.parse(staging.stdout).find((route) => route.src === "^/api/(.*)$")?.dest, stagingApi);
   });
 }
