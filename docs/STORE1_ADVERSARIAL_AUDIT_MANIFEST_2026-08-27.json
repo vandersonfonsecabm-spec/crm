@@ -2,6 +2,7 @@
   "mission": "STORE1_ADVERSARIAL_CONTINUOUS_USE_AUDIT",
   "date": "2026-08-27",
   "baselineHead": "c328ecb627c1d0d68bd9ef90d2472f7ace26b979",
+  "candidateCommit": "4583cf7",
   "branch": "codex/store1-release-reconcile",
   "trackedDiffHash": "4c7ac504e350f83b6d850b8b046d7e910895c41c",
   "productionChanged": false,

@@ -19,8 +19,9 @@ O backend global terminou com código `0` no runner Prisma isolado; o frontend
 terminou com `216/216`, lint e build com código `0`. O banco protegido manteve o
 SHA-256 `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
 
-Este documento não declara o candidato como publicado. Não houve commit,
-push, deploy, migration ou alteração de variável neste lote.
+Este documento não declara o candidato como publicado. O código e as evidências
+foram congelados localmente em `4583cf7`; não houve push, deploy, migration ou
+alteração de variável neste lote.
 
 ## Correções implementadas
 
