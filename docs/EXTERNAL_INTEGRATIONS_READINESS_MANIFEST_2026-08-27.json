@@ -2,8 +2,9 @@
   "report": "docs/EXTERNAL_INTEGRATIONS_READINESS_AUDIT_2026-08-27.md",
   "date": "2026-08-27",
   "branch": "codex/store1-release-reconcile",
-  "commit": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
-  "remoteHead": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
+  "runtimeCommit": "4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f",
+  "reportCommit": "aefb838",
+  "remoteHead": "aefb838",
   "production": {
     "writes": 0,
     "deployments": 0,

@@ -47,8 +47,9 @@ correções de execução foram:
 
 ```text
 BRANCH=codex/store1-release-reconcile
-HEAD=4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f
-REMOTE_HEAD=4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f
+AUDITED_RUNTIME_SHA=4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f
+REPORT_SHA=aefb838
+REMOTE_HEAD=aefb838
 WORKTREE_CLEAN=true
 PROTECTED_DEV_DB_LINK=REMOVED
 
@@ -229,7 +230,8 @@ insegura.
 ## Git e deploy
 
 ```text
-COMMIT=4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f
+RUNTIME_COMMIT=4b0b6beeb1d7cc9fa33d072b6dd0eb5e4463329f
+REPORT_COMMIT=aefb838
 PUSH=PASS (origin/codex/store1-release-reconcile)
 STAGING_VERCEL_PREVIEW=PASS
 PRODUCTION_DEPLOY=NOT_EXECUTED
