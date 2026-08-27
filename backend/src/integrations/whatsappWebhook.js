@@ -186,7 +186,7 @@ function sendError(res, status, codigo) {
 }
 
 function hasConfiguredSecret(value) {
-  return typeof value === "string" && value.trim().length > 0;
+  return typeof value === "string" && value.trim().length >= 8;
 }
 
 function isEnabled(value) {

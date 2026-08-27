@@ -83,7 +83,7 @@ async function tokenRequest(params) {
   if (!response.ok) {
     throw blingError("BLING_TOKEN_ERROR", sanitizeBlingError(data, "Não foi possível autenticar no Bling."), response.status);
   }
-  return normalizeTokenResponse(data);
+  return normalizeTokenResponse(data, { requireRefreshToken: params.grant_type === "authorization_code" });
 }
 
 class BlingHttpClient {
@@ -176,11 +176,19 @@ class BlingHttpClient {
   }
 }
 
-function normalizeTokenResponse(data = {}) {
+function normalizeTokenResponse(data = {}, { requireRefreshToken = false } = {}) {
+  const accessToken = clean(data.access_token || data.accessToken);
+  const refreshToken = clean(data.refresh_token || data.refreshToken);
+  if (!accessToken || accessToken.length > 4096 || (requireRefreshToken && !refreshToken)) {
+    throw blingError("BLING_TOKEN_RESPONSE_INVALID", "Resposta do Bling sem credenciais de token validas.");
+  }
   const expiresIn = Number(data.expires_in || data.expiresIn || 21600);
+  if (!Number.isFinite(expiresIn) || expiresIn <= 0) {
+    throw blingError("BLING_TOKEN_RESPONSE_INVALID", "Resposta do Bling com expiracao invalida.");
+  }
   return {
-    accessToken: String(data.access_token || ""),
-    refreshToken: String(data.refresh_token || ""),
+    accessToken,
+    refreshToken,
     tokenType: String(data.token_type || "Bearer"),
     scope: data.scope ? String(data.scope) : null,
     expiresIn,
@@ -268,4 +276,5 @@ module.exports = {
   refreshBlingTokens,
   revokeBlingToken,
   blingError,
+  _private: { normalizeTokenResponse },
 };

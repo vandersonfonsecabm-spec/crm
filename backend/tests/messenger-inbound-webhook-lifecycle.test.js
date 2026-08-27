@@ -532,8 +532,8 @@ test("mapeamento ausente e falha pos-intake permanecem fechados e recuperaveis",
   assert.equal(event.tentativas, 2);
   assert.equal(event.erroCodigo, null);
   assert.equal(event.erroResumo, null);
-  assert.equal(failedChannel.lastFailureAt.toISOString(), failureAt.toISOString());
-  assert.equal(failedChannel.lastFailureCode, "P2028");
+  assert.equal(failedChannel.lastFailureAt, null);
+  assert.equal(failedChannel.lastFailureCode, null);
   assert.equal(JSON.stringify(failedChannel).includes("private"), false);
   assert.deepEqual(await commercialCounts(fixture.tenant.id), {
     contacts: 1,
@@ -607,8 +607,8 @@ test("falha concorrente atrasada nao sobrescreve processamento concluido", async
   assert.equal(event.statusProcessamento, "PROCESSADO");
   assert.equal(event.tentativas, 2);
   assert.equal(event.processadoEm instanceof Date, true);
-  assert.ok(channel.lastFailureAt instanceof Date);
-  assert.equal(channel.lastFailureCode, "P2028");
+  assert.equal(channel.lastFailureAt, null);
+  assert.equal(channel.lastFailureCode, null);
   assert.deepEqual(await commercialCounts(fixture.tenant.id), {
     contacts: 1,
     clients: 1,

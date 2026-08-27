@@ -12,7 +12,7 @@ function createMetaInstagramClient({ transport = disabledTransport, config = pro
 
   function buildAuthorizationUrl({ clientId, redirectUri, state }) {
     const resolvedClientId = requiredConfig(clientId || config.META_INSTAGRAM_APP_ID || config.INSTAGRAM_META_APP_ID, "META_INSTAGRAM_APP_ID");
-    const resolvedRedirectUri = validRedirectUri(redirectUri || config.META_INSTAGRAM_OAUTH_REDIRECT_URI);
+    const resolvedRedirectUri = validRedirectUri(redirectUri || config.META_INSTAGRAM_OAUTH_REDIRECT_URI || config.INSTAGRAM_OAUTH_REDIRECT_URI);
     const rawState = requiredText(state, "state", 256);
     const url = new URL(AUTHORIZATION_URL);
     url.searchParams.set("client_id", resolvedClientId);
@@ -27,9 +27,9 @@ function createMetaInstagramClient({ transport = disabledTransport, config = pro
   async function exchangeAuthorizationCode({ code, redirectUri }) {
     const body = formBody({
       client_id: requiredConfig(config.META_INSTAGRAM_APP_ID || config.INSTAGRAM_META_APP_ID, "META_INSTAGRAM_APP_ID"),
-      client_secret: requiredConfig(config.META_INSTAGRAM_APP_SECRET, "META_INSTAGRAM_APP_SECRET"),
+      client_secret: requiredConfig(config.META_INSTAGRAM_APP_SECRET || config.INSTAGRAM_APP_SECRET, "META_INSTAGRAM_APP_SECRET"),
       grant_type: "authorization_code",
-      redirect_uri: validRedirectUri(redirectUri || config.META_INSTAGRAM_OAUTH_REDIRECT_URI),
+      redirect_uri: validRedirectUri(redirectUri || config.META_INSTAGRAM_OAUTH_REDIRECT_URI || config.INSTAGRAM_OAUTH_REDIRECT_URI),
       code: requiredText(code, "code", 4096),
     });
     return validateTokenResponse(await transport.post({ url: SHORT_TOKEN_URL, headers: formHeaders(), body }), "short");
@@ -39,7 +39,7 @@ function createMetaInstagramClient({ transport = disabledTransport, config = pro
     const token = requiredText(accessToken, "accessToken", 4096);
     const url = new URL(`${GRAPH_BASE_URL}/access_token`);
     url.searchParams.set("grant_type", "ig_exchange_token");
-    url.searchParams.set("client_secret", requiredConfig(config.META_INSTAGRAM_APP_SECRET, "META_INSTAGRAM_APP_SECRET"));
+    url.searchParams.set("client_secret", requiredConfig(config.META_INSTAGRAM_APP_SECRET || config.INSTAGRAM_APP_SECRET, "META_INSTAGRAM_APP_SECRET"));
     url.searchParams.set("access_token", token);
     return validateTokenResponse(await transport.get({ url: url.toString() }), "long");
   }

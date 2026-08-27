@@ -32,7 +32,7 @@ function createInstagramWebhookIntake({ prisma, clock = () => new Date() }) {
     if (!(receivedAt instanceof Date) || Number.isNaN(receivedAt.getTime())) {
       throw intakeError(503, "WEBHOOK_STORAGE_UNAVAILABLE");
     }
-    const records = items.map((item) => eventRecord(item, integration));
+    const records = items.map((item) => eventRecord(item, integration, receivedAt));
     const events = await persistBatch(prisma, records, integration, receivedAt, true);
     return { accepted: true, events };
   };
@@ -204,7 +204,7 @@ async function readCapabilities(prisma, empresaId, env) {
   };
 }
 
-function eventRecord(item, integration) {
+function eventRecord(item, integration, receivedAt) {
   return {
     empresaId: integration.empresaId,
     canalIntegracaoId: integration.id,
@@ -215,6 +215,7 @@ function eventRecord(item, integration) {
     payloadJson: item.payloadJson,
     statusProcessamento: "RECEBIDO",
     tentativas: 0,
+    recebidoEm: receivedAt,
   };
 }
 
@@ -234,7 +235,7 @@ async function persistBatch(prisma, records, integration, receivedAt, allowUniqu
         const created = await tx.eventoWebhook.create({ data: record, select: { id: true } });
         accepted.push({ eventoWebhookId: created.id, created: true });
       }
-      await touchActiveChannel(tx, integration, receivedAt);
+      if (accepted.some((event) => event.created)) await touchActiveChannel(tx, integration, receivedAt);
       return accepted;
     });
   } catch (error) {

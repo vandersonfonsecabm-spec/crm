@@ -180,7 +180,12 @@ function createBlingService({ prisma }) {
         });
         await tx.integracao.update({
           where: { empresaId_id: { empresaId, id: integracao.id } },
-          data: { ultimaSincronizacaoEm: finishedAt, ultimoSucessoEm: finishedAt, ultimoErroEm: counters.erros > 0 ? finishedAt : null, status: "ATIVA" },
+          data: {
+            ultimaSincronizacaoEm: finishedAt,
+            ultimoErroEm: counters.erros > 0 ? finishedAt : null,
+            status: "ATIVA",
+            ...(counters.erros === 0 ? { ultimoSucessoEm: finishedAt } : {}),
+          },
         });
         return syncDone;
       });
@@ -691,20 +696,24 @@ function statusAfterSyncError(integracao, error) {
 
 function moneyToCents(value) {
   if (value === undefined || value === null || value === "") return null;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return null;
-    return Math.round(value * 100);
-  }
+  if (typeof value === "number" && !Number.isFinite(value)) return null;
   let normalized = String(value).trim().replace(/[^\d,.-]/g, "");
-  if (!normalized) return null;
+  if (!normalized || normalized.includes("-") || normalized.includes("+") || /e/i.test(normalized)) return null;
   if (normalized.includes(",") && normalized.includes(".")) {
-    normalized = normalized.replace(/\./g, "").replace(",", ".");
+    const decimalSeparator = normalized.lastIndexOf(",") > normalized.lastIndexOf(".") ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? /\./g : /,/g;
+    normalized = normalized.replace(thousandsSeparator, "");
+    if (decimalSeparator === ",") normalized = normalized.replace(",", ".");
   } else if (normalized.includes(",")) {
     normalized = normalized.replace(",", ".");
   }
-  if (Number.isNaN(Number(normalized))) return null;
-  const [integer, decimalPart = ""] = normalized.split(".");
-  return Number(integer) * 100 + Number(decimalPart.padEnd(2, "0").slice(0, 2));
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(normalized);
+  if (!match) return null;
+  const integerPart = BigInt(match[1]);
+  const fraction = match[2] || "";
+  const centsPart = BigInt((fraction.slice(0, 2) || "").padEnd(2, "0") || "0");
+  const rounded = integerPart * 100n + centsPart + (fraction[2] && fraction[2] >= "5" ? 1n : 0n);
+  return rounded <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(rounded) : null;
 }
 
 function decimal(value) {
@@ -727,4 +736,4 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
-module.exports = { createBlingService };
+module.exports = { createBlingService, _private: { moneyToCents } };

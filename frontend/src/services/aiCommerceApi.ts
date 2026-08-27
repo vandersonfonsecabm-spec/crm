@@ -298,7 +298,7 @@ function normalizeAssistantResult(value?: Record<string, unknown>): AICommerceAs
   return {
     runId: String(result.runId ?? ""),
     mode: normalizeModeValue(result.mode),
-    connectionStatus: "MOCK_AVAILABLE",
+    connectionStatus: normalizeRunConnectionStatus(result),
     intent: typeof decision.intent === "string" ? decision.intent : null,
     confidence: confidenceNumber(decision.confidence),
     missingInformation: arrayOfStrings(draftValue?.questions ?? decision.missingInformation),
@@ -385,6 +385,14 @@ function isSideEffectTool(name: string) {
 
 function normalizeModeValue(value: unknown): AICommerceMode {
   return value === "SHADOW" || value === "SUGGESTION_ONLY" || value === "HUMAN_APPROVAL" ? value : "OFF";
+}
+
+function normalizeRunConnectionStatus(value: Record<string, unknown>): AICommerceAssistantResult["connectionStatus"] {
+  const explicit = String(value.connectionStatus ?? "").toUpperCase();
+  if (explicit === "MOCK_AVAILABLE" || explicit === "REAL_NOT_CONNECTED" || explicit === "NOT_CONNECTED") {
+    return explicit;
+  }
+  return value.mock === true ? "MOCK_AVAILABLE" : "NOT_CONNECTED";
 }
 
 function normalizeConnectionStatus(value?: Record<string, unknown>): AICommerceConnectionStatus {

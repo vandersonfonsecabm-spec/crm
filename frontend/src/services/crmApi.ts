@@ -1560,6 +1560,18 @@ export type MessengerOperationalStatusResponse = {
   nextRequirement?: string | null;
 };
 
+export type InstagramOperationalStatusResponse = {
+  state?: "NOT_CONFIGURED" | "CONFIGURED_INACTIVE" | "WAITING_META_AUTH" | "CONNECTED" | "PAUSED" | "ERROR" | "UNAVAILABLE";
+  nextRequirement?: string | null;
+  configured?: boolean;
+  ativo?: boolean;
+  status?: string | null;
+  connectedAt?: string | null;
+  verifiedAt?: string | null;
+  lastWebhookAt?: string | null;
+  lastFailureAt?: string | null;
+};
+
 export function getAuthToken() {
   return accessTokenMemory;
 }
@@ -1996,6 +2008,10 @@ export async function fetchWhatsappOperationalStatus() {
 
 export async function fetchMessengerOperationalStatus() {
   return requestApiGetAuthenticated<MessengerOperationalStatusResponse>("/integracoes/messenger/status");
+}
+
+export async function fetchInstagramOperationalStatus() {
+  return requestApiGetAuthenticated<InstagramOperationalStatusResponse>("/integracoes/instagram/status");
 }
 
 export type MetaCredentialHandoffResponse = {

@@ -58,11 +58,11 @@ function createWhatsAppWebhookIntake({ prisma, clock = () => new Date() }) {
       throw intakeError(404, "WEBHOOK_NOT_AVAILABLE");
     }
 
-    const records = items.map((item) => eventRecord(item, integration));
     const receivedAt = clock();
     if (!(receivedAt instanceof Date) || Number.isNaN(receivedAt.getTime())) {
       throw intakeError(503, "WEBHOOK_STORAGE_UNAVAILABLE");
     }
+    const records = items.map((item) => eventRecord(item, integration, receivedAt));
     const events = await persistBatch(prisma, records, integration, receivedAt, true);
     return { accepted: true, events };
   };
@@ -271,7 +271,7 @@ async function mapIntegration(prisma, { wabaId, phoneNumberId }, globalConfig) {
   return matches[0];
 }
 
-function eventRecord(item, integration) {
+function eventRecord(item, integration, receivedAt) {
   return {
     empresaId: integration.empresaId,
     canalIntegracaoId: integration.id,
@@ -282,6 +282,7 @@ function eventRecord(item, integration) {
     payloadJson: item.payloadJson,
     statusProcessamento: "RECEBIDO",
     tentativas: 0,
+    recebidoEm: receivedAt,
   };
 }
 
@@ -304,24 +305,26 @@ async function persistBatch(prisma, records, integration, receivedAt, allowUniqu
         });
         accepted.push({ eventoWebhookId: created.id, created: true });
       }
-      await tx.canalIntegracao.updateMany({
-        where: {
-          id: integration.id,
-          empresaId: integration.empresaId,
-          tipo: "WHATSAPP_META",
-          chaveInterna: REAL_WHATSAPP_INBOUND_KEY,
-          modoTeste: false,
-          metaAppId: integration.metaAppId,
-          providerEnvironment: integration.providerEnvironment,
-          ativo: true,
-          status: "ATIVO",
-          OR: [
-            { lastWebhookAt: null },
-            { lastWebhookAt: { lt: receivedAt } },
-          ],
-        },
-        data: { lastWebhookAt: receivedAt },
-      });
+      if (accepted.some((event) => event.created)) {
+        await tx.canalIntegracao.updateMany({
+          where: {
+            id: integration.id,
+            empresaId: integration.empresaId,
+            tipo: "WHATSAPP_META",
+            chaveInterna: REAL_WHATSAPP_INBOUND_KEY,
+            modoTeste: false,
+            metaAppId: integration.metaAppId,
+            providerEnvironment: integration.providerEnvironment,
+            ativo: true,
+            status: "ATIVO",
+            OR: [
+              { lastWebhookAt: null },
+              { lastWebhookAt: { lt: receivedAt } },
+            ],
+          },
+          data: { lastWebhookAt: receivedAt },
+        });
+      }
       return accepted;
     });
   } catch (error) {

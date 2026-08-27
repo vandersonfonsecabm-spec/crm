@@ -11,6 +11,8 @@ test("E6A UI exposes a bounded single-connection surface", () => {
   const settings = read("src/components/ai-commerce/CommerceSettingsPanel.tsx");
   assert.match(api, /AICommerceMode = \"OFF\" \| \"SHADOW\" \| \"SUGGESTION_ONLY\" \| \"HUMAN_APPROVAL\"/);
   assert.match(api, /runAICommerceAssistant/);
+  assert.match(api, /normalizeRunConnectionStatus/);
+  assert.match(api, /return value\.mock === true \? "MOCK_AVAILABLE" : "NOT_CONNECTED"/);
   assert.match(api, /\/ai-commerce\/connection\/status/);
   assert.match(api, /\/catalogo-comercial\/busca/);
   assert.match(api, /\/catalogo-comercial\/ofertas\/preview/);

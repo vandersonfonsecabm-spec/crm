@@ -325,6 +325,22 @@ async function markChannelConnected(tx, event, completedAt) {
     },
     data: { connectedAt: completedAt },
   });
+  await clearRecoveredFailure(tx, event);
+}
+
+async function clearRecoveredFailure(tx, event) {
+  const receivedAt = event?.recebidoEm instanceof Date && !Number.isNaN(event.recebidoEm.getTime())
+    ? event.recebidoEm
+    : null;
+  if (!receivedAt) return;
+  await tx.canalIntegracao.updateMany({
+    where: {
+      id: event.canalIntegracaoId,
+      empresaId: event.empresaId,
+      lastWebhookAt: receivedAt,
+    },
+    data: { lastFailureAt: null, lastFailureCode: null },
+  });
 }
 
 async function verifyTerminalEvent(tx, event) {

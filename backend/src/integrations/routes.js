@@ -6,6 +6,7 @@ const { createCommercialCatalogService } = require("./commercialCatalogService")
 const { createWhatsAppFoundationService } = require("./whatsappFoundation");
 const { REAL_WHATSAPP_INBOUND_KEY, readGlobalWhatsappConfiguration } = require("../platform/whatsappInboundProvisioning");
 const { createMessengerInboundLifecycleService } = require("./messengerInboundLifecycle");
+const { createInstagramInboundLifecycleService } = require("./instagramInboundLifecycle");
 const { REAL_MESSENGER_INBOUND_KEY, readGlobalMessengerConfiguration } = require("../platform/messengerInboundProvisioning");
 const { createMetaCredentialStore } = require("./metaCredentialStore");
 const { createMetaOAuthService } = require("./metaOAuthService");
@@ -36,6 +37,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const metaOAuthService = createMetaOAuthService({ prisma });
   const whatsappFoundationService = createWhatsAppFoundationService({ prisma });
   const messengerInboundLifecycle = createMessengerInboundLifecycleService({ prisma });
+  const instagramInboundLifecycle = createInstagramInboundLifecycleService({ prisma });
   const metaCredentialStore = createMetaCredentialStore({ prisma });
   const messengerIntegrationGate = createTenantFeatureMiddleware({
     prisma,
@@ -87,6 +89,14 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       return res.json(await withCredentialRevision(prisma, req.auth.empresaId, status, "META_MESSENGER"));
     } catch (error) {
       return integrationError(res, error, "Não foi possível consultar o estado do Messenger.");
+    }
+  });
+
+  app.get("/integracoes/instagram/status", ...requireAdmin, async (req, res) => {
+    try {
+      return res.json(await instagramInboundLifecycle.getStatus({ tenantId: req.auth.empresaId }));
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível consultar o estado do Instagram.");
     }
   });
 
@@ -883,7 +893,7 @@ function statusFromCode(code) {
   if (code === "CONNECTOR_NOT_IMPLEMENTED") return 501;
   if (code === "BLING_NOT_CONFIGURED") return 501;
   if (code === "BLING_CREDENTIALS_REQUIRED" || code === "BLING_INVALID_STATE" || code === "BLING_AUTH_CODE_REQUIRED") return 400;
-  if (code === "BLING_TOKEN_ERROR" || code === "BLING_HTTP_ERROR" || code === "BLING_TIMEOUT") return 502;
+  if (["BLING_TOKEN_ERROR", "BLING_TOKEN_RESPONSE_INVALID", "BLING_HTTP_ERROR", "BLING_TIMEOUT"].includes(code)) return 502;
   if (code === "INTEGRATION_NOT_FOUND" || code === "SYNC_NOT_FOUND" || code === "IMPORT_NOT_FOUND") return 404;
   if (code === "IMPORT_DUPLICATE_FILE" || code === "IMPORT_INVALID_STATUS" || code === "IMPORT_CONFIRMATION_REQUIRED") return 409;
   if (code === "IMPORT_CACHE_EXPIRED") return 410;

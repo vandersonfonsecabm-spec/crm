@@ -1,8 +1,8 @@
 import { Globe2, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
-import { iniciarConexaoInstagram, removeMessengerCredential, replaceMessengerCredential, storeMessengerCredential } from "../../services/crmApi";
-import { createLocalMetaInstagramReadiness, isApprovedInstagramAuthorizationUrl } from "../../services/metaInstagramBoundary";
+import { useCallback, useEffect, useState } from "react";
+import { fetchInstagramOperationalStatus, iniciarConexaoInstagram, removeMessengerCredential, replaceMessengerCredential, storeMessengerCredential } from "../../services/crmApi";
+import { createLocalMetaInstagramReadiness, deriveMetaInstagramReadiness, isApprovedInstagramAuthorizationUrl } from "../../services/metaInstagramBoundary";
 import { useMessengerConnectionStatus } from "../integrations/useMessengerConnectionStatus";
 import type { MessengerConnectionState } from "../integrations/messengerConnectionState";
 import { CommunicationModal } from "../leads-communication/CommunicationOverlay";
@@ -19,19 +19,9 @@ type ReadinessItem = {
   nextRequirement?: string;
 };
 
-const instagramReadiness = createLocalMetaInstagramReadiness();
+const localInstagramReadiness = createLocalMetaInstagramReadiness();
 
 const STATIC_READINESS_ITEMS: ReadinessItem[] = [
-  {
-    key: "instagram-meta",
-    title: "Instagram Direct / Meta",
-    description: instagramReadiness.description,
-    note: `${instagramReadiness.note} Boundary: ${instagramReadiness.state}.`,
-    status: instagramReadiness.badgeStatus,
-    label: instagramReadiness.label,
-    icon: <Globe2 aria-hidden="true" size={16} />,
-    nextRequirement: instagramReadiness.nextRequirement,
-  },
   {
     key: "serasa-score",
     title: "Serasa / score",
@@ -44,6 +34,8 @@ const STATIC_READINESS_ITEMS: ReadinessItem[] = [
 ];
 
 export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId }: { canalIntegracaoId?: number | null }) {
+  const [instagramReadiness, setInstagramReadiness] = useState(localInstagramReadiness);
+  const [instagramLoadState, setInstagramLoadState] = useState<"loading" | "ready" | "fallback">("loading");
   const handleMessengerUnauthorized = useCallback(() => undefined, []);
   const { loadState: messengerLoadState, refresh: refreshMessengerStatus, status: messengerStatus } = useMessengerConnectionStatus(handleMessengerUnauthorized);
   const [busy, setBusy] = useState(false);
@@ -53,6 +45,22 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId }
   const [messengerError, setMessengerError] = useState("");
   const [messengerBusy, setMessengerBusy] = useState(false);
   const [messengerCredentialMode, setMessengerCredentialMode] = useState<"create" | "replace">("create");
+  useEffect(() => {
+    let cancelled = false;
+    setInstagramLoadState("loading");
+    fetchInstagramOperationalStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setInstagramReadiness(deriveMetaInstagramReadiness({ ...status, source: "backend" }));
+        setInstagramLoadState("ready");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInstagramReadiness(localInstagramReadiness);
+        setInstagramLoadState("fallback");
+      });
+    return () => { cancelled = true; };
+  }, [canalIntegracaoId]);
   const instagramAction = canalIntegracaoId ? async () => {
     if (busy) return;
     setBusy(true);
@@ -109,8 +117,20 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId }
       setMessengerBusy(false);
     }
   }
+  const instagramItem: ReadinessItem = {
+    key: "instagram-meta",
+    title: "Instagram Direct / Meta",
+    description: instagramReadiness.description,
+    note: instagramLoadState === "loading"
+      ? "Consultando o estado seguro do canal para esta empresa."
+      : `${instagramReadiness.note} Boundary: ${instagramReadiness.state}.`,
+    status: instagramReadiness.badgeStatus,
+    label: instagramReadiness.label,
+    icon: <Globe2 aria-hidden="true" size={16} />,
+    nextRequirement: instagramReadiness.nextRequirement,
+  };
   const readinessItems: ReadinessItem[] = [
-    STATIC_READINESS_ITEMS[0],
+    instagramItem,
     {
       key: "messenger-meta",
       title: "Facebook Messenger / Meta",
@@ -123,7 +143,7 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId }
       icon: <Globe2 aria-hidden="true" size={16} />,
       nextRequirement: messengerStatus.nextRequirement || "CONFIGURE_MESSENGER_PROVIDER",
     },
-    STATIC_READINESS_ITEMS[1],
+    STATIC_READINESS_ITEMS[0],
   ];
   return (
     <Surface className="min-w-0 overflow-hidden" data-testid="integration-readiness-panel">

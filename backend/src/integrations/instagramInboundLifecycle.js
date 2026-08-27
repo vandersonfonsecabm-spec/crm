@@ -615,7 +615,7 @@ function readInboundRuntimeConfiguration(env) {
 }
 
 function hasConfiguredSecret(value) {
-  return typeof value === "string" && value.trim().length > 0;
+  return typeof value === "string" && value.trim().length >= 8;
 }
 
 function hasEssentialIdentity(channel) {

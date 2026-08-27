@@ -564,6 +564,7 @@ test("Bling trata falha parcial ao consultar detalhe de unidade", async () => {
   const afterPartialError = await prisma.integracao.findUnique({ where: { id: integration.id } });
   assert.equal(afterPartialError.status, "ATIVA");
   assert.equal(afterPartialError.ativo, true);
+  assert.equal(afterPartialError.ultimoSucessoEm, null);
 });
 
 test("Bling sincronizacao deduplica entidades e rejeita valores desconhecidos", async () => {
