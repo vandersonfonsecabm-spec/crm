@@ -7,9 +7,9 @@ const { relationSpecs } = require("./check-tenant-relation-integrity.cjs");
 const { classifyPolymorphicRows, POLYMORPHIC_ROWS_QUERY } = require("./tenant-isolation-verifier-utils.cjs");
 const { sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation-log-utils.cjs");
 
-const EXPECTED_RELATION_COUNT = 161;
+const EXPECTED_RELATION_COUNT = 162;
 const TENANT_RELATION_MANIFEST_VERSION = 1;
-const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "cdc6eaab700579a521d150ea02a338b47f1d07170469d05e35770b435ba2c309";
+const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "8029822ec4e7fe7165fe2de9394c4f1d9310ada8b1716e44f13df609f7bfb60e";
 const DEFAULT_MIGRATION_NAME = "20260801123000_enforce_tenant_safe_relations";
 const DEFAULT_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma", "migrations");
 const DEFAULT_POSTGRES_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma-postgres", "migrations");
@@ -55,6 +55,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260824150000_add_ai_commerce_catalog_foundation": "724f2e21d329d3d7548201e91de7fc3bd87e6d7f686f9a5c144e620853e5cb0f",
     "20260824160000_add_ai_commerce_persistent_audit_effects": "fb90ee7c62783fb5369cca2736b0c0b23e31a8d7861a5d484fece44640bd02b6",
     "20260825170000_add_commercial_proposal_catalog_items": "20d18cdec5fb781bb81572188a90f4b5e3f0feafe478f520c2bc910f6f5f2295",
+    "20260827200000_add_store1_provider_readiness": "6aa6ee3e3097df108765da05ecd1ea303f719473afd51402db916789a3fffa4c",
   }),
   postgresql: Object.freeze({
     "20260728090000_postgres_baseline": "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
@@ -74,6 +75,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260824150000_add_ai_commerce_catalog_foundation": "29e51644720f34ffe1c66b9e8a156f6986090ef1733440deafc7e8ece3564988",
     "20260824160000_add_ai_commerce_persistent_audit_effects": "e491d9342ddced5a5769a0030d586e337bc55867ce2564803f4a8e623f9230cc",
     "20260825170000_add_commercial_proposal_catalog_items": "ee6535644e267c6490c98ec580b958db56926054e4cf66bdb522d1bd2fc68f05",
+    "20260827200000_add_store1_provider_readiness": "caad5bb24aac5943e5a6f9f36e3ad8d35598ef22914714f9177c17c690246e2e",
   }),
 });
 
@@ -275,6 +277,15 @@ const MIGRATION_REGISTRY = Object.freeze({
       "ItemPropostaComercial.productOfferId->ProductOffer",
       "ItemPropostaComercial.catalogProductId->CommercialCatalogProduct",
       "ItemPropostaComercial.stockProductId->ProdutoEstoque",
+    ]),
+  }),
+  "20260827200000_add_store1_provider_readiness": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: "6aa6ee3e3097df108765da05ecd1ea303f719473afd51402db916789a3fffa4c",
+    postgresSha256: "caad5bb24aac5943e5a6f9f36e3ad8d35598ef22914714f9177c17c690246e2e",
+    preMigrationUnavailableTenantRelations: Object.freeze([
+      "EmailDeliveryEvent.deliveryId->EmailDeliveryOutbox",
     ]),
   }),
 });

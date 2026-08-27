@@ -5,24 +5,31 @@ const { processStockOutboxBatch } = require("./outbox");
 const { runStockRetention } = require("./retention");
 const { projectStockEvaluation } = require("./projection");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
-const ruleCursors = new Map();
+const { KEYS: WORKER_CHECKPOINT_KEYS, createWorkerCheckpointStore } = require("../shared/workerCheckpoint");
 const MAX_CYCLE_TELEMETRY_DURATION_MS = 10 * 60 * 1000;
 const MAX_FAILED_TENANTS_TELEMETRY = 100;
 
-async function runStockWorkerCycle({ prisma, rules = null, env = process.env, owner = null, leaseOwner = null, leaseMs = 30000, logger = console, now = new Date(), limit = 20 } = {}) {
+async function runStockWorkerCycle({ prisma, rules = null, env = process.env, owner = null, leaseOwner = null, leaseMs = 30000, logger = console, now = new Date(), limit = 20, checkpointStore = null } = {}) {
   const flags = stockFlags(env);
   assertStockFlagsOffForProduction(env);
   if (!flags.domainEnabled || !flags.syncWorkerEnabled || flags.tenantAllowlist.size === 0) return { enabled: false, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, tenants: 0 };
+  const effectiveCheckpointStore = flags.ruleEngineEnabled && typeof rules?.evaluateTenant === "function"
+    ? checkpointStore || createWorkerCheckpointStore({ prisma })
+    : null;
   const cycleStartedAt = Date.now();
   const results = { enabled: true, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, matched: 0, resolved: 0, tenants: 0, failedTenants: [] };
   for (const empresaId of flags.tenantAllowlist) {
     if (!stockEnabledForTenant(empresaId, env, { worker: true })) continue;
     results.tenants += 1;
     try {
+      let checkpointUpdate = null;
       if (flags.ruleEngineEnabled && typeof rules?.evaluateTenant === "function") {
-        const evaluation = await rules.evaluateTenant(empresaId, { now, limit, cursor: ruleCursors.get(empresaId) || null });
-        if (evaluation.nextCursor) ruleCursors.set(empresaId, evaluation.nextCursor);
-        else ruleCursors.delete(empresaId);
+        const checkpointKey = WORKER_CHECKPOINT_KEYS.stockRules(empresaId);
+        const storedCursor = await effectiveCheckpointStore.read(checkpointKey);
+        const cursor = positiveCursor(storedCursor?.id);
+        const evaluation = await rules.evaluateTenant(empresaId, { now, limit, cursor });
+        const nextCursor = positiveCursor(evaluation.nextCursor);
+        checkpointUpdate = { key: checkpointKey, nextCursor };
         results.evaluated += Number(evaluation.evaluated || 0);
         results.matched += Number(evaluation.matched || 0);
         results.resolved += Number(evaluation.resolved || 0);
@@ -43,6 +50,8 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
       });
       results.claimed += result.claimed; results.processed += result.processed; results.quarantined += result.quarantined;
       if (parseBoolean(env.STOCK_RETENTION_ENABLED) && parseBoolean(env.STOCK_RETENTION_WORKER_ENABLED)) await runStockRetention({ prisma, empresaId, now, dryRun: false, env, logger });
+      if (checkpointUpdate?.nextCursor) await effectiveCheckpointStore.write(checkpointUpdate.key, { id: checkpointUpdate.nextCursor });
+      else if (checkpointUpdate) await effectiveCheckpointStore.clear(checkpointUpdate.key);
     } catch (error) {
       logger.error?.("stock_tenant_cycle_failed", { empresaId, code: error?.code || "STOCK_CYCLE_FAILED" });
       results.failedTenants.push(empresaId);
@@ -59,6 +68,11 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
     // Observability must not change worker cadence or turn a completed cycle into a failure.
   }
   return results;
+}
+
+function positiveCursor(value) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function boundedCycleDuration(startedAt) {

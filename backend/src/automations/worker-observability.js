@@ -14,6 +14,8 @@ const SAFE_ERROR_MESSAGES = new Map([
   ["NO_ELIGIBLE_USER", "Automation action has no eligible user."],
   ["ROUND_ROBIN_STATE_CONFLICT", "Round-robin state changed concurrently."],
   ["RULE_DISABLED", "Automation rule is disabled."],
+  ["WORKER_CYCLE_TIMEOUT", "Worker cycle exceeded its deadline."],
+  ["WORKER_SHUTDOWN_TIMEOUT", "Worker shutdown exceeded its deadline."],
 ]);
 const SAFE_ERROR_CODES = new Set([
   "ACTION_CONFIG_MISSING",
@@ -36,6 +38,8 @@ const SAFE_ERROR_CODES = new Set([
   "RULE_DISABLED",
   "USER_NOT_FOUND",
   "VALIDATION_ERROR",
+  "WORKER_CYCLE_TIMEOUT",
+  "WORKER_SHUTDOWN_TIMEOUT",
 ]);
 const DOMAIN_ERROR_CODES = new Set([
   "ACTION_CONFIG_MISSING",
@@ -53,6 +57,8 @@ const DOMAIN_ERROR_CODES = new Set([
   "RULE_DISABLED",
   "USER_NOT_FOUND",
   "VALIDATION_ERROR",
+  "WORKER_CYCLE_TIMEOUT",
+  "WORKER_SHUTDOWN_TIMEOUT",
 ]);
 const SAFE_ERROR_NAMES = new Set([
   "Error",
@@ -110,7 +116,7 @@ const SAFE_STATUSES = new Set([
 ]);
 const SAFE_LIFECYCLE_STATUSES = new Set(["disabled", "started", "stopped", "stopping"]);
 const SAFE_PROVIDERS = new Set(["postgresql", "sqlite", "unknown"]);
-const SAFE_SUBSYSTEMS = new Set(["automation", "automation_temporal", "automation_jobs", "notifications", "stock_core"]);
+const SAFE_SUBSYSTEMS = new Set(["automation", "automation_temporal", "automation_jobs", "notifications", "stock_core", "meta_inbound", "security_email_delivery", "worker_cycle", "worker_shutdown"]);
 
 const NUMERIC_FIELDS = new Set([
   "tenantId",
@@ -124,6 +130,8 @@ const NUMERIC_FIELDS = new Set([
   "consecutiveFailures",
   "failedTenantCount",
   "pollIntervalMs",
+  "cycleTimeoutMs",
+  "shutdownTimeoutMs",
   "syncRunId",
   "sourceConnectionId",
   "materialVersion",
@@ -299,7 +307,7 @@ function sanitizeErrorMessage(value, maxLength = MAX_ERROR_MESSAGE_LENGTH) {
 
 function classifyError(error, errorCode, errorName) {
   if (/^P\d{4}$/i.test(errorCode) || /^Prisma/i.test(errorName)) return "PRISMA";
-  if (errorCode === "ACTION_TIMEOUT" || /timeout/i.test(errorName)) return "TIMEOUT";
+  if (["ACTION_TIMEOUT", "WORKER_CYCLE_TIMEOUT", "WORKER_SHUTDOWN_TIMEOUT"].includes(errorCode) || /timeout/i.test(errorName)) return "TIMEOUT";
   if (DOMAIN_ERROR_CODES.has(errorCode)) return "DOMAIN";
   return "UNEXPECTED";
 }

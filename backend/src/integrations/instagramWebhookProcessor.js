@@ -121,6 +121,9 @@ async function processTransaction(tx, eventoWebhookId, lease) {
       processadoEm: completedAt,
       erroCodigo: null,
       erroResumo: null,
+      nextAttemptAt: null,
+      leaseOwner: null,
+      leaseExpiresAt: null,
     },
   });
   if (completed.count !== 1) throw processingError("INSTAGRAM_EVENT_STATE_INVALID");
@@ -177,12 +180,13 @@ function validateEventOwnership(event) {
     || event.canalIntegracao.tipo !== "INSTAGRAM_META"
     || event.canalIntegracao.chaveInterna !== "instagram-meta-inbound-real"
     || event.canalIntegracao.modoTeste !== false
-    || event.canalIntegracao.ativo !== true
-    || event.canalIntegracao.status !== "ATIVO"
     || event.canalIntegracao.metaAppId !== global.metaAppId
     || event.canalIntegracao.providerEnvironment !== global.providerEnvironment
   ) {
     throw processingError("INSTAGRAM_EVENT_INTEGRATION_INVALID");
+  }
+  if (event.canalIntegracao.ativo !== true || event.canalIntegracao.status !== "ATIVO") {
+    throw processingError("INSTAGRAM_EVENT_INTEGRATION_PAUSED");
   }
 }
 

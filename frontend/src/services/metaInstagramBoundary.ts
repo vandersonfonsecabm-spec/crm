@@ -23,15 +23,20 @@ export type MetaInstagramReadiness = {
 type MetaInstagramStatusPayload = {
   state?: string | null;
   nextRequirement?: string | null;
+  credentialConfigured?: boolean | null;
+  verifiedAt?: string | null;
   source?: "local-preparation" | "backend" | "fixture";
 };
 
 const DEFAULT_REQUIREMENT = "REAL_META_ACCOUNT_REQUIRED_FOR_E2E";
 
 export function deriveMetaInstagramReadiness(payload: MetaInstagramStatusPayload | null | undefined): MetaInstagramReadiness {
-  const state = META_INSTAGRAM_BACKEND_STATES.includes(payload?.state as MetaInstagramBackendState)
+  const reportedState = META_INSTAGRAM_BACKEND_STATES.includes(payload?.state as MetaInstagramBackendState)
     ? payload?.state as MetaInstagramBackendState
     : "NOT_CONFIGURED";
+  const state = reportedState === "CONNECTED" && (payload?.credentialConfigured !== true || !payload?.verifiedAt)
+    ? "WAITING_META_AUTH"
+    : reportedState;
   const source = payload?.source ?? "local-preparation";
   const nextRequirement = payload?.nextRequirement || DEFAULT_REQUIREMENT;
 

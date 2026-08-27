@@ -195,6 +195,73 @@ test("worker H8 processa somente tenants presentes na allowlist", async () => {
   assert.equal(await prisma.notificacao.count({ where: { empresaId: other.empresa.id } }), 0);
 });
 
+test("worker H8 retoma cursor persistido depois de reiniciar o service", async () => {
+  const first = await seedTenant("worker-restart-a", { enabled: true });
+  const second = await seedTenant("worker-restart-b", { enabled: true });
+  for (const tenant of [first, second]) {
+    await prisma.acompanhamento.create({
+      data: {
+        empresaId: tenant.empresa.id,
+        responsavelId: tenant.admin.id,
+        autorId: tenant.admin.id,
+        titulo: "Retomar worker",
+        dataHora: new Date(now.getTime() - 5 * 60000),
+        prioridade: "ALTA",
+        status: "PENDENTE",
+        tipo: "RETORNO",
+      },
+    });
+  }
+  const checkpointStore = memoryCheckpointStore();
+  const workerEnv = { ...env, NOTIFICATIONS_WORKER_ENABLED: "true" };
+  const beforeRestart = createNotificationService({ prisma, env: workerEnv, clock: () => now, checkpointStore });
+  assert.equal((await beforeRestart.processDue({ limit: 1 })).tenants, 1);
+
+  const afterRestart = createNotificationService({ prisma, env: workerEnv, clock: () => now, checkpointStore });
+  assert.equal((await afterRestart.processDue({ limit: 1 })).tenants, 1);
+  assert.equal(await prisma.notificacao.count({ where: { empresaId: first.empresa.id } }), 1);
+  assert.equal(await prisma.notificacao.count({ where: { empresaId: second.empresa.id } }), 1);
+});
+
+test("cursor de fonte nao avanca antes da projecao concluir", async () => {
+  const tenant = await seedTenant("source-cursor-failure", { enabled: true });
+  await prisma.acompanhamento.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      responsavelId: tenant.admin.id,
+      autorId: tenant.admin.id,
+      titulo: "Falha antes do checkpoint",
+      dataHora: new Date(now.getTime() - 5 * 60000),
+      prioridade: "ALTA",
+      status: "PENDENTE",
+      tipo: "RETORNO",
+    },
+  });
+  const checkpointStore = memoryCheckpointStore();
+  const faultPrisma = new Proxy(prisma, {
+    get(target, property) {
+      if (property === "notificacao") {
+        return new Proxy(target.notificacao, {
+          get(delegate, method) {
+            if (method === "findUnique") return async () => { throw new Error("projection failure"); };
+            const value = Reflect.get(delegate, method);
+            return typeof value === "function" ? value.bind(delegate) : value;
+          },
+        });
+      }
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const failing = createNotificationService({ prisma: faultPrisma, env, clock: () => now, checkpointStore });
+  await assert.rejects(failing.projectForTenant(tenant.empresa.id), /projection failure/);
+  assert.equal(checkpointStore.values.size, 0);
+
+  const resumed = createNotificationService({ prisma, env, clock: () => now, checkpointStore });
+  await resumed.projectForTenant(tenant.empresa.id);
+  assert.equal(await prisma.notificacao.count({ where: { empresaId: tenant.empresa.id } }), 1);
+});
+
 test("reagendamento e transferencia encerram a ocorrencia e o destinatario anteriores", async () => {
   const tenant = await seedTenant("reconcile");
   const manager = await prisma.usuario.create({ data: { empresaId: tenant.empresa.id, nome: "Gerente H8", email: `manager-${tenant.empresa.id}@h8.test`, senhaHash: "hash-test", papel: "GERENTE", ativo: true } });
@@ -254,4 +321,14 @@ async function createNotification(tenant, idSuffix, occurredAt, createdAt = occu
       createdAt,
     },
   });
+}
+
+function memoryCheckpointStore() {
+  const values = new Map();
+  return {
+    values,
+    async read(key) { return values.get(key) || null; },
+    async write(key, value) { values.set(key, JSON.parse(JSON.stringify(value))); },
+    async clear(key) { values.delete(key); },
+  };
 }

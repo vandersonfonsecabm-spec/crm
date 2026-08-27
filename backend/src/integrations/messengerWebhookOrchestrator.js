@@ -66,6 +66,30 @@ function createMessengerWebhookOrchestrator({
   };
 }
 
+function createMessengerStoredWebhookProcessor({
+  prisma,
+  processEvent = processMessengerWebhookEvent,
+  clock = () => new Date(),
+  retryPolicy,
+  random = Math.random,
+} = {}) {
+  if (!prisma || typeof processEvent !== "function" || typeof clock !== "function" || typeof random !== "function") {
+    throw new Error("Dependencias invalidas para o worker Messenger.");
+  }
+  const policy = normalizeRetryPolicy(retryPolicy);
+  return ({ eventoWebhookId, leaseOwner }) => processAcceptedEvent({
+    prisma,
+    eventoWebhookId,
+    processEvent,
+    clock,
+    policy,
+    waitForRetry: wait,
+    random,
+    durableRetry: true,
+    leaseOwner,
+  });
+}
+
 async function processAcceptedEvent({
   prisma,
   eventoWebhookId,
@@ -74,6 +98,8 @@ async function processAcceptedEvent({
   policy,
   waitForRetry,
   random,
+  durableRetry = false,
+  leaseOwner,
 }) {
   let contentionAttempts = 0;
   while (true) {
@@ -85,12 +111,14 @@ async function processAcceptedEvent({
         provider: PROVIDER,
         clock,
         policy,
+        leaseOwner,
       });
     } catch {
       throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
     }
 
-    if (claim.state === "PROCESSED") return;
+    if (claim.state === "PROCESSED") return { state: "PROCESSED" };
+    if (claim.state === "NOT_DUE") return { state: "NOT_DUE" };
     if (claim.state === FAILURE_STATE.PERMANENT) {
       throw orchestrationError(409, "WEBHOOK_PROCESSING_CONFLICT");
     }
@@ -98,6 +126,7 @@ async function processAcceptedEvent({
       throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
     }
     if (claim.state === "LEASE_ACTIVE" || claim.state === "CAS_CONFLICT") {
+      if (durableRetry) return { state: claim.state };
       if (contentionAttempts >= policy.maxContentionAttempts - 1) {
         throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
       }
@@ -124,7 +153,7 @@ async function processAcceptedEvent({
         error.code = "MESSENGER_EVENT_PROCESSOR_INVALID_RESULT";
         throw error;
       }
-      return;
+      return { state: "PROCESSED" };
     } catch (error) {
       let failure;
       try {
@@ -138,12 +167,15 @@ async function processAcceptedEvent({
           permanentCodes: PROCESSING_CONFLICT_CODES,
           clock,
           policy,
+          scheduleRetry: durableRetry,
+          random,
         });
       } catch {
         throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
       }
 
       if (failure.state === FAILURE_STATE.RETRYABLE) {
+        if (durableRetry) return { state: FAILURE_STATE.RETRYABLE };
         await waitForRetry(calculateBackoffWithJitter({
           attempt: claim.lease.attempt,
           policy,
@@ -151,8 +183,9 @@ async function processAcceptedEvent({
         }));
         continue;
       }
-      if (failure.state === "PROCESSED") return;
+      if (failure.state === "PROCESSED") return { state: "PROCESSED" };
       if (failure.state === "LEASE_LOST" || failure.state === "CAS_CONFLICT") {
+        if (durableRetry) return { state: failure.state };
         if (contentionAttempts >= policy.maxContentionAttempts - 1) {
           throw orchestrationError(503, "WEBHOOK_PROCESSING_UNAVAILABLE");
         }
@@ -216,6 +249,7 @@ function orchestrationError(status, code) {
 }
 
 module.exports = {
+  createMessengerStoredWebhookProcessor,
   createMessengerWebhookOrchestrator,
   recordProcessingFailure,
 };

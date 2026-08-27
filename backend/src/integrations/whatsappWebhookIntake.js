@@ -283,6 +283,7 @@ function eventRecord(item, integration, receivedAt) {
     statusProcessamento: "RECEBIDO",
     tentativas: 0,
     recebidoEm: receivedAt,
+    nextAttemptAt: receivedAt,
   };
 }
 

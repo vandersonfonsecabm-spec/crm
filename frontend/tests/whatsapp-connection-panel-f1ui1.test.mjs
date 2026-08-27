@@ -31,11 +31,13 @@ test("F1UI-1 mapeia estados atuais e futuros sem inventar conexao", async () => 
   assert.equal(mapWhatsAppConnectionStatus({ status: "NOT_CONFIGURED", ready: false }).state, "NOT_CONFIGURED");
   assert.equal(mapWhatsAppConnectionStatus({ status: "CONFIGURED", ready: true }).state, "CONFIGURED_INACTIVE");
   assert.equal(
-    mapWhatsAppConnectionStatus({ status: "CONFIGURED", ready: true, verifiedAt: "2026-07-18T12:00:00.000Z" }).state,
+    mapWhatsAppConnectionStatus({ status: "CONFIGURED", ready: true, credentialConfigured: true, verifiedAt: "2026-07-18T12:00:00.000Z" }).state,
     "CONNECTED",
   );
+  assert.equal(mapWhatsAppConnectionStatus({ status: "CONNECTED", credentialConfigured: false, verifiedAt: "2026-07-18T12:00:00.000Z" }).state, "WAITING_META_AUTH");
+  assert.equal(mapWhatsAppConnectionStatus({ status: "CONNECTED", credentialConfigured: true, verifiedAt: null }).state, "WAITING_META_AUTH");
 
-  for (const state of ["WAITING_META_AUTH", "CONFIGURED_INACTIVE", "CONNECTED", "PAUSED", "ERROR", "UNAVAILABLE"]) {
+  for (const state of ["WAITING_META_AUTH", "CONFIGURED_INACTIVE", "PAUSED", "ERROR", "UNAVAILABLE"]) {
     assert.equal(mapWhatsAppConnectionStatus({ status: state }).state, state);
   }
   assert.equal(mapWhatsAppConnectionStatus({ status: "UNKNOWN" }).state, "UNAVAILABLE");

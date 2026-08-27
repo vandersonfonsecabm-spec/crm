@@ -34,6 +34,7 @@ test("ProductOffer renders stale, unknown and expired as non-authoritative", () 
 });
 
 test("Inbox assistant uses the existing composer as an insertion target", () => {
+  const api = read("src/services/aiCommerceApi.ts");
   const panel = read("src/components/ai-commerce/CommerceInboxAssistantPanel.tsx");
   assert.match(panel, /onInsertComposer/);
   assert.match(panel, /Inserir no composer/);
@@ -42,6 +43,11 @@ test("Inbox assistant uses the existing composer as an insertion target", () => 
   assert.match(panel, /Criar oportunidade rascunho/);
   assert.match(panel, /Aprovar handoff/);
   assert.match(panel, /draftStale/);
+  assert.match(api, /approvalToken: typeof value\.approvalToken === "string" \? value\.approvalToken : ""/);
+  assert.match(api, /approvalToken: string/);
+  assert.match(panel, /approvalToken: draft\.approvalToken/);
+  assert.doesNotMatch(api, /createOpaqueKey\("approval"\)|createOpaqueKey\("reject"\)/);
+  assert.doesNotMatch(panel, /approvalToken:\s*`approval-|approvalKeys/);
   assert.doesNotMatch(panel, /send.*Message|fetch\(.*\/send/i);
 });
 

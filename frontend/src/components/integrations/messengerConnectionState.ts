@@ -35,13 +35,19 @@ export function mapMessengerConnectionStatus(
   payload: MessengerOperationalStatusResponse | null | undefined,
 ): MessengerConnectionStatus {
   const raw = String(payload?.state || payload?.status || "").toUpperCase();
+  const credentialConfigured = payload?.credentialConfigured === true;
+  const verifiedAt = dateOrNull(payload?.verifiedAt);
+  const reportedState = SUPPORTED.has(raw as MessengerConnectionState) ? raw as MessengerConnectionState : "UNAVAILABLE";
+  const state = reportedState === "CONNECTED" && (!credentialConfigured || !verifiedAt)
+    ? "WAITING_META_AUTH"
+    : reportedState;
   return {
-    state: SUPPORTED.has(raw as MessengerConnectionState) ? raw as MessengerConnectionState : "UNAVAILABLE",
+    state,
     canalIntegracaoId: positiveId(payload?.canalIntegracaoId),
-    credentialConfigured: payload?.credentialConfigured === true,
+    credentialConfigured,
     credentialRevision: Number.isSafeInteger(payload?.credentialRevision) && (payload?.credentialRevision || 0) > 0 ? payload!.credentialRevision! : null,
     connectedAt: dateOrNull(payload?.connectedAt),
-    verifiedAt: dateOrNull(payload?.verifiedAt),
+    verifiedAt,
     lastWebhookAt: dateOrNull(payload?.lastWebhookAt),
     lastFailureAt: dateOrNull(payload?.lastFailureAt),
     nextRequirement: typeof payload?.nextRequirement === "string" ? payload.nextRequirement : null,

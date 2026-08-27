@@ -55,6 +55,7 @@ import {
 } from "../../services/crmApi";
 import DashboardMetricStrip from "./DashboardMetricStrip";
 import DashboardIntegrationReadinessPanel from "./DashboardIntegrationReadinessPanel";
+import { blingStatePresentation, isApprovedBlingAuthorizationUrl } from "../integrations/blingConnectionState";
 import {
   Button as UiButton,
   EmptyState as UiEmptyState,
@@ -507,6 +508,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
     setBlingMessage("");
     try {
       const result = await iniciarConexaoBling();
+      if (!isApprovedBlingAuthorizationUrl(result.authorizationUrl)) throw new Error("A URL de autorização retornada pelo Bling não é segura.");
       window.location.href = result.authorizationUrl;
     } catch (error) {
       setBlingMessage(errorText(error, "Não foi possível iniciar a conexão com o Bling."));
@@ -1103,8 +1105,7 @@ function BlingSection({
 }) {
   const active = integrations.find((item) => item.tipo === "BLING" && item.ativo && item.possuiCredenciais && item.status === "ATIVA");
   const latest = active ?? integrations.find((item) => item.tipo === "BLING");
-  const statusLabel = active ? (active.status === "ERRO" ? "Conectado com erro" : "Conectado") : latest ? "Desconectado" : "Não conectado";
-  const status = active ? (active.status === "ERRO" ? "erro" : "conectado") : latest ? "desconectado" : "indisponivel";
+  const presentation = blingStatePresentation(latest);
 
   return (
     <UiSurface className="min-w-0 overflow-hidden">
@@ -1125,7 +1126,7 @@ function BlingSection({
         )}
         description="Produtos e estoque em modo de leitura. As ações de conexão respeitam as permissões administrativas existentes."
         icon={<PlugZap size={15} />}
-        status={<UiStatusBadge label={statusLabel} status={status} />}
+        status={<UiStatusBadge label={presentation.label} status={presentation.status} />}
         title="Bling"
       />
       <div className="grid gap-2 px-4 py-3 md:grid-cols-4">

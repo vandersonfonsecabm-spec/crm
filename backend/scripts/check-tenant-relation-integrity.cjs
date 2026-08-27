@@ -84,6 +84,7 @@ const relationSpecs = Object.freeze([
   ["commercial", "HistoricoPropostaComercial", "propostaId", "PropostaComercial"],
   ["commercial", "HistoricoPropostaComercial", "autorId", "Usuario"],
   ["shared-channel", "EventoWebhook", "canalIntegracaoId", "CanalIntegracao"],
+  ["email-delivery", "EmailDeliveryEvent", "deliveryId", "EmailDeliveryOutbox"],
   ["automation", "AutomacaoRegra", "createdById", "Usuario"],
   ["automation", "AutomacaoRegra", "updatedById", "Usuario"],
   ["automation", "AutomacaoExecucao", "regraId", "AutomacaoRegra"],

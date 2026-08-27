@@ -5,10 +5,13 @@ const test = require("node:test");
 const {
   MockCommerceAIConnection,
   UnconfiguredCommerceAIConnection,
+  createSyntheticTestCommerceAIConnection,
+  invokeCommercialDecision,
 } = require("../src/ai-commerce/connection");
 const { createCommercialToolRegistry } = require("../src/ai-commerce/tools");
 const { createAICommerceOrchestrator } = require("../src/ai-commerce/orchestrator");
 const { createAICommerceAudit } = require("../src/ai-commerce/audit");
+const { createApprovalTokenService } = require("../src/ai-commerce/approval-token");
 const { publicRunInput, resolveRunContext, writeSettings } = require("../src/ai-commerce/routes");
 const { createAICommerceEffects } = require("../src/ai-commerce/effects");
 const { MODES, buildSanitizedContext, isAllowedHttpsUrl, sanitizeData } = require("../src/ai-commerce/policy");
@@ -65,10 +68,10 @@ test("human approval is tied to draft revision and conversation revision", async
     getSellableAvailability: async () => ({ offerId: "offer-7", empresaId: 1, conversationId: 2, availabilityStatus: "AVAILABLE", customerSafeMessage: "Disponível." }),
   } });
   const orchestrator = createAICommerceOrchestrator({ connection, toolRegistry: tools, featureGate: async () => true });
-  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 8, messageRevision: 1, conversationRevision: 4, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Quero uma roçadeira", messages: [{ id: 8, direction: "INBOUND", text: "Quero uma roçadeira" }] });
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, actorUsuarioId: 2, messageId: 8, messageRevision: 1, conversationRevision: 4, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Quero uma roçadeira", messages: [{ id: 8, direction: "INBOUND", text: "Quero uma roçadeira" }] });
   assert.ok(run.draft?.draftId);
-  await assert.rejects(() => orchestrator.approve({ draftId: run.draft.draftId, action: "insertComposer", actorUsuarioId: 2, conversationRevision: 5, approvalToken: "a", idempotencyKey: "i" }), { code: "AI_DRAFT_CONVERSATION_CHANGED" });
-  const approved = await orchestrator.approve({ draftId: run.draft.draftId, action: "insertComposer", actorUsuarioId: 2, conversationRevision: 4, approvalToken: "a", idempotencyKey: "i" });
+  await assert.rejects(() => orchestrator.approve({ draftId: run.draft.draftId, action: "insertComposer", actorUsuarioId: 2, conversationRevision: 5, approvalToken: run.draft.approvalToken, idempotencyKey: "i" }), { code: "AI_DRAFT_CONVERSATION_CHANGED" });
+  const approved = await orchestrator.approve({ draftId: run.draft.draftId, action: "insertComposer", actorUsuarioId: 2, conversationRevision: 4, approvalToken: run.draft.approvalToken, idempotencyKey: "i" });
   assert.equal(approved.autoSend, false);
   assert.equal(approved.outbound, 0);
 });
@@ -82,9 +85,9 @@ test("draft approval persists tenant/revision state when the AI draft model is a
   };
   const tools = createCommercialToolRegistry({ services: {} });
   const orchestrator = createAICommerceOrchestrator({ prisma: { aICommerceDraft: draftModel }, connection: new MockCommerceAIConnection({ enabled: true, allowlist: [1] }), toolRegistry: tools, featureGate: async () => true });
-  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 9, conversationRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Quero uma roçadeira" });
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, actorUsuarioId: 2, messageId: 9, conversationRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Quero uma roçadeira" });
   assert.equal(run.draft.draftId, "draft-db-1");
-  await orchestrator.approve({ draftId: "draft-db-1", action: "insertComposer", actorUsuarioId: 2, conversationRevision: 1, approvalToken: "a", idempotencyKey: "idem-draft" });
+  await orchestrator.approve({ draftId: "draft-db-1", action: "insertComposer", actorUsuarioId: 2, conversationRevision: 1, approvalToken: run.draft.approvalToken, idempotencyKey: "idem-draft" });
   assert.equal(rows.get("draft-db-1").status, "APPROVED");
 });
 
@@ -248,10 +251,10 @@ test("concurrent human approvals claim one draft before side effects", async () 
       return { ok: true };
     },
   } });
-  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 12, messageRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, actorUsuarioId: 2, messageId: 12, messageRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
   const approvals = await Promise.allSettled([
-    orchestrator.approve({ draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 2, conversationRevision: "", approvalToken: "a", idempotencyKey: "a" }),
-    orchestrator.approve({ draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 2, conversationRevision: "", approvalToken: "b", idempotencyKey: "b" }),
+    orchestrator.approve({ draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 2, conversationRevision: "", approvalToken: run.draft.approvalToken, idempotencyKey: "approval-a" }),
+    orchestrator.approve({ draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 2, conversationRevision: "", approvalToken: run.draft.approvalToken, idempotencyKey: "approval-b" }),
   ]);
   assert.equal(effects, 1);
   assert.equal(approvals.filter((item) => item.status === "fulfilled").length, 1);
@@ -262,8 +265,8 @@ test("human can reject a draft without executing a tool", async () => {
   let executed = 0;
   const connection = { generateCommercialDecision: async () => ({ intent: "PRODUCT_SEARCH", confidence: 0.5, nextAction: "OFFER_READY", requestedTools: [], draftResponse: "Produto encontrado." }) };
   const orchestrator = createAICommerceOrchestrator({ connection, featureGate: async () => true, toolRegistry: { execute: async () => { executed += 1; return {}; } } });
-  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 13, messageRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
-  const rejected = await orchestrator.reject({ draftId: run.draft.draftId, empresaId: 1, conversationRevision: "", actorUsuarioId: 2, approvalToken: "reject", idempotencyKey: "reject-1" });
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, actorUsuarioId: 2, messageId: 13, messageRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
+  const rejected = await orchestrator.reject({ draftId: run.draft.draftId, empresaId: 1, conversationRevision: "", actorUsuarioId: 2, approvalToken: run.draft.approvalToken, idempotencyKey: "reject-1" });
   assert.equal(rejected.status, "REJECTED");
   assert.equal(executed, 0);
 });
@@ -272,10 +275,10 @@ test("sequential in-memory approval replay is rejected after the first effect", 
   let effects = 0;
   const connection = { generateCommercialDecision: async () => ({ intent: "PRODUCT_SEARCH", confidence: 0.5, nextAction: "OFFER_READY", requestedTools: [], draftResponse: "Produto encontrado." }) };
   const orchestrator = createAICommerceOrchestrator({ connection, featureGate: async () => true, toolRegistry: { execute: async () => { effects += 1; return {}; } } });
-  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, messageId: 14, messageRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
-  const input = { draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 2, conversationRevision: "", approvalToken: "a", idempotencyKey: "a" };
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, actorUsuarioId: 2, messageId: 14, messageRevision: 1, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
+  const input = { draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 2, conversationRevision: "", approvalToken: run.draft.approvalToken, idempotencyKey: "approval-sequential" };
   await orchestrator.approve(input);
-  await assert.rejects(() => orchestrator.approve({ ...input, approvalToken: "b", idempotencyKey: "b", draftRevision: 2 }), { code: "AI_DRAFT_CONFLICT" });
+  await assert.rejects(() => orchestrator.approve({ ...input, idempotencyKey: "approval-replay", draftRevision: 2 }), { code: "AI_DRAFT_CONFLICT" });
   assert.equal(effects, 1);
 });
 
@@ -507,4 +510,186 @@ test("audit de ferramenta promove contexto tenant-scoped para a linha Prisma", a
   const audit = createAICommerceAudit({ prisma: { aICommerceToolInvocation: model }, logger: { info() {}, warn() {} } });
   await audit.recordToolInvocation({ name: "searchCommercialCatalog", classification: "READ", context: { empresaId: 1, conversationId: 2, runId: "run-tool", correlationId: "corr-tool" }, input: {}, output: {}, status: "SUCCEEDED" });
   assert.equal(captured.correlationId, "corr-tool");
+});
+
+test("provider-neutral boundary rejects unknown output fields and times out with abort", async () => {
+  await assert.rejects(
+    () => invokeCommercialDecision({ generateCommercialDecision: async () => ({ nextAction: "HANDOFF", leakedSecret: "x" }) }, {}, { timeoutMs: 100 }),
+    { code: "AI_CONNECTION_RESPONSE_INVALID" },
+  );
+  await assert.rejects(
+    () => invokeCommercialDecision({ generateCommercialDecision: async () => ({ schemaVersion: "Unexpected.v1", nextAction: "HANDOFF" }) }, {}, { timeoutMs: 100 }),
+    { code: "AI_CONNECTION_RESPONSE_INVALID" },
+  );
+  await assert.rejects(
+    () => invokeCommercialDecision({ generateCommercialDecision: async () => ({ nextAction: "HANDOFF", correlationId: "wrong" }) }, { correlationId: "expected" }, { timeoutMs: 100 }),
+    { code: "AI_CONNECTION_RESPONSE_INVALID" },
+  );
+
+  let aborted = false;
+  let cancelled = false;
+  const hanging = {
+    generateCommercialDecision: ({ signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener("abort", () => { aborted = true; reject(new Error("aborted")); }, { once: true });
+    }),
+    cancel: async () => { cancelled = true; },
+  };
+  await assert.rejects(() => invokeCommercialDecision(hanging, { runId: "run-timeout" }, { timeoutMs: 50 }), { code: "AI_CONNECTION_TIMEOUT" });
+  assert.equal(aborted, true);
+  assert.equal(cancelled, true);
+});
+
+test("synthetic transport is injectable only in test and never reports a real provider", async () => {
+  assert.throws(
+    () => createSyntheticTestCommerceAIConnection({ env: { NODE_ENV: "production" }, allowlist: [1], transport: async () => ({ nextAction: "HANDOFF" }) }),
+    /AI_SYNTHETIC_TRANSPORT_TEST_ONLY/,
+  );
+  const connection = createSyntheticTestCommerceAIConnection({
+    env: { NODE_ENV: "test" },
+    allowlist: [1],
+    transport: async () => ({ intent: "UNKNOWN", confidence: "LOW", nextAction: "HANDOFF", requestedTools: [] }),
+  });
+  const status = connection.getConnectionStatus({ empresaId: 1 });
+  assert.equal(status.status, "READY");
+  assert.equal(status.realProviderConnected, false);
+  assert.equal(status.networkEnabled, false);
+  const decision = await invokeCommercialDecision(connection, { empresaId: 1 }, { timeoutMs: 100 });
+  assert.equal(decision.nextAction, "HANDOFF");
+});
+
+test("real connector readiness is distinct from mock readiness without enabling outbound", async () => {
+  const connection = {
+    getConnectionStatus: async () => ({ status: "READY", providerConnected: true, realProviderConnected: true, realConnectorImplemented: true, networkEnabled: true, autoReplyEnabled: false }),
+    generateCommercialDecision: async () => ({ intent: "UNKNOWN", confidence: "LOW", nextAction: "HANDOFF", requestedTools: [], draftResponse: "Encaminhar para vendedor." }),
+  };
+  const orchestrator = createAICommerceOrchestrator({
+    connection,
+    toolRegistry: { execute: async () => null, reset() {} },
+    featureGate: async () => true,
+    settingsResolver: async () => ({ enabled: true, mode: MODES.SUGGESTION_ONLY, mockEnabled: false, revision: 1 }),
+  });
+  const result = await orchestrator.run({ empresaId: 1, conversationId: 2, actorUsuarioId: 3, messageId: 4, mode: MODES.SUGGESTION_ONLY, latestMessage: "Ajuda" });
+  assert.equal(result.connectionStatus, "REAL_CONNECTED");
+  assert.equal(result.outbound, 0);
+  assert.equal(result.autoSend, false);
+});
+
+test("provider-neutral connector stays fail-closed when tenant feature or mode is OFF", async () => {
+  let calls = 0;
+  const connection = {
+    getConnectionStatus: async () => ({ status: "READY", providerConnected: true, realProviderConnected: true, realConnectorImplemented: true, networkEnabled: true }),
+    generateCommercialDecision: async () => { calls += 1; return { nextAction: "HANDOFF" }; },
+  };
+  const featureOff = createAICommerceOrchestrator({ connection, toolRegistry: { execute: async () => null }, featureGate: async () => false, settingsResolver: async () => ({ enabled: true, mode: MODES.SUGGESTION_ONLY, revision: 1 }) });
+  const disabledByFeature = await featureOff.run({ empresaId: 1, conversationId: 2, messageId: 4, mode: MODES.SUGGESTION_ONLY });
+  assert.equal(disabledByFeature.noExecution, true);
+  const modeOff = createAICommerceOrchestrator({ connection, toolRegistry: { execute: async () => null }, featureGate: async () => true, settingsResolver: async () => ({ enabled: false, mode: MODES.OFF, revision: 1 }) });
+  const disabledByMode = await modeOff.run({ empresaId: 1, conversationId: 2, messageId: 4, mode: MODES.OFF });
+  assert.equal(disabledByMode.noExecution, true);
+  assert.equal(calls, 0);
+});
+
+test("approval token is server-issued and bound to tenant, conversation, draft, revision and actor", async () => {
+  let effects = 0;
+  const orchestrator = createAICommerceOrchestrator({
+    connection: { generateCommercialDecision: async () => ({ intent: "PRODUCT_SEARCH", confidence: "LOW", nextAction: "OFFER_READY", requestedTools: [], draftResponse: "Produto encontrado." }) },
+    toolRegistry: { execute: async () => { effects += 1; return { ok: true }; } },
+    featureGate: async () => true,
+  });
+  const run = await orchestrator.run({ empresaId: 1, conversationId: 2, actorUsuarioId: 7, messageId: 15, mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
+  assert.match(run.draft.approvalToken, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+  await assert.rejects(
+    () => orchestrator.approve({ draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 8, conversationRevision: "", approvalToken: run.draft.approvalToken, idempotencyKey: "wrong-actor" }),
+    { code: "AI_APPROVAL_TOKEN_CONTEXT_MISMATCH" },
+  );
+  await assert.rejects(
+    () => orchestrator.approve({ draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 7, conversationRevision: "", approvalToken: `${run.draft.approvalToken}x`, idempotencyKey: "forged-token" }),
+    { code: "AI_APPROVAL_TOKEN_INVALID" },
+  );
+  const approved = await orchestrator.approve({ draftId: run.draft.draftId, action: "registerProductInterest", actorUsuarioId: 7, conversationRevision: "", approvalToken: run.draft.approvalToken, idempotencyKey: "valid-approval" });
+  assert.equal(approved.status, "APPROVED");
+  assert.equal(effects, 1);
+});
+
+test("approval token rejects every altered claim and expiration", () => {
+  let now = new Date("2026-08-27T12:00:00.000Z");
+  const service = createApprovalTokenService({ secret: "x".repeat(32), clock: () => now, ttlMs: 60_000 });
+  const claims = { draftId: "draft-claims-1", empresaId: 1, conversationId: 2, revision: 3, actorUsuarioId: 4 };
+  const token = service.issue(claims);
+  assert.equal(service.verify(token, claims).draftId, claims.draftId);
+  for (const changed of [
+    { ...claims, draftId: "draft-claims-2" },
+    { ...claims, empresaId: 9 },
+    { ...claims, conversationId: 9 },
+    { ...claims, revision: 9 },
+    { ...claims, actorUsuarioId: 9 },
+  ]) assert.throws(() => service.verify(token, changed), { code: "AI_APPROVAL_TOKEN_CONTEXT_MISMATCH" });
+  now = new Date("2026-08-27T12:01:01.000Z");
+  assert.throws(() => service.verify(token, claims), { code: "AI_APPROVAL_TOKEN_EXPIRED" });
+});
+
+test("persisted idempotent replay restores the final response and issues a fresh actor-bound token", async () => {
+  const persisted = {
+    id: "run-persisted",
+    empresaId: 1,
+    conversationId: 2,
+    idempotencyKey: "persisted-replay",
+    status: "COMPLETED",
+    eventJson: JSON.stringify({ result: {
+      runId: "run-persisted",
+      empresaId: 1,
+      conversationId: 2,
+      mode: MODES.HUMAN_APPROVAL,
+      status: "COMPLETED",
+      connectionStatus: "NOT_CONNECTED",
+      draft: { draftId: "draft-persisted", empresaId: 1, conversationId: 2, revision: 1, text: "Resposta persistida", productOffers: [], requiresHumanApproval: true },
+      outbound: 0,
+      autoSend: false,
+    } }),
+  };
+  const orchestrator = createAICommerceOrchestrator({
+    prisma: { aiCommerceRun: { findFirst: async () => persisted, create: async () => { throw new Error("create should not run"); } } },
+    connection: new UnconfiguredCommerceAIConnection(),
+    toolRegistry: { execute: async () => null, reset() {} },
+    featureGate: async () => true,
+  });
+  const replay = await orchestrator.run({ empresaId: 1, conversationId: 2, actorUsuarioId: 9, messageId: 16, idempotencyKey: "persisted-replay", mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Produto" });
+  assert.equal(replay.idempotentReplay, true);
+  assert.equal(replay.draft.text, "Resposta persistida");
+  assert.match(replay.draft.approvalToken, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+});
+
+test("completed run audit persists a bounded replay snapshot consumed after restart", async () => {
+  let row = null;
+  const runModel = {
+    findFirst: async ({ where }) => row && row.empresaId === where.empresaId && (!where.conversationId || row.conversationId === where.conversationId) && (!where.idempotencyKey || row.idempotencyKey === where.idempotencyKey) ? row : null,
+    create: async ({ data }) => { row = { ...data, eventJson: data.eventJson || "{}", revision: 1 }; return row; },
+    update: async ({ data }) => { row = { ...row, ...data, revision: Number(row.revision || 1) + Number(data.revision?.increment || 0) }; return row; },
+  };
+  const prisma = { aiCommerceRun: runModel };
+  const approvalTokenService = createApprovalTokenService({ secret: "stable-replay-secret" });
+  const first = createAICommerceOrchestrator({
+    prisma,
+    approvalTokenService,
+    audit: createAICommerceAudit({ prisma, logger: { info() {}, warn() {} } }),
+    connection: { generateCommercialDecision: async () => ({ intent: "UNKNOWN", confidence: "LOW", nextAction: "HANDOFF", draftResponse: "Resposta duravel." }) },
+    toolRegistry: { execute: async () => null, reset() {} },
+    featureGate: async () => true,
+  });
+  const input = { empresaId: 1, conversationId: 2, actorUsuarioId: 3, messageId: 17, idempotencyKey: "restart-replay", mode: MODES.HUMAN_APPROVAL, enabled: true, mockEnabled: true, latestMessage: "Ajuda" };
+  const created = await first.run(input);
+  assert.equal(created.draft.text, "Resposta duravel.");
+  assert.equal(JSON.parse(row.eventJson).result.draft.approvalToken, undefined);
+
+  const restarted = createAICommerceOrchestrator({
+    prisma,
+    approvalTokenService,
+    connection: new UnconfiguredCommerceAIConnection(),
+    toolRegistry: { execute: async () => null, reset() {} },
+    featureGate: async () => true,
+  });
+  const replay = await restarted.run(input);
+  assert.equal(replay.idempotentReplay, true);
+  assert.equal(replay.draft.text, "Resposta duravel.");
+  assert.match(replay.draft.approvalToken, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
 });

@@ -416,7 +416,7 @@ test("mapeamento ausente e falha pos-intake permanecem fechados e recuperaveis",
   });
   await assert.rejects(
     pausedOrchestrator(pausedPayload),
-    (error) => error.status === 409 && error.code === "WEBHOOK_PROCESSING_CONFLICT",
+    (error) => error.status === 503 && error.code === "WEBHOOK_PROCESSING_UNAVAILABLE",
   );
   const pausedChannel = await prisma.canalIntegracao.findUniqueOrThrow({
     where: { id: pausedFixture.channel.id },

@@ -80,13 +80,13 @@ export default function CommerceSettingsPanel({ enabled = true }: { enabled?: bo
   if (!settings) return <Surface><EmptyState description="A configuração ainda não está disponível neste ambiente." icon={<Bot size={19} />} state="empty" title="Fundação não configurada" /></Surface>;
   if (!enabled) return <section aria-label="Configurações da IA Comercial" className="space-y-3" data-testid="ai-commerce-settings-panel"><Surface><div className="p-4"><h2 className="text-sm font-semibold text-[var(--text-primary)]">Fundação comercial OFF</h2><p className="mt-1 text-[11px] leading-4 text-[var(--text-secondary)]">O tenant não possui a capacidade AI_COMMERCE habilitada. Nenhum endpoint de IA é chamado e nenhum provedor real está conectado.</p></div></Surface></section>;
 
-  const connectionReady = connection?.status === "MOCK_AVAILABLE";
+  const connectionPresentation = aiConnectionPresentation(connection);
   return <section aria-label="Configurações da IA Comercial" className="space-y-3" data-testid="ai-commerce-settings-panel">
     <Surface>
-      <SectionHeader actions={<Button disabled={busy} leftIcon={<RefreshCw size={13} />} onClick={() => void load()} size="sm" variant="ghost">Atualizar</Button>} description="A conexão real ainda não foi escolhida. Esta tela configura apenas o comportamento tenant-scoped da fundação." icon={<Bot size={16} />} title="IA Comercial" status={<Badge variant={settings.mode === "OFF" ? "neutral" : "primary"}>{modeLabel(settings.mode)}</Badge>} />
+      <SectionHeader actions={<Button disabled={busy} leftIcon={<RefreshCw size={13} />} onClick={() => void load()} size="sm" variant="ghost">Atualizar</Button>} description={connectionPresentation.realConnected ? "O backend confirmou o provider e o conector real; a política tenant-scoped continua controlando o uso." : "Nenhum provider real operacional foi confirmado. Esta tela configura apenas o comportamento tenant-scoped da fundação."} icon={<Bot size={16} />} title="IA Comercial" status={<Badge variant={settings.mode === "OFF" ? "neutral" : "primary"}>{modeLabel(settings.mode)}</Badge>} />
       <div className="grid gap-3 p-4 md:grid-cols-2">
-        <InfoCard icon={<LockKeyhole size={15} />} label="Provedor real" value="Não conectado" detail="Nenhuma chave é coletada nesta missão." />
-        <InfoCard icon={<Sparkles size={15} />} label="Conexão interna" value={connection?.status === "MOCK_AVAILABLE" ? "Mock disponível" : "Slot não configurado"} detail="Determinístico, sem rede e sem custo." tone={connectionReady ? "success" : "neutral"} />
+        <InfoCard icon={<LockKeyhole size={15} />} label="Provedor real" value={connectionPresentation.providerValue} detail={connectionPresentation.providerDetail} tone={connectionPresentation.realConnected ? "success" : "neutral"} />
+        <InfoCard icon={<Sparkles size={15} />} label="Conexão interna" value={connectionPresentation.connectorValue} detail={connectionPresentation.connectorDetail} tone={connectionPresentation.ready ? "success" : "neutral"} />
       </div>
     </Surface>
 
@@ -130,6 +130,47 @@ function PolicyRow({ label, value }: { label: string; value: string }) {
 
 function modeLabel(mode: AICommerceMode) {
   return mode === "SUGGESTION_ONLY" ? "Sugestão" : mode === "HUMAN_APPROVAL" ? "Aprovação humana" : mode === "SHADOW" ? "Shadow" : "OFF";
+}
+
+function aiConnectionPresentation(connection: AICommerceConnectionStatus | null) {
+  if (connection?.status === "REAL_CONNECTED" && connection.realProviderConnected && connection.realConnectorImplemented) {
+    return {
+      providerValue: "Conectado",
+      providerDetail: connection.autoReplyEnabled ? "Provider validado; respostas automáticas seguem a política do servidor." : "Provider validado; nenhum envio automático foi habilitado.",
+      connectorValue: "Conector real ativo",
+      connectorDetail: connection.message || "Conexão real confirmada pelo backend.",
+      realConnected: true,
+      ready: true,
+    };
+  }
+  if (connection?.status === "REAL_NOT_CONNECTED" || connection?.realProviderConnected) {
+    return {
+      providerValue: "Configuração incompleta",
+      providerDetail: "Há evidência do provider, mas o conector real ainda não está habilitado.",
+      connectorValue: "Conector indisponível",
+      connectorDetail: connection?.message || "Conclua a configuração server-side antes de usar o provider.",
+      realConnected: false,
+      ready: false,
+    };
+  }
+  if (connection?.status === "MOCK_AVAILABLE") {
+    return {
+      providerValue: "Não conectado",
+      providerDetail: "Nenhuma chave de provider real está em uso.",
+      connectorValue: "Mock disponível",
+      connectorDetail: "Determinístico, sem rede e sem custo.",
+      realConnected: false,
+      ready: true,
+    };
+  }
+  return {
+    providerValue: "Não conectado",
+    providerDetail: "Nenhuma chave de provider real está em uso.",
+    connectorValue: "Slot não configurado",
+    connectorDetail: connection?.message || "Nenhuma conexão interna está ativa.",
+    realConnected: false,
+    ready: false,
+  };
 }
 
 function settingsErrorMessage(error: unknown) {

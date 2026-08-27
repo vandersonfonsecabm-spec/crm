@@ -70,7 +70,10 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   });
 
   app.get("/integracoes/bling/callback", async (req, res) => {
-    const frontendUrl = String(process.env.FRONTEND_URL || "https://crm-murex-six-83.vercel.app").split(",")[0].trim();
+    let frontendUrl;
+    try { frontendUrl = frontendCallbackBase(process.env); } catch (error) {
+      return integrationError(res, error, "Callback do Bling indisponível.");
+    }
     try {
       const code = clean(req.query.code);
       const state = clean(req.query.state);
@@ -204,7 +207,10 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   });
 
   app.get("/integracoes/instagram/oauth/callback", async (req, res) => {
-    const frontendUrl = String(process.env.FRONTEND_URL || "https://crm-murex-six-83.vercel.app").split(",")[0].trim();
+    let frontendUrl;
+    try { frontendUrl = frontendCallbackBase(process.env); } catch (error) {
+      return integrationError(res, error, "Callback do Instagram indisponível.");
+    }
     res.set("Cache-Control", "no-store");
     res.set("Referrer-Policy", "no-referrer");
     try {
@@ -253,6 +259,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   app.post("/integracoes", ...requireAdmin, async (req, res) => {
     try {
       const payload = integrationPayload(req.body, { partial: false });
+      assertGenericIntegrationLifecycleAllowed(null, payload.data.tipo, req.body);
       const encrypted = payload.credentials ? encryptCredentials(payload.credentials) : null;
       const integracao = await prisma.integracao.create({
         data: {
@@ -277,6 +284,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     try {
       const atual = await findIntegrationOrThrow(prisma, req);
       const payload = integrationPayload(req.body, { partial: true });
+      assertGenericIntegrationLifecycleAllowed(atual.tipo, payload.data.tipo, req.body);
       const data = { ...payload.data };
 
       if (payload.credentials) {
@@ -894,6 +902,7 @@ function sanitizedError(error) {
 }
 
 function statusFromCode(code) {
+  if (code === "BLING_OAUTH_REQUIRED" || code === "BLING_LIFECYCLE_REQUIRED" || code === "INTEGRATION_OPERATION_IN_PROGRESS") return 409;
   if (code === "CONNECTOR_NOT_IMPLEMENTED") return 501;
   if (code === "BLING_NOT_CONFIGURED") return 501;
   if (code === "BLING_CREDENTIALS_REQUIRED" || code === "BLING_INVALID_STATE" || code === "BLING_AUTH_CODE_REQUIRED") return 400;
@@ -1025,11 +1034,52 @@ function stringifySafeConfig(value) {
     throw httpError(400, "Configuração deve ser um objeto JSON.", "INTEGRATION_CONFIG_INVALID");
   }
   assertNoSensitiveConfigKeys(parsed);
+  assertNoSensitiveConfigValues(parsed);
   const serialized = JSON.stringify(parsed);
   if (Buffer.byteLength(serialized, "utf8") > MAX_CONFIG_JSON_BYTES) {
     throw httpError(400, "Configuração excede o limite permitido.", "INTEGRATION_CONFIG_INVALID");
   }
   return serialized;
+}
+
+function assertNoSensitiveConfigValues(value, depth = 0) {
+  if (depth > 8) throw httpError(400, "Configuração profunda demais.", "INTEGRATION_CONFIG_INVALID");
+  if (typeof value === "string") {
+    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|[?&](?:api_key|client_secret|access_token|refresh_token|token)=[^&\s]+|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
+    if (sensitiveValue.test(value)) {
+      throw httpError(400, "Configuração contém valor sensível; use o armazenamento cifrado de credenciais.", "INTEGRATION_CONFIG_SENSITIVE_FIELD");
+    }
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const child of Object.values(value)) assertNoSensitiveConfigValues(child, depth + 1);
+}
+
+function assertGenericIntegrationLifecycleAllowed(currentType, requestedType, body = {}) {
+  const nextType = requestedType || currentType;
+  if (currentType !== "BLING" && nextType !== "BLING") return true;
+  if (!currentType && nextType === "BLING") {
+    throw httpError(409, "A integração Bling deve ser criada pelo fluxo OAuth dedicado.", "BLING_OAUTH_REQUIRED");
+  }
+  const allowedRenameOnly = currentType === "BLING"
+    && nextType === "BLING"
+    && Object.keys(body).every((field) => field === "nome");
+  if (!allowedRenameOnly) {
+    throw httpError(409, "O ciclo operacional do Bling deve usar as ações dedicadas.", "BLING_LIFECYCLE_REQUIRED");
+  }
+  return true;
+}
+
+function frontendCallbackBase(env = process.env) {
+  const raw = String(env.FRONTEND_URL || "").split(",")[0].trim();
+  if (!raw) throw httpError(503, "Frontend de callback não configurado.", "PROVIDER_FRONTEND_URL_REQUIRED");
+  let url;
+  try { url = new URL(raw); } catch { throw httpError(503, "Frontend de callback inválido.", "PROVIDER_FRONTEND_URL_INVALID"); }
+  const localDevelopment = env.NODE_ENV !== "production" && ["localhost", "127.0.0.1"].includes(url.hostname);
+  if ((!localDevelopment && url.protocol !== "https:") || (localDevelopment && !["http:", "https:"].includes(url.protocol)) || url.username || url.password || url.search || url.hash) {
+    throw httpError(503, "Frontend de callback inválido.", "PROVIDER_FRONTEND_URL_INVALID");
+  }
+  return url.origin;
 }
 
 function assertNoSensitiveConfigKeys(value, depth = 0) {
@@ -1143,6 +1193,8 @@ module.exports = {
     redactSensitiveConfig,
     safeAdapterErrorMessage,
     redactSensitiveText,
+    assertGenericIntegrationLifecycleAllowed,
+    frontendCallbackBase,
   },
 };
 

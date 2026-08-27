@@ -33,14 +33,16 @@ const SUPPORTED_STATES = new Set<WhatsAppConnectionState>([
 export function mapWhatsAppConnectionStatus(
   payload: WhatsappOperationalStatusResponse | null | undefined,
 ): WhatsAppConnectionStatus {
-  const state = normalizeState(payload);
+  const credentialConfigured = payload?.credentialConfigured === true;
+  const verifiedAt = optionalDate(payload?.verifiedAt);
+  const state = normalizeState(payload, { credentialConfigured, verifiedAt });
   return {
     state,
     canalIntegracaoId: positiveId(payload?.canalIntegracaoId),
-    credentialConfigured: payload?.credentialConfigured === true,
+    credentialConfigured,
     credentialRevision: Number.isSafeInteger(payload?.credentialRevision) && (payload?.credentialRevision || 0) > 0 ? payload!.credentialRevision! : null,
     connectedAt: optionalDate(payload?.connectedAt),
-    verifiedAt: optionalDate(payload?.verifiedAt),
+    verifiedAt,
     lastWebhookAt: optionalDate(payload?.lastWebhookAt),
     lastFailureAt: optionalDate(payload?.lastFailureAt),
   };
@@ -50,11 +52,15 @@ function positiveId(value: unknown) {
   return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : null;
 }
 
-function normalizeState(payload: WhatsappOperationalStatusResponse | null | undefined): WhatsAppConnectionState {
+function normalizeState(
+  payload: WhatsappOperationalStatusResponse | null | undefined,
+  evidence: { credentialConfigured: boolean; verifiedAt: string | null },
+): WhatsAppConnectionState {
   const rawStatus = typeof payload?.status === "string" ? payload.status.toUpperCase() : "";
   if (rawStatus === "CONFIGURED") {
-    return payload?.ready === true && optionalDate(payload.verifiedAt) ? "CONNECTED" : "CONFIGURED_INACTIVE";
+    return payload?.ready === true && evidence.credentialConfigured && evidence.verifiedAt ? "CONNECTED" : "CONFIGURED_INACTIVE";
   }
+  if (rawStatus === "CONNECTED" && (!evidence.credentialConfigured || !evidence.verifiedAt)) return "WAITING_META_AUTH";
   return SUPPORTED_STATES.has(rawStatus as WhatsAppConnectionState)
     ? rawStatus as WhatsAppConnectionState
     : "UNAVAILABLE";

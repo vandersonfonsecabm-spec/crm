@@ -102,12 +102,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260824150000_add_ai_commerce_catalog_foundation",
       "20260824160000_add_ai_commerce_persistent_audit_effects",
       "20260825170000_add_commercial_proposal_catalog_items",
+      "20260827200000_add_store1_provider_readiness",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260825170000_add_commercial_proposal_catalog_items",
+        "20260827200000_add_store1_provider_readiness",
         "migration.sql",
       ),
     );
@@ -209,6 +210,18 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(commercialProposalCatalogMigration, /FOREIGN KEY \("empresaId", "productOfferId"\) REFERENCES "ProductOffer"\("empresaId", "id"\) ON DELETE RESTRICT/);
     assert.match(commercialProposalCatalogMigration, /ItemPropostaComercial_catalog_contract_ck/);
     assert.doesNotMatch(commercialProposalCatalogMigration, /^\s*(?:DELETE|TRUNCATE|DROP TABLE)\b/im);
+    const providerReadinessMigration = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260827200000_add_store1_provider_readiness",
+      "migration.sql",
+    ), "utf8");
+    assert.match(providerReadinessMigration, /^BEGIN;\s*$/m);
+    assert.match(providerReadinessMigration, /OperacaoDistribuidaLease/);
+    assert.match(providerReadinessMigration, /WorkerCheckpoint/);
+    assert.match(providerReadinessMigration, /EmailDeliveryOutbox/);
+    assert.match(providerReadinessMigration, /EmailDeliveryEvent/);
+    assert.match(providerReadinessMigration, /nextAttemptAt/);
+    assert.doesNotMatch(providerReadinessMigration, /^\s*(?:DELETE|TRUNCATE|DROP TABLE)\b/im);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

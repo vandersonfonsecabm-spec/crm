@@ -22,7 +22,7 @@ function getBlingConfig() {
 
 function assertBlingConfigured() {
   const config = getBlingConfig();
-  if (!config.clientId || !config.clientSecret || !config.redirectUri) {
+  if (!config.clientId || !config.clientSecret || !isValidRedirectUri(config.redirectUri)) {
     throw blingError("BLING_NOT_CONFIGURED", "Conector Bling disponível para configuração. Defina as credenciais do aplicativo para conectar.");
   }
   return config;
@@ -38,16 +38,16 @@ function buildAuthorizationUrl({ state }) {
   return url.toString();
 }
 
-async function exchangeCodeForTokens(code) {
+async function exchangeCodeForTokens(code, { signal } = {}) {
   const config = assertBlingConfigured();
-  return tokenRequest({ grant_type: "authorization_code", code, redirect_uri: config.redirectUri });
+  return tokenRequest({ grant_type: "authorization_code", code, redirect_uri: config.redirectUri }, { signal });
 }
 
-async function refreshBlingTokens(refreshToken) {
-  return tokenRequest({ grant_type: "refresh_token", refresh_token: refreshToken });
+async function refreshBlingTokens(refreshToken, { signal } = {}) {
+  return tokenRequest({ grant_type: "refresh_token", refresh_token: refreshToken }, { signal });
 }
 
-async function revokeBlingToken(token, tokenTypeHint) {
+async function revokeBlingToken(token, tokenTypeHint, { signal } = {}) {
   if (!token) return { ok: false, skipped: true };
   const config = assertBlingConfigured();
   const body = new URLSearchParams();
@@ -61,11 +61,12 @@ async function revokeBlingToken(token, tokenTypeHint) {
       "User-Agent": USER_AGENT,
     },
     body,
+    signal,
   }, config.timeoutMs);
   return { ok: response.ok, status: response.status };
 }
 
-async function tokenRequest(params) {
+async function tokenRequest(params, { signal } = {}) {
   const config = assertBlingConfigured();
   const body = new URLSearchParams(params);
   const response = await fetchWithTimeout(BLING_TOKEN_URL, {
@@ -78,6 +79,7 @@ async function tokenRequest(params) {
       "enable-jwt": "1",
     },
     body,
+    signal,
   }, config.timeoutMs);
   const data = await safeJson(response);
   if (!response.ok) {
@@ -87,11 +89,13 @@ async function tokenRequest(params) {
 }
 
 class BlingHttpClient {
-  constructor({ credentials, onTokenRefresh, correlationId } = {}) {
+  constructor({ credentials, onTokenRefresh, correlationId, signal } = {}) {
     this.credentials = credentials || {};
     this.onTokenRefresh = onTokenRefresh;
     this.correlationId = correlationId || crypto.randomUUID();
     this.config = getBlingConfig();
+    this.signal = signal;
+    this.refreshPromise = null;
   }
 
   async testConnection() {
@@ -137,6 +141,7 @@ class BlingHttpClient {
         "User-Agent": USER_AGENT,
         "X-Correlation-Id": this.correlationId,
       },
+      signal: this.signal,
     }, this.config.timeoutMs);
 
     if (response.status === 401 && attempt === 0) {
@@ -165,14 +170,23 @@ class BlingHttpClient {
   }
 
   async refreshTokens() {
-    const tokens = await refreshBlingTokens(this.credentials.refreshToken);
-    this.credentials = {
-      ...this.credentials,
-      ...tokens,
-      refreshToken: tokens.refreshToken || this.credentials.refreshToken,
-      refreshedAt: new Date().toISOString(),
-    };
-    if (this.onTokenRefresh) await this.onTokenRefresh(this.credentials);
+    if (this.refreshPromise) return this.refreshPromise;
+    this.refreshPromise = (async () => {
+      const tokens = await refreshBlingTokens(this.credentials.refreshToken, { signal: this.signal });
+      this.credentials = {
+        ...this.credentials,
+        ...tokens,
+        refreshToken: tokens.refreshToken || this.credentials.refreshToken,
+        refreshedAt: new Date().toISOString(),
+      };
+      if (this.onTokenRefresh) await this.onTokenRefresh(this.credentials);
+      return this.credentials;
+    })();
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
   }
 }
 
@@ -209,14 +223,22 @@ function basicAuth(config) {
 
 async function fetchWithTimeout(url, options, timeoutMs) {
   const controller = new AbortController();
+  const externalSignal = options?.signal;
+  const abortFromExternal = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) abortFromExternal();
+  else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } catch (error) {
+    if (error?.name === "AbortError" && externalSignal?.aborted && externalSignal.reason instanceof Error) {
+      throw externalSignal.reason;
+    }
     if (error?.name === "AbortError") throw blingError("BLING_TIMEOUT", "Tempo de resposta do Bling excedido.");
     throw error;
   } finally {
     clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abortFromExternal);
   }
 }
 
@@ -230,7 +252,27 @@ async function safeJson(response) {
 
 function sanitizeBlingError(data, fallback) {
   const error = data?.error || data?.erro || data;
-  return clean(error?.description || error?.message || error?.type || data?.message || fallback);
+  const code = clean(error?.type || error?.code || data?.code).toLowerCase();
+  const safeMessages = {
+    invalid_client: "As credenciais do aplicativo Bling foram rejeitadas.",
+    invalid_grant: "A autorização do Bling expirou ou foi rejeitada.",
+    invalid_request: "O Bling rejeitou a solicitação de autenticação.",
+    unauthorized: "A autenticação do Bling foi rejeitada.",
+  };
+  return safeMessages[code] || fallback;
+}
+
+function isValidRedirectUri(value) {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) return false;
+    const local = ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase());
+    if (local && process.env.NODE_ENV === "production") return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function retryAfterMs(response) {
@@ -282,5 +324,5 @@ module.exports = {
   refreshBlingTokens,
   revokeBlingToken,
   blingError,
-  _private: { normalizeTokenResponse },
+  _private: { normalizeTokenResponse, sanitizeBlingError, isValidRedirectUri },
 };

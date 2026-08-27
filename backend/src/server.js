@@ -47,11 +47,11 @@ const { authContext } = require("./leads-communication/policy");
 const { mountSiteLeadAdminRoutes, mountSiteLeadPublicRoutes, siteLeadBodyLimit } = require("./site-leads/routes");
 const { assertIntegrationEncryptionReady } = require("./integrations/crypto");
 const { mountWhatsAppWebhookRoutes } = require("./integrations/whatsappWebhook");
-const { createWhatsAppWebhookOrchestrator } = require("./integrations/whatsappWebhookOrchestrator");
+const { createWhatsAppWebhookIntake } = require("./integrations/whatsappWebhookIntake");
 const { mountInstagramWebhookRoutes } = require("./integrations/instagramWebhook");
-const { createInstagramWebhookOrchestrator } = require("./integrations/instagramWebhookOrchestrator");
+const { createInstagramWebhookIntake } = require("./integrations/instagramWebhookIntake");
 const { mountMessengerWebhookRoutes } = require("./integrations/messengerWebhook");
-const { createMessengerWebhookOrchestrator } = require("./integrations/messengerWebhookOrchestrator");
+const { createMessengerWebhookIntake } = require("./integrations/messengerWebhookIntake");
 const { CANONICAL_CLIENT_STATUSES: CLIENT_LIFECYCLE_STATUSES, isPostgresRuntime, lockClienteRow } = require("./shared/clientLifecycleLock");
 const { getAllowedOrigins } = require("./security/origin-policy");
 
@@ -81,9 +81,9 @@ app.use(createMaintenanceReadOnlyMiddleware({
   env: process.env,
   mutatingGetPaths: ["/integracoes/bling/callback", "/integracoes/instagram/oauth/callback"],
 }));
-mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookOrchestrator({ prisma }) });
-mountInstagramWebhookRoutes({ app, processWebhook: createInstagramWebhookOrchestrator({ prisma }) });
-mountMessengerWebhookRoutes({ app, processWebhook: createMessengerWebhookOrchestrator({ prisma }) });
+mountWhatsAppWebhookRoutes({ app, processWebhook: createWhatsAppWebhookIntake({ prisma }) });
+mountInstagramWebhookRoutes({ app, processWebhook: createInstagramWebhookIntake({ prisma }) });
+mountMessengerWebhookRoutes({ app, processWebhook: createMessengerWebhookIntake({ prisma }) });
 app.use(siteLeadBodyLimit);
 // The stock route installs its bounded JSON parser after authentication. The
 // legacy parser deliberately excludes preview so unauthenticated requests are

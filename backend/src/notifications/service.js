@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 const { sanitizeStructured } = require("../stock/contracts");
+const { KEYS: WORKER_CHECKPOINT_KEYS, createWorkerCheckpointStore } = require("../shared/workerCheckpoint");
 
 const ACTIVE_FOLLOW_UP_STATUSES = ["PENDENTE", "EM_ANDAMENTO"];
 const MANAGER_ROLES = ["ADMIN", "GERENTE"];
@@ -21,9 +22,7 @@ const EFFECTIVE_TIME_ZONE = "America/Sao_Paulo";
 const TENANT_ALLOWLIST_ENV = "H8_NOTIFICATION_TENANT_ALLOWLIST";
 const STOCK_RULE_TYPES = new Set(["STOCK_LOT_EXPIRING", "STOCK_LOT_EXPIRED", "STOCK_DATA_STALE", "STOCK_SYNC_FAILED"]);
 
-function createNotificationService({ prisma, env = process.env, clock = () => new Date() } = {}) {
-  let tenantCursor = 0;
-  const sourceCursors = new Map();
+function createNotificationService({ prisma, env = process.env, clock = () => new Date(), checkpointStore = createWorkerCheckpointStore({ prisma }) } = {}) {
   function globallyEnabled() {
     const raw = String(env.H8_NOTIFICATIONS_ENABLED || "").trim().toLowerCase();
     return raw === "true" || raw === "1";
@@ -50,7 +49,8 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     const settings = await prisma.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId } });
     if (!settings?.habilitada) return { created: 0, updated: 0, resolved: 0, disabled: true };
     const sourceLimit = Math.min(Math.max(Number(limit) || MAX_SOURCE_ROWS, 1), MAX_SOURCE_ROWS);
-    const sourceCursor = sourceCursors.get(empresaId) || { followUp: null, conversation: null };
+    const sourceCheckpointKey = WORKER_CHECKPOINT_KEYS.notificationSources(empresaId);
+    const sourceCursor = notificationSourceCursor(await checkpointStore.read(sourceCheckpointKey));
     const [followUps, conversations] = await Promise.all([
       prisma.acompanhamento.findMany({
         where: { empresaId, status: { in: ACTIVE_FOLLOW_UP_STATUSES }, dataHora: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) }, ...followUpCursorWhere(sourceCursor.followUp) },
@@ -73,10 +73,6 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
         take: sourceLimit,
       }),
     ]);
-    sourceCursors.set(empresaId, {
-      followUp: followUps.length === sourceLimit ? { dataHora: followUps.at(-1).dataHora, id: followUps.at(-1).id } : null,
-      conversation: conversations.length === sourceLimit ? { ultimaMensagemEm: conversations.at(-1).ultimaMensagemEm, id: conversations.at(-1).id } : null,
-    });
     const userIds = new Set();
     followUps.forEach((item) => { if (Number.isInteger(item.responsavelId)) userIds.add(item.responsavelId); if (Number.isInteger(item.autorId)) userIds.add(item.autorId); });
     conversations.forEach((item) => { if (Number.isInteger(item.responsavelId)) userIds.add(item.responsavelId); });
@@ -156,6 +152,12 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     result.resolved += await resolveCompletedFollowUps(empresaId, now, prisma, userById, managers);
     result.resolved += await resolveCompletedConversations(empresaId, now, prisma, userById, managers);
     result.resolved += await resolveMissingTargets(prisma, { empresaId }, now);
+    const nextSourceCursor = {
+      followUp: followUps.length === sourceLimit ? { dataHora: followUps.at(-1).dataHora, id: followUps.at(-1).id } : null,
+      conversation: conversations.length === sourceLimit ? { ultimaMensagemEm: conversations.at(-1).ultimaMensagemEm, id: conversations.at(-1).id } : null,
+    };
+    if (nextSourceCursor.followUp || nextSourceCursor.conversation) await checkpointStore.write(sourceCheckpointKey, nextSourceCursor);
+    else await checkpointStore.clear(sourceCheckpointKey);
     return result;
   }
 
@@ -163,6 +165,9 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     const allowedTenantIds = parseTenantAllowlist(env[TENANT_ALLOWLIST_ENV]);
     if (!globallyEnabled() || !workerEnabled() || !allowedTenantIds.length) return { tenants: 0, created: 0, updated: 0, resolved: 0 };
     const batchLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+    const tenantCheckpointKey = WORKER_CHECKPOINT_KEYS.notificationTenants();
+    const tenantCheckpoint = await checkpointStore.read(tenantCheckpointKey);
+    const tenantCursor = positiveInteger(tenantCheckpoint?.tenantId, 0);
     const tenantWhere = { habilitada: true, empresaId: { in: allowedTenantIds } };
     let tenants = await prisma.configuracaoNotificacaoEmpresa.findMany({
       where: tenantCursor > 0 ? { ...tenantWhere, empresaId: { in: allowedTenantIds, gt: tenantCursor } } : tenantWhere,
@@ -171,7 +176,6 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
       select: { empresaId: true },
     });
     if (!tenants.length && tenantCursor > 0) {
-      tenantCursor = 0;
       tenants = await prisma.configuracaoNotificacaoEmpresa.findMany({ where: tenantWhere, orderBy: { empresaId: "asc" }, take: batchLimit, select: { empresaId: true } });
     }
     const total = { tenants: tenants.length, created: 0, updated: 0, resolved: 0 };
@@ -188,7 +192,10 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
         console.error("H8_NOTIFICATION_TENANT_FAILED", { empresaId: tenant.empresaId, code: error?.code || "UNKNOWN" });
       }
     }
-    if (tenants.length) tenantCursor = tenants[tenants.length - 1].empresaId;
+    if (!total.failed) {
+      if (tenants.length) await checkpointStore.write(tenantCheckpointKey, { tenantId: tenants.at(-1).empresaId });
+      else await checkpointStore.clear(tenantCheckpointKey);
+    }
     return total;
   }
 
@@ -699,6 +706,20 @@ function boundedText(value, max) {
 function positiveInteger(value, fallback) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function notificationSourceCursor(value) {
+  return {
+    followUp: notificationCursor(value?.followUp, "dataHora"),
+    conversation: notificationCursor(value?.conversation, "ultimaMensagemEm"),
+  };
+}
+
+function notificationCursor(value, field) {
+  const id = positiveInteger(value?.id, null);
+  const date = value?.[field] ? new Date(value[field]) : null;
+  if (!id || !date || !Number.isFinite(date.getTime())) return null;
+  return { id, [field]: date };
 }
 
 function parseId(value) {

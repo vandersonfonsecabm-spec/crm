@@ -368,7 +368,7 @@ test("pausa entre intake e processor bloqueia conclusao sem marcar falha", async
 
   await assert.rejects(
     pausedOrchestrator(payload),
-    (error) => error.status === 409 && error.code === "WEBHOOK_PROCESSING_CONFLICT",
+    (error) => error.status === 503 && error.code === "WEBHOOK_PROCESSING_UNAVAILABLE",
   );
   const channel = await prisma.canalIntegracao.findUniqueOrThrow({ where: { id: fixture.channel.id } });
   assert.equal(channel.lastFailureAt, null);

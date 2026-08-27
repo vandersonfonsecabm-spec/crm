@@ -23,7 +23,7 @@ const command = process.argv.slice(2);
 const metaSandboxOnly = command[0] === "meta-suite";
 const expectedHash = "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533";
 const expectedSize = 1282048;
-const expectedMigrationCount = 40;
+const expectedMigrationCount = 41;
 const historicalMigrationCount = 9;
 const prismaCli = resolvePrismaCli();
 const prismaConfigModule = require.resolve("prisma/config", { paths: [backendDir] });
@@ -199,13 +199,20 @@ function runRequestedCommand(args, env) {
     const testsDir = path.join(backendDir, "tests");
     const suiteDir = path.join(runDir, "test-databases");
     fs.mkdirSync(suiteDir, { recursive: true });
-    const testFiles = fs.readdirSync(testsDir)
+    let testFiles = fs.readdirSync(testsDir)
       .filter((name) => name.endsWith(".test.js"))
       // The canonical runner is SQLite-only. PostgreSQL relations run only in
       // the separately isolated disposable-Postgres gate; never coerce that
       // test into the SQLite sandbox or consume an ambient URL implicitly.
       .filter((name) => !name.endsWith("-postgres.test.js"))
       .sort();
+    const startAt = String(process.env.CRM_TEST_START_AT || "").trim();
+    if (startAt) {
+      if (!/^[A-Za-z0-9._-]+\.test\.js$/.test(startAt) || !testFiles.includes(startAt)) {
+        throw new Error("CRM_TEST_START_AT deve nomear um teste canonico existente.");
+      }
+      testFiles = testFiles.slice(testFiles.indexOf(startAt));
+    }
     for (const name of testFiles) {
       const isolatedDb = path.join(suiteDir, `${name}.db`);
       fs.copyFileSync(testDb, isolatedDb, fs.constants.COPYFILE_EXCL);

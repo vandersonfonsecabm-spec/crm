@@ -4,6 +4,8 @@ const crypto = require("node:crypto");
 
 const CONNECTION_SCHEMA_VERSION = "CommerceAIConnectionPort.v1";
 const DECISION_SCHEMA_VERSION = "CommerceAIDecision.v1";
+const DEFAULT_CONNECTION_TIMEOUT_MS = 8_000;
+const MAX_CONNECTION_TIMEOUT_MS = 30_000;
 const CONNECTION_STATUSES = Object.freeze({
   NOT_CONNECTED: "NOT_CONNECTED",
   READY: "READY",
@@ -244,6 +246,156 @@ class MockCommerceAIConnection {
   }
 }
 
+function createSyntheticTestCommerceAIConnection({ transport, env = process.env, allowlist = [] } = {}) {
+  if (String(env?.NODE_ENV || "").toLowerCase() !== "test") throw new Error("AI_SYNTHETIC_TRANSPORT_TEST_ONLY");
+  if (typeof transport !== "function") throw new Error("AI_SYNTHETIC_TRANSPORT_REQUIRED");
+  const tenants = new Set(normalizeTenantIds(allowlist));
+  return Object.freeze({
+    getConnectionStatus(input = {}) {
+      const tenantAllowed = isTenantAllowed(input.empresaId, tenants);
+      return Object.freeze({
+        schemaVersion: CONNECTION_SCHEMA_VERSION,
+        status: tenantAllowed ? CONNECTION_STATUSES.READY : CONNECTION_STATUSES.BLOCKED,
+        providerConnected: false,
+        realConnector: false,
+        realProviderConnected: false,
+        realConnectorImplemented: false,
+        autoReplyEnabled: false,
+        mock: true,
+        synthetic: true,
+        networkEnabled: false,
+        tenantAllowed,
+        reason: tenantAllowed ? null : "SYNTHETIC_NOT_ALLOWLISTED",
+      });
+    },
+    async validateConnection(input = {}) {
+      const status = this.getConnectionStatus(input);
+      return Object.freeze({ valid: status.status === CONNECTION_STATUSES.READY, status: status.status, networkAttempted: false, synthetic: true });
+    },
+    async generateCommercialDecision(input = {}) {
+      const status = this.getConnectionStatus(input);
+      if (status.status !== CONNECTION_STATUSES.READY) throw new CommerceAIConnectionError("AI_SYNTHETIC_DISABLED", "Transporte sintetico indisponivel.", undefined, 404);
+      return transport(input);
+    },
+    async cancel(runId) {
+      return Object.freeze({ cancelled: true, runId: String(runId || "").slice(0, 128), providerCall: false, synthetic: true });
+    },
+  });
+}
+
+async function invokeCommercialDecision(connection, input = {}, { timeoutMs = DEFAULT_CONNECTION_TIMEOUT_MS } = {}) {
+  if (!connection || typeof connection.generateCommercialDecision !== "function") {
+    throw new CommerceAIConnectionError("AI_CONNECTION_PORT_INVALID", "Conector comercial invalido.", undefined, 503);
+  }
+  const timeout = Math.min(MAX_CONNECTION_TIMEOUT_MS, Math.max(50, Number(timeoutMs) || DEFAULT_CONNECTION_TIMEOUT_MS));
+  const controller = new AbortController();
+  let timer;
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort(new Error("AI_CONNECTION_TIMEOUT"));
+      Promise.resolve(connection.cancel?.(input.runId)).catch(() => undefined);
+      reject(new CommerceAIConnectionError("AI_CONNECTION_TIMEOUT", "O conector comercial excedeu o tempo limite.", undefined, 504));
+    }, timeout);
+    timer.unref?.();
+  });
+  try {
+    const raw = await Promise.race([
+      Promise.resolve().then(() => connection.generateCommercialDecision({ ...input, signal: controller.signal })),
+      timeoutPromise,
+    ]);
+    const normalized = normalizeCommercialDecision(raw);
+    const expectedCorrelationId = typeof input.correlationId === "string" ? input.correlationId.slice(0, 128) : "";
+    if (normalized.correlationId && expectedCorrelationId && normalized.correlationId !== expectedCorrelationId) throw invalidResponse();
+    return expectedCorrelationId ? Object.freeze({ ...normalized, correlationId: expectedCorrelationId }) : normalized;
+  } catch (error) {
+    if (error instanceof CommerceAIConnectionError) throw error;
+    throw new CommerceAIConnectionError("AI_CONNECTION_FAILED", "O conector comercial falhou de forma controlada.", undefined, 503);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function normalizeCommercialDecision(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new CommerceAIConnectionError("AI_CONNECTION_RESPONSE_INVALID", "Resposta do conector comercial invalida.", undefined, 502);
+  }
+  const allowed = new Set([
+    "schemaVersion", "connectorVersion", "intent", "confidence", "nextAction", "missingInformation",
+    "requestedTools", "draftResponse", "offerIds", "handoffReason", "safetyFlags", "policyFlags", "correlationId",
+  ]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) {
+    throw new CommerceAIConnectionError("AI_CONNECTION_RESPONSE_INVALID", "Resposta do conector comercial contem campos nao permitidos.", undefined, 502);
+  }
+  if (value.schemaVersion !== undefined && value.schemaVersion !== DECISION_SCHEMA_VERSION) throw invalidResponse();
+  const intent = strictString(value.intent || "UNKNOWN", 80, true);
+  const nextAction = strictString(value.nextAction, 80, true);
+  const confidence = normalizeConfidence(value.confidence);
+  const requestedTools = strictToolRequests(value.requestedTools);
+  const draftResponse = value.draftResponse === null || value.draftResponse === undefined ? null : strictString(value.draftResponse, 2000, false);
+  const handoffReason = value.handoffReason === null || value.handoffReason === undefined ? null : strictString(value.handoffReason, 500, false);
+  return Object.freeze({
+    schemaVersion: DECISION_SCHEMA_VERSION,
+    connectorVersion: strictString(value.connectorVersion || "provider-neutral.v1", 80, false),
+    intent,
+    confidence,
+    nextAction,
+    missingInformation: strictStrings(value.missingInformation, 20, 120),
+    requestedTools,
+    draftResponse,
+    offerIds: strictReferenceIds(value.offerIds, 3),
+    handoffReason,
+    safetyFlags: strictStrings(value.safetyFlags, 20, 120),
+    policyFlags: strictStrings(value.policyFlags, 20, 120),
+    correlationId: strictString(value.correlationId || "", 128, false),
+  });
+}
+
+function strictToolRequests(value) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 5) throw invalidResponse();
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) throw invalidResponse();
+    const keys = Object.keys(item);
+    if (keys.some((key) => !["name", "version", "input"].includes(key))) throw invalidResponse();
+    if (item.input !== undefined && (!item.input || typeof item.input !== "object" || Array.isArray(item.input))) throw invalidResponse();
+    return Object.freeze({ name: strictString(item.name, 80, true), version: strictString(item.version || "v1", 30, false), input: sanitizeData(item.input || {}) });
+  });
+}
+
+function strictStrings(value, maxItems, maxLength) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > maxItems) throw invalidResponse();
+  return value.map((item) => strictString(item, maxLength, true));
+}
+
+function strictReferenceIds(value, maxItems) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > maxItems) throw invalidResponse();
+  return value.map((item) => {
+    const id = String(item || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(id)) throw invalidResponse();
+    return id;
+  });
+}
+
+function strictString(value, maxLength, required) {
+  if (typeof value !== "string") throw invalidResponse();
+  const text = value.replace(/[\u0000-\u001F\u007F]/g, "").trim();
+  if ((required && !text) || text.length > maxLength) throw invalidResponse();
+  return text;
+}
+
+function normalizeConfidence(value) {
+  if (["HIGH", "MEDIUM", "LOW", "UNKNOWN"].includes(value)) return value;
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1) return value;
+  if (value === undefined || value === null) return "UNKNOWN";
+  throw invalidResponse();
+}
+
+function invalidResponse() {
+  return new CommerceAIConnectionError("AI_CONNECTION_RESPONSE_INVALID", "Resposta do conector comercial invalida.", undefined, 502);
+}
+
 function decision(input = {}) {
   return Object.freeze({
     schemaVersion: DECISION_SCHEMA_VERSION,
@@ -387,10 +539,15 @@ function boundedToolRequests(value) {
 module.exports = {
   CONNECTION_SCHEMA_VERSION,
   DECISION_SCHEMA_VERSION,
+  DEFAULT_CONNECTION_TIMEOUT_MS,
+  MAX_CONNECTION_TIMEOUT_MS,
   CONNECTION_STATUSES,
   CommerceAIConnectionError,
   UnconfiguredCommerceAIConnection,
   MockCommerceAIConnection,
+  createSyntheticTestCommerceAIConnection,
+  invokeCommercialDecision,
+  normalizeCommercialDecision,
   containsPromptInjection,
   sanitizeData,
 };

@@ -15,7 +15,7 @@ const JWT_ISSUER = "crm-agro-saas-api";
 const JWT_AUDIENCE = "crm-agro-saas";
 const LOCAL_JWT_SECRET = "local-development-only-change-me";
 
-function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDelivery = createSecurityDelivery({ env: process.env }), allowedOrigins = [] }) {
+function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDelivery = null, allowedOrigins = [] }) {
   const production = process.env.NODE_ENV === "production";
   const railwayRuntime = Boolean(
     process.env.RAILWAY_SERVICE_ID
@@ -54,6 +54,7 @@ function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDe
     ),
   };
 
+  const resolvedSecurityDelivery = securityDelivery || createSecurityDelivery({ env: process.env, prisma });
   const security = createUserSecurity({
     prisma,
     jwt,
@@ -74,7 +75,7 @@ function createAuth({ prisma, loginRateLimiter, sensitiveRateLimiter, securityDe
     },
     production,
     reservedPlatformEmails: parsePlatformAdminEmails(process.env.PLATFORM_ADMIN_EMAILS),
-    securityDelivery,
+    securityDelivery: resolvedSecurityDelivery,
     sensitiveRateLimiter: securityLimiter,
   });
 

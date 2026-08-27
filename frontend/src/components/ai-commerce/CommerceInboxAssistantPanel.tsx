@@ -30,7 +30,7 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
   const [feedback, setFeedback] = useState("");
   const [busyAction, setBusyAction] = useState("");
   const [effectiveMode, setEffectiveMode] = useState<AICommerceMode>(mode);
-  const approvalKeys = useRef<Record<string, { approvalToken: string; idempotencyKey: string }>>({});
+  const approvalIdempotencyKeys = useRef<Record<string, string>>({});
 
   useEffect(() => {
     let ignore = false;
@@ -67,13 +67,18 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
 
   async function approve(action: "INSERT_COMPOSER" | "REGISTER_INTEREST" | "CREATE_OPPORTUNITY_DRAFT" | "HANDOFF") {
     if (!draft || draftStale || busyAction) return;
+    if (!draft.approvalToken) {
+      setError("O servidor não forneceu uma autorização válida para este rascunho. Gere uma nova sugestão.");
+      return;
+    }
     setBusyAction(action);
     setError("");
     setFeedback("");
     try {
-      const keys = approvalKeys.current[draft.id] ?? { approvalToken: `approval-${draft.id}`, idempotencyKey: `approval-${draft.id}-${action}` };
-      approvalKeys.current[draft.id] = keys;
-      const next = await approveAICommerceDraft(draft.id, { action, revision: draft.revision, conversationRevision: conversationRevision ?? undefined, ...keys });
+      const key = `${draft.id}:${action}`;
+      const idempotencyKey = approvalIdempotencyKeys.current[key] ?? `approval-${draft.id}-${action}`;
+      approvalIdempotencyKeys.current[key] = idempotencyKey;
+      const next = await approveAICommerceDraft(draft.id, { action, revision: draft.revision, conversationRevision: conversationRevision ?? undefined, approvalToken: draft.approvalToken, idempotencyKey });
       if (action === "INSERT_COMPOSER") {
         if (next.draft?.text && onInsertComposer) onInsertComposer(next.draft.text);
         setFeedback("Rascunho inserido no composer existente. O envio continua sendo uma ação humana separada.");
@@ -94,13 +99,18 @@ export default function CommerceInboxAssistantPanel({ conversationId, conversati
 
   async function reject() {
     if (!draft || draftStale || busyAction) return;
+    if (!draft.approvalToken) {
+      setError("O servidor não forneceu uma autorização válida para este rascunho. Gere uma nova sugestão.");
+      return;
+    }
     setBusyAction("REJECT");
     setError("");
     setFeedback("");
     try {
-      const keys = approvalKeys.current[draft.id] ?? { approvalToken: `approval-${draft.id}`, idempotencyKey: `reject-${draft.id}` };
-      approvalKeys.current[draft.id] = keys;
-      await rejectAICommerceDraft(draft.id, { revision: draft.revision, conversationRevision: conversationRevision ?? undefined, ...keys });
+      const key = `${draft.id}:REJECT`;
+      const idempotencyKey = approvalIdempotencyKeys.current[key] ?? `reject-${draft.id}`;
+      approvalIdempotencyKeys.current[key] = idempotencyKey;
+      await rejectAICommerceDraft(draft.id, { revision: draft.revision, conversationRevision: conversationRevision ?? undefined, approvalToken: draft.approvalToken, idempotencyKey });
       setResult((current) => current ? { ...current, draft: null } : current);
       setFeedback("Rascunho rejeitado e registrado na auditoria. Nenhuma ação foi executada.");
     } catch (nextError) {

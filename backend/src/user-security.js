@@ -244,14 +244,34 @@ function createUserSecurity({
     if (isSystemActor(usuario)) throw securityError("SYSTEM_ACTOR_RESERVED", 409);
     const rawToken = randomToken();
     const expiraEm = addMilliseconds(new Date(), resetMinutes * 60 * 1000);
-    await prisma.$transaction(async (tx) => {
+    const prepared = await withSerializableRetry(() => prisma.$transaction(async (tx) => {
+      const previousTokens = await tx.tokenRecuperacaoSenha.findMany({
+        where: { empresaId: usuario.empresaId, usuarioId: usuario.id, usadoEm: null, revogadoEm: null },
+        select: { id: true },
+      });
       await tx.tokenRecuperacaoSenha.updateMany({
         where: { empresaId: usuario.empresaId, usuarioId: usuario.id, usadoEm: null, revogadoEm: null },
         data: { revogadoEm: new Date() },
       });
-      await tx.tokenRecuperacaoSenha.create({
+      if (typeof delivery.cancelSources === "function" && previousTokens.length) {
+        await delivery.cancelSources({ tx, empresaId: usuario.empresaId, sourceType: "PASSWORD_RESET", sourceIds: previousTokens.map((item) => item.id) });
+      }
+      const resetToken = await tx.tokenRecuperacaoSenha.create({
         data: { empresaId: usuario.empresaId, usuarioId: usuario.id, tokenHash: hashToken(rawToken), expiraEm },
       });
+      const deliveryResult = typeof delivery.enqueue === "function"
+        ? await delivery.enqueue({
+          tx,
+          empresaId: usuario.empresaId,
+          kind: "PASSWORD_RESET",
+          sourceId: resetToken.id,
+          expectedRevision: resetToken.deliveryRevision,
+          recipient: usuario.email,
+          token: rawToken,
+          expiresAt: expiraEm,
+          correlationId: correlationId(req),
+        })
+        : null;
       await audit(tx, {
         empresaId: usuario.empresaId,
         actorUsuarioId: null,
@@ -261,8 +281,9 @@ function createUserSecurity({
         motivo: "Solicitacao de recuperacao registrada.",
         correlationId: correlationId(req),
       });
-    });
-    const result = await delivery.deliver({ kind: "PASSWORD_RESET", email: usuario.email, token: rawToken, expiresAt: expiraEm });
+      return { deliveryResult };
+    }, { isolationLevel: "Serializable" }));
+    const result = prepared.deliveryResult || await delivery.deliver({ kind: "PASSWORD_RESET", email: usuario.email, token: rawToken, expiresAt: expiraEm });
     return { status: result.status, expiresAt: expiraEm };
   }
 
@@ -288,6 +309,9 @@ function createUserSecurity({
       if (!target || !target.ativo) throw securityError("ACCOUNT_INACTIVE", 400);
       const consumed = await tx.tokenRecuperacaoSenha.updateMany({ where: { id: token.id, usadoEm: null, revogadoEm: null }, data: { usadoEm: now } });
       if (consumed.count !== 1) throw securityError("PASSWORD_RESET_INVALID", 400);
+      if (typeof delivery.cancelSources === "function") {
+        await delivery.cancelSources({ tx, empresaId: token.empresaId, sourceType: "PASSWORD_RESET", sourceIds: [token.id] });
+      }
       const updated = await tx.usuario.updateMany({ where: { id: token.usuarioId, empresaId: token.empresaId, ativo: true }, data: { senhaHash } });
       if (updated.count !== 1) throw securityError("ACCOUNT_INACTIVE", 400);
       const sessions = await tx.sessaoUsuario.findMany({ where: { empresaId: token.empresaId, usuarioId: token.usuarioId, revogadoEm: null }, select: { id: true } });
@@ -322,12 +346,25 @@ function createUserSecurity({
         const inviteRecord = existingInvite
           ? await tx.conviteUsuario.update({ where: { id: existingInvite.id }, data })
           : await tx.conviteUsuario.create({ data });
+        const deliveryResult = typeof delivery.enqueue === "function"
+          ? await delivery.enqueue({
+            tx,
+            empresaId,
+            kind: "USER_INVITE",
+            sourceId: inviteRecord.id,
+            expectedRevision: inviteRecord.deliveryRevision,
+            recipient: email,
+            token: rawToken,
+            expiresAt,
+            correlationId: correlationId(req),
+          })
+          : null;
         await audit(tx, { empresaId, actorUsuarioId, acao: pending ? "USER_INVITE_RESENT" : "USER_INVITE_CREATED", resultado: "SUCCESS", motivo: "Convite de usuario registrado.", correlationId: correlationId(req) });
-        return inviteRecord;
+        return { inviteRecord, deliveryResult };
       });
-      const deliveryResult = await delivery.deliver({ kind: "USER_INVITE", email, token: rawToken, expiresAt });
-      await prisma.conviteUsuario.updateMany({ where: { id: invite.id, empresaId }, data: { deliveryStatus: deliveryResult.status } });
-      return { kind: "created", invite: publicInvite(invite, deliveryResult.status) };
+      const deliveryResult = invite.deliveryResult || await delivery.deliver({ kind: "USER_INVITE", email, token: rawToken, expiresAt });
+      if (!invite.deliveryResult) await prisma.conviteUsuario.updateMany({ where: { id: invite.inviteRecord.id, empresaId }, data: { deliveryStatus: deliveryResult.status } });
+      return { kind: "created", invite: publicInvite(invite.inviteRecord, deliveryResult.status) };
     } catch (error) {
       if (error?.code === "P2002") throw securityError("INVITE_ALREADY_PENDING", 409);
       throw error;
@@ -361,6 +398,9 @@ function createUserSecurity({
           data: { aceitoEm: acceptedAt },
         });
         if (accepted.count !== 1) throw securityError("INVITE_INVALID", 400);
+        if (typeof delivery.cancelSources === "function") {
+          await delivery.cancelSources({ tx, empresaId: token.empresaId, sourceType: "USER_INVITE", sourceIds: [token.id] });
+        }
         const existing = await tx.usuario.findFirst({ where: { empresaId: token.empresaId, email: token.emailNormalizado } });
         if (existing) throw securityError("USER_ALREADY_EXISTS", 409);
         const created = await tx.usuario.create({ data: { empresaId: token.empresaId, nome: finalName, email: token.emailNormalizado, senhaHash, papel: token.papel, ativo: true }, select: publicUserSelect });
@@ -699,21 +739,47 @@ function createUserSecurity({
     if (!existing) return authError(res, 404, "Convite nao encontrado.", "INVITE_NOT_FOUND");
     const rawToken = randomToken();
     const expiraEm = addMilliseconds(new Date(), inviteHours * 60 * 60 * 1000);
-    const invite = await prisma.$transaction(async (tx) => {
-      const changed = await tx.conviteUsuario.updateMany({ where: { id, empresaId: req.auth.empresaId, aceitoEm: null, revogadoEm: null }, data: { convidadoPorId: req.auth.usuarioId, tokenHash: hashToken(rawToken), expiraEm, deliveryStatus: "PENDING_DELIVERY" } });
-      if (changed.count !== 1) throw securityError("INVITE_NOT_FOUND", 404);
+    let invite;
+    try {
+      invite = await prisma.$transaction(async (tx) => {
+      const changed = await tx.conviteUsuario.updateMany({ where: { id, empresaId: req.auth.empresaId, aceitoEm: null, revogadoEm: null, deliveryRevision: existing.deliveryRevision, tokenHash: existing.tokenHash }, data: { convidadoPorId: req.auth.usuarioId, tokenHash: hashToken(rawToken), expiraEm, deliveryStatus: "PENDING" } });
+      if (changed.count !== 1) throw securityError("INVITE_DELIVERY_CONFLICT", 409);
       const updated = await tx.conviteUsuario.findFirst({ where: { id, empresaId: req.auth.empresaId } });
+      const deliveryResult = typeof delivery.enqueue === "function"
+        ? await delivery.enqueue({
+          tx,
+          empresaId: req.auth.empresaId,
+          kind: "USER_INVITE",
+          sourceId: updated.id,
+          expectedRevision: updated.deliveryRevision,
+          recipient: updated.emailNormalizado,
+          token: rawToken,
+          expiresAt: expiraEm,
+          correlationId: correlationId(req),
+        })
+        : null;
       await audit(tx, { empresaId: req.auth.empresaId, actorUsuarioId: req.auth.usuarioId, acao: "USER_INVITE_RESENT", resultado: "SUCCESS", motivo: "Convite reenviado.", correlationId: correlationId(req) });
-      return updated;
-    });
-    const deliveryResult = await delivery.deliver({ kind: "USER_INVITE", email: invite.emailNormalizado, token: rawToken, expiresAt: expiraEm });
-    await prisma.conviteUsuario.updateMany({ where: { id, empresaId: req.auth.empresaId }, data: { deliveryStatus: deliveryResult.status } });
+      return { updated, deliveryResult };
+      });
+    } catch (error) {
+      if (error?.status) return authError(res, error.status, "Nao foi possivel reenviar o convite agora.", error.code);
+      logInternalError("Falha ao reenviar convite.", error);
+      return authError(res, 500, "Nao foi possivel reenviar o convite agora.", "INVITE_RESEND_ERROR");
+    }
+    const deliveryResult = invite.deliveryResult || await delivery.deliver({ kind: "USER_INVITE", email: invite.updated.emailNormalizado, token: rawToken, expiresAt: expiraEm });
+    if (!invite.deliveryResult) await prisma.conviteUsuario.updateMany({ where: { id, empresaId: req.auth.empresaId }, data: { deliveryStatus: deliveryResult.status } });
     return res.status(202).json({ ok: true, deliveryStatus: deliveryResult.status, expiresAt: expiraEm });
   }
 
   async function revokeInvite(req, res) {
     const id = String(req.params.id || "");
-    const result = await prisma.conviteUsuario.updateMany({ where: { id, empresaId: req.auth.empresaId, aceitoEm: null, revogadoEm: null }, data: { revogadoEm: new Date(), deliveryStatus: "REVOKED" } });
+    const result = await prisma.$transaction(async (tx) => {
+      const changed = await tx.conviteUsuario.updateMany({ where: { id, empresaId: req.auth.empresaId, aceitoEm: null, revogadoEm: null }, data: { revogadoEm: new Date(), deliveryStatus: "REVOKED" } });
+      if (changed.count === 1 && typeof delivery.cancelSources === "function") {
+        await delivery.cancelSources({ tx, empresaId: req.auth.empresaId, sourceType: "USER_INVITE", sourceIds: [id] });
+      }
+      return changed;
+    });
     if (result.count !== 1) return authError(res, 404, "Convite nao encontrado.", "INVITE_NOT_FOUND");
     await recordAudit({ empresaId: req.auth.empresaId, actorUsuarioId: req.auth.usuarioId, acao: "USER_INVITE_REVOKED", resultado: "SUCCESS", motivo: "Convite revogado.", correlationId: correlationId(req) });
     return res.json({ ok: true });
@@ -996,6 +1062,18 @@ function addMilliseconds(date, milliseconds) {
 
 function isRetryableConflict(error) {
   return ["P1008", "P2028", "P2034"].includes(error?.code) || /database is locked/i.test(String(error?.message || ""));
+}
+
+async function withSerializableRetry(operation) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isRetryableConflict(error) || attempt === 2) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 15 * (attempt + 1)));
+    }
+  }
+  throw securityError("SECURITY_TRANSACTION_CONFLICT", 409);
 }
 
 function publicEmpresa(empresa) {

@@ -59,17 +59,22 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
       { code: "TENANT_GATE_MIGRATION_PENDING" },
     );
 
-    fs.rmSync(path.join(workspace.migrationsDir, migrationNames.at(-1)), { recursive: true, force: true });
+    const finalMigrations = migrationNames.slice(-2);
+    for (const migrationName of finalMigrations) {
+      fs.rmSync(path.join(workspace.migrationsDir, migrationName), { recursive: true, force: true });
+    }
     runPrismaDeploy(workspace.schemaPath);
-    fs.cpSync(
-      path.join(sourceMigrations, migrationNames.at(-1)),
-      path.join(workspace.migrationsDir, migrationNames.at(-1)),
-      { recursive: true },
-    );
+    for (const migrationName of finalMigrations) {
+      fs.cpSync(
+        path.join(sourceMigrations, migrationName),
+        path.join(workspace.migrationsDir, migrationName),
+        { recursive: true },
+      );
+    }
     const preSeven = await runGate({ mode: "pre-migration", ...gateOptions });
     assert.equal(preSeven.safe, true);
-    // All prior catalog/stock migrations are applied here; only the four
-    // proposal-item relations that gain empresaId remain unavailable.
+    // The proposal catalog migration and readiness migration are pending;
+    // four proposal-item relations plus delivery-outbox are unavailable.
     assert.equal(preSeven.checkedRelationCount, 157);
 
     await seedLegacyProposalItem(client);
@@ -80,10 +85,10 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
     assert.equal(finalStatus.length, migrationNames.length);
     assert.equal(finalStatus.every((row) => row.finished && !row.rolledBack), true);
     assert.equal(post.safe, true);
-    assert.equal(post.checkedRelationCount, 161);
+    assert.equal(post.checkedRelationCount, 162);
     assert.deepEqual(post.totals, { orphaned: 0, crossed: 0 });
-    assert.equal(post.constraints.checkedForeignKeys, 243);
-    assert.equal(post.constraints.checkedUniqueParents, 30);
+    assert.equal(post.constraints.checkedForeignKeys, 247);
+    assert.equal(post.constraints.checkedUniqueParents, 31);
     const backfilled = (await client.query(
       'SELECT "empresaId", "itemType", "descricao", "productOfferId", "catalogProductId", "stockProductId" FROM "ItemPropostaComercial" WHERE "id" = $1',
       [9001],

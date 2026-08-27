@@ -15,9 +15,22 @@ const {
   policyError,
   sanitizeData,
 } = require("./policy");
-const { UnconfiguredCommerceAIConnection } = require("./connection");
+const {
+  CONNECTION_STATUSES,
+  DEFAULT_CONNECTION_TIMEOUT_MS,
+  UnconfiguredCommerceAIConnection,
+  invokeCommercialDecision,
+} = require("./connection");
+const { createApprovalTokenService } = require("./approval-token");
 
 const MAX_TURNS = 6;
+
+function approvalSigningSecret(env = process.env) {
+  const configured = String(env.JWT_SECRET || "").trim();
+  if (configured) return configured;
+  if (String(env.NODE_ENV || "").toLowerCase() === "production") throw new Error("AI_APPROVAL_SIGNING_SECRET_REQUIRED");
+  return crypto.randomBytes(32);
+}
 
 function createAICommerceOrchestrator({
   connection = new UnconfiguredCommerceAIConnection(),
@@ -28,8 +41,11 @@ function createAICommerceOrchestrator({
   featureGate,
   settingsResolver,
   now = () => new Date(),
+  connectionTimeoutMs = DEFAULT_CONNECTION_TIMEOUT_MS,
+  approvalTokenService,
 } = {}) {
   if (!toolRegistry || typeof toolRegistry.execute !== "function") throw new Error("AI_COMMERCE_TOOL_REGISTRY_REQUIRED");
+  const approvalTokens = approvalTokenService || createApprovalTokenService({ secret: approvalSigningSecret(process.env), clock: now });
   const runs = new Map();
   const drafts = new Map();
   const approvalLocks = new Set();
@@ -43,10 +59,9 @@ function createAICommerceOrchestrator({
     const configuredMode = normalizeMode(settings.mode || MODES.OFF);
     const mode = normalizeMode(input.mode || configuredMode);
     if (modeRank(mode) > modeRank(configuredMode)) throw policyError("AI_MODE_ESCALATION", "Modo solicitado excede a politica do tenant.", 403);
-    const mockEnabled = input.mockEnabled === true || settings.mockEnabled === true;
     const tenantAllowed = input.tenantAllowed !== false;
-    const modePolicy = buildModePolicy({ mode, enabled: input.enabled !== false && settings.enabled !== false, featureEnabled, mockEnabled, tenantAllowed });
-    if (!modeAllowsExecution(mode) || !modePolicy.enabled) {
+    const runtimeEnabled = input.enabled !== false && settings.enabled !== false;
+    if (!modeAllowsExecution(mode) || !runtimeEnabled || !featureEnabled || !tenantAllowed) {
       return freezeResult({ state: STATES.IDLE, mode: MODES.OFF, status: "OFF", noExecution: true, empresaId, conversationId });
     }
     const messageId = input.messageId || input.latestMessageId;
@@ -57,7 +72,15 @@ function createAICommerceOrchestrator({
       ? makeIdempotencyKey({ empresaId, conversationId, messageId, messageRevision: input.messageRevision, policyRevision: settings.revision || input.policyRevision || "1" })
       : normalizeRunIdempotencyKey(input.idempotencyKey);
     const existing = await getExistingRun({ prisma, idempotencyKey, empresaId, conversationId, runs });
-    if (existing) return freezeResult({ ...existing, idempotentReplay: true });
+    if (existing) return decorateReplay(existing, { actorUsuarioId: input.actorUsuarioId, approvalTokenService: approvalTokens });
+    const connectionStatus = await resolveConnectionStatus(connection, empresaId);
+    const connectionReady = isRealConnectionReady(connectionStatus);
+    const mockEnabled = (input.mockEnabled === true || settings.mockEnabled === true)
+      && (connectionStatus === null || (connectionStatus.mock === true && connectionStatus.status === CONNECTION_STATUSES.READY));
+    const modePolicy = buildModePolicy({ mode, enabled: runtimeEnabled, featureEnabled, mockEnabled, connectorReady: connectionReady, tenantAllowed });
+    if (!modePolicy.enabled) {
+      return freezeResult({ state: STATES.IDLE, mode: MODES.OFF, status: "OFF", noExecution: true, empresaId, conversationId, connectionStatus: publicConnectionStatus(connectionStatus) });
+    }
     // Run identity is server-owned. A caller-provided id could collide with a
     // different tenant because AICommerceRun.id is globally unique.
     const runId = crypto.randomUUID();
@@ -88,7 +111,7 @@ function createAICommerceOrchestrator({
       approvedActions: {},
     };
     const claim = await claimPersistedRun({ prisma, baseContext, input, settings, now });
-    if (claim?.existing) return freezeResult({ ...claim.existing, idempotentReplay: true, status: claim.existing.status || "IN_PROGRESS" });
+    if (claim?.existing) return decorateReplay(claim.existing, { actorUsuarioId: input.actorUsuarioId, approvalTokenService: approvalTokens, fallbackStatus: "IN_PROGRESS" });
     await auditCall(audit, "recordRunStarted", { ...baseContext, status: "STARTED", state: STATES.DISCOVERY });
     let state = STATES.DISCOVERY;
     let decision;
@@ -96,14 +119,14 @@ function createAICommerceOrchestrator({
     let turn = 0;
     const catalogContext = sanitizeData(input.catalogContext);
     try {
-      decision = await connection.generateCommercialDecision({
+      decision = await invokeCommercialDecision(connection, {
         ...baseContext,
         conversationContext: context,
         latestMessage: input.latestMessage,
         toolResults,
         catalogContext,
         offerIds: input.offerIds,
-      });
+      }, { timeoutMs: connectionTimeoutMs });
       await auditCall(audit, "recordDecision", { ...baseContext, decision, state });
       for (turn = 0; turn < MAX_TURNS; turn += 1) {
         const requests = validateToolRequests(decision?.requestedTools, toolRegistry);
@@ -124,13 +147,14 @@ function createAICommerceOrchestrator({
           }
         }
         if (state === STATES.AWAITING_APPROVAL) break;
-        decision = await connection.generateCommercialDecision({ ...baseContext, conversationContext: context, latestMessage: input.latestMessage, toolResults, catalogContext, offerIds: input.offerIds });
+        decision = await invokeCommercialDecision(connection, { ...baseContext, conversationContext: context, latestMessage: input.latestMessage, toolResults, catalogContext, offerIds: input.offerIds }, { timeoutMs: connectionTimeoutMs });
         await auditCall(audit, "recordTurn", { ...baseContext, turn: turn + 1, state, decision, toolResults });
       }
       if (turn >= MAX_TURNS) throw policyError("AI_TOOL_LOOP_LIMIT", "Loop de ferramentas excedeu o limite.", 422);
       const allOffers = await materializeOffers({ toolResults, explicitOffers: input.offers, offerService, context: baseContext, customerId: input.customerId });
       let draft = buildDraft(decision, allOffers, { empresaId, conversationId, conversationRevision: input.conversationRevision, mode, now });
       draft = await persistDraft({ prisma, draft, baseContext, decision, actorUsuarioId: input.actorUsuarioId, now });
+      draft = attachApprovalToken(draft, { actorUsuarioId: input.actorUsuarioId, approvalTokenService: approvalTokens });
       const result = freezeResult({
         schemaVersion: "AICommerceRun.v1",
         runId,
@@ -140,6 +164,7 @@ function createAICommerceOrchestrator({
         conversationRevision: String(input.conversationRevision ?? ""),
         correlationId: baseContext.correlationId,
         mode,
+        connectionStatus: publicConnectionStatus(connectionStatus),
         state: stateForResult({ state, decision, draft }),
         status: "COMPLETED",
         decision,
@@ -153,12 +178,12 @@ function createAICommerceOrchestrator({
       runs.set(runScopeKey({ empresaId, conversationId, idempotencyKey }), result);
       if (draft?.draftId) drafts.set(draft.draftId, { ...result, revision: 1 });
       await auditCall(audit, "recordDraft", { ...baseContext, draft, state: result.state });
-      await auditCall(audit, "recordRunCompleted", { ...baseContext, status: result.status, state: result.state, draftId: draft?.draftId });
+      await auditCall(audit, "recordRunCompleted", { ...baseContext, status: result.status, state: result.state, draftId: draft?.draftId, result: replaySnapshot(result) });
       return result;
     } catch (error) {
       const failed = freezeResult({ schemaVersion: "AICommerceRun.v1", runId, idempotencyKey, empresaId, conversationId, mode, state: STATES.ERROR, status: "FAILED", errorCode: String(error?.code || "AI_COMMERCE_RUN_FAILED"), requiresHumanApproval: false, autoSend: false, outbound: 0 });
       runs.set(runScopeKey({ empresaId, conversationId, idempotencyKey }), failed);
-      await auditCall(audit, "recordRunFailed", { ...baseContext, status: failed.status, state: failed.state, errorCode: failed.errorCode });
+      await auditCall(audit, "recordRunFailed", { ...baseContext, status: failed.status, state: failed.state, errorCode: failed.errorCode, result: failed });
       throw Object.assign(error, { runId, idempotencyKey });
     }
   }
@@ -173,8 +198,15 @@ function createAICommerceOrchestrator({
     if (stored.empresaId !== approval.empresaId || stored.conversationId !== approval.conversationId) throw policyError("AI_DRAFT_CONTEXT_MISMATCH", "Rascunho fora do tenant ou conversa.", 403);
     if (String(input.conversationRevision || "") !== String(stored.conversationRevision || input.conversationRevision || "")) throw policyError("AI_DRAFT_CONVERSATION_CHANGED", "A conversa mudou antes da aprovacao.", 409);
     if (stored.approvedAction || stored.rejected) throw policyError("AI_DRAFT_CONFLICT", "Rascunho alterado por outro aprovador.", 409);
-    approvalLocks.add(draftId);
     const expectedRevision = Number(stored.revision) || 1;
+    approvalTokens.verify(input.approvalToken, {
+      draftId,
+      empresaId: approval.empresaId,
+      conversationId: approval.conversationId,
+      revision: expectedRevision,
+      actorUsuarioId: approval.actorUsuarioId,
+    });
+    approvalLocks.add(draftId);
     let claimed = false;
     try {
       claimed = await claimPersistedDraft({ prisma, draftId, empresaId: approval.empresaId, revision: expectedRevision, actorUsuarioId: approval.actorUsuarioId });
@@ -220,8 +252,15 @@ function createAICommerceOrchestrator({
     if (stored.empresaId !== positiveId(input.empresaId) || stored.conversationId !== positiveId(input.conversationId || stored.conversationId)) throw policyError("AI_DRAFT_CONTEXT_MISMATCH", "Rascunho fora do tenant ou conversa.", 403);
     if (String(input.conversationRevision || "") !== String(stored.conversationRevision || input.conversationRevision || "")) throw policyError("AI_DRAFT_CONVERSATION_CHANGED", "A conversa mudou antes da rejeicao.", 409);
     if (!String(input.approvalToken || "").trim() || !String(input.idempotencyKey || "").trim()) throw policyError("AI_APPROVAL_TOKEN_REQUIRED", "A rejeicao exige token e idempotencia.", 422);
-    approvalLocks.add(draftId);
     const expectedRevision = Number(stored.revision) || 1;
+    approvalTokens.verify(input.approvalToken, {
+      draftId,
+      empresaId: stored.empresaId,
+      conversationId: stored.conversationId,
+      revision: expectedRevision,
+      actorUsuarioId: input.actorUsuarioId,
+    });
+    approvalLocks.add(draftId);
     let claimed = false;
     try {
       claimed = await claimPersistedDraft({ prisma, draftId, empresaId: stored.empresaId, revision: expectedRevision, actorUsuarioId: input.actorUsuarioId });
@@ -463,7 +502,7 @@ async function getExistingRun({ prisma, idempotencyKey, empresaId, conversationI
   const model = prisma?.aICommerceRun || prisma?.aiCommerceRun;
   if (model?.findFirst) {
     const row = await model.findFirst({ where: { empresaId, conversationId, idempotencyKey } });
-    if (row) return row;
+    if (row) return hydratePersistedRun(row);
   }
   return null;
 }
@@ -497,8 +536,101 @@ async function claimPersistedRun({ prisma, baseContext, input, settings, now }) 
       const conflictingScope = await model.findFirst({ where: { empresaId: baseContext.empresaId, idempotencyKey: baseContext.idempotencyKey }, select: { conversationId: true } });
       if (conflictingScope) throw policyError("AI_IDEMPOTENCY_CONTEXT_CONFLICT", "Chave idempotente pertence a outra conversa.", 409);
     }
-    return { existing };
+    return { existing: existing ? hydratePersistedRun(existing) : null };
   }
+}
+
+function attachApprovalToken(draft, { actorUsuarioId, approvalTokenService } = {}) {
+  if (!draft) return null;
+  const safe = { ...draft };
+  delete safe.approvalToken;
+  const actorId = positiveId(actorUsuarioId);
+  if (!actorId || !approvalTokenService?.issue) return Object.freeze(safe);
+  return Object.freeze({
+    ...safe,
+    approvalToken: approvalTokenService.issue({
+      draftId: safe.draftId,
+      empresaId: safe.empresaId,
+      conversationId: safe.conversationId,
+      revision: Number(safe.revision) || 1,
+      actorUsuarioId: actorId,
+    }),
+  });
+}
+
+function decorateReplay(existing, { actorUsuarioId, approvalTokenService, fallbackStatus } = {}) {
+  const value = existing && typeof existing === "object" ? existing : {};
+  const draft = attachApprovalToken(value.draft, { actorUsuarioId, approvalTokenService });
+  return freezeResult({
+    ...value,
+    ...(draft ? { draft } : {}),
+    idempotentReplay: true,
+    status: value.status || fallbackStatus,
+  });
+}
+
+function hydratePersistedRun(row) {
+  if (!row || typeof row !== "object") return row;
+  try {
+    const event = JSON.parse(String(row.eventJson || "{}"));
+    if (event?.result && typeof event.result === "object" && !Array.isArray(event.result)) return { ...event.result };
+  } catch {
+    // Historical/in-progress rows remain observable without inventing a result.
+  }
+  return row;
+}
+
+function replaySnapshot(result) {
+  const draft = result?.draft ? { ...result.draft } : null;
+  if (draft) delete draft.approvalToken;
+  return sanitizeData({
+    schemaVersion: result?.schemaVersion,
+    runId: result?.runId,
+    idempotencyKey: result?.idempotencyKey,
+    empresaId: result?.empresaId,
+    conversationId: result?.conversationId,
+    conversationRevision: result?.conversationRevision,
+    correlationId: result?.correlationId,
+    mode: result?.mode,
+    connectionStatus: result?.connectionStatus,
+    state: result?.state,
+    status: result?.status,
+    decision: result?.decision,
+    // Durable replay preserves the commercial decision/draft and exact-once
+    // semantics. Detailed tool output remains in its dedicated audit rows.
+    toolResults: {},
+    draft,
+    requiresHumanApproval: result?.requiresHumanApproval === true,
+    autoSend: false,
+    outbound: 0,
+    createdAt: result?.createdAt,
+  });
+}
+
+async function resolveConnectionStatus(connection, empresaId) {
+  if (!connection || typeof connection.getConnectionStatus !== "function") return null;
+  try {
+    const status = await connection.getConnectionStatus({ empresaId });
+    return status && typeof status === "object" ? status : { status: CONNECTION_STATUSES.BLOCKED };
+  } catch {
+    return { status: CONNECTION_STATUSES.BLOCKED, providerConnected: false, realProviderConnected: false, realConnectorImplemented: false, networkEnabled: false };
+  }
+}
+
+function isRealConnectionReady(status) {
+  return Boolean(status
+    && status.status === CONNECTION_STATUSES.READY
+    && status.mock !== true
+    && status.providerConnected === true
+    && (status.realConnector === true || status.realConnectorImplemented === true)
+    && status.networkEnabled === true);
+}
+
+function publicConnectionStatus(status) {
+  if (status?.mock === true && status.status === CONNECTION_STATUSES.READY) return "MOCK_AVAILABLE";
+  if (isRealConnectionReady(status)) return "REAL_CONNECTED";
+  if (status?.providerConnected === true || status?.realProviderConnected === true) return "REAL_NOT_CONNECTED";
+  return "NOT_CONNECTED";
 }
 
 function isUniqueConflict(error) { return error?.code === "P2002" || /unique|duplicate/i.test(String(error?.message || "")); }
@@ -512,4 +644,4 @@ function normalizeRunIdempotencyKey(value) {
   return key;
 }
 
-module.exports = { MAX_TURNS, createAICommerceOrchestrator, buildDraft, collectOffers, materializeOffers, stateForDecision };
+module.exports = { MAX_TURNS, createAICommerceOrchestrator, buildDraft, collectOffers, materializeOffers, stateForDecision, hydratePersistedRun, publicConnectionStatus };

@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 const { Prisma } = require("@prisma/client");
 const { encryptCredentials, decryptCredentials } = require("./crypto");
+const { createDistributedOperationLease } = require("../shared/distributedOperationLease");
 const {
   BlingHttpClient,
   assertBlingConfigured,
@@ -16,9 +17,10 @@ const SYNC_ENTITIES = new Set(["PRODUTOS", "ESTOQUE", "PRECOS", "CONDICOES_PAGAM
 const STOCK_PRODUCT_ID_BATCH_SIZE = 50;
 const PRODUCT_LIST_PARAMS = { criterio: 5, tipo: "T" };
 const PRODUCT_DETAIL_CONCURRENCY = 3;
-const refreshLocks = new Map();
 
 function createBlingService({ prisma }) {
+  const distributedLease = createDistributedOperationLease({ prisma });
+
   async function iniciarOAuth({ auth }) {
     assertBlingConfigured();
     const state = crypto.randomBytes(32).toString("base64url");
@@ -40,80 +42,135 @@ function createBlingService({ prisma }) {
 
   async function concluirOAuth({ code, state }) {
     if (!code) throw blingError("BLING_AUTH_CODE_REQUIRED", "Código de autorização ausente.");
-    const stored = await consumeState({ prisma, state });
-    const tokens = await exchangeCodeForTokens(code);
-    return prisma.integracao.create({
-      data: {
-        empresaId: stored.empresaId,
-        nome: "Bling",
-        tipo: "BLING",
-        status: "ATIVA",
-        modo: "SOMENTE_LEITURA",
-        configuracaoJson: JSON.stringify({ provider: "BLING", connectedAt: new Date().toISOString(), connectedByUsuarioId: stored.usuarioId }),
-        credenciaisCriptografadas: encryptCredentials(tokens),
-        ativo: true,
-        ultimaSincronizacaoEm: new Date(),
-        ultimoSucessoEm: new Date(),
-      },
+    const pending = await loadStateCandidate({ prisma, state });
+    return distributedLease.withLease({
+      empresaId: pending.empresaId,
+      namespace: "BLING_OAUTH_TENANT",
+      resourceKey: "BLING",
+    }, async (lease) => {
+      const existing = await prisma.integracao.findFirst({
+        where: { empresaId: pending.empresaId, tipo: "BLING" },
+        select: { id: true, ativo: true, status: true, credenciaisCriptografadas: true },
+      });
+      if (existing?.ativo && existing.status === "ATIVA" && existing.credenciaisCriptografadas) {
+        throw blingError("BLING_ALREADY_CONNECTED", "Este tenant já possui uma integração Bling.", 409);
+      }
+
+      const tokens = await exchangeCodeForTokens(code, { signal: lease.signal });
+      return lease.fencedTransaction(async (tx) => {
+        const stored = await consumeStateWithClient(tx, state);
+        const data = {
+          nome: "Bling",
+          status: "ATIVA",
+          modo: "SOMENTE_LEITURA",
+          configuracaoJson: JSON.stringify({ provider: "BLING", connectedAt: new Date().toISOString(), connectedByUsuarioId: stored.usuarioId }),
+          credenciaisCriptografadas: encryptCredentials(tokens),
+          ativo: true,
+          ultimaSincronizacaoEm: new Date(),
+          ultimoSucessoEm: new Date(),
+          ultimoErroEm: null,
+        };
+        if (existing) {
+          return tx.integracao.update({
+            where: { empresaId_id: { empresaId: stored.empresaId, id: existing.id } },
+            data,
+          });
+        }
+        return tx.integracao.create({
+          data: {
+            empresaId: stored.empresaId,
+            ...data,
+            tipo: "BLING",
+          },
+        });
+      });
     });
   }
 
   async function desconectar({ integracao, empresaId, usuarioId }) {
     integracao = await loadTenantIntegration(prisma, integracao, empresaId);
-    const credentials = safeDecrypt(integracao.credenciaisCriptografadas);
-    try {
-      await revokeBlingToken(credentials?.accessToken, "access_token");
-      await revokeBlingToken(credentials?.refreshToken, "refresh_token");
-    } catch {
-      // Revogação remota é melhor esforço; os tokens locais ainda serão removidos.
-    }
-    return prisma.integracao.update({
-      where: { empresaId_id: { empresaId, id: integracao.id } },
-      data: {
-        status: "INATIVA",
-        ativo: false,
-        credenciaisCriptografadas: null,
-        ultimoErroEm: null,
-        configuracaoJson: JSON.stringify({
-          ...safeJson(integracao.configuracaoJson, {}),
-          disconnectedAt: new Date().toISOString(),
-          disconnectedByUsuarioId: usuarioId,
-        }),
-      },
+    return withIntegrationLease(integracao, async (lease) => {
+      integracao = await loadTenantIntegration(prisma, integracao, empresaId);
+      const credentials = safeDecrypt(integracao.credenciaisCriptografadas);
+      try {
+        await revokeBlingToken(credentials?.accessToken, "access_token", { signal: lease.signal });
+        await revokeBlingToken(credentials?.refreshToken, "refresh_token", { signal: lease.signal });
+      } catch {
+        // Revogação remota é melhor esforço; os tokens locais ainda serão removidos.
+      }
+      return lease.fencedTransaction((tx) => tx.integracao.update({
+        where: { empresaId_id: { empresaId, id: integracao.id } },
+        data: {
+          status: "INATIVA",
+          ativo: false,
+          credenciaisCriptografadas: null,
+          ultimoErroEm: null,
+          configuracaoJson: JSON.stringify({
+            ...safeJson(integracao.configuracaoJson, {}),
+            disconnectedAt: new Date().toISOString(),
+            disconnectedByUsuarioId: usuarioId,
+          }),
+        },
+      }));
     });
   }
 
   async function testar({ integracao, empresaId }) {
     integracao = await loadTenantIntegration(prisma, integracao, empresaId);
-    const client = await clientForIntegration(integracao);
-    const result = await client.testConnection();
-    await prisma.integracao.update({
-      where: { empresaId_id: { empresaId, id: integracao.id } },
-      data: { status: "ATIVA", ultimoSucessoEm: new Date(), ultimaSincronizacaoEm: new Date(), ultimoErroEm: null },
+    return withIntegrationLease(integracao, async (lease) => {
+      integracao = await loadTenantIntegration(prisma, integracao, empresaId);
+      const client = await clientForIntegration(integracao, lease);
+      try {
+        const result = await client.testConnection();
+        await lease.fencedTransaction((tx) => tx.integracao.update({
+          where: { empresaId_id: { empresaId, id: integracao.id } },
+          data: { status: "ATIVA", ultimoSucessoEm: new Date(), ultimaSincronizacaoEm: new Date(), ultimoErroEm: null },
+        }));
+        return result;
+      } catch (error) {
+        if (statusAfterSyncError(integracao, error) === "ERRO") {
+          await lease.fencedTransaction((tx) => tx.integracao.update({
+            where: { empresaId_id: { empresaId, id: integracao.id } },
+            data: { status: "ERRO", ultimoErroEm: new Date(), ultimaSincronizacaoEm: new Date() },
+          }));
+        }
+        throw error;
+      }
     });
-    return result;
   }
 
   async function sincronizar({ integracao, empresaId, entidades }) {
     integracao = await loadTenantIntegration(prisma, integracao, empresaId);
+    return withIntegrationLease(integracao, async (lease) => sincronizarComLease({
+      integracao: await loadTenantIntegration(prisma, integracao, empresaId),
+      empresaId,
+      entidades,
+      lease,
+    }));
+  }
+
+  async function sincronizarComLease({ integracao, empresaId, entidades, lease }) {
     const requested = normalizeEntities(entidades);
     if (integracao.tipo !== "BLING") throw blingError("INTEGRATION_INVALID_TYPE", "Sincronização Bling exige integração do tipo BLING.");
     if (!integracao.ativo || integracao.status !== "ATIVA") throw blingError("INTEGRATION_INACTIVE", "Integração Bling inativa ou desconectada.");
 
-    const sync = await prisma.sincronizacaoIntegracao.create({
-      data: {
-        empresaId,
-        integracaoId: integracao.id,
-        status: "EXECUTANDO",
-        origem: "MANUAL",
-        metadadosJson: JSON.stringify({ entidades: requested, modo: "SOMENTE_LEITURA" }),
-      },
+    const sync = await lease.fencedTransaction(async (tx) => {
+      await reconcileInterruptedSyncs(tx, empresaId, integracao.id);
+      return tx.sincronizacaoIntegracao.create({
+        data: {
+          empresaId,
+          integracaoId: integracao.id,
+          status: "EXECUTANDO",
+          origem: "MANUAL",
+          metadadosJson: JSON.stringify({ entidades: requested, modo: "SOMENTE_LEITURA" }),
+        },
+      });
     });
 
     const counters = emptyCounters();
 
     try {
-      const client = await clientForIntegration(integracao);
+      const client = await clientForIntegration(integracao, lease);
       const now = new Date();
       let productIndex = new Map();
 
@@ -125,12 +182,12 @@ function createBlingService({ prisma }) {
         counters.detalhesProdutosConsultados += detailResult.detailsFetched;
         counters.detalhesProdutosComErro += detailResult.detailErrors;
         counters.erros += detailResult.detailErrors;
-        const result = await upsertProducts({ prisma, empresaId, integracaoId: integracao.id, products, now });
+        const result = await lease.fencedTransaction((tx) => upsertProducts({ prisma: tx, empresaId, integracaoId: integracao.id, products, now }));
         counters.produtosCriados += result.created;
         counters.produtosAtualizados += result.updated;
         productIndex = result.productIndex;
         if (!requested.includes("PRECOS")) {
-          const priceResult = await upsertPrices({ prisma, empresaId, integracaoId: integracao.id, products, productIndex, now });
+          const priceResult = await lease.fencedTransaction((tx) => upsertPrices({ prisma: tx, empresaId, integracaoId: integracao.id, products, productIndex, now }));
           counters.precosCriados += priceResult.created;
           counters.precosAtualizados += priceResult.updated;
           counters.erros += priceResult.errors;
@@ -142,7 +199,7 @@ function createBlingService({ prisma }) {
       if (requested.includes("ESTOQUE")) {
         const stocks = await fetchStocksForProducts({ client, productIndex });
         counters.estoquesRecebidos = stocks.length;
-        const result = await upsertStocks({ prisma, empresaId, integracaoId: integracao.id, stocks, productIndex, now });
+        const result = await lease.fencedTransaction((tx) => upsertStocks({ prisma: tx, empresaId, integracaoId: integracao.id, stocks, productIndex, now }));
         counters.estoquesCriados += result.created;
         counters.estoquesAtualizados += result.updated;
         counters.erros += result.errors;
@@ -151,7 +208,7 @@ function createBlingService({ prisma }) {
       if (requested.includes("PRECOS")) {
         const products = requested.includes("PRODUTOS") ? Array.from(productIndex.values()).map((entry) => entry.original).filter(Boolean) : await client.fetchPaginated("/produtos", PRODUCT_LIST_PARAMS);
         counters.precosRecebidos = products.length;
-        const result = await upsertPrices({ prisma, empresaId, integracaoId: integracao.id, products, productIndex, now });
+        const result = await lease.fencedTransaction((tx) => upsertPrices({ prisma: tx, empresaId, integracaoId: integracao.id, products, productIndex, now }));
         counters.precosCriados += result.created;
         counters.precosAtualizados += result.updated;
         counters.erros += result.errors;
@@ -160,13 +217,13 @@ function createBlingService({ prisma }) {
       if (requested.includes("CONDICOES_PAGAMENTO")) {
         const terms = await client.fetchPaginated("/formas-pagamentos");
         counters.condicoesRecebidas = terms.length;
-        const result = await upsertPaymentTerms({ prisma, empresaId, integracaoId: integracao.id, terms, now });
+        const result = await lease.fencedTransaction((tx) => upsertPaymentTerms({ prisma: tx, empresaId, integracaoId: integracao.id, terms, now }));
         counters.condicoesCriadas += result.created;
         counters.condicoesAtualizadas += result.updated;
       }
 
       const finishedAt = new Date();
-      const updated = await prisma.$transaction(async (tx) => {
+      const updated = await lease.fencedTransaction(async (tx) => {
         const syncDone = await tx.sincronizacaoIntegracao.update({
           where: { empresaId_id: { empresaId, id: sync.id } },
           data: {
@@ -194,7 +251,7 @@ function createBlingService({ prisma }) {
     } catch (error) {
       const now = new Date();
       const sanitized = sanitizeError(error);
-      const failed = await prisma.$transaction(async (tx) => {
+      const failed = await lease.fencedTransaction(async (tx) => {
         const syncFailed = await tx.sincronizacaoIntegracao.update({
           where: { empresaId_id: { empresaId, id: sync.id } },
           data: {
@@ -227,27 +284,54 @@ function createBlingService({ prisma }) {
     }
   }
 
-  async function clientForIntegration(integracao) {
+  async function clientForIntegration(integracao, lease) {
     const credentials = safeDecrypt(integracao.credenciaisCriptografadas);
     return new BlingHttpClient({
       credentials,
-      onTokenRefresh: (updatedCredentials) => saveCredentialsOnce(integracao.empresaId, integracao.id, updatedCredentials),
+      onTokenRefresh: (updatedCredentials) => saveCredentialsOnce(integracao.empresaId, integracao.id, updatedCredentials, lease),
       correlationId: `bling-${integracao.id}-${Date.now()}`,
+      signal: lease.signal,
     });
   }
 
-  async function saveCredentialsOnce(empresaId, integracaoId, credentials) {
-    const lockKey = `${empresaId}:${integracaoId}`;
-    const current = refreshLocks.get(lockKey) || Promise.resolve();
-    const next = current.then(() => prisma.integracao.update({
-      where: { empresaId_id: { empresaId, id: integracaoId } },
-      data: { credenciaisCriptografadas: encryptCredentials(credentials) },
-    }));
-    refreshLocks.set(lockKey, next.catch(() => null));
-    await next;
+  async function saveCredentialsOnce(empresaId, integracaoId, credentials, lease) {
+    await lease.fencedTransaction(async (tx) => {
+      const current = await tx.integracao.findUnique({
+        where: { empresaId_id: { empresaId, id: integracaoId } },
+        select: { ativo: true, status: true },
+      });
+      if (!current?.ativo || current.status === "INATIVA") {
+        throw blingError("INTEGRATION_INACTIVE", "Integração Bling inativa ou desconectada.", 409);
+      }
+      return tx.integracao.update({
+        where: { empresaId_id: { empresaId, id: integracaoId } },
+        data: { credenciaisCriptografadas: encryptCredentials(credentials) },
+      });
+    });
+  }
+
+  function withIntegrationLease(integracao, handler) {
+    return distributedLease.withLease({
+      empresaId: integracao.empresaId,
+      namespace: "INTEGRATION_OPERATION",
+      resourceKey: String(integracao.id),
+    }, handler);
   }
 
   return { iniciarOAuth, concluirOAuth, desconectar, testar, sincronizar };
+}
+
+async function reconcileInterruptedSyncs(client, empresaId, integracaoId) {
+  const now = new Date();
+  await client.sincronizacaoIntegracao.updateMany({
+    where: { empresaId, integracaoId, status: "EXECUTANDO" },
+    data: {
+      status: "FALHOU",
+      finalizadaEm: now,
+      itensComErro: 1,
+      mensagemErro: "Sincronização interrompida antes da conclusão.",
+    },
+  });
 }
 
 async function loadTenantIntegration(prisma, integrationCandidate, empresaId) {
@@ -622,22 +706,31 @@ function emptyCounters() {
   };
 }
 
-async function consumeState({ prisma, state }) {
+async function loadStateCandidate({ prisma, state }) {
   const stateHash = hashState(state);
   const now = new Date();
-  return prisma.$transaction(async (tx) => {
-    const value = await tx.integracaoOAuthState.findUnique({ where: { stateHash } });
-    if (!value || value.usedAt || value.expiresAt < now || value.provedor !== "BLING") {
-      throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
-    }
-    await assertOAuthActorActive(tx, value);
-    const claimed = await tx.integracaoOAuthState.updateMany({
-      where: { id: value.id, provedor: "BLING", usedAt: null, expiresAt: { gte: now } },
-      data: { usedAt: now },
-    });
-    if (claimed.count !== 1) throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
-    return value;
+  const value = await prisma.integracaoOAuthState.findUnique({ where: { stateHash } });
+  if (!value || value.usedAt || value.expiresAt < now || value.provedor !== "BLING") {
+    throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
+  }
+  await assertOAuthActorActive(prisma, value);
+  return value;
+}
+
+async function consumeStateWithClient(client, state) {
+  const stateHash = hashState(state);
+  const now = new Date();
+  const value = await client.integracaoOAuthState.findUnique({ where: { stateHash } });
+  if (!value || value.usedAt || value.expiresAt < now || value.provedor !== "BLING") {
+    throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
+  }
+  await assertOAuthActorActive(client, value);
+  const claimed = await client.integracaoOAuthState.updateMany({
+    where: { id: value.id, provedor: "BLING", usedAt: null, expiresAt: { gte: now } },
+    data: { usedAt: now },
   });
+  if (claimed.count !== 1) throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
+  return value;
 }
 
 async function assertOAuthActorActive(client, state) {

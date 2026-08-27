@@ -52,6 +52,7 @@ function main(options = {}) {
       "tests/v54-lifecycle-lock.test.js",
       "tests/email-inbound-lifecycle.test.js",
       "tests/email-inbound-processing.test.js",
+      "tests/bling-distributed-coordination-postgres.test.js",
       "tests/commercial-proposal-catalog-v1-postgres.test.js",
     ];
     const focusedFile = focus

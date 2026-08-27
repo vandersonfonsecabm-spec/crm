@@ -107,6 +107,7 @@ export type AICommerceToolTrace = {
 export type AICommerceDraft = {
   id: string;
   revision: number;
+  approvalToken: string;
   text: string;
   offers: AICommerceProductOffer[];
   questions: string[];
@@ -242,16 +243,18 @@ export async function runAICommerceAssistant(payload: { conversationId: number; 
   return normalizeAssistantResult(response.item);
 }
 
-export async function approveAICommerceDraft(id: string, payload: { revision: number; conversationRevision?: number; action: "INSERT_COMPOSER" | "REGISTER_INTEREST" | "CREATE_OPPORTUNITY_DRAFT" | "HANDOFF"; approvalToken?: string; idempotencyKey?: string }) {
+export async function approveAICommerceDraft(id: string, payload: { revision: number; conversationRevision?: number; action: "INSERT_COMPOSER" | "REGISTER_INTEREST" | "CREATE_OPPORTUNITY_DRAFT" | "HANDOFF"; approvalToken: string; idempotencyKey?: string }) {
   assertOpaqueId(id, "draftId");
-  const response = await request<{ item?: Record<string, unknown> }>(`/ai-commerce/drafts/${encodeURIComponent(id)}/approve`, { method: "POST", body: { ...payload, action: toBackendApprovalAction(payload.action), approvalToken: payload.approvalToken || createOpaqueKey("approval"), idempotencyKey: payload.idempotencyKey || createOpaqueKey("approval-idem"), draftRevision: payload.revision } });
+  assertApprovalToken(payload.approvalToken);
+  const response = await request<{ item?: Record<string, unknown> }>(`/ai-commerce/drafts/${encodeURIComponent(id)}/approve`, { method: "POST", body: { ...payload, action: toBackendApprovalAction(payload.action), idempotencyKey: payload.idempotencyKey || createOpaqueKey("approval-idem"), draftRevision: payload.revision } });
   const item = response.item ?? {};
   return { draft: normalizeDraft(item.draft as Record<string, unknown> | null | undefined), applied: item.status === "APPROVED" || item.action !== undefined };
 }
 
-export async function rejectAICommerceDraft(id: string, payload: { revision: number; conversationRevision?: number; approvalToken?: string; idempotencyKey?: string }) {
+export async function rejectAICommerceDraft(id: string, payload: { revision: number; conversationRevision?: number; approvalToken: string; idempotencyKey?: string }) {
   assertOpaqueId(id, "draftId");
-  const response = await request<{ item?: Record<string, unknown> }>(`/ai-commerce/drafts/${encodeURIComponent(id)}/reject`, { method: "POST", body: { ...payload, approvalToken: payload.approvalToken || createOpaqueKey("reject"), idempotencyKey: payload.idempotencyKey || createOpaqueKey("reject-idem") } });
+  assertApprovalToken(payload.approvalToken);
+  const response = await request<{ item?: Record<string, unknown> }>(`/ai-commerce/drafts/${encodeURIComponent(id)}/reject`, { method: "POST", body: { ...payload, idempotencyKey: payload.idempotencyKey || createOpaqueKey("reject-idem") } });
   return { draft: normalizeDraft(response.item?.draft as Record<string, unknown> | null | undefined), rejected: response.item?.status === "REJECTED" };
 }
 
@@ -317,6 +320,7 @@ function normalizeDraft(value?: Record<string, unknown> | null): AICommerceDraft
   return {
     id: String(value.draftId ?? value.id ?? ""),
     revision: Number.isSafeInteger(value.revision) ? Number(value.revision) : 1,
+    approvalToken: typeof value.approvalToken === "string" ? value.approvalToken : "",
     text: String(value.text ?? ""),
     offers: (Array.isArray(value.productOffers) ? value.productOffers : []).map((item) => normalizeOffer(item)).filter((item): item is AICommerceProductOffer => item !== null),
     questions: arrayOfStrings(value.questions),
@@ -484,6 +488,10 @@ function assertPositiveId(value: number, label: string): asserts value is number
 
 function assertOpaqueId(value: string, label: string): asserts value is string {
   if (!value.trim() || value.length > 180 || /[\r\n]/.test(value)) throw new Error(`${label} inválido.`);
+}
+
+function assertApprovalToken(value: string): asserts value is string {
+  if (!value.trim() || value.length > 4096 || /[\r\n]/.test(value)) throw new Error("approvalToken inválido.");
 }
 
 function isPrivateHostname(hostname: string) {

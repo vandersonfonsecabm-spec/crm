@@ -1564,6 +1564,7 @@ export type MessengerOperationalStatusResponse = {
 
 export type InstagramOperationalStatusResponse = {
   state?: "NOT_CONFIGURED" | "CONFIGURED_INACTIVE" | "WAITING_META_AUTH" | "CONNECTED" | "PAUSED" | "ERROR" | "UNAVAILABLE";
+  credentialConfigured?: boolean;
   nextRequirement?: string | null;
   configured?: boolean;
   ativo?: boolean;

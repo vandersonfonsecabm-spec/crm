@@ -16,6 +16,34 @@ test("configuração rejeita secrets recursivos e redige legado", () => {
   const serialized = JSON.stringify(_private.redactSensitiveConfig(legacy));
   assert.equal(serialized.includes("deep-secret"), false);
   assert.equal(serialized.includes("[redacted]"), true);
+  assert.throws(
+    () => _private.stringifySafeConfig({ endpoint: "https://provider.test/callback?access_token=secret" }),
+    (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+  );
+  assert.throws(
+    () => _private.stringifySafeConfig({ header: "Bearer abc.def.ghi" }),
+    (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+  );
+});
+
+test("Bling não pode ser forjado pelo writer genérico", () => {
+  assert.throws(
+    () => _private.assertGenericIntegrationLifecycleAllowed(null, "BLING", { tipo: "BLING", credenciais: { accessToken: "x" } }),
+    (error) => error.code === "BLING_OAUTH_REQUIRED",
+  );
+  assert.throws(
+    () => _private.assertGenericIntegrationLifecycleAllowed("BLING", "BLING", { status: "ATIVA" }),
+    (error) => error.code === "BLING_LIFECYCLE_REQUIRED",
+  );
+  assert.equal(_private.assertGenericIntegrationLifecycleAllowed("BLING", "BLING", { nome: "Conta Bling" }), true);
+});
+
+test("callbacks externos exigem frontend explícito e seguro", () => {
+  assert.throws(() => _private.frontendCallbackBase({ NODE_ENV: "production" }), (error) => error.code === "PROVIDER_FRONTEND_URL_REQUIRED");
+  assert.throws(() => _private.frontendCallbackBase({ NODE_ENV: "production", FRONTEND_URL: "http://crm.example.test" }), (error) => error.code === "PROVIDER_FRONTEND_URL_INVALID");
+  assert.throws(() => _private.frontendCallbackBase({ NODE_ENV: "production", FRONTEND_URL: "https://user:pass@crm.example.test" }), (error) => error.code === "PROVIDER_FRONTEND_URL_INVALID");
+  assert.equal(_private.frontendCallbackBase({ NODE_ENV: "production", FRONTEND_URL: "https://crm.example.test" }), "https://crm.example.test");
+  assert.equal(_private.frontendCallbackBase({ NODE_ENV: "test", FRONTEND_URL: "http://localhost:5173" }), "http://localhost:5173");
 });
 
 test("mensagem de provider nunca persiste segredo bruto", () => {

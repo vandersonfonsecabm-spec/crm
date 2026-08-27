@@ -264,6 +264,9 @@ model Empresa {
   configuracoesRegraEstoque  ConfiguracaoRegraEstoque[]
   overridesEstoque            OverrideEstoque[]
   avaliacoesRegraEstoque      AvaliacaoRegraEstoque[]
+  operacoesDistribuidas       OperacaoDistribuidaLease[]
+  entregasEmail               EmailDeliveryOutbox[]
+  eventosEntregaEmail         EmailDeliveryEvent[]
   catalogosComerciais         CommercialCatalogProduct[]
   ofertasProduto              ProductOffer[]
   configuracoesAICommerce    AICommerceSettings[]
@@ -391,6 +394,7 @@ model TokenRecuperacaoSenha {
   expiraEm    DateTime
   usadoEm     DateTime?
   revogadoEm  DateTime?
+  deliveryRevision Int @default(0)
   criadoEm    DateTime @default(now())
 
   @@unique([empresaId, id])
@@ -411,6 +415,7 @@ model ConviteUsuario {
   aceitoEm           DateTime?
   revogadoEm         DateTime?
   deliveryStatus     String       @default("PENDING_DELIVERY")
+  deliveryRevision   Int          @default(0)
   criadoEm           DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -1218,12 +1223,96 @@ model EventoWebhook {
   processadoEm        DateTime?
   erroCodigo          String?
   erroResumo          String?
+  nextAttemptAt       DateTime?
+  leaseOwner          String?
+  leaseExpiresAt      DateTime?
   createdAt           DateTime                   @default(now())
   updatedAt           DateTime                   @updatedAt
 
   @@unique([empresaId, canalIntegracaoId, provedor, externalEventId])
   @@index([empresaId, statusProcessamento, recebidoEm])
   @@index([empresaId, canalIntegracaoId, recebidoEm])
+  @@index([statusProcessamento, nextAttemptAt, recebidoEm])
+  @@index([leaseExpiresAt])
+}
+
+model OperacaoDistribuidaLease {
+  empresaId   Int
+  namespace   String
+  resourceKey String
+  ownerToken  String   @unique
+  expiresAt   DateTime
+  heartbeatAt DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@id([empresaId, namespace, resourceKey])
+  @@index([empresaId, expiresAt])
+  @@index([expiresAt])
+}
+
+model WorkerCheckpoint {
+  id         Int      @id @default(autoincrement())
+  chave      String   @unique
+  cursorJson String?
+  revisao    Int      @default(1)
+  updatedAt  DateTime @updatedAt
+}
+
+model EmailDeliveryOutbox {
+  id                  String              @id @default(cuid())
+  empresaId           Int
+  kind                String
+  sourceType          String
+  sourceId            String
+  targetVersion       Int                 @default(1)
+  idempotencyKey      String
+  recipientNormalized String
+  payloadCiphertext   String?
+  status              EmailDeliveryStatus @default(PENDING)
+  attempts            Int                 @default(0)
+  availableAt         DateTime            @default(now())
+  leaseOwner          String?
+  leaseToken          String?             @unique
+  leaseExpiresAt      DateTime?
+  providerMessageId   String?
+  lastErrorCode       String?
+  expiresAt           DateTime
+  deliveredAt         DateTime?
+  failedAt            DateTime?
+  correlationId       String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  empresa             Empresa             @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  events              EmailDeliveryEvent[]
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, status, availableAt])
+  @@index([empresaId, leaseExpiresAt])
+  @@index([empresaId, sourceType, sourceId])
+}
+
+model EmailDeliveryEvent {
+  id                    Int                 @id @default(autoincrement())
+  empresaId             Int
+  deliveryId            String
+  type                  String
+  status                EmailDeliveryStatus
+  attempt               Int
+  providerMessageId     String?
+  providerEventId       String?
+  providerOccurredAt    DateTime?
+  errorCode             String?
+  metadataSanitizedJson String?
+  occurredAt            DateTime            @default(now())
+  empresa               Empresa             @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  delivery              EmailDeliveryOutbox @relation(fields: [empresaId, deliveryId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, providerEventId])
+  @@index([empresaId, deliveryId, occurredAt])
+  @@index([empresaId, type, occurredAt])
 }
 
 model AutomacaoRegra {
@@ -2596,6 +2685,17 @@ enum StatusProcessamentoWebhook {
   PROCESSADO
   FALHOU
   IGNORADO_DUPLICADO
+}
+
+enum EmailDeliveryStatus {
+  PENDING
+  PROCESSING
+  RETRY_WAIT
+  DELIVERED
+  FAILED
+  BOUNCED
+  EXPIRED
+  CANCELLED
 }
 
 enum TipoMensagemCanal {

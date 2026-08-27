@@ -96,11 +96,12 @@ test("outbox claims every row for the scoped tenant and reclaims expired process
 
 test("rule cursor rotates beyond the first bounded page", async () => {
   const cursors = [];
+  const checkpointStore = memoryCheckpointStore();
   const rules = { evaluateTenant: async (_tenant, options) => { cursors.push(options.cursor || null); return { evaluated: 1, matched: 0, resolved: 0, nextCursor: cursors.length === 1 ? 10 : null }; } };
   const env = { STOCK_DOMAIN_ENABLED: "true", STOCK_SYNC_WORKER_ENABLED: "true", STOCK_RULE_ENGINE_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "1", STOCK_H8_PROJECTION_ENABLED: "false" };
   const prisma = {};
-  await runStockWorkerCycle({ prisma, rules, env, limit: 1 });
-  await runStockWorkerCycle({ prisma, rules, env, limit: 1 });
+  await runStockWorkerCycle({ prisma, rules, env, limit: 1, checkpointStore });
+  await runStockWorkerCycle({ prisma, rules, env, limit: 1, checkpointStore });
   assert.deepEqual(cursors, [null, 10]);
 });
 
@@ -142,3 +143,12 @@ test("target override recipient policy wins over tenant fallback", async () => {
   assert.equal(outcome.handled, true);
   assert.deepEqual(projection.recipients, [11]);
 });
+
+function memoryCheckpointStore() {
+  const values = new Map();
+  return {
+    async read(key) { return values.get(key) || null; },
+    async write(key, value) { values.set(key, JSON.parse(JSON.stringify(value))); },
+    async clear(key) { values.delete(key); },
+  };
+}

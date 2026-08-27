@@ -904,10 +904,18 @@ test("H7 isola item temporal defeituoso e continua no proximo candidato", async 
       return Reflect.get(target, property, receiver);
     },
   });
-  const result = await createAutomationService({ prisma: faultPrisma, env }).scanTemporalTriggers({ now: new Date(), limit: 10 });
+  const checkpointStore = memoryCheckpointStore();
+  const result = await createAutomationService({ prisma: faultPrisma, env, checkpointStore }).scanTemporalTriggers({ now: new Date(), limit: 10 });
   assert.equal(result.created, 1);
   assert.equal(result.scanErrors, 1);
   assert.equal(await prisma.automacaoExecucao.count({ where: { empresaId: tenant.empresa.id, leadId: firstLead.id } }), 0);
+  assert.equal(await prisma.automacaoExecucao.count({ where: { empresaId: tenant.empresa.id, leadId: secondLead.id } }), 1);
+  assert.equal(checkpointStore.values.size, 0);
+
+  const resumed = await createAutomationService({ prisma, env, checkpointStore }).scanTemporalTriggers({ now: new Date(), limit: 10 });
+  assert.equal(resumed.scanErrors, 0);
+  assert.equal(resumed.created, 1);
+  assert.equal(await prisma.automacaoExecucao.count({ where: { empresaId: tenant.empresa.id, leadId: firstLead.id } }), 1);
   assert.equal(await prisma.automacaoExecucao.count({ where: { empresaId: tenant.empresa.id, leadId: secondLead.id } }), 1);
 });
 
@@ -950,11 +958,14 @@ test("H8.1 interpreta gate e configuracao do worker com defaults seguros", async
   assert.equal(config.leaseMs, 60000);
   assert.equal(config.executionTimeoutMs, 30000);
   assert.equal(config.maxAttempts, 3);
+  assert.equal(config.cycleTimeoutMs, 300000);
+  assert.equal(config.shutdownTimeoutMs, 45000);
   const boundedLease = readAutomationWorkerConfig({
     AUTOMATION_WORKER_LEASE_MS: "5000",
     AUTOMATION_WORKER_EXECUTION_TIMEOUT_MS: "120000",
   });
   assert.equal(boundedLease.leaseMs, 130000);
+  assert.equal(boundedLease.cycleTimeoutMs, 300000);
 
   const logs = [];
   const disabled = startAutomationWorker({
@@ -1856,4 +1867,14 @@ function pilotEvent(empresaId, key) {
 
 function hashKey(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
+}
+
+function memoryCheckpointStore() {
+  const values = new Map();
+  return {
+    values,
+    async read(key) { return values.get(key) || null; },
+    async write(key, value) { values.set(key, JSON.parse(JSON.stringify(value))); },
+    async clear(key) { values.delete(key); },
+  };
 }

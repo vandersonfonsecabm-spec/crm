@@ -22,15 +22,16 @@ function modeRequiresHumanApproval(mode) {
   return normalizeMode(mode) === MODES.HUMAN_APPROVAL;
 }
 
-function buildModePolicy({ mode = MODES.OFF, enabled = false, featureEnabled = false, mockEnabled = false, tenantAllowed = false } = {}) {
+function buildModePolicy({ mode = MODES.OFF, enabled = false, featureEnabled = false, mockEnabled = false, connectorReady = false, tenantAllowed = false } = {}) {
   const normalized = normalizeMode(mode);
-  const active = enabled === true && featureEnabled === true && tenantAllowed === true && (normalized === MODES.OFF || mockEnabled === true);
+  const active = enabled === true && featureEnabled === true && tenantAllowed === true && (normalized === MODES.OFF || mockEnabled === true || connectorReady === true);
   return Object.freeze({
     mode: normalized,
     enabled: active && normalized !== MODES.OFF,
     featureEnabled: featureEnabled === true,
     tenantAllowed: tenantAllowed === true,
     mockEnabled: mockEnabled === true,
+    connectorReady: connectorReady === true,
     humanApprovalRequired: normalized === MODES.HUMAN_APPROVAL,
     autoReply: false,
     outbound: false,

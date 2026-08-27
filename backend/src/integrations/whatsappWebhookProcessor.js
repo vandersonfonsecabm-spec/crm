@@ -127,6 +127,9 @@ async function processTransaction(tx, eventoWebhookId, lease) {
       processadoEm: completedAt,
       erroCodigo: null,
       erroResumo: null,
+      nextAttemptAt: null,
+      leaseOwner: null,
+      leaseExpiresAt: null,
     },
   });
   if (completed.count !== 1) throw processingError("WHATSAPP_EVENT_STATE_INVALID");
@@ -192,10 +195,11 @@ function validateEventOwnership(event) {
     || !event.canalIntegracao
     || event.canalIntegracao.id !== event.canalIntegracaoId
     || event.canalIntegracao.empresaId !== event.empresaId
-    || event.canalIntegracao.tipo !== "WHATSAPP_META"
-    || event.canalIntegracao.ativo !== true
-    || event.canalIntegracao.status !== "ATIVO") {
+    || event.canalIntegracao.tipo !== "WHATSAPP_META") {
     throw processingError("WHATSAPP_EVENT_INTEGRATION_INVALID");
+  }
+  if (event.canalIntegracao.ativo !== true || event.canalIntegracao.status !== "ATIVO") {
+    throw processingError("WHATSAPP_EVENT_INTEGRATION_PAUSED");
   }
 }
 

@@ -6,6 +6,12 @@ const { createAutomationWorkerLogger } = require("./worker-observability");
 const { databaseProviderFromEnv } = require("../../scripts/prisma-runtime.cjs");
 const { runGate } = require("../../scripts/tenant-isolation-gate.cjs");
 const { assertStockFlagsOffForProduction, stockFlags } = require("../stock/flags");
+const { assertPersistentWorkerCheckpoints } = require("../shared/workerCheckpoint");
+const {
+  createMetaInboundWebhookWorker,
+  shouldStartMetaInboundWebhookWorker,
+} = require("../integrations/metaInboundWebhookWorker");
+const { createEmailDeliveryWorkerRuntime, shouldStartEmailDeliveryWorker } = require("../email-delivery/worker");
 
 const WORKER_DEFAULTS = Object.freeze({
   batchSize: 5,
@@ -13,6 +19,8 @@ const WORKER_DEFAULTS = Object.freeze({
   leaseMs: 60000,
   executionTimeoutMs: 30000,
   maxAttempts: 3,
+  cycleTimeoutMs: 5 * 60 * 1000,
+  shutdownTimeoutMs: 45000,
 });
 
 const WORKER_LIMITS = Object.freeze({
@@ -21,6 +29,8 @@ const WORKER_LIMITS = Object.freeze({
   leaseMs: [5000, 10 * 60 * 1000],
   executionTimeoutMs: [1000, 2 * 60 * 1000],
   maxAttempts: [1, 10],
+  cycleTimeoutMs: [5000, 15 * 60 * 1000],
+  shutdownTimeoutMs: [5000, 2 * 60 * 1000],
 });
 const MAX_CONSECUTIVE_FULL_FAILURES = 5;
 const OFFICIAL_WORKER_SERVICE_ID = "4eef3b96-e33f-42ea-9fb8-86c17b077ab8";
@@ -65,6 +75,7 @@ function readAutomationWorkerConfig(env = process.env) {
     ...WORKER_LIMITS.executionTimeoutMs,
   );
   const requestedLeaseMs = boundedInteger(env.AUTOMATION_WORKER_LEASE_MS, WORKER_DEFAULTS.leaseMs, ...WORKER_LIMITS.leaseMs);
+  const requestedCycleTimeoutMs = boundedInteger(env.WORKER_CYCLE_TIMEOUT_MS, WORKER_DEFAULTS.cycleTimeoutMs, ...WORKER_LIMITS.cycleTimeoutMs);
   return {
     batchSize: boundedInteger(env.AUTOMATION_WORKER_BATCH_SIZE, WORKER_DEFAULTS.batchSize, ...WORKER_LIMITS.batchSize),
     pollIntervalMs: boundedInteger(
@@ -75,6 +86,8 @@ function readAutomationWorkerConfig(env = process.env) {
     leaseMs: Math.min(WORKER_LIMITS.leaseMs[1], Math.max(requestedLeaseMs, executionTimeoutMs + 10000)),
     executionTimeoutMs,
     maxAttempts: boundedInteger(env.AUTOMATION_WORKER_MAX_ATTEMPTS, WORKER_DEFAULTS.maxAttempts, ...WORKER_LIMITS.maxAttempts),
+    cycleTimeoutMs: Math.min(WORKER_LIMITS.cycleTimeoutMs[1], Math.max(requestedCycleTimeoutMs, executionTimeoutMs + 10000)),
+    shutdownTimeoutMs: boundedInteger(env.WORKER_SHUTDOWN_TIMEOUT_MS, WORKER_DEFAULTS.shutdownTimeoutMs, ...WORKER_LIMITS.shutdownTimeoutMs),
   };
 }
 
@@ -82,11 +95,15 @@ function startAutomationWorker({
   service,
   notificationService = null,
   stockWorker = null,
+  metaInboundWorker = null,
+  emailDeliveryService = null,
   env = process.env,
   logger = console,
   workerId = `automation-worker-${process.pid}-${crypto.randomUUID()}`,
   setTimeoutImpl = setTimeout,
   clearTimeoutImpl = clearTimeout,
+  setWatchdogTimeoutImpl = setTimeout,
+  clearWatchdogTimeoutImpl = clearTimeout,
 } = {}) {
   const eventLogger = createAutomationWorkerLogger({
     logger,
@@ -96,8 +113,11 @@ function startAutomationWorker({
   const automationEnabled = shouldStartAutomationWorker(env);
   const notificationsEnabled = shouldStartNotificationWorker(env);
   const stockEnabled = shouldStartStockWorker(env) && typeof stockWorker?.processDue === "function";
+  const metaInboundEnabled = shouldStartMetaInboundWebhookWorker(env) && typeof metaInboundWorker?.processDue === "function";
+  const emailDeliveryEnabled = shouldStartEmailDeliveryWorker(env) && typeof emailDeliveryService?.processDue === "function";
   const temporalScanEnabled = shouldStartTemporalScanWorker(env);
-  if ((!service && !notificationService && !stockWorker) || (!automationEnabled && !notificationsEnabled && !stockEnabled)) {
+  if ((!service && !notificationService && !stockWorker && !metaInboundWorker && !emailDeliveryService)
+    || (!automationEnabled && !notificationsEnabled && !stockEnabled && !metaInboundEnabled && !emailDeliveryEnabled)) {
     eventLogger.info("worker_disabled", { status: "disabled" });
     return { started: false, async stop() {} };
   }
@@ -114,6 +134,8 @@ function startAutomationWorker({
   let consecutiveAutomationFailures = 0;
   let consecutiveNotificationFailures = 0;
   let consecutiveStockFailures = 0;
+  let consecutiveMetaInboundFailures = 0;
+  let consecutiveEmailDeliveryFailures = 0;
 
   function markStopped() {
     if (stopped) return;
@@ -126,22 +148,26 @@ function startAutomationWorker({
     automationEnabled,
     notificationsEnabled,
     stockEnabled,
+    metaInboundEnabled,
+    emailDeliveryEnabled,
     temporalScanEnabled,
     pollIntervalMs: config.pollIntervalMs,
     batchSize: config.batchSize,
     leaseMs: config.leaseMs,
     executionTimeoutMs: config.executionTimeoutMs,
     maxAttempts: config.maxAttempts,
+    cycleTimeoutMs: config.cycleTimeoutMs,
+    shutdownTimeoutMs: config.shutdownTimeoutMs,
   });
 
-  async function cycle() {
-    if (running || stopping) return;
-    running = true;
+  async function cycleBody() {
     const startedAt = Date.now();
     const now = new Date();
     let automationFailed = false;
     let notificationsFailed = false;
     let stockFailed = false;
+    let metaInboundFailed = false;
+    let emailDeliveryFailed = false;
     if (automationEnabled && service) {
       try {
         if (temporalScanEnabled && typeof service.scanTemporalTriggers === "function") {
@@ -204,26 +230,93 @@ function startAutomationWorker({
         eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "stock_core" });
       }
     }
+    if (metaInboundEnabled) {
+      try {
+        const metaResult = await metaInboundWorker.processDue({
+          now,
+          limit: config.batchSize,
+          leaseOwner: workerId,
+        });
+        if (Number(metaResult?.failed || 0) > 0) {
+          metaInboundFailed = true;
+          eventLogger.error("worker_poll_error", new Error("META_INBOUND_CYCLE_PARTIAL_FAILURE"), {
+            durationMs: elapsedMs(startedAt),
+            subsystem: "meta_inbound",
+            failedEventCount: Number(metaResult.failed || 0),
+          });
+        }
+      } catch (error) {
+        metaInboundFailed = true;
+        eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "meta_inbound" });
+      }
+    }
+    if (emailDeliveryEnabled) {
+      try {
+        await emailDeliveryService.processDue({
+          now,
+          limit: config.batchSize,
+          leaseOwner: workerId,
+          leaseMs: config.leaseMs,
+          timeoutMs: config.executionTimeoutMs,
+          maxAttempts: config.maxAttempts,
+        });
+      } catch (error) {
+        emailDeliveryFailed = true;
+        eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "security_email_delivery" });
+      }
+    }
     const automationActive = automationEnabled && Boolean(service);
     const notificationsActive = notificationsEnabled && Boolean(notificationService?.processDue);
     if (automationActive) consecutiveAutomationFailures = automationFailed ? consecutiveAutomationFailures + 1 : 0;
     if (notificationsActive) consecutiveNotificationFailures = notificationsFailed ? consecutiveNotificationFailures + 1 : 0;
     const stockActive = stockEnabled && Boolean(stockWorker?.processDue);
     if (stockActive) consecutiveStockFailures = stockFailed ? consecutiveStockFailures + 1 : 0;
+    const metaInboundActive = metaInboundEnabled && Boolean(metaInboundWorker?.processDue);
+    if (metaInboundActive) consecutiveMetaInboundFailures = metaInboundFailed ? consecutiveMetaInboundFailures + 1 : 0;
+    const emailDeliveryActive = emailDeliveryEnabled && Boolean(emailDeliveryService?.processDue);
+    if (emailDeliveryActive) consecutiveEmailDeliveryFailures = emailDeliveryFailed ? consecutiveEmailDeliveryFailures + 1 : 0;
     const unhealthySubsystem = consecutiveAutomationFailures >= MAX_CONSECUTIVE_FULL_FAILURES
       ? "automation"
       : consecutiveNotificationFailures >= MAX_CONSECUTIVE_FULL_FAILURES ? "notifications"
-        : consecutiveStockFailures >= MAX_CONSECUTIVE_FULL_FAILURES ? "stock_core" : null;
+        : consecutiveStockFailures >= MAX_CONSECUTIVE_FULL_FAILURES ? "stock_core"
+          : consecutiveMetaInboundFailures >= MAX_CONSECUTIVE_FULL_FAILURES ? "meta_inbound"
+            : consecutiveEmailDeliveryFailures >= MAX_CONSECUTIVE_FULL_FAILURES ? "security_email_delivery" : null;
     if (unhealthySubsystem) {
       stopping = true;
       fatal = true;
       eventLogger.error("worker_unhealthy", new Error("Falhas consecutivas no subsistema ativo."), {
         durationMs: elapsedMs(startedAt),
         subsystem: unhealthySubsystem,
-        consecutiveFailures: unhealthySubsystem === "automation" ? consecutiveAutomationFailures : unhealthySubsystem === "notifications" ? consecutiveNotificationFailures : consecutiveStockFailures,
+        consecutiveFailures: unhealthySubsystem === "automation"
+          ? consecutiveAutomationFailures
+          : unhealthySubsystem === "notifications"
+            ? consecutiveNotificationFailures
+            : unhealthySubsystem === "stock_core"
+              ? consecutiveStockFailures
+              : unhealthySubsystem === "meta_inbound" ? consecutiveMetaInboundFailures : consecutiveEmailDeliveryFailures,
       });
     }
-    running = false;
+  }
+
+  async function cycle() {
+    if (running || stopping) return;
+    running = true;
+    try {
+      await withDeadline(cycleBody(), config.cycleTimeoutMs, {
+        setTimeoutImpl: setWatchdogTimeoutImpl,
+        clearTimeoutImpl: clearWatchdogTimeoutImpl,
+        code: "WORKER_CYCLE_TIMEOUT",
+      });
+    } catch (error) {
+      stopping = true;
+      fatal = true;
+      eventLogger.error("worker_unhealthy", error, {
+        durationMs: config.cycleTimeoutMs,
+        subsystem: "worker_cycle",
+      });
+    } finally {
+      running = false;
+    }
     if (!stopping) timer = setTimeoutImpl(() => {
       activeCycle = cycle();
     }, config.pollIntervalMs);
@@ -272,6 +365,7 @@ async function runAutomationWorkerProcess({ env = process.env, logger = console,
   const stockRuntimeDisabled = !stockFlags(env).domainEnabled && !stockFlags(env).syncWorkerEnabled && !stockFlags(env).sourceEnabled;
   try {
     await preflightWorkerDatabase({ prisma, env, queryDatabase });
+    assertPersistentWorkerCheckpoints(prisma);
     try {
       await runGate({ mode: provider === "postgresql" ? "production-readonly" : "post-migration", env });
     } catch (error) {
@@ -293,12 +387,18 @@ async function runAutomationWorkerProcess({ env = process.env, logger = console,
     const stockServices = createStockServices({ prisma, env, logger });
     stockWorker = { processDue: (options) => stockServices.worker(options) };
   }
-  const worker = startAutomationWorker({ service, notificationService, stockWorker, env, logger });
+  const metaInboundWorker = shouldStartMetaInboundWebhookWorker(env)
+    ? createMetaInboundWebhookWorker({ prisma, env })
+    : null;
+  const emailDeliveryRuntime = prisma.emailDeliveryOutbox && prisma.emailDeliveryEvent
+    ? createEmailDeliveryWorkerRuntime({ prisma, env, logger })
+    : { enabled: false, service: null };
+  const worker = startAutomationWorker({ service, notificationService, stockWorker, metaInboundWorker, emailDeliveryService: emailDeliveryRuntime.service, env, logger });
   if (!worker.started) {
     await prisma.$disconnect();
     return 0;
   }
-  return waitForShutdown(worker, prisma);
+  return waitForShutdown(worker, prisma, { env, logger });
 }
 
 async function preflightWorkerDatabase({ prisma, env = process.env, queryDatabase = queryDatabaseWithServerTimeout } = {}) {
@@ -335,7 +435,18 @@ function validateWorkerRuntimeTarget(env = process.env) {
   return provider;
 }
 
-function waitForShutdown(worker, prisma) {
+function waitForShutdown(worker, prisma, {
+  env = process.env,
+  logger = console,
+  setTimeoutImpl = setTimeout,
+  clearTimeoutImpl = clearTimeout,
+} = {}) {
+  const timeoutMs = readAutomationWorkerConfig(env).shutdownTimeoutMs;
+  const eventLogger = createAutomationWorkerLogger({
+    logger,
+    workerInstanceId: worker?.workerId || `automation-worker-${process.pid}`,
+    provider: automationProvider(env),
+  });
   return new Promise((resolve) => {
     let closed = false;
     const close = async () => {
@@ -343,13 +454,56 @@ function waitForShutdown(worker, prisma) {
       closed = true;
       process.removeListener("SIGTERM", close);
       process.removeListener("SIGINT", close);
-      await worker.stop();
-      await prisma.$disconnect();
-      resolve(worker.isFatal?.() ? 1 : 0);
+      let timedOut = false;
+      try {
+        await withDeadline(worker.stop(), timeoutMs, {
+          setTimeoutImpl,
+          clearTimeoutImpl,
+          code: "WORKER_SHUTDOWN_TIMEOUT",
+        });
+      } catch (error) {
+        timedOut = true;
+        eventLogger.error("worker_unhealthy", error, {
+          durationMs: timeoutMs,
+          subsystem: "worker_shutdown",
+        });
+      }
+      try {
+        await withDeadline(Promise.resolve(prisma.$disconnect()), Math.min(timeoutMs, 5000), {
+          setTimeoutImpl,
+          clearTimeoutImpl,
+          code: "WORKER_SHUTDOWN_TIMEOUT",
+        });
+      } catch (error) {
+        timedOut = true;
+        eventLogger.error("worker_unhealthy", error, {
+          durationMs: Math.min(timeoutMs, 5000),
+          subsystem: "worker_shutdown",
+        });
+      }
+      resolve(timedOut || worker.isFatal?.() ? 1 : 0);
     };
     process.once("SIGTERM", close);
     process.once("SIGINT", close);
     worker.waitForStop?.().then(close).catch(close);
+  });
+}
+
+function withDeadline(promise, timeoutMs, {
+  setTimeoutImpl = setTimeout,
+  clearTimeoutImpl = clearTimeout,
+  code = "WORKER_CYCLE_TIMEOUT",
+} = {}) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeoutImpl(() => {
+      const error = new Error(code);
+      error.code = code;
+      reject(error);
+    }, timeoutMs);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => {
+    if (timer) clearTimeoutImpl(timer);
   });
 }
 
@@ -371,7 +525,8 @@ function elapsedMs(startedAt) {
 if (require.main === module) {
   runAutomationWorkerProcess()
     .then((code) => {
-      process.exitCode = code;
+      if (code !== 0) process.exit(code);
+      process.exitCode = 0;
     })
     .catch((error) => {
       createAutomationWorkerLogger({
@@ -379,7 +534,7 @@ if (require.main === module) {
         workerInstanceId: `automation-worker-${process.pid}`,
         provider: automationProvider(process.env),
       }).error("worker_failed", error);
-      process.exitCode = 1;
+      process.exit(1);
     });
 }
 
@@ -393,6 +548,9 @@ module.exports = {
   shouldStartNotificationWorker,
   shouldStartStockWorker,
   shouldStartTemporalScanWorker,
+  shouldStartEmailDeliveryWorker,
   validateWorkerRuntimeTarget,
   startAutomationWorker,
+  waitForShutdown,
+  withDeadline,
 };

@@ -82,10 +82,12 @@ async function claimMetaInboundWebhook({
   prisma,
   eventoWebhookId,
   provider,
+  leaseOwner = `meta-inbound-${process.pid}`,
   clock = () => new Date(),
   policy = DEFAULT_RETRY_POLICY,
 } = {}) {
-  if (!prisma || !Number.isInteger(eventoWebhookId) || eventoWebhookId < 1 || !safeProvider(provider)) {
+  if (!prisma || !Number.isInteger(eventoWebhookId) || eventoWebhookId < 1
+    || !safeProvider(provider) || !safeLeaseOwner(leaseOwner)) {
     return { state: "INVALID" };
   }
   const normalizedPolicy = normalizeRetryPolicy(policy);
@@ -104,19 +106,23 @@ async function claimMetaInboundWebhook({
 
   const claimedAt = validClock(clock);
   const recoveringLease = event.statusProcessamento === PROCESSING_STATUS.PROCESSING;
-  if (recoveringLease && !leaseExpired(event.updatedAt, claimedAt, normalizedPolicy.leaseMs)) {
+  if (recoveringLease && !leaseExpired(event, claimedAt, normalizedPolicy.leaseMs)) {
     return { state: "LEASE_ACTIVE" };
   }
   if (!recoveringLease && event.statusProcessamento !== PROCESSING_STATUS.RECEIVED) {
     return { state: "INVALID" };
   }
   if (!Number.isInteger(event.tentativas) || event.tentativas < 0) return { state: "INVALID" };
+  if (!recoveringLease && isValidDate(event.nextAttemptAt) && event.nextAttemptAt.getTime() > claimedAt.getTime()) {
+    return { state: "NOT_DUE", nextAttemptAt: event.nextAttemptAt };
+  }
 
   if (event.tentativas >= normalizedPolicy.maxAttempts) {
     return exhaustClaim({ prisma, event, provider });
   }
 
   const leaseStartedAt = nextLeaseTimestamp(event.updatedAt, claimedAt);
+  const leaseExpiresAt = new Date(leaseStartedAt.getTime() + normalizedPolicy.leaseMs);
   const claimed = await prisma.eventoWebhook.updateMany({
     where: claimWhere(event, provider),
     data: {
@@ -124,6 +130,9 @@ async function claimMetaInboundWebhook({
       tentativas: { increment: 1 },
       erroCodigo: null,
       erroResumo: null,
+      nextAttemptAt: null,
+      leaseOwner,
+      leaseExpiresAt,
       updatedAt: leaseStartedAt,
     },
   });
@@ -135,6 +144,8 @@ async function claimMetaInboundWebhook({
       eventoWebhookId: event.id,
       provider,
       attempt: event.tentativas + 1,
+      owner: leaseOwner,
+      expiresAt: leaseExpiresAt,
       updatedAt: leaseStartedAt,
     },
   };
@@ -150,6 +161,8 @@ async function recordMetaInboundFailure({
   permanentCodes = new Set(),
   clock = () => new Date(),
   policy = DEFAULT_RETRY_POLICY,
+  scheduleRetry = false,
+  random = Math.random,
 } = {}) {
   if (!prisma || !Number.isInteger(eventoWebhookId) || eventoWebhookId < 1 || !safeProvider(provider)) {
     return { state: "INVALID", recorded: false };
@@ -157,6 +170,7 @@ async function recordMetaInboundFailure({
   const normalizedPolicy = normalizeRetryPolicy(policy);
   const failureCode = sanitizeFailureCode(error?.code, channel?.failureFallback);
   const permanent = error?.retryable === false || permanentCodes.has(error?.code);
+  const operationalDeferral = scheduleRetry && isOperationalDeferralCode(error?.code);
   const failedAt = validClock(clock);
 
   return prisma.$transaction(async (tx) => {
@@ -170,7 +184,9 @@ async function recordMetaInboundFailure({
     }
     if (!isMatchingLease(event, lease)) return { state: "LEASE_LOST", recorded: false };
 
-    const state = permanent
+    const state = operationalDeferral
+      ? FAILURE_STATE.RETRYABLE
+      : permanent
       ? FAILURE_STATE.PERMANENT
       : event.tentativas >= normalizedPolicy.maxAttempts
         ? FAILURE_STATE.EXHAUSTED
@@ -186,6 +202,18 @@ async function recordMetaInboundFailure({
           : PROCESSING_STATUS.FAILED,
         erroCodigo: failureCode,
         erroResumo: state,
+        ...(operationalDeferral ? { tentativas: { decrement: 1 } } : {}),
+        nextAttemptAt: state === FAILURE_STATE.RETRYABLE && scheduleRetry
+          ? new Date(failedAt.getTime() + (operationalDeferral
+            ? Math.max(60_000, normalizedPolicy.maxDelayMs)
+            : calculateBackoffWithJitter({
+              attempt: event.tentativas,
+              policy: normalizedPolicy,
+              random,
+            })))
+          : null,
+        leaseOwner: null,
+        leaseExpiresAt: null,
       },
     });
     if (updated.count !== 1) return { state: "LEASE_LOST", recorded: false };
@@ -212,6 +240,11 @@ async function recordMetaInboundFailure({
 }
 
 function isMatchingLease(event, lease) {
+  const explicitLeaseMatches = lease?.owner === undefined && lease?.expiresAt === undefined
+    ? true
+    : safeLeaseOwner(lease?.owner)
+      && event?.leaseOwner === lease.owner
+      && sameDate(event?.leaseExpiresAt, lease.expiresAt);
   return Boolean(
     event
     && lease
@@ -220,6 +253,7 @@ function isMatchingLease(event, lease) {
     && Number.isInteger(lease.attempt)
     && lease.attempt === event.tentativas
     && sameDate(lease.updatedAt, event.updatedAt)
+    && explicitLeaseMatches
     && event.statusProcessamento === PROCESSING_STATUS.PROCESSING
     && event.processadoEm === null,
   );
@@ -236,6 +270,9 @@ async function exhaustClaim({ prisma, event, provider }) {
       statusProcessamento: PROCESSING_STATUS.FAILED,
       erroCodigo: `${provider}_EVENT_ATTEMPTS_EXHAUSTED`,
       erroResumo: FAILURE_STATE.EXHAUSTED,
+      nextAttemptAt: null,
+      leaseOwner: null,
+      leaseExpiresAt: null,
     },
   });
   return exhausted.count === 1
@@ -252,6 +289,8 @@ function claimWhere(event, provider) {
     statusProcessamento: event.statusProcessamento,
     processadoEm: null,
     updatedAt: event.updatedAt,
+    ...(event.leaseOwner === undefined ? {} : { leaseOwner: event.leaseOwner }),
+    ...(event.leaseExpiresAt === undefined ? {} : { leaseExpiresAt: event.leaseExpiresAt }),
   };
 }
 
@@ -265,6 +304,9 @@ function claimSelection() {
     tentativas: true,
     processadoEm: true,
     erroResumo: true,
+    nextAttemptAt: true,
+    leaseOwner: true,
+    leaseExpiresAt: true,
     updatedAt: true,
   };
 }
@@ -275,8 +317,9 @@ function terminalState(value) {
     : FAILURE_STATE.PERMANENT;
 }
 
-function leaseExpired(updatedAt, now, leaseMs) {
-  return updatedAt.getTime() <= now.getTime() - leaseMs;
+function leaseExpired(event, now, leaseMs) {
+  if (isValidDate(event?.leaseExpiresAt)) return event.leaseExpiresAt.getTime() <= now.getTime();
+  return event.updatedAt.getTime() <= now.getTime() - leaseMs;
 }
 
 function nextLeaseTimestamp(previous, now) {
@@ -306,6 +349,15 @@ function isValidDate(value) {
 
 function safeProvider(value) {
   return typeof value === "string" && /^[A-Z][A-Z0-9_]{1,79}$/.test(value);
+}
+
+function isOperationalDeferralCode(value) {
+  return typeof value === "string"
+    && (value.endsWith("_EVENT_INTEGRATION_PAUSED") || value.endsWith("_EVENT_PROCESSING_NOT_AVAILABLE"));
+}
+
+function safeLeaseOwner(value) {
+  return typeof value === "string" && /^[A-Za-z0-9:_-]{1,160}$/.test(value);
 }
 
 function boundedInteger(value, fallback, min, max) {

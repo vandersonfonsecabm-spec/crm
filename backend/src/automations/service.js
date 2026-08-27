@@ -4,6 +4,7 @@ const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES, unavailableActionTypes } = requ
 const { createWorkerEventEnvelope, sanitizeError } = require("./worker-observability");
 const { withPostgresEnqueueDiagnostics } = require("./postgres-enqueue-diagnostics");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { KEYS: WORKER_CHECKPOINT_KEYS, createWorkerCheckpointStore } = require("../shared/workerCheckpoint");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 const { presentRule, safeJson, snapshotRule, validatePilotEventPayload, validateRulePayload } = require("./validation");
 const {
@@ -21,12 +22,7 @@ const ROUND_ROBIN_TRANSACTION_ATTEMPTS = 5;
 const ROUND_ROBIN_TRANSACTION_BACKOFF_MS = 5;
 const RETRYABLE_JOB_STATUSES = Object.freeze(["PENDENTE", "FALHOU"]);
 
-function createAutomationService({ prisma, env = process.env, logger = console }) {
-  const temporalScanState = {
-    tenantId: null,
-    leads: new Map(),
-    deals: new Map(),
-  };
+function createAutomationService({ prisma, env = process.env, logger = console, checkpointStore = createWorkerCheckpointStore({ prisma }) }) {
   const isPostgresRuntime = () => {
     const mergedEnv = { ...process.env, ...env };
     if (String(mergedEnv.CRM_TEST_DATABASE_PROVIDER || "").trim().toLowerCase() === "postgresql") return true;
@@ -249,8 +245,11 @@ function createAutomationService({ prisma, env = process.env, logger = console }
 
   async function scanTemporalTriggers({ now = new Date(), limit = 50 } = {}) {
     const pageSize = Math.max(1, Math.min(Number.isInteger(limit) ? limit : 50, 100));
+    const tenantCheckpointKey = WORKER_CHECKPOINT_KEYS.automationTenants();
+    const tenantCheckpoint = await checkpointStore.read(tenantCheckpointKey);
+    const tenantCursor = positiveInteger(tenantCheckpoint?.tenantId, null);
     const tenantWhere = { chave: FEATURE_KEYS.AUTOMATIONS, habilitada: true };
-    if (temporalScanState.tenantId !== null) tenantWhere.empresaId = { gt: temporalScanState.tenantId };
+    if (tenantCursor !== null) tenantWhere.empresaId = { gt: tenantCursor };
     const tenants = await prisma.empresaFuncionalidade.findMany({
       where: tenantWhere,
       select: { empresaId: true },
@@ -283,7 +282,10 @@ function createAutomationService({ prisma, env = process.env, logger = console }
         logTemporalScanFailure("TENANT", tenant.empresaId, error);
       }
     }
-    temporalScanState.tenantId = tenants.length === pageSize ? tenants.at(-1).empresaId : null;
+    if (scanErrors === 0) {
+      if (tenants.length === pageSize) await checkpointStore.write(tenantCheckpointKey, { tenantId: tenants.at(-1).empresaId });
+      else await checkpointStore.clear(tenantCheckpointKey);
+    }
     return { created, scanErrors };
   }
 
@@ -292,14 +294,15 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     let count = 0;
     let errors = 0;
     for (const rule of rules) {
+      const errorsBeforeRule = errors;
       let leads = null;
       let cursorKey = null;
       try {
         const threshold = thresholdMinutes(rule, "tempoSemAcompanhamentoMinutos");
         if (!threshold || !rule.activatedAt) continue;
         const cutoff = new Date(now.getTime() - threshold * 60000);
-        cursorKey = `${empresaId}:${rule.id}`;
-        const cursor = temporalScanState.leads.get(cursorKey);
+        cursorKey = WORKER_CHECKPOINT_KEYS.automationLeads(empresaId, rule.id);
+        const cursor = temporalLeadCursor(await checkpointStore.read(cursorKey));
         const where = { empresaId, cliente: { arquivadoEm: null }, createdAt: { gte: rule.activatedAt, lte: cutoff }, status: { in: ["NOVO", "EM_ATENDIMENTO", "QUALIFICADO"] } };
         if (cursor) where.OR = [{ createdAt: { gt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { gt: cursor.id } }];
         leads = await prisma.lead.findMany({ where, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: limit });
@@ -336,12 +339,12 @@ function createAutomationService({ prisma, env = process.env, logger = console }
             logTemporalScanFailure("LEAD_WITHOUT_FOLLOW_UP_ITEM", empresaId, error, rule.id);
           }
         }
-        if (leads.length === limit) temporalScanState.leads.set(cursorKey, { createdAt: leads.at(-1).createdAt, id: leads.at(-1).id });
-        else temporalScanState.leads.delete(cursorKey);
+        if (errors === errorsBeforeRule) {
+          if (leads.length === limit) await checkpointStore.write(cursorKey, { createdAt: leads.at(-1).createdAt, id: leads.at(-1).id });
+          else await checkpointStore.clear(cursorKey);
+        }
       } catch (error) {
         errors += 1;
-        if (leads?.length === limit) temporalScanState.leads.set(cursorKey, { createdAt: leads.at(-1).createdAt, id: leads.at(-1).id });
-        else if (cursorKey) temporalScanState.leads.delete(cursorKey);
         logTemporalScanFailure("LEAD_WITHOUT_FOLLOW_UP", empresaId, error, rule.id);
       }
     }
@@ -353,14 +356,15 @@ function createAutomationService({ prisma, env = process.env, logger = console }
     let count = 0;
     let errors = 0;
     for (const rule of rules) {
+      const errorsBeforeRule = errors;
       let negocios = null;
       let cursorKey = null;
       try {
         const threshold = thresholdMinutes(rule, "tempoParadoMinutos");
         if (!threshold || !rule.activatedAt) continue;
         const cutoff = new Date(now.getTime() - threshold * 60000);
-        cursorKey = `${empresaId}:${rule.id}`;
-        const cursor = temporalScanState.deals.get(cursorKey);
+        cursorKey = WORKER_CHECKPOINT_KEYS.automationDeals(empresaId, rule.id);
+        const cursor = temporalDealCursor(await checkpointStore.read(cursorKey));
         const where = { empresaId, cliente: { arquivadoEm: null }, etapa: { notIn: ["FECHADO", "PERDIDO"] }, etapaEntrouEm: { gte: rule.activatedAt, lte: cutoff } };
         if (cursor) where.OR = [{ etapaEntrouEm: { gt: cursor.etapaEntrouEm } }, { etapaEntrouEm: cursor.etapaEntrouEm, id: { gt: cursor.id } }];
         negocios = await prisma.negocio.findMany({ where, orderBy: [{ etapaEntrouEm: "asc" }, { id: "asc" }], take: limit });
@@ -395,12 +399,12 @@ function createAutomationService({ prisma, env = process.env, logger = console }
             logTemporalScanFailure("DEAL_STALLED_ITEM", empresaId, error, rule.id);
           }
         }
-        if (negocios.length === limit) temporalScanState.deals.set(cursorKey, { etapaEntrouEm: negocios.at(-1).etapaEntrouEm, id: negocios.at(-1).id });
-        else temporalScanState.deals.delete(cursorKey);
+        if (errors === errorsBeforeRule) {
+          if (negocios.length === limit) await checkpointStore.write(cursorKey, { etapaEntrouEm: negocios.at(-1).etapaEntrouEm, id: negocios.at(-1).id });
+          else await checkpointStore.clear(cursorKey);
+        }
       } catch (error) {
         errors += 1;
-        if (negocios?.length === limit) temporalScanState.deals.set(cursorKey, { etapaEntrouEm: negocios.at(-1).etapaEntrouEm, id: negocios.at(-1).id });
-        else if (cursorKey) temporalScanState.deals.delete(cursorKey);
         logTemporalScanFailure("DEAL_STALLED", empresaId, error, rule.id);
       }
     }
@@ -1480,6 +1484,21 @@ function requireAutomationAdmin(context) {
 function positiveInteger(value, fallback) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function temporalLeadCursor(value) {
+  return temporalCursor(value, "createdAt");
+}
+
+function temporalDealCursor(value) {
+  return temporalCursor(value, "etapaEntrouEm");
+}
+
+function temporalCursor(value, field) {
+  const id = positiveInteger(value?.id, null);
+  const date = value?.[field] ? new Date(value[field]) : null;
+  if (!id || !date || !Number.isFinite(date.getTime())) return null;
+  return { id, [field]: date };
 }
 
 function pageResult(data, total, page, limit) {

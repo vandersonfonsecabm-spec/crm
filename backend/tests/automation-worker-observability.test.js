@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const { after, afterEach, before, test } = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const { createAutomationService } = require("../src/automations/service");
-const { automationProvider, preflightWorkerDatabase, startAutomationWorker } = require("../src/automations/worker");
+const { automationProvider, preflightWorkerDatabase, startAutomationWorker, waitForShutdown } = require("../src/automations/worker");
 const {
   MAX_ERROR_MESSAGE_LENGTH,
   createAutomationWorkerLogger,
@@ -214,6 +214,67 @@ test("worker torna notificacoes unhealthy somente quando todos os tenants falham
   }
   await worker.stop();
   assert.equal(capture.entries().filter((entry) => entry.event === "worker_unhealthy").length, 1);
+});
+
+test("watchdog encerra ciclo travado sem agendar polling sobreposto", async () => {
+  const capture = logCapture();
+  const scheduled = [];
+  const watchdogs = [];
+  const worker = startAutomationWorker({
+    service: { processDueJobs: () => new Promise(() => {}) },
+    env: {
+      NODE_ENV: "production",
+      AUTOMATION_WORKER_ENABLED: "true",
+      AUTOMATION_WORKER_POLL_INTERVAL_MS: "1000",
+      WORKER_CYCLE_TIMEOUT_MS: "5000",
+    },
+    workerId: "worker-cycle-timeout",
+    logger: capture.logger,
+    setTimeoutImpl: (callback) => { scheduled.push(callback); return callback; },
+    clearTimeoutImpl() {},
+    setWatchdogTimeoutImpl: (callback) => { watchdogs.push(callback); return callback; },
+    clearWatchdogTimeoutImpl() {},
+  });
+
+  scheduled[0]();
+  await flushTasks();
+  assert.equal(watchdogs.length, 1);
+  watchdogs[0]();
+  await worker.waitForStop();
+
+  assert.equal(worker.isFatal(), true);
+  assert.equal(scheduled.length, 1);
+  const unhealthy = capture.entries().filter((entry) => entry.event === "worker_unhealthy");
+  assert.equal(unhealthy.length, 1);
+  assert.equal(unhealthy[0].subsystem, "worker_cycle");
+  assert.equal(unhealthy[0].errorCode, "WORKER_CYCLE_TIMEOUT");
+});
+
+test("shutdown travado termina com codigo nao zero no deadline", async () => {
+  const capture = logCapture({ workerInstanceId: "worker-shutdown-timeout" });
+  const watchdogs = [];
+  const codePromise = waitForShutdown({
+    workerId: "worker-shutdown-timeout",
+    stop: () => new Promise(() => {}),
+    waitForStop: () => Promise.resolve(),
+    isFatal: () => false,
+  }, {
+    $disconnect: async () => {},
+  }, {
+    env: { WORKER_SHUTDOWN_TIMEOUT_MS: "5000" },
+    logger: capture.logger,
+    setTimeoutImpl: (callback) => { watchdogs.push(callback); return callback; },
+    clearTimeoutImpl() {},
+  });
+
+  await flushTasks();
+  watchdogs[0]();
+  const code = await codePromise;
+  assert.equal(code, 1);
+  const unhealthy = capture.entries().filter((entry) => entry.event === "worker_unhealthy");
+  assert.equal(unhealthy.length, 1);
+  assert.equal(unhealthy[0].subsystem, "worker_shutdown");
+  assert.equal(unhealthy[0].errorCode, "WORKER_SHUTDOWN_TIMEOUT");
 });
 
 test("sanitizacao cobre headers compostos, credenciais, PII e payload Prisma", () => {

@@ -17,6 +17,7 @@ process.env.INTEGRATION_ENCRYPTION_KEY = "bling-test-encryption-key-with-32-byte
 process.env.BLING_CLIENT_ID = "client-id-test";
 process.env.BLING_CLIENT_SECRET = "client-secret-test";
 process.env.BLING_REDIRECT_URI = "https://api.test/integracoes/bling/callback";
+process.env.FRONTEND_URL = "https://frontend.test";
 process.env.BLING_TIMEOUT_MS = "200";
 process.env.BLING_MAX_PAGES = "2";
 process.env.BLING_PAGE_SIZE = "2";
@@ -797,6 +798,112 @@ test("Bling trata timeout e ausência de configuração sem vazar tokens", async
   const missingRedirect = await request("POST", "/integracoes/bling/iniciar", {}, admin.token);
   assert.equal(missingRedirect.status, 501);
   process.env.BLING_REDIRECT_URI = previousRedirect;
+});
+
+test("Bling serializa sincronizações concorrentes por lease persistida", async () => {
+  const admin = await registerAndLogin("Empresa Bling Lease", "Admin Bling Lease", "admin-bling-lease@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Lease",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "access-lease",
+        refreshToken: "refresh-lease",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  let releaseProvider;
+  let providerEntered;
+  const entered = new Promise((resolve) => { providerEntered = resolve; });
+  const released = new Promise((resolve) => { releaseProvider = resolve; });
+  let productCalls = 0;
+  mockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/produtos")) {
+      productCalls += 1;
+      providerEntered();
+      await released;
+      return jsonResponse({ data: [] });
+    }
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const firstPromise = request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS"] }, admin.token);
+  await entered;
+  const competing = await request("POST", `/integracoes/${integration.id}/sincronizar`, { entidades: ["PRODUTOS"] }, admin.token);
+  assert.equal(competing.status, 409);
+  assert.equal(competing.body.codigo, "INTEGRATION_OPERATION_IN_PROGRESS");
+  releaseProvider();
+  const first = await firstPromise;
+  assert.equal(first.status, 200);
+  assert.equal(productCalls, 1);
+  assert.equal(await prisma.sincronizacaoIntegracao.count({ where: { empresaId: admin.empresaId, integracaoId: integration.id } }), 1);
+  assert.equal(await prisma.operacaoDistribuidaLease.count({ where: { empresaId: admin.empresaId } }), 0);
+});
+
+test("Bling marca ERRO quando teste termina em 401 após refresh", async () => {
+  const admin = await registerAndLogin("Empresa Bling Auth Error", "Admin Bling Auth Error", "admin-bling-auth-error@test.local");
+  const integration = await prisma.integracao.create({
+    data: {
+      empresaId: admin.empresaId,
+      nome: "Bling Auth Error",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({
+        accessToken: "rejected-access",
+        refreshToken: "valid-refresh",
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+
+  let refreshCalls = 0;
+  mockFetch(async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.pathname.endsWith("/oauth/token")) {
+      refreshCalls += 1;
+      return jsonResponse({ access_token: "still-rejected", refresh_token: "rotated-refresh", expires_in: 21600 });
+    }
+    if (parsed.pathname.endsWith("/produtos")) return jsonResponse({ error: { type: "unauthorized", description: "token=secret" } }, 401);
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const tested = await request("POST", `/integracoes/${integration.id}/bling/testar`, {}, admin.token);
+  assert.equal(tested.status, 401);
+  assert.equal(refreshCalls, 1);
+  const stored = await prisma.integracao.findUnique({ where: { id: integration.id } });
+  assert.equal(stored.status, "ERRO");
+  assert.equal(JSON.stringify(tested.body).includes("secret"), false);
+});
+
+test("Bling impede segunda integração OAuth no mesmo tenant", async () => {
+  const admin = await registerAndLogin("Empresa Bling OAuth Único", "Admin OAuth Único", "admin-bling-oauth-unico@test.local");
+  const firstStart = await request("POST", "/integracoes/bling/iniciar", {}, admin.token);
+  const secondStart = await request("POST", "/integracoes/bling/iniciar", {}, admin.token);
+  const firstState = new URL(firstStart.body.authorizationUrl).searchParams.get("state");
+  const secondState = new URL(secondStart.body.authorizationUrl).searchParams.get("state");
+  let exchanges = 0;
+  mockFetch(async () => {
+    exchanges += 1;
+    return jsonResponse({ access_token: "unique-access", refresh_token: "unique-refresh", expires_in: 21600 });
+  });
+
+  const first = await request("GET", `/integracoes/bling/callback?code=first-code&state=${encodeURIComponent(firstState)}`);
+  const second = await request("GET", `/integracoes/bling/callback?code=second-code&state=${encodeURIComponent(secondState)}`);
+  assert.match(first.headers.location, /bling=conectado/);
+  assert.match(second.headers.location, /bling=erro/);
+  assert.equal(exchanges, 1);
+  assert.equal(await prisma.integracao.count({ where: { empresaId: admin.empresaId, tipo: "BLING" } }), 1);
 });
 
 function mockFetch(handler) {

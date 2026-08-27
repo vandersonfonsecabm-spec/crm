@@ -331,7 +331,7 @@ test("flags, capabilities e integracao inativa impedem qualquer escrita", async 
   await enableCapabilities(empresaA.id);
 
   await prisma.canalIntegracao.update({ where: { id: integrationA.id }, data: { ativo: false } });
-  await assertProcessorError(event.id, "WHATSAPP_EVENT_INTEGRATION_INVALID");
+  await assertProcessorError(event.id, "WHATSAPP_EVENT_INTEGRATION_PAUSED");
   assert.deepEqual(await chainCounts(), { clients: 0, contacts: 0, leads: 0, conversations: 0, messages: 0 });
   assert.equal((await prisma.eventoWebhook.findUniqueOrThrow({ where: { id: event.id } })).statusProcessamento, "RECEBIDO");
 });
