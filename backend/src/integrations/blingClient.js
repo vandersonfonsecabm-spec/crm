@@ -177,8 +177,8 @@ class BlingHttpClient {
 }
 
 function normalizeTokenResponse(data = {}, { requireRefreshToken = false } = {}) {
-  const accessToken = clean(data.access_token || data.accessToken);
-  const refreshToken = clean(data.refresh_token || data.refreshToken);
+  const accessToken = cleanToken(data.access_token ?? data.accessToken);
+  const refreshToken = cleanToken(data.refresh_token ?? data.refreshToken);
   if (!accessToken || accessToken.length > 4096 || (requireRefreshToken && !refreshToken)) {
     throw blingError("BLING_TOKEN_RESPONSE_INVALID", "Resposta do Bling sem credenciais de token validas.");
   }
@@ -195,6 +195,10 @@ function normalizeTokenResponse(data = {}, { requireRefreshToken = false } = {})
     expiresAt: new Date(Date.now() + Math.max(60, expiresIn) * 1000).toISOString(),
     obtainedAt: new Date().toISOString(),
   };
+}
+
+function cleanToken(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function basicAuth(config) {

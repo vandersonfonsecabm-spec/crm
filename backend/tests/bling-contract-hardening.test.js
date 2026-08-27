@@ -12,6 +12,14 @@ test("Bling rejeita token OAuth incompleto sem aceitar credencial vazia", () => 
     () => clientPrivate.normalizeTokenResponse({ access_token: "access" }, { requireRefreshToken: true }),
     (error) => error.code === "BLING_TOKEN_RESPONSE_INVALID",
   );
+  assert.throws(
+    () => clientPrivate.normalizeTokenResponse({ access_token: { value: "access" }, refresh_token: "refresh" }, { requireRefreshToken: true }),
+    (error) => error.code === "BLING_TOKEN_RESPONSE_INVALID",
+  );
+  assert.throws(
+    () => clientPrivate.normalizeTokenResponse({ access_token: "access", refresh_token: ["refresh"] }, { requireRefreshToken: true }),
+    (error) => error.code === "BLING_TOKEN_RESPONSE_INVALID",
+  );
   const refresh = clientPrivate.normalizeTokenResponse({ access_token: "access" }, { requireRefreshToken: false });
   assert.equal(refresh.accessToken, "access");
   assert.equal(refresh.refreshToken, "");
