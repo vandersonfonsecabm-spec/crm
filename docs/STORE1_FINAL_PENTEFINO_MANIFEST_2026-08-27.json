@@ -85,7 +85,8 @@
     }
   },
   "readiness": "BLOCKED_BY_OPERATIONAL_EVIDENCE",
-  "fixed_conversation_delivery_confirmed": false,
+  "fixed_conversation_delivery_confirmed": true,
+  "fixed_conversation_delivery_method": "browser_file_upload_verified_by_dom",
   "artifacts": [
     "docs/STORE1_FINAL_PENTEFINO_2026-08-27.md",
     "docs/STORE1_FINAL_FEATURE_MATRIX_2026-08-27.md",
