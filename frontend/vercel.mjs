@@ -37,7 +37,7 @@ const securityHeaders = [
   },
 ];
 
-export const config = {
+export default {
   headers: [{ source: "/(.*)", headers: securityHeaders }],
   rewrites: [
     { source: "/api/:path*", destination: `${apiOrigin}/:path*` },

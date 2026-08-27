@@ -43,7 +43,7 @@ const securityHeaders = [
   },
 ];
 
-export const config = {
+export default {
   installCommand: "npm install --prefix frontend",
   buildCommand: "npm run build --prefix frontend",
   outputDirectory: "frontend/dist",
