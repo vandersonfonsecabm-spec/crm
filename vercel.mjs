@@ -31,23 +31,10 @@ function resolveApiOrigin() {
 
 const apiOrigin = resolveApiOrigin();
 
-const securityHeaders = [
-  { key: "X-Content-Type-Options", value: "nosniff" },
-  { key: "X-Frame-Options", value: "DENY" },
-  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-  { key: "Strict-Transport-Security", value: "max-age=31536000" },
-  {
-    key: "Content-Security-Policy",
-    value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
-  },
-];
-
 export default {
   installCommand: "npm install --prefix frontend",
   buildCommand: "npm run build --prefix frontend",
   outputDirectory: "frontend/dist",
-  headers: [{ source: "/(.*)", headers: securityHeaders }],
   rewrites: [
     { source: "/api/:path*", destination: `${apiOrigin}/:path*` },
     { source: "/(.*)", destination: "/index.html" },
