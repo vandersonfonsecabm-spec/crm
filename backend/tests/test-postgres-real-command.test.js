@@ -40,6 +40,11 @@ test("runner PostgreSQL real oferece dry-run sem consultar Docker", async () => 
   assert.equal(dockerCalls, 0);
   assert.equal(result.harnessTests, 23);
   assert.ok(result.suite.length >= 7);
+  for (const required of [
+    "tests/v54-lifecycle-lock.test.js",
+    "tests/email-inbound-lifecycle.test.js",
+    "tests/email-inbound-processing.test.js",
+  ]) assert.equal(result.suite.includes(required), true, `${required} deve permanecer no runner real`);
 });
 
 test("runner PostgreSQL real sobe, aguarda healthcheck e remove container e volume", async () => {

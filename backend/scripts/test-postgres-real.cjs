@@ -21,6 +21,7 @@ const pgSuite = Object.freeze([
   "tests/auth-admin-concurrency-postgres.test.js",
   "tests/internal-automations-h7.test.js",
   "tests/next-follow-up-projection.test.js",
+  "tests/v54-lifecycle-lock.test.js",
   "tests/email-inbound-lifecycle.test.js",
   "tests/email-inbound-processing.test.js",
   "tests/commercial-proposal-catalog-v1-postgres.test.js",
@@ -201,6 +202,19 @@ function sourceManifestHash() {
       hash.update(`${name}/${file}\0`);
       hash.update(fs.readFileSync(filePath));
     }
+  }
+  for (const relativePath of [
+    "src/shared/clientLifecycleLock.js",
+    "src/integrations/emailInboundProcessor.js",
+    "src/platform/emailInboundProvisioning.js",
+    "tests/v54-lifecycle-lock.test.js",
+    "tests/email-inbound-lifecycle.test.js",
+    "tests/email-inbound-processing.test.js",
+    "scripts/run-postgres-tests.cjs",
+  ]) {
+    const filePath = path.join(backendDir, relativePath);
+    hash.update(`runtime:${relativePath}\0`);
+    hash.update(fs.readFileSync(filePath));
   }
   return hash.digest("hex");
 }

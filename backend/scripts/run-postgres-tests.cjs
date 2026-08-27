@@ -48,6 +48,7 @@ function main(options = {}) {
       "tests/auth-admin-concurrency-postgres.test.js",
       "tests/internal-automations-h7.test.js",
       "tests/next-follow-up-projection.test.js",
+      "tests/v54-lifecycle-lock.test.js",
       "tests/email-inbound-lifecycle.test.js",
       "tests/email-inbound-processing.test.js",
       "tests/commercial-proposal-catalog-v1-postgres.test.js",
