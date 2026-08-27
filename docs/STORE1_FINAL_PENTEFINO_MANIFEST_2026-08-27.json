@@ -1,0 +1,94 @@
+{
+  "mission": "STORE-1 FINAL PENTEFINO",
+  "date": "2026-08-27",
+  "candidate": {
+    "branch": "codex/store1-release-reconcile",
+    "head": "3599a0973ddf9a58e62bb285848f6861768be341",
+    "base": "3151cec0d3950abd0364e90f340918aca0baf196",
+    "worktree": "C:\\Users\\vande\\AppData\\Local\\Temp\\crm-store1-release-reconcile-20260827",
+    "clean": true
+  },
+  "production": {
+    "touched": false,
+    "push": false,
+    "deploy": false,
+    "migration": false,
+    "requests": 0
+  },
+  "findings": {
+    "fixable_code_findings": 0,
+    "proven_dead_components_removed": 6,
+    "hardcoded_vercel_json_removed": true,
+    "arbitrary_production_api_url_blocked": true,
+    "webhook_cross_environment_blocked": true,
+    "cors_validation_added": true,
+    "stock_ui_flow_completed": true,
+    "automation_capability_guard_added": true
+  },
+  "validation": {
+    "frontend_tests": "213/213 PASS",
+    "frontend_build": "PASS",
+    "frontend_lint": "PASS",
+    "architecture_guard": "PASS",
+    "origin_policy_tests": "4/4 PASS",
+    "node_syntax_checks": "PASS",
+    "npm_audit_high": 0,
+    "local_http_smoke": "PASS",
+    "backend_global_suite": "BLOCKED_PROTECTED_FIXTURE_MISSING",
+    "browser_retest_new_ui": "UNTESTED_TOOLING_UNAVAILABLE",
+    "dead_buttons_global_runtime": "UNTESTED"
+  },
+  "inventory": {
+    "backend_route_definitions": 229,
+    "server_route_mount_groups": 18,
+    "frontend_primary_route_literals": 13,
+    "frontend_detail_and_subroute_families": 14,
+    "static_interactive_tags": 465,
+    "matrix_rows": 73,
+    "matrix_pass": 60,
+    "matrix_fail": 0,
+    "matrix_partial": 0,
+    "matrix_broken": 0,
+    "matrix_untested": 6,
+    "pending_intentional_off": 1,
+    "pending_external_provider": 5,
+    "not_applicable": 1
+  },
+  "hashes": {
+    "vercel.mjs": {
+      "bytes": 2440,
+      "sha256": "5ff8d45ed3f05c70171dd526ab033c21af8392446d8a57e33518c83575d2ddb9"
+    },
+    "frontend/vercel.mjs": {
+      "bytes": 2002,
+      "sha256": "53c1def4f0ace7e9d4e72e1bd1090dd8b7f4b8c9ec52ab5f9957e2b83d25aac2"
+    },
+    "frontend/src/services/crmApi.ts": {
+      "bytes": 113046,
+      "sha256": "cd3a25136456db2f7fbb4a77eae5500fef5d0e25e7602d981bb0dda208c3eb1f"
+    },
+    "frontend/src/components/stock/StockControlPanel.tsx": {
+      "bytes": 17865,
+      "sha256": "c36ec07ca48b90f5ef249d51f5da236fa086cb11d7abe34cbb1fbe5ec46c7a4d"
+    },
+    "frontend/src/pages/Dashboard.tsx": {
+      "bytes": 55023,
+      "sha256": "e1c24c04da9db07026be66bb349702b284a293c18136a70372b2843cfee5090c"
+    },
+    "backend/src/server.js": {
+      "bytes": 87258,
+      "sha256": "6f8cc3108bf07aff56db19b58ecc3487ee501a1560558ae8f64e0c02014d50d3"
+    },
+    "backend/src/security/origin-policy.js": {
+      "bytes": 1366,
+      "sha256": "4fa1f0d538503b2eb254e2ba4ae94638826b96d37bd6b0ffa82f14f6b951718c"
+    }
+  },
+  "readiness": "BLOCKED_BY_OPERATIONAL_EVIDENCE",
+  "fixed_conversation_delivery_confirmed": false,
+  "artifacts": [
+    "docs/STORE1_FINAL_PENTEFINO_2026-08-27.md",
+    "docs/STORE1_FINAL_FEATURE_MATRIX_2026-08-27.md",
+    "docs/STORE1_FINAL_PENTEFINO_MANIFEST_2026-08-27.json"
+  ]
+}
