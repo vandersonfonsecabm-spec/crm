@@ -53,6 +53,7 @@ const { createInstagramWebhookOrchestrator } = require("./integrations/instagram
 const { mountMessengerWebhookRoutes } = require("./integrations/messengerWebhook");
 const { createMessengerWebhookOrchestrator } = require("./integrations/messengerWebhookOrchestrator");
 const { CANONICAL_CLIENT_STATUSES: CLIENT_LIFECYCLE_STATUSES, isPostgresRuntime, lockClienteRow } = require("./shared/clientLifecycleLock");
+const { getAllowedOrigins } = require("./security/origin-policy");
 
 const prisma = createPrismaClient();
 const readinessProbe = createDatabaseProbe({ prisma, env: process.env });
@@ -75,13 +76,7 @@ app.use((req, res, next) => {
 });
 const PORT = process.env.PORT || 3001;
 const HOST = "0.0.0.0";
-const DEFAULT_ALLOWED_ORIGINS = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "https://crm-murex-six-83.vercel.app",
-  "https://crm-ga3-bundle-staging.vercel.app",
-];
-const allowedOrigins = getAllowedOrigins();
+const allowedOrigins = getAllowedOrigins(process.env);
 app.use(createMaintenanceReadOnlyMiddleware({
   env: process.env,
   mutatingGetPaths: ["/integracoes/bling/callback", "/integracoes/instagram/oauth/callback"],
@@ -2544,36 +2539,6 @@ if (require.main === module) {
       console.error(error.message || "Falha ao validar criptografia de integracoes.");
       process.exit(1);
     });
-}
-
-function getAllowedOrigins() {
-  const rawOrigins = [process.env.FRONTEND_URL, process.env.ALLOWED_ORIGINS]
-    .filter(Boolean)
-    .flatMap((value) => String(value).split(","))
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-  const configuredOrigins = rawOrigins.map((origin) => normalizeAllowedOrigin(origin));
-  if (configuredOrigins.some((origin) => origin === null)) {
-    throw new Error("Configuracao de CORS invalida; informe origens HTTPS exatas.");
-  }
-
-  return configuredOrigins.length > 0 ? configuredOrigins : DEFAULT_ALLOWED_ORIGINS;
-}
-
-function normalizeAllowedOrigin(value) {
-  try {
-    const parsed = new URL(value);
-    const isLocal = process.env.NODE_ENV !== "production"
-      && parsed.protocol === "http:"
-      && ["localhost", "127.0.0.1"].includes(parsed.hostname);
-    if ((!isLocal && parsed.protocol !== "https:") || parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
-      return null;
-    }
-    return parsed.origin;
-  } catch {
-    return null;
-  }
 }
 
 module.exports = { app, prisma, startServer };
