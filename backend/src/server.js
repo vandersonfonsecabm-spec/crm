@@ -2481,6 +2481,18 @@ app.get("/ready", async (req, res) => {
   }
 });
 
+app.get("/runtime-fingerprint", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const environment = String(process.env.STORE1_RUNTIME_ENVIRONMENT || "").trim().toLowerCase();
+  const sourceSha = String(process.env.STORE1_SOURCE_SHA || "").trim().toLowerCase();
+  return res.json({
+    environment: environment === "staging" ? "staging" : "unknown",
+    sourceSha: /^[a-f0-9]{40}$/.test(sourceSha) ? sourceSha : null,
+    providersConnected: false,
+    outboundEnabled: false,
+  });
+});
+
 app.use((error, req, res, next) => {
   if (isMaintenanceReadOnlyError(error)) {
     res.set("Retry-After", "60");

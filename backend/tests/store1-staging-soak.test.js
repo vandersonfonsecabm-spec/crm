@@ -137,7 +137,8 @@ test("orquestrador exercita tres roles, limita concorrencia e gera ledger sem eg
     randomUUID: () => `request-${++requestCounter}`,
     fetchImpl: async (url, init) => {
       assert.equal(url.hostname, "store1-staging.example.test");
-      if (init.headers.Authorization) seenAuthorization.push(init.headers.Authorization);
+      if (url.pathname.endsWith("/runtime-fingerprint")) return response(200, { environment: "staging", sourceSha: config.sourceSha, providersConnected: false, outboundEnabled: false });
+      if (init.headers?.Authorization) seenAuthorization.push(init.headers.Authorization);
       if (url.pathname === "/api/test/jobs") return response(200, { total: 9, pending: 1, failed: 0, secret: "must-not-enter-ledger" });
       return response(200);
     },
@@ -194,6 +195,7 @@ test("5xx e redirect externo impedem PASS sem seguir o provider", async () => {
     randomUUID: () => `blocked-${++requestCounter}`,
     restartHook: async () => {},
     fetchImpl: async (url) => {
+      if (url.pathname.endsWith("/runtime-fingerprint")) return response(200, { environment: "staging", sourceSha: config.sourceSha, providersConnected: false, outboundEnabled: false });
       if (url.pathname === "/api/clientes") return response(503);
       if (url.pathname === "/api/negocios") return response(302, null, { location: "https://graph.facebook.com/me" });
       if (url.pathname === "/api/test/jobs") return response(200, { total: 0 });

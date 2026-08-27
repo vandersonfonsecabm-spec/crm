@@ -15,6 +15,9 @@ const {
   createMetaInstagramClient,
 } = require("../src/integrations/metaInstagramClient");
 const { startAutomationWorker } = require("../src/automations/worker");
+const { inspectGlobalConfiguration: inspectWhatsapp } = require("../src/integrations/whatsappInboundLifecycle");
+const { inspectGlobalConfiguration: inspectInstagram } = require("../src/integrations/instagramInboundLifecycle");
+const { inspectGlobalConfiguration: inspectMessenger } = require("../src/integrations/messengerInboundLifecycle");
 
 test("server ACK path wires durable intakes instead of synchronous orchestrators", () => {
   const source = fs.readFileSync(path.join(__dirname, "../src/server.js"), "utf8");
@@ -36,6 +39,13 @@ test("Meta inbound worker is deny-by-default and maintenance-safe", () => {
     NODE_ENV: "production",
     META_INBOUND_WORKER_ENABLED: "true",
   }), true);
+});
+
+test("lifecycle Meta não fica ready quando o consumidor assíncrono está OFF", () => {
+  const common = { NODE_ENV: "production", META_INBOUND_WORKER_ENABLED: "false" };
+  assert.equal(inspectWhatsapp({ ...common, WHATSAPP_INTEGRATION_ENABLED: "true", WHATSAPP_INBOUND_ENABLED: "true", WHATSAPP_META_APP_ID: "app", WHATSAPP_PROVIDER_ENVIRONMENT: "STAGING", WHATSAPP_APP_SECRET: "secret-123", WHATSAPP_WEBHOOK_VERIFY_TOKEN: "verify-123" }).valid, false);
+  assert.equal(inspectInstagram({ ...common, INSTAGRAM_INTEGRATION_ENABLED: "true", INSTAGRAM_INBOUND_ENABLED: "true", INSTAGRAM_META_APP_ID: "app", INSTAGRAM_PROVIDER_ENVIRONMENT: "STAGING", INSTAGRAM_APP_SECRET: "secret-123", INSTAGRAM_WEBHOOK_VERIFY_TOKEN: "verify-123" }).valid, false);
+  assert.equal(inspectMessenger({ ...common, MESSENGER_INTEGRATION_ENABLED: "true", MESSENGER_INBOUND_ENABLED: "true", MESSENGER_META_APP_ID: "app", MESSENGER_PROVIDER_ENVIRONMENT: "STAGING", MESSENGER_APP_SECRET: "secret-123", MESSENGER_WEBHOOK_VERIFY_TOKEN: "verify-123" }).valid, false);
 });
 
 test("dedicated worker process can run Meta inbound independently of automations", async () => {

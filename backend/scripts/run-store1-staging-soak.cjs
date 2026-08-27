@@ -186,6 +186,7 @@ function resolveConfig({ env = process.env, testOverrides, allowTestOverrides = 
     roles: roleConfigsFromEnv(env, { requireCredentials }),
     healthPath: String(env.STORE1_SOAK_HEALTH_PATH || defaultProbePath(target, "health")),
     readyPath: String(env.STORE1_SOAK_READY_PATH || defaultProbePath(target, "ready")),
+    fingerprintPath: String(env.STORE1_SOAK_FINGERPRINT_PATH || defaultProbePath(target, "runtime-fingerprint")),
     jobsPath,
     restartPath,
     timeoutMs: DEFAULT_TIMEOUT_MS,
@@ -321,6 +322,16 @@ async function runStore1StagingSoak(options = {}) {
   const limit = createLimiter(MAX_INFLIGHT, (active) => {
     ledger.maxInflightObserved = Math.max(ledger.maxInflightObserved, active);
   });
+
+  const fingerprintUrl = assertSameOriginRequest(config.target, config.fingerprintPath);
+  const fingerprintResponse = await fetchImpl(fingerprintUrl, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(config.timeoutMs) });
+  const fingerprint = fingerprintResponse.status === 200 && typeof fingerprintResponse.json === "function"
+    ? await fingerprintResponse.json().catch(() => null)
+    : null;
+  if (!fingerprint || fingerprint.environment !== "staging" || String(fingerprint.sourceSha || "").toLowerCase() !== config.sourceSha.toLowerCase()
+    || fingerprint.providersConnected !== false || fingerprint.outboundEnabled !== false) {
+    throw new SoakError("SOAK_RUNTIME_FINGERPRINT_MISMATCH", "Runtime staging nao corresponde ao candidato seguro.");
+  }
 
   const executeRequest = async ({ kind, requestPath, role, method = "GET", headers = {} }) => {
     const requestId = `${runId}:${kind}:${randomUUID()}`;

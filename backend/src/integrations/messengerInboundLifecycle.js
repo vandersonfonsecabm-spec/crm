@@ -608,6 +608,7 @@ function readInboundRuntimeConfiguration(env) {
   if (
     env.MESSENGER_INTEGRATION_ENABLED !== "true"
     || env.MESSENGER_INBOUND_ENABLED !== "true"
+    || (env.NODE_ENV === "test" ? env.META_INBOUND_WORKER_ENABLED === "false" : env.META_INBOUND_WORKER_ENABLED !== "true")
     || !hasConfiguredSecret(env.MESSENGER_APP_SECRET)
     || !hasConfiguredSecret(env.MESSENGER_WEBHOOK_VERIFY_TOKEN)
   ) {

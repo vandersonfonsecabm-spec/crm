@@ -606,6 +606,7 @@ function readInboundRuntimeConfiguration(env) {
   if (
     env.INSTAGRAM_INTEGRATION_ENABLED !== "true"
     || env.INSTAGRAM_INBOUND_ENABLED !== "true"
+    || (env.NODE_ENV === "test" ? env.META_INBOUND_WORKER_ENABLED === "false" : env.META_INBOUND_WORKER_ENABLED !== "true")
     || !hasConfiguredSecret(env.INSTAGRAM_APP_SECRET)
     || !hasConfiguredSecret(env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN)
   ) {

@@ -160,7 +160,7 @@ function startAutomationWorker({
     shutdownTimeoutMs: config.shutdownTimeoutMs,
   });
 
-  async function cycleBody() {
+  async function cycleBody(signal) {
     const startedAt = Date.now();
     const now = new Date();
     let automationFailed = false;
@@ -171,7 +171,7 @@ function startAutomationWorker({
     if (automationEnabled && service) {
       try {
         if (temporalScanEnabled && typeof service.scanTemporalTriggers === "function") {
-          const temporalResult = await service.scanTemporalTriggers({ now, limit: config.batchSize });
+          const temporalResult = await service.scanTemporalTriggers({ now, limit: config.batchSize, signal });
           if (Number(temporalResult?.scanErrors || 0) > 0) {
             eventLogger.error("worker_poll_error", new Error("TEMPORAL_SCAN_PARTIAL_FAILURE"), {
               durationMs: elapsedMs(startedAt),
@@ -193,6 +193,7 @@ function startAutomationWorker({
           maxAttempts: config.maxAttempts,
           supportedActions: WORKER_ACTION_TYPES,
           onEvent: eventLogger.event,
+          signal,
         });
       } catch (error) {
         automationFailed = true;
@@ -201,7 +202,7 @@ function startAutomationWorker({
     }
     if (notificationsEnabled && notificationService?.processDue) {
       try {
-        const notificationResult = await notificationService.processDue({ now, limit: config.batchSize });
+        const notificationResult = await notificationService.processDue({ now, limit: config.batchSize, signal });
         if (Number(notificationResult?.failed || 0) > 0) {
           const failedTenantCount = Number(notificationResult.failed || 0);
           const activeTenants = Number(notificationResult.tenants || 0);
@@ -219,7 +220,7 @@ function startAutomationWorker({
     }
     if (stockEnabled) {
       try {
-        const stockResult = await stockWorker.processDue({ now, limit: config.batchSize, leaseOwner: workerId, leaseMs: config.leaseMs });
+        const stockResult = await stockWorker.processDue({ now, limit: config.batchSize, leaseOwner: workerId, leaseMs: config.leaseMs, signal });
         if (Array.isArray(stockResult?.failedTenants) && stockResult.failedTenants.length) {
           eventLogger.error("worker_poll_error", new Error("STOCK_TENANT_CYCLE_PARTIAL_FAILURE"), { durationMs: elapsedMs(startedAt), subsystem: "stock_core", failedTenantCount: stockResult.failedTenants.length });
           const activeTenants = Number(stockResult.tenants || 0);
@@ -236,6 +237,7 @@ function startAutomationWorker({
           now,
           limit: config.batchSize,
           leaseOwner: workerId,
+          signal,
         });
         if (Number(metaResult?.failed || 0) > 0) {
           metaInboundFailed = true;
@@ -259,6 +261,7 @@ function startAutomationWorker({
           leaseMs: config.leaseMs,
           timeoutMs: config.executionTimeoutMs,
           maxAttempts: config.maxAttempts,
+          signal,
         });
       } catch (error) {
         emailDeliveryFailed = true;
@@ -301,11 +304,13 @@ function startAutomationWorker({
   async function cycle() {
     if (running || stopping) return;
     running = true;
+    const controller = new AbortController();
     try {
-      await withDeadline(cycleBody(), config.cycleTimeoutMs, {
+      await withDeadline(cycleBody(controller.signal), config.cycleTimeoutMs, {
         setTimeoutImpl: setWatchdogTimeoutImpl,
         clearTimeoutImpl: clearWatchdogTimeoutImpl,
         code: "WORKER_CYCLE_TIMEOUT",
+        onTimeout: () => controller.abort(new Error("WORKER_CYCLE_TIMEOUT")),
       });
     } catch (error) {
       stopping = true;
@@ -468,7 +473,7 @@ function waitForShutdown(worker, prisma, {
           subsystem: "worker_shutdown",
         });
       }
-      try {
+      if (!timedOut) try {
         await withDeadline(Promise.resolve(prisma.$disconnect()), Math.min(timeoutMs, 5000), {
           setTimeoutImpl,
           clearTimeoutImpl,
@@ -493,10 +498,12 @@ function withDeadline(promise, timeoutMs, {
   setTimeoutImpl = setTimeout,
   clearTimeoutImpl = clearTimeout,
   code = "WORKER_CYCLE_TIMEOUT",
+  onTimeout,
 } = {}) {
   let timer = null;
   const timeout = new Promise((_, reject) => {
     timer = setTimeoutImpl(() => {
+      try { onTimeout?.(); } catch {}
       const error = new Error(code);
       error.code = code;
       reject(error);

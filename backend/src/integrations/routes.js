@@ -305,6 +305,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   app.post("/integracoes/:id/testar", ...requireAdmin, async (req, res) => {
     try {
       const integracao = await findIntegrationOrThrow(prisma, req);
+      if (integracao.tipo === "BLING") throw httpError(409, "Use a ação dedicada para testar o Bling.", "BLING_LIFECYCLE_REQUIRED");
       const adapter = integracao.tipo === "BLING"
         ? { testConnection: () => blingService.testar({ integracao, empresaId: req.auth.empresaId }) }
         : createIntegrationAdapter(integracao.tipo, safeJson(integracao.configuracaoJson, {}));

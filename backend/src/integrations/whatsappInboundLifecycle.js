@@ -572,7 +572,8 @@ function inspectGlobalConfiguration(env = process.env) {
     identityValid = false;
   }
   const flagsValid = env.WHATSAPP_INTEGRATION_ENABLED === "true"
-    && env.WHATSAPP_INBOUND_ENABLED === "true";
+    && env.WHATSAPP_INBOUND_ENABLED === "true"
+    && (env.NODE_ENV === "test" ? env.META_INBOUND_WORKER_ENABLED !== "false" : env.META_INBOUND_WORKER_ENABLED === "true");
   const secretsValid = hasConfiguredSecret(env.WHATSAPP_APP_SECRET)
     && hasConfiguredSecret(env.WHATSAPP_WEBHOOK_VERIFY_TOKEN);
   return {
