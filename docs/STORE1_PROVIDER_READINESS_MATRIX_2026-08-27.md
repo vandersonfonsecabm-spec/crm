@@ -12,7 +12,7 @@
 | Workers | checkpoint/restart/watchdog PASS | worker SUCCESS | N/A | 0 | PASS |
 | UI de integrações | estados verdadeiros PASS | browser PASS | nenhum falso conectado | 0 | PASS |
 | PostgreSQL | migrations/CAS/locks PASS | migration aplicada | N/A | 0 | PASS |
-| Soak 4h15 | runner/guard PASS | não executado integralmente | N/A | 0 | PENDING_3_ROLE_CREDENTIALS |
+| Soak 4h15 | runner/guard/lease PASS | 255 min + restart + cleanup PASS | N/A | 0 | PASS |
 
 ## Gates de segurança
 
@@ -26,4 +26,9 @@ PROVIDER_EGRESS=0
 REAL_PROVIDER_CONNECTIONS=0
 REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
+SOAK_REQUESTS=5560
+SOAK_FAILURES=0
+SOAK_HTTP_5XX=0
+SOAK_RESTART=PASS
+SOAK_CLEANUP=PASS
 ```

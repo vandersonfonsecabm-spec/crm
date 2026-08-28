@@ -10,12 +10,12 @@ Commit funcional atual: `db59f37ee69c0ed2b4cb3c75b871dfb1ed5a0162`
 
 O candidato de preparação para integrações foi implementado, revisado, corrigido e publicado somente no staging. Produção não foi alterada. Nenhum provider real foi conectado, nenhuma credencial real foi usada e nenhum outbound externo foi habilitado.
 
-O soak real de staging, com duração canônica de 255 minutos (4h15), está em execução. Portanto, este documento é um checkpoint intermediário e não declara `SOAK=PASS`.
+O soak real de staging, com duração canônica de 255 minutos (4h15), foi concluído em 2026-08-28. Este checkpoint foi substituído pelo relatório final canônico.
 
 ```text
 STORE1_INTERNAL_PRODUCT_READY=PASS
 FINAL_RUNTIME_READY=PASS
-SOAK_4H15=IN_PROGRESS
+SOAK_4H15=PASS
 SOAK_STARTED_AT_APPROX=2026-08-27T19:39:00-03:00
 SOAK_EXPECTED_END_APPROX=2026-08-27T23:54:00-03:00
 MONITORING_INTERVAL=30_MINUTES
@@ -23,6 +23,12 @@ PRODUCTION_CHANGED=false
 REAL_PROVIDER_CONNECTIONS=0
 REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
+SOAK_FINISHED_AT=2026-08-28T02:53:32.801Z
+SOAK_REQUESTS=5560
+SOAK_FAILURES=0
+SOAK_HTTP_5XX=0
+SOAK_RESTART=PASS
+SOAK_CLEANUP=PASS
 ```
 
 ## Trabalho concluído neste lote
@@ -103,9 +109,11 @@ Ao término, deve:
 9. atualizar os relatórios canônicos;
 10. enviar os arquivos finais reais na conversa fixada.
 
-## Limitações honestas deste checkpoint
+## Fechamento deste checkpoint
 
-- `SOAK_4H15` ainda não pode receber `PASS`.
+- `SOAK_4H15=PASS`; ledger sanitizado SHA-256 `235699e82aba06f46b5deb68410ddfcc0e2388710d569a2b1eefb3e2713fda9e`.
+- Foram concluídos 5.560 requests sem falha, restart controlado, 57 refreshes de sessão e cleanup das três identidades QA.
+- O proxy TCP e o pacote temporário foram removidos; Prisma local voltou ao provider SQLite.
 - E-mail e IA possuem fundação provider-neutral, mas o adapter real depende de futura seleção de provider.
 - Meta, WhatsApp, Instagram, Messenger e Bling permanecem sem conta real conectada.
-- Este checkpoint será substituído pelo relatório final após a conclusão e validação do soak.
+- O relatório final canônico e a matriz de readiness substituem este checkpoint.

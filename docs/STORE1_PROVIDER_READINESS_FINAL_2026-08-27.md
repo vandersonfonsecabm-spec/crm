@@ -2,7 +2,7 @@
 
 Data: 2026-08-27
 
-Source final: `3e12fd95609dc7e7cbc3325a569b47797f43b87c`
+Source funcional final: `db59f37ee69c0ed2b4cb3c75b871dfb1ed5a0162`
 
 Branch: `codex/store1-release-reconcile`
 
@@ -49,7 +49,14 @@ PROVIDER_SECRET_HANDLING=PASS_LOCAL_BOUNDARIES
 WORKER_OPERATIONAL_READINESS=PASS
 
 BOUNDED_AUTHENTICATED_SMOKE=PASS
-SOAK_4H15=PENDING_THREE_ROLE_QA_CREDENTIALS
+SOAK_4H15=PASS
+SOAK_REQUESTS=5560
+SOAK_FAILURES=0
+SOAK_HTTP_5XX=0
+SOAK_PROVIDER_EGRESS=0
+SOAK_PRODUCTION_REQUESTS=0
+SOAK_RESTART=PASS
+SOAK_CLEANUP=PASS
 ```
 
 ## Alterações principais
@@ -72,12 +79,21 @@ SOAK_4H15=PENDING_THREE_ROLE_QA_CREDENTIALS
 - Evidência PG log SHA-256: `8c6d3960bc1b36fae2bdd1b84ef7b87e1a51dc9d8c692fe53a176a91c1726f09`.
 - SQLite migration/tenant gate: 162 relações, zero orphan/cross-tenant, 238 FKs verificadas.
 - `backend/prisma/dev.db`: `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533` (intacto).
-- Railway API staging deployment: `8db08de2-1f9c-4a0f-a138-fa066f993e22`.
+- Railway API staging deployment final: `39cde9ad-5662-4b67-bad0-5dd1fb53cebb` (`SUCCESS`).
 - Railway worker staging deployment: `bd70b271-4968-464a-8333-632dca1dd5fa` (`SUCCESS`).
 - Vercel staging deployment: `dpl_5KLEGHgZ6AB6eW9kmZjXwSMpQEmH` (`READY`).
 - API direta e alias Vercel retornaram fingerprint autoritativo idêntico: source manifest `e8750e1bfd01cd9b507d6279e05699356382ab8f3a2508e0e109e1c2c3bcbb5e`, IDs Railway e banco staging verificados, providers/outbound OFF. Sem token técnico, o endpoint retorna 404 antes de hash ou banco.
 - Browser QA autenticado: rotas críticas PASS, console error/warn = 0.
 - Egress do worker: somente DNS interno e PostgreSQL staging; provider egress = 0.
+- Soak staging de 255 minutos: `PASS`, executado de `2026-08-27T22:38:27.355Z` a `2026-08-28T02:53:32.801Z`.
+- Ledger sanitizado SHA-256: `235699e82aba06f46b5deb68410ddfcc0e2388710d569a2b1eefb3e2713fda9e`.
+- Requests: 5.560/5.560 bem-sucedidos; p95 542 ms; p99 692 ms; zero 4xx/5xx contabilizado como sucesso.
+- Health/ready: 1.112 verificações cada, zero falha.
+- Autenticação: 3 logins, 57 refreshes, 60 validações e zero falha/relogin.
+- Jobs no baseline e final: total/pending/running/failed/stuck/retries/duplicates = 0.
+- Restart controlado: `PASS`.
+- Cleanup confirmado: 3 usuários desativados, 3 sessões revogadas, zero sessão/token/lease ativo remanescente.
+- Proxy TCP temporário do PostgreSQL staging removido após validação; pacote temporário removido; Prisma local restaurado para SQLite.
 
 ## Falhas encontradas e recuperadas
 
@@ -92,7 +108,7 @@ SOAK_4H15=PENDING_THREE_ROLE_QA_CREDENTIALS
 ## Limitações honestas
 
 - E-mail e IA possuem fundação/porta provider-neutral, mas ainda exigem seleção e implementação do adapter específico na missão de ativação.
-- O soak canônico soma 255 minutos (4h15). Não foi declarado PASS nesta execução porque requer ADMIN, GERENTE e VENDEDOR com credenciais QA separadas; apenas uma sessão QA foi fornecida.
+- O soak canônico de 255 minutos foi concluído com três identidades QA temporárias e cleanup integral. As identidades permaneceram exclusivamente no staging e foram desativadas ao final.
 - Nenhuma conta Meta, número WhatsApp, Página Messenger, Instagram, conta Bling, SMTP ou provider de IA foi conectado.
 
 ## Review adversarial final
