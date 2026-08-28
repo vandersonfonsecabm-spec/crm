@@ -1,5 +1,13 @@
 # Estado atual do CRM
 
+## STORE-1 — hardening de integridade de valores comerciais (2026-08-28)
+
+- O commit funcional local `79eed4f` endurece precisão/ROUND_HALF_UP, limites `INTEGER`, snapshots catalogados, CAS de `Cliente.valor`, contexto proposta/negócio, importação/Bling, `null` versus zero e apresentação monetária. Leituras/PDF/status/duplicação agora recalculam totais persistidos e falham fechado diante de corrupção.
+- Testes disponíveis passaram: backend focal 26/26, suítes SQLite isoladas afetadas, frontend 225/225, focal final 8/8, build, lint e QA visual em 1366×768, 1440×900, 1920×1080 e 900×768. `dev.db` permaneceu no SHA-256 canônico.
+- O reviewer adversarial final declarou `RETHINK`: proposta aceita, negócio fechado e valor do cliente continuam sem fonte de verdade transacional; `Cliente.valor`/`Negocio.valor` usam reais inteiros, proposta usa centavos, e não há proposta vencedora/idempotência persistente.
+- O gate PostgreSQL causal atual não iniciou porque o daemon Docker local estava indisponível. Nenhum banco oficial/staging foi usado como atalho.
+- Produção, cloud, providers reais, outbound, migration, push e deploy permaneceram intocados. Relatório: `docs/STORE1_COMMERCIAL_VALUE_INTEGRITY_FINAL_2026-08-28.md`.
+
 ## V73 — publicação da Proposta ↔ Catálogo V1 (2026-08-26)
 
 - A release operacional foi concluída no runtime `eb1cadb8a692dea99a1c0edc888504d22be15a33`, com a migration `20260825170000_add_commercial_proposal_catalog_items` aplicada uma única vez no PostgreSQL oficial 18.6. O banco terminou com 17 migrations, zero falhas, zero `empresaId` nulo e zero runner concorrente.
