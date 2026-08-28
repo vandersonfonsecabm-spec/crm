@@ -37,6 +37,8 @@ test("Bling converte moeda com ROUND_HALF_UP, rejeita negativos e limita inteiro
   assert.equal(moneyToCents("10,005"), 1001);
   assert.equal(moneyToCents("R$ 1.234,56"), 123456);
   assert.equal(moneyToCents("1,234.56"), 123456);
+  assert.equal(moneyToCents("21.474.836,47"), 2147483647);
+  assert.equal(moneyToCents("21.474.836,48"), null);
   assert.equal(moneyToCents("-1,00"), null);
   assert.equal(moneyToCents("90071992547409.92"), null);
 });

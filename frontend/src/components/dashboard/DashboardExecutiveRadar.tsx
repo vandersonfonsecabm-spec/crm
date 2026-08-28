@@ -52,7 +52,7 @@ export default function DashboardExecutiveRadar({
         <RadarMetric label="Risco alto" value={`${highRiskClients.length} oportunidades`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
         <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
         <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
-        <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-slate-300" />} />
+        <RadarMetric label="Valor em clientes na etapa Proposta" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-slate-300" />} />
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2">

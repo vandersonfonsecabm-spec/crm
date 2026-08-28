@@ -4,6 +4,7 @@ import { Archive, RotateCcw, Trash2, X } from "lucide-react";
 import type { Client, Status } from "../../types/dashboard";
 import { ApiHttpError } from "../../services/crmApi";
 import { formatNextFollowUp } from "../../utils/followUpProjection";
+import { MAX_PRISMA_INT } from "../../utils/commercialMoney.js";
 
 const statusList: Status[] = ["Novo", "Contato", "Proposta", "Fechado", "Perdido"];
 
@@ -467,6 +468,9 @@ export default function ClientModal({
             <label htmlFor="client-value" className={fieldLabelClass}>Valor estimado</label>
             <input
               id="client-value"
+              max={MAX_PRISMA_INT}
+              min="0"
+              step="1"
               type="number"
               value={client.value}
               onChange={(event) => updateField("value", Number(event.target.value))}

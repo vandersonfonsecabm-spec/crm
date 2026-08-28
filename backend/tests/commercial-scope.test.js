@@ -73,6 +73,13 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   assert.equal(invalidClient.body.codigo, "CLIENT_VALIDATION_ERROR");
   assert.deepEqual(Object.keys(invalidClient.body.campos).sort(), ["email", "nome", "telefone", "valor"]);
 
+  for (const valor of [false, [], " ", 1.5, 2_147_483_648]) {
+    const rejectedValue = await request("POST", "/clientes", { nome: "Cliente valor invalido", valor }, tokenA);
+    assert.equal(rejectedValue.status, 400, String(valor));
+    assert.equal(rejectedValue.body.codigo, "CLIENT_VALIDATION_ERROR");
+    assert.ok(rejectedValue.body.campos.valor);
+  }
+
   const ambiguousPayloads = [
     { favorito: "true" },
     { favorito: 1 },
@@ -128,6 +135,13 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   assert.equal(updatedClientA.body.nome, clientA.body.nome);
   assert.equal(updatedClientA.body.telefone, clientA.body.telefone);
   assert.equal(updatedClientA.body.email, clientA.body.email);
+
+  const missingValueRevision = await request("PATCH", `/clientes/${clientA.body.id}`, { valor: 1750 }, tokenA);
+  assert.equal(missingValueRevision.status, 422);
+  assert.ok(missingValueRevision.body.campos.revisao);
+  const updatedValue = await request("PATCH", `/clientes/${clientA.body.id}`, { valor: 1750, revisao: updatedClientA.body.revisao }, tokenA);
+  assert.equal(updatedValue.status, 200);
+  assert.equal(updatedValue.body.valor, 1750);
 
   const missingArchiveRevision = await request("POST", `/clientes/${clientA.body.id}/arquivar`, {}, tokenA);
   assert.equal(missingArchiveRevision.status, 422);

@@ -49,6 +49,31 @@ test("catalog defaults hidden, binds canonical tenant product and rejects unappr
   assert.equal(created.id, 2);
 });
 
+test("catalog price is strict, exact and bounded by proposal cents", async () => {
+  const prisma = fakePrisma();
+  const service = createCommercialCatalogService({ prisma });
+  for (const commercialPrice of [false, [], " ", "1e3", "-1", "21474836.475"]) {
+    await assert.rejects(
+      () => service.create({ empresaId: 1, data: { stockProductId: 7, title: "Preco invalido", commercialPrice } }),
+      (error) => error.code === "COMMERCE_INVALID_PRICE",
+    );
+  }
+  const created = await service.create({ empresaId: 1, data: { stockProductId: 7, title: "Preco exato", commercialPrice: "10.005" } });
+  assert.equal(created.commercialPrice, "10.005");
+});
+
+test("catalog archive records its timestamp and publish clears it", async () => {
+  const prisma = fakePrisma();
+  const now = new Date("2026-08-24T13:00:00Z");
+  const service = createCommercialCatalogService({ prisma, clock: () => now });
+  const archived = await service.archive({ empresaId: 1, catalogProductId: 1, expectedRevision: 1 });
+  assert.equal(archived.visibility, "ARCHIVED");
+  assert.equal(prisma.products[0].archivedAt.toISOString(), now.toISOString());
+  const published = await service.publish({ empresaId: 1, catalogProductId: 1, expectedRevision: 2 });
+  assert.equal(published.visibility, "PUBLISHED");
+  assert.equal(prisma.products[0].archivedAt, null);
+});
+
 test("availability is fail-closed for stale, unknown and expired canonical balances", () => {
   const now = new Date("2026-08-24T12:00:00Z");
   const fresh = evaluateBalances({ now, balances: [{ id: 1, fonteAutoritativaId: 8, fonteAutoritativa: { statusCiclo: "ACTIVE" }, semanticaDisponivel: "EXPLICIT", available: 4, freshnessEstado: "FRESH", dataConfidence: "HIGH", revision: 1, unidade: "UN" }] });
@@ -112,11 +137,24 @@ test("ProductOffer snapshots price/availability and expires or revalidates mater
   const created = await offers.create({ empresaId: 1, catalogProductId: 1, correlationId: "test" });
   assert.equal(created.availabilityStatus, "AVAILABLE");
   assert.equal(created.price, 1499.9);
+  assert.equal(created.priceStatus, "AVAILABLE");
   assert.deepEqual(created.allowedActions, ["VIEW_PRODUCT", "REGISTER_PRODUCT_INTEREST", "PURCHASE_LINK"]);
   const valid = await offers.get({ empresaId: 1, offerId: created.offerId, now: new Date("2026-08-24T12:01:00Z") });
   assert.equal(valid.valid, true);
   const expired = await offers.get({ empresaId: 1, offerId: created.offerId, now: new Date("2026-08-25T12:01:00Z") });
   assert.equal(expired.valid, false);
+});
+
+test("ProductOffer detecta mudanca monetaria mesmo sem incremento de revisao", async () => {
+  const prisma = fakePrisma();
+  const catalog = createCommercialCatalogService({ prisma });
+  const availability = createSellableAvailabilityService({ prisma, catalogService: catalog });
+  const offers = createProductOfferService({ prisma, catalogService: catalog, availabilityService: availability, clock: () => new Date("2026-08-24T12:00:00Z") });
+  const created = await offers.create({ empresaId: 1, catalogProductId: 1 });
+  prisma.products[0].commercialPrice = "1500.00";
+  const changed = await offers.get({ empresaId: 1, offerId: created.offerId, now: new Date("2026-08-24T12:01:00Z") });
+  assert.equal(changed.valid, false);
+  assert.equal(changed.invalidReason, "PRICE_CHANGED");
 });
 
 test("ProductOffer preview reuses an active tenant/conversation/product snapshot and caps active previews", async () => {

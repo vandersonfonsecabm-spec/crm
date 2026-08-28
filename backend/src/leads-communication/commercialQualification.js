@@ -4,6 +4,7 @@ const {
   withProjectionRetry,
 } = require("../follow-up-projection");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { parseNonNegativePrismaInt } = require("../shared/commercial-money");
 
 const PRIORITIES = ["BAIXA", "MEDIA", "ALTA", "CRITICA"];
 const ACTIVE_BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA"];
@@ -472,10 +473,8 @@ function cleanOptionalText(value, field, max) {
 
 function optionalNonNegativeInteger(value, field) {
   if (value === undefined || value === null || value === "") return null;
-  const text = String(value);
-  if (!/^\d+$/.test(text)) throw commercialInvalid(`${field} deve ser um numero inteiro nao negativo.`);
-  const number = Number(text);
-  if (!Number.isSafeInteger(number)) throw commercialInvalid(`${field} fora do intervalo permitido.`);
+  const number = parseNonNegativePrismaInt(value);
+  if (number === null) throw commercialInvalid(`${field} deve ser um inteiro nao negativo dentro do limite permitido.`);
   return number;
 }
 

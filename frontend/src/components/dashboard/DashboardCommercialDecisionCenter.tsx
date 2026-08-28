@@ -151,7 +151,7 @@ export default function DashboardCommercialDecisionCenter({
             <RadarMetric label="Risco alto" value={`${highRiskClients.length} oportunidades`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-700" />} />
             <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-700" />} />
             <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-700" />} />
-            <RadarMetric label="Propostas" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-violet-700" />} />
+            <RadarMetric label="Valor em clientes na etapa Proposta" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-violet-700" />} />
           </div>
         )}
 

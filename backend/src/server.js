@@ -53,6 +53,7 @@ const { createInstagramWebhookIntake } = require("./integrations/instagramWebhoo
 const { mountMessengerWebhookRoutes } = require("./integrations/messengerWebhook");
 const { createMessengerWebhookIntake } = require("./integrations/messengerWebhookIntake");
 const { CANONICAL_CLIENT_STATUSES: CLIENT_LIFECYCLE_STATUSES, isPostgresRuntime, lockClienteRow } = require("./shared/clientLifecycleLock");
+const { parseNonNegativePrismaInt } = require("./shared/commercial-money");
 const { getAllowedOrigins } = require("./security/origin-policy");
 
 const prisma = createPrismaClient();
@@ -473,6 +474,9 @@ async function updateCliente(req, res) {
     const hasRevision = Object.prototype.hasOwnProperty.call(req.body || {}, "revisao");
     const revisao = hasRevision ? Number(req.body.revisao) : null;
     if (hasRevision && (!Number.isInteger(revisao) || revisao < 1)) return clienteValidationError(res, { revisao: "Revisao invalida." }, 422);
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, "valor") && !hasRevision) {
+      return clienteValidationError(res, { revisao: "Informe a revisao atual para alterar o valor comercial." }, 422);
+    }
     const lifecycleResult = await prisma.$transaction(async (tx) => {
       const locked = await lockClienteRow(tx, empresaId, clienteId);
       if (!locked) return { kind: "not-found" };
@@ -2155,13 +2159,7 @@ function parseNonNegativeInteger(value, fallback) {
     return fallback;
   }
 
-  const parsed = Number(value);
-
-  if (!Number.isInteger(parsed) || parsed < 0) {
-    return null;
-  }
-
-  return parsed;
+  return parseNonNegativePrismaInt(value);
 }
 
 function parseNonNegativeDecimal(value, fallback) {
@@ -2325,7 +2323,7 @@ function clientePayload(body, { partial = false } = {}) {
   if (!partial || has("cpfCnpj")) data.cpfCnpj = String(body.cpfCnpj || "").replace(/\D/g, "") || null;
   if (!partial || has("interesse")) data.interesse = String(body.interesse || "").trim();
   if (!partial || has("status")) data.status = String(body.status || "Lead").trim();
-  if (!partial || has("valor")) data.valor = Number.isFinite(Number(body.valor)) ? Number(body.valor) : 0;
+  if (!partial || has("valor")) data.valor = has("valor") ? parseNonNegativePrismaInt(body.valor) : 0;
   if (!partial || has("origem")) data.origem = String(body.origem || "Manual").trim();
   if (!partial || has("favorito")) data.favorito = has("favorito") ? body.favorito : false;
   if (!partial || has("quente")) data.quente = has("quente") ? body.quente : false;
@@ -2366,8 +2364,8 @@ function clienteValidationErrors(body, { partial = false } = {}) {
   }
   if (has("estado") && estado && !/^[A-Z]{2}$/.test(estado)) errors.estado = "Estado invalido.";
   if (has("cpfCnpj") && cpfCnpj && !isValidCpfCnpj(cpfCnpj)) errors.cpfCnpj = "CPF ou CNPJ invalido.";
-  if (has("valor") && (!Number.isFinite(Number(source.valor)) || Number(source.valor) < 0)) {
-    errors.valor = "Valor invalido.";
+  if (has("valor") && parseNonNegativePrismaInt(source.valor) === null) {
+    errors.valor = "Valor deve ser um inteiro nao negativo dentro do limite permitido.";
   }
   for (const field of ["favorito", "quente"]) {
     if (has(field) && typeof source[field] !== "boolean") errors[field] = "O valor deve ser booleano.";

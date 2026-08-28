@@ -3,6 +3,7 @@ const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 const { Prisma } = require("@prisma/client");
 const { encryptCredentials, decryptCredentials } = require("./crypto");
 const { createDistributedOperationLease } = require("../shared/distributedOperationLease");
+const { decimalToCentsRoundHalfUp } = require("../shared/commercial-money");
 const {
   BlingHttpClient,
   assertBlingConfigured,
@@ -809,13 +810,7 @@ function moneyToCents(value) {
   } else if (normalized.includes(",")) {
     normalized = normalized.replace(",", ".");
   }
-  const match = /^(\d+)(?:\.(\d+))?$/.exec(normalized);
-  if (!match) return null;
-  const integerPart = BigInt(match[1]);
-  const fraction = match[2] || "";
-  const centsPart = BigInt((fraction.slice(0, 2) || "").padEnd(2, "0") || "0");
-  const rounded = integerPart * 100n + centsPart + (fraction[2] && fraction[2] >= "5" ? 1n : 0n);
-  return rounded <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(rounded) : null;
+  return decimalToCentsRoundHalfUp(normalized);
 }
 
 function decimal(value) {

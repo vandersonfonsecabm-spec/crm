@@ -58,6 +58,9 @@ test("C1 não adiciona contrato visual fictício de SLA ou score e preserva a co
 
   assert.doesNotMatch(leads, /score de ia|atrasados/i);
   assert.match(leads, /convertCommunicationLeadToBusiness/);
+  assert.match(leads, /conversionForm\.valor !== ""/);
+  assert.match(leads, /parseNonNegativePrismaInt/);
+  assert.match(leads, /money\(selectedBusiness\.valor\)/);
   assert.doesNotMatch(inbox, /sla oficial|saldo baixo|sincronizar bling/i);
   assert.match(leads, /Não informado/);
   assert.match(inbox, /simulad[ao]/i);

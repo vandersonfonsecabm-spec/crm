@@ -12,7 +12,7 @@ const COMPOSITIONAL_CONTRACT_MATRIX = {
     forbiddenLabels: ["Oportunidades ativas", "Pipeline de Negócios", "Clientes em atenção"],
     fields: [
       field("ApiDashboardSummary", "indicadores.clientes", "Clientes na carteira", /indicadores:\s*\{[\s\S]*?\bclientes\s*:\s*number;/),
-      field("ApiDashboardSummary", "analytics.wonValue", "Receita fechada", /analytics:\s*\{[\s\S]*?\bwonValue\s*:\s*number;/),
+      field("ApiDashboardSummary", "analytics.wonValue", "Valor informado em clientes fechados", /analytics:\s*\{[\s\S]*?\bwonValue\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.forecastValue", "Valor informado em clientes — Novo e Proposta", /analytics:\s*\{[\s\S]*?\bforecastValue\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.activePipeline", "Clientes em acompanhamento comercial", /analytics:\s*\{[\s\S]*?\bactivePipeline\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.todayFollowUps", "Clientes com acompanhamento hoje", /analytics:\s*\{[\s\S]*?\btodayFollowUps\s*:\s*number;/),

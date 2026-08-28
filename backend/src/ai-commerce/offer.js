@@ -12,6 +12,7 @@ const {
   requireTenantId,
   validatePublicUrl,
 } = require("./common");
+const { decimalToCentsRoundHalfUp } = require("../shared/commercial-money");
 
 function createProductOfferService({ prisma, catalogService, availabilityService, clock = () => new Date(), policy = {} } = {}) {
   if (!prisma?.productOffer) throw new Error("PRODUCT_OFFER_PRISMA_MODEL_MISSING");
@@ -113,6 +114,7 @@ function createProductOfferService({ prisma, catalogService, availabilityService
     if (!revalidate) return { ...publicOffer(row, { internal }), valid: row.status === "ACTIVE", invalidReason: row.status === "ACTIVE" ? null : `OFFER_${row.status}` };
     const catalog = await catalogService.get(tenantId, row.catalogProductId, { includeHidden: true }).catch(() => null);
     if (!catalog || catalog.visibility !== VISIBILITY.PUBLISHED || catalog.archivedAt || catalog.revision !== row.catalogRevision) return markStale(row, tenantId, "CATALOG_CHANGED", internal);
+    if (!sameMonetarySnapshot(catalog, row)) return markStale(row, tenantId, "PRICE_CHANGED", internal);
     const current = await availabilityService.getSellableAvailability({ empresaId: tenantId, catalogProductId: row.catalogProductId, now });
     if (Number(current.stockMaterialVersion || 0) !== Number(row.stockMaterialVersion || 0) || current.status !== row.availabilityStatus) return markStale(row, tenantId, "AVAILABILITY_CHANGED", internal);
     return { ...publicOffer(row, { internal }), valid: row.status === "ACTIVE", invalidReason: row.status === "ACTIVE" ? null : `OFFER_${row.status}` };
@@ -127,6 +129,7 @@ function createProductOfferService({ prisma, catalogService, availabilityService
 }
 
 function publicOffer(row, { internal = false } = {}) {
+  const commercialTerms = parseJson(row.commercialTermsJson, {});
   const safe = {
     offerId: row.id,
     catalogProductId: row.catalogProductId,
@@ -135,9 +138,10 @@ function publicOffer(row, { internal = false } = {}) {
     imageUrl: row.imageUrl || null,
     price: row.price ?? null,
     currency: row.currency,
+    priceStatus: commercialTerms.priceStatus || (row.price === null || row.price === undefined ? PRICE_STATUS.UNAVAILABLE : PRICE_STATUS.AVAILABLE),
     availabilityStatus: row.availabilityStatus,
     availabilityLabel: row.availabilityLabel,
-    commercialTerms: parseJson(row.commercialTermsJson, {}),
+    commercialTerms,
     productUrl: row.productUrl || null,
     purchaseUrl: row.purchaseUrl || null,
     allowedActions: parseJson(row.allowedActionsJson, []),
@@ -154,6 +158,20 @@ function publicOffer(row, { internal = false } = {}) {
   };
   if (internal) Object.assign(safe, { stockProductId: row.stockProductId, conversationId: row.conversationId || null, customerId: row.customerId || null, empresaId: row.empresaId });
   return safe;
+}
+
+function sameMonetarySnapshot(catalog, offer) {
+  const terms = parseJson(offer.commercialTermsJson, {});
+  const catalogStatus = String(catalog.priceStatus || PRICE_STATUS.UNAVAILABLE).toUpperCase();
+  const offerStatus = String(terms.priceStatus || (offer.price === null || offer.price === undefined ? PRICE_STATUS.UNAVAILABLE : PRICE_STATUS.AVAILABLE)).toUpperCase();
+  if (catalogStatus !== offerStatus || String(catalog.currency || "BRL").toUpperCase() !== String(offer.currency || "BRL").toUpperCase()) return false;
+  const catalogHasPrice = catalog.commercialPrice !== null && catalog.commercialPrice !== undefined;
+  const offerHasPrice = offer.price !== null && offer.price !== undefined;
+  if (catalogHasPrice !== offerHasPrice) return false;
+  if (!catalogHasPrice) return true;
+  const catalogPrice = decimalToCentsRoundHalfUp(catalog.commercialPrice);
+  const offerPrice = decimalToCentsRoundHalfUp(offer.price);
+  return catalogPrice !== null && offerPrice !== null && catalogPrice === offerPrice;
 }
 
 function validateSnapshotUrls(data, domain) {

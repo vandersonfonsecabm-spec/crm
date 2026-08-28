@@ -44,7 +44,7 @@ export default function useDashboardAnalytics({
     }
     const totalValue = kanbanClients.reduce((sum, client) => sum + client.value, 0);
     const forecastValue = kanbanClients
-      .filter((client) => client.status === "Novo" || client.status === "Contato" || client.status === "Proposta")
+      .filter((client) => client.status === "Novo" || client.status === "Proposta")
       .reduce((sum, client) => sum + client.value, 0);
     const wonValue = kanbanClients
       .filter((client) => client.status === "Fechado")

@@ -349,13 +349,14 @@ export default function useDashboardActions({
       return;
     }
 
-    const header = ["Nome", "Empresa", "Telefone", "Email", "Valor", "Status", "Origem", "Prioridade", "Risco", "Score"];
+    const header = ["Nome", "Empresa", "Telefone", "Email", "Valor informado (BRL)", "Valor informado?", "Status", "Origem", "Prioridade", "Risco", "Score"];
     const rows = clients.map((client) => [
       client.name,
       client.company,
       client.phone,
       client.email,
-      String(client.value),
+      client.valueKnown === false ? "" : String(client.value),
+      client.valueKnown === false ? "Não" : "Sim",
       client.archived ? "Arquivado" : client.status,
       client.source,
       getPriority(client),

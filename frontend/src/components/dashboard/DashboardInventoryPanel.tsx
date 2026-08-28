@@ -392,7 +392,15 @@ function integratedUnit(product: HubProdutoEstoque) {
 
 function integratedPrice(product: HubProdutoEstoque) {
   const defaultPrice = product.precos.find((price) => normalizeSearchText(price.tabela || "") === "padrao") ?? product.precos[0];
-  return defaultPrice?.precoPromocionalCentavos ?? defaultPrice?.precoCentavos ?? null;
+  if (!defaultPrice) return null;
+  const now = Date.now();
+  const start = defaultPrice.inicioPromocao ? new Date(defaultPrice.inicioPromocao).getTime() : null;
+  const end = defaultPrice.fimPromocao ? new Date(defaultPrice.fimPromocao).getTime() : null;
+  const promotionActive = defaultPrice.precoPromocionalCentavos !== null
+    && defaultPrice.precoPromocionalCentavos !== undefined
+    && (start === null || (Number.isFinite(start) && start <= now))
+    && (end === null || (Number.isFinite(end) && end >= now));
+  return promotionActive ? defaultPrice.precoPromocionalCentavos! : defaultPrice.precoCentavos;
 }
 
 function integratedQuantity(product: HubProdutoEstoque) {

@@ -97,7 +97,7 @@ function createCommercialCatalogService({ prisma, clock = () => new Date(), poli
         revision: 1,
         createdAt: now,
         updatedAt: now,
-        archivedAt: null,
+        archivedAt: normalized.visibility === VISIBILITY.ARCHIVED ? now : null,
       },
     });
     return publicCatalogProduct(row);
@@ -117,7 +117,12 @@ function createCommercialCatalogService({ prisma, clock = () => new Date(), poli
     if (merged.visibility === VISIBILITY.PUBLISHED && merged.sellabilityPolicy !== "STOCK_CANONICAL_ONLY") throw new CommerceCatalogError("COMMERCE_PUBLISH_POLICY_INVALID", "Produto publicado deve usar politica de estoque canonico.", 422);
     assertPriceStatusConsistency(merged);
     const now = clock();
-    const updateData = { ...normalized, revision: { increment: 1 }, updatedAt: now };
+    const updateData = {
+      ...normalized,
+      ...(normalized.visibility === undefined ? {} : { archivedAt: normalized.visibility === VISIBILITY.ARCHIVED ? now : null }),
+      revision: { increment: 1 },
+      updatedAt: now,
+    };
     const result = await prisma.commercialCatalogProduct.updateMany({ where: { id, empresaId: tenantId, revision: existing.revision }, data: updateData });
     if (result.count !== 1) throw new CommerceCatalogError("COMMERCE_CATALOG_CONFLICT", "Produto comercial foi alterado por outro operador.", 409);
     const row = await prisma.commercialCatalogProduct.findFirst({ where: { id, empresaId: tenantId } });

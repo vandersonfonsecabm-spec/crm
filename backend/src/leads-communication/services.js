@@ -7,6 +7,7 @@ const { calculateConversationSla, slaFilterWhere } = require("./inboxOperations"
 const { createInboxCommercialQualificationService } = require("./commercialQualification");
 const { assertTestSimulationChannel, isTestSimulationChannel } = require("../channels/simulationPolicy");
 const { lockActiveClienteRows } = require("../shared/clientLifecycleLock");
+const { MAX_PRISMA_INT } = require("../shared/commercial-money");
 const { reconcileClientProjections, withProjectionRetry } = require("../follow-up-projection");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 const {
@@ -233,7 +234,7 @@ function createLeadsCommunicationServices({ prisma }) {
     const body = rejectUnknown(input, ["titulo", "valor", "observacao"]);
     rejectEmpresaId(body);
     const requestedTitle = optionalText(body.titulo, "titulo", 200);
-    const valor = optionalInteger(body.valor, "valor", { min: 0 });
+    const valor = optionalInteger(body.valor, "valor", { min: 0, max: MAX_PRISMA_INT });
     const observacao = optionalText(body.observacao, "observacao", 1000);
 
     const initialLead = await prisma.lead.findFirst({

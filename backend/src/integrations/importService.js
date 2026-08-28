@@ -6,6 +6,7 @@ const { parse } = require("csv-parse/sync");
 const ExcelJS = require("exceljs");
 const multer = require("multer");
 const { Prisma } = require("@prisma/client");
+const { decimalToCentsRoundHalfUp, parseNonNegativePrismaInt } = require("../shared/commercial-money");
 
 const ALLOWED_FIELDS = new Set([
   "externalId",
@@ -556,13 +557,20 @@ function parseDecimal(value, field) {
 function parseMoneyToCents(value, mode) {
   const text = String(value).trim();
   if (mode === "CENTAVOS") {
-    if (!/^\d+$/.test(text)) throw codedError("Valor monetario em centavos deve ser inteiro.", "INVALID_PRICE");
-    return Number(text);
+    const cents = parseNonNegativePrismaInt(text);
+    if (cents === null) throw codedError("Valor monetario em centavos deve ser inteiro e caber no limite permitido.", "INVALID_PRICE");
+    return cents;
   }
-  const normalized = mode === "REAIS_VIRGULA" ? text.replace(/\./g, "").replace(",", ".") : text.replace(/,/g, "");
+  const usesCommaDecimal = mode === "REAIS_VIRGULA";
+  const validFormat = usesCommaDecimal
+    ? /^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?$/
+    : /^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/;
+  if (!validFormat.test(text)) throw codedError("Separadores monetarios invalidos para o modo selecionado.", "INVALID_PRICE");
+  const normalized = usesCommaDecimal ? text.replace(/\./g, "").replace(",", ".") : text.replace(/,/g, "");
   if (!/^\d+(\.\d{1,2})?$/.test(normalized)) throw codedError("Valor monetario invalido.", "INVALID_PRICE");
-  const [whole, cents = ""] = normalized.split(".");
-  return Number(whole) * 100 + Number(cents.padEnd(2, "0"));
+  const cents = decimalToCentsRoundHalfUp(normalized);
+  if (cents === null) throw codedError("Valor monetario fora do limite permitido.", "INVALID_PRICE");
+  return cents;
 }
 
 function parseDate(value, field) {
@@ -870,6 +878,7 @@ module.exports = {
   getImportLimits,
   UPDATE_STRATEGIES,
   claimImportForProcessing,
+  _private: { parseMoneyToCents },
 };
 
 

@@ -17,10 +17,24 @@ import type {
   CommercialProposalPayload,
   CommercialProposalStatus,
 } from "../../services/crmApi";
+import {
+  addMoneyWithinPrismaInt,
+  multiplyQuantityByCentsRoundHalfUp,
+  parseMoneyInputToCents,
+  quantityToMilli,
+} from "../../utils/commercialMoney.js";
 import { Badge, Button, EmptyState, ErrorState, Input, LoadingState, Select, Textarea } from "../ui";
 
 type Props = { businessId: number; onChanged?: () => void };
-type FormItem = { key: string; descricao: string; quantidade: string; valorUnitario: string; desconto: string };
+type FormItem = {
+  key: string;
+  itemType: "LEGACY_ITEM" | "CATALOG_ITEM";
+  productOfferId: string | null;
+  descricao: string;
+  quantidade: string;
+  valorUnitario: string;
+  desconto: string;
+};
 type ProposalForm = {
   titulo: string;
   descricao: string;
@@ -265,7 +279,7 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
           </div>
 
           <div className="overflow-hidden rounded-md border border-[var(--border-default)]">
-            {selected.itens.map((item) => <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-[var(--border-default)] px-3 py-2 text-[11px] last:border-b-0" key={item.id}><div className="min-w-0"><p className="truncate font-medium text-[var(--text-primary)]">{item.descricao}</p><p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{item.quantidade} × {formatMoney(item.valorUnitarioCentavos)}{item.descontoCentavos ? ` · desconto ${formatMoney(item.descontoCentavos)}` : ""}</p></div><span className="tabular-nums text-[var(--text-secondary)]">{formatMoney(item.totalCentavos)}</span></div>)}
+            {selected.itens.map((item) => <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-[var(--border-default)] px-3 py-2 text-[11px] last:border-b-0" key={item.id}><div className="min-w-0"><div className="flex min-w-0 items-center gap-1.5"><p className="truncate font-medium text-[var(--text-primary)]">{item.descricao}</p>{item.itemType === "CATALOG_ITEM" && <span className="shrink-0 rounded border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-teal-700">Catálogo</span>}</div><p className="mt-0.5 text-[10px] text-[var(--text-muted)]">{item.quantidade} × {formatMoney(item.valorUnitarioCentavos)}{item.descontoCentavos ? ` · desconto ${formatMoney(item.descontoCentavos)}` : ""}</p>{item.itemType === "CATALOG_ITEM" && <p className="mt-0.5 text-[9px] text-teal-700">SKU {item.skuSnapshot || "não informado"} · revisão {item.catalogRevision ?? "não informada"} · preço {item.priceStatusSnapshot || "sem status"}</p>}</div><span className="tabular-nums text-[var(--text-secondary)]">{formatMoney(item.totalCentavos)}</span></div>)}
           </div>
 
           <div className="grid grid-cols-3 gap-px overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--border-default)] text-right text-[10px]">
@@ -290,27 +304,37 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
   );
 }
 
+export function CommercialProposalEditorFixture({ proposal }: { proposal: CommercialProposal }) {
+  const [fixtureForm, setFixtureForm] = useState<ProposalForm>(() => formFromProposal(proposal));
+  const fixtureTotals = useMemo(() => calculatePreview(fixtureForm), [fixtureForm]);
+  return <ProposalEditor busy={false} form={fixtureForm} onCancel={() => undefined} onChange={setFixtureForm} onSave={() => undefined} totals={fixtureTotals} />;
+}
+
 function ProposalEditor({ busy, form, onCancel, onChange, onSave, totals }: { busy: boolean; form: ProposalForm; onCancel: () => void; onChange: (form: ProposalForm) => void; onSave: () => void; totals: { subtotal: number; discount: number; total: number } }) {
   function updateItem(index: number, patch: Partial<FormItem>) {
     onChange({ ...form, itens: form.itens.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item) });
   }
+  const hasCatalogItem = form.itens.some((item) => item.itemType === "CATALOG_ITEM");
   return (
     <div className="space-y-3 border-t border-[var(--border-default)] pt-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <Input containerClassName="sm:col-span-2" label="Título" maxLength={160} onChange={(event) => onChange({ ...form, titulo: event.target.value })} placeholder="Ex.: Proposta para renovação de maquinário" value={form.titulo} />
         <Input label="Validade" onChange={(event) => onChange({ ...form, validade: event.target.value })} type="date" value={form.validade} />
-        <Input inputMode="decimal" label="Desconto geral (R$)" min="0" onChange={(event) => onChange({ ...form, descontoGeral: moneyInput(event.target.value) })} value={form.descontoGeral} />
+        <Input disabled={hasCatalogItem} inputMode="decimal" label="Desconto geral (R$)" min="0" onChange={(event) => onChange({ ...form, descontoGeral: moneyInput(event.target.value) })} title={hasCatalogItem ? "Itens de catálogo preservam o preço validado e não aceitam desconto nesta versão." : undefined} value={form.descontoGeral} />
         <Textarea containerClassName="sm:col-span-2" label="Descrição curta" maxLength={500} onChange={(event) => onChange({ ...form, descricao: event.target.value })} rows={2} value={form.descricao} />
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2"><p className="text-[11px] font-semibold text-[var(--text-primary)]">Itens</p><Button leftIcon={<Plus size={12} />} onClick={() => onChange({ ...form, itens: [...form.itens, emptyItem()] })} size="sm" variant="ghost">Adicionar item</Button></div>
         {form.itens.map((item, index) => (
-          <div className="grid grid-cols-[minmax(0,1fr)_72px_105px_105px_32px] items-end gap-2 rounded-md border border-[var(--border-default)] p-2.5 max-[640px]:grid-cols-2" key={item.key}>
-            <Input containerClassName="max-[640px]:col-span-2" label="Descrição" maxLength={240} onChange={(event) => updateItem(index, { descricao: event.target.value })} value={item.descricao} />
+          <div className={`grid grid-cols-[minmax(0,1fr)_72px_105px_105px_32px] items-end gap-2 rounded-md border p-2.5 max-[640px]:grid-cols-2 ${item.itemType === "CATALOG_ITEM" ? "border-teal-200 bg-teal-50/40" : "border-[var(--border-default)]"}`} key={item.key}>
+            <div className="max-[640px]:col-span-2">
+              <Input disabled={item.itemType === "CATALOG_ITEM"} label="Descrição" maxLength={240} onChange={(event) => updateItem(index, { descricao: event.target.value })} value={item.descricao} />
+              {item.itemType === "CATALOG_ITEM" && <p className="mt-1 text-[9px] font-medium text-teal-700">Item de catálogo · descrição e preço preservados pelo servidor.</p>}
+            </div>
             <Input inputMode="decimal" label="Qtd." min="0.001" onChange={(event) => updateItem(index, { quantidade: decimalInput(event.target.value) })} value={item.quantidade} />
-            <Input inputMode="decimal" label="Unitário (R$)" min="0" onChange={(event) => updateItem(index, { valorUnitario: moneyInput(event.target.value) })} value={item.valorUnitario} />
-            <Input inputMode="decimal" label="Desconto (R$)" min="0" onChange={(event) => updateItem(index, { desconto: moneyInput(event.target.value) })} value={item.desconto} />
+            <Input disabled={item.itemType === "CATALOG_ITEM"} inputMode="decimal" label="Unitário (R$)" min="0" onChange={(event) => updateItem(index, { valorUnitario: moneyInput(event.target.value) })} value={item.valorUnitario} />
+            <Input disabled={item.itemType === "CATALOG_ITEM"} inputMode="decimal" label="Desconto (R$)" min="0" onChange={(event) => updateItem(index, { desconto: moneyInput(event.target.value) })} value={item.desconto} />
             <Button aria-label={`Remover item ${index + 1}`} disabled={form.itens.length === 1} onClick={() => onChange({ ...form, itens: form.itens.filter((_, itemIndex) => itemIndex !== index) })} size="sm" title="Remover item" variant="ghost"><Trash2 size={13} /></Button>
           </div>
         ))}
@@ -352,7 +376,7 @@ function emptyForm(): ProposalForm {
 }
 
 function emptyItem(): FormItem {
-  return { key: `${Date.now()}-${Math.random()}`, descricao: "", quantidade: "1", valorUnitario: "0,00", desconto: "0,00" };
+  return { key: `${Date.now()}-${Math.random()}`, itemType: "LEGACY_ITEM", productOfferId: null, descricao: "", quantidade: "1", valorUnitario: "0,00", desconto: "0,00" };
 }
 
 function formFromProposal(proposal: CommercialProposal): ProposalForm {
@@ -363,28 +387,50 @@ function formFromProposal(proposal: CommercialProposal): ProposalForm {
     descontoGeral: centsToInput(proposal.descontoGeralCentavos),
     observacoes: proposal.observacoes ?? "",
     condicoesComerciais: proposal.condicoesComerciais ?? "",
-    itens: proposal.itens.map((item) => ({ key: String(item.id), descricao: item.descricao, quantidade: item.quantidade, valorUnitario: centsToInput(item.valorUnitarioCentavos), desconto: centsToInput(item.descontoCentavos) })),
+    itens: proposal.itens.map((item) => ({ key: String(item.id), itemType: item.itemType, productOfferId: item.productOfferId ?? null, descricao: item.descricao, quantidade: item.quantidade, valorUnitario: centsToInput(item.valorUnitarioCentavos), desconto: centsToInput(item.descontoCentavos) })),
   };
 }
 
 function formPayload(form: ProposalForm): CommercialProposalPayload {
-  return { titulo: form.titulo.trim(), descricao: form.descricao.trim() || null, validade: form.validade, observacoes: form.observacoes.trim() || null, condicoesComerciais: form.condicoesComerciais.trim() || null, descontoGeralCentavos: inputToCents(form.descontoGeral), itens: form.itens.map((item) => ({ descricao: item.descricao.trim(), quantidade: item.quantidade.replace(",", "."), valorUnitarioCentavos: inputToCents(item.valorUnitario), descontoCentavos: inputToCents(item.desconto) })) };
+  return {
+    titulo: form.titulo.trim(),
+    descricao: form.descricao.trim() || null,
+    validade: form.validade,
+    observacoes: form.observacoes.trim() || null,
+    condicoesComerciais: form.condicoesComerciais.trim() || null,
+    descontoGeralCentavos: inputToCents(form.descontoGeral),
+    itens: form.itens.map((item) => item.itemType === "CATALOG_ITEM"
+      ? { itemType: "CATALOG_ITEM", productOfferId: item.productOfferId || "", quantidade: item.quantidade.replace(",", ".") }
+      : { itemType: "LEGACY_ITEM", descricao: item.descricao.trim(), quantidade: item.quantidade.replace(",", "."), valorUnitarioCentavos: inputToCents(item.valorUnitario), descontoCentavos: inputToCents(item.desconto) }),
+  };
 }
 
 function validateForm(form: ProposalForm) {
   if (!form.titulo.trim()) return "Informe o título da proposta.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.validade)) return "Informe uma validade válida.";
-  if (!form.itens.length || form.itens.some((item) => !item.descricao.trim() || Number(item.quantidade.replace(",", ".")) <= 0)) return "Preencha a descrição e a quantidade positiva de todos os itens.";
+  if (!form.itens.length || form.itens.some((item) => quantityToMilli(item.quantidade) === null)) return "Preencha uma quantidade positiva, com até três casas decimais, em todos os itens.";
+  if (form.itens.some((item) => item.itemType === "CATALOG_ITEM" && !item.productOfferId)) return "O item de catálogo perdeu a referência da oferta. Recarregue a proposta.";
+  if (form.itens.some((item) => item.itemType === "LEGACY_ITEM" && (!item.descricao.trim() || parseMoneyInputToCents(item.valorUnitario) === null || parseMoneyInputToCents(item.desconto) === null))) return "Preencha descrição, valor unitário e desconto válidos em todos os itens manuais.";
+  if (form.itens.some((item) => item.itemType === "CATALOG_ITEM") && inputToCents(form.descontoGeral) > 0) return "Desconto geral não está disponível para itens de catálogo.";
   const totals = calculatePreview(form);
-  if (totals.total < 0) return "Os descontos não podem gerar total negativo.";
+  if (!totals.valid) return "Revise preços, quantidades e descontos: o total deve ser não negativo e caber no limite permitido.";
   return "";
 }
 
 function calculatePreview(form: ProposalForm) {
-  const itemTotals = form.itens.map((item) => Math.max(0, Math.round(Number(item.quantidade.replace(",", ".")) * inputToCents(item.valorUnitario)) - inputToCents(item.desconto)));
-  const subtotal = itemTotals.reduce((sum, value) => sum + value, 0);
-  const discount = inputToCents(form.descontoGeral);
-  return { subtotal, discount, total: subtotal - discount };
+  let subtotal = 0;
+  for (const item of form.itens) {
+    const unitCents = parseMoneyInputToCents(item.valorUnitario);
+    const itemDiscount = parseMoneyInputToCents(item.desconto);
+    const rawSubtotal = unitCents === null ? null : multiplyQuantityByCentsRoundHalfUp(item.quantidade, unitCents);
+    if (rawSubtotal === null || itemDiscount === null || itemDiscount > rawSubtotal) return { subtotal: 0, discount: 0, total: 0, valid: false };
+    const nextSubtotal = addMoneyWithinPrismaInt(subtotal, rawSubtotal - itemDiscount);
+    if (nextSubtotal === null) return { subtotal: 0, discount: 0, total: 0, valid: false };
+    subtotal = nextSubtotal;
+  }
+  const discount = parseMoneyInputToCents(form.descontoGeral);
+  if (discount === null || discount > subtotal) return { subtotal, discount: discount ?? 0, total: 0, valid: false };
+  return { subtotal, discount, total: subtotal - discount, valid: true };
 }
 
 function moneyInput(value: string) {
@@ -400,8 +446,7 @@ function decimalInput(value: string) {
 }
 
 function inputToCents(value: string) {
-  const parsed = Number(value.replace(".", "").replace(",", "."));
-  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+  return parseMoneyInputToCents(value) ?? 0;
 }
 
 function centsToInput(value: number) {

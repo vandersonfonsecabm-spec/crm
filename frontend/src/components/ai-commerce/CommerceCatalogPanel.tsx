@@ -148,7 +148,7 @@ function Info({ label, value }: { label: string; value: string }) {
 }
 
 function formatPrice(product: AICommerceCatalogProduct) {
-  if (product.priceStatus === "ON_REQUEST" || product.priceStatus === "UNAVAILABLE" || product.priceStatus === "STALE" || product.commercialPrice === null || product.commercialPrice === undefined) return "Preço sob consulta";
+  if (product.priceStatus !== "AVAILABLE" || product.commercialPrice === null || product.commercialPrice === undefined) return "Preço sob consulta";
   const number = Number(product.commercialPrice);
   if (!Number.isFinite(number)) return "Preço sob consulta";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: product.currency || "BRL" }).format(number);

@@ -535,7 +535,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
     setBlingBusy("sync");
     setBlingMessage("");
     try {
-      const result = await sincronizarIntegracao(integrationId, ["PRODUTOS", "ESTOQUE"]);
+      const result = await sincronizarIntegracao(integrationId, ["PRODUTOS", "ESTOQUE", "PRECOS"]);
       setLastBlingSync(result);
       setBlingMessage(formatBlingSyncMessage(result));
       await Promise.all([loadAll(), reloadCatalog(), reloadQuality()]);

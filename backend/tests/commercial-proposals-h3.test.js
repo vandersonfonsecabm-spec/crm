@@ -59,6 +59,13 @@ test("H3 cria, calcula, versiona e protege propostas por tenant e concorrencia",
   assert.equal((await request("POST", `/negocios/${fixtureA.business.id}/propostas`, { ...validProposal(), validade: "2026-02-31" }, sellerA.token)).status, 422);
   assert.equal((await request("POST", `/negocios/${fixtureA.business.id}/propostas`, { ...validProposal(), itens: [{ descricao: "Item", quantidade: "0", valorUnitarioCentavos: 1000 }] }, sellerA.token)).status, 422);
   assert.equal((await request("POST", `/negocios/${fixtureA.business.id}/propostas`, { ...validProposal(), descontoGeralCentavos: 999999 }, sellerA.token)).status, 422);
+  for (const valorUnitarioCentavos of [false, [], " ", 1.5, 2_147_483_648]) {
+    const invalidMoney = await request("POST", `/negocios/${fixtureA.business.id}/propostas`, {
+      ...validProposal(),
+      itens: [{ descricao: "Item monetario invalido", quantidade: "1", valorUnitarioCentavos }],
+    }, sellerA.token);
+    assert.equal(invalidMoney.status, 422, String(valorUnitarioCentavos));
+  }
 
   const created = await request("POST", `/negocios/${fixtureA.business.id}/propostas`, validProposal(), sellerA.token);
   assert.equal(created.status, 201);
@@ -71,6 +78,20 @@ test("H3 cria, calcula, versiona e protege propostas por tenant e concorrencia",
   assert.equal(created.body.itens[0].totalCentavos, 24000);
   assert.equal(created.body.clienteId, fixtureA.client.id);
   assert.equal(created.body.leadId, fixtureA.lead.id);
+
+  const sameTenantOtherClient = await prisma.cliente.create({ data: { empresaId: adminA.empresaId, nome: "Cliente contexto divergente", origem: "QA H3" } });
+  await prisma.propostaComercial.update({ where: { id: created.body.id }, data: { clienteId: sameTenantOtherClient.id } });
+  const mismatchedContext = await request("GET", `/propostas/${created.body.id}`, undefined, sellerA.token);
+  assert.equal(mismatchedContext.status, 409);
+  assert.equal(mismatchedContext.body.codigo, "PROPOSAL_CONTEXT_CONFLICT");
+  await prisma.propostaComercial.update({ where: { id: created.body.id }, data: { clienteId: fixtureA.client.id } });
+
+  await prisma.propostaComercial.update({ where: { id: created.body.id }, data: { totalCentavos: created.body.totalCentavos + 1 } });
+  const corruptedMoney = await request("GET", `/propostas/${created.body.id}`, undefined, sellerA.token);
+  assert.equal(corruptedMoney.status, 409);
+  assert.equal(corruptedMoney.body.codigo, "PROPOSAL_MONEY_INTEGRITY_CONFLICT");
+  assert.ok(corruptedMoney.body.detalhes.findings.includes("PROPOSAL_TOTAL_MISMATCH"));
+  await prisma.propostaComercial.update({ where: { id: created.body.id }, data: { totalCentavos: created.body.totalCentavos } });
 
   const listed = await request("GET", `/propostas?negocioId=${fixtureA.business.id}`, undefined, sellerA.token);
   assert.equal(listed.status, 200);

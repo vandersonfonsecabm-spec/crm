@@ -4,12 +4,14 @@ import type { Client } from "../../types/dashboard";
 
 type DashboardKanbanCommandBarProps = {
   clients: Client[];
+  loadedPage: number;
   money: (value: number) => string;
   getLeadScore: (client: Client) => number;
 };
 
 export default function DashboardKanbanCommandBar({
   clients,
+  loadedPage,
   money,
   getLeadScore,
 }: DashboardKanbanCommandBarProps) {
@@ -19,22 +21,22 @@ export default function DashboardKanbanCommandBar({
   const contactCount = clients.filter((client) => client.status === "Contato").length;
   const proposalCount = clients.filter((client) => client.status === "Proposta").length;
   const biggestBottleneck = contactCount >= proposalCount ? "Contato" : "Proposta";
-  const expectedRevenue = clients
-    .filter((client) => client.status === "Proposta" || client.status === "Fechado")
+  const informedForecastValue = clients
+    .filter((client) => client.status === "Novo" || client.status === "Proposta")
     .reduce((sum, client) => sum + client.value, 0);
-  const conversionRate = Math.max(
-    1,
-    Math.round((clients.filter((client) => client.status === "Fechado").length / Math.max(clients.length, 1)) * 100)
-  );
+  const conversionRate = Math.round((clients.filter((client) => client.status === "Fechado").length / Math.max(clients.length, 1)) * 100);
 
   return (
-    <div className="grid overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-      <KanbanCommandPill icon={<Target size={12} />} label="Gargalo" value={biggestBottleneck} tone="default" />
-      <KanbanCommandPill label="Prioridade" value={`${hotLeads} oportunidades`} tone="warning" />
-      <KanbanCommandPill icon={<GitBranch size={12} />} label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
-      <KanbanCommandPill icon={<AlertTriangle size={12} />} label="Silenciosos" value={`${stalledLeads} oportunidades`} tone="danger" />
-      <KanbanCommandPill icon={<BadgeDollarSign size={12} />} label="Receita prevista" value={money(expectedRevenue)} tone="success" />
-      <KanbanCommandPill icon={<TrendingUp size={12} />} label="Conversão" value={`${conversionRate}%`} tone="info" />
+    <div>
+      <p className="mb-1.5 text-[10px] text-[var(--text-muted)]">Página {loadedPage} carregada · indicadores calculados somente sobre os clientes visíveis.</p>
+      <div className="grid overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <KanbanCommandPill icon={<Target size={12} />} label="Gargalo" value={biggestBottleneck} tone="default" />
+        <KanbanCommandPill label="Prioridade" value={`${hotLeads} oportunidades`} tone="warning" />
+        <KanbanCommandPill icon={<GitBranch size={12} />} label="Propostas" value={`${proposalLeads} abertas`} tone="default" />
+        <KanbanCommandPill icon={<AlertTriangle size={12} />} label="Silenciosos" value={`${stalledLeads} oportunidades`} tone="danger" />
+        <KanbanCommandPill icon={<BadgeDollarSign size={12} />} label="Valor informado — Novo e Proposta" value={money(informedForecastValue)} tone="success" />
+        <KanbanCommandPill icon={<TrendingUp size={12} />} label="Conversão na página" value={`${conversionRate}%`} tone="info" />
+      </div>
     </div>
   );
 }

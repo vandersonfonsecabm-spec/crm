@@ -145,7 +145,7 @@ export default function DashboardKanbanBoard({
             <ChevronDown className="transition-transform group-open:rotate-180" size={14} />
           </summary>
           <div className="space-y-2 border-t border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
-            <DashboardKanbanCommandBar clients={clients} money={money} getLeadScore={getLeadScore} />
+            <DashboardKanbanCommandBar clients={clients} loadedPage={loadedPage} money={money} getLeadScore={getLeadScore} />
             <DashboardKanbanSummary
               kanbanClientsCount={kanbanClients.length}
               kanbanOwnerFilter={kanbanOwnerFilter}

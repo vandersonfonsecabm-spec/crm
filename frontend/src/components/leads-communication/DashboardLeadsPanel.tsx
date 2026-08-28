@@ -16,6 +16,8 @@ import {
   updateCommunicationLead,
 } from "../../services/crmApi";
 import type { Client } from "../../types/dashboard";
+import { parseNonNegativePrismaInt } from "../../utils/commercialMoney.js";
+import { money } from "../../utils/dashboardHelpers";
 import { Button, EmptyState, ErrorState, FilterBar, Input, LoadingState, Pagination, Select, Surface, Textarea } from "../ui";
 import { CommunicationDrawer, CommunicationModal } from "./CommunicationOverlay";
 import { DetailRow, LeadStatusBadge } from "./communicationPresentation";
@@ -233,8 +235,10 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
 
   async function submitConversion() {
     if (!conversionLead || !conversionForm.titulo.trim() || conversionInFlight.current) return;
-    if (conversionForm.valor && (!Number.isSafeInteger(Number(conversionForm.valor)) || Number(conversionForm.valor) < 0)) {
-      setConversionError("Informe um valor inteiro não negativo ou deixe o campo vazio.");
+    const hasValue = conversionForm.valor !== "";
+    const parsedValue = hasValue ? parseNonNegativePrismaInt(conversionForm.valor) : null;
+    if (hasValue && parsedValue === null) {
+      setConversionError("Informe um valor inteiro não negativo dentro do limite permitido ou deixe o campo vazio.");
       return;
     }
     conversionInFlight.current = true;
@@ -243,7 +247,7 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
     try {
       const result = await convertCommunicationLeadToBusiness(conversionLead.id, {
         titulo: conversionForm.titulo.trim(),
-        ...(conversionForm.valor ? { valor: Number(conversionForm.valor) } : {}),
+        ...(hasValue ? { valor: parsedValue! } : {}),
         ...(conversionForm.observacao.trim() ? { observacao: conversionForm.observacao.trim() } : {}),
       });
       setSelected(result.lead);
@@ -328,7 +332,7 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
           <section><h3 className="mb-1 text-xs font-semibold text-[var(--text-primary)]">Resumo</h3><dl><DetailRow label="Status" value={<LeadStatusBadge status={selected.status} />} /><DetailRow label="Responsável" value={selected.responsavel?.nome ?? "Sem responsável"} /><DetailRow label="Interesse" value={selected.interesse ?? "Não informado"} /></dl></section>
           <section><h3 className="mb-1 text-xs font-semibold text-[var(--text-primary)]">Origem comercial</h3><dl><DetailRow label="Origem" value={selected.origem ?? "Não informado"} /><DetailRow label="Campanha" value={selected.campanha ?? "Não informado"} /></dl></section>
           <section><h3 className="mb-2 text-xs font-semibold text-[var(--text-primary)]">Ações permitidas</h3><div className="flex flex-wrap gap-2">{selected.responsavelId === null && <Button disabled={busy} leftIcon={<UserPlus size={13} />} onClick={() => void runAssume(selected)} size="sm">Assumir</Button>}{manager && <Button onClick={() => { setActionModal({ kind: "assign", lead: selected }); setActionValue(String(selected.responsavelId ?? "")); }} size="sm" variant="secondary">{selected.responsavelId ? "Transferir" : "Atribuir"}</Button>}{(manager || selectedIsMine) && selected.responsavelId !== null && <Button onClick={() => setActionModal({ kind: "queue", lead: selected })} size="sm" variant="secondary">Devolver à fila</Button>}{canConvertSelected && <Button disabled={busy} leftIcon={<BriefcaseBusiness size={13} />} onClick={() => openConversion(selected)} size="sm">Converter em Negócio</Button>}</div>{selected.responsavelId === null && <p className="mt-2 text-[11px] text-[var(--text-muted)]">Assuma o Lead antes de convertê-lo em Negócio.</p>}</section>
-          {selectedBusiness && <section className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3"><div className="mb-2 flex items-center gap-2"><BriefcaseBusiness size={14} /><h3 className="text-xs font-semibold text-[var(--text-primary)]">Negócio vinculado</h3></div><dl><DetailRow label="Título" value={selectedBusiness.titulo ?? `Negócio #${selectedBusiness.id}`} /><DetailRow label="Etapa" value={selectedBusiness.etapa} /><DetailRow label="Responsável" value={selectedBusiness.responsavel?.nome ?? "Sem responsável"} /><DetailRow label="Valor" value={selectedBusiness.valor === null ? "Não informado" : String(selectedBusiness.valor)} /><DetailRow label="Convertido por" value={selectedBusiness.convertidoPor?.nome ?? "Usuário removido"} /><DetailRow label="Convertido em" value={formatCommunicationDate(selectedBusiness.createdAt)} /></dl></section>}
+          {selectedBusiness && <section className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3"><div className="mb-2 flex items-center gap-2"><BriefcaseBusiness size={14} /><h3 className="text-xs font-semibold text-[var(--text-primary)]">Negócio vinculado</h3></div><dl><DetailRow label="Título" value={selectedBusiness.titulo ?? `Negócio #${selectedBusiness.id}`} /><DetailRow label="Etapa" value={selectedBusiness.etapa} /><DetailRow label="Responsável" value={selectedBusiness.responsavel?.nome ?? "Sem responsável"} /><DetailRow label="Valor" value={selectedBusiness.valor === null ? "Não informado" : money(selectedBusiness.valor)} /><DetailRow label="Convertido por" value={selectedBusiness.convertidoPor?.nome ?? "Usuário removido"} /><DetailRow label="Convertido em" value={formatCommunicationDate(selectedBusiness.createdAt)} /></dl></section>}
           {canEditSelected && selected.status !== "CONVERTIDO" && <LeadEditor busy={busy} key={`${selected.id}-${selected.updatedAt}`} lead={selected} onSave={async (payload) => { setBusy(true); try { await updateCommunicationLead(selected.id, payload); setFeedback("Lead atualizado."); await refreshLead(selected.id); } catch (nextError) { setFeedback(errorMessage(nextError)); } finally { setBusy(false); } }} />}
           <section><div className="mb-2 flex items-center gap-2"><Search size={13} /><h3 className="text-xs font-semibold text-[var(--text-primary)]">Conversas relacionadas</h3></div>{selectedConversations.length ? <div className="space-y-2">{selectedConversations.map((conversation) => <button className="flex w-full items-center justify-between rounded-md border border-[var(--border-default)] px-3 py-2 text-left hover:bg-[var(--bg-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]" key={conversation.id} onClick={() => onOpenConversation(conversation.id)} type="button"><span><span className="block text-[11px] font-medium text-[var(--text-primary)]">{conversation.canalIntegracao.nome}</span><span className="mt-0.5 block text-[11px] text-[var(--text-muted)]">{conversation.ultimaMensagem?.texto ?? "Sem mensagens"}</span></span><ArrowRight size={14} /></button>)}</div> : <p className="text-[11px] text-[var(--text-muted)]">Nenhuma conversa vinculada.</p>}</section>
           <section><div className="mb-2 flex items-center gap-2"><History size={13} /><h3 className="text-xs font-semibold text-[var(--text-primary)]">Histórico de atribuição</h3></div>{selectedHistory.length ? <ol className="space-y-2">{selectedHistory.map((entry) => <li className="rounded-md bg-[var(--bg-muted)] px-3 py-2 text-[11px]" key={entry.id}><p className="font-medium text-[var(--text-primary)]">{historyLabel(entry.tipo, entry.responsavelAnterior?.nome, entry.responsavelNovo?.nome)}</p><p className="mt-0.5 text-[var(--text-muted)]">Por {entry.alteradoPor?.nome ?? "Usuário removido"} · {formatCommunicationDate(entry.createdAt)}</p>{entry.motivo && <p className="mt-1 text-[var(--text-secondary)]">{entry.motivo}</p>}</li>)}</ol> : <p className="text-[11px] text-[var(--text-muted)]">Nenhuma alteração de responsável registrada.</p>}</section>

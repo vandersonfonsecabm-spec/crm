@@ -82,8 +82,8 @@ export default function ProductOfferCard({ busy = false, compact = false, offer,
 }
 
 function formatPrice(value: AICommerceProductOffer["price"], currency: string | null | undefined, status: AICommerceProductOffer["priceStatus"]) {
-  if (status === "ON_REQUEST" || status === "MISSING" || value === null || value === undefined || value === "") return "Preço sob consulta";
   if (status === "STALE") return "Preço requer confirmação";
+  if (status !== "AVAILABLE" || value === null || value === undefined || value === "") return "Preço sob consulta";
   const numeric = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numeric)) return "Preço sob consulta";
   try {

@@ -1,6 +1,7 @@
 "use strict";
 
 const { URL } = require("node:url");
+const { normalizeMoneyDecimal } = require("../shared/commercial-money");
 
 const VISIBILITY = Object.freeze({ HIDDEN: "HIDDEN", PUBLISHED: "PUBLISHED", ARCHIVED: "ARCHIVED" });
 const PRICE_STATUS = Object.freeze({ AVAILABLE: "AVAILABLE", ON_REQUEST: "ON_REQUEST", UNAVAILABLE: "UNAVAILABLE", STALE: "STALE" });
@@ -106,9 +107,9 @@ function normalizeCurrency(value) {
 
 function decimalNumber(value) {
   if (value === null || value === undefined || value === "") return null;
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) throw new CommerceCatalogError("COMMERCE_INVALID_PRICE", "Preco invalido.", 422);
-  return number;
+  const normalized = normalizeMoneyDecimal(value);
+  if (normalized === null) throw new CommerceCatalogError("COMMERCE_INVALID_PRICE", "Preco invalido ou fora do limite permitido.", 422);
+  return normalized;
 }
 
 function validatePublicUrl(value, allowedLinkDomain, field = "URL") {

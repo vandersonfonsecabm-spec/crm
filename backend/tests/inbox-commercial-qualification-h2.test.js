@@ -68,6 +68,8 @@ test("H2 qualifica, cria ou vincula Negocio com tenant, permissao e concorrencia
 
   assert.equal((await request("PATCH", `/conversas/${primary.conversation.id}/qualificacao-comercial`, { ...validQualification(), proximaAcao: "" }, sellerA.token)).status, 422);
   assert.equal((await request("PATCH", `/conversas/${primary.conversation.id}/qualificacao-comercial`, { ...validQualification(), valorEstimado: -1 }, sellerA.token)).status, 422);
+  assert.equal((await request("PATCH", `/conversas/${primary.conversation.id}/qualificacao-comercial`, { ...validQualification(), valorEstimado: false }, sellerA.token)).status, 422);
+  assert.equal((await request("PATCH", `/conversas/${primary.conversation.id}/qualificacao-comercial`, { ...validQualification(), valorEstimado: 2_147_483_648 }, sellerA.token)).status, 422);
   assert.equal((await request("PATCH", `/conversas/${primary.conversation.id}/qualificacao-comercial`, { ...validQualification(), dataRetorno: "2026-02-31" }, sellerA.token)).status, 422);
 
   const qualified = await request("PATCH", `/conversas/${primary.conversation.id}/qualificacao-comercial`, validQualification(), sellerA.token);

@@ -82,7 +82,14 @@ test("G1 converte Lead uma vez com tenant, RBAC, auditoria e rollback transacion
   assert.equal(await prisma.negocio.count({ where: { leadId: leadAdmin.id } }), 1);
 
   const leadManager = await createLead(adminA, clientA2.id, sellerA.usuarioId);
-  assert.equal((await request("POST", `/leads/${leadManager.id}/converter-negocio`, {}, managerA.token)).status, 201);
+  const zeroValueConversion = await request("POST", `/leads/${leadManager.id}/converter-negocio`, { valor: 0 }, managerA.token);
+  assert.equal(zeroValueConversion.status, 201);
+  assert.equal(zeroValueConversion.body.negocio.valor, 0);
+
+  const overflowLead = await createLead(adminA, clientA2.id, adminA.usuarioId);
+  const overflowConversion = await request("POST", `/leads/${overflowLead.id}/converter-negocio`, { valor: 2_147_483_648 }, adminA.token);
+  assert.ok([400, 422].includes(overflowConversion.status));
+  assert.equal(await prisma.negocio.count({ where: { leadId: overflowLead.id } }), 0);
 
   const leadSeller = await createLead(adminA, clientA2.id, sellerA.usuarioId);
   assert.equal((await request("POST", `/leads/${leadSeller.id}/converter-negocio`, {}, sellerA.token)).status, 201);

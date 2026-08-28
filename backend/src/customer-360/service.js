@@ -98,7 +98,7 @@ function createCustomer360Service({ prisma }) {
         .map((negocio) => ({
           id: negocio.id,
           titulo: negocio.titulo || `Negocio ${negocio.id}`,
-          valor: Number(negocio.valor || 0),
+          valor: negocio.valor === null || negocio.valor === undefined ? null : Number(negocio.valor),
           fechadoEm: negocio.fechadoEm || negocio.updatedAt,
           responsavel: negocio.responsavel,
         })),
@@ -288,7 +288,7 @@ function presentLead(item) {
 }
 
 function presentBusiness(item) {
-  return { id: item.id, titulo: item.titulo || `Negocio ${item.id}`, etapa: item.etapa, valor: Number(item.valor || 0), responsavel: item.responsavel };
+  return { id: item.id, titulo: item.titulo || `Negocio ${item.id}`, etapa: item.etapa, valor: item.valor === null || item.valor === undefined ? null : Number(item.valor), responsavel: item.responsavel };
 }
 
 function presentProposal(item) {
@@ -364,7 +364,7 @@ function businessEvent(item) {
     titulo: item.titulo || `Negocio ${item.id}`,
     descricao: item.observacao || "Oportunidade comercial registrada.",
     status: item.etapa,
-    valor: Number(item.valor || 0),
+    valor: item.valor === null || item.valor === undefined ? null : Number(item.valor),
     responsavel: item.responsavel,
     origem: { entidade: "Negocio", id: item.id },
     navegacao: { destino: "KANBAN", id: item.id },

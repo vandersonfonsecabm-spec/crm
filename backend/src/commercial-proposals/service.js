@@ -2,6 +2,11 @@ const { Prisma } = require("@prisma/client");
 const { domainError, isManager, notFound } = require("../leads-communication/policy");
 const { generateProposalPdf } = require("./pdf");
 const { lockActiveClienteRows } = require("../shared/clientLifecycleLock");
+const {
+  MAX_PRISMA_INT,
+  decimalToCentsRoundHalfUp: parseDecimalToCentsRoundHalfUp,
+  parseNonNegativePrismaInt,
+} = require("../shared/commercial-money");
 
 const STATUSES = ["RASCUNHO", "PRONTA", "ENVIADA", "ACEITA", "RECUSADA", "VENCIDA", "CANCELADA"];
 const EDITABLE_STATUSES = new Set(["RASCUNHO"]);
@@ -37,7 +42,13 @@ function createCommercialProposalService({ prisma }) {
       prisma.propostaComercial.findMany({ where, include: proposalIncludes(false), orderBy: [{ updatedAt: "desc" }, { id: "desc" }], skip: (page - 1) * limit, take: limit }),
       prisma.propostaComercial.count({ where }),
     ]);
-    return { data: rows.map((row) => presentProposal(context, row)), pagination: { page, limit, total, totalPages: total ? Math.ceil(total / limit) : 0 } };
+    return {
+      data: rows.map((row) => {
+        assertProposalMoneyIntegrity(row);
+        return presentProposal(context, row);
+      }),
+      pagination: { page, limit, total, totalPages: total ? Math.ceil(total / limit) : 0 },
+    };
   }
 
   async function getProposal(context, id) {
@@ -186,39 +197,41 @@ function createCommercialProposalService({ prisma }) {
     const observacao = optionalText(body.observacao, "observacao", 500);
     const source = await loadProposal(prisma, context, id, true);
     requireProposalWrite(context, source.negocio);
-    const rootId = source.propostaOrigemId ?? source.id;
     let created;
     try {
       created = await prisma.$transaction(async (tx) => {
         await lockActiveClienteRows(tx, context.empresaId, [source.clienteId, source.negocio?.clienteId]);
+        const transactionalSource = await loadProposal(tx, context, id, true);
+        requireProposalWrite(context, transactionalSource.negocio);
+        const rootId = transactionalSource.propostaOrigemId ?? transactionalSource.id;
         const latest = await tx.propostaComercial.findFirst({ where: { empresaId: context.empresaId, OR: [{ id: rootId }, { propostaOrigemId: rootId }] }, orderBy: [{ versao: "desc" }, { id: "desc" }] });
-        const version = (latest?.versao ?? source.versao) + 1;
-        const root = source.codigo.replace(/-V\d+$/, "");
+        const version = (latest?.versao ?? transactionalSource.versao) + 1;
+        const root = transactionalSource.codigo.replace(/-V\d+$/, "");
         const proposal = await tx.propostaComercial.create({
           data: {
             empresaId: context.empresaId,
-            clienteId: source.clienteId,
-            negocioId: source.negocioId,
-            leadId: source.leadId,
-            responsavelId: source.responsavelId,
+            clienteId: transactionalSource.clienteId,
+            negocioId: transactionalSource.negocioId,
+            leadId: transactionalSource.leadId,
+            responsavelId: transactionalSource.responsavelId,
             autorId: context.usuarioId,
             propostaOrigemId: rootId,
             codigo: `${root}-V${version}`,
-            titulo: source.titulo,
-            descricao: source.descricao,
-            descontoGeralCentavos: source.descontoGeralCentavos,
-            subtotalCentavos: source.subtotalCentavos,
-            totalCentavos: source.totalCentavos,
-            validade: source.validade,
-            observacoes: source.observacoes,
-            condicoesComerciais: source.condicoesComerciais,
+            titulo: transactionalSource.titulo,
+            descricao: transactionalSource.descricao,
+            descontoGeralCentavos: transactionalSource.descontoGeralCentavos,
+            subtotalCentavos: transactionalSource.subtotalCentavos,
+            totalCentavos: transactionalSource.totalCentavos,
+            validade: transactionalSource.validade,
+            observacoes: transactionalSource.observacoes,
+            condicoesComerciais: transactionalSource.condicoesComerciais,
             versao: version,
           },
         });
         await tx.itemPropostaComercial.createMany({
-          data: source.itens.map((item) => itemStorageData(tx, proposal.id, context, item)),
+          data: transactionalSource.itens.map((item) => itemStorageData(tx, proposal.id, context, item)),
         });
-        await history(tx, context, proposal, "DUPLICAR_VERSAO", source.status, "RASCUNHO", observacao);
+        await history(tx, context, proposal, "DUPLICAR_VERSAO", transactionalSource.status, "RASCUNHO", observacao);
         return proposal;
       });
     } catch (error) {
@@ -261,6 +274,7 @@ async function loadBusiness(client, context, id, requireWrite) {
     business.empresaId !== context.empresaId
     || business.cliente.empresaId !== context.empresaId
     || (business.lead && business.lead.empresaId !== context.empresaId)
+    || (business.lead && business.lead.clienteId !== business.clienteId)
     || (business.responsavel && business.responsavel.empresaId !== context.empresaId)
   ) throw conflict("PROPOSAL_CONTEXT_CONFLICT", "Contexto comercial inconsistente.");
   if (requireWrite) requireProposalWrite(context, business);
@@ -271,6 +285,7 @@ async function loadProposal(client, context, id, withDetails) {
   const proposal = await client.propostaComercial.findFirst({ where: { id, empresaId: context.empresaId }, include: proposalIncludes(withDetails) });
   if (!proposal) throw notFound("Proposta nao encontrada.");
   assertProposalTenantContext(context.empresaId, proposal);
+  assertProposalMoneyIntegrity(proposal);
   return proposal;
 }
 
@@ -278,7 +293,7 @@ function proposalIncludes(withDetails) {
   return {
     empresa: { select: { id: true, nome: true } },
     cliente: { select: { id: true, empresaId: true, nome: true, empresa: true, email: true, telefone: true, arquivadoEm: true } },
-    negocio: { select: { id: true, empresaId: true, titulo: true, etapa: true, responsavelId: true, cliente: { select: { arquivadoEm: true } } } },
+    negocio: { select: { id: true, empresaId: true, clienteId: true, leadId: true, titulo: true, etapa: true, responsavelId: true, cliente: { select: { arquivadoEm: true } } } },
     lead: { select: { id: true, empresaId: true, status: true, interesse: true } },
     responsavel: { select: { id: true, empresaId: true, nome: true } },
     autor: { select: { id: true, empresaId: true, nome: true } },
@@ -292,7 +307,10 @@ function assertProposalTenantContext(empresaId, proposal) {
     .filter(Boolean);
   const itemRows = (proposal.itens || []).filter((row) => row && row.empresaId !== undefined);
   const historyRows = (proposal.historico || []).flatMap((row) => [row, row.autor]).filter(Boolean);
-  if ([...tenantRows, ...itemRows, ...historyRows].some((row) => row.empresaId !== empresaId)) {
+  const mismatchedBusinessContext = proposal.negocio
+    && (proposal.clienteId !== proposal.negocio.clienteId
+      || (proposal.leadId ?? null) !== (proposal.negocio.leadId ?? null));
+  if (mismatchedBusinessContext || [...tenantRows, ...itemRows, ...historyRows].some((row) => row.empresaId !== empresaId)) {
     throw conflict("PROPOSAL_CONTEXT_CONFLICT", "Contexto comercial inconsistente.");
   }
 }
@@ -357,7 +375,7 @@ function parseProposalInput(input, { create }) {
   const itens = Array.isArray(body.itens) ? body.itens : invalid("Informe ao menos um item.");
   if (!itens.length || itens.length > 100) invalid("A proposta deve possuir entre 1 e 100 itens.");
   const parsedItems = itens.map(parseItem);
-  if (parsedItems.some((item) => item.itemType === "CATALOG_ITEM" && item.descontoCentavos > 0) || (body.descontoGeralCentavos !== undefined && nonNegativeInteger(body.descontoGeralCentavos, "descontoGeralCentavos") > 0 && parsedItems.some((item) => item.itemType === "CATALOG_ITEM"))) {
+  if (parsedItems.some((item) => item.itemType === "CATALOG_ITEM" && item.descontoCentavos > 0) || (body.descontoGeralCentavos !== undefined && nonNegativeMoneyInteger(body.descontoGeralCentavos, "descontoGeralCentavos") > 0 && parsedItems.some((item) => item.itemType === "CATALOG_ITEM"))) {
     invalid("Desconto ainda nao esta disponivel para itens catalogados.", "CATALOG_ITEM_DISCOUNT_UNSUPPORTED");
   }
   return {
@@ -366,7 +384,7 @@ function parseProposalInput(input, { create }) {
     validade: requiredDate(body.validade, "validade"),
     observacoes: optionalText(body.observacoes, "observacoes", 1500),
     condicoesComerciais: optionalText(body.condicoesComerciais, "condicoesComerciais", 1500),
-    descontoGeralCentavos: nonNegativeInteger(body.descontoGeralCentavos ?? 0, "descontoGeralCentavos"),
+    descontoGeralCentavos: nonNegativeMoneyInteger(body.descontoGeralCentavos ?? 0, "descontoGeralCentavos"),
     itens: parsedItems,
     revisao: create ? 1 : positiveInteger(body.revisao, "revisao", 1, Number.MAX_SAFE_INTEGER),
     observacaoHistorico: optionalText(body.observacaoHistorico, "observacaoHistorico", 500),
@@ -407,7 +425,7 @@ function parseItem(value, index) {
       descricao: null,
       quantidade,
       valorUnitarioCentavos: null,
-      descontoCentavos: nonNegativeInteger(body.descontoCentavos ?? 0, `itens[${index}].descontoCentavos`),
+      descontoCentavos: nonNegativeMoneyInteger(body.descontoCentavos ?? 0, `itens[${index}].descontoCentavos`),
       ordem: index,
     };
   }
@@ -433,18 +451,22 @@ function parseItem(value, index) {
     stockMaterialVersion: null,
     descricao: requiredText(body.descricao, `itens[${index}].descricao`, 240),
     quantidade,
-    valorUnitarioCentavos: nonNegativeInteger(body.valorUnitarioCentavos, `itens[${index}].valorUnitarioCentavos`),
-    descontoCentavos: nonNegativeInteger(body.descontoCentavos ?? 0, `itens[${index}].descontoCentavos`),
+    valorUnitarioCentavos: nonNegativeMoneyInteger(body.valorUnitarioCentavos, `itens[${index}].valorUnitarioCentavos`),
+    descontoCentavos: nonNegativeMoneyInteger(body.descontoCentavos ?? 0, `itens[${index}].descontoCentavos`),
     ordem: index,
   };
 }
 
 function calculateTotals(items, generalDiscount) {
+  if (!Number.isSafeInteger(generalDiscount) || generalDiscount < 0 || generalDiscount > MAX_PRISMA_INT) invalid("Desconto geral invalido.");
   let subtotalCentavos = 0;
   const calculated = items.map((item) => {
-    if (!Number.isSafeInteger(item.valorUnitarioCentavos) || item.valorUnitarioCentavos < 0) invalid("Valor unitario invalido.");
+    if (!Number.isSafeInteger(item.valorUnitarioCentavos) || item.valorUnitarioCentavos < 0 || item.valorUnitarioCentavos > MAX_PRISMA_INT) invalid("Valor unitario invalido.");
+    if (!Number.isSafeInteger(item.descontoCentavos) || item.descontoCentavos < 0 || item.descontoCentavos > MAX_PRISMA_INT) invalid("Desconto do item invalido.");
     const quantityMilli = quantityToMilli(item.quantidade);
-    const subtotal = Number((BigInt(item.valorUnitarioCentavos) * quantityMilli + 500n) / 1000n);
+    const subtotalBigInt = (BigInt(item.valorUnitarioCentavos) * quantityMilli + 500n) / 1000n;
+    if (subtotalBigInt > BigInt(MAX_PRISMA_INT)) invalid("Subtotal do item fora do limite permitido.");
+    const subtotal = Number(subtotalBigInt);
     if (item.descontoCentavos > subtotal) invalid("O desconto do item nao pode superar seu subtotal.");
     const total = subtotal - item.descontoCentavos;
     subtotalCentavos = safeMoneyAdd(subtotalCentavos, total);
@@ -834,14 +856,9 @@ async function recordRevalidationRejection(client, context, proposal, details) {
 
 function decimalToCentsRoundHalfUp(value) {
   if (typeof value === "number") invalid("Preco catalogado deve ser Decimal ou texto decimal.", "CATALOG_PRICE_DECIMAL_REQUIRED");
-  const text = value === null || value === undefined ? "" : String(value).trim();
-  if (!/^\d+(?:\.\d+)?$/.test(text)) invalid("Preco catalogado invalido.", "CATALOG_PRICE_INVALID");
-  const [wholeText, fractionText = ""] = text.split(".");
-  const centsText = fractionText.padEnd(2, "0").slice(0, 2);
-  let cents = BigInt(wholeText) * 100n + BigInt(centsText || "0");
-  if (fractionText.length > 2 && fractionText[2] >= "5") cents += 1n;
-  if (cents > BigInt(Number.MAX_SAFE_INTEGER)) invalid("Preco catalogado fora do limite permitido.", "CATALOG_PRICE_INVALID");
-  return Number(cents);
+  const cents = parseDecimalToCentsRoundHalfUp(value);
+  if (cents === null) invalid("Preco catalogado invalido ou fora do limite permitido.", "CATALOG_PRICE_INVALID");
+  return cents;
 }
 
 function asDate(value) {
@@ -902,8 +919,71 @@ function optionalPositiveInteger(value, field) {
   return positiveInteger(value, field, 1, Number.MAX_SAFE_INTEGER);
 }
 
-function nonNegativeInteger(value, field) {
-  return positiveInteger(value, field, 0, Number.MAX_SAFE_INTEGER);
+function nonNegativeMoneyInteger(value, field) {
+  const parsed = parseNonNegativePrismaInt(value);
+  if (parsed === null) invalid(`${field} invalido ou fora do limite permitido.`);
+  return parsed;
+}
+
+function assertProposalMoneyIntegrity(proposal) {
+  const findings = proposalMoneyIntegrityFindings(proposal);
+  if (!findings.length) return;
+  const error = conflict("PROPOSAL_MONEY_INTEGRITY_CONFLICT", "Os valores persistidos da proposta estao inconsistentes.");
+  error.details = { findings };
+  throw error;
+}
+
+function proposalMoneyIntegrityFindings(proposal) {
+  const findings = [];
+  const items = Array.isArray(proposal?.itens) ? proposal.itens : [];
+  if (!items.length) findings.push("ITEMS_MISSING");
+  let expectedProposalSubtotal = 0n;
+  items.forEach((item, index) => {
+    const prefix = `ITEM_${index + 1}`;
+    const unitCents = parseNonNegativePrismaInt(item?.valorUnitarioCentavos);
+    const discountCents = parseNonNegativePrismaInt(item?.descontoCentavos);
+    const storedSubtotal = parseNonNegativePrismaInt(item?.subtotalCentavos);
+    const storedTotal = parseNonNegativePrismaInt(item?.totalCentavos);
+    const quantityText = String(item?.quantidade ?? "").trim();
+    const quantityMatch = /^(\d{1,9})(?:\.(\d{1,3}))?$/.exec(quantityText);
+    if (unitCents === null || discountCents === null || storedSubtotal === null || storedTotal === null || !quantityMatch) {
+      findings.push(`${prefix}_INVALID`);
+      return;
+    }
+    const quantityMilli = BigInt(quantityMatch[1]) * 1000n + BigInt((quantityMatch[2] || "").padEnd(3, "0"));
+    if (quantityMilli <= 0n) {
+      findings.push(`${prefix}_QUANTITY_INVALID`);
+      return;
+    }
+    const expectedSubtotal = (BigInt(unitCents) * quantityMilli + 500n) / 1000n;
+    if (expectedSubtotal > BigInt(MAX_PRISMA_INT)) {
+      findings.push(`${prefix}_SUBTOTAL_OVERFLOW`);
+      return;
+    }
+    if (BigInt(storedSubtotal) !== expectedSubtotal) findings.push(`${prefix}_SUBTOTAL_MISMATCH`);
+    if (BigInt(discountCents) > expectedSubtotal) {
+      findings.push(`${prefix}_DISCOUNT_INVALID`);
+      return;
+    }
+    const expectedTotal = expectedSubtotal - BigInt(discountCents);
+    if (BigInt(storedTotal) !== expectedTotal) findings.push(`${prefix}_TOTAL_MISMATCH`);
+    expectedProposalSubtotal += expectedTotal;
+  });
+  const generalDiscount = parseNonNegativePrismaInt(proposal?.descontoGeralCentavos);
+  const storedProposalSubtotal = parseNonNegativePrismaInt(proposal?.subtotalCentavos);
+  const storedProposalTotal = parseNonNegativePrismaInt(proposal?.totalCentavos);
+  if (expectedProposalSubtotal > BigInt(MAX_PRISMA_INT)) findings.push("PROPOSAL_SUBTOTAL_OVERFLOW");
+  if (generalDiscount === null || storedProposalSubtotal === null || storedProposalTotal === null) {
+    findings.push("PROPOSAL_TOTALS_INVALID");
+    return [...new Set(findings)];
+  }
+  if (BigInt(storedProposalSubtotal) !== expectedProposalSubtotal) findings.push("PROPOSAL_SUBTOTAL_MISMATCH");
+  if (BigInt(generalDiscount) > expectedProposalSubtotal) {
+    findings.push("PROPOSAL_DISCOUNT_INVALID");
+  } else if (BigInt(storedProposalTotal) !== expectedProposalSubtotal - BigInt(generalDiscount)) {
+    findings.push("PROPOSAL_TOTAL_MISMATCH");
+  }
+  return [...new Set(findings)];
 }
 
 function decimalQuantity(value, field) {
@@ -919,7 +999,7 @@ function quantityToMilli(value) {
 
 function safeMoneyAdd(left, right) {
   const total = left + right;
-  if (!Number.isSafeInteger(total)) invalid("Total da proposta fora do limite permitido.");
+  if (!Number.isSafeInteger(total) || total > MAX_PRISMA_INT) invalid("Total da proposta fora do limite permitido.");
   return total;
 }
 
@@ -958,5 +1038,6 @@ module.exports = {
   calculateTotals,
   createCommercialProposalService,
   decimalToCentsRoundHalfUp,
+  proposalMoneyIntegrityFindings,
   revalidateProposalCatalogItems,
 };

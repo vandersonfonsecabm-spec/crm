@@ -58,6 +58,7 @@ test("H5 entrega cadastro, resumo, compras e timeline reais por tenant", async (
   assert.equal(overview.body.resumo.mensagens, 2);
   assert.equal(overview.body.comprasAnteriores.length, 1);
   assert.equal(overview.body.comprasAnteriores[0].id, fixture.closedBusiness.id);
+  assert.equal(overview.body.comprasAnteriores[0].valor, null);
   assert.equal(overview.body.contexto.negocio.id, fixture.activeBusiness.id);
 
   const timeline = await request("GET", `/clientes/${fixture.client.id}/timeline?limit=4&page=1`, undefined, sellerA.token);
@@ -111,7 +112,7 @@ async function customerFixture(account, responsavelId) {
   });
   const lead = await prisma.lead.create({ data: { empresaId: account.empresaId, clienteId: client.id, responsavelId, status: "QUALIFICADO", origem: "SITE", interesse: "Plantio" } });
   const activeBusiness = await prisma.negocio.create({ data: { empresaId: account.empresaId, clienteId: client.id, leadId: lead.id, responsavelId, titulo: "Renovacao de maquinario", etapa: "PROPOSTA", valor: 85000 } });
-  const closedBusiness = await prisma.negocio.create({ data: { empresaId: account.empresaId, clienteId: client.id, responsavelId, titulo: "Compra anterior comprovada", etapa: "FECHADO", valor: 42000, fechadoEm: new Date(Date.now() - 20 * 86400000) } });
+  const closedBusiness = await prisma.negocio.create({ data: { empresaId: account.empresaId, clienteId: client.id, responsavelId, titulo: "Negocio fechado sem valor informado", etapa: "FECHADO", valor: null, fechadoEm: new Date(Date.now() - 20 * 86400000) } });
   const proposal = await prisma.propostaComercial.create({ data: { empresaId: account.empresaId, clienteId: client.id, leadId: lead.id, negocioId: activeBusiness.id, responsavelId, autorId: account.usuarioId, codigo: "PROP-H5-001", titulo: "Proposta de renovacao", descricao: "Equipamentos para a proxima safra", validade: new Date(Date.now() + 10 * 86400000), totalCentavos: 8500000, status: "PRONTA" } });
   await prisma.acompanhamento.createMany({ data: [
     { empresaId: account.empresaId, clienteId: client.id, leadId: lead.id, negocioId: activeBusiness.id, responsavelId, autorId: account.usuarioId, titulo: "Ligacao de alinhamento", descricao: "Confirmar condicoes", dataHora: new Date(Date.now() - 3600000), tipo: "LIGACAO", status: "CONCLUIDO" },

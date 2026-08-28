@@ -611,10 +611,10 @@ export type Customer360Overview = {
     ultimaAtividade: string | null;
     responsavelComercial: Customer360Person | null;
   };
-  comprasAnteriores: Array<{ id: number; titulo: string; valor: number; fechadoEm: string; responsavel: Customer360Person | null }>;
+  comprasAnteriores: Array<{ id: number; titulo: string; valor: number | null; fechadoEm: string; responsavel: Customer360Person | null }>;
   contexto: {
     lead: { id: number; status: string; origem: string | null; interesse: string | null; responsavel: Customer360Person | null } | null;
-    negocio: { id: number; titulo: string; etapa: string; valor: number; responsavel: Customer360Person | null } | null;
+    negocio: { id: number; titulo: string; etapa: string; valor: number | null; responsavel: Customer360Person | null } | null;
     proposta: { id: number; negocioId: number; codigo: string; titulo: string; status: string; totalCentavos: number; responsavel: Customer360Person | null } | null;
     proximoAcompanhamento: { id: number; titulo: string; tipo: string; status: string; dataHora: string; responsavel: Customer360Person | null } | null;
   };
