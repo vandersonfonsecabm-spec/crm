@@ -4,7 +4,9 @@ Data: 2026-08-29
 
 Branch: `feature/canonical-sale-v1`
 
-HEAD verificado: `e9ec77a56868bc97b076cec47e814d2d887e4cc7`
+HEAD inicial verificado: `e9ec77a56868bc97b076cec47e814d2d887e4cc7`
+
+Commit do candidato: `782e2d9` (`feat-canonical-sale-v1`)
 
 Baseline funcional: `79eed4f`
 
