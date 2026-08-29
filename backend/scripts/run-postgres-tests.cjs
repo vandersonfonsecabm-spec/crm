@@ -16,6 +16,7 @@ function main(options = {}) {
   const envSource = options.env || process.env;
   const databaseUrl = String(envSource.POSTGRES_TEST_DATABASE_URL || "").trim();
   const focus = String(envSource.CRM_POSTGRES_FOCUS || "").trim();
+  const boundaryFocus = focus === "tenant-isolation-pending-migrations-postgres";
   if (!/^postgres(ql)?:\/\//i.test(databaseUrl)) {
     console.error("[postgres-tests] POSTGRES_TEST_DATABASE_URL ausente; testes PostgreSQL reais nao foram executados.");
     process.exitCode = 2;
@@ -39,7 +40,10 @@ function main(options = {}) {
     const testEnv = { ...env, NODE_OPTIONS: appendNodeRequire(env.NODE_OPTIONS, workspace.clientLoaderPath) };
     runCommand("node", prismaArgs("validate"), env);
     runCommand("node", prismaArgs("generate"), env);
-    runCommand("node", ["--test", "tests/tenant-isolation-pending-migrations-postgres.test.js"], testEnv);
+    if (!focus || boundaryFocus) {
+      runCommand("node", ["--test", "tests/tenant-isolation-pending-migrations-postgres.test.js"], testEnv);
+    }
+    if (boundaryFocus) return;
     runCommand("node", prismaArgs("migrate-empty"), {
       ...testEnv,
       CRM_POSTGRES_MIGRATE_CONFIRM: "apply-empty-postgres",
@@ -54,6 +58,7 @@ function main(options = {}) {
       "tests/email-inbound-processing.test.js",
       "tests/bling-distributed-coordination-postgres.test.js",
       "tests/commercial-proposal-catalog-v1-postgres.test.js",
+      "tests/canonical-sale-v1-postgres.test.js",
     ];
     const focusedFile = focus
       ? testFiles.find((file) => file === `tests/${focus}.test.js`)

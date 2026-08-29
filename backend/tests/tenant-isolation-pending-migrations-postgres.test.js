@@ -59,7 +59,7 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
       { code: "TENANT_GATE_MIGRATION_PENDING" },
     );
 
-    const finalMigrations = migrationNames.slice(-2);
+    const finalMigrations = migrationNames.slice(-3);
     for (const migrationName of finalMigrations) {
       fs.rmSync(path.join(workspace.migrationsDir, migrationName), { recursive: true, force: true });
     }
@@ -73,8 +73,8 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
     }
     const preSeven = await runGate({ mode: "pre-migration", ...gateOptions });
     assert.equal(preSeven.safe, true);
-    // The proposal catalog migration and readiness migration are pending;
-    // four proposal-item relations plus delivery-outbox are unavailable.
+    // Catalog, readiness and canonical-sale migrations are pending: four
+    // proposal-item relations, delivery-outbox and ten sale relations are unavailable.
     assert.equal(preSeven.checkedRelationCount, 157);
 
     await seedLegacyProposalItem(client);
@@ -85,10 +85,10 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
     assert.equal(finalStatus.length, migrationNames.length);
     assert.equal(finalStatus.every((row) => row.finished && !row.rolledBack), true);
     assert.equal(post.safe, true);
-    assert.equal(post.checkedRelationCount, 162);
+    assert.equal(post.checkedRelationCount, 169);
     assert.deepEqual(post.totals, { orphaned: 0, crossed: 0 });
-    assert.equal(post.constraints.checkedForeignKeys, 247);
-    assert.equal(post.constraints.checkedUniqueParents, 31);
+    assert.equal(post.constraints.checkedForeignKeys, 266);
+    assert.equal(post.constraints.checkedUniqueParents, 32);
     const backfilled = (await client.query(
       'SELECT "empresaId", "itemType", "descricao", "productOfferId", "catalogProductId", "stockProductId" FROM "ItemPropostaComercial" WHERE "id" = $1',
       [9001],

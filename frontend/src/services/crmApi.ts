@@ -277,12 +277,14 @@ export type ApiDashboardSummary = {
     pedidos: number;
     contasPendentes: number;
     faturamento: number;
+    faturamentoCentavos: number;
     pipeline: number;
     quentes: number;
   };
   analytics: {
     totalValue: number;
     wonValue: number;
+    wonValueCents: number;
     forecastValue: number;
     hotCount: number;
     averageScore: number;
@@ -296,6 +298,8 @@ export type ApiDashboardSummary = {
   status: Array<{ status: string; total: number; valor: number }>;
   estoqueBaixo: unknown[];
   pedidosRecentes: ApiCliente[];
+  vendasRecentes: Array<{ id: number; negocioId: number; clienteId: number; cliente: string; negocio: string; totalCentavos: number; moeda: "BRL"; origem: "ACCEPTED_PROPOSAL" | "MANUAL_CLOSE"; fechadoEm: string; proposta: { id: number; codigo: string; titulo: string } | null }>;
+  receita: { fonte: "CANONICAL_SALE"; totalCentavos: number; vendas: number };
   contasVencidas: ApiCliente[];
   produtosMaisVendidos: unknown[];
   atividadesRecentes: Array<{
@@ -392,6 +396,67 @@ export type BusinessStageHistoryEntry = {
   createdAt: string;
 };
 
+export type CanonicalSaleSource = "ACCEPTED_PROPOSAL" | "MANUAL_CLOSE";
+export type CanonicalSaleStatus = "ACTIVE" | "INVALIDATED";
+
+export type CanonicalSaleItem = {
+  id: number;
+  propostaItemId: number | null;
+  descricao: string;
+  productNameSnapshot: string | null;
+  skuSnapshot: string | null;
+  unitSnapshot: string | null;
+  quantidade: string;
+  valorUnitarioCentavos: number;
+  descontoCentavos: number;
+  subtotalCentavos: number;
+  totalCentavos: number;
+  moeda: "BRL";
+  ordem: number;
+};
+
+export type CanonicalSale = {
+  id: number;
+  negocioId: number;
+  clienteId: number;
+  origem: CanonicalSaleSource;
+  status: CanonicalSaleStatus;
+  propostaVencedoraId: number | null;
+  moeda: "BRL";
+  subtotalCentavos: number;
+  descontoCentavos: number;
+  totalCentavos: number;
+  propostaRevisao: number | null;
+  etapaAbertaAnterior: BusinessStage;
+  revisao: number;
+  fechadoEm: string;
+  invalidadoEm: string | null;
+  motivoInvalidacao: string | null;
+  createdAt: string;
+  updatedAt: string;
+  itens: CanonicalSaleItem[];
+  fechadoPor: { id: number; nome: string } | null;
+  invalidadoPor: { id: number; nome: string } | null;
+  propostaVencedora: { id: number; codigo: string; titulo: string; status: CommercialProposalStatus } | null;
+};
+
+export type CanonicalSaleContract = {
+  revisao: number;
+  propostaPrincipalId: number | null;
+  propostaVencedoraId: number | null;
+  vendaAtivaId: number | null;
+  propostaPrincipal: { id: number; codigo: string; titulo: string; status: CommercialProposalStatus; totalCentavos: number; moeda: "BRL"; revisao: number } | null;
+  propostaVencedora: { id: number; codigo: string; titulo: string; status: CommercialProposalStatus; totalCentavos: number; moeda: "BRL"; revisao: number } | null;
+  vendaAtiva: CanonicalSale | null;
+};
+
+export type CanonicalCommercialState = {
+  negocio: { id: number; clienteId: number; titulo: string | null; etapa: BusinessStage; valorEstimadoLegado: number | null; fechadoEm: string | null; perdidoEm: string | null; motivoPerda: string | null; integridadeComercial: "OK" | "LEGACY_WON_UNRECONCILED"; responsavel: { id: number; nome: string } | null };
+  contrato: CanonicalSaleContract;
+  vendas: CanonicalSale[];
+  idempotentReplay?: boolean;
+};
+
 export type CommunicationBusiness = {
   id: number;
   empresaId?: number;
@@ -422,9 +487,11 @@ export type CommunicationBusiness = {
   tempoEtapa?: BusinessStageTiming;
   negocioParado?: boolean;
   motivoParado?: BusinessStalledReason | null;
+  integridadeComercial?: "OK" | "LEGACY_WON_UNRECONCILED";
+  contratoComercial?: CanonicalSaleContract;
   createdAt: string;
   updatedAt: string;
-  permissoes?: { movimentar: boolean };
+  permissoes?: { movimentar: boolean; fechar?: boolean; marcarPerdido?: boolean; reabrir?: boolean };
 };
 
 export type NegociosKanbanResponse = ApiPaginatedResponse<CommunicationBusiness> & {
@@ -580,7 +647,7 @@ export type NotificationSettings = {
   };
 };
 
-export type Customer360TimelineType = "TODOS" | "MENSAGEM" | "LIGACAO" | "VISITA" | "PROPOSTA" | "NEGOCIO" | "ACOMPANHAMENTO" | "NOTA" | "QUALIFICACAO";
+export type Customer360TimelineType = "TODOS" | "MENSAGEM" | "LIGACAO" | "VISITA" | "PROPOSTA" | "NEGOCIO" | "ACOMPANHAMENTO" | "NOTA" | "QUALIFICACAO" | "VENDA";
 
 export type Customer360Person = { id: number; nome: string };
 
@@ -607,11 +674,14 @@ export type Customer360Overview = {
     acompanhamentosPendentes: number;
     conversas: number;
     mensagens: number;
-    valorPipeline: number;
+    valorPipeline: number | null;
+    valorPipelineIncompleto: boolean;
+    totalVendidoCentavos: number;
+    ultimaVenda: { id: number; negocioId: number; titulo: string; totalCentavos: number; moeda: "BRL"; origem: CanonicalSaleSource; status: CanonicalSaleStatus; revisao: number; fechadoEm: string } | null;
     ultimaAtividade: string | null;
     responsavelComercial: Customer360Person | null;
   };
-  comprasAnteriores: Array<{ id: number; titulo: string; valor: number | null; fechadoEm: string; responsavel: Customer360Person | null }>;
+  comprasAnteriores: Array<{ id: number; negocioId: number; titulo: string; totalCentavos: number; moeda: "BRL"; origem: CanonicalSaleSource; status: CanonicalSaleStatus; revisao: number; fechadoEm: string; responsavel: Customer360Person | null; proposta: { id: number; codigo: string; titulo: string; status: string } | null }>;
   contexto: {
     lead: { id: number; status: string; origem: string | null; interesse: string | null; responsavel: Customer360Person | null } | null;
     negocio: { id: number; titulo: string; etapa: string; valor: number | null; responsavel: Customer360Person | null } | null;
@@ -628,6 +698,7 @@ export type Customer360TimelineEvent = {
   descricao: string;
   status: string | null;
   valor: number | null;
+  valorCentavos?: number | null;
   responsavel: Customer360Person | null;
   origem: { entidade: string; id: number };
   canal: { tipo: string; nome: string } | null;
@@ -640,7 +711,7 @@ export type Customer360TimelineResponse = {
   filtros: Customer360TimelineType[];
 };
 
-export type CommercialProposalStatus = "RASCUNHO" | "PRONTA" | "ENVIADA" | "ACEITA" | "RECUSADA" | "VENCIDA" | "CANCELADA";
+export type CommercialProposalStatus = "RASCUNHO" | "PRONTA" | "ENVIADA" | "ACEITA" | "RECUSADA" | "VENCIDA" | "CANCELADA" | "SUBSTITUIDA";
 export type CommercialProposalItemType = "CATALOG_ITEM" | "LEGACY_ITEM";
 export type CommercialProposalPriceStatus = "AVAILABLE" | "ON_REQUEST" | "UNAVAILABLE" | "STALE";
 
@@ -685,6 +756,7 @@ export type CommercialProposal = {
   descontoGeralCentavos: number;
   subtotalCentavos: number;
   totalCentavos: number;
+  moeda: "BRL";
   validade: string;
   observacoes: string | null;
   condicoesComerciais: string | null;
@@ -693,14 +765,15 @@ export type CommercialProposal = {
   revisao: number;
   itens: CommercialProposalItem[];
   historico?: CommercialProposalHistory[];
-  permissoes: { editar: boolean; alterarStatus: boolean; duplicar: boolean };
+  contratoComercial: { revisao: number; principal: boolean; vencedora: boolean; vendaAtivaId: number | null };
+  permissoes: { editar: boolean; alterarStatus: boolean; duplicar: boolean; aceitar: boolean; definirPrincipal: boolean; substituirVencedora: boolean; reconciliarVencedora: boolean; removerVencedora: boolean };
   createdAt: string;
   updatedAt: string;
 };
 
 export type CommercialProposalHistory = {
   id: number;
-  acao: "CRIAR" | "ATUALIZAR" | "ALTERAR_STATUS" | "DUPLICAR_VERSAO";
+  acao: "CRIAR" | "ATUALIZAR" | "ALTERAR_STATUS" | "DUPLICAR_VERSAO" | "ADICIONAR_ITEM_CATALOGADO" | "REVALIDAR" | "REVALIDACAO_RECUSADA" | "DEFINIR_PRINCIPAL" | "REMOVER_PRINCIPAL" | "ACEITAR_COMO_VENCEDORA" | "SUBSTITUIR_VENCEDORA" | "RECONCILIAR_VENCEDORA" | "REMOVER_VENCEDORA";
   statusAnterior: CommercialProposalStatus | null;
   statusNovo: CommercialProposalStatus | null;
   versao: number;
@@ -2434,6 +2507,46 @@ export async function changeCommercialProposalStatus(id: number, status: Commerc
 
 export async function duplicateCommercialProposal(id: number) {
   return requestApiWrite<CommercialProposal>("POST", `/propostas/${id}/duplicar-versao`, {});
+}
+
+export async function fetchCanonicalCommercialState(negocioId: number) {
+  return requestApiGetAuthenticated<CanonicalCommercialState>(`/negocios/${negocioId}/contrato-venda`);
+}
+
+export async function fetchCanonicalSales(params: { page?: number; limit?: number; status?: CanonicalSaleStatus; clienteId?: number; negocioId?: number } = {}) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<CanonicalSale>>(`/vendas${toQueryString(params)}`);
+}
+
+export async function setPrimaryCommercialProposal(negocioId: number, propostaId: number | null, revisao: number) {
+  return requestApiWrite<CanonicalCommercialState>("PUT", `/negocios/${negocioId}/proposta-principal`, { propostaId, revisao });
+}
+
+export async function acceptCommercialProposal(id: number, revisao: number, contratoRevisao: number) {
+  return requestApiWrite<CanonicalCommercialState>("POST", `/propostas/${id}/aceitar`, { revisao, contratoRevisao });
+}
+
+export async function replaceWinningCommercialProposal(negocioId: number, propostaId: number, propostaRevisao: number, contratoRevisao: number, motivo: string) {
+  return requestApiWrite<CanonicalCommercialState>("POST", `/negocios/${negocioId}/proposta-vencedora/substituir`, { propostaId, propostaRevisao, contratoRevisao, motivo });
+}
+
+export async function reconcileWinningCommercialProposal(negocioId: number, propostaId: number, contratoRevisao: number, motivo: string) {
+  return requestApiWrite<CanonicalCommercialState>("POST", `/negocios/${negocioId}/proposta-vencedora/reconciliar`, { propostaId, contratoRevisao, motivo });
+}
+
+export async function removeWinningCommercialProposal(negocioId: number, contratoRevisao: number, motivo: string) {
+  return requestApiWrite<CanonicalCommercialState>("POST", `/negocios/${negocioId}/proposta-vencedora/remover`, { contratoRevisao, motivo });
+}
+
+export async function closeDealAsWon(negocioId: number, payload: { origem: CanonicalSaleSource; idempotencyKey: string; contratoRevisao: number; valorFinalCentavos?: number }) {
+  return requestApiWrite<CanonicalCommercialState>("POST", `/negocios/${negocioId}/fechar-ganho`, payload);
+}
+
+export async function markDealAsLost(negocioId: number, contratoRevisao: number, motivo: string) {
+  return requestApiWrite<CanonicalCommercialState>("POST", `/negocios/${negocioId}/marcar-perdido`, { contratoRevisao, motivo });
+}
+
+export async function reopenCanonicalDeal(negocioId: number, contratoRevisao: number, motivo: string) {
+  return requestApiWrite<CanonicalCommercialState>("POST", `/negocios/${negocioId}/reabrir`, { contratoRevisao, motivo });
 }
 
 export async function fetchCommercialProposalHistory(id: number) {

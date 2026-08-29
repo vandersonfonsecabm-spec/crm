@@ -10,14 +10,14 @@ async function source(relativePath) {
   return readFile(path.join(frontendDir, relativePath), "utf8");
 }
 
-test("H5 apresenta cadastro, resumo e negocios fechados do Cliente 360", async () => {
+test("H5 apresenta cadastro, estimativa e vendas canônicas do Cliente 360", async () => {
   const [panel, api, modal] = await Promise.all([
     source("src/components/dashboard/DashboardSelectedClientPanel.tsx"),
     source("src/services/crmApi.ts"),
     source("src/components/dashboard/ClientModal.tsx"),
   ]);
 
-  for (const label of ["Cidade / UF", "CPF / CNPJ", "Pipeline ativo", "Negócios ativos", "Propostas abertas", "Negócios fechados"]) {
+  for (const label of ["Cidade / UF", "CPF / CNPJ", "Pipeline estimado", "Total vendido", "Negócios ativos", "Propostas abertas", "Vendas realizadas"]) {
     assert.match(panel, new RegExp(label));
   }
   for (const field of ["cidade", "estado", "cpfCnpj", "revisao"]) assert.match(api, new RegExp(field));
@@ -33,7 +33,7 @@ test("H5 usa timeline real, paginada, filtravel e com proveniencia", async () =>
     source("src/services/crmApi.ts"),
   ]);
 
-  for (const filter of ["MENSAGEM", "LIGACAO", "VISITA", "PROPOSTA", "NEGOCIO", "ACOMPANHAMENTO", "NOTA", "QUALIFICACAO"]) {
+  for (const filter of ["MENSAGEM", "LIGACAO", "VISITA", "PROPOSTA", "NEGOCIO", "ACOMPANHAMENTO", "NOTA", "QUALIFICACAO", "VENDA"]) {
     assert.match(timeline, new RegExp(filter));
   }
   assert.match(timeline, /event\.origem\.entidade/);
@@ -53,8 +53,9 @@ test("H5 navega para contextos reais e nao inventa receita ou integracoes", asyn
   assert.match(combined, /"INBOX"/);
   assert.match(combined, /"KANBAN"/);
   assert.match(combined, /"AGENDA"/);
-  assert.match(panel, /Nenhum negócio fechado/);
-  assert.match(panel, /purchase\.valor === null \? "Não informado"/);
+  assert.match(panel, /Nenhuma venda realizada/);
+  assert.match(panel, /purchase\.totalCentavos \/ 100/);
+  assert.match(panel, /purchase\.origem === "ACCEPTED_PROPOSAL"/);
   assert.match(timeline, /minimumFractionDigits: 2/);
   assert.doesNotMatch(combined, /graph\.facebook|api\.whatsapp|oauth|embedded.signup/i);
   assert.doesNotMatch(combined, /empresaId|localStorage|sessionStorage|Authorization|console\.log/);

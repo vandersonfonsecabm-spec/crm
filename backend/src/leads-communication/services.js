@@ -53,6 +53,7 @@ const CONVERSATION_TRANSITIONS = {
 const DEFAULT_REPLY_LEASE_SECONDS = 120;
 const MIN_REPLY_LEASE_SECONDS = 30;
 const MAX_REPLY_LEASE_SECONDS = 300;
+const CONVERSATION_TRANSITION_TRANSACTION_OPTIONS = Object.freeze({ maxWait: 5000, timeout: 30000 });
 
 function createLeadsCommunicationServices({ prisma }) {
   const channelService = createChannelService({ prisma });
@@ -678,7 +679,7 @@ function createLeadsCommunicationServices({ prisma }) {
         motivo,
       });
       return presentConversationWithLatest(tx, context.empresaId, await tx.conversaCanal.findUnique({ where: { id }, include: conversationIncludes() }));
-    });
+    }, CONVERSATION_TRANSITION_TRANSACTION_OPTIONS);
   }
 
   async function finishConversationReminders(tx, context, conversationId, action) {

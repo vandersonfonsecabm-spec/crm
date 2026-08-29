@@ -26,6 +26,7 @@ async function cleanDatabase() {
     prisma.automacaoRegra.deleteMany(),
     prisma.historicoAcompanhamento.deleteMany(),
     prisma.acompanhamento.deleteMany(),
+    prisma.nota.deleteMany(),
     prisma.historicoAtribuicao.deleteMany(),
     prisma.negocio.deleteMany(),
     prisma.lead.deleteMany(),

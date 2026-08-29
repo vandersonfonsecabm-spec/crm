@@ -103,12 +103,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260824160000_add_ai_commerce_persistent_audit_effects",
       "20260825170000_add_commercial_proposal_catalog_items",
       "20260827200000_add_store1_provider_readiness",
+      "20260828130000_add_canonical_sale_v1",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260827200000_add_store1_provider_readiness",
+        "20260828130000_add_canonical_sale_v1",
         "migration.sql",
       ),
     );
@@ -222,6 +223,16 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(providerReadinessMigration, /EmailDeliveryEvent/);
     assert.match(providerReadinessMigration, /nextAttemptAt/);
     assert.doesNotMatch(providerReadinessMigration, /^\s*(?:DELETE|TRUNCATE|DROP TABLE)\b/im);
+    const canonicalSaleMigration = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260828130000_add_canonical_sale_v1",
+      "migration.sql",
+    ), "utf8");
+    assert.match(canonicalSaleMigration, /^BEGIN;\s*$/m);
+    assert.match(canonicalSaleMigration, /CREATE TABLE "VendaCanonica"/);
+    assert.match(canonicalSaleMigration, /VendaCanonica_snapshot_immutable_update/);
+    assert.match(canonicalSaleMigration, /VendaCanonica_empresaId_clienteId_negocioId_fkey/);
+    assert.doesNotMatch(canonicalSaleMigration, /^\s*(?:DELETE|TRUNCATE|DROP TABLE)\b/im);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -245,6 +256,21 @@ test("runner PostgreSQL usa workspace e client isolados sem regenerar SQLite", (
   const pgTestCall = calls.find((call) => call.args.some((arg) => String(arg).includes("tenant-isolation-pending-migrations-postgres.test.js")));
   assert.ok(pgTestCall);
   assert.match(pgTestCall.env.NODE_OPTIONS, /loader\.cjs/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("runner PostgreSQL permite provar somente a fronteira de migrations", () => {
+  const calls = [];
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "crm-prisma-tests-boundary-focus-"));
+  runPostgresTests({
+    env: { POSTGRES_TEST_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm_migration_test", CRM_POSTGRES_FOCUS: "tenant-isolation-pending-migrations-postgres" },
+    createWorkspace: () => ({ root, clientLoaderPath: path.join(root, "loader.cjs") }),
+    cleanupWorkspace: () => undefined,
+    runCommand: (command, args, env) => calls.push({ command, args, env }),
+  });
+  assert.equal(calls.some((call) => call.args.some((arg) => String(arg).includes("tenant-isolation-pending-migrations-postgres.test.js"))), true);
+  assert.equal(calls.some((call) => call.args.includes("migrate-empty")), false);
+  assert.equal(calls.some((call) => call.args.some((arg) => String(arg).includes("canonical-sale-v1-postgres.test.js"))), false);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

@@ -42,6 +42,7 @@ model Cliente {
   interessesAICommerce AICommerceProductInterest[] @relation("AICommerceInterestCustomer")
   rascunhosAICommerce AICommerceOpportunityDraft[] @relation("AICommerceDraftCustomer")
   propostasComerciais PropostaComercial[]
+  vendasCanonicas     VendaCanonica[]
 
   @@unique([empresaId, id])
   @@index([empresaId])
@@ -228,6 +229,10 @@ model Empresa {
   propostasComerciais          PropostaComercial[]
   itensPropostasComerciais     ItemPropostaComercial[]
   historicosPropostasComerciais HistoricoPropostaComercial[]
+  contratosVenda               NegocioContratoVenda[]
+  vendasCanonicas              VendaCanonica[]
+  itensVendasCanonicas         ItemVendaCanonica[]
+  historicosVendasCanonicas    HistoricoVendaCanonica[]
   historicosAcompanhamentos    HistoricoAcompanhamento[]
   automacaoRegras              AutomacaoRegra[]
   automacaoExecucoes           AutomacaoExecucao[]
@@ -309,6 +314,9 @@ model Usuario {
   propostasComerciaisResponsaveis PropostaComercial[] @relation("PropostaComercialResponsavel")
   propostasComerciaisCriadas      PropostaComercial[] @relation("PropostaComercialAutor")
   historicosPropostasComerciais   HistoricoPropostaComercial[] @relation("HistoricoPropostaComercialAutor")
+  vendasCanonicasFechadas         VendaCanonica[] @relation("VendaCanonicaFechadaPor")
+  vendasCanonicasInvalidadas      VendaCanonica[] @relation("VendaCanonicaInvalidadaPor")
+  historicosVendasCanonicas       HistoricoVendaCanonica[] @relation("HistoricoVendaCanonicaAutor")
   acompanhamentosResponsaveis     Acompanhamento[] @relation("AcompanhamentoResponsavel")
   acompanhamentosCriados          Acompanhamento[] @relation("AcompanhamentoAutor")
   acompanhamentosConcluidos       Acompanhamento[] @relation("AcompanhamentoConcluidoPor")
@@ -1010,10 +1018,14 @@ model Negocio {
   historicoAtribuicoes HistoricoAtribuicao[]
   historicosQualificacao HistoricoQualificacaoConversa[]
   propostasComerciais    PropostaComercial[]
+  contratoVenda          NegocioContratoVenda?
+  vendasCanonicas        VendaCanonica[] @relation("VendasCanonicasNegocio")
+  historicosVendasCanonicas HistoricoVendaCanonica[]
   automacaoExecucoes      AutomacaoExecucao[]
   automacaoEventosInternos AutomacaoEventoInterno[]
 
   @@unique([empresaId, id])
+  @@unique([empresaId, clienteId, id])
   @@index([empresaId, etapa])
   @@index([empresaId, responsavelId, etapa])
   @@index([empresaId, clienteId])
@@ -1128,6 +1140,7 @@ model PropostaComercial {
   descontoGeralCentavos    Int                         @default(0)
   subtotalCentavos         Int                         @default(0)
   totalCentavos            Int                         @default(0)
+  moeda                    String                      @default("BRL")
   validade                 DateTime
   observacoes              String?
   condicoesComerciais      String?
@@ -1139,9 +1152,13 @@ model PropostaComercial {
   itens                    ItemPropostaComercial[]
   historico                HistoricoPropostaComercial[]
   acompanhamentos          Acompanhamento[]
+  contratosComoPrincipal   NegocioContratoVenda[]      @relation("ContratoPropostaPrincipal")
+  contratosComoVencedora   NegocioContratoVenda[]      @relation("ContratoPropostaVencedora")
+  vendasComoPropostaVencedora VendaCanonica[]          @relation("VendaPropostaVencedora")
 
   @@unique([empresaId, codigo])
   @@unique([empresaId, id])
+  @@unique([empresaId, negocioId, id])
   @@unique([empresaId, propostaOrigemId, versao])
   @@index([empresaId, clienteId, status])
   @@index([empresaId, negocioId, status])
@@ -1179,8 +1196,10 @@ model ItemPropostaComercial {
   ordem                    Int                        @default(0)
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
+  itensVendasCanonicas     ItemVendaCanonica[]
 
   @@unique([empresaId, id])
+  @@unique([empresaId, propostaId, id])
   @@index([empresaId, propostaId, ordem])
   @@index([empresaId, productOfferId])
   @@index([empresaId, catalogProductId])
@@ -1203,6 +1222,129 @@ model HistoricoPropostaComercial {
   createdAt                DateTime                    @default(now())
 
   @@index([empresaId, propostaId, createdAt])
+  @@index([empresaId, autorId, createdAt])
+}
+
+model NegocioContratoVenda {
+  empresaId           Int
+  negocioId           Int
+  propostaPrincipalId Int?
+  propostaVencedoraId Int?
+  vendaAtivaId        Int?
+  revisao             Int      @default(1)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  empresa             Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  negocio             Negocio  @relation(fields: [empresaId, negocioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  propostaPrincipal   PropostaComercial? @relation("ContratoPropostaPrincipal", fields: [empresaId, negocioId, propostaPrincipalId], references: [empresaId, negocioId, id], onDelete: Restrict, onUpdate: Restrict)
+  propostaVencedora   PropostaComercial? @relation("ContratoPropostaVencedora", fields: [empresaId, negocioId, propostaVencedoraId], references: [empresaId, negocioId, id], onDelete: Restrict, onUpdate: Restrict)
+  vendaAtiva          VendaCanonica? @relation("ContratoVendaAtiva", fields: [empresaId, negocioId, vendaAtivaId], references: [empresaId, negocioId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([empresaId, negocioId])
+  @@index([empresaId, propostaPrincipalId])
+  @@index([empresaId, propostaVencedoraId])
+  @@index([empresaId, vendaAtivaId])
+}
+
+model VendaCanonica {
+  id                  Int                  @id @default(autoincrement())
+  empresaId           Int
+  negocioId           Int
+  clienteId           Int
+  origem               OrigemVendaCanonica
+  status               StatusVendaCanonica @default(ACTIVE)
+  propostaVencedoraId Int?
+  moeda                MoedaVendaCanonica   @default(BRL)
+  subtotalCentavos    Int
+  descontoCentavos    Int                  @default(0)
+  totalCentavos       Int
+  propostaRevisao     Int?
+  etapaAbertaAnterior EtapaNegocio
+  revisao             Int
+  idempotencyKey      String
+  requestFingerprint  String
+  fechadoEm           DateTime
+  fechadoPorId        Int
+  invalidadoEm        DateTime?
+  invalidadoPorId     Int?
+  motivoInvalidacao   String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  empresa             Empresa              @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  negocio             Negocio              @relation("VendasCanonicasNegocio", fields: [empresaId, clienteId, negocioId], references: [empresaId, clienteId, id], onDelete: Restrict, onUpdate: Restrict)
+  cliente             Cliente              @relation(fields: [empresaId, clienteId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  propostaVencedora   PropostaComercial?    @relation("VendaPropostaVencedora", fields: [empresaId, negocioId, propostaVencedoraId], references: [empresaId, negocioId, id], onDelete: Restrict, onUpdate: Restrict)
+  fechadoPor          Usuario              @relation("VendaCanonicaFechadaPor", fields: [empresaId, fechadoPorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  invalidadoPor       Usuario?             @relation("VendaCanonicaInvalidadaPor", fields: [empresaId, invalidadoPorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  itens               ItemVendaCanonica[] @relation("VendaItensCanonicos")
+  itensPropostaOriginal ItemVendaCanonica[] @relation("VendaItemPropostaOriginal")
+  historico           HistoricoVendaCanonica[]
+  contratosAtivos     NegocioContratoVenda[] @relation("ContratoVendaAtiva")
+
+  @@unique([empresaId, id])
+  @@unique([empresaId, negocioId, id])
+  @@unique([empresaId, id, propostaVencedoraId])
+  @@unique([empresaId, negocioId, revisao])
+  @@unique([empresaId, idempotencyKey])
+  @@index([empresaId, clienteId, status, fechadoEm])
+  @@index([empresaId, negocioId, status])
+  @@index([empresaId, propostaVencedoraId])
+}
+
+model ItemVendaCanonica {
+  id                       Int       @id @default(autoincrement())
+  empresaId                Int
+  vendaId                  Int
+  propostaIdOriginal       Int?
+  propostaItemId           Int?
+  itemTypeOriginal         TipoItemPropostaComercial?
+  productOfferIdOriginal   String?
+  catalogProductIdOriginal Int?
+  stockProductIdOriginal   Int?
+  descricao                String
+  productNameSnapshot      String?
+  skuSnapshot              String?
+  unitSnapshot             String?
+  quantidade               Decimal
+  valorUnitarioCentavos    Int
+  descontoCentavos         Int      @default(0)
+  subtotalCentavos         Int
+  totalCentavos            Int
+  moeda                    MoedaVendaCanonica @default(BRL)
+  catalogRevision          Int?
+  stockMaterialVersion     Int?
+  ordem                    Int      @default(0)
+  createdAt                DateTime @default(now())
+  empresa                  Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  venda                    VendaCanonica @relation("VendaItensCanonicos", fields: [empresaId, vendaId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  vendaPropostaOriginal    VendaCanonica? @relation("VendaItemPropostaOriginal", fields: [empresaId, vendaId, propostaIdOriginal], references: [empresaId, id, propostaVencedoraId], onDelete: Restrict, onUpdate: Restrict)
+  propostaItem             ItemPropostaComercial? @relation(fields: [empresaId, propostaIdOriginal, propostaItemId], references: [empresaId, propostaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, id])
+  @@index([empresaId, vendaId, ordem])
+  @@index([empresaId, propostaIdOriginal])
+  @@index([empresaId, propostaItemId])
+}
+
+model HistoricoVendaCanonica {
+  id             Int                     @id @default(autoincrement())
+  empresaId      Int
+  vendaId        Int
+  negocioId      Int
+  autorId        Int
+  acao           TipoAcaoVendaCanonica
+  statusAnterior StatusVendaCanonica?
+  statusNovo     StatusVendaCanonica
+  motivo         String?
+  createdAt      DateTime                @default(now())
+  empresa        Empresa                 @relation(fields: [empresaId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  venda          VendaCanonica           @relation(fields: [empresaId, negocioId, vendaId], references: [empresaId, negocioId, id], onDelete: Restrict, onUpdate: Restrict)
+  negocio        Negocio                 @relation(fields: [empresaId, negocioId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+  autor          Usuario                 @relation("HistoricoVendaCanonicaAutor", fields: [empresaId, autorId], references: [empresaId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([empresaId, vendaId, acao])
+  @@index([empresaId, vendaId, createdAt])
+  @@index([empresaId, negocioId, createdAt])
   @@index([empresaId, autorId, createdAt])
 }
 
@@ -2760,6 +2902,7 @@ enum StatusPropostaComercial {
   RECUSADA
   VENCIDA
   CANCELADA
+  SUBSTITUIDA
 }
 
 enum TipoItemPropostaComercial {
@@ -2775,6 +2918,31 @@ enum TipoAcaoPropostaComercial {
   ADICIONAR_ITEM_CATALOGADO
   REVALIDAR
   REVALIDACAO_RECUSADA
+  DEFINIR_PRINCIPAL
+  REMOVER_PRINCIPAL
+  ACEITAR_COMO_VENCEDORA
+  SUBSTITUIR_VENCEDORA
+  RECONCILIAR_VENCEDORA
+  REMOVER_VENCEDORA
+}
+
+enum OrigemVendaCanonica {
+  ACCEPTED_PROPOSAL
+  MANUAL_CLOSE
+}
+
+enum StatusVendaCanonica {
+  ACTIVE
+  INVALIDATED
+}
+
+enum MoedaVendaCanonica {
+  BRL
+}
+
+enum TipoAcaoVendaCanonica {
+  CREATE
+  INVALIDATE
 }
 
 enum PapelUsuario {

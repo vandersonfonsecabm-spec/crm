@@ -137,10 +137,15 @@ export default function DashboardSelectedClientPanel({
         ) : (
           <>
             <div className="grid grid-cols-2 gap-px border-b border-[var(--border-default)] bg-[var(--border-default)]">
-              <SummaryStat label={readOnly ? "Pipeline histórico" : "Pipeline ativo"} value={money(summary?.valorPipeline || 0)} />
+              <SummaryStat
+                label={`${readOnly ? "Pipeline histórico" : "Pipeline estimado"}${summary?.valorPipelineIncompleto ? " (parcial)" : ""}`}
+                value={summary?.valorPipeline === null || summary?.valorPipeline === undefined ? "Não informado" : money(summary.valorPipeline)}
+              />
+              <SummaryStat label="Total vendido" value={money((summary?.totalVendidoCentavos || 0) / 100)} />
               <SummaryStat label={readOnly ? "Negócios no histórico" : "Negócios ativos"} value={String(summary?.negociosAtivos || 0)} />
               <SummaryStat label={readOnly ? "Propostas no histórico" : "Propostas abertas"} value={String(summary?.propostasAtivas || 0)} />
               <SummaryStat label={readOnly ? "Acompanhamentos no histórico" : "Acompanhamentos"} value={String(summary?.acompanhamentosPendentes || 0)} />
+              <SummaryStat label="Última venda" value={summary?.ultimaVenda ? formatDate(summary.ultimaVenda.fechadoEm) : "Nenhuma"} />
             </div>
 
             <div className="border-b border-[var(--border-default)] px-3 py-2.5">
@@ -156,14 +161,14 @@ export default function DashboardSelectedClientPanel({
             </div>
 
             <details className="border-b border-[var(--border-default)] px-3 py-2.5">
-                  <summary className="cursor-pointer select-none text-[11px] font-semibold text-slate-700 hover:text-slate-900">Negócios fechados ({overview.comprasAnteriores.length})</summary>
+                  <summary className="cursor-pointer select-none text-[11px] font-semibold text-slate-700 hover:text-slate-900">Vendas realizadas ({overview.comprasAnteriores.length})</summary>
               <div className="mt-2 space-y-1.5">
                 {overview.comprasAnteriores.length ? overview.comprasAnteriores.map((purchase) => {
-                  const content = <><span className="min-w-0"><span className="block truncate text-[11px] font-medium text-slate-700">{purchase.titulo}</span><span className="mt-0.5 block text-[10px] text-slate-600">Fechado em {formatDate(purchase.fechadoEm)}</span></span><span className="shrink-0 text-[11px] font-semibold text-emerald-700">{purchase.valor === null ? "Não informado" : money(purchase.valor)}</span></>;
+                  const content = <><span className="min-w-0"><span className="block truncate text-[11px] font-medium text-slate-700">{purchase.titulo}</span><span className="mt-0.5 block text-[10px] text-slate-600">{purchase.origem === "ACCEPTED_PROPOSAL" ? `Proposta ${purchase.proposta?.codigo || "vencedora"}` : "Fechamento manual"} · {formatDate(purchase.fechadoEm)}</span></span><span className="shrink-0 text-[11px] font-semibold text-emerald-700">{money(purchase.totalCentavos / 100)}</span></>;
                   return readOnly
                     ? <div className="flex w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-left" key={purchase.id}>{content}</div>
-                    : <button className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-left hover:border-teal-300 hover:bg-teal-50" key={purchase.id} onClick={() => onNavigateContext("KANBAN", purchase.id)} type="button">{content}</button>;
-                }) : <p className="text-[11px] text-slate-600">Nenhum negócio fechado.</p>}
+                    : <button className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-left hover:border-teal-300 hover:bg-teal-50" key={purchase.id} onClick={() => onNavigateContext("KANBAN", purchase.negocioId)} type="button">{content}</button>;
+                }) : <p className="text-[11px] text-slate-600">Nenhuma venda realizada.</p>}
               </div>
             </details>
           </>

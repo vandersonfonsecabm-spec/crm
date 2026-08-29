@@ -1,5 +1,6 @@
 import {
   BriefcaseBusiness,
+  BadgeDollarSign,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
@@ -39,6 +40,7 @@ const FILTERS: Array<{ value: Customer360TimelineType; label: string }> = [
   { value: "ACOMPANHAMENTO", label: "Acompanhamentos" },
   { value: "NOTA", label: "Notas" },
   { value: "QUALIFICACAO", label: "Qualificações" },
+  { value: "VENDA", label: "Vendas" },
 ];
 
 export default function DashboardClientTimeline({
@@ -178,6 +180,7 @@ function eventMeta(type: Customer360TimelineEvent["tipo"]): { icon: ReactNode; l
   if (type === "VISITA") return { icon: <MapPin size={13} />, label: "Visita", tone: "border-amber-200 bg-amber-50 text-amber-700" };
   if (type === "PROPOSTA") return { icon: <FileText size={13} />, label: "Proposta", tone: "border-violet-200 bg-violet-50 text-violet-700" };
   if (type === "NEGOCIO") return { icon: <BriefcaseBusiness size={13} />, label: "Negócio", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+  if (type === "VENDA") return { icon: <BadgeDollarSign size={13} />, label: "Venda", tone: "border-emerald-300 bg-emerald-50 text-emerald-800" };
   if (type === "QUALIFICACAO") return { icon: <Target size={13} />, label: "Qualificação", tone: "border-rose-200 bg-rose-50 text-rose-700" };
   if (type === "NOTA") return { icon: <StickyNote size={13} />, label: "Nota", tone: "border-slate-200 bg-slate-50 text-slate-700" };
   return { icon: <CalendarClock size={13} />, label: "Acompanhamento", tone: "border-cyan-200 bg-cyan-50 text-cyan-700" };

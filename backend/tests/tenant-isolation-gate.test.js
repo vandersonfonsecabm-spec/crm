@@ -31,22 +31,30 @@ const {
 const backendDir = path.resolve(__dirname, "..");
 const migrationDir = path.join(backendDir, "prisma", "migrations");
 const currentMigration = "20260801123000_enforce_tenant_safe_relations";
-const latestMigration = "20260827200000_add_store1_provider_readiness";
+const latestMigration = "20260828130000_add_canonical_sale_v1";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 const historicalSourceDatabase = requiredEnv("CRM_TEST_SOURCE_DATABASE_PATH");
 
-test("arquitetura atual cobre as 162 relacoes e as excecoes documentadas", () => {
+test("arquitetura atual cobre as 169 relacoes padrao e as excecoes compostas documentadas", () => {
   const result = inspectArchitecture();
   assert.deepEqual(result.failures, []);
-  assert.equal(result.relationCount, 162);
+  assert.equal(result.relationCount, 169);
   assert.equal(result.relationManifestHash, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(tenantRelationManifestHash(), EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.equal(MIGRATION_REGISTRY[currentMigration].relationManifestSha256, EXPECTED_TENANT_RELATION_MANIFEST_SHA256);
   assert.deepEqual(Object.keys(GLOBAL_RELATION_EXCEPTIONS).sort(), [
     "AuditoriaFuncionalidade.usuarioId->Usuario",
-    "CanalIntegracao.id->MetaCredential",
+    "CanalIntegracao.accessTokenRef->MetaCredential",
+    "HistoricoVendaCanonica.vendaId->VendaCanonica",
+    "ItemVendaCanonica.propostaIdOriginal->VendaCanonica",
+    "ItemVendaCanonica.propostaItemId->ItemPropostaComercial",
+    "NegocioContratoVenda.propostaPrincipalId->PropostaComercial",
+    "NegocioContratoVenda.propostaVencedoraId->PropostaComercial",
+    "NegocioContratoVenda.vendaAtivaId->VendaCanonica",
     "PlatformTenantAudit.actorUserId->Usuario",
+    "VendaCanonica.negocioId->Negocio",
+    "VendaCanonica.propostaVencedoraId->PropostaComercial",
   ]);
 });
 
@@ -171,7 +179,7 @@ test("pre-migration aceita somente tabelas novas da migration registrada", () =>
   existingTables.add("AutomacaoExecucao");
   existingTables.add("Lead");
   existingTables.add("Negocio");
-  assert.equal(relationSpecsForExistingSchema(existingTables, { allowedMissingTables: createdTables }).length, 158);
+  assert.equal(relationSpecsForExistingSchema(existingTables, { allowedMissingTables: createdTables }).length, 165);
 
   existingTables.delete("Cliente");
   assert.throws(
@@ -180,7 +188,7 @@ test("pre-migration aceita somente tabelas novas da migration registrada", () =>
   );
 });
 
-test("pre-migration preserva o upgrade canonico SQLite de 9 para 32 migrations", async () => {
+test("pre-migration preserva o upgrade canonico SQLite de 9 para 42 migrations", async () => {
   const databasePath = path.join(runDir, `tenant-gate-historical-upgrade-${process.pid}.db`);
   fs.copyFileSync(historicalSourceDatabase, databasePath);
   try {
@@ -211,8 +219,8 @@ test("pre-migration preserva o upgrade canonico SQLite de 9 para 32 migrations",
       migrationName: latestMigration,
     });
     assert.equal(result.safe, true);
-    assert.equal(result.relationCount, 162);
-  assert.ok(result.checkedRelationCount > 0 && result.checkedRelationCount < 162);
+    assert.equal(result.relationCount, 169);
+    assert.ok(result.checkedRelationCount > 0 && result.checkedRelationCount < 169);
   } finally {
     removeDatabase(databasePath);
   }
@@ -236,7 +244,7 @@ test("pre-migration admite somente a relacao exata ligada a migration Meta pende
     columnsByTable,
     unavailableRelationKeys: new Set(["IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao"]),
   };
-  assert.equal(relationSpecsForExistingSchema(tables, options).length, 160);
+  assert.equal(relationSpecsForExistingSchema(tables, options).length, 167);
   assert.throws(
     () => relationSpecsForExistingSchema(tables, { ...options, unavailableRelationKeys: new Set() }),
     { code: "TENANT_GATE_SCHEMA_INCOMPLETE" },
@@ -262,7 +270,7 @@ test("pre-migration inspeciona a relacao quando a coluna pendente ja existe", ()
   assert.equal(relationSpecsForExistingSchema(tables, {
     columnsByTable,
     unavailableRelationKeys: new Set(["IntegracaoOAuthState.canalIntegracaoId->CanalIntegracao"]),
-  }).length, 162);
+  }).length, 169);
 
   columnsByTable.get("IntegracaoOAuthState").delete("usuarioId");
   assert.throws(
@@ -284,17 +292,22 @@ test("pre-migration admite relacoes tenant-scoped cujo tenant key nasce na migra
     ]),
   );
   columnsByTable.get("ItemPropostaComercial").delete("empresaId");
+  const futureCanonicalTables = new Set(["NEGOCIOCONTRATOVENDA", "VENDACANONICA", "ITEMVENDACANONICA", "HISTORICOVENDACANONICA"]);
+  for (const table of ["NegocioContratoVenda", "VendaCanonica", "ItemVendaCanonica", "HistoricoVendaCanonica"]) {
+    tables.delete(table);
+    columnsByTable.delete(table);
+  }
   const unavailableRelationKeys = new Set([
     "ItemPropostaComercial.propostaId->PropostaComercial",
     "ItemPropostaComercial.productOfferId->ProductOffer",
     "ItemPropostaComercial.catalogProductId->CommercialCatalogProduct",
     "ItemPropostaComercial.stockProductId->ProdutoEstoque",
   ]);
-  const result = relationSpecsForExistingSchema(tables, { columnsByTable, unavailableRelationKeys });
+  const result = relationSpecsForExistingSchema(tables, { allowedMissingTables: futureCanonicalTables, columnsByTable, unavailableRelationKeys });
   assert.equal(result.some((spec) => spec[1] === "ItemPropostaComercial"), false);
   assert.equal(result.length, 158);
   assert.throws(
-    () => relationSpecsForExistingSchema(tables, { columnsByTable }),
+    () => relationSpecsForExistingSchema(tables, { allowedMissingTables: futureCanonicalTables, columnsByTable }),
     { code: "TENANT_GATE_SCHEMA_INCOMPLETE" },
   );
 });

@@ -40,22 +40,19 @@ export default function useDashboardAnalytics({
         todayFollowUps: summary.analytics.todayFollowUps,
         activePipeline: summary.analytics.activePipeline,
         conversionRate: summary.analytics.conversionRate,
+        monetaryDataAvailable: true,
       };
     }
-    const totalValue = kanbanClients.reduce((sum, client) => sum + client.value, 0);
-    const forecastValue = kanbanClients
-      .filter((client) => client.status === "Novo" || client.status === "Proposta")
-      .reduce((sum, client) => sum + client.value, 0);
-    const wonValue = kanbanClients
-      .filter((client) => client.status === "Fechado")
-      .reduce((sum, client) => sum + client.value, 0);
+    const totalValue = 0;
+    const forecastValue = 0;
+    const wonValue = 0;
     const averageScore = Math.round(
       kanbanClients.reduce((sum, client) => sum + getLeadScore(client), 0) / Math.max(1, kanbanClients.length)
     );
     const highRiskCount = kanbanClients.filter((client) => getRisk(client) === "Alto").length;
     const todayFollowUps = kanbanClients.filter((client) => classifyNextFollowUp(client.nextFollowUp) === "TODAY").length;
     const activePipeline = kanbanClients.filter((client) => client.status !== "Fechado" && client.status !== "Perdido").length;
-    const conversionRate = Math.round((wonValue / Math.max(1, totalValue)) * 100);
+    const conversionRate = 0;
 
     return {
       totalValue,
@@ -66,6 +63,7 @@ export default function useDashboardAnalytics({
       todayFollowUps,
       activePipeline,
       conversionRate,
+      monetaryDataAvailable: false,
     };
   }, [kanbanClients, summary]);
 
@@ -80,11 +78,9 @@ export default function useDashboardAnalytics({
         todayFollowUps: summary.analytics.todayFollowUps,
       };
     }
-    const totalValue = clients.reduce((sum, client) => sum + client.value, 0);
-    const wonValue = clients.filter((client) => client.status === "Fechado").reduce((sum, client) => sum + client.value, 0);
-    const forecastValue = clients
-      .filter((client) => client.status === "Proposta" || client.status === "Novo")
-      .reduce((sum, client) => sum + client.value, 0);
+    const totalValue = 0;
+    const wonValue = 0;
+    const forecastValue = 0;
     const hotCount = clients.filter((client) => client.hot || getPriority(client) === "Alta").length;
     const averageScore = Math.round(clients.reduce((sum, client) => sum + getLeadScore(client), 0) / Math.max(1, clients.length));
     const todayFollowUps = clients.filter((client) => classifyNextFollowUp(client.nextFollowUp) === "TODAY").length;

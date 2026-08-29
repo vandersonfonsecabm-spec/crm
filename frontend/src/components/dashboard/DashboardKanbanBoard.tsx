@@ -16,6 +16,7 @@ type KanbanEnterpriseStats = {
   todayFollowUps: number;
   activePipeline: number;
   conversionRate: number;
+  monetaryDataAvailable: boolean;
 };
 
 type DashboardKanbanBoardProps = {

@@ -26,8 +26,9 @@ const pgSuite = Object.freeze([
   "tests/email-inbound-processing.test.js",
   "tests/bling-distributed-coordination-postgres.test.js",
   "tests/commercial-proposal-catalog-v1-postgres.test.js",
+  "tests/canonical-sale-v1-postgres.test.js",
 ]);
-const pgHarnessTestCount = 23;
+const pgHarnessTestCount = 24;
 
 function parseArguments(rawArgs = []) {
   const args = [...rawArgs];
@@ -57,13 +58,67 @@ function externalDatabaseUrlFromEnv(env = process.env) {
   if (env.CRM_POSTGRES_REAL_CONFIRM !== "disposable-external") {
     throw new Error("URL externa exige CRM_POSTGRES_REAL_CONFIRM=disposable-external.");
   }
-  if (isOfficialDatabaseUrl(value, env)) {
+  if (matchesProtectedDatabaseUrl(value, env)) {
+    throw new Error("URL oficial ou de producao nunca pode ser usada pelo runner real.");
+  }
+  if (isOfficialDatabaseUrl(value, env) && !isVerifiedRailwayDisposable(value, env)) {
     throw new Error("URL oficial ou de producao nunca pode ser usada pelo runner real.");
   }
   return value;
 }
 
+function isVerifiedRailwayDisposable(value, env = process.env) {
+  const expectedProject = String(env.CRM_EXPECTED_RAILWAY_PROJECT_ID || "").trim();
+  const expectedEnvironment = String(env.CRM_EXPECTED_RAILWAY_ENVIRONMENT_ID || "").trim();
+  const expectedService = String(env.CRM_EXPECTED_RAILWAY_SERVICE_ID || "").trim();
+  const expectedRun = String(env.CRM_EXPECTED_DISPOSABLE_RUN_ID || "").trim();
+  if (env.CRM_DISPOSABLE_TEST_DATABASE !== "true" || env.CRM_DISPOSABLE_TEST_RUN_ID !== expectedRun) return false;
+  if (!expectedProject || !expectedEnvironment || !expectedService || !expectedRun) return false;
+  if (String(env.RAILWAY_PROJECT_ID || "").trim() !== expectedProject) return false;
+  if (String(env.RAILWAY_ENVIRONMENT_ID || "").trim() !== expectedEnvironment) return false;
+  if (String(env.RAILWAY_SERVICE_ID || "").trim() !== expectedService) return false;
+  if (/(?:^|[-_])(prod|production|official)(?:$|[-_])/i.test(String(env.RAILWAY_ENVIRONMENT_NAME || ""))) return false;
+  const publicUrl = String(env.DATABASE_PUBLIC_URL || "").trim();
+  if (publicUrl) return publicUrl === value && /^postgres(?:ql)?:\/\//i.test(publicUrl);
+  if (env.CRM_DISPOSABLE_URL_CONSTRUCTED !== "true") return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname === String(env.CRM_EXPECTED_TCP_PROXY_HOST || "").trim()
+      && parsed.port === String(env.CRM_EXPECTED_TCP_PROXY_PORT || "").trim();
+  } catch {
+    return false;
+  }
+}
+
 function isOfficialDatabaseUrl(value, env = process.env) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return false;
+  if (matchesProtectedDatabaseUrl(value, env)) return true;
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return true;
+  }
+  const host = parsed.hostname.toLowerCase();
+  const database = parsed.pathname.replace(/^\/+/, "").toLowerCase();
+  const knownProductionFragments = [
+    "railway.app",
+    "railway.internal",
+    "railway",
+    "rlwy.net",
+    "vercel",
+    "crm-agro",
+    "crm-murex",
+    "api-production",
+    "glistening-playfulness",
+  ];
+  return knownProductionFragments.some((fragment) => host.includes(fragment))
+    || /(?:^|[.-])(prod|production|official)(?:[.-]|$)/.test(host)
+    || /(?:^|[-_])(prod|production|official)(?:$|[-_])/.test(database);
+}
+
+function matchesProtectedDatabaseUrl(value, env = process.env) {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized) return false;
   for (const key of [
@@ -77,27 +132,7 @@ function isOfficialDatabaseUrl(value, env = process.env) {
     if (candidate && candidate === normalized) return true;
     if (candidate && sameDatabaseEndpoint(value, candidate)) return true;
   }
-  let parsed;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return true;
-  }
-  const host = parsed.hostname.toLowerCase();
-  const database = parsed.pathname.replace(/^\/+/, "").toLowerCase();
-  const knownProductionFragments = [
-    "railway.app",
-    "railway.internal",
-    "railway",
-    "vercel",
-    "crm-agro",
-    "crm-murex",
-    "api-production",
-    "glistening-playfulness",
-  ];
-  return knownProductionFragments.some((fragment) => host.includes(fragment))
-    || /(?:^|[.-])(prod|production|official)(?:[.-]|$)/.test(host)
-    || /(?:^|[-_])(prod|production|official)(?:$|[-_])/.test(database);
+  return false;
 }
 
 function sameDatabaseEndpoint(left, right) {
@@ -140,6 +175,7 @@ function runSuite(databaseUrl, options = {}) {
     CRM_TEST_POSTGRES_ALLOW: "true",
     CRM_TEST_DATABASE_URL: databaseUrl,
     POSTGRES_TEST_DATABASE_URL: databaseUrl,
+    CRM_POSTGRES_SUITE_VERIFIED: "true",
     DATABASE_URL: databaseUrl,
     POSTGRES_DATABASE_URL: "",
     POSTGRES_TARGET_URL: "",
@@ -204,20 +240,76 @@ function sourceManifestHash() {
       hash.update(fs.readFileSync(filePath));
     }
   }
-  for (const relativePath of [
-    "src/shared/clientLifecycleLock.js",
-    "src/integrations/emailInboundProcessor.js",
-    "src/platform/emailInboundProvisioning.js",
-    "tests/v54-lifecycle-lock.test.js",
-    "tests/email-inbound-lifecycle.test.js",
-    "tests/email-inbound-processing.test.js",
-    "scripts/run-postgres-tests.cjs",
-  ]) {
+  const runtimeFiles = [...new Set([
+    ...sourceFilesUnder("src"),
+    ...sourceFilesUnder("scripts"),
+    ...pgSuite,
+  ])].sort();
+  for (const relativePath of runtimeFiles) {
     const filePath = path.join(backendDir, relativePath);
     hash.update(`runtime:${relativePath}\0`);
     hash.update(fs.readFileSync(filePath));
   }
   return hash.digest("hex");
+}
+
+function sourceFilesUnder(relativeRoot) {
+  const root = path.join(backendDir, relativeRoot);
+  const files = [];
+  visit(root, relativeRoot.replace(/\\/g, "/"));
+  return files;
+
+  function visit(directory, relativeDirectory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+      const relativePath = `${relativeDirectory}/${entry.name}`;
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) throw new Error("Manifesto PostgreSQL nao aceita symlink em source.");
+      if (entry.isDirectory()) {
+        visit(absolutePath, relativePath);
+      } else if (entry.isFile() && [".js", ".cjs"].includes(path.extname(entry.name).toLowerCase())) {
+        files.push(relativePath);
+      }
+    }
+  }
+}
+
+function verifyRailwayDisposableAuthority(env = process.env, runCommand = spawnSync) {
+  const project = String(env.CRM_EXPECTED_RAILWAY_PROJECT_ID || "").trim();
+  const environment = String(env.CRM_EXPECTED_RAILWAY_ENVIRONMENT_ID || "").trim();
+  const service = String(env.CRM_EXPECTED_RAILWAY_SERVICE_ID || "").trim();
+  const expectedRun = String(env.CRM_EXPECTED_DISPOSABLE_RUN_ID || "").trim();
+  if (![project, environment, service, expectedRun].every((value) => /^[A-Za-z0-9-]+$/.test(value))) return false;
+  const appData = String(env.APPDATA || process.env.APPDATA || "").trim();
+  const railwayCli = path.join(appData, "npm", "node_modules", "@railway", "cli", "bin", "railway.js");
+  if (!appData || !fs.existsSync(railwayCli) || !fs.statSync(railwayCli).isFile()) return false;
+  const result = runCommand(process.execPath, [
+    railwayCli,
+    "variables",
+    "--project", project,
+    "--environment", environment,
+    "--service", service,
+    "--json",
+  ], {
+    cwd: backendDir,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+    shell: false,
+    timeout: 30000,
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  if (result?.error || result?.status !== 0) return false;
+  try {
+    const variables = JSON.parse(String(result.stdout || "{}"));
+    const environmentName = String(env.RAILWAY_ENVIRONMENT_NAME || variables.RAILWAY_ENVIRONMENT_NAME || "");
+    const serviceName = String(env.RAILWAY_SERVICE_NAME || variables.RAILWAY_SERVICE_NAME || "");
+    return variables.CRM_DISPOSABLE_TEST_DATABASE === "true"
+      && variables.CRM_DISPOSABLE_TEST_RUN_ID === expectedRun
+      && /(?:staging|test|preview|sandbox)/i.test(environmentName)
+      && /^Postgres-[A-Za-z0-9]+$/.test(serviceName);
+  } catch {
+    return false;
+  }
 }
 
 function makeRunId() {
@@ -386,6 +478,10 @@ async function main(options = {}) {
   const env = options.env || process.env;
   const image = imageFromEnv(env);
   const externalUrl = externalDatabaseUrlFromEnv(env);
+  if (externalUrl && isVerifiedRailwayDisposable(externalUrl, env)) {
+    const verifyAuthority = options.verifyExternalAuthority || verifyRailwayDisposableAuthority;
+    if (!verifyAuthority(env)) throw new Error("A autoridade externa nao confirmou o PostgreSQL descartavel.");
+  }
   const runId = safeRunId(options.runId || makeRunId());
   const containerName = externalUrl ? null : makeResourceName("crm-pg-real", runId);
   const volumeName = externalUrl ? null : makeResourceName("crm-pg-real-vol", runId);
@@ -517,6 +613,8 @@ module.exports = {
   externalDatabaseUrlFromEnv,
   imageFromEnv,
   isOfficialDatabaseUrl,
+  matchesProtectedDatabaseUrl,
+  isVerifiedRailwayDisposable,
   main,
   mappedPort,
   parseArguments,
@@ -526,5 +624,6 @@ module.exports = {
   safeRunId,
   sanitizeLogText,
   sourceManifestHash,
+  verifyRailwayDisposableAuthority,
   waitForHealthy,
 };

@@ -2,6 +2,7 @@ import { CopyPlus, Download, FileText, History, Plus, RefreshCw, Save, Trash2 } 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ApiHttpError,
+  acceptCommercialProposal,
   changeCommercialProposalStatus,
   createCommercialProposal,
   duplicateCommercialProposal,
@@ -9,6 +10,10 @@ import {
   fetchCommercialProposal,
   fetchCommercialProposalHistory,
   fetchCommercialProposalPdf,
+  reconcileWinningCommercialProposal,
+  removeWinningCommercialProposal,
+  replaceWinningCommercialProposal,
+  setPrimaryCommercialProposal,
   updateCommercialProposal,
 } from "../../services/crmApi";
 import type {
@@ -53,16 +58,18 @@ const statusLabels: Record<CommercialProposalStatus, string> = {
   RECUSADA: "Recusada",
   VENCIDA: "Vencida",
   CANCELADA: "Cancelada",
+  SUBSTITUIDA: "Substituída",
 };
 
 const nextStatuses: Record<CommercialProposalStatus, CommercialProposalStatus[]> = {
   RASCUNHO: ["PRONTA", "CANCELADA"],
-  PRONTA: ["RASCUNHO", "ENVIADA", "ACEITA", "RECUSADA", "CANCELADA"],
-  ENVIADA: ["ACEITA", "RECUSADA", "VENCIDA", "CANCELADA"],
+  PRONTA: ["RASCUNHO", "ENVIADA", "RECUSADA", "CANCELADA"],
+  ENVIADA: ["RECUSADA", "VENCIDA", "CANCELADA"],
   ACEITA: [],
   RECUSADA: [],
   VENCIDA: [],
   CANCELADA: [],
+  SUBSTITUIDA: [],
 };
 
 export default function CommercialProposalsPanel({ businessId, onChanged }: Props) {
@@ -77,6 +84,8 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
   const [form, setForm] = useState<ProposalForm>(() => emptyForm());
   const [statusChoice, setStatusChoice] = useState<CommercialProposalStatus | "">("");
   const [showHistory, setShowHistory] = useState(false);
+  const [winnerAction, setWinnerAction] = useState<"replace" | "reconcile" | "remove" | null>(null);
+  const [winnerReason, setWinnerReason] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,6 +106,8 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
   }, [load]);
 
   const previewTotals = useMemo(() => calculatePreview(form), [form]);
+  const currentWinner = useMemo(() => proposals.find((proposal) => proposal.contratoComercial.vencedora) ?? null, [proposals]);
+  const acceptedProposalCount = useMemo(() => proposals.filter((proposal) => proposal.status === "ACEITA").length, [proposals]);
 
   async function selectProposal(id: number) {
     setBusy(true);
@@ -109,6 +120,8 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
       setEditing(false);
       setShowHistory(false);
       setStatusChoice("");
+      setWinnerAction(null);
+      setWinnerReason("");
     } catch (nextError) {
       setError(proposalErrorMessage(nextError));
     } finally {
@@ -177,6 +190,68 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
     }
   }
 
+  async function togglePrimary() {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      await setPrimaryCommercialProposal(businessId, selected.contratoComercial.principal ? null : selected.id, selected.contratoComercial.revisao);
+      setFeedback(selected.contratoComercial.principal ? "Proposta removida da posição principal." : "Proposta definida como principal.");
+      await refreshContractSelection(selected.id);
+      onChanged?.();
+    } catch (nextError) {
+      setError(proposalErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function acceptAsWinner() {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      await acceptCommercialProposal(selected.id, selected.revisao, selected.contratoComercial.revisao);
+      setFeedback("Proposta aceita e registrada como vencedora. O Negócio continua aberto até o fechamento explícito.");
+      await refreshContractSelection(selected.id);
+      onChanged?.();
+    } catch (nextError) {
+      setError(proposalErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmWinnerAction() {
+    if (!selected || !winnerAction) return;
+    if (!winnerReason.trim()) {
+      setError("Informe o motivo da alteração da proposta vencedora.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      if (winnerAction === "replace") {
+        await replaceWinningCommercialProposal(businessId, selected.id, selected.revisao, selected.contratoComercial.revisao, winnerReason.trim());
+        setFeedback("Proposta vencedora substituída com auditoria.");
+      } else if (winnerAction === "reconcile") {
+        await reconcileWinningCommercialProposal(businessId, selected.id, selected.contratoComercial.revisao, winnerReason.trim());
+        setFeedback("Proposta aceita legada reconciliada como vencedora.");
+      } else {
+        await removeWinningCommercialProposal(businessId, selected.contratoComercial.revisao, winnerReason.trim());
+        setFeedback("Proposta vencedora removida e preservada como substituída.");
+      }
+      setWinnerAction(null);
+      setWinnerReason("");
+      await refreshContractSelection(selected.id);
+      onChanged?.();
+    } catch (nextError) {
+      setError(proposalErrorMessage(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function duplicate() {
     if (!selected) return;
     setBusy(true);
@@ -230,6 +305,13 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
     if (listItem && !editing) setSelected((current) => current?.id === selectedId ? { ...current, ...listItem } : current);
   }
 
+  async function refreshContractSelection(selectedId: number) {
+    const [response, proposal] = await Promise.all([fetchBusinessProposals(businessId), fetchCommercialProposal(selectedId)]);
+    setProposals(response.data);
+    setSelected(proposal);
+    setHistory(proposal.historico ?? []);
+  }
+
   if (loading) return <LoadingState label="Carregando propostas" rows={3} />;
   if (error && !editing && proposals.length === 0) return <ErrorState description="O Negócio permanece disponível." onRetry={() => void load()} title={error} />;
 
@@ -256,6 +338,7 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
           {proposals.map((proposal) => (
             <button className={`min-w-0 rounded-md border px-3 py-2.5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] ${selected?.id === proposal.id ? "border-[var(--primary)] bg-emerald-50/40" : "border-[var(--border-default)] hover:border-[var(--border-strong)]"}`} key={proposal.id} onClick={() => void selectProposal(proposal.id)} type="button">
               <div className="flex items-start justify-between gap-2"><span className="truncate text-[11px] font-semibold text-[var(--text-primary)]">{proposal.codigo}</span><ProposalStatus status={proposal.status} /></div>
+              {(proposal.contratoComercial.principal || proposal.contratoComercial.vencedora) && <div className="mt-1.5 flex flex-wrap gap-1">{proposal.contratoComercial.principal && <Badge variant="warning">Principal</Badge>}{proposal.contratoComercial.vencedora && <Badge variant="success">Vencedora</Badge>}</div>}
               <p className="mt-1 truncate text-[11px] text-[var(--text-secondary)]">{proposal.titulo}</p>
               <p className="mt-1 text-[10px] tabular-nums text-[var(--text-muted)]">v{proposal.versao} · {formatMoney(proposal.totalCentavos)}</p>
             </button>
@@ -269,9 +352,15 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
 
       {!editing && selected && (
         <div className="space-y-3 border-t border-[var(--border-default)] pt-3">
+          <div aria-label="Proveniência comercial" className="grid grid-cols-4 gap-px overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--border-default)] text-[9px] max-[640px]:grid-cols-2">
+            <ProvenanceStep active label="Negócio" value="Em negociação" />
+            <ProvenanceStep active={selected.contratoComercial.principal} label="Principal" value={selected.contratoComercial.principal ? selected.codigo : "Não é esta"} />
+            <ProvenanceStep active={selected.contratoComercial.vencedora} label="Vencedora" value={selected.contratoComercial.vencedora ? "Aceita" : currentWinner?.codigo || "Não definida"} />
+            <ProvenanceStep active={Boolean(selected.contratoComercial.vendaAtivaId)} label="Venda" value={selected.contratoComercial.vendaAtivaId ? "Registrada" : "Ainda não realizada"} />
+          </div>
           <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-l-2 border-[var(--primary)] pl-3">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">{selected.codigo} · versão {selected.versao}</span><ProposalStatus status={selected.status} /></div>
+              <div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">{selected.codigo} · versão {selected.versao}</span><ProposalStatus status={selected.status} />{selected.contratoComercial.principal && <Badge variant="warning">Principal</Badge>}{selected.contratoComercial.vencedora && <Badge variant="success">Vencedora</Badge>}</div>
               <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{selected.titulo}</p>
               <p className="mt-1 text-[10px] text-[var(--text-muted)]">Válida até {formatDate(selected.validade)} · revisão {selected.revisao}</p>
             </div>
@@ -293,9 +382,16 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
             {statusChoice && <Button disabled={busy} onClick={() => void updateStatus()} size="sm">Confirmar status</Button>}
             {selected.permissoes.editar && <Button leftIcon={<Save size={13} />} onClick={beginEdit} size="sm" variant="secondary">Editar rascunho</Button>}
             {selected.permissoes.duplicar && <Button disabled={busy} leftIcon={<CopyPlus size={13} />} onClick={() => void duplicate()} size="sm" variant="secondary">Nova versão</Button>}
+            {selected.permissoes.definirPrincipal && <Button disabled={busy} onClick={() => void togglePrimary()} size="sm" variant="secondary">{selected.contratoComercial.principal ? "Remover principal" : "Definir como principal"}</Button>}
+            {selected.permissoes.aceitar && !currentWinner && <Button disabled={busy} onClick={() => void acceptAsWinner()} size="sm">Aceitar como vencedora</Button>}
+            {selected.permissoes.substituirVencedora && currentWinner && currentWinner.id !== selected.id && ["PRONTA", "ENVIADA"].includes(selected.status) && <Button disabled={busy} onClick={() => { setWinnerAction("replace"); setWinnerReason(""); }} size="sm">Substituir vencedora</Button>}
+            {selected.permissoes.reconciliarVencedora && selected.status === "ACEITA" && (!currentWinner || acceptedProposalCount > 1) && <Button disabled={busy} onClick={() => { setWinnerAction("reconcile"); setWinnerReason(""); }} size="sm">Reconciliar vencedora</Button>}
+            {selected.permissoes.removerVencedora && selected.contratoComercial.vencedora && <Button disabled={busy} onClick={() => { setWinnerAction("remove"); setWinnerReason(""); }} size="sm" variant="secondary">Remover vencedora</Button>}
             <Button disabled={busy} leftIcon={<Download size={13} />} onClick={() => void openPdf()} size="sm" variant="secondary">Abrir PDF</Button>
             <Button leftIcon={<History size={13} />} onClick={() => void toggleHistory()} size="sm" variant="ghost">Histórico</Button>
           </div>
+
+          {winnerAction && <div className="space-y-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3"><Textarea label="Motivo obrigatório" maxLength={500} onChange={(event) => setWinnerReason(event.target.value)} rows={2} value={winnerReason} /><div className="flex justify-end gap-2"><Button onClick={() => { setWinnerAction(null); setWinnerReason(""); }} size="sm" variant="ghost">Cancelar</Button><Button disabled={busy || !winnerReason.trim()} onClick={() => void confirmWinnerAction()} size="sm">Confirmar alteração</Button></div></div>}
 
           {showHistory && <ProposalHistory entries={history} />}
         </div>
@@ -363,6 +459,10 @@ function ProposalHistory({ entries }: { entries: CommercialProposalHistory[] }) 
 function ProposalStatus({ status }: { status: CommercialProposalStatus }) {
   const variant = status === "ACEITA" ? "success" : status === "RECUSADA" || status === "CANCELADA" ? "danger" : status === "VENCIDA" ? "warning" : status === "PRONTA" || status === "ENVIADA" ? "primary" : "neutral";
   return <Badge variant={variant}>{statusLabels[status]}</Badge>;
+}
+
+function ProvenanceStep({ active, label, value }: { active: boolean; label: string; value: string }) {
+  return <div className="bg-[var(--bg-surface)] px-2.5 py-2"><p className="font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</p><p className={`mt-1 truncate font-medium ${active ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"}`}>{value}</p></div>;
 }
 
 function Total({ emphasis, label, value }: { emphasis?: boolean; label: string; value: number }) {
@@ -465,6 +565,12 @@ function historyLabel(entry: CommercialProposalHistory) {
   if (entry.acao === "CRIAR") return "Proposta criada";
   if (entry.acao === "ATUALIZAR") return "Rascunho atualizado";
   if (entry.acao === "DUPLICAR_VERSAO") return `Versão ${entry.versao} criada`;
+  if (entry.acao === "DEFINIR_PRINCIPAL") return "Definida como proposta principal";
+  if (entry.acao === "REMOVER_PRINCIPAL") return "Removida da posição principal";
+  if (entry.acao === "ACEITAR_COMO_VENCEDORA") return "Aceita como proposta vencedora";
+  if (entry.acao === "SUBSTITUIR_VENCEDORA") return "Proposta vencedora substituída";
+  if (entry.acao === "RECONCILIAR_VENCEDORA") return "Vencedora legada reconciliada";
+  if (entry.acao === "REMOVER_VENCEDORA") return "Proposta vencedora removida";
   return `Status: ${entry.statusAnterior ? statusLabels[entry.statusAnterior] : "—"} → ${entry.statusNovo ? statusLabels[entry.statusNovo] : "—"}`;
 }
 

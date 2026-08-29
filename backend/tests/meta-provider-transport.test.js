@@ -6,8 +6,8 @@ function channel(type, fields = {}) {
   return { id: 10, empresaId: 20, tipo: type, chaveInterna: type === "WHATSAPP_META" ? "whatsapp-meta-inbound-real" : "messenger-meta-inbound-real", metaAppId: "app-test", providerEnvironment: "test", ativo: true, status: "ATIVO", modoTeste: false, ...fields };
 }
 
-const whatsappEnv = (extra = {}) => ({ WHATSAPP_INTEGRATION_ENABLED: "true", WHATSAPP_INBOUND_ENABLED: "true", WHATSAPP_APP_SECRET: "whatsapp-secret", WHATSAPP_WEBHOOK_VERIFY_TOKEN: "whatsapp-verify", WHATSAPP_META_APP_ID: "app-test", WHATSAPP_PROVIDER_ENVIRONMENT: "test", ...extra });
-const messengerEnv = (extra = {}) => ({ MESSENGER_INTEGRATION_ENABLED: "true", MESSENGER_INBOUND_ENABLED: "true", MESSENGER_APP_SECRET: "messenger-secret", MESSENGER_WEBHOOK_VERIFY_TOKEN: "messenger-verify", MESSENGER_META_APP_ID: "app-test", MESSENGER_PROVIDER_ENVIRONMENT: "test", ...extra });
+const whatsappEnv = (extra = {}) => ({ NODE_ENV: "test", META_INBOUND_WORKER_ENABLED: "true", WHATSAPP_INTEGRATION_ENABLED: "true", WHATSAPP_INBOUND_ENABLED: "true", WHATSAPP_APP_SECRET: "whatsapp-secret", WHATSAPP_WEBHOOK_VERIFY_TOKEN: "whatsapp-verify", WHATSAPP_META_APP_ID: "app-test", WHATSAPP_PROVIDER_ENVIRONMENT: "test", ...extra });
+const messengerEnv = (extra = {}) => ({ NODE_ENV: "test", META_INBOUND_WORKER_ENABLED: "true", MESSENGER_INTEGRATION_ENABLED: "true", MESSENGER_INBOUND_ENABLED: "true", MESSENGER_APP_SECRET: "messenger-secret", MESSENGER_WEBHOOK_VERIFY_TOKEN: "messenger-verify", MESSENGER_META_APP_ID: "app-test", MESSENGER_PROVIDER_ENVIRONMENT: "test", ...extra });
 
 function resolver(expected) {
   return async ({ empresaId, canalIntegracaoId }) => (

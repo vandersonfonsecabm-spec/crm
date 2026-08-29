@@ -19,6 +19,7 @@ const { mountWhatsappSimulationRoutes } = require("./channels/whatsapp/simulatio
 const { mountLeadsCommunicationRoutes } = require("./leads-communication/routes");
 const { mountNegociosKanbanRoutes } = require("./negocios-kanban/routes");
 const { mountCommercialProposalRoutes } = require("./commercial-proposals/routes");
+const { mountCanonicalSaleRoutes } = require("./canonical-sales/routes");
 const { mountCustomer360Routes } = require("./customer-360/routes");
 const { mountAutomationRoutes } = require("./automations/routes");
 const { mountPlatformRoutes } = require("./platform/routes");
@@ -197,6 +198,7 @@ mountWhatsappSimulationRoutes({ app, prisma, authenticate: requireAuth, requireR
 mountLeadsCommunicationRoutes({ app, prisma, authenticate: requireAuth });
 mountNegociosKanbanRoutes({ app, prisma, authenticate: requireAuth });
 mountCommercialProposalRoutes({ app, prisma, authenticate: requireAuth });
+mountCanonicalSaleRoutes({ app, prisma, authenticate: requireAuth });
 mountCustomer360Routes({ app, prisma, authenticate: requireAuth });
 mountAutomationRoutes({ app, prisma, authenticate: requireAuth });
 mountPlatformRoutes({ app, prisma, authenticate: requireAuth });
@@ -246,6 +248,9 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
       contasVencidas,
       atividadesRecentes,
       scoreRows,
+      vendasCanonicas,
+      vendasRecentes,
+      negociosAbertos,
     ] = await Promise.all([
       prisma.cliente.aggregate({
         where: { empresaId, arquivadoEm: null },
@@ -289,34 +294,60 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         take: 5,
       }),
       prisma.$queryRaw(markMaintenanceReadOnlyQuery(dashboardScoreQuery(empresaId))),
+      prisma.vendaCanonica.aggregate({
+        where: { empresaId, status: "ACTIVE", negocio: { etapa: "FECHADO" }, contratosAtivos: { some: { empresaId } } },
+        _count: { _all: true },
+        _sum: { totalCentavos: true },
+      }),
+      prisma.vendaCanonica.findMany({
+        where: { empresaId, status: "ACTIVE", negocio: { etapa: "FECHADO" }, contratosAtivos: { some: { empresaId } } },
+        include: {
+          cliente: { select: { id: true, nome: true } },
+          negocio: { select: { id: true, titulo: true } },
+          propostaVencedora: { select: { id: true, codigo: true, titulo: true } },
+        },
+        orderBy: [{ fechadoEm: "desc" }, { id: "desc" }],
+        take: 5,
+      }),
+      prisma.negocio.groupBy({
+        by: ["etapa"],
+        where: { empresaId, etapa: { in: ["NOVO", "CONTATO", "PROPOSTA"] }, cliente: { arquivadoEm: null } },
+        _count: { _all: true },
+        _sum: { valor: true },
+      }),
     ]);
     const statusMap = new Map(porStatus.map((item) => [item.status, item]));
-    const statusCount = (status) => statusMap.get(status)?._count?._all || 0;
     const statusValue = (status) => Number(statusMap.get(status)?._sum?.valor || 0);
-    const pipeline = Number(carteira._sum.valor || 0);
-    const faturamento = statusValue("Fechado");
+    const businessStageMap = new Map(negociosAbertos.map((item) => [item.etapa, item]));
+    const businessStageValue = (stage) => Number(businessStageMap.get(stage)?._sum?.valor || 0);
+    const businessStageCount = (stage) => businessStageMap.get(stage)?._count?._all || 0;
+    const pipeline = ["NOVO", "CONTATO", "PROPOSTA"].reduce((total, stage) => total + businessStageValue(stage), 0);
+    const faturamentoCentavos = Number(vendasCanonicas._sum.totalCentavos || 0);
+    const faturamento = faturamentoCentavos / 100;
 
     res.json({
       indicadores: {
         clientes: carteira._count._all,
         produtos: 0,
-        pedidos: statusCount("Proposta") + statusCount("Fechado"),
-        contasPendentes: statusValue("Proposta"),
+        pedidos: vendasCanonicas._count._all,
+        contasPendentes: businessStageValue("PROPOSTA"),
         faturamento,
+        faturamentoCentavos,
         pipeline,
         quentes,
       },
       analytics: {
         totalValue: pipeline,
         wonValue: faturamento,
-        forecastValue: statusValue("Proposta") + statusValue("Novo"),
+        wonValueCents: faturamentoCentavos,
+        forecastValue: businessStageValue("PROPOSTA") + businessStageValue("NOVO"),
         hotCount: quentes,
         averageScore: Math.round(Number(scoreRows[0]?.averageScore || 0)),
         todayFollowUps: followUpsHoje.length,
         highRiskCount: altoRisco,
         silentCount: semContato,
         hotProposalCount: propostasQuentes,
-        activePipeline: carteira._count._all - statusCount("Fechado") - statusCount("Perdido"),
+        activePipeline: ["NOVO", "CONTATO", "PROPOSTA"].reduce((total, stage) => total + businessStageCount(stage), 0),
         conversionRate: Math.round((faturamento / Math.max(1, pipeline)) * 100),
       },
       status: porStatus.map((item) => ({
@@ -326,6 +357,23 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
       })),
       estoqueBaixo: [],
       pedidosRecentes: propostasRecentes,
+      vendasRecentes: vendasRecentes.map((sale) => ({
+        id: sale.id,
+        negocioId: sale.negocioId,
+        clienteId: sale.clienteId,
+        cliente: sale.cliente.nome,
+        negocio: sale.negocio.titulo || `Negocio ${sale.negocioId}`,
+        totalCentavos: sale.totalCentavos,
+        moeda: sale.moeda,
+        origem: sale.origem,
+        fechadoEm: sale.fechadoEm,
+        proposta: sale.propostaVencedora,
+      })),
+      receita: {
+        fonte: "CANONICAL_SALE",
+        totalCentavos: faturamentoCentavos,
+        vendas: vendasCanonicas._count._all,
+      },
       contasVencidas,
       produtosMaisVendidos: [],
       atividadesRecentes: atividadesRecentes.map((nota) => ({
@@ -546,6 +594,7 @@ app.delete("/clientes/:id", ...customerLifecycleAuth, async (req, res) => {
         tx.contatoCanal.count({ where: { empresaId, clienteId } }),
         tx.historicoQualificacaoConversa.count({ where: { empresaId, clienteId } }),
         tx.propostaComercial.count({ where: { empresaId, clienteId } }),
+        tx.vendaCanonica.count({ where: { empresaId, clienteId } }),
       ]);
       if (relationCounts.some((count) => count > 0)) {
         const error = new Error("Este cliente possui historico ou registros vinculados e nao pode ser excluido permanentemente.");

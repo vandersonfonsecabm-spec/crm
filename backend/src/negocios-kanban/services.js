@@ -8,6 +8,7 @@ const {
   rejectUnknown,
 } = require("../leads-communication/validation");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { assertCommercialPointers } = require("../canonical-sales/service");
 
 const BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA", "FECHADO", "PERDIDO"];
 const ACTIVE_BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA"];
@@ -144,12 +145,21 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
       if (!isManager(context) && current.responsavelId !== context.usuarioId) {
         throw domainError(403, "NEGOCIO_FORBIDDEN", "Acesso negado.");
       }
+      if (TERMINAL_BUSINESS_STAGES.has(current.etapa) || TERMINAL_BUSINESS_STAGES.has(etapa)) {
+        throw domainError(409, "NEGOCIO_TERMINAL_ACTION_REQUIRED", "Use a acao comercial dedicada para ganhar, perder ou reabrir o Negocio.");
+      }
       if (current.etapa !== etapaAnterior) {
         throw domainError(409, "NEGOCIO_STAGE_CONFLICT", "O Negocio foi alterado por outra operacao.", { etapaAtual: current.etapa });
       }
       if (current.etapa === etapa) return;
 
       await lockActiveClienteRow(tx, context.empresaId, current.clienteId);
+      await tx.negocioContratoVenda.upsert({
+        where: { empresaId_negocioId: { empresaId: context.empresaId, negocioId: id } },
+        create: { empresaId: context.empresaId, negocioId: id },
+        update: {},
+      });
+      const contract = await tx.negocioContratoVenda.findUnique({ where: { empresaId_negocioId: { empresaId: context.empresaId, negocioId: id } } });
 
       const now = clock();
       const persistedEntry = current.etapaEntrouEm;
@@ -168,6 +178,11 @@ function createNegociosKanbanServices({ prisma, clock = () => new Date() }) {
       if (result.count !== 1) {
         throw domainError(409, "NEGOCIO_STAGE_CONFLICT", "O Negocio foi alterado por outra operacao.");
       }
+      const contractUpdated = await tx.negocioContratoVenda.updateMany({
+        where: { empresaId: context.empresaId, negocioId: id, revisao: contract.revisao },
+        data: { revisao: { increment: 1 } },
+      });
+      if (contractUpdated.count !== 1) throw domainError(409, "SALE_CONTRACT_REVISION_CONFLICT", "O contrato comercial foi alterado por outra operacao.");
       await tx.historicoAtribuicao.create({
         data: {
           empresaId: context.empresaId,
@@ -214,6 +229,13 @@ function listIncludes(empresaId) {
       where: { empresaId, tipo: "MOVIMENTAR_ETAPA" },
       select: { duracaoEtapaSegundos: true },
     },
+    contratoVenda: {
+      include: {
+        propostaPrincipal: { select: { id: true, codigo: true, titulo: true, status: true, totalCentavos: true, moeda: true, revisao: true } },
+        propostaVencedora: { select: { id: true, codigo: true, titulo: true, status: true, totalCentavos: true, moeda: true, revisao: true } },
+        vendaAtiva: { select: { id: true, origem: true, status: true, moeda: true, totalCentavos: true, revisao: true, fechadoEm: true, propostaVencedoraId: true } },
+      },
+    },
   };
 }
 
@@ -242,12 +264,14 @@ function detailIncludes(empresaId) {
 }
 
 function businessView(context, business, now) {
-  const { acompanhamentos, historicoAtribuicoes, ...data } = business;
+  const { acompanhamentos, historicoAtribuicoes, contratoVenda, ...data } = business;
+  const integridadeComercial = assertCommercialPointers(business);
   const nextAction = acompanhamentos?.[0] || null;
   const stageTiming = stageTimingView(business, historicoAtribuicoes || [], now);
   const stalled = stalledBusinessView(business.etapa, nextAction, now);
   return {
     ...data,
+    integridadeComercial,
     proximaAcao: nextAction ? {
       ...nextAction,
       atrasada: new Date(nextAction.dataHora).getTime() < now.getTime(),
@@ -255,8 +279,20 @@ function businessView(context, business, now) {
     tempoEtapa: stageTiming,
     negocioParado: stalled.parado,
     motivoParado: stalled.motivo,
+    contratoComercial: {
+      revisao: contratoVenda?.revisao || 1,
+      propostaPrincipalId: contratoVenda?.propostaPrincipalId || null,
+      propostaVencedoraId: contratoVenda?.propostaVencedoraId || null,
+      vendaAtivaId: contratoVenda?.vendaAtivaId || null,
+      propostaPrincipal: contratoVenda?.propostaPrincipal || null,
+      propostaVencedora: contratoVenda?.propostaVencedora || null,
+      vendaAtiva: contratoVenda?.vendaAtiva || null,
+    },
     permissoes: {
-      movimentar: isManager(context) || business.responsavelId === context.usuarioId,
+      movimentar: !TERMINAL_BUSINESS_STAGES.has(business.etapa) && (isManager(context) || business.responsavelId === context.usuarioId),
+      fechar: ACTIVE_BUSINESS_STAGES.includes(business.etapa) && (isManager(context) || business.responsavelId === context.usuarioId),
+      marcarPerdido: ACTIVE_BUSINESS_STAGES.includes(business.etapa) && (isManager(context) || business.responsavelId === context.usuarioId),
+      reabrir: TERMINAL_BUSINESS_STAGES.has(business.etapa) && isManager(context),
     },
   };
 }

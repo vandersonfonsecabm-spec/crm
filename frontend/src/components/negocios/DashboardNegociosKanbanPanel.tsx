@@ -2,8 +2,12 @@ import { AlertTriangle, CalendarClock, Clock3, GripVertical, UserRound, X } from
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import {
+  closeDealAsWon,
+  fetchCanonicalSales,
   fetchNegocioKanban,
   fetchNegociosKanban,
+  markDealAsLost,
+  reopenCanonicalDeal,
   updateNegocioKanbanStage,
 } from "../../services/crmApi";
 import type {
@@ -13,7 +17,8 @@ import type {
   CommunicationBusiness,
   NegociosKanbanResponse,
 } from "../../services/crmApi";
-import { Button, ErrorState, Input, LoadingState, Pagination, Select, Surface } from "../ui";
+import { parseMoneyInputToCents } from "../../utils/commercialMoney.js";
+import { Button, ErrorState, Input, LoadingState, Pagination, Select, Surface, Textarea } from "../ui";
 import BusinessStageTimingPanel from "./BusinessStageTimingPanel";
 import { formatBusinessDuration } from "./businessStagePresentation";
 import CommercialProposalsPanel from "./CommercialProposalsPanel";
@@ -169,6 +174,20 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
   async function moveBusiness(id: number, nextStage: BusinessStage): Promise<boolean> {
     const current = businesses.find((business) => business.id === id);
     if (!current || !current.permissoes?.movimentar || current.etapa === nextStage || stageUpdates.current.has(id)) return false;
+    if (nextStage === "FECHADO" || nextStage === "PERDIDO") {
+      setSelected(current);
+      setDetailLoading(true);
+      try {
+        setSelected(await adapter.fetchNegocioKanban(id));
+        onToast(nextStage === "FECHADO" ? "Conclua a venda pelo fechamento explícito do Negócio." : "Informe o motivo para marcar o Negócio como perdido.");
+      } catch {
+        onToast("Não foi possível abrir o fechamento comercial.");
+      } finally {
+        setDetailLoading(false);
+        setDragOverStage(null);
+      }
+      return false;
+    }
     stageUpdates.current.add(id);
     setMovingBusinessId(id);
     const snapshot = businesses;
@@ -191,6 +210,41 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
     }
   }
 
+  async function refreshCanonicalBusiness(id: number, message: string) {
+    const updated = await adapter.fetchNegocioKanban(id);
+    setSelected(updated);
+    setBusinesses((items) => items.map((business) => business.id === id ? updated : business));
+    onToast(message);
+    await load(true);
+  }
+
+  async function exportCanonicalSalesCsv() {
+    if (!window.confirm("O CSV contém dados comerciais. Exporte apenas para finalidade legítima e armazenamento seguro.")) return;
+    try {
+      const first = await fetchCanonicalSales({ page: 1, limit: 100 });
+      const sales = [...first.data];
+      for (let nextPage = 2; nextPage <= first.pagination.totalPages; nextPage += 1) {
+        sales.push(...(await fetchCanonicalSales({ page: nextPage, limit: 100 })).data);
+      }
+      if (!sales.length) {
+        onToast("Nenhuma venda canônica disponível para exportação.");
+        return;
+      }
+      const header = ["Venda", "Negócio", "Cliente", "Moeda", "Valor (BRL)", "Centavos", "Origem", "Status", "Fechado em", "Proposta", "Revisão"];
+      const rows = sales.map((sale) => [sale.id, sale.negocioId, sale.clienteId, sale.moeda, (sale.totalCentavos / 100).toFixed(2).replace(".", ","), sale.totalCentavos, sale.origem, sale.status, sale.fechadoEm, sale.propostaVencedora?.codigo || "", sale.revisao]);
+      const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "vendas-canonicas.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+      onToast("Vendas canônicas exportadas em CSV.");
+    } catch {
+      onToast("Não foi possível exportar as vendas canônicas.");
+    }
+  }
+
   if (loading) return <LoadingState label="Carregando Kanban de Negócios" rows={5} />;
   if (error) return <ErrorState description="Tente novamente sem alterar os filtros." onRetry={() => void load()} title={error} />;
 
@@ -202,6 +256,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
         operationalFilter={operationalFilter}
         onClear={() => { setQuery(""); setSearch(""); setStageFilter(""); setOperationalFilter(""); setPage(1); }}
         onOperationalFilterChange={(value) => { setOperationalFilter(value); setPage(1); }}
+        onExportSales={() => void exportCanonicalSalesCsv()}
         onQueryChange={setQuery}
         onStageFilterChange={(value) => { setStageFilter(value); setPage(1); }}
         query={query}
@@ -223,7 +278,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
         <Pagination disabled={refreshing} itemLabel="Negócios" onPageChange={setPage} page={page} total={pagination.total} totalPages={pagination.totalPages} visibleCount={businesses.length} />
       </Surface>
 
-      {selected && <BusinessDrawer authSession={authSession} business={selected} isMoving={movingBusinessId === selected.id} loading={detailLoading} onClose={closeBusiness} onMoveBusiness={moveBusiness} onOpenAgenda={onOpenAgenda} />}
+      {selected && <BusinessDrawer authSession={authSession} business={selected} isMoving={movingBusinessId === selected.id} loading={detailLoading} onCanonicalChanged={refreshCanonicalBusiness} onClose={closeBusiness} onMoveBusiness={moveBusiness} onOpenAgenda={onOpenAgenda} />}
     </section>
   );
 }
@@ -239,6 +294,7 @@ type NegociosKanbanToolbarProps = {
   onStageFilterChange: (value: BusinessStage | "") => void;
   onOperationalFilterChange: (value: BusinessOperationalFilter | "") => void;
   onClear: () => void;
+  onExportSales: () => void;
 };
 
 export function NegociosKanbanToolbar({
@@ -252,6 +308,7 @@ export function NegociosKanbanToolbar({
   onStageFilterChange,
   onOperationalFilterChange,
   onClear,
+  onExportSales,
 }: NegociosKanbanToolbarProps) {
   const totalLabel = total === 1 ? "negócio" : "negócios";
 
@@ -282,6 +339,7 @@ export function NegociosKanbanToolbar({
           <option value="PROXIMA_ACAO_HOJE">Próxima ação hoje</option>
         </Select>
         <Button disabled={!query && !stageFilter && !operationalFilter} onClick={onClear} size="md" variant="secondary">Limpar</Button>
+        <Button onClick={onExportSales} size="md" variant="secondary">Exportar vendas CSV</Button>
       </div>
     </Surface>
   );
@@ -344,6 +402,10 @@ export function BusinessCard({ business, onOpen }: { business: CommunicationBusi
   const currentStageTime = formatBusinessDuration(business.tempoEtapa?.atualSegundos);
   const nextAction = business.proximaAcao;
   const isNextActionOverdue = nextAction?.atrasada === true;
+  const activeSale = business.contratoComercial?.vendaAtiva || null;
+  const displayedValue = activeSale
+    ? formatCents(activeSale.totalCentavos)
+    : business.etapa === "FECHADO" ? "Venda não reconciliada" : formatBusinessValue(business.valor);
   return (
     <div
       aria-label={`Abrir Negócio ${business.titulo || business.id}`}
@@ -366,7 +428,10 @@ export function BusinessCard({ business, onOpen }: { business: CommunicationBusi
       <div className="negocios-card-context mt-2 border-t border-[var(--border-default)] pt-2">
         <div className="flex min-w-0 items-center justify-between gap-2">
           <p className="truncate">{business.responsavel?.nome || "Sem responsável"}</p>
-          <p className="negocios-card-value shrink-0">{formatBusinessValue(business.valor)}</p>
+          <div className="shrink-0 text-right">
+            <p className="text-[9px] uppercase tracking-wide text-[var(--text-muted)]">{activeSale ? "Realizado" : business.etapa === "FECHADO" ? "Legado" : "Estimado"}</p>
+            <p className="negocios-card-value">{displayedValue}</p>
+          </div>
         </div>
         <div className="negocios-card-rhythm mt-2 flex min-w-0 items-center justify-between gap-2">
           <span className="inline-flex min-w-0 items-center gap-1.5 truncate" title={business.tempoEtapa?.estimado ? "Tempo estimado na etapa" : "Tempo na etapa atual"}>
@@ -395,11 +460,18 @@ export function BusinessCard({ business, onOpen }: { business: CommunicationBusi
   );
 }
 
-function BusinessDrawer({ authSession, business, isMoving, loading, onClose, onMoveBusiness, onOpenAgenda }: { authSession: AuthSession | null; business: CommunicationBusiness; isMoving: boolean; loading: boolean; onClose: () => void; onMoveBusiness: (id: number, stage: BusinessStage) => Promise<boolean>; onOpenAgenda: () => void }) {
+export function BusinessDrawer({ authSession, business, isMoving, loading, onCanonicalChanged, onClose, onMoveBusiness, onOpenAgenda }: { authSession: AuthSession | null; business: CommunicationBusiness; isMoving: boolean; loading: boolean; onCanonicalChanged: (id: number, message: string) => Promise<void>; onClose: () => void; onMoveBusiness: (id: number, stage: BusinessStage) => Promise<boolean>; onOpenAgenda: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const stageSelectRef = useRef<HTMLSelectElement>(null);
   const canMove = business.permissoes?.movimentar === true;
+  const contract = business.contratoComercial ?? { revisao: 1, propostaPrincipalId: null, propostaVencedoraId: null, vendaAtivaId: null, propostaPrincipal: null, propostaVencedora: null, vendaAtiva: null };
+  const [canonicalAction, setCanonicalAction] = useState<"proposal" | "manual" | "lost" | "reopen" | null>(null);
+  const [canonicalReason, setCanonicalReason] = useState("");
+  const [manualValue, setManualValue] = useState("");
+  const [canonicalError, setCanonicalError] = useState("");
+  const [canonicalBusy, setCanonicalBusy] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => newIdempotencyKey(business.id));
 
   const requestClose = useCallback(() => {
     if (isMoving) return;
@@ -411,6 +483,52 @@ function BusinessDrawer({ authSession, business, isMoving, loading, onClose, onM
     void onMoveBusiness(business.id, nextStage).finally(() => {
       window.requestAnimationFrame(() => stageSelectRef.current?.focus({ preventScroll: true }));
     });
+  }
+
+  function beginCanonicalAction(action: "proposal" | "manual" | "lost" | "reopen") {
+    setCanonicalAction(action);
+    setCanonicalReason("");
+    setManualValue("");
+    setCanonicalError("");
+    setIdempotencyKey(newIdempotencyKey(business.id));
+  }
+
+  async function confirmCanonicalAction() {
+    if (!canonicalAction) return;
+    setCanonicalError("");
+    const reason = canonicalReason.trim();
+    if ((canonicalAction === "lost" || canonicalAction === "reopen") && !reason) {
+      setCanonicalError("Informe o motivo da operação.");
+      return;
+    }
+    const manualCents = canonicalAction === "manual" ? parseMoneyInputToCents(manualValue) : null;
+    if (canonicalAction === "manual" && manualCents === null) {
+      setCanonicalError("Informe o valor final em BRL.");
+      return;
+    }
+    setCanonicalBusy(true);
+    try {
+      if (canonicalAction === "proposal") {
+        await closeDealAsWon(business.id, { origem: "ACCEPTED_PROPOSAL", idempotencyKey, contratoRevisao: contract.revisao });
+        await onCanonicalChanged(business.id, "Venda registrada pela proposta vencedora.");
+      } else if (canonicalAction === "manual") {
+        await closeDealAsWon(business.id, { origem: "MANUAL_CLOSE", idempotencyKey, contratoRevisao: contract.revisao, valorFinalCentavos: manualCents ?? 0 });
+        await onCanonicalChanged(business.id, "Venda manual registrada com snapshot.");
+      } else if (canonicalAction === "lost") {
+        await markDealAsLost(business.id, contract.revisao, reason);
+        await onCanonicalChanged(business.id, "Negócio marcado como perdido com motivo registrado.");
+      } else {
+        await reopenCanonicalDeal(business.id, contract.revisao, reason);
+        await onCanonicalChanged(business.id, "Negócio reaberto; o histórico anterior foi preservado.");
+      }
+      setCanonicalAction(null);
+      setCanonicalReason("");
+      setManualValue("");
+    } catch (error) {
+      setCanonicalError(error instanceof Error ? error.message : "Não foi possível concluir a operação comercial.");
+    } finally {
+      setCanonicalBusy(false);
+    }
   }
 
   useLayoutEffect(() => {
@@ -468,7 +586,7 @@ function BusinessDrawer({ authSession, business, isMoving, loading, onClose, onM
             <Detail label="Empresa" value={business.cliente?.empresa || "Não informada"} />
             <Detail label="Lead" value={business.lead ? `#${business.lead.id} · ${business.lead.status}` : "Sem Lead de origem"} />
             <Detail label="Origem" value={business.lead?.origem || "Não informada"} />
-            <Detail label="Valor" value={formatBusinessValue(business.valor, "Não informado")} />
+            <Detail label="Valor estimado" value={formatBusinessValue(business.valor, "Não informado")} />
             <Detail label="Criado em" value={new Date(business.createdAt).toLocaleString("pt-BR")} />
           </dl>
           <section aria-labelledby={`negocios-move-stage-${business.id}`} className="mt-5 border-t border-[var(--border-default)] pt-4">
@@ -486,6 +604,36 @@ function BusinessDrawer({ authSession, business, isMoving, loading, onClose, onM
               {stages.map((stage) => <option key={stage} value={stage}>{stageLabels[stage]}</option>)}
             </Select>
           </section>
+          <section aria-labelledby={`negocios-sale-contract-${business.id}`} className="mt-5 border-t border-[var(--border-default)] pt-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-semibold text-[var(--text-primary)]" id={`negocios-sale-contract-${business.id}`}>Contrato da venda</h3>
+                <p className="mt-1 text-[10px] text-[var(--text-muted)]">A proposta aceita não vira receita até o fechamento explícito.</p>
+              </div>
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Revisão {contract.revisao}</span>
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-px overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--border-default)] text-[9px] max-[640px]:grid-cols-2">
+              <SaleStep label="Estimativa" value={formatBusinessValue(business.valor, "Não informada")} />
+              <SaleStep label="Principal" value={contract.propostaPrincipal?.codigo || "Não definida"} />
+              <SaleStep label="Vencedora" value={contract.propostaVencedora?.codigo || "Não definida"} />
+              <SaleStep label="Venda" value={contract.vendaAtiva ? formatCents(contract.vendaAtiva.totalCentavos) : "Não realizada"} />
+            </div>
+            {contract.vendaAtiva && <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">Venda ativa · revisão {contract.vendaAtiva.revisao}</p><p className="text-sm font-semibold tabular-nums text-emerald-950">{formatCents(contract.vendaAtiva.totalCentavos)}</p></div><p className="mt-1 text-[10px] text-emerald-800">Origem: {contract.vendaAtiva.origem === "ACCEPTED_PROPOSAL" ? `proposta ${contract.propostaVencedora?.codigo || "vencedora"}` : "fechamento manual"} · {new Date(contract.vendaAtiva.fechadoEm).toLocaleString("pt-BR")}</p></div>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {business.permissoes?.fechar && contract.propostaVencedoraId && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("proposal")} size="sm">Fechar com proposta vencedora</Button>}
+              {business.permissoes?.fechar && !contract.propostaVencedoraId && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("manual")} size="sm">Fechar venda manual</Button>}
+              {business.permissoes?.marcarPerdido && !contract.propostaVencedoraId && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("lost")} size="sm" variant="secondary">Marcar como perdido</Button>}
+              {business.permissoes?.marcarPerdido && contract.propostaVencedoraId && <p className="self-center text-[10px] text-[var(--text-muted)]">Remova a vencedora antes de marcar como perdido.</p>}
+              {business.permissoes?.reabrir && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("reopen")} size="sm" variant="secondary">Reabrir com auditoria</Button>}
+            </div>
+            {canonicalAction && <div className="mt-3 space-y-2 rounded-md border border-[var(--border-default)] bg-[var(--bg-subtle)] p-3">
+              {canonicalAction === "manual" && <Input inputMode="decimal" label="Valor final (BRL)" onChange={(event) => { setManualValue(event.target.value); if (canonicalError) setCanonicalError(""); }} placeholder="0,00" value={manualValue} />}
+              {(canonicalAction === "lost" || canonicalAction === "reopen") && <Textarea label="Motivo obrigatório" maxLength={500} onChange={(event) => { setCanonicalReason(event.target.value); if (canonicalError) setCanonicalError(""); }} rows={2} value={canonicalReason} />}
+              {canonicalAction === "proposal" && <p className="text-[11px] text-[var(--text-secondary)]">O valor e os itens serão copiados da proposta vencedora {contract.propostaVencedora?.codigo}. Nenhum valor oculto será solicitado.</p>}
+              {canonicalError && <p aria-live="assertive" className="text-[11px] text-rose-700">{canonicalError}</p>}
+              <div className="flex justify-end gap-2"><Button disabled={canonicalBusy} onClick={() => { setCanonicalAction(null); setCanonicalError(""); }} size="sm" variant="ghost">Cancelar</Button><Button disabled={canonicalBusy} onClick={() => void confirmCanonicalAction()} size="sm">{canonicalBusy ? "Confirmando…" : "Confirmar operação"}</Button></div>
+            </div>}
+          </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]">Observação</h3>
             <p className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-[var(--text-secondary)]">{business.observacao || "Nenhuma observação registrada."}</p>
@@ -494,7 +642,7 @@ function BusinessDrawer({ authSession, business, isMoving, loading, onClose, onM
             <BusinessStageTimingPanel business={business} key={business.id} onOpenAgenda={onOpenAgenda} />
           </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
-            <CommercialProposalsPanel businessId={business.id} />
+            <CommercialProposalsPanel businessId={business.id} onChanged={() => void onCanonicalChanged(business.id, "Contrato comercial atualizado.")} />
           </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]">Conversas relacionadas</h3>
@@ -522,9 +670,28 @@ function Detail({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0"><dt>{label}</dt><dd>{value}</dd></div>;
 }
 
+function SaleStep({ label, value }: { label: string; value: string }) {
+  return <div className="min-w-0 bg-[var(--bg-surface)] px-2.5 py-2"><p className="font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</p><p className="mt-1 truncate font-medium text-[var(--text-primary)]" title={value}>{value}</p></div>;
+}
+
 function formatBusinessValue(value: number | null, emptyLabel = "Sem valor") {
   if (value === null) return emptyLabel;
   return new Intl.NumberFormat("pt-BR", { currency: "BRL", maximumFractionDigits: 0, style: "currency" }).format(value);
+}
+
+function formatCents(value: number) {
+  return new Intl.NumberFormat("pt-BR", { currency: "BRL", style: "currency" }).format(value / 100);
+}
+
+function newIdempotencyKey(businessId: number) {
+  const random = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `deal-${businessId}-${random}`;
+}
+
+function csvCell(value: string | number) {
+  const raw = String(value ?? "");
+  const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 function formatCompactDateTime(value: string) {

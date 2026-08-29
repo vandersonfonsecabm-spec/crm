@@ -20,6 +20,7 @@ const DEFAULT_LEASE_MS = 60000;
 const DEFAULT_EXECUTION_TIMEOUT_MS = 30000;
 const ROUND_ROBIN_TRANSACTION_ATTEMPTS = 5;
 const ROUND_ROBIN_TRANSACTION_BACKOFF_MS = 5;
+const TEMPORAL_SCAN_TRANSACTION_OPTIONS = Object.freeze({ maxWait: 5000, timeout: 30000 });
 const RETRYABLE_JOB_STATUSES = Object.freeze(["PENDENTE", "FALHOU"]);
 
 function createAutomationService({ prisma, env = process.env, logger = console, checkpointStore = createWorkerCheckpointStore({ prisma }) }) {
@@ -333,7 +334,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
                 elapsedMinutes: Math.floor((now.getTime() - currentLead.createdAt.getTime()) / 60000),
                 onlyRuleId: rule.id,
               })).created;
-            });
+            }, TEMPORAL_SCAN_TRANSACTION_OPTIONS);
           } catch (error) {
             errors += 1;
             logTemporalScanFailure("LEAD_WITHOUT_FOLLOW_UP_ITEM", empresaId, error, rule.id);
@@ -393,7 +394,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
                 elapsedMinutes: Math.floor((now.getTime() - currentBusiness.etapaEntrouEm.getTime()) / 60000),
                 onlyRuleId: rule.id,
               })).created;
-            });
+            }, TEMPORAL_SCAN_TRANSACTION_OPTIONS);
           } catch (error) {
             errors += 1;
             logTemporalScanFailure("DEAL_STALLED_ITEM", empresaId, error, rule.id);

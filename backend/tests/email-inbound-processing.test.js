@@ -467,6 +467,7 @@ async function cleanupTenants(ids) {
   await prisma.historicoAtribuicao.deleteMany({ where });
   await prisma.conversaCanal.deleteMany({ where });
   await prisma.contatoCanal.deleteMany({ where });
+  await prisma.nota.deleteMany({ where });
   await prisma.lead.deleteMany({ where });
   await prisma.cliente.deleteMany({ where });
   await prisma.auditoriaFuncionalidade.deleteMany({ where });

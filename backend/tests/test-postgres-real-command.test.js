@@ -14,6 +14,7 @@ const {
   parseArguments,
   safeRunId,
   sanitizeLogText,
+  verifyRailwayDisposableAuthority,
 } = require("../scripts/test-postgres-real.cjs");
 
 function cleanupEvidence(result) {
@@ -38,12 +39,14 @@ test("runner PostgreSQL real oferece dry-run sem consultar Docker", async () => 
   assert.equal(result.image, defaultImage);
   assert.equal(result.mode, "container");
   assert.equal(dockerCalls, 0);
-  assert.equal(result.harnessTests, 23);
+  assert.equal(result.harnessTests, 24);
+  assert.match(result.sourceManifestSha256, /^[a-f0-9]{64}$/);
   assert.ok(result.suite.length >= 7);
   for (const required of [
     "tests/v54-lifecycle-lock.test.js",
     "tests/email-inbound-lifecycle.test.js",
     "tests/email-inbound-processing.test.js",
+    "tests/canonical-sale-v1-postgres.test.js",
   ]) assert.equal(result.suite.includes(required), true, `${required} deve permanecer no runner real`);
 });
 
@@ -207,6 +210,39 @@ test("runner PostgreSQL real usa URL externa somente com confirmacao e sem Docke
   } finally {
     cleanupEvidence(result);
   }
+});
+
+test("runner aceita Railway somente com recurso descartavel e IDs exatos", () => {
+  const url = "postgresql://user:pass@roundhouse.proxy.rlwy.net:5432/railway";
+  const env = {
+    POSTGRES_TEST_DATABASE_URL: url,
+    DATABASE_PUBLIC_URL: url,
+    CRM_POSTGRES_REAL_CONFIRM: "disposable-external",
+    CRM_DISPOSABLE_TEST_DATABASE: "true",
+    CRM_DISPOSABLE_TEST_RUN_ID: "canonical-sale-test-run",
+    CRM_EXPECTED_DISPOSABLE_RUN_ID: "canonical-sale-test-run",
+    CRM_EXPECTED_RAILWAY_PROJECT_ID: "project-test",
+    CRM_EXPECTED_RAILWAY_ENVIRONMENT_ID: "environment-test",
+    CRM_EXPECTED_RAILWAY_SERVICE_ID: "service-test",
+    RAILWAY_PROJECT_ID: "project-test",
+    RAILWAY_ENVIRONMENT_ID: "environment-test",
+    RAILWAY_ENVIRONMENT_NAME: "canonical-staging",
+    RAILWAY_SERVICE_ID: "service-test",
+  };
+  assert.equal(externalDatabaseUrlFromEnv(env), url);
+  assert.throws(() => externalDatabaseUrlFromEnv({ ...env, DATABASE_URL: url }), /oficial|producao/i);
+  assert.throws(() => externalDatabaseUrlFromEnv({ ...env, RAILWAY_SERVICE_ID: "outro-servico" }), /oficial|producao/i);
+  assert.throws(() => externalDatabaseUrlFromEnv({ ...env, RAILWAY_ENVIRONMENT_NAME: "production" }), /oficial|producao/i);
+  assert.equal(verifyRailwayDisposableAuthority(env, () => ({
+    status: 0,
+    stdout: JSON.stringify({
+      CRM_DISPOSABLE_TEST_DATABASE: "true",
+      CRM_DISPOSABLE_TEST_RUN_ID: "canonical-sale-test-run",
+      RAILWAY_ENVIRONMENT_NAME: "canonical-staging",
+      RAILWAY_SERVICE_NAME: "Postgres-Test1",
+    }),
+  })), true);
+  assert.equal(verifyRailwayDisposableAuthority(env, () => ({ status: 0, stdout: "{}" })), false);
 });
 
 test("runner PostgreSQL real sanitiza URL, password, token e bearer", () => {

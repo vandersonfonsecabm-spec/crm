@@ -57,8 +57,11 @@ test("H5 entrega cadastro, resumo, compras e timeline reais por tenant", async (
   assert.equal(overview.body.resumo.propostasAtivas, 1);
   assert.equal(overview.body.resumo.mensagens, 2);
   assert.equal(overview.body.comprasAnteriores.length, 1);
-  assert.equal(overview.body.comprasAnteriores[0].id, fixture.closedBusiness.id);
-  assert.equal(overview.body.comprasAnteriores[0].valor, null);
+  assert.equal(overview.body.comprasAnteriores[0].id, fixture.sale.id);
+  assert.equal(overview.body.comprasAnteriores[0].negocioId, fixture.closedBusiness.id);
+  assert.equal(overview.body.comprasAnteriores[0].totalCentavos, 125000);
+  assert.equal(overview.body.comprasAnteriores[0].origem, "MANUAL_CLOSE");
+  assert.equal(overview.body.resumo.totalVendidoCentavos, 125000);
   assert.equal(overview.body.contexto.negocio.id, fixture.activeBusiness.id);
 
   const timeline = await request("GET", `/clientes/${fixture.client.id}/timeline?limit=4&page=1`, undefined, sellerA.token);
@@ -76,6 +79,9 @@ test("H5 entrega cadastro, resumo, compras e timeline reais por tenant", async (
   const messages = await request("GET", `/clientes/${fixture.client.id}/timeline?tipo=MENSAGEM`, undefined, adminA.token);
   assert.equal(messages.body.data.length, 2);
   assert.ok(messages.body.data.every((item) => item.navegacao.destino === "INBOX"));
+  const sales = await request("GET", `/clientes/${fixture.client.id}/timeline?tipo=VENDA`, undefined, adminA.token);
+  assert.equal(sales.body.data.length, 1);
+  assert.equal(sales.body.data[0].valorCentavos, 125000);
   assert.equal((await request("GET", `/clientes/${fixture.client.id}/timeline?tipo=INVENTADO`, undefined, adminA.token)).status, 422);
 
   const originalRevision = overview.body.cliente.revisao;
@@ -113,6 +119,9 @@ async function customerFixture(account, responsavelId) {
   const lead = await prisma.lead.create({ data: { empresaId: account.empresaId, clienteId: client.id, responsavelId, status: "QUALIFICADO", origem: "SITE", interesse: "Plantio" } });
   const activeBusiness = await prisma.negocio.create({ data: { empresaId: account.empresaId, clienteId: client.id, leadId: lead.id, responsavelId, titulo: "Renovacao de maquinario", etapa: "PROPOSTA", valor: 85000 } });
   const closedBusiness = await prisma.negocio.create({ data: { empresaId: account.empresaId, clienteId: client.id, responsavelId, titulo: "Negocio fechado sem valor informado", etapa: "FECHADO", valor: null, fechadoEm: new Date(Date.now() - 20 * 86400000) } });
+  const sale = await prisma.vendaCanonica.create({ data: { empresaId: account.empresaId, negocioId: closedBusiness.id, clienteId: client.id, origem: "MANUAL_CLOSE", subtotalCentavos: 125000, descontoCentavos: 0, totalCentavos: 125000, etapaAbertaAnterior: "PROPOSTA", revisao: 1, idempotencyKey: "h5-canonical-sale", requestFingerprint: "h5-canonical-sale-fingerprint", fechadoEm: closedBusiness.fechadoEm, fechadoPorId: account.usuarioId } });
+  await prisma.negocioContratoVenda.create({ data: { empresaId: account.empresaId, negocioId: closedBusiness.id, vendaAtivaId: sale.id, revisao: 2 } });
+  await prisma.historicoVendaCanonica.create({ data: { empresaId: account.empresaId, vendaId: sale.id, negocioId: closedBusiness.id, autorId: account.usuarioId, acao: "CREATE", statusNovo: "ACTIVE" } });
   const proposal = await prisma.propostaComercial.create({ data: { empresaId: account.empresaId, clienteId: client.id, leadId: lead.id, negocioId: activeBusiness.id, responsavelId, autorId: account.usuarioId, codigo: "PROP-H5-001", titulo: "Proposta de renovacao", descricao: "Equipamentos para a proxima safra", validade: new Date(Date.now() + 10 * 86400000), totalCentavos: 8500000, status: "PRONTA" } });
   await prisma.acompanhamento.createMany({ data: [
     { empresaId: account.empresaId, clienteId: client.id, leadId: lead.id, negocioId: activeBusiness.id, responsavelId, autorId: account.usuarioId, titulo: "Ligacao de alinhamento", descricao: "Confirmar condicoes", dataHora: new Date(Date.now() - 3600000), tipo: "LIGACAO", status: "CONCLUIDO" },
@@ -127,7 +136,7 @@ async function customerFixture(account, responsavelId) {
     { empresaId: account.empresaId, canalIntegracaoId: channel.id, conversaCanalId: conversation.id, autorUsuarioId: responsavelId, externalId: "h5-outbound", direcao: "SAIDA", texto: "Vamos preparar a proposta.", simulada: true },
   ] });
   await prisma.historicoQualificacaoConversa.create({ data: { empresaId: account.empresaId, conversaCanalId: conversation.id, clienteId: client.id, leadId: lead.id, negocioId: activeBusiness.id, autorId: account.usuarioId, acao: "QUALIFICAR", interesse: "Renovacao", prioridade: "ALTA", proximaAcao: "Validar proposta" } });
-  return { client, lead, activeBusiness, closedBusiness, proposal, conversation };
+  return { client, lead, activeBusiness, closedBusiness, sale, proposal, conversation };
 }
 
 async function registerAndLogin(empresaNome, adminNome, email) {

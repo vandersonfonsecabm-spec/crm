@@ -7,9 +7,9 @@ const { relationSpecs } = require("./check-tenant-relation-integrity.cjs");
 const { classifyPolymorphicRows, POLYMORPHIC_ROWS_QUERY } = require("./tenant-isolation-verifier-utils.cjs");
 const { sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation-log-utils.cjs");
 
-const EXPECTED_RELATION_COUNT = 162;
+const EXPECTED_RELATION_COUNT = 169;
 const TENANT_RELATION_MANIFEST_VERSION = 1;
-const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "8029822ec4e7fe7165fe2de9394c4f1d9310ada8b1716e44f13df609f7bfb60e";
+const EXPECTED_TENANT_RELATION_MANIFEST_SHA256 = "d51c4a8801388ae354ba97156c5df80bbe00d29da4611eac5aafe20975125ded";
 const DEFAULT_MIGRATION_NAME = "20260801123000_enforce_tenant_safe_relations";
 const DEFAULT_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma", "migrations");
 const DEFAULT_POSTGRES_MIGRATION_DIR = path.resolve(__dirname, "..", "prisma-postgres", "migrations");
@@ -56,6 +56,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260824160000_add_ai_commerce_persistent_audit_effects": "fb90ee7c62783fb5369cca2736b0c0b23e31a8d7861a5d484fece44640bd02b6",
     "20260825170000_add_commercial_proposal_catalog_items": "20d18cdec5fb781bb81572188a90f4b5e3f0feafe478f520c2bc910f6f5f2295",
     "20260827200000_add_store1_provider_readiness": "6aa6ee3e3097df108765da05ecd1ea303f719473afd51402db916789a3fffa4c",
+    "20260828130000_add_canonical_sale_v1": "23123b6b9f87358a1750c089ae694a7e69fd9f628a85ec76613914d5338c90aa",
   }),
   postgresql: Object.freeze({
     "20260728090000_postgres_baseline": "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
@@ -76,6 +77,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260824160000_add_ai_commerce_persistent_audit_effects": "e491d9342ddced5a5769a0030d586e337bc55867ce2564803f4a8e623f9230cc",
     "20260825170000_add_commercial_proposal_catalog_items": "ee6535644e267c6490c98ec580b958db56926054e4cf66bdb522d1bd2fc68f05",
     "20260827200000_add_store1_provider_readiness": "caad5bb24aac5943e5a6f9f36e3ad8d35598ef22914714f9177c17c690246e2e",
+    "20260828130000_add_canonical_sale_v1": "d99fa7fa38ae7f9fcbbad36fd82e5cf21581f04054ee615fe17dab82619b286e",
   }),
 });
 
@@ -124,11 +126,59 @@ const GLOBAL_RELATION_EXCEPTIONS = Object.freeze({
     scope: "platform",
     reason: "PlatformTenantAudit.actorUserId representa o operador de plataforma global.",
   }),
-  "CanalIntegracao.id->MetaCredential": Object.freeze({
+  "CanalIntegracao.accessTokenRef->MetaCredential": Object.freeze({
     fromFields: ["empresaId", "id", "accessTokenRef"],
     toFields: ["empresaId", "canalIntegracaoId", "reference"],
     scope: "integration",
     reason: "CanalIntegracao aponta para a credencial Meta atual por chave composta opcional e tenant-scoped.",
+  }),
+  "NegocioContratoVenda.propostaPrincipalId->PropostaComercial": Object.freeze({
+    fromFields: ["empresaId", "negocioId", "propostaPrincipalId"],
+    toFields: ["empresaId", "negocioId", "id"],
+    scope: "canonical-sale",
+    reason: "A proposta principal precisa pertencer simultaneamente ao tenant e ao Negocio do contrato.",
+  }),
+  "NegocioContratoVenda.propostaVencedoraId->PropostaComercial": Object.freeze({
+    fromFields: ["empresaId", "negocioId", "propostaVencedoraId"],
+    toFields: ["empresaId", "negocioId", "id"],
+    scope: "canonical-sale",
+    reason: "A proposta vencedora precisa pertencer simultaneamente ao tenant e ao Negocio do contrato.",
+  }),
+  "NegocioContratoVenda.vendaAtivaId->VendaCanonica": Object.freeze({
+    fromFields: ["empresaId", "negocioId", "vendaAtivaId"],
+    toFields: ["empresaId", "negocioId", "id"],
+    scope: "canonical-sale",
+    reason: "A venda ativa precisa pertencer simultaneamente ao tenant e ao Negocio do contrato.",
+  }),
+  "VendaCanonica.propostaVencedoraId->PropostaComercial": Object.freeze({
+    fromFields: ["empresaId", "negocioId", "propostaVencedoraId"],
+    toFields: ["empresaId", "negocioId", "id"],
+    scope: "canonical-sale",
+    reason: "O snapshot só pode apontar para a proposta vencedora do mesmo tenant e Negocio.",
+  }),
+  "VendaCanonica.negocioId->Negocio": Object.freeze({
+    fromFields: ["empresaId", "clienteId", "negocioId"],
+    toFields: ["empresaId", "clienteId", "id"],
+    scope: "canonical-sale",
+    reason: "A venda precisa pertencer simultaneamente ao tenant, ao Cliente e ao Negocio correto.",
+  }),
+  "ItemVendaCanonica.propostaIdOriginal->VendaCanonica": Object.freeze({
+    fromFields: ["empresaId", "vendaId", "propostaIdOriginal"],
+    toFields: ["empresaId", "id", "propostaVencedoraId"],
+    scope: "canonical-sale",
+    reason: "O item vendido precisa apontar para uma venda cuja proposta vencedora seja a proposta original do item.",
+  }),
+  "ItemVendaCanonica.propostaItemId->ItemPropostaComercial": Object.freeze({
+    fromFields: ["empresaId", "propostaIdOriginal", "propostaItemId"],
+    toFields: ["empresaId", "propostaId", "id"],
+    scope: "canonical-sale",
+    reason: "O item vendido precisa pertencer simultaneamente ao tenant e à proposta vencedora fotografada.",
+  }),
+  "HistoricoVendaCanonica.vendaId->VendaCanonica": Object.freeze({
+    fromFields: ["empresaId", "negocioId", "vendaId"],
+    toFields: ["empresaId", "negocioId", "id"],
+    scope: "canonical-sale",
+    reason: "O historico da venda precisa pertencer simultaneamente ao tenant e ao Negocio da venda.",
   }),
 });
 
@@ -288,6 +338,21 @@ const MIGRATION_REGISTRY = Object.freeze({
       "EmailDeliveryEvent.deliveryId->EmailDeliveryOutbox",
     ]),
   }),
+  "20260828130000_add_canonical_sale_v1": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: "23123b6b9f87358a1750c089ae694a7e69fd9f628a85ec76613914d5338c90aa",
+    postgresSha256: "d99fa7fa38ae7f9fcbbad36fd82e5cf21581f04054ee615fe17dab82619b286e",
+    preMigrationUnavailableTenantRelations: Object.freeze([
+      "NegocioContratoVenda.negocioId->Negocio",
+      "VendaCanonica.clienteId->Cliente",
+      "VendaCanonica.fechadoPorId->Usuario",
+      "VendaCanonica.invalidadoPorId->Usuario",
+      "ItemVendaCanonica.vendaId->VendaCanonica",
+      "HistoricoVendaCanonica.negocioId->Negocio",
+      "HistoricoVendaCanonica.autorId->Usuario",
+    ]),
+  }),
 });
 
 class GateFailure extends Error {
@@ -384,7 +449,7 @@ function discoverTenantRelations(datamodel) {
       if (!parent || !scalarField(parent, "empresaId")) continue;
       const fromFields = normalizeFields(field.relationFromFields);
       const toFields = normalizeFields(field.relationToFields);
-      const childField = fromFields.find((value) => value !== childTenant);
+      const childField = [...fromFields].reverse().find((value) => value !== childTenant);
       if (!childField) throw new GateFailure("TENANT_GATE_RELATION_FIELD_INVALID");
       candidates.push({
         child: child.name,
@@ -421,9 +486,8 @@ function inspectArchitecture({
 
   for (const candidate of candidates) {
     const key = relationKey(candidate.child, candidate.childField, candidate.parent);
-    const isComposite = candidate.fromFields.includes(candidate.childTenant)
-      && candidate.toFields.includes("empresaId")
-      && candidate.toFields.includes("id");
+    const isComposite = JSON.stringify(candidate.fromFields) === JSON.stringify([candidate.childTenant, candidate.childField])
+      && JSON.stringify(candidate.toFields) === JSON.stringify(["empresaId", "id"]);
     const target = isComposite ? composite : simple;
     if (target.has(key)) failures.push("TENANT_GATE_DUPLICATE_RELATION");
     target.set(key, candidate);

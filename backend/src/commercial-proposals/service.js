@@ -8,18 +8,19 @@ const {
   parseNonNegativePrismaInt,
 } = require("../shared/commercial-money");
 
-const STATUSES = ["RASCUNHO", "PRONTA", "ENVIADA", "ACEITA", "RECUSADA", "VENCIDA", "CANCELADA"];
+const STATUSES = ["RASCUNHO", "PRONTA", "ENVIADA", "ACEITA", "RECUSADA", "VENCIDA", "CANCELADA", "SUBSTITUIDA"];
 const EDITABLE_STATUSES = new Set(["RASCUNHO"]);
 const ITEM_TYPES = Object.freeze(["CATALOG_ITEM", "LEGACY_ITEM"]);
 const MATERIAL_STATUSES = new Set(["PRONTA", "ENVIADA", "ACEITA"]);
 const TRANSITIONS = {
   RASCUNHO: new Set(["PRONTA", "CANCELADA"]),
-  PRONTA: new Set(["RASCUNHO", "ENVIADA", "ACEITA", "RECUSADA", "CANCELADA"]),
-  ENVIADA: new Set(["ACEITA", "RECUSADA", "VENCIDA", "CANCELADA"]),
+  PRONTA: new Set(["RASCUNHO", "ENVIADA", "RECUSADA", "CANCELADA"]),
+  ENVIADA: new Set(["RECUSADA", "VENCIDA", "CANCELADA"]),
   ACEITA: new Set(),
   RECUSADA: new Set(),
   VENCIDA: new Set(),
   CANCELADA: new Set(),
+  SUBSTITUIDA: new Set(),
 };
 
 function createCommercialProposalService({ prisma }) {
@@ -156,6 +157,7 @@ function createCommercialProposalService({ prisma }) {
     requireProposalWrite(context, current.negocio);
     if (revisao !== current.revisao) throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
     if (current.status === nextStatus) return getProposal(context, id);
+    if (nextStatus === "ACEITA") throw invalid("Use a acao dedicada para aceitar e definir a proposta vencedora.", "PROPOSAL_ACCEPT_REQUIRES_WINNER_ACTION");
     if (!TRANSITIONS[current.status]?.has(nextStatus)) throw invalid("Transicao de status invalida.", "PROPOSAL_STATUS_INVALID");
     let result;
     try {
@@ -176,6 +178,17 @@ function createCommercialProposalService({ prisma }) {
         if (updated.count !== 1) throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
         if (MATERIAL_STATUSES.has(nextStatus) && (transactional.itens || []).some((item) => item.itemType === "CATALOG_ITEM")) {
           await history(tx, context, transactional, "REVALIDAR", current.status, nextStatus, null);
+        }
+        if (["RECUSADA", "VENCIDA", "CANCELADA", "SUBSTITUIDA"].includes(nextStatus)) {
+          const contract = await tx.negocioContratoVenda.findUnique({ where: { empresaId_negocioId: { empresaId: context.empresaId, negocioId: transactional.negocioId } } });
+          if (contract?.propostaPrincipalId === transactional.id) {
+            const cleared = await tx.negocioContratoVenda.updateMany({
+              where: { empresaId: context.empresaId, negocioId: transactional.negocioId, revisao: contract.revisao, propostaPrincipalId: transactional.id },
+              data: { propostaPrincipalId: null, revisao: { increment: 1 } },
+            });
+            if (cleared.count !== 1) throw conflict("SALE_CONTRACT_REVISION_CONFLICT", "O contrato comercial foi alterado por outra operacao.");
+            await history(tx, context, transactional, "REMOVER_PRINCIPAL", current.status, nextStatus, "Proposta deixou de ser elegivel como principal.");
+          }
         }
         await history(tx, context, transactional, "ALTERAR_STATUS", current.status, nextStatus, observacao);
         return true;
@@ -293,7 +306,7 @@ function proposalIncludes(withDetails) {
   return {
     empresa: { select: { id: true, nome: true } },
     cliente: { select: { id: true, empresaId: true, nome: true, empresa: true, email: true, telefone: true, arquivadoEm: true } },
-    negocio: { select: { id: true, empresaId: true, clienteId: true, leadId: true, titulo: true, etapa: true, responsavelId: true, cliente: { select: { arquivadoEm: true } } } },
+    negocio: { select: { id: true, empresaId: true, clienteId: true, leadId: true, titulo: true, etapa: true, responsavelId: true, cliente: { select: { arquivadoEm: true } }, contratoVenda: { select: { revisao: true, propostaPrincipalId: true, propostaVencedoraId: true, vendaAtivaId: true } } } },
     lead: { select: { id: true, empresaId: true, status: true, interesse: true } },
     responsavel: { select: { id: true, empresaId: true, nome: true } },
     autor: { select: { id: true, empresaId: true, nome: true } },
@@ -318,10 +331,15 @@ function assertProposalTenantContext(empresaId, proposal) {
 function requireProposalWrite(context, business) {
   if (business?.cliente?.arquivadoEm || business?.negocio?.cliente?.arquivadoEm) throw domainError(409, "CLIENT_ARCHIVED_READ_ONLY", "Restaure o cliente antes de operar propostas.");
   if (!isManager(context) && business.responsavelId !== context.usuarioId) throw domainError(403, "PROPOSAL_FORBIDDEN", "Acesso negado.");
+  if (!["NOVO", "CONTATO", "PROPOSTA"].includes(business.etapa)) {
+    throw domainError(409, "PROPOSAL_DEAL_NOT_OPEN", "Reabra o Negocio antes de alterar suas propostas.");
+  }
 }
 
 function presentProposal(context, proposal) {
   const { empresaId: _empresaId, itens: rawItems, ...safeProposal } = proposal;
+  const negocioAberto = ["NOVO", "CONTATO", "PROPOSTA"].includes(proposal.negocio.etapa);
+  const podeOperar = negocioAberto && (isManager(context) || proposal.negocio.responsavelId === context.usuarioId);
   const safeRelations = {
     cliente: withoutTenantContext(proposal.cliente),
     negocio: withoutTenantContext(proposal.negocio),
@@ -339,10 +357,21 @@ function presentProposal(context, proposal) {
     ...safeProposal,
     ...safeRelations,
     itens: (rawItems || []).map(presentItem),
+    contratoComercial: {
+      revisao: proposal.negocio?.contratoVenda?.revisao || 1,
+      principal: proposal.negocio?.contratoVenda?.propostaPrincipalId === proposal.id,
+      vencedora: proposal.negocio?.contratoVenda?.propostaVencedoraId === proposal.id,
+      vendaAtivaId: proposal.negocio?.contratoVenda?.vendaAtivaId || null,
+    },
     permissoes: {
-      editar: EDITABLE_STATUSES.has(proposal.status) && (isManager(context) || proposal.negocio.responsavelId === context.usuarioId),
-      alterarStatus: isManager(context) || proposal.negocio.responsavelId === context.usuarioId,
-      duplicar: isManager(context) || proposal.negocio.responsavelId === context.usuarioId,
+      editar: podeOperar && EDITABLE_STATUSES.has(proposal.status),
+      alterarStatus: podeOperar,
+      duplicar: podeOperar,
+      aceitar: podeOperar && ["PRONTA", "ENVIADA"].includes(proposal.status),
+      definirPrincipal: podeOperar && ["RASCUNHO", "PRONTA", "ENVIADA", "ACEITA"].includes(proposal.status),
+      substituirVencedora: negocioAberto && isManager(context),
+      reconciliarVencedora: negocioAberto && isManager(context),
+      removerVencedora: negocioAberto && isManager(context),
     },
   };
 }
@@ -1035,6 +1064,7 @@ module.exports = {
   ITEM_TYPES,
   MATERIAL_STATUSES,
   STATUSES,
+  assertProposalMoneyIntegrity,
   calculateTotals,
   createCommercialProposalService,
   decimalToCentsRoundHalfUp,

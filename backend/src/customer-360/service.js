@@ -11,6 +11,7 @@ const TIMELINE_TYPES = new Set([
   "ACOMPANHAMENTO",
   "NOTA",
   "QUALIFICACAO",
+  "VENDA",
 ]);
 const ACTIVE_LEAD_STATUSES = new Set(["NOVO", "EM_ATENDIMENTO", "QUALIFICADO"]);
 const ACTIVE_BUSINESS_STAGES = new Set(["NOVO", "CONTATO", "PROPOSTA"]);
@@ -34,6 +35,14 @@ function createCustomer360Service({ prisma }) {
         propostasComerciais: {
           include: { responsavel: { select: { id: true, nome: true } } },
           orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+        },
+        vendasCanonicas: {
+          where: { status: "ACTIVE", negocio: { etapa: "FECHADO" }, contratosAtivos: { some: { empresaId: context.empresaId } } },
+          include: {
+            negocio: { include: { responsavel: { select: { id: true, nome: true } } } },
+            propostaVencedora: { select: { id: true, codigo: true, titulo: true, status: true } },
+          },
+          orderBy: [{ fechadoEm: "desc" }, { id: "desc" }],
         },
         acompanhamentos: {
           include: { responsavelUsuario: { select: { id: true, nome: true } } },
@@ -66,6 +75,10 @@ function createCustomer360Service({ prisma }) {
     const negociosAtivos = cliente.negocios.filter((negocio) => ACTIVE_BUSINESS_STAGES.has(negocio.etapa));
     const propostasAtivas = cliente.propostasComerciais.filter((proposta) => ACTIVE_PROPOSAL_STATUSES.has(proposta.status));
     const acompanhamentosPendentes = cliente.acompanhamentos.filter((item) => OPEN_FOLLOW_UP_STATUSES.has(item.status));
+    const negociosAtivosComValor = negociosAtivos.filter((negocio) => negocio.valor !== null && negocio.valor !== undefined);
+    const valorPipeline = negociosAtivosComValor.length > 0
+      ? negociosAtivosComValor.reduce((total, negocio) => total + Number(negocio.valor), 0)
+      : negociosAtivos.length > 0 ? null : 0;
     const responsavel = negociosAtivos.find((item) => item.responsavel)?.responsavel
       || leadsAtivos.find((item) => item.responsavel)?.responsavel
       || cliente.negocios.find((item) => item.responsavel)?.responsavel
@@ -78,6 +91,7 @@ function createCustomer360Service({ prisma }) {
       cliente.negocios[0]?.updatedAt,
       cliente.propostasComerciais[0]?.updatedAt,
       cliente.acompanhamentos[0]?.updatedAt,
+      cliente.vendasCanonicas[0]?.fechadoEm,
     ]);
 
     return {
@@ -89,19 +103,14 @@ function createCustomer360Service({ prisma }) {
         acompanhamentosPendentes: acompanhamentosPendentes.length,
         conversas: conversaIds.length,
         mensagens,
-        valorPipeline: negociosAtivos.reduce((total, negocio) => total + Number(negocio.valor || 0), 0),
+        valorPipeline,
+        valorPipelineIncompleto: negociosAtivosComValor.length !== negociosAtivos.length,
+        totalVendidoCentavos: cliente.vendasCanonicas.reduce((total, sale) => total + Number(sale.totalCentavos), 0),
+        ultimaVenda: cliente.vendasCanonicas[0] ? presentSaleSummary(cliente.vendasCanonicas[0]) : null,
         ultimaAtividade,
         responsavelComercial: responsavel,
       },
-      comprasAnteriores: cliente.negocios
-        .filter((negocio) => negocio.etapa === "FECHADO")
-        .map((negocio) => ({
-          id: negocio.id,
-          titulo: negocio.titulo || `Negocio ${negocio.id}`,
-          valor: negocio.valor === null || negocio.valor === undefined ? null : Number(negocio.valor),
-          fechadoEm: negocio.fechadoEm || negocio.updatedAt,
-          responsavel: negocio.responsavel,
-        })),
+      comprasAnteriores: cliente.vendasCanonicas.map(presentSaleSummary),
       contexto: {
         lead: leadsAtivos[0] ? presentLead(leadsAtivos[0]) : null,
         negocio: negociosAtivos[0] ? presentBusiness(negociosAtivos[0]) : null,
@@ -128,7 +137,7 @@ function createCustomer360Service({ prisma }) {
       select: { id: true },
     }).then((items) => items.map((item) => item.id));
 
-    const [messages, followUps, proposals, businesses, notes, qualifications] = await Promise.all([
+    const [messages, followUps, proposals, businesses, notes, qualifications, sales] = await Promise.all([
       wants("MENSAGEM") && conversaIds.length
         ? prisma.mensagemCanal.findMany({
           where: { empresaId: context.empresaId, conversaCanalId: { in: conversaIds } },
@@ -186,6 +195,17 @@ function createCustomer360Service({ prisma }) {
           take,
         })
         : [],
+      wants("VENDA")
+        ? prisma.vendaCanonica.findMany({
+          where: { empresaId: context.empresaId, clienteId },
+          include: {
+            negocio: { include: { responsavel: { select: { id: true, nome: true } } } },
+            propostaVencedora: { select: { id: true, codigo: true, titulo: true } },
+          },
+          orderBy: [{ fechadoEm: "desc" }, { id: "desc" }],
+          take,
+        })
+        : [],
     ]);
 
     const events = [
@@ -195,6 +215,7 @@ function createCustomer360Service({ prisma }) {
       ...businesses.map(businessEvent),
       ...notes.map(noteEvent),
       ...qualifications.map(qualificationEvent),
+      ...sales.map(saleEvent),
     ].sort(compareEvents);
 
     const total = await timelineCount({ prisma, context, clienteId, conversaIds, tipo });
@@ -261,6 +282,7 @@ async function timelineCount({ prisma, context, clienteId, conversaIds, tipo }) 
     wants("NEGOCIO") ? prisma.negocio.count({ where: { empresaId: context.empresaId, clienteId } }) : 0,
     wants("NOTA") ? prisma.nota.count({ where: { empresaId: context.empresaId, clienteId } }) : 0,
     wants("QUALIFICACAO") ? prisma.historicoQualificacaoConversa.count({ where: { empresaId: context.empresaId, clienteId } }) : 0,
+    wants("VENDA") ? prisma.vendaCanonica.count({ where: { empresaId: context.empresaId, clienteId } }) : 0,
   ]);
   return counts.reduce((total, count) => total + Number(count), 0);
 }
@@ -297,6 +319,22 @@ function presentProposal(item) {
 
 function presentFollowUp(item) {
   return { id: item.id, titulo: item.titulo, tipo: item.tipo, status: item.status, dataHora: item.dataHora, responsavel: item.responsavelUsuario };
+}
+
+function presentSaleSummary(item) {
+  return {
+    id: item.id,
+    negocioId: item.negocioId,
+    titulo: item.negocio?.titulo || `Negocio ${item.negocioId}`,
+    totalCentavos: Number(item.totalCentavos),
+    moeda: item.moeda,
+    origem: item.origem,
+    status: item.status,
+    revisao: item.revisao,
+    fechadoEm: item.fechadoEm,
+    responsavel: item.negocio?.responsavel || null,
+    proposta: item.propostaVencedora || null,
+  };
 }
 
 function messageEvent(item) {
@@ -368,6 +406,24 @@ function businessEvent(item) {
     responsavel: item.responsavel,
     origem: { entidade: "Negocio", id: item.id },
     navegacao: { destino: "KANBAN", id: item.id },
+  });
+}
+
+function saleEvent(item) {
+  return event({
+    id: `venda:${item.id}`,
+    tipo: "VENDA",
+    data: item.fechadoEm,
+    titulo: item.status === "ACTIVE" ? "Venda realizada" : "Venda invalidada",
+    descricao: item.propostaVencedora
+      ? `Origem: proposta ${item.propostaVencedora.codigo}.`
+      : "Origem: fechamento manual.",
+    status: item.status,
+    valor: Number(item.totalCentavos) / 100,
+    valorCentavos: Number(item.totalCentavos),
+    responsavel: item.negocio?.responsavel || null,
+    origem: { entidade: "VendaCanonica", id: item.id },
+    navegacao: { destino: "KANBAN", id: item.negocioId },
   });
 }
 

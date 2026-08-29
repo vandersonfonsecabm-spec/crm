@@ -90,19 +90,20 @@ test("G2A aplica rollout duplo, tenant, RBAC e lock sem alterar entidades legada
   assert.equal(managerMove.body.etapa, "PROPOSTA");
   assert.equal((await request("PATCH", `/negocios/${negocioA.id}/etapa`, { etapa: "INVALIDA", etapaAnterior: "PROPOSTA" }, adminA.token)).status, 400);
 
-  await prisma.$executeRawUnsafe(`CREATE TRIGGER "g2a_force_rollback" BEFORE UPDATE OF "etapa" ON "Negocio" WHEN NEW."id" = ${negocioA.id} AND NEW."etapa" = 'FECHADO' BEGIN SELECT RAISE(ABORT, 'forced stage failure'); END`);
-  assert.equal((await request("PATCH", `/negocios/${negocioA.id}/etapa`, { etapa: "FECHADO", etapaAnterior: "PROPOSTA" }, adminA.token)).status, 500);
+  const terminalBlocked = await request("PATCH", `/negocios/${negocioA.id}/etapa`, { etapa: "FECHADO", etapaAnterior: "PROPOSTA" }, adminA.token);
+  assert.equal(terminalBlocked.status, 409);
+  assert.equal(terminalBlocked.body.codigo, "NEGOCIO_TERMINAL_ACTION_REQUIRED");
+  await prisma.$executeRawUnsafe(`CREATE TRIGGER "g2a_force_rollback" BEFORE UPDATE OF "etapa" ON "Negocio" WHEN NEW."id" = ${negocioA.id} AND NEW."etapa" = 'CONTATO' BEGIN SELECT RAISE(ABORT, 'forced stage failure'); END`);
+  assert.equal((await request("PATCH", `/negocios/${negocioA.id}/etapa`, { etapa: "CONTATO", etapaAnterior: "PROPOSTA" }, adminA.token)).status, 500);
   assert.equal((await prisma.negocio.findUnique({ where: { id: negocioA.id } })).etapa, "PROPOSTA");
   await prisma.$executeRawUnsafe('DROP TRIGGER "g2a_force_rollback"');
 
-  const adminMove = await request("PATCH", `/negocios/${negocioA.id}/etapa`, { etapa: "FECHADO", etapaAnterior: "PROPOSTA" }, adminA.token);
-  assert.equal(adminMove.status, 200);
   const concurrent = await Promise.all([
-    request("PATCH", `/negocios/${negocioA.id}/etapa`, { etapa: "PERDIDO", etapaAnterior: "FECHADO" }, adminA.token),
-    request("PATCH", `/negocios/${negocioA.id}/etapa`, { etapa: "PERDIDO", etapaAnterior: "FECHADO" }, managerA.token),
+    request("PATCH", `/negocios/${negocioA.id}/etapa`, { etapa: "CONTATO", etapaAnterior: "PROPOSTA" }, adminA.token),
+    request("PATCH", `/negocios/${negocioA.id}/etapa`, { etapa: "NOVO", etapaAnterior: "PROPOSTA" }, managerA.token),
   ]);
   assert.deepEqual(concurrent.map(({ status }) => status).sort(), [200, 409]);
-  assert.equal((await prisma.negocio.findUnique({ where: { id: negocioA.id } })).etapa, "PERDIDO");
+  assert.ok(["CONTATO", "NOVO"].includes((await prisma.negocio.findUnique({ where: { id: negocioA.id } })).etapa));
   assert.deepEqual(await legacySnapshot(adminA.empresaId, clienteA.id, leadA.id), baseline);
 
   process.env.NEGOCIOS_KANBAN_ENABLED = "false";

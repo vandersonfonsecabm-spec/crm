@@ -11,8 +11,10 @@ test("PostgreSQL coordena lease Bling entre dois PrismaClient e aplica fencing a
   const { createDistributedOperationLease } = require("../src/shared/distributedOperationLease");
   const firstClient = new PrismaClient();
   const secondClient = new PrismaClient();
-  const firstManager = createDistributedOperationLease({ prisma: firstClient, ttlMs: 80, heartbeatMs: 10_000 });
-  const secondManager = createDistributedOperationLease({ prisma: secondClient, ttlMs: 80, heartbeatMs: 10_000 });
+  let logicalNowMs = Date.now();
+  const clock = () => new Date(logicalNowMs);
+  const firstManager = createDistributedOperationLease({ prisma: firstClient, clock, ttlMs: 60_000, heartbeatMs: 60_000 });
+  const secondManager = createDistributedOperationLease({ prisma: secondClient, clock, ttlMs: 60_000, heartbeatMs: 60_000 });
   const suffix = `${Date.now()}-${process.pid}`;
   let empresaId;
 
@@ -42,7 +44,7 @@ test("PostgreSQL coordena lease Bling entre dois PrismaClient e aplica fencing a
     let staleContext;
     await firstManager.withLease(key, async (lease) => {
       staleContext = lease;
-      await delay(110);
+      logicalNowMs += 60_001;
 
       let releaseSecond;
       let secondEntered;
@@ -80,8 +82,4 @@ function requiredPostgresUrl() {
   const value = String(process.env.CRM_TEST_DATABASE_URL || "").trim();
   if (!/^postgres(ql)?:\/\//i.test(value)) throw new Error("CRM_TEST_DATABASE_URL PostgreSQL obrigatoria.");
   return value;
-}
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

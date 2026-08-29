@@ -132,14 +132,17 @@ test("H3 cria, calcula, versiona e protege propostas por tenant e concorrencia",
 
   const ready = await request("POST", `/propostas/${duplicated.body.id}/status`, { status: "PRONTA", revisao: duplicated.body.revisao }, sellerA.token);
   assert.equal(ready.status, 200);
-  const accepted = await request("POST", `/propostas/${duplicated.body.id}/status`, { status: "ACEITA", revisao: ready.body.revisao }, sellerA.token);
-  assert.equal(accepted.status, 200);
+  const acceptedState = await request("POST", `/propostas/${duplicated.body.id}/aceitar`, { revisao: ready.body.revisao, contratoRevisao: 1 }, sellerA.token);
+  assert.equal(acceptedState.status, 200);
+  assert.equal(acceptedState.body.contrato.propostaVencedoraId, duplicated.body.id);
+  const accepted = await request("GET", `/propostas/${duplicated.body.id}`, undefined, sellerA.token);
+  assert.equal(accepted.body.status, "ACEITA");
   assert.equal((await request("PATCH", `/propostas/${accepted.body.id}/rascunho`, { ...validProposal(), revisao: accepted.body.revisao }, sellerA.token)).status, 409);
 
   const history = await request("GET", `/propostas/${duplicated.body.id}/historico`, undefined, sellerA.token);
   assert.equal(history.status, 200);
   assert.ok(history.body.data.some((entry) => entry.acao === "DUPLICAR_VERSAO"));
-  assert.ok(history.body.data.some((entry) => entry.acao === "ALTERAR_STATUS" && entry.statusNovo === "ACEITA"));
+  assert.ok(history.body.data.some((entry) => entry.acao === "ACEITAR_COMO_VENCEDORA" && entry.statusNovo === "ACEITA"));
 
   const pdf = await requestBinary("GET", `/propostas/${accepted.body.id}/pdf`, sellerA.token);
   assert.equal(pdf.status, 200);
