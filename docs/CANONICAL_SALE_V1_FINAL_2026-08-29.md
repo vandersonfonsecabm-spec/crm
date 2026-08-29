@@ -25,7 +25,14 @@ Sol/revisão final: executor principal, com veredito independente ainda pendente
 `GLOBAL_REGRESSION_LOCAL=PASS`
 
 `STAGING=NOT_STARTED`
+
 `FINAL_VERDICT=BLOCKED_INDEPENDENT_REVIEW`
+
+`CANONICAL_SALE_LOCAL_EVIDENCE=VALID`
+
+`EXECUTION_PROVENANCE=CODEX_ROOT`
+
+`LUNA_MAX_EXECUTION_PROVENANCE=UNVERIFIED`
 
 Disponibilidade verificada: não houve processo separado de Sol ou Luna Max
 exposto pelas ferramentas desta sessão. O trabalho foi executado pelo Codex
