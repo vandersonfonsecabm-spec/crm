@@ -4,9 +4,10 @@ Data: 2026-08-29
 
 Branch: `feature/canonical-sale-v1`
 
-CANDIDATE_CODE_SHA: `020394acc65f0f653ea8d4cb7b14d0844d13b50e`
+CANDIDATE_CODE_SHA: `5d45ace` (código comercial; commits documentais posteriores não alteram a implementação)
 
-Commit do candidato: `020394a` (`close-terminal-commercial-ui-gaps`)
+Commits de implementação: `020394a` (`close-terminal-commercial-ui-gaps`) e
+`5d45ace` (`guard-drawer-canonical-refresh-race`)
 
 Baseline funcional: `79eed4f`
 
@@ -116,7 +117,7 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
 | Regressão local | PASS | backend exit 0; frontend 228/228 |
 | PostgreSQL causal atual | UNTESTED/BLOCKED_EXTERNAL | Docker indisponível e nenhuma URL descartável autorizada |
 | Passagem independente 1 | PASS após correções | findings CV1-R1–CV1-R12 retestados |
-| Passagem independente 2 | PASS | reviewer limpo sobre SHA `020394a` |
+| Passagem independente 2 | PASS | finding assíncrono corrigido em `5d45ace`; duas confirmações limpas |
 | Staging E2E/soak | PENDING_SEPARATE_PHASE | não iniciado; exige autorização de staging e gate PostgreSQL |
 
 ## Testes e evidências
@@ -127,17 +128,20 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
   idempotência, reopen e ataques de snapshot: PASS.
 - Frontend focal canônico: 2/2 PASS.
 - Regressão frontend completa: 228/228 PASS.
-- Build TypeScript/Vite: PASS.
-- ESLint: PASS.
+- Build TypeScript/Vite: PASS após o ajuste de refresh e proteção de concorrência do drawer.
+- ESLint: PASS após o ajuste de refresh e proteção de concorrência do drawer.
 - Regressão backend global no sandbox Prisma: exit 0, sem falhas; skips
   PostgreSQL são explícitos e cobertos pelo runner descartável.
-- QA visual focal: board, loading, empty, error, manual, proposta,
-  vencedora, substituída, legado, perdido e reopen; resoluções 1366×768,
-  1440×900, 1920×1080 e 900×768; `scrollWidth == clientWidth` e zero erros
-  de console.
+- QA visual focal anterior cobriu board, loading, empty, error, manual,
+  proposta, vencedora, substituída, legado, perdido e reopen nas resoluções
+  1366×768, 1440×900, 1920×1080 e 900×768; o ajuste atual de CTA/refresh foi
+  validado por lint, build e suíte frontend, sem alegar browser dinâmico novo.
 - O gate PostgreSQL causal foi tentado no runner seguro e não iniciou porque
   Docker está indisponível; não há `POSTGRES_TEST_DATABASE_URL` nem outro
   PostgreSQL descartável autorizado. SQLite não é usado como substituto.
+  Evidência sanitizada: manifesto
+  `C:\Users\vande\AppData\Local\Temp\crm-postgres-real\20260830022632667-17860-ca2a45b91009.json`,
+  log SHA-256 `af526007a901fc9a7a706bc36321b2784e3fdee6abe4fad790a007ee977dee4a`.
 - `backend/prisma/dev.db` continua com SHA-256
   `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
 - Varredura de padrões de segredos nos artefatos do candidato: nenhum
@@ -181,13 +185,15 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
 | CV1-R13 | MEDIUM | “Nova proposta” no terminal | CTA não recebia etapa/permissão | RETESTED | `020394a` + build/suíte |
 | CV1-R14 | MEDIUM | “Reabrir” em FECHADO legado sem venda | permissão ignorava venda ativa | RETESTED | `020394a` + teste API |
 | CV4-01 | HIGH | ausência de guards permanentes (repetido) | contradito pelo schema atual | REJECTED | triggers permanentes + testes estruturais |
+| DRAWER-ASYNC-01 | MEDIUM | resposta antiga podia sobrescrever histórico novo | carga sem abort/geração | RETESTED | `5d45ace`: AbortController + sequência monotônica |
 
 Os findings CV1-R1–CV1-R12 foram corrigidos com reteste causal antes do SHA
 atual. CV1-R13 e CV1-R14 foram corrigidos em `020394a`. CV4-01 foi
 reconciliado como falso positivo, pois a migration atual contém os triggers
-permanentes e os testes os exercitam diretamente. A segunda passagem limpa
-independente retornou `FINDINGS=NONE`; PostgreSQL causal continua externo e
-não deve ser chamado de PASS.
+permanentes e os testes os exercitam diretamente. A revisão final encontrou
+`DRAWER-ASYNC-01`, corrigido em `5d45ace` com cancelamento e geração
+  monotônica; as confirmações independentes finais retornaram `FINDINGS=NONE`.
+  PostgreSQL causal continua externo e não deve ser chamado de PASS.
 
 ## Produção, staging e integrações
 
@@ -199,8 +205,9 @@ não deve ser chamado de PASS.
 - `REAL_OUTBOUND=0`.
 - Staging ainda não foi alterado. E2E autenticado, runtime fingerprint e soak
   comercial continuam pendentes para a fase separada de staging.
-- `PENDING_INTERNAL=0` e `FALSE_PASS=0` após a reconciliação local; o único
-  gate externo não testado neste checkpoint é o PostgreSQL causal.
+- `PENDING_INTERNAL=0`, `UNTESTED_INTERNAL=0` e `FALSE_PASS=0` após a
+  reconciliação local; o único gate externo não testado neste checkpoint é o
+  PostgreSQL causal (`UNTESTED_EXTERNAL=POSTGRES_CAUSAL_GATE`).
 - Checkpoint do Sol: baseline congelado → contrato/state machine → migration →
   implementação → correções dos findings → retestes SQLite → regressão local →
   duas revisões independentes limpas → bloqueio externo somente no PostgreSQL.
@@ -249,17 +256,19 @@ LUNA_MAX_EXECUTION_PROVENANCE=UNVERIFIED
 
 Nenhuma implementação foi refeita. As evidências técnicas do candidato foram
 preservadas separadamente da provenance do executor. As duas passagens
-independentes foram executadas sobre o SHA congelado, sem deploy, providers ou
-outbound; a segunda retornou `FINDINGS=NONE`.
+independentes foram concluídas sobre o SHA congelado, sem deploy, providers ou
+outbound; ambas retornaram `FINDINGS=NONE`.
 
 ```text
 SECOND_REVIEW_PASS_1=PASS_AFTER_RETESTS
 SECOND_REVIEW_PASS_2=PASS
+FINAL_SOL_RECONCILIATION=PASS_LOCAL
+READY_FOR_STAGING=NO_POSTGRES_GATE
 STALLED_GATE=NONE
-LAST_KNOWN_GOOD=CANDIDATE_020394a
+LAST_KNOWN_GOOD=CANDIDATE_5d45ace
 ATTEMPTED_SAFE_ALTERNATIVES=bounded_wait + focused_local_retests + independent_reviewer_retry
 RISK=no code/database mutation observed outside candidate worktree
-NEXT_MINIMUM_SAFE_ACTION=gate PostgreSQL causal descartável e fase staging separada
+NEXT_MINIMUM_SAFE_ACTION=disponibilizar PostgreSQL descartável autorizado; depois staging separado
 ```
 
 O resultado não altera a evidência técnica existente:
