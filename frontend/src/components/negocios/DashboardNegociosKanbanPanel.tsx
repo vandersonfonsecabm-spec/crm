@@ -492,7 +492,13 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
   }, [business.id]);
 
   useEffect(() => {
-    void refreshCanonicalState();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void refreshCanonicalState();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [refreshCanonicalState]);
 
   const requestClose = useCallback(() => {
