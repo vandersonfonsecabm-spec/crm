@@ -38,7 +38,8 @@
     "idempotencyRecoveryHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
     "releaseArtifactHead": "2da896aac84dd683e844b266331716e9600e6357",
     "gitTree": "5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce",
-    "remoteBranchMatches": true,
+    "releaseArtifactInRemoteAncestry": true,
+    "postReleaseCommitsEvidenceOnly": true,
     "reportDraftCommit": "a56f936eae6511bd9f090fa84bed4fadf39b43aa",
     "reportCommit": "a56f936eae6511bd9f090fa84bed4fadf39b43aa",
     "finalReconciliationCommit": "54428fdd8f49efaa2e932c3baea21a19fbea6ba6"

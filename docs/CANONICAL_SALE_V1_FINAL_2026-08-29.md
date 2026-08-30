@@ -86,7 +86,9 @@ Nenhuma promoção para produção está autorizada ou foi realizada.
 - Correção funcional encontrada no segundo sweep: `3b2e462`.
 - Correções do primeiro adversarial — reopen fail-closed, CSV executável e
   evidência final: `2da896a`.
-- HEAD remoto da branch após push controlado: exatamente `2da896a`.
+- O release artifact `2da896a` está na ancestralidade da branch remota. Os
+  commits posteriores são exclusivamente relatório/evidência e não alteram o
+  backend ou frontend implantado.
 - Manifesto de fonte do release: Git tree
   `5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce`.
 - `backend/prisma/dev.db` permaneceu imutável, SHA-256
