@@ -328,6 +328,9 @@ function createCanonicalSaleService({ prisma, clock = () => new Date() }) {
         const existing = await prisma.vendaCanonica.findFirst({ where: { empresaId: context.empresaId, idempotencyKey } });
         if (existing) {
           assertIdempotentReplay(existing, { negocioId, origem, contratoRevisao, manualValue });
+          if (existing.status !== "ACTIVE") {
+            throw conflict("IDEMPOTENCY_KEY_REPLAY_INVALIDATED", "A venda associada a esta chave foi invalidada; use uma nova chave para um novo fechamento.");
+          }
           replayed = true;
         } else {
           throw conflict("CONCURRENT_DEAL_CLOSE", "Outra operacao concluiu este Negocio primeiro.");
