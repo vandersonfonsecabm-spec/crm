@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- fixture DOM comportamental executada diretamente pelo Vite. */
 import { createRoot } from "react-dom/client";
-import { useCallback, useEffect, useState } from "react";
+import { StrictMode, useCallback, useEffect, useState } from "react";
 import { MemoryRouter } from "react-router-dom";
 import DashboardNegociosKanbanPanel, { type NegociosKanbanAdapter } from "../../src/components/negocios/DashboardNegociosKanbanPanel";
 import type { BusinessStage, CommunicationBusiness, NegociosKanbanResponse } from "../../src/services/crmApi";
@@ -166,7 +166,7 @@ function Fixture() {
 
   return (
     <main data-fixture-readonly="true">
-      {mounted && <DashboardNegociosKanbanPanel adapter={adapter} authSession={null} initialBusinessId={target} onInitialBusinessHandled={consumeTarget} onOpenAgenda={() => undefined} onToast={handleToast} />}
+      <StrictMode>{mounted && <DashboardNegociosKanbanPanel adapter={adapter} authSession={null} initialBusinessId={target} onInitialBusinessHandled={consumeTarget} onOpenAgenda={() => undefined} onToast={handleToast} />}</StrictMode>
       {toast && <p role="status">{toast}</p>}
     </main>
   );

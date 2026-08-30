@@ -555,6 +555,7 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
   }, [business.id]);
 
   useEffect(() => {
+    drawerMounted.current = true;
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) void refreshCanonicalState();
