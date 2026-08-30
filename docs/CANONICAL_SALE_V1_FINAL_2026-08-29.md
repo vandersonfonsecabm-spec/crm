@@ -21,13 +21,13 @@ Sol/revisão final: reconciliação supervisionada; passagens independentes limp
 
 `LOCAL_GATES=PASS`
 
-`POSTGRES_CAUSAL_GATE=UNTESTED`
+`POSTGRES_CAUSAL_GATE=FAIL`
 
 `GLOBAL_REGRESSION_LOCAL=PASS`
 
 `STAGING=NOT_STARTED`
 
-`FINAL_VERDICT=BLOCKED_EXTERNAL_POSTGRES`
+`FINAL_VERDICT=FIX_FIRST`
 
 `CANONICAL_SALE_LOCAL_EVIDENCE=VALID`
 
@@ -110,15 +110,15 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
 | Migration aditiva e legado preservado | PASS | migrations SQLite/PostgreSQL + verifier |
 | Primary/winning proposal | PASS | serviço, CAS, reconciliação e testes |
 | CanonicalSale/snapshot | PASS | schema, triggers e testes de ataque |
-| Fechamento atômico/idempotência | PASS local | SQLite; PostgreSQL causal não executado neste checkpoint |
+| Fechamento atômico/idempotência | PASS local | SQLite; PostgreSQL encontrou falha no replay divergente |
 | Customer 360/dashboard/export | PASS | testes de proveniência e API |
 | UI comercial/QA visual | PASS contratual | build + 228 testes; ajuste de CTA coberto localmente |
 | Tenant/security | PASS | 169 relações, cross-tenant negativo |
 | Regressão local | PASS | backend exit 0; frontend 228/228 |
-| PostgreSQL causal atual | UNTESTED/BLOCKED_EXTERNAL | Docker indisponível e nenhuma URL descartável autorizada |
+| PostgreSQL causal atual | FAIL | WSL descartável executou migration/suíte; replay divergente falhou |
 | Passagem independente 1 | PASS após correções | findings CV1-R1–CV1-R12 retestados |
 | Passagem independente 2 | PASS | finding assíncrono corrigido em `5d45ace`; duas confirmações limpas |
-| Staging E2E/soak | PENDING_SEPARATE_PHASE | não iniciado; exige autorização de staging e gate PostgreSQL |
+| Staging E2E/soak | BLOCKED | não iniciado; gate PostgreSQL falhou |
 
 ## Testes e evidências
 
@@ -136,12 +136,15 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
   proposta, vencedora, substituída, legado, perdido e reopen nas resoluções
   1366×768, 1440×900, 1920×1080 e 900×768; o ajuste atual de CTA/refresh foi
   validado por lint, build e suíte frontend, sem alegar browser dinâmico novo.
-- O gate PostgreSQL causal foi tentado no runner seguro e não iniciou porque
-  Docker está indisponível; não há `POSTGRES_TEST_DATABASE_URL` nem outro
-  PostgreSQL descartável autorizado. SQLite não é usado como substituto.
-  Evidência sanitizada: manifesto
-  `C:\Users\vande\AppData\Local\Temp\crm-postgres-real\20260830022632667-17860-ca2a45b91009.json`,
-  log SHA-256 `af526007a901fc9a7a706bc36321b2784e3fdee6abe4fad790a007ee977dee4a`.
+- O gate PostgreSQL causal foi executado em cluster 18.3 descartável no
+  WSL/Ubuntu, com porta `55432`, role/banco exclusivos e IP privado. Migration,
+  limites, locks, concorrência, tenant, snapshots e a maior parte da suíte
+  passaram. O teste `canonical-sale-v1-postgres.test.js` falhou no cenário de
+  chave de idempotência divergente: a operação levantou
+  `IDEMPOTENCY_KEY_REUSED`, mas a função de validação da asserção retornou
+  `false`. Evidência sanitizada: manifesto
+  `C:\Users\vande\AppData\Local\Temp\crm-postgres-real\20260830040929180-20300-556981cde46f.json`,
+  log SHA-256 `e6f6df7e0348e2f8e6b16c1cc8e3aee40a9a30744e111833207e5bc650dbed5a`.
 - `backend/prisma/dev.db` continua com SHA-256
   `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
 - Varredura de padrões de segredos nos artefatos do candidato: nenhum
@@ -186,6 +189,7 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
 | CV1-R14 | MEDIUM | “Reabrir” em FECHADO legado sem venda | permissão ignorava venda ativa | RETESTED | `020394a` + teste API |
 | CV4-01 | HIGH | ausência de guards permanentes (repetido) | contradito pelo schema atual | REJECTED | triggers permanentes + testes estruturais |
 | DRAWER-ASYNC-01 | MEDIUM | resposta antiga podia sobrescrever histórico novo | carga sem abort/geração | RETESTED | `5d45ace`: AbortController + sequência monotônica |
+| PG-IDEMPOTENCY-01 | HIGH | replay divergente da mesma chave falhou a asserção PostgreSQL | comportamento observado não convergiu ao predicate esperado | OPEN | execução WSL PostgreSQL; fix/reteste pendente |
 
 Os findings CV1-R1–CV1-R12 foram corrigidos com reteste causal antes do SHA
 atual. CV1-R13 e CV1-R14 foram corrigidos em `020394a`. CV4-01 foi
@@ -193,7 +197,8 @@ reconciliado como falso positivo, pois a migration atual contém os triggers
 permanentes e os testes os exercitam diretamente. A revisão final encontrou
 `DRAWER-ASYNC-01`, corrigido em `5d45ace` com cancelamento e geração
   monotônica; as confirmações independentes finais retornaram `FINDINGS=NONE`.
-  PostgreSQL causal continua externo e não deve ser chamado de PASS.
+  O gate PostgreSQL posterior encontrou `PG-IDEMPOTENCY-01`; não há declaração
+  de PASS ou READY_FOR_STAGING enquanto esse finding permanecer aberto.
 
 ## Produção, staging e integrações
 
@@ -205,19 +210,19 @@ permanentes e os testes os exercitam diretamente. A revisão final encontrou
 - `REAL_OUTBOUND=0`.
 - Staging ainda não foi alterado. E2E autenticado, runtime fingerprint e soak
   comercial continuam pendentes para a fase separada de staging.
-- `PENDING_INTERNAL=0`, `UNTESTED_INTERNAL=0` e `FALSE_PASS=0` após a
-  reconciliação local; o único gate externo não testado neste checkpoint é o
-  PostgreSQL causal (`UNTESTED_EXTERNAL=POSTGRES_CAUSAL_GATE`).
+- `PENDING_INTERNAL=1`, `UNTESTED_INTERNAL=0` e `FALSE_PASS=0`: o finding
+  PostgreSQL de idempotência está aberto e exige correção/reteste causal.
 - Checkpoint do Sol: baseline congelado → contrato/state machine → migration →
   implementação → correções dos findings → retestes SQLite → regressão local →
-  duas revisões independentes limpas → bloqueio externo somente no PostgreSQL.
+  duas revisões independentes limpas → PostgreSQL WSL executado → falha de
+  idempotência canônica.
 
 ## Próximos gates mínimos
 
 1. Registrar o resultado das duas passagens independentes e o ledger final;
    o candidato não deve ser chamado `SHIP` de produção neste checkpoint.
-2. Executar o gate PostgreSQL causal em ambiente descartável autorizado; Docker
-   indisponível permanece `UNTESTED/BLOCKED_EXTERNAL`.
+2. Corrigir e retestar o finding `PG-IDEMPOTENCY-01` em ambiente PostgreSQL
+   descartável; não reutilizar esta execução como PASS.
 3. Com autorização operacional mantida, publicar a branch e validar o destino
    exato de staging antes de qualquer migration/deploy.
 4. Aplicar migration no staging, validar API/frontend/runtime parity, executar
@@ -233,8 +238,8 @@ permanentes e os testes os exercitam diretamente. A revisão final encontrou
   pela proteção de snapshots.
 - O teste de migration executado fora do harness foi descartado e repetido no
   runner correto, evitando falso diagnóstico de produto.
-- O gate PostgreSQL causal não foi substituído por SQLite após Docker falhar;
-  permanece explicitamente `UNTESTED/BLOCKED_EXTERNAL`.
+- O gate PostgreSQL causal foi executado no WSL após a falha do Docker e
+  permanece `FAIL` até o reteste do cenário de idempotência.
 
 ## Retomada controlada sob pré-condição de seleção do usuário
 
@@ -262,13 +267,13 @@ outbound; ambas retornaram `FINDINGS=NONE`.
 ```text
 SECOND_REVIEW_PASS_1=PASS_AFTER_RETESTS
 SECOND_REVIEW_PASS_2=PASS
-FINAL_SOL_RECONCILIATION=PASS_LOCAL
-READY_FOR_STAGING=NO_POSTGRES_GATE
+FINAL_SOL_RECONCILIATION=BLOCKED_POSTGRES_FAILURE
+READY_FOR_STAGING=NO_IDEMPOTENCY_FIX
 STALLED_GATE=NONE
 LAST_KNOWN_GOOD=CANDIDATE_5d45ace
 ATTEMPTED_SAFE_ALTERNATIVES=bounded_wait + focused_local_retests + independent_reviewer_retry
 RISK=no code/database mutation observed outside candidate worktree
-NEXT_MINIMUM_SAFE_ACTION=disponibilizar PostgreSQL descartável autorizado; depois staging separado
+NEXT_MINIMUM_SAFE_ACTION=triagem/fix de PG-IDEMPOTENCY-01 em missão autorizada, depois novo gate PostgreSQL
 ```
 
 O resultado não altera a evidência técnica existente:
