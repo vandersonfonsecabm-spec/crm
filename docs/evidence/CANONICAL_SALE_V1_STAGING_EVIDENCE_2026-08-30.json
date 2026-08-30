@@ -1,0 +1,251 @@
+{
+  "schemaVersion": "canonical-sale-v1-staging-evidence-v1",
+  "asOfDate": "2026-08-30",
+  "status": "PENDING_FINAL_ADVERSARIAL_RECONCILIATION",
+  "authority": "docs/CANONICAL_SALE_V1_FINAL_2026-08-29.md",
+  "redaction": {
+    "sanitized": true,
+    "containsSecrets": false,
+    "containsCredentials": false,
+    "containsCookies": false,
+    "containsRealCustomerData": false,
+    "containsConnectionStrings": false
+  },
+  "release": {
+    "branch": "feature/canonical-sale-v1",
+    "baseline": "79eed4f",
+    "originalCommercialCandidate": "5d45ace",
+    "harnessFixCommit": "3525651",
+    "frontendStabilizationHead": "5d0e427",
+    "deleteGuardHardeningHead": "f8f4961",
+    "releaseArtifactHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
+    "gitTree": "80806ac71f039c7bc79bf2a1931c7afdaa9c9d58",
+    "remoteBranchMatches": true,
+    "reportCommit": null
+  },
+  "stagingTargets": {
+    "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
+    "railwayEnvironmentId": "d6b6f137-cffd-4647-a102-3619fc54133a",
+    "railwayEnvironmentName": "ga3-bundle-staging",
+    "apiServiceId": "8af12b8e-4f4d-498c-9ceb-3182417905f8",
+    "apiServiceName": "ga3-bundle-api",
+    "workerServiceId": "25dab463-52c0-4425-825e-c7dcf6a65332",
+    "workerServiceName": "store1-worker",
+    "databaseServiceId": "f3a2862b-2371-4ab3-b4db-1e91680ee3b7",
+    "databaseServiceName": "Postgres--e25",
+    "vercelProjectId": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
+    "vercelAlias": "crm-ga3-bundle-staging.vercel.app",
+    "productionTargetsDistinct": true
+  },
+  "deployments": {
+    "backend": {
+      "deploymentId": "ecc3a785-b4a1-4b1f-93e2-539cf2de3fb8",
+      "status": "SUCCESS",
+      "releaseHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
+      "imageDigest": "sha256:26677c3939c82e6aa59d4ae568b8324c94d1d9b908dc4bc8e6b95ad380f57250",
+      "healthHttpStatus": 200,
+      "readinessHttpStatus": 200
+    },
+    "frontend": {
+      "deploymentId": "dpl_DJuYkeaS6w2xXoXYnkkSB355U9uH",
+      "status": "READY",
+      "releaseHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
+      "stableAliasCurrent": true
+    },
+    "worker": {
+      "inCanonicalSaleCausalPath": false,
+      "status": "SUCCESS"
+    }
+  },
+  "runtimeFingerprint": {
+    "version": "backend-runtime-v3-lf",
+    "sha256": "bea0a256eb86fe2833258f28b7a1438b440a284762ce6784bee6d7776ffe8fab",
+    "targetVerified": true,
+    "databaseVerified": true,
+    "providersConnected": false,
+    "outboundEnabled": false,
+    "sourceRuntimeParity": "PASS",
+    "stableAliasParity": "PASS"
+  },
+  "migrations": {
+    "appliedCount": 20,
+    "failedCount": 0,
+    "latest": "20260830133500_harden_canonical_sale_delete_guard",
+    "files": [
+      {
+        "name": "20260828130000_add_canonical_sale_v1",
+        "platform": "sqlite",
+        "sha256": "00d7064d74e167503280b625f6a5a076efedf1824c4c9bf8f284b8b0430b8d37"
+      },
+      {
+        "name": "20260828130000_add_canonical_sale_v1",
+        "platform": "postgresql",
+        "sha256": "b9d6e0f3f56181f1a1fde44a7c454a2f525a8733eb9c065c1e900fdfa65971e1"
+      },
+      {
+        "name": "20260830133500_harden_canonical_sale_delete_guard",
+        "platform": "sqlite",
+        "sha256": "69aa03b4cd09c5e3f232a9d56e146ec8623c342bb42e451ee35a9274cc83b4dd"
+      },
+      {
+        "name": "20260830133500_harden_canonical_sale_delete_guard",
+        "platform": "postgresql",
+        "sha256": "14349f98eda3b066c0abc8ce236387f90b2fe8c77f816601d3533932b9492be4"
+      }
+    ],
+    "verifier": {
+      "protectedTriggers": 8,
+      "sessionBypassBlocked": true,
+      "truncateBlocked": true,
+      "qaCompaniesRemaining": 0
+    }
+  },
+  "backups": {
+    "preDeleteHardening": {
+      "fileName": "canonical-sale-staging-pre-delete-hardening.dump",
+      "bytes": 670217,
+      "sha256": "95fa106ec98a615528a5260b422174b3ae5eb8476b10f6d6f8d5d71a953f2a",
+      "restoreDrill": "PASS",
+      "restoreListEntries": 1330,
+      "restoreMigrationCount": 19,
+      "restoreFailedMigrationCount": 0,
+      "restoreTables": 91,
+      "keyTablesChecked": 5
+    }
+  },
+  "localIntegrity": {
+    "protectedDevDbSha256": "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533",
+    "devDbChanged": false,
+    "frontendRegression": "230/230 PASS",
+    "frontendBuild": "PASS",
+    "frontendLint": "PASS",
+    "backendRegression": "PASS_WITH_PROPORTIONAL_RETEST"
+  },
+  "postgresCausalGate": {
+    "status": "PASS",
+    "engine": "PostgreSQL 18.6",
+    "environment": "disposable WSL",
+    "officialDatabaseTouched": false,
+    "harnessTests": 24,
+    "sourceManifestSha256": "8a2f0bb816e338a8392a79bd72b42114f6a10532644efaabc2c0d7ed8327d25b",
+    "evidenceManifestFile": "20260830142504707-8116-35dbe6dfdb7e.json",
+    "evidenceManifestSha256": "592b9301752514aee44d783429d32efe20af40bef958d0f835831cd8dda02197",
+    "logsSha256": "176b975dfa34e9b381801935e86747ce878de6e87c55898235987ee2a29ab4e2",
+    "wslEnvironmentCleaned": true
+  },
+  "authenticatedE2E": {
+    "status": "PASS",
+    "syntheticLoginConfirmed": true,
+    "runHash": "c3e73463008d0d71f692",
+    "fixtureRunId": "ce200b1d298eea6d",
+    "fixtureManifestSha256": "6ef4db8c0fe7ae4f91047debcb4d176d5c2fba0db216391f79c53daa9bd1480e",
+    "fixtureCounts": {
+      "companies": 2,
+      "users": 8,
+      "clients": 5,
+      "businesses": 5,
+      "proposals": 104,
+      "sales": 4
+    },
+    "manualZero": "PASS",
+    "nullDistinctFromZero": "PASS",
+    "proposalSale": "PASS",
+    "reopen": "PASS",
+    "concurrency": "PASS",
+    "tenantRbac": "PASS",
+    "revenueProvenance": "PASS",
+    "databaseApiUiConverged": true
+  },
+  "idempotencyRecoveryFinding": {
+    "id": "STG-S2-IDEMP-01",
+    "severity": "HIGH",
+    "description": "P2002/P2028/P2034 recovery accepted an INVALIDATED sale as an idempotent replay",
+    "fixCommit": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
+    "status": "RETESTED_REVIEWER_SHIP",
+    "causalRetests": {
+      "focusedRecovery": "3/3 PASS",
+      "sqliteCanonical": "PASS",
+      "postgresCanonicalFocused": "PASS",
+      "postgresFull": "PASS",
+      "runtimeRedeployed": true
+    }
+  },
+  "browserQa": {
+    "status": "PASS",
+    "viewports": ["900x768", "1366x768", "1440x900", "1920x1080"],
+    "consoleErrors": 0,
+    "stableRefreshes": "3/3 PASS",
+    "directDeepLink": "PASS",
+    "rapidBusinessSwitch": "PASS",
+    "twoTabs": "PASS",
+    "drawerAsync01": "RETESTED",
+    "exportDownloadCapture": "BROWSER_CONTROL_FAILURE_RESOLVED_BY_API_AND_UNIT_TEST"
+  },
+  "soak": {
+    "status": "PASS_WITH_CAUSAL_SUPPLEMENT",
+    "serviceCodeHead": "5d0e427af877ba81b5cb6e8d32187e4797e3c9ba",
+    "iterations": 30,
+    "requests": 312,
+    "activeDurationSeconds": 575,
+    "failures": 0,
+    "http5xx": 0,
+    "timeouts": 0,
+    "duplicateSales": 0,
+    "stuckOperations": 0,
+    "valueDrift": 0,
+    "restartResult": "PASS",
+    "phase1Sha256": "b2ef2c3678676298aebdcb59babe32537feb1cd162366e7c87761f699a15b51e",
+    "phase2Sha256": "702d681a25adc7e32dff84cd18b52e88dd9ce93f6cb79b80e87e6bb25c678676",
+    "postSoakDeltaRetest": "FOCUSED_SQLITE_AND_POSTGRES_PASS"
+  },
+  "cleanup": {
+    "status": "PASS",
+    "qaCompaniesRemaining": 0,
+    "syntheticCredentialFileRemoved": true,
+    "temporaryApiArtifactsRemovedByRedeploy": true,
+    "temporaryPostgresRemoved": true,
+    "deletedCounts": {
+      "saleHistory": 95,
+      "saleItems": 62,
+      "contracts": 33,
+      "sales": 64,
+      "proposalHistory": 130,
+      "proposalItems": 134,
+      "proposals": 134,
+      "assignmentHistory": 95,
+      "businesses": 35,
+      "clients": 35,
+      "refreshTokens": 30,
+      "sessions": 15,
+      "securityAudit": 30,
+      "features": 2,
+      "users": 8,
+      "companies": 2
+    }
+  },
+  "reviewGates": {
+    "stagingAuditSweep1": "PASS_AFTER_RETESTS",
+    "stagingAuditSweep2": "PASS_AFTER_RETESTS",
+    "secondReviewFindingIdempotencyRecovery": "RETESTED",
+    "finalSecretSweep": "PENDING_RECONCILIATION",
+    "finalAdversarialVerdict": "PENDING_RECONCILIATION",
+    "finalSolReconciliation": "PENDING_RECONCILIATION"
+  },
+  "safety": {
+    "productionRequests": 0,
+    "productionChanged": false,
+    "realProductProviderConnections": 0,
+    "realProductProviderCredentialsUsed": 0,
+    "realOutbound": 0,
+    "hostingControlPlane": "STAGING_ONLY"
+  },
+  "finalState": {
+    "canonicalSaleV1": "NOT_YET_FINAL",
+    "readyForProduction": "PENDING_RECONCILIATION",
+    "openCritical": 0,
+    "openHigh": 0,
+    "openMedium": 0,
+    "untestedProductScope": 0,
+    "falsePass": 0
+  }
+}
