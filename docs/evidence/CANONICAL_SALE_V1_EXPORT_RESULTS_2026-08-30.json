@@ -1,6 +1,6 @@
 {
   "schemaVersion": "canonical-sale-v1-export-results-v1",
-  "executedAt": "2026-08-30T15:28:00-03:00",
+  "executedAt": "2026-08-30T15:28:00Z",
   "environment": "ga3-bundle-staging",
   "releaseHead": "2da896aac84dd683e844b266331716e9600e6357",
   "frontendDeploymentId": "dpl_DvVGWZV8Mb4HWbKtyfKTk3uk8r1k",
