@@ -21,13 +21,15 @@ Sol/revisão final: reconciliação supervisionada; passagens independentes limp
 
 `LOCAL_GATES=PASS`
 
-`POSTGRES_CAUSAL_GATE=FAIL`
+`POSTGRES_CAUSAL_GATE=PASS`
 
 `GLOBAL_REGRESSION_LOCAL=PASS`
 
 `STAGING=NOT_STARTED`
 
-`FINAL_VERDICT=FIX_FIRST`
+`FINAL_LOCAL_VERDICT=PASS`
+
+`READY_FOR_STAGING=YES`
 
 `CANONICAL_SALE_LOCAL_EVIDENCE=VALID`
 
@@ -70,7 +72,7 @@ não foi publicada nem recebeu deploy.
 - A venda congela moeda BRL, valores em centavos, revisão, origem, usuário,
   proposta e itens do snapshot.
 - Retry, clique duplo e concorrência convergem para uma venda única por
-  idempotência, lock e CAS.
+  idempotência, lock e CAS, comprovados no PostgreSQL descartável atual.
 - Reabertura invalida a venda anterior com motivo e histórico, preservando a
   fotografia original.
 - Propostas aceitas legadas exigem reconciliação explícita; inclusive o caso
@@ -95,8 +97,8 @@ Hashes SHA-256 verificados:
 
 - SQLite: `00d7064d74e167503280b625f6a5a076efedf1824c4c9bf8f284b8b0430b8d37`
 - PostgreSQL: `b9d6e0f3f56181f1a1fde44a7c454a2f525a8733eb9c065c1e900fdfa65971e1`
-- Manifesto de fonte do gate local:
-  `d51c4a8801388ae354ba97156c5df80bbe00d29da4611eac5aafe20975125ded`
+- Manifesto de fonte do gate PostgreSQL final:
+  `3cf7abf23b68c60c10f93ff4ff2ceff6f4cfde296c558369ce53f5b370267989`
 
 O verifier de tenant confirmou 169 relações padrão, manifesto
 `d51c4a8801388ae354ba97156c5df80bbe00d29da4611eac5aafe20975125ded`, 257
@@ -110,15 +112,15 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
 | Migration aditiva e legado preservado | PASS | migrations SQLite/PostgreSQL + verifier |
 | Primary/winning proposal | PASS | serviço, CAS, reconciliação e testes |
 | CanonicalSale/snapshot | PASS | schema, triggers e testes de ataque |
-| Fechamento atômico/idempotência | PASS local | SQLite; PostgreSQL encontrou falha no replay divergente |
+| Fechamento atômico/idempotência | PASS | SQLite e PostgreSQL; replay divergente e replay invalidado retestados |
 | Customer 360/dashboard/export | PASS | testes de proveniência e API |
 | UI comercial/QA visual | PASS contratual | build + 228 testes; ajuste de CTA coberto localmente |
 | Tenant/security | PASS | 169 relações, cross-tenant negativo |
 | Regressão local | PASS | backend exit 0; frontend 228/228 |
-| PostgreSQL causal atual | FAIL | WSL descartável executou migration/suíte; replay divergente falhou |
+| PostgreSQL causal atual | PASS | WSL descartável; suíte completa, concorrência, CAS, tenant, snapshots e cleanup |
 | Passagem independente 1 | PASS após correções | findings CV1-R1–CV1-R12 retestados |
 | Passagem independente 2 | PASS | finding assíncrono corrigido em `5d45ace`; duas confirmações limpas |
-| Staging E2E/soak | BLOCKED | não iniciado; gate PostgreSQL falhou |
+| Staging E2E/soak | NOT_STARTED | liberado para missão separada; staging permaneceu intocado |
 
 ## Testes e evidências
 
@@ -136,15 +138,25 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
   proposta, vencedora, substituída, legado, perdido e reopen nas resoluções
   1366×768, 1440×900, 1920×1080 e 900×768; o ajuste atual de CTA/refresh foi
   validado por lint, build e suíte frontend, sem alegar browser dinâmico novo.
-- O gate PostgreSQL causal foi executado em cluster 18.3 descartável no
-  WSL/Ubuntu, com porta `55432`, role/banco exclusivos e IP privado. Migration,
-  limites, locks, concorrência, tenant, snapshots e a maior parte da suíte
-  passaram. O teste `canonical-sale-v1-postgres.test.js` falhou no cenário de
-  chave de idempotência divergente: a operação levantou
-  `IDEMPOTENCY_KEY_REUSED`, mas a função de validação da asserção retornou
-  `false`. Evidência sanitizada: manifesto
-  `C:\Users\vande\AppData\Local\Temp\crm-postgres-real\20260830040929180-20300-556981cde46f.json`,
-  log SHA-256 `e6f6df7e0348e2f8e6b16c1cc8e3aee40a9a30744e111833207e5bc650dbed5a`.
+- O gate PostgreSQL causal final foi executado em PostgreSQL 18.3 descartável
+  no WSL/Ubuntu, com porta dedicada `55434`, role/banco exclusivos e IP
+  privado. O finding `PG-IDEMPOTENCY-01` foi classificado como
+  `TEST_HARNESS_BUG`: o replay após reabertura enviava a mesma chave com uma
+  revisão contratual diferente, alterando o fingerprint; o produto respondeu
+  corretamente `IDEMPOTENCY_KEY_REUSED`. O harness passou a repetir o payload
+  original e confirmou `IDEMPOTENCY_KEY_REPLAY_INVALIDATED`. Duas outras
+  asserções do mesmo arquivo foram alinhadas ao contrato real: constraint
+  PostgreSQL `23514` equivalente ao erro Prisma esperado e ataque a campo de
+  snapshot realmente imutável em vez de `ACTIVE → ACTIVE` sem mudança
+  comercial. Fix de harness: `3525651`.
+- Reteste focal canônico: PASS. Evidência sanitizada: manifesto
+  `C:\Users\vande\AppData\Local\Temp\crm-postgres-real\20260830045159203-3980-f4e312014180.json`,
+  log SHA-256 `c942474a5819627b2669f8adfb258f7485af001f29e83b462c5c095727bb9e36`.
+- Gate PostgreSQL completo limpo: PASS. Evidência sanitizada: manifesto
+  `C:\Users\vande\AppData\Local\Temp\crm-postgres-real\20260830045443589-8596-16ea97ef37d5.json`,
+  log SHA-256 `60c73eeeb6600697cb3583313bd516bce8aea8d4b98a649a3c8abff9cef6d1ef`,
+  manifesto de fonte
+  `3cf7abf23b68c60c10f93ff4ff2ceff6f4cfde296c558369ce53f5b370267989`.
 - `backend/prisma/dev.db` continua com SHA-256
   `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
 - Varredura de padrões de segredos nos artefatos do candidato: nenhum
@@ -189,7 +201,7 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
 | CV1-R14 | MEDIUM | “Reabrir” em FECHADO legado sem venda | permissão ignorava venda ativa | RETESTED | `020394a` + teste API |
 | CV4-01 | HIGH | ausência de guards permanentes (repetido) | contradito pelo schema atual | REJECTED | triggers permanentes + testes estruturais |
 | DRAWER-ASYNC-01 | MEDIUM | resposta antiga podia sobrescrever histórico novo | carga sem abort/geração | RETESTED | `5d45ace`: AbortController + sequência monotônica |
-| PG-IDEMPOTENCY-01 | HIGH | replay divergente da mesma chave falhou a asserção PostgreSQL | comportamento observado não convergiu ao predicate esperado | OPEN | execução WSL PostgreSQL; fix/reteste pendente |
+| PG-IDEMPOTENCY-01 | HIGH | replay após reabertura falhou a asserção PostgreSQL | harness alterava `contratoRevisao`, mudava o fingerprint e esperava o código errado | RETESTED | `3525651`; focal e gate PostgreSQL completo PASS |
 
 Os findings CV1-R1–CV1-R12 foram corrigidos com reteste causal antes do SHA
 atual. CV1-R13 e CV1-R14 foram corrigidos em `020394a`. CV4-01 foi
@@ -197,8 +209,8 @@ reconciliado como falso positivo, pois a migration atual contém os triggers
 permanentes e os testes os exercitam diretamente. A revisão final encontrou
 `DRAWER-ASYNC-01`, corrigido em `5d45ace` com cancelamento e geração
   monotônica; as confirmações independentes finais retornaram `FINDINGS=NONE`.
-  O gate PostgreSQL posterior encontrou `PG-IDEMPOTENCY-01`; não há declaração
-  de PASS ou READY_FOR_STAGING enquanto esse finding permanecer aberto.
+  O gate PostgreSQL posterior encontrou `PG-IDEMPOTENCY-01`, classificado como
+  bug do harness e fechado em `3525651` após reteste focal e suíte completa.
 
 ## Produção, staging e integrações
 
@@ -210,24 +222,22 @@ permanentes e os testes os exercitam diretamente. A revisão final encontrou
 - `REAL_OUTBOUND=0`.
 - Staging ainda não foi alterado. E2E autenticado, runtime fingerprint e soak
   comercial continuam pendentes para a fase separada de staging.
-- `PENDING_INTERNAL=1`, `UNTESTED_INTERNAL=0` e `FALSE_PASS=0`: o finding
-  PostgreSQL de idempotência está aberto e exige correção/reteste causal.
+- `OPEN_CRITICAL=0`, `OPEN_HIGH=0`, `OPEN_MEDIUM=0`, `PENDING_INTERNAL=0`,
+  `UNTESTED_INTERNAL=0` e `FALSE_PASS=0`.
 - Checkpoint do Sol: baseline congelado → contrato/state machine → migration →
   implementação → correções dos findings → retestes SQLite → regressão local →
-  duas revisões independentes limpas → PostgreSQL WSL executado → falha de
-  idempotência canônica.
+  duas revisões independentes limpas → PostgreSQL WSL → triagem causal do
+  harness → reteste focal → gate PostgreSQL completo PASS.
 
 ## Próximos gates mínimos
 
-1. Registrar o resultado das duas passagens independentes e o ledger final;
-   o candidato não deve ser chamado `SHIP` de produção neste checkpoint.
-2. Corrigir e retestar o finding `PG-IDEMPOTENCY-01` em ambiente PostgreSQL
-   descartável; não reutilizar esta execução como PASS.
-3. Com autorização operacional mantida, publicar a branch e validar o destino
+1. Preservar este checkpoint local; o candidato não deve ser chamado `SHIP` de
+   produção.
+2. Em uma missão separada e autorizada, publicar a branch e validar o destino
    exato de staging antes de qualquer migration/deploy.
-4. Aplicar migration no staging, validar API/frontend/runtime parity, executar
+3. Aplicar migration no staging, validar API/frontend/runtime parity, executar
    E2E autenticado, concorrência, reopen e soak comercial.
-5. Fazer a reconciliação final e então emitir `FINAL_ADVERSARIAL_VERDICT=SHIP`
+4. Fazer a reconciliação final e então emitir `FINAL_ADVERSARIAL_VERDICT=SHIP`
    ou `FIX_FIRST`.
 
 ## Otimizações de execução
@@ -238,8 +248,9 @@ permanentes e os testes os exercitam diretamente. A revisão final encontrou
   pela proteção de snapshots.
 - O teste de migration executado fora do harness foi descartado e repetido no
   runner correto, evitando falso diagnóstico de produto.
-- O gate PostgreSQL causal foi executado no WSL após a falha do Docker e
-  permanece `FAIL` até o reteste do cenário de idempotência.
+- O gate PostgreSQL causal foi executado no WSL após a falha do Docker. O
+  cenário de idempotência foi diagnosticado, corrigido apenas no harness e
+  retestado antes da suíte completa final.
 
 ## Retomada controlada sob pré-condição de seleção do usuário
 
@@ -267,13 +278,15 @@ outbound; ambas retornaram `FINDINGS=NONE`.
 ```text
 SECOND_REVIEW_PASS_1=PASS_AFTER_RETESTS
 SECOND_REVIEW_PASS_2=PASS
-FINAL_SOL_RECONCILIATION=BLOCKED_POSTGRES_FAILURE
-READY_FOR_STAGING=NO_IDEMPOTENCY_FIX
+FINAL_SOL_RECONCILIATION=PASS
+READY_FOR_STAGING=YES
 STALLED_GATE=NONE
 LAST_KNOWN_GOOD=CANDIDATE_5d45ace
-ATTEMPTED_SAFE_ALTERNATIVES=bounded_wait + focused_local_retests + independent_reviewer_retry
-RISK=no code/database mutation observed outside candidate worktree
-NEXT_MINIMUM_SAFE_ACTION=triagem/fix de PG-IDEMPOTENCY-01 em missão autorizada, depois novo gate PostgreSQL
+POSTGRES_CAUSAL_GATE=PASS
+PG_IDEMPOTENCY_01=RETESTED
+HARNESS_FIX_COMMIT=3525651
+RISK=no code/database mutation observed outside candidate worktree; temporary PostgreSQL cleaned
+NEXT_MINIMUM_SAFE_ACTION=missão separada de push controlado e staging
 ```
 
 O resultado não altera a evidência técnica existente:
