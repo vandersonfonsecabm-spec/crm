@@ -251,6 +251,44 @@ BEGIN
   SELECT RAISE(ABORT, 'NEGOCIO_CONTRATO_VENDA_CUSTOMER_MISMATCH');
 END;
 
+CREATE TRIGGER "PropostaComercial_customer_consistency_insert"
+BEFORE INSERT ON "PropostaComercial"
+WHEN NOT EXISTS (
+  SELECT 1 FROM "Negocio" AS negocio
+  WHERE negocio."empresaId" = NEW."empresaId"
+    AND negocio."id" = NEW."negocioId"
+    AND negocio."clienteId" = NEW."clienteId"
+)
+BEGIN
+  SELECT RAISE(ABORT, 'PROPOSTA_COMERCIAL_CUSTOMER_MISMATCH');
+END;
+
+CREATE TRIGGER "PropostaComercial_customer_consistency_update"
+BEFORE UPDATE OF "empresaId", "negocioId", "clienteId" ON "PropostaComercial"
+WHEN NOT EXISTS (
+  SELECT 1 FROM "Negocio" AS negocio
+  WHERE negocio."empresaId" = NEW."empresaId"
+    AND negocio."id" = NEW."negocioId"
+    AND negocio."clienteId" = NEW."clienteId"
+)
+BEGIN
+  SELECT RAISE(ABORT, 'PROPOSTA_COMERCIAL_CUSTOMER_MISMATCH');
+END;
+
+CREATE TRIGGER "Negocio_customer_reparent_guard"
+BEFORE UPDATE OF "empresaId", "id", "clienteId" ON "Negocio"
+WHEN EXISTS (
+  SELECT 1 FROM "PropostaComercial" AS proposta
+  WHERE proposta."empresaId" = OLD."empresaId"
+    AND proposta."negocioId" = OLD."id"
+    AND (proposta."empresaId" IS NOT NEW."empresaId"
+      OR proposta."negocioId" IS NOT NEW."id"
+      OR proposta."clienteId" IS NOT NEW."clienteId")
+)
+BEGIN
+  SELECT RAISE(ABORT, 'NEGOCIO_CUSTOMER_REPARENT_FORBIDDEN');
+END;
+
 -- Snapshot fields are immutable. Reopening may only change lifecycle/audit fields.
 CREATE TRIGGER "VendaCanonica_snapshot_immutable_update"
 BEFORE UPDATE ON "VendaCanonica"

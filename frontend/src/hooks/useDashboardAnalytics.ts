@@ -40,6 +40,10 @@ export default function useDashboardAnalytics({
         todayFollowUps: summary.analytics.todayFollowUps,
         activePipeline: summary.analytics.activePipeline,
         conversionRate: summary.analytics.conversionRate,
+        pipelineValueAvailable: summary.analytics.pipelineValueAvailable,
+        forecastValueAvailable: summary.analytics.forecastValueAvailable,
+        wonValueAvailable: summary.analytics.wonValueAvailable,
+        conversionRateAvailable: summary.analytics.conversionRateAvailable,
         monetaryDataAvailable: summary.analytics.monetaryDataAvailable,
       };
     }
@@ -63,6 +67,10 @@ export default function useDashboardAnalytics({
       todayFollowUps,
       activePipeline,
       conversionRate,
+      pipelineValueAvailable: false,
+      forecastValueAvailable: false,
+      wonValueAvailable: false,
+      conversionRateAvailable: false,
       monetaryDataAvailable: false,
     };
   }, [kanbanClients, summary]);

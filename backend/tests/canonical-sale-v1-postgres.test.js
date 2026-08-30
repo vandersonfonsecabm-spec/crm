@@ -175,7 +175,7 @@ test("PostgreSQL converge close/accept/update concorrentes sem venda duplicada",
 
   const otherClient = await prismaA.cliente.create({ data: { empresaId: company.id, nome: "Cliente divergente PostgreSQL", origem: "QA PostgreSQL" } });
   const mismatchBusiness = await createBusiness("Contrato cliente divergente", "PROPOSTA");
-  const mismatchProposal = await prismaA.propostaComercial.create({
+  await assert.rejects(prismaA.propostaComercial.create({
     data: {
       empresaId: company.id,
       clienteId: otherClient.id,
@@ -190,11 +190,9 @@ test("PostgreSQL converge close/accept/update concorrentes sem venda duplicada",
       validade: new Date("2026-12-31T00:00:00.000Z"),
       status: "PRONTA",
     },
-  });
-  await assert.rejects(
-    prismaA.negocioContratoVenda.create({ data: { empresaId: company.id, negocioId: mismatchBusiness.id, propostaPrincipalId: mismatchProposal.id } }),
-    (error) => error?.code === "P2003" || error?.code === "P2010",
-  );
+  }));
+  await assert.rejects(prismaA.propostaComercial.update({ where: { id: proposalA.id }, data: { clienteId: otherClient.id } }));
+  await assert.rejects(prismaA.negocio.update({ where: { id: proposalBusiness.id }, data: { clienteId: otherClient.id } }));
   const constraintBusiness = await createBusiness("Constraints PostgreSQL", "PROPOSTA");
   const timestamp = new Date();
   await assert.rejects(prismaA.$executeRaw`

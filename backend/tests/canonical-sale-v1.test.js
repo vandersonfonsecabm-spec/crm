@@ -56,7 +56,7 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   const proposalB = await createReadyProposal(fixture.business.id, sellerA.token, "Proposta B");
   const proposalOtherTenant = await createReadyProposal(otherTenant.business.id, adminB.token, "Proposta Outro Tenant");
   const sameTenantOther = await businessFixture(adminA, sellerA.usuarioId, "Cliente Outro Mesmo Tenant", "PROPOSTA", null);
-  const mismatchedProposal = await prisma.propostaComercial.create({
+  await assert.rejects(prisma.propostaComercial.create({
     data: {
       empresaId: adminA.empresaId,
       clienteId: sameTenantOther.client.id,
@@ -70,14 +70,9 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
       totalCentavos: 100,
       descontoGeralCentavos: 0,
     },
-  });
-  await assert.rejects(prisma.negocioContratoVenda.create({
-    data: {
-      empresaId: adminA.empresaId,
-      negocioId: fixture.business.id,
-      propostaPrincipalId: mismatchedProposal.id,
-    },
   }));
+  await assert.rejects(prisma.propostaComercial.update({ where: { id: proposalA.id }, data: { clienteId: sameTenantOther.client.id } }));
+  await assert.rejects(prisma.negocio.update({ where: { id: fixture.business.id }, data: { clienteId: sameTenantOther.client.id } }));
 
   const primary = await request("PUT", `/negocios/${fixture.business.id}/proposta-principal`, { propostaId: proposalA.id, revisao: 1 }, sellerA.token);
   assert.equal(primary.status, 200, JSON.stringify(primary.body));
@@ -347,6 +342,8 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   const dashboardOpen = await request("GET", "/dashboard", undefined, adminA.token);
   assert.equal(dashboardOpen.body.indicadores.pipeline, null);
   assert.equal(dashboardOpen.body.analytics.monetaryDataAvailable, false);
+  assert.equal(dashboardOpen.body.analytics.wonValueAvailable, true);
+  assert.equal(typeof dashboardOpen.body.analytics.wonValue, "number");
   const provenanceClosed = await request("POST", `/negocios/${provenanceFixture.business.id}/fechar-ganho`, manualClose("dashboard-provenance-close", 1, 123400), sellerA.token);
   assert.equal(provenanceClosed.status, 200);
   const dashboardClosed = await request("GET", "/dashboard", undefined, adminA.token);

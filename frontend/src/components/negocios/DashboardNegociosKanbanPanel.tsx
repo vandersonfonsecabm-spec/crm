@@ -479,16 +479,21 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
   const [canonicalStateLoading, setCanonicalStateLoading] = useState(false);
   const [canonicalStateError, setCanonicalStateError] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const refreshCanonicalState = useCallback(async () => {
     setCanonicalStateLoading(true);
     setCanonicalStateError("");
-    fetchCanonicalCommercialState(business.id)
-      .then((nextState) => { if (active) setCanonicalState(nextState); })
-      .catch(() => { if (active) setCanonicalStateError("Não foi possível carregar o histórico canônico."); })
-      .finally(() => { if (active) setCanonicalStateLoading(false); });
-    return () => { active = false; };
+    try {
+      setCanonicalState(await fetchCanonicalCommercialState(business.id));
+    } catch {
+      setCanonicalStateError("Não foi possível carregar o histórico canônico.");
+    } finally {
+      setCanonicalStateLoading(false);
+    }
   }, [business.id]);
+
+  useEffect(() => {
+    void refreshCanonicalState();
+  }, [refreshCanonicalState]);
 
   const requestClose = useCallback(() => {
     if (isMoving) return;
@@ -538,6 +543,7 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
         await reopenCanonicalDeal(business.id, contract.revisao, reason);
         await onCanonicalChanged(business.id, "Negócio reaberto; o histórico anterior foi preservado.");
       }
+      await refreshCanonicalState();
       setCanonicalAction(null);
       setCanonicalReason("");
       setManualValue("");

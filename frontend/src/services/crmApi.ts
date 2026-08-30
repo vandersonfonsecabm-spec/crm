@@ -294,6 +294,10 @@ export type ApiDashboardSummary = {
     hotProposalCount: number;
     activePipeline: number;
     conversionRate: number | null;
+    pipelineValueAvailable: boolean;
+    forecastValueAvailable: boolean;
+    wonValueAvailable: boolean;
+    conversionRateAvailable: boolean;
     monetaryDataAvailable: boolean;
   };
   status: Array<{ status: string; total: number; valor: number | null }>;

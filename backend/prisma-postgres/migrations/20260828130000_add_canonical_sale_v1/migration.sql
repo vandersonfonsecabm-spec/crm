@@ -251,6 +251,48 @@ BEFORE INSERT OR UPDATE OF "empresaId", "negocioId", "propostaPrincipalId", "pro
 ON "NegocioContratoVenda"
 FOR EACH ROW EXECUTE FUNCTION "guardNegocioContratoVendaCustomerV1"();
 
+CREATE FUNCTION "guardPropostaComercialCustomerConsistencyV1"() RETURNS TRIGGER AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM "Negocio" AS negocio
+    WHERE negocio."empresaId" = NEW."empresaId"
+      AND negocio."id" = NEW."negocioId"
+      AND negocio."clienteId" = NEW."clienteId"
+  ) THEN
+    RAISE EXCEPTION 'PROPOSTA_COMERCIAL_CUSTOMER_MISMATCH' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "PropostaComercial_customer_consistency"
+BEFORE INSERT OR UPDATE OF "empresaId", "negocioId", "clienteId"
+ON "PropostaComercial"
+FOR EACH ROW EXECUTE FUNCTION "guardPropostaComercialCustomerConsistencyV1"();
+
+CREATE FUNCTION "guardNegocioCustomerReparentV1"() RETURNS TRIGGER AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "PropostaComercial" AS proposta
+    WHERE proposta."empresaId" = OLD."empresaId"
+      AND proposta."negocioId" = OLD."id"
+      AND (
+        proposta."empresaId" IS DISTINCT FROM NEW."empresaId"
+        OR proposta."negocioId" IS DISTINCT FROM NEW."id"
+        OR proposta."clienteId" IS DISTINCT FROM NEW."clienteId"
+      )
+  ) THEN
+    RAISE EXCEPTION 'NEGOCIO_CUSTOMER_REPARENT_FORBIDDEN' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "Negocio_customer_reparent_guard"
+BEFORE UPDATE OF "empresaId", "id", "clienteId"
+ON "Negocio"
+FOR EACH ROW EXECUTE FUNCTION "guardNegocioCustomerReparentV1"();
+
 CREATE FUNCTION "guardVendaCanonicaSnapshotV1"() RETURNS TRIGGER AS $$
 BEGIN
   IF NEW."empresaId" IS DISTINCT FROM OLD."empresaId"

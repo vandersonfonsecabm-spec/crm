@@ -10,6 +10,10 @@ type KanbanEnterpriseStats = {
   todayFollowUps: number;
   activePipeline: number;
   conversionRate: number | null;
+  pipelineValueAvailable: boolean;
+  forecastValueAvailable: boolean;
+  wonValueAvailable: boolean;
+  conversionRateAvailable: boolean;
   monetaryDataAvailable: boolean;
 };
 
@@ -37,11 +41,11 @@ export default function DashboardKanbanSummary({
         </span>
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-        <SummarySignal icon={<GitBranch size={12} />} label="Funil" value={kanbanEnterpriseStats.monetaryDataAvailable ? money(kanbanEnterpriseStats.totalValue) : "Não informado"} />
-        <SummarySignal icon={<Target size={12} />} label="Previsão" value={kanbanEnterpriseStats.monetaryDataAvailable ? money(kanbanEnterpriseStats.forecastValue) : "Não informado"} tone="warning" />
-        <SummarySignal icon={<CheckCircle2 size={12} />} label="Ganho" value={kanbanEnterpriseStats.monetaryDataAvailable ? money(kanbanEnterpriseStats.wonValue) : "Não informado"} tone="success" />
+        <SummarySignal icon={<GitBranch size={12} />} label="Funil" value={kanbanEnterpriseStats.pipelineValueAvailable ? money(kanbanEnterpriseStats.totalValue) : "Não informado"} />
+        <SummarySignal icon={<Target size={12} />} label="Previsão" value={kanbanEnterpriseStats.forecastValueAvailable ? money(kanbanEnterpriseStats.forecastValue) : "Não informado"} tone="warning" />
+        <SummarySignal icon={<CheckCircle2 size={12} />} label="Ganho" value={kanbanEnterpriseStats.wonValueAvailable ? money(kanbanEnterpriseStats.wonValue) : "Não informado"} tone="success" />
         <SummarySignal icon={<AlertTriangle size={12} />} label="Risco" value={`${kanbanEnterpriseStats.highRiskCount} oportunidades`} tone="danger" />
-        <SummarySignal icon={<TrendingUp size={12} />} label="Conversão" value={kanbanEnterpriseStats.monetaryDataAvailable && kanbanEnterpriseStats.conversionRate !== null ? `${kanbanEnterpriseStats.conversionRate}%` : "Não informado"} tone="success" />
+        <SummarySignal icon={<TrendingUp size={12} />} label="Conversão" value={kanbanEnterpriseStats.conversionRateAvailable && kanbanEnterpriseStats.conversionRate !== null ? `${kanbanEnterpriseStats.conversionRate}%` : "Não informado"} tone="success" />
         <SummarySignal icon={<Gauge size={12} />} label="Score médio" value={`${kanbanEnterpriseStats.averageScore}/100`} tone="info" />
         <SummarySignal icon={<GitBranch size={12} />} label="Funil ativo" value={`${kanbanEnterpriseStats.activePipeline} oportunidades`} />
         <SummarySignal icon={<CalendarDays size={12} />} label="Hoje" value={`${kanbanEnterpriseStats.todayFollowUps} ações`} tone="info" />

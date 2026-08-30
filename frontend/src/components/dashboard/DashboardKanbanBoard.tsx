@@ -16,6 +16,10 @@ type KanbanEnterpriseStats = {
   todayFollowUps: number;
   activePipeline: number;
   conversionRate: number | null;
+  pipelineValueAvailable: boolean;
+  forecastValueAvailable: boolean;
+  wonValueAvailable: boolean;
+  conversionRateAvailable: boolean;
   monetaryDataAvailable: boolean;
 };
 
