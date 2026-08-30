@@ -35,9 +35,14 @@
   outbound. Somente os deployments oficiais foram consultados read-only e
   permaneceram nos IDs anteriores. Conectores/credenciais reais de produto não
   foram usados por esta missão.
-- Estado deste checkpoint: `FINAL_ADVERSARIAL_VERDICT=PENDING_REVIEW_AFTER_FIXES`.
-  Não declarar `CANONICAL_SALE_V1=COMPLETE` nem
-  `READY_FOR_PRODUCTION=YES` antes da nova revisão e reconciliação do Sol.
+- A revisão adversarial independente pós-fixes retornou
+  `FINAL_ADVERSARIAL_VERDICT=SHIP`; o timestamp documental divergente foi
+  corrigido em `624d88a` e os 14 artefatos indexados conferiram. O secret sweep
+  final e a reconciliação do Sol passaram.
+- Estado final: `CANONICAL_SALE_V1=COMPLETE`,
+  `READY_FOR_PRODUCTION=YES`, `PENDING_INTERNAL=0`, `UNTESTED_INTERNAL=0` e
+  `FALSE_PASS=0`. Isso não autoriza promoção: produção exige missão futura
+  separadamente autorizada. `PRODUCTION_CHANGED=false`.
   Autoridade: `docs/CANONICAL_SALE_V1_FINAL_2026-08-29.md` e
   `docs/evidence/CANONICAL_SALE_V1_STAGING_EVIDENCE_2026-08-30.json`.
 

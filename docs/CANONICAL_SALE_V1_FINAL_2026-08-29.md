@@ -4,14 +4,15 @@ Data de consolidação: 2026-08-30
 
 Branch: `feature/canonical-sale-v1`
 
-Estado deste documento: `PENDING_REVIEW_AFTER_FIXES`
+Estado deste documento: `FINAL`
 
 Este documento substitui o relatório local anterior, que registrava staging
 como não iniciado. Ele consolida somente fatos comprovados até o artefato de
 release atual. O primeiro adversarial retornou `FIX_FIRST`; os findings foram
-corrigidos e retestados, mas uma nova revisão adversarial limpa e o secret
-sweep sobre os artefatos documentais ainda estão pendentes. Este rascunho não
-declara `COMPLETE`, `SHIP` nem prontidão para produção antes desses gates.
+corrigidos e retestados. A revisão adversarial independente pós-fixes retornou
+`SHIP`, o secret sweep final passou e o Sol reconciliou a matriz. `SHIP` aqui
+significa staging verificado e prontidão para uma promoção futura separadamente
+autorizada; produção não foi promovida nem alterada.
 
 ## 1. Veredito atual
 
@@ -55,14 +56,14 @@ ROLLBACK_FORWARD_FIX_REHEARSAL=PASS
 STAGING_AUDIT_SWEEP_1=PASS_AFTER_RETESTS
 STAGING_AUDIT_SWEEP_2=PASS_AFTER_RETESTS
 SECOND_REVIEW_FINDING_IDEMPOTENCY_RECOVERY=RETESTED
-FINAL_SECRET_SWEEP=PENDING_RECONCILIATION
+FINAL_SECRET_SWEEP=PASS
 FIRST_FINAL_ADVERSARIAL_VERDICT=FIX_FIRST
 FIRST_FINAL_ADVERSARIAL_FINDINGS=RETESTED_RECONCILED
-FINAL_ADVERSARIAL_VERDICT=PENDING_REVIEW_AFTER_FIXES
-FINAL_SOL_RECONCILIATION=PENDING_RECONCILIATION
+FINAL_ADVERSARIAL_VERDICT=SHIP
+FINAL_SOL_RECONCILIATION=PASS
 
-CANONICAL_SALE_V1=NOT_YET_FINAL
-READY_FOR_PRODUCTION=PENDING_REVIEW_AFTER_FIXES
+CANONICAL_SALE_V1=COMPLETE
+READY_FOR_PRODUCTION=YES
 PRODUCTION_CHANGED=false
 REAL_PRODUCT_PROVIDER_CONNECTIONS_USED_BY_THIS_MISSION=0
 REAL_PRODUCT_PROVIDER_CREDENTIALS_USED_BY_THIS_MISSION=0
@@ -421,7 +422,7 @@ O resultado durável está em
 | STG-S1-DELETE-01 | HIGH | GUC liberava delete e faltava guard de truncate | `f8f4961` | RETESTED local/staging |
 | STG-S1-CONTRACT-01 | HIGH | delete de contrato ocultava receita ativa | `f8f4961` | RETESTED |
 | STG-S1-RUNTIME-01 | MEDIUM | manifesto omitia normalização `.toml` | runtime v3-lf | RETESTED |
-| STG-S1-EVIDENCE-01 | MEDIUM | soak sem atribuição/cleanup consolidado | relatório e manifests duráveis | RETESTED; secret check final pendente |
+| STG-S1-EVIDENCE-01 | MEDIUM | soak sem atribuição/cleanup consolidado | relatório e manifests duráveis | RETESTED |
 | STG-S2-IDEMP-01 | HIGH | recovery aceitava venda invalidada | `3b2e462` | RETESTED; reviewer SHIP |
 | ADV-FIX-REOPEN | gate blocker | LOST sem histórico causal tinha fallback implícito; legado WON não podia ser reinterpretado | `2da896a`, fail-closed | RETESTED SQLite/PG/E2E |
 | ADV-FIX-CSV | gate blocker | export não possuía prova executável/download capturado | utilitário/testes/download `2da896a` | RETESTED 4/4, 232/232, browser |
@@ -431,8 +432,7 @@ O resultado durável está em
 
 As severidades individuais dos cinco findings adversariais não foram
 reclassificadas neste relatório; todos bloquearam o gate `FIX_FIRST` e foram
-tratados como obrigatórios. Não há finding conhecido sem correção. Permanecem
-pendentes o secret sweep documental e uma nova revisão adversarial limpa.
+tratados como obrigatórios. Não há finding conhecido sem correção.
 
 ## 16. Auditorias independentes
 
@@ -448,19 +448,20 @@ O primeiro adversarial final, executado depois dos dois sweeps, retornou
 `FIX_FIRST` para: semântica fail-closed do reopen LOST/legado WON, prova
 executável do CSV, rehearsal de rollback/forward-fix, cleanup compatível com
 append-only e amplitude das alegações de provider. `2da896a` e os manifests
-duráveis corrigiram/retestaram todos esses pontos. O primeiro veredito não é
-reescrito retroativamente como SHIP; uma nova revisão adversarial é obrigatória.
+duráveis corrigiram/retestaram todos esses pontos. O primeiro veredito não foi
+reescrito retroativamente. Uma nova instância independente reavaliou o
+candidato inteiro, validou os artefatos e corrigiu somente um timestamp
+documental em `624d88a`; depois retornou `SHIP` sem finding bloqueante.
 
 ```text
 STAGING_AUDIT_SWEEP_1=PASS_AFTER_RETESTS
 STAGING_AUDIT_SWEEP_2=PASS_AFTER_RETESTS
 FIRST_FINAL_ADVERSARIAL_VERDICT=FIX_FIRST
 FIRST_FINAL_ADVERSARIAL_FINDINGS=RETESTED_RECONCILED
-FINAL_ADVERSARIAL_VERDICT=PENDING_REVIEW_AFTER_FIXES
+FINAL_ADVERSARIAL_VERDICT=SHIP
 ```
 
-O adversarial final somente poderá retornar `SHIP` ou `FIX_FIRST` depois do
-secret sweep, commit documental e rechecagem final de runtime.
+Evidência durável: `docs/evidence/CANONICAL_SALE_V1_FINAL_ADVERSARIAL_RESULTS_2026-08-30.json`.
 
 ## 17. Matriz de gates
 
@@ -484,8 +485,8 @@ secret sweep, commit documental e rechecagem final de runtime.
 | Runtime/parity/final QA | PASS | deployments, SHA, manifest, health, logs 0, 5xx 0 |
 | Sweep 1 | PASS_AFTER_RETESTS | findings corrigidos/revistos |
 | Sweep 2 | PASS_AFTER_RETESTS | finding corrigido; reviewer SHIP |
-| Secret sweep final | PENDING_RECONCILIATION | executar nos docs finais |
-| Adversarial final | PENDING_REVIEW_AFTER_FIXES | primeiro FIX_FIRST fechado; nova revisão exigida |
+| Secret sweep final | PASS | varredura final sanitizada, sem segredo real |
+| Adversarial final | SHIP | re-auditoria pós-fixes sem finding bloqueante |
 
 ## 18. Produção, providers e segredos
 
@@ -509,36 +510,34 @@ ativas de `MetaCredential`/integração Bling; ele não prova ausência de toda 
 qualquer credencial armazenada em todos os subsistemas. A alegação correta é
 que esta missão não conectou nem utilizou credencial real de provider de
 produto. O relatório não contém URL com credencial, token, cookie, senha,
-private key ou dado real. `FINAL_SECRET_SWEEP` deve rodar novamente sobre o
-commit documental.
+private key ou dado real. `FINAL_SECRET_SWEEP=PASS` no estado final.
 
 O índice sanitizado central desta missão é
 `docs/evidence/CANONICAL_SALE_V1_STAGING_EVIDENCE_2026-08-30.json`; ele aponta
 para E2E, browser, CSV, soak, rollback/forward-fix e cleanup duráveis.
 
-## 19. Critério de encerramento
+## 19. Encerramento
 
-Este rascunho só pode mudar para estado final depois de:
-
-1. secret sweep do relatório/índice;
-2. consolidar o relatório posterior ao draft commit
-   `a56f936eae6511bd9f090fa84bed4fadf39b43aa`, preservando
-   `RELEASE_ARTIFACT_HEAD=2da896a`;
-3. nova revisão adversarial independente, pós-fixes, com veredito `SHIP`;
-4. reconciliação do Sol e rechecagem runtime/alias/produção.
-
-Até lá:
+O secret sweep do relatório/índice passou, a revisão adversarial independente
+pós-fixes retornou `SHIP`, e o Sol reconciliou runtime, Git, migrations,
+PostgreSQL causal, E2E, browser, CSV, cleanup, rollback e produção distinta.
 
 ```text
 OPEN_CRITICAL=0
 OPEN_HIGH=0
 OPEN_MEDIUM=0
+PENDING_INTERNAL=0
+UNTESTED_INTERNAL=0
 UNTESTED_PRODUCT_SCOPE=0
 FALSE_PASS=0
-CANONICAL_SALE_V1=NOT_YET_FINAL
-READY_FOR_PRODUCTION=PENDING_REVIEW_AFTER_FIXES
+FINAL_SECRET_SWEEP=PASS
+FINAL_ADVERSARIAL_VERDICT=SHIP
+FINAL_SOL_RECONCILIATION=PASS
+CANONICAL_SALE_V1=COMPLETE
+READY_FOR_PRODUCTION=YES
+PRODUCTION_CHANGED=false
 ```
 
-Quando e somente quando esses gates passarem, a autoridade final poderá
-registrar `CANONICAL_SALE_V1=COMPLETE` e `READY_FOR_PRODUCTION=YES`, mantendo
-`PRODUCTION_CHANGED=false`.
+`READY_FOR_PRODUCTION=YES` não autoriza nem executa promoção. Produção exige
+uma missão futura própria com autorização, preflight, backup, janela de
+migration e verificação pós-promoção.

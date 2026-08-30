@@ -1,7 +1,7 @@
 {
   "schemaVersion": "canonical-sale-v1-staging-evidence-v1",
   "asOfDate": "2026-08-30",
-  "status": "PENDING_FINAL_ADVERSARIAL_RECONCILIATION",
+  "status": "COMPLETE",
   "authority": "docs/CANONICAL_SALE_V1_FINAL_2026-08-29.md",
   "redaction": {
     "sanitized": true,
@@ -17,6 +17,7 @@
     "cleanupCommandOutput": { "file": "CANONICAL_SALE_V1_CLEANUP_COMMAND_OUTPUT_2026-08-30.txt", "sha256": "a62ed8e17acb768e1d8c12e3e0d0793f8279afab5d47cd2f3664405b695f620e" },
     "e2e": { "file": "CANONICAL_SALE_V1_E2E_RESULTS_2026-08-30.json", "sha256": "6043bf00db4080c3cc8714a8463611c31bbedf7feebd14ca31d1c6a532795e70" },
     "e2eCommandOutput": { "file": "CANONICAL_SALE_V1_E2E_COMMAND_OUTPUT_2026-08-30.txt", "sha256": "e1a6cff4def3c079900242910608540fac902172ea302610d534d928d51a6f75" },
+    "finalAdversarial": { "file": "CANONICAL_SALE_V1_FINAL_ADVERSARIAL_RESULTS_2026-08-30.json", "sha256": "777dfda697e43c28c1d743701c54a252f4eebc2984843ff0f7f20e4513b664d7" },
     "export": { "file": "CANONICAL_SALE_V1_EXPORT_RESULTS_2026-08-30.json", "sha256": "f14604193ef03703bd7e196f4100240878f2bae3d65ac70952e1d162f8b2900c" },
     "exportCsv": { "file": "CANONICAL_SALE_V1_STAGING_EXPORT_2026-08-30.csv", "sha256": "7509e195de0fe377e68333347116abc890d57d28dd3bf3c9cb7bd9aadfbe18ef" },
     "runtime": { "file": "CANONICAL_SALE_V1_FINAL_RUNTIME_RESULTS_2026-08-30.json", "sha256": "a7afa3700e58ba4ddab22dadd9c2525713009f09111ddd26ef6b397dae9b262e" },
@@ -254,9 +255,9 @@
     "stagingAuditSweep1": "PASS_AFTER_RETESTS",
     "stagingAuditSweep2": "PASS_AFTER_RETESTS",
     "secondReviewFindingIdempotencyRecovery": "RETESTED",
-    "finalSecretSweep": "PENDING_RECONCILIATION",
-    "finalAdversarialVerdict": "PENDING_RECONCILIATION",
-    "finalSolReconciliation": "PENDING_RECONCILIATION"
+    "finalSecretSweep": "PASS",
+    "finalAdversarialVerdict": "SHIP",
+    "finalSolReconciliation": "PASS"
   },
   "firstFinalAdversarial": {
     "verdict": "FIX_FIRST",
@@ -264,10 +265,10 @@
       "legacyReopen": "RETESTED_RECONCILED",
       "rollbackForwardFix": "RETESTED_RECONCILED",
       "csvBrowser": "RETESTED_RECONCILED",
-      "durableEvidenceAndState": "EVIDENCE_PERSISTED_STATE_UPDATE_PENDING",
+      "durableEvidenceAndState": "RETESTED_RECONCILED",
       "providerClaimScope": "RECONCILED"
     },
-    "requiredSecondVerdict": "PENDING_REVIEW_AFTER_FIXES"
+    "requiredSecondVerdict": "SHIP"
   },
   "safety": {
     "productionApplicationRequests": 0,
@@ -280,12 +281,15 @@
     "runtimeVerifierScope": "outbound flags plus active MetaCredential and Bling integration rows; no broader stored-provider absence is claimed"
   },
   "finalState": {
-    "canonicalSaleV1": "NOT_YET_FINAL",
-    "readyForProduction": "PENDING_RECONCILIATION",
+    "canonicalSaleV1": "COMPLETE",
+    "readyForProduction": "YES",
     "openCritical": 0,
     "openHigh": 0,
     "openMedium": 0,
+    "pendingInternal": 0,
+    "untestedInternal": 0,
     "untestedProductScope": 0,
-    "falsePass": 0
+    "falsePass": 0,
+    "productionChanged": false
   }
 }

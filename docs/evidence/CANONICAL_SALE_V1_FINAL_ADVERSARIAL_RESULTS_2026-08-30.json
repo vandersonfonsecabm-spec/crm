@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "canonical-sale-v1-final-adversarial-results-v1",
+  "verdict": "SHIP",
+  "meaning": "Staging verified and ready for a separately authorized future production promotion; production not deployed.",
+  "releaseArtifactHead": "2da896aac84dd683e844b266331716e9600e6357",
+  "gitTree": "5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce",
+  "stableEvidenceCheckpoint": "624d88a7fc9aa576d6fa906efeb762462099d0f0",
+  "openBlockingFindings": 0,
+  "verified": {
+    "lostReopenFailClosed": true,
+    "legacyWonFailClosed": true,
+    "executableCsv": true,
+    "authenticatedCsvCapture": true,
+    "allIndexedEvidenceHashes": true,
+    "postgresCausalLogAndManifest": true,
+    "runtimeFingerprint": true,
+    "cleanupAccessDisabledAndHistoryRetained": true,
+    "providerClaimScopeNarrowed": true,
+    "rollbackBridgeAndForwardFix": true,
+    "stagingProductionTargetsDistinct": true
+  },
+  "evidenceChronologyFinding": {
+    "status": "RETESTED_RECONCILED",
+    "fixCommit": "624d88a7fc9aa576d6fa906efeb762462099d0f0",
+    "correctedExportInstant": "2026-08-30T15:28:00Z",
+    "correctedExportManifestSha256": "f14604193ef03703bd7e196f4100240878f2bae3d65ac70952e1d162f8b2900c"
+  },
+  "residualRisks": [
+    "The 575-second soak ran on 5d0e427; later changes used proportional SQLite, PostgreSQL, frontend and final authenticated E2E evidence.",
+    "A future production promotion requires separate authorization, preflight, backup/restore controls, migration window and post-promotion verification."
+  ],
+  "goalGuardDecision": "GOAL_COMPLETE",
+  "containsCredentials": false,
+  "containsRealCustomerData": false
+}
