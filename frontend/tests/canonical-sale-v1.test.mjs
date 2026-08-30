@@ -25,6 +25,9 @@ test("Venda Canônica V1 expõe proveniência e bloqueia fechamento silencioso",
   assert.match(kanban, /markDealAsLost/);
   assert.match(kanban, /reopenCanonicalDeal/);
   assert.match(kanban, /idempotencyKey/);
+  assert.match(kanban, /canonicalRequestSequence/);
+  assert.match(kanban, /new AbortController\(\)/);
+  assert.match(kanban, /controller\.signal\.aborted/);
   assert.match(kanban, /Motivo obrigatório/);
   assert.match(kanban, /Exportar vendas CSV/);
   assert.match(kanban, /sale\.totalCentavos/);
@@ -42,6 +45,8 @@ test("Venda Canônica V1 expõe proveniência e bloqueia fechamento silencioso",
   for (const endpoint of ["contrato-venda", "proposta-principal", "\/aceitar", "proposta-vencedora\/substituir", "fechar-ganho", "marcar-perdido", "\/reabrir", "\/vendas"]) {
     assert.match(api, new RegExp(endpoint));
   }
+  assert.match(api, /fetchCanonicalCommercialState\(negocioId: number, options/);
+  assert.match(api, /requestApiGetAuthenticated<CanonicalCommercialState>\([^\n]+options/);
   assert.match(api, /CanonicalSaleSource/);
   assert.match(api, /CanonicalSaleContract/);
   assert.match(api, /totalCentavos/);
