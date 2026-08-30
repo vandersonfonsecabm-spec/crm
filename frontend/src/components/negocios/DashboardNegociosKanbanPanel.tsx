@@ -478,16 +478,29 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
   const [canonicalState, setCanonicalState] = useState<CanonicalCommercialState | null>(null);
   const [canonicalStateLoading, setCanonicalStateLoading] = useState(false);
   const [canonicalStateError, setCanonicalStateError] = useState("");
+  const canonicalRequestSequence = useRef(0);
+  const canonicalRequestController = useRef<AbortController | null>(null);
 
   const refreshCanonicalState = useCallback(async () => {
+    const requestSequence = canonicalRequestSequence.current + 1;
+    canonicalRequestSequence.current = requestSequence;
+    canonicalRequestController.current?.abort();
+    const controller = new AbortController();
+    canonicalRequestController.current = controller;
     setCanonicalStateLoading(true);
     setCanonicalStateError("");
     try {
-      setCanonicalState(await fetchCanonicalCommercialState(business.id));
+      const nextState = await fetchCanonicalCommercialState(business.id, { signal: controller.signal });
+      if (controller.signal.aborted || canonicalRequestSequence.current !== requestSequence) return;
+      setCanonicalState(nextState);
     } catch {
+      if (controller.signal.aborted || canonicalRequestSequence.current !== requestSequence) return;
       setCanonicalStateError("Não foi possível carregar o histórico canônico.");
     } finally {
-      setCanonicalStateLoading(false);
+      if (canonicalRequestSequence.current === requestSequence) {
+        canonicalRequestController.current = null;
+        setCanonicalStateLoading(false);
+      }
     }
   }, [business.id]);
 
@@ -498,6 +511,9 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
     });
     return () => {
       cancelled = true;
+      canonicalRequestSequence.current += 1;
+      canonicalRequestController.current?.abort();
+      canonicalRequestController.current = null;
     };
   }, [refreshCanonicalState]);
 

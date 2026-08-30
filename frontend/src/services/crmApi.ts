@@ -2525,8 +2525,8 @@ export async function duplicateCommercialProposal(id: number) {
   return requestApiWrite<CommercialProposal>("POST", `/propostas/${id}/duplicar-versao`, {});
 }
 
-export async function fetchCanonicalCommercialState(negocioId: number) {
-  return requestApiGetAuthenticated<CanonicalCommercialState>(`/negocios/${negocioId}/contrato-venda`);
+export async function fetchCanonicalCommercialState(negocioId: number, options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<CanonicalCommercialState>(`/negocios/${negocioId}/contrato-venda`, options);
 }
 
 export async function fetchCanonicalSales(params: { page?: number; limit?: number; status?: CanonicalSaleStatus; clienteId?: number; negocioId?: number } = {}) {
