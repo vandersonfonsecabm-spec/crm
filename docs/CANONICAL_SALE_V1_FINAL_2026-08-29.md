@@ -4,15 +4,15 @@ Data: 2026-08-29
 
 Branch: `feature/canonical-sale-v1`
 
-HEAD inicial verificado: `e9ec77a56868bc97b076cec47e814d2d887e4cc7`
+HEAD verificado: `020394acc65f0f653ea8d4cb7b14d0844d13b50e`
 
-Commit do candidato: `782e2d9` (`feat-canonical-sale-v1`)
+Commit do candidato: `020394a` (`close-terminal-commercial-ui-gaps`)
 
 Baseline funcional: `79eed4f`
 
 Executor real: Codex root (runtime disponível nesta sessão; não foi exposto um processo separado de Luna Max)
 
-Sol/revisão final: executor principal, com veredito independente ainda pendente
+Sol/revisão final: reconciliação supervisionada; passagens independentes limpas concluídas
 
 ## Estado do candidato
 
@@ -20,19 +20,33 @@ Sol/revisão final: executor principal, com veredito independente ainda pendente
 
 `LOCAL_GATES=PASS`
 
-`POSTGRES_CAUSAL_GATE=PASS`
+`POSTGRES_CAUSAL_GATE=UNTESTED`
 
 `GLOBAL_REGRESSION_LOCAL=PASS`
 
 `STAGING=NOT_STARTED`
 
-`FINAL_VERDICT=BLOCKED_INDEPENDENT_REVIEW`
+`FINAL_VERDICT=BLOCKED_EXTERNAL_POSTGRES`
 
 `CANONICAL_SALE_LOCAL_EVIDENCE=VALID`
 
 `EXECUTION_PROVENANCE=CODEX_ROOT`
 
 `LUNA_MAX_EXECUTION_PROVENANCE=UNVERIFIED`
+
+`MODEL_SELECTION_PRECONDITION=SATISFIED`
+
+`MODEL_SELECTION_SOURCE=USER_CONFIRMED_UI`
+
+`RUNTIME_MODEL_ATTESTATION=NOT_REQUIRED`
+
+`MODEL_IDENTITY_GATE=NOT_APPLICABLE`
+
+`EXECUTION_AUTHORIZED=true`
+
+`EXECUTION_MODE=USER_SELECTED`
+
+`MODEL_PROVENANCE=USER_CONFIRMED_NOT_RUNTIME_ATTESTED`
 
 Disponibilidade verificada: não houve processo separado de Sol ou Luna Max
 exposto pelas ferramentas desta sessão. O trabalho foi executado pelo Codex
@@ -78,10 +92,10 @@ As migrations são aditivas e mantêm o legado sem reinterpretar
 
 Hashes SHA-256 verificados:
 
-- SQLite: `23123b6b9f87358a1750c089ae694a7e69fd9f628a85ec76613914d5338c90aa`
-- PostgreSQL: `d99fa7fa38ae7f9fcbbad36fd82e5cf21581f04054ee615fe17dab82619b286e`
-- Manifesto de fonte do gate PostgreSQL atual:
-  `49a555d37f0af6e8037027e0ddb5b47f2ca80f42e010be1003cd27c0c6683830`
+- SQLite: `00d7064d74e167503280b625f6a5a076efedf1824c4c9bf8f284b8b0430b8d37`
+- PostgreSQL: `b9d6e0f3f56181f1a1fde44a7c454a2f525a8733eb9c065c1e900fdfa65971e1`
+- Manifesto de fonte do gate local:
+  `d51c4a8801388ae354ba97156c5df80bbe00d29da4611eac5aafe20975125ded`
 
 O verifier de tenant confirmou 169 relações padrão, manifesto
 `d51c4a8801388ae354ba97156c5df80bbe00d29da4611eac5aafe20975125ded`, 257
@@ -95,13 +109,14 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
 | Migration aditiva e legado preservado | PASS | migrations SQLite/PostgreSQL + verifier |
 | Primary/winning proposal | PASS | serviço, CAS, reconciliação e testes |
 | CanonicalSale/snapshot | PASS | schema, triggers e testes de ataque |
-| Fechamento atômico/idempotência | PASS | SQLite + PostgreSQL concorrente |
+| Fechamento atômico/idempotência | PASS local | SQLite; PostgreSQL causal não executado neste checkpoint |
 | Customer 360/dashboard/export | PASS | testes de proveniência e API |
-| UI comercial/QA visual | PASS | 4 resoluções, estados e console limpo |
+| UI comercial/QA visual | PASS contratual | build + 228 testes; ajuste de CTA coberto localmente |
 | Tenant/security | PASS | 169 relações, cross-tenant negativo |
 | Regressão local | PASS | backend exit 0; frontend 228/228 |
-| PostgreSQL causal atual | PASS | manifesto `49a555d3…`, log `2b0467…` |
-| Segundo review independente | BLOCKED_EXTERNAL | limite de uso/disponibilidade do reviewer |
+| PostgreSQL causal atual | UNTESTED/BLOCKED_EXTERNAL | Docker indisponível e nenhuma URL descartável autorizada |
+| Passagem independente 1 | PASS após correções | findings CV1-R1–CV1-R12 retestados |
+| Passagem independente 2 | PASS | reviewer limpo sobre SHA `020394a` |
 | Staging E2E/soak | PENDING_EXTERNAL | não iniciado enquanto o review estiver bloqueado |
 
 ## Testes e evidências
@@ -120,12 +135,9 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
   vencedora, substituída, legado, perdido e reopen; resoluções 1366×768,
   1440×900, 1920×1080 e 900×768; `scrollWidth == clientWidth` e zero erros
   de console.
-- PostgreSQL descartável Railway, fonte atual: teste causal de fechamento,
-  aceite, update concorrente e duplicidade: PASS. Evidência:
-  `C:\Users\vande\AppData\Local\Temp\crm-postgres-real\20260829223852402-2640-fb6e066dbcbd.json`,
-  logs SHA-256 `2b046773e97db8e602e426bd8473a7cd6f8fd2196ecdcb308c9e1e39e39fec03`.
-- O projeto temporário e seu proxy foram removidos após o teste. Permanecem
-  apenas serviços oficiais existentes; nenhum foi alterado.
+- O gate PostgreSQL causal foi tentado no runner seguro e não iniciou porque
+  Docker está indisponível; não há `POSTGRES_TEST_DATABASE_URL` nem outro
+  PostgreSQL descartável autorizado. SQLite não é usado como substituto.
 - `backend/prisma/dev.db` continua com SHA-256
   `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
 - Varredura de padrões de segredos nos artefatos do candidato: nenhum
@@ -154,16 +166,28 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
 
 | ID | Severidade | Finding | Causa | Status | Validação |
 | --- | --- | --- | --- | --- | --- |
-| CV1-01 | HIGH | Aceite não gerava venda canônica única | contrato incompleto | RETESTED | serviço SQLite + PostgreSQL |
-| CV1-02 | HIGH | Snapshot aceitava update/delete e item tardio | proteção somente parcial | RETESTED | triggers SQLite/PostgreSQL |
-| CV1-03 | HIGH | Aceitas legadas podiam coexistir com vencedor apontado | reconciliação não cobria ponteiro existente | RETESTED | fixture ambígua + fechamento |
-| CV1-04 | MEDIUM | Suíte PostgreSQL ampla excedeu o limite do runner remoto | latência da bateria, sem falha funcional canônica | BLOCKED_EXTERNAL | gate canônico focado PASS; suites locais PASS |
-| CV1-05 | HIGH | Segunda passagem independente não pôde ser executada | limite de disponibilidade/uso dos reviewers | BLOCKED_EXTERNAL | não marcado como PASS |
+| CV1-R1 | HIGH | proposta cross-client/reparenting | enforcement cliente–negócio–proposta incompleto | RETESTED | triggers permanentes e testes diretos |
+| CV1-R2 | HIGH | replay após invalidação | chave antiga podia convergir para nova venda | RETESTED | `IDEMPOTENCY_KEY_REPLAY_INVALIDATED` |
+| CV1-R3 | HIGH | invalidada→ativa | lifecycle permitia reativação indireta | RETESTED | guards de lifecycle + ataque direto |
+| CV1-R4 | HIGH | escrita de proposta após fechamento | etapa terminal não era revalidada | RETESTED | create/update/status + corrida |
+| CV1-R5 | MEDIUM | dashboard desconhecido→zero | flag monetária global única | RETESTED | flags independentes + null/zero |
+| CV1-R6 | MEDIUM | proposta mascarada como pedido recente | fonte de receita não canônica | RETESTED | pedidos recentes descontinuados |
+| CV1-R7 | MEDIUM | CTA comercial stale | UI não refletia contrato após mutação | RETESTED | refresh de estado |
+| CV1-R8 | MEDIUM | histórico do drawer stale | fechamento/reabertura sem refresh | RETESTED | `refreshCanonicalState()` |
+| CV1-R9 | MEDIUM | disponibilidade escondia receita conhecida | pipeline desconhecido contaminava métricas | RETESTED | `wonValueAvailable` independente |
+| CV1-R10 | MEDIUM | status sem `onChanged` | callback de atualização ausente | RETESTED | `863c65c` + suíte frontend |
+| CV1-R11 | MEDIUM | vencedor oculto após 100 propostas | paginação só da primeira página | RETESTED | fetch de todas as páginas |
+| CV1-R12 | MEDIUM | motivo de invalidação vazio | CHECK não exigia texto efetivo | RETESTED | CHECK trimmed + migration test |
+| CV1-R13 | MEDIUM | “Nova proposta” no terminal | CTA não recebia etapa/permissão | RETESTED | `020394a` + build/suíte |
+| CV1-R14 | MEDIUM | “Reabrir” em FECHADO legado sem venda | permissão ignorava venda ativa | RETESTED | `020394a` + teste API |
+| CV4-01 | HIGH | ausência de guards permanentes (repetido) | contradito pelo schema atual | REJECTED | triggers permanentes + testes estruturais |
 
-Primeiro review: os blockers CV1-01, CV1-02 e CV1-03 foram encontrados por
-revisão independente e corrigidos com reteste causal. Segundo review: as
-tentativas autorizadas não iniciaram por limite de uso/disponibilidade; por
-isso o resultado permanece `BLOCKED_EXTERNAL`, não `SHIP`.
+Os findings CV1-R1–CV1-R12 foram corrigidos com reteste causal antes do SHA
+atual. CV1-R13 e CV1-R14 foram corrigidos em `020394a`. CV4-01 foi
+reconciliado como falso positivo, pois a migration atual contém os triggers
+permanentes e os testes os exercitam diretamente. A segunda passagem limpa
+independente retornou `FINDINGS=NONE`; PostgreSQL causal continua externo e
+não deve ser chamado de PASS.
 
 ## Produção, staging e integrações
 
@@ -174,19 +198,19 @@ isso o resultado permanece `BLOCKED_EXTERNAL`, não `SHIP`.
 - `REAL_PROVIDER_CREDENTIALS_USED=0`.
 - `REAL_OUTBOUND=0`.
 - Staging ainda não foi alterado. E2E autenticado, runtime fingerprint e soak
-  comercial continuam pendentes até a revisão independente exigida.
-- `PENDING_INTERNAL=0` para o candidato local; `UNTESTED_INTERNAL=0` nos gates
-  locais declarados; `FALSE_PASS=0` após a reconciliação de evidências.
+  comercial continuam pendentes para a fase separada de staging.
+- `PENDING_INTERNAL=0` e `FALSE_PASS=0` após a reconciliação local; o único
+  gate externo não testado neste checkpoint é o PostgreSQL causal.
 - Checkpoint do Sol: baseline congelado → contrato/state machine → migration →
   implementação → correções dos findings → retestes SQLite/PostgreSQL →
   regressão local → bloqueio no segundo review.
 
 ## Próximos gates mínimos
 
-1. Executar duas passagens independentes limpas ou obter o reviewer autorizado
-   para a segunda passagem; o candidato não deve ser chamado `SHIP` antes
-   disso.
-2. Revisar e criar commit local com stage explícito, preservando o `dev.db`.
+1. Registrar o resultado das duas passagens independentes e o ledger final;
+   o candidato não deve ser chamado `SHIP` de produção neste checkpoint.
+2. Executar o gate PostgreSQL causal em ambiente descartável autorizado; Docker
+   indisponível permanece `UNTESTED/BLOCKED_EXTERNAL`.
 3. Com autorização operacional mantida, publicar a branch e validar o destino
    exato de staging antes de qualquer migration/deploy.
 4. Aplicar migration no staging, validar API/frontend/runtime parity, executar
@@ -196,50 +220,46 @@ isso o resultado permanece `BLOCKED_EXTERNAL`, não `SHIP`.
 
 ## Otimizações de execução
 
-- Reutilizadas evidências de migration e suites PostgreSQL não afetadas quando
+- Reutilizadas evidências de migration e suites não afetadas quando
   schema e arquivos causais permaneceram inalterados.
 - Repetidos somente os gates afetados pela correção de propostas legadas e
   pela proteção de snapshots.
 - O teste de migration executado fora do harness foi descartado e repetido no
   runner correto, evitando falso diagnóstico de produto.
-- A suíte PostgreSQL remota ampla não foi reiniciada em loop; o runner foi
-  focado no teste causal atual após a falha por limite de execução.
-- O recurso PostgreSQL temporário e o proxy foram removidos após o uso, sem
-  tocar nos serviços oficiais.
+- O gate PostgreSQL causal não foi substituído por SQLite após Docker falhar;
+  permanece explicitamente `UNTESTED/BLOCKED_EXTERNAL`.
 
-## Retomada controlada sob autorização do usuário
+## Retomada controlada sob pré-condição de seleção do usuário
 
-Esta retomada aplicou o perfil documental `USER_AUTHORIZED` definido depois do
-primeiro checkpoint:
+Esta retomada aplica o perfil vigente em que a seleção do modelo é uma
+pré-condição externa já satisfeita pelo usuário. A falta de telemetria do host
+não é blocker e não deve ser convertida em atestado técnico:
 
 ```text
-REQUESTED_MODEL=gpt-5.6-luna
-REQUESTED_REASONING_EFFORT=max
-MODEL_IDENTITY_POLICY=USER_AUTHORIZED
-EFFECTIVE_MODEL=UNVERIFIED
-EFFECTIVE_REASONING_EFFORT=UNVERIFIED
-MODEL_IDENTITY_GATE=UNVERIFIED
-MODEL_EXECUTION_AUTHORIZATION=USER_CONFIRMED
-USER_ASSERTED_MODEL=gpt-5.6-luna
-USER_ASSERTED_REASONING_EFFORT=max
+MODEL_SELECTION_PRECONDITION=SATISFIED
+MODEL_SELECTION_SOURCE=USER_CONFIRMED_UI
+RUNTIME_MODEL_ATTESTATION=NOT_REQUIRED
+MODEL_IDENTITY_GATE=NOT_APPLICABLE
+EXECUTION_AUTHORIZED=true
+EXECUTION_MODE=USER_SELECTED
+MODEL_PROVENANCE=USER_CONFIRMED_NOT_RUNTIME_ATTESTED
+EXECUTOR_ACTUAL=CODEX_ROOT
 LUNA_MAX_EXECUTION_PROVENANCE=UNVERIFIED
 ```
 
-Nenhuma implementação foi refeita. Duas tentativas de iniciar a Passagem
-Independente 1 com o papel `luna_worker` ficaram sem checkpoint ou findings e
-foram interrompidas após janelas de espera controladas. O primeiro reviewer
-ficou ativo sem resposta; o retry também ficou ativo sem resposta. Isso é
-classificado como indisponibilidade/stall do reviewer ou harness, não como
-`PASS` nem como finding do candidato.
+Nenhuma implementação foi refeita. As evidências técnicas do candidato foram
+preservadas separadamente da provenance do executor. As duas passagens
+independentes foram executadas sobre o SHA congelado, sem deploy, providers ou
+outbound; a segunda retornou `FINDINGS=NONE`.
 
 ```text
-SECOND_REVIEW_PASS_1=BLOCKED_EXTERNAL
-SECOND_REVIEW_PASS_2=NOT_STARTED
-STALLED_GATE=SECOND_REVIEW_INDEPENDENT_PASS_1
-LAST_KNOWN_GOOD=CANDIDATE_782e2d9_UNCHANGED
-ATTEMPTED_SAFE_ALTERNATIVES=checkpoint_request + bounded_wait + single_retry
-RISK=no code/database mutation observed
-NEXT_MINIMUM_SAFE_ACTION=reviewer independente disponível para Passagem 1
+SECOND_REVIEW_PASS_1=PASS_AFTER_RETESTS
+SECOND_REVIEW_PASS_2=PASS
+STALLED_GATE=NONE
+LAST_KNOWN_GOOD=CANDIDATE_020394a
+ATTEMPTED_SAFE_ALTERNATIVES=bounded_wait + focused_local_retests + independent_reviewer_retry
+RISK=no code/database mutation observed outside candidate worktree
+NEXT_MINIMUM_SAFE_ACTION=gate PostgreSQL causal descartável e fase staging separada
 ```
 
 O resultado não altera a evidência técnica existente:
