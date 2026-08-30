@@ -57,6 +57,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260825170000_add_commercial_proposal_catalog_items": "20d18cdec5fb781bb81572188a90f4b5e3f0feafe478f520c2bc910f6f5f2295",
     "20260827200000_add_store1_provider_readiness": "6aa6ee3e3097df108765da05ecd1ea303f719473afd51402db916789a3fffa4c",
     "20260828130000_add_canonical_sale_v1": "00d7064d74e167503280b625f6a5a076efedf1824c4c9bf8f284b8b0430b8d37",
+    "20260830133500_harden_canonical_sale_delete_guard": "69aa03b4cd09c5e3f232a9d56e146ec8623c342bb42e451ee35a9274cc83b4dd",
   }),
   postgresql: Object.freeze({
     "20260728090000_postgres_baseline": "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
@@ -78,6 +79,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260825170000_add_commercial_proposal_catalog_items": "ee6535644e267c6490c98ec580b958db56926054e4cf66bdb522d1bd2fc68f05",
     "20260827200000_add_store1_provider_readiness": "caad5bb24aac5943e5a6f9f36e3ad8d35598ef22914714f9177c17c690246e2e",
     "20260828130000_add_canonical_sale_v1": "b9d6e0f3f56181f1a1fde44a7c454a2f525a8733eb9c065c1e900fdfa65971e1",
+    "20260830133500_harden_canonical_sale_delete_guard": "14349f98eda3b066c0abc8ce236387f90b2fe8c77f816601d3533932b9492be4",
   }),
 });
 
@@ -352,6 +354,12 @@ const MIGRATION_REGISTRY = Object.freeze({
       "HistoricoVendaCanonica.negocioId->Negocio",
       "HistoricoVendaCanonica.autorId->Usuario",
     ]),
+  }),
+  "20260830133500_harden_canonical_sale_delete_guard": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: "69aa03b4cd09c5e3f232a9d56e146ec8623c342bb42e451ee35a9274cc83b4dd",
+    postgresSha256: "14349f98eda3b066c0abc8ce236387f90b2fe8c77f816601d3533932b9492be4",
   }),
 });
 

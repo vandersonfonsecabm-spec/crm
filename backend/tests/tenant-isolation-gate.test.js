@@ -31,7 +31,7 @@ const {
 const backendDir = path.resolve(__dirname, "..");
 const migrationDir = path.join(backendDir, "prisma", "migrations");
 const currentMigration = "20260801123000_enforce_tenant_safe_relations";
-const latestMigration = "20260828130000_add_canonical_sale_v1";
+const latestMigration = "20260830133500_harden_canonical_sale_delete_guard";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 const historicalSourceDatabase = requiredEnv("CRM_TEST_SOURCE_DATABASE_PATH");
@@ -515,11 +515,11 @@ test("architecture sem flags valida os dois pacotes canonicos", async () => {
   const result = await runGate({ mode: "architecture" });
   assert.equal(result.safe, true);
   assert.equal(result.migration.migrationName, latestMigration);
-  assert.equal(result.migration.relationAffecting, true);
+  assert.equal(result.migration.relationAffecting, false);
   assert.equal(result.migration.providers.sqlite.migrationName, latestMigration);
-  assert.equal(result.migration.providers.sqlite.relationAffecting, true);
+  assert.equal(result.migration.providers.sqlite.relationAffecting, false);
   assert.equal(result.migration.providers.postgresql.migrationName, latestMigration);
-  assert.equal(result.migration.providers.postgresql.relationAffecting, true);
+  assert.equal(result.migration.providers.postgresql.relationAffecting, false);
 });
 
 test("architecture rejeita migration-dir sem provider antes de confiar no hash", async () => {

@@ -59,7 +59,7 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
       { code: "TENANT_GATE_MIGRATION_PENDING" },
     );
 
-    const finalMigrations = migrationNames.slice(-3);
+    const finalMigrations = migrationNames.slice(-4);
     for (const migrationName of finalMigrations) {
       fs.rmSync(path.join(workspace.migrationsDir, migrationName), { recursive: true, force: true });
     }
@@ -73,8 +73,8 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
     }
     const preSeven = await runGate({ mode: "pre-migration", ...gateOptions });
     assert.equal(preSeven.safe, true);
-    // Catalog, readiness and canonical-sale migrations are pending: four
-    // proposal-item relations, delivery-outbox and ten sale relations are unavailable.
+    // Catalog, readiness, canonical-sale and its PostgreSQL-only hardening are
+    // pending: four proposal-item relations, delivery-outbox and sale relations.
     assert.equal(preSeven.checkedRelationCount, 157);
 
     await seedLegacyProposalItem(client);

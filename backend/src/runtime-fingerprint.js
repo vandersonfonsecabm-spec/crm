@@ -7,8 +7,8 @@ const STAGING_IDS = Object.freeze({
   environment: "d6b6f137-cffd-4647-a102-3619fc54133a",
   apiService: "8af12b8e-4f4d-498c-9ceb-3182417905f8",
 });
-const SOURCE_MANIFEST_VERSION = "backend-runtime-v2-lf";
-const TEXT_MANIFEST_EXTENSIONS = new Set([".cjs", ".js", ".json", ".mjs", ".prisma", ".sql", ".ts", ".tsx"]);
+const SOURCE_MANIFEST_VERSION = "backend-runtime-v3-lf";
+const TEXT_MANIFEST_EXTENSIONS = new Set([".cjs", ".js", ".json", ".mjs", ".prisma", ".sql", ".toml", ".ts", ".tsx"]);
 
 function sourceManifestSha256(root = path.resolve(__dirname, "..")) {
   const resolvedRoot = path.resolve(root);

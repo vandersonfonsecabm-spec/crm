@@ -25,24 +25,6 @@ before(async () => {
 });
 
 after(async () => {
-  if (prismaA && company) {
-    const where = { empresaId: company.id };
-    await prismaA.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe("SET LOCAL crm.allow_canonical_sale_delete = 'test-cleanup'");
-      await tx.historicoVendaCanonica.deleteMany({ where });
-      await tx.itemVendaCanonica.deleteMany({ where });
-      await tx.negocioContratoVenda.deleteMany({ where });
-      await tx.vendaCanonica.deleteMany({ where });
-    }, { maxWait: 5000, timeout: 30000 });
-    await prismaA.historicoPropostaComercial.deleteMany({ where });
-    await prismaA.itemPropostaComercial.deleteMany({ where });
-    await prismaA.propostaComercial.deleteMany({ where });
-    await prismaA.historicoAtribuicao.deleteMany({ where });
-    await prismaA.negocio.deleteMany({ where });
-    await prismaA.cliente.deleteMany({ where });
-    await prismaA.usuario.deleteMany({ where });
-    await prismaA.empresa.deleteMany({ where: { id: company.id } });
-  }
   await Promise.allSettled([prismaA?.$disconnect(), prismaB?.$disconnect()]);
 });
 
@@ -230,6 +212,22 @@ test("PostgreSQL converge close/accept/update concorrentes sem venda duplicada",
   await assert.rejects(prismaA.itemVendaCanonica.delete({ where: { id: protectedItem.id } }));
   await assert.rejects(prismaA.historicoVendaCanonica.delete({ where: { id: protectedHistory.id } }));
   await assert.rejects(prismaA.vendaCanonica.delete({ where: { id: protectedSaleId } }));
+  await assert.rejects(prismaA.negocioContratoVenda.delete({ where: { empresaId_negocioId: { empresaId: company.id, negocioId: itemConstraintBusiness.id } } }));
+  await assert.rejects(
+    prismaA.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SET LOCAL crm.allow_canonical_sale_delete = 'test-cleanup'");
+      await tx.vendaCanonica.delete({ where: { id: protectedSaleId } });
+    }),
+    /CANONICAL_SALE_DELETE_FORBIDDEN/,
+  );
+  await assert.rejects(
+    prismaA.$executeRawUnsafe('TRUNCATE TABLE "HistoricoVendaCanonica"'),
+    /CANONICAL_SALE_TRUNCATE_FORBIDDEN/,
+  );
+  await assert.rejects(
+    prismaA.$executeRawUnsafe('TRUNCATE TABLE "NegocioContratoVenda"'),
+    /CANONICAL_SALE_TRUNCATE_FORBIDDEN/,
+  );
 });
 
 async function createBusiness(title, etapa) {

@@ -45,6 +45,7 @@ test("manifesto runtime versionado normaliza LF, CRLF e CR sem mudar o hash", ()
       ["src/example.js", "module.exports = { safe: true };\n"],
       ["package.json", "{\n  \"name\": \"runtime-manifest-fixture\"\n}\n"],
       ["prisma/migrations/one/migration.sql", "BEGIN;\nSELECT 1;\nCOMMIT;\n"],
+      ["prisma/migration_lock.toml", "provider = \"sqlite\"\n"],
     ];
     for (const [relative, content] of files) {
       fs.writeFileSync(path.join(lfRoot, relative), content, "utf8");

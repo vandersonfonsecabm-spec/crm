@@ -104,12 +104,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260825170000_add_commercial_proposal_catalog_items",
       "20260827200000_add_store1_provider_readiness",
       "20260828130000_add_canonical_sale_v1",
+      "20260830133500_harden_canonical_sale_delete_guard",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260828130000_add_canonical_sale_v1",
+        "20260830133500_harden_canonical_sale_delete_guard",
         "migration.sql",
       ),
     );
@@ -233,6 +234,17 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(canonicalSaleMigration, /VendaCanonica_snapshot_immutable_update/);
     assert.match(canonicalSaleMigration, /VendaCanonica_empresaId_clienteId_negocioId_fkey/);
     assert.doesNotMatch(canonicalSaleMigration, /^\s*(?:DELETE|TRUNCATE|DROP TABLE)\b/im);
+    const canonicalSaleDeleteHardening = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260830133500_harden_canonical_sale_delete_guard",
+      "migration.sql",
+    ), "utf8");
+    assert.match(canonicalSaleDeleteHardening, /^BEGIN;\s*$/m);
+    assert.match(canonicalSaleDeleteHardening, /CANONICAL_SALE_DELETE_FORBIDDEN/);
+    assert.match(canonicalSaleDeleteHardening, /CANONICAL_SALE_TRUNCATE_FORBIDDEN/);
+    assert.match(canonicalSaleDeleteHardening, /NegocioContratoVenda_no_delete_v1/);
+    assert.match(canonicalSaleDeleteHardening, /NegocioContratoVenda_no_truncate_v1/);
+    assert.doesNotMatch(canonicalSaleDeleteHardening, /allow_canonical_sale_delete|test-cleanup/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

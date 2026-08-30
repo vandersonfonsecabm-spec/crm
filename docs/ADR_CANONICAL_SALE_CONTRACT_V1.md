@@ -216,6 +216,10 @@ executa o PATCH terminal silenciosamente.
   anterior.
 - Depois da primeira Venda V1, rollback permanece forward-fix ou pausa de
   escrita; nunca remover tabelas com dados.
+- `VendaCanonica`, seus itens, histórico e `NegocioContratoVenda` são
+  append-only no PostgreSQL. Nenhuma variável/GUC de sessão libera `DELETE` ou
+  `TRUNCATE`; testes descartam o banco inteiro fora das credenciais da
+  aplicação.
 - Ensaio obrigatório: migrate-empty, upgrade histórico, repetição idempotente,
   SQLite, PostgreSQL causal, integridade e `dev.db` imutável.
 

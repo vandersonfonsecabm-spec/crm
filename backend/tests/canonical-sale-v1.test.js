@@ -136,6 +136,7 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   await assert.rejects(prisma.vendaCanonica.delete({ where: { id: firstSaleId } }));
   await assert.rejects(prisma.itemVendaCanonica.delete({ where: { id: saleItem.id } }));
   await assert.rejects(prisma.historicoVendaCanonica.delete({ where: { id: saleHistory.id } }));
+  await assert.rejects(prisma.negocioContratoVenda.delete({ where: { empresaId_negocioId: { empresaId: adminA.empresaId, negocioId: fixture.business.id } } }));
   await assert.rejects(prisma.historicoVendaCanonica.create({ data: { empresaId: adminA.empresaId, vendaId: firstSaleId, negocioId: fixture.business.id, autorId: adminA.usuarioId, acao: "INVALIDATE", statusAnterior: "ACTIVE", statusNovo: "INVALIDATED", motivo: "Invalidacao fora do lifecycle" } }));
   await assert.rejects(prisma.itemVendaCanonica.create({
     data: {
