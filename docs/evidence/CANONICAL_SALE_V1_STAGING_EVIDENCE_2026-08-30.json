@@ -41,7 +41,7 @@
     "remoteBranchMatches": true,
     "reportDraftCommit": "a56f936eae6511bd9f090fa84bed4fadf39b43aa",
     "reportCommit": "a56f936eae6511bd9f090fa84bed4fadf39b43aa",
-    "finalReconciliationCommit": null
+    "finalReconciliationCommit": "54428fdd8f49efaa2e932c3baea21a19fbea6ba6"
   },
   "stagingTargets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",

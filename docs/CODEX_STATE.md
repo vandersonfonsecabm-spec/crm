@@ -7,6 +7,10 @@
   `5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce`. O commit documental-base é
   `a56f936eae6511bd9f090fa84bed4fadf39b43aa`; commits documentais posteriores
   não mudam a identidade do artefato implantado.
+- A reconciliação final foi consolidada em
+  `54428fdd8f49efaa2e932c3baea21a19fbea6ba6`; o checkpoint de evidência
+  adversarial imediatamente anterior é
+  `624d88a7fc9aa576d6fa906efeb762462099d0f0`.
 - Staging está no backend Railway
   `313650fd-be82-4a28-a89a-9f1d525b400e` (`SUCCESS`) e frontend Vercel
   `dpl_EmnYbZQWFWxyaD1u8A5fXk19v5Cr` (`READY`) no alias dedicado. O runtime
