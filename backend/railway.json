@@ -3,7 +3,7 @@
   "build": {
     "builder": "NIXPACKS",
     "watchPatterns": [
-      "/backend/**"
+      "**"
     ],
     "buildCommand": "npm run prisma:generate:runtime"
   },
