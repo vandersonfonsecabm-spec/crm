@@ -52,10 +52,10 @@ test("gate A oferece movimentação de Negócio por teclado no drawer usando a m
   assert.match(panel, /workspaceFallbackFocus\.current\?\.focus\(\{ preventScroll: true \}\)/);
   assert.match(panel, /searchInputRef=\{workspaceFallbackFocus\}/);
   assert.match(panel, /ref=\{searchInputRef\}/);
-  assert.match(drawer, /const requestClose = useCallback\(\(\) => \{[\s\S]*?if \(isMoving\) return;[\s\S]*?onClose\(\);[\s\S]*?\}, \[isMoving, onClose\]\);/);
+  assert.match(drawer, /const requestClose = useCallback\(\(\) => \{[\s\S]*?if \(isMoving \|\| canonicalBusy\) return;[\s\S]*?onClose\(\);[\s\S]*?\}, \[canonicalBusy, isMoving, onClose\]\);/);
   assert.match(drawer, /event\.key === "Escape"[\s\S]*?requestClose\(\)/);
-  assert.match(drawer, /aria-label="Fechar detalhes do Negócio"[\s\S]*?disabled=\{isMoving\}[\s\S]*?onClick=\{requestClose\}/);
-  assert.match(drawer, /aria-label="Fechar detalhes"[\s\S]*?disabled=\{isMoving\}[\s\S]*?onClick=\{requestClose\}/);
+  assert.match(drawer, /aria-label="Fechar detalhes do Negócio"[\s\S]*?disabled=\{isMoving \|\| canonicalBusy\}[\s\S]*?onClick=\{requestClose\}/);
+  assert.match(drawer, /aria-label="Fechar detalhes"[\s\S]*?disabled=\{isMoving \|\| canonicalBusy\}[\s\S]*?onClick=\{requestClose\}/);
   assert.match(panel, /data-negocio-card-id=\{business\.id\}/);
 });
 

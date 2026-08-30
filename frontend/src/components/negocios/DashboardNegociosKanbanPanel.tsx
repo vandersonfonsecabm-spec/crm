@@ -74,6 +74,8 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
   const [detailLoading, setDetailLoading] = useState(false);
   const requestSequence = useRef(0);
   const detailRequestSequence = useRef(0);
+  const drawerSessionSequence = useRef(0);
+  const currentDrawerBusinessId = useRef<number | null>(null);
   const stageUpdates = useRef(new Set<number>());
   const detailTrigger = useRef<HTMLElement | null>(null);
   const detailTriggerBusinessId = useRef<number | null>(null);
@@ -117,6 +119,8 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
 
   useEffect(() => () => {
     detailRequestSequence.current += 1;
+    drawerSessionSequence.current += 1;
+    currentDrawerBusinessId.current = null;
   }, []);
 
   useEffect(() => {
@@ -136,6 +140,8 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
       adapter.fetchNegocioKanban(initialBusinessId)
         .then((business) => {
           if (!active || sequence !== detailRequestSequence.current) return;
+          drawerSessionSequence.current += 1;
+          currentDrawerBusinessId.current = business.id;
           setSelected(business);
           setDetailLoading(false);
           onInitialBusinessHandled?.();
@@ -156,6 +162,8 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
 
   async function openBusiness(business: CommunicationBusiness, trigger: HTMLElement) {
     const sequence = ++detailRequestSequence.current;
+    drawerSessionSequence.current += 1;
+    currentDrawerBusinessId.current = business.id;
     detailTrigger.current = trigger;
     detailTriggerBusinessId.current = business.id;
     setSelected(business);
@@ -172,6 +180,8 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
 
   const closeBusiness = useCallback(() => {
     detailRequestSequence.current += 1;
+    drawerSessionSequence.current += 1;
+    currentDrawerBusinessId.current = null;
     setDetailLoading(false);
     const businessId = detailTriggerBusinessId.current;
     const originalTrigger = detailTrigger.current;
@@ -199,6 +209,10 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
     if (!current || !current.permissoes?.movimentar || current.etapa === nextStage || stageUpdates.current.has(id)) return false;
     if (nextStage === "FECHADO" || nextStage === "PERDIDO") {
       const sequence = ++detailRequestSequence.current;
+      if (currentDrawerBusinessId.current !== id) {
+        drawerSessionSequence.current += 1;
+        currentDrawerBusinessId.current = id;
+      }
       setSelected(current);
       setDetailLoading(true);
       try {
@@ -238,18 +252,19 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
     }
   }
 
-  async function refreshCanonicalBusiness(id: number, message: string) {
+  async function refreshCanonicalBusiness(id: number, message: string, expectedDrawerSession: number) {
+    if (expectedDrawerSession !== drawerSessionSequence.current || currentDrawerBusinessId.current !== id) return;
     const sequence = ++detailRequestSequence.current;
     setDetailLoading(true);
     try {
       const updated = await adapter.fetchNegocioKanban(id);
-      if (sequence !== detailRequestSequence.current) return;
+      if (sequence !== detailRequestSequence.current || expectedDrawerSession !== drawerSessionSequence.current || currentDrawerBusinessId.current !== id) return;
       setSelected(updated);
       setBusinesses((items) => items.map((business) => business.id === id ? updated : business));
       onToast(message);
       await load(true);
     } finally {
-      if (sequence === detailRequestSequence.current) setDetailLoading(false);
+      if (sequence === detailRequestSequence.current && expectedDrawerSession === drawerSessionSequence.current) setDetailLoading(false);
     }
   }
 
@@ -284,6 +299,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
   if (error) return <ErrorState description="Tente novamente sem alterar os filtros." onRetry={() => void load()} title={error} />;
 
   const totalBusinesses = summary?.total ?? pagination.total;
+  const activeDrawerSession = drawerSessionSequence.current;
 
   return (
     <section className="negocios-workspace space-y-3" aria-label="Kanban de Negócios">
@@ -313,7 +329,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
         <Pagination disabled={refreshing} itemLabel="Negócios" onPageChange={setPage} page={page} total={pagination.total} totalPages={pagination.totalPages} visibleCount={businesses.length} />
       </Surface>
 
-      {selected && <BusinessDrawer authSession={authSession} business={selected} isMoving={movingBusinessId === selected.id} loading={detailLoading} onCanonicalChanged={refreshCanonicalBusiness} onClose={closeBusiness} onMoveBusiness={moveBusiness} onOpenAgenda={onOpenAgenda} />}
+      {selected && <BusinessDrawer authSession={authSession} business={selected} isMoving={movingBusinessId === selected.id} loading={detailLoading} onCanonicalChanged={(id, message) => refreshCanonicalBusiness(id, message, activeDrawerSession)} onClose={closeBusiness} onMoveBusiness={moveBusiness} onOpenAgenda={onOpenAgenda} />}
     </section>
   );
 }
@@ -550,9 +566,9 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
   }, [refreshCanonicalState]);
 
   const requestClose = useCallback(() => {
-    if (isMoving) return;
+    if (isMoving || canonicalBusy) return;
     onClose();
-  }, [isMoving, onClose]);
+  }, [canonicalBusy, isMoving, onClose]);
 
   function handleStageChange(nextStage: BusinessStage) {
     if (!canMove || isMoving || nextStage === business.etapa) return;
@@ -644,7 +660,7 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
 
   return (
     <div className="negocios-drawer-layer fixed inset-0 z-[220] flex justify-end" role="presentation">
-      <button aria-label="Fechar detalhes do Negócio" className="negocios-drawer-backdrop absolute inset-0 cursor-default" disabled={isMoving} onClick={requestClose} tabIndex={-1} type="button" />
+      <button aria-label="Fechar detalhes do Negócio" className="negocios-drawer-backdrop absolute inset-0 cursor-default" disabled={isMoving || canonicalBusy} onClick={requestClose} tabIndex={-1} type="button" />
       <aside aria-labelledby={`negocios-drawer-title-${business.id}`} aria-modal="true" className="negocios-drawer relative flex h-full w-full max-w-[760px] flex-col" ref={drawerRef} role="dialog">
         <header className="negocios-drawer-header flex items-start justify-between gap-3 px-4 py-3">
           <div className="min-w-0">
@@ -652,7 +668,7 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
             <h2 className="negocios-drawer-title mt-1 truncate" id={`negocios-drawer-title-${business.id}`}>{business.titulo || "Sem título"}</h2>
             <p className="negocios-drawer-client mt-1 truncate">{business.cliente?.nome || "Cliente não informado"}</p>
           </div>
-          <Button aria-label="Fechar detalhes" disabled={isMoving} onClick={requestClose} ref={closeButtonRef} size="sm" variant="ghost"><X size={16} /></Button>
+          <Button aria-label="Fechar detalhes" disabled={isMoving || canonicalBusy} onClick={requestClose} ref={closeButtonRef} size="sm" variant="ghost"><X size={16} /></Button>
         </header>
         <div className="negocios-drawer-body flex-1 overflow-y-auto p-4">
           {loading && <LoadingState label="Carregando detalhes" rows={2} />}

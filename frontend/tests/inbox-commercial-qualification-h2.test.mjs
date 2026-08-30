@@ -81,6 +81,9 @@ test("deep link e trocas rápidas de Negócio descartam respostas assíncronas o
   assert.match(kanban, /sequence === detailRequestSequence\.current\) setSelected\(detail\)/);
   assert.match(kanban, /setDetailLoading\(false\);\s*onInitialBusinessHandled\?\.\(\)/);
   assert.match(kanban, /detailRequestSequence\.current \+= 1/);
-  assert.match(kanban, /const closeBusiness = useCallback[\s\S]*?detailRequestSequence\.current \+= 1;\s*setDetailLoading\(false\)/);
-  assert.match(kanban, /async function refreshCanonicalBusiness[\s\S]*?const sequence = \+\+detailRequestSequence\.current[\s\S]*?setDetailLoading\(true\)[\s\S]*?sequence !== detailRequestSequence\.current[\s\S]*?finally[\s\S]*?sequence === detailRequestSequence\.current\) setDetailLoading\(false\)/);
+  assert.match(kanban, /const closeBusiness = useCallback[\s\S]*?detailRequestSequence\.current \+= 1;[\s\S]{0,220}setDetailLoading\(false\)/);
+  assert.match(kanban, /const drawerSessionSequence = useRef\(0\)/);
+  assert.match(kanban, /async function refreshCanonicalBusiness[\s\S]*?expectedDrawerSession !== drawerSessionSequence\.current[\s\S]*?const sequence = \+\+detailRequestSequence\.current[\s\S]*?setDetailLoading\(true\)[\s\S]*?currentDrawerBusinessId\.current !== id[\s\S]*?finally[\s\S]*?expectedDrawerSession === drawerSessionSequence\.current/);
+  assert.match(kanban, /if \(isMoving \|\| canonicalBusy\) return/);
+  assert.match(kanban, /disabled=\{isMoving \|\| canonicalBusy\}/);
 });
