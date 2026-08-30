@@ -20,6 +20,7 @@ import type {
   CommunicationBusiness,
   NegociosKanbanResponse,
 } from "../../services/crmApi";
+import { buildCanonicalSalesCsv, downloadCanonicalSalesCsv, fetchAllCanonicalSales } from "../../utils/canonicalSalesCsv.js";
 import { parseMoneyInputToCents } from "../../utils/commercialMoney.js";
 import { Button, ErrorState, Input, LoadingState, Pagination, Select, Surface, Textarea } from "../ui";
 import BusinessStageTimingPanel from "./BusinessStageTimingPanel";
@@ -271,24 +272,12 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
   async function exportCanonicalSalesCsv() {
     if (!window.confirm("O CSV contém dados comerciais. Exporte apenas para finalidade legítima e armazenamento seguro.")) return;
     try {
-      const first = await fetchCanonicalSales({ page: 1, limit: 100 });
-      const sales = [...first.data];
-      for (let nextPage = 2; nextPage <= first.pagination.totalPages; nextPage += 1) {
-        sales.push(...(await fetchCanonicalSales({ page: nextPage, limit: 100 })).data);
-      }
+      const sales = await fetchAllCanonicalSales(fetchCanonicalSales);
       if (!sales.length) {
         onToast("Nenhuma venda canônica disponível para exportação.");
         return;
       }
-      const header = ["Venda", "Negócio", "Cliente", "Moeda", "Valor (BRL)", "Centavos", "Origem", "Status", "Fechado em", "Proposta", "Revisão"];
-      const rows = sales.map((sale) => [sale.id, sale.negocioId, sale.clienteId, sale.moeda, (sale.totalCentavos / 100).toFixed(2).replace(".", ","), sale.totalCentavos, sale.origem, sale.status, sale.fechadoEm, sale.propostaVencedora?.codigo || "", sale.revisao]);
-      const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
-      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "vendas-canonicas.csv";
-      link.click();
-      URL.revokeObjectURL(url);
+      downloadCanonicalSalesCsv(buildCanonicalSalesCsv(sales));
       onToast("Vendas canônicas exportadas em CSV.");
     } catch {
       onToast("Não foi possível exportar as vendas canônicas.");
@@ -813,12 +802,6 @@ function formatCents(value: number) {
 function newIdempotencyKey(businessId: number) {
   const random = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `deal-${businessId}-${random}`;
-}
-
-function csvCell(value: string | number) {
-  const raw = String(value ?? "");
-  const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
-  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 function formatCompactDateTime(value: string) {

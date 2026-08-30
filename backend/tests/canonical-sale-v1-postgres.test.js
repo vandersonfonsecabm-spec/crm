@@ -150,6 +150,33 @@ test("PostgreSQL converge close/accept/update concorrentes sem venda duplicada",
   );
   assert.equal(replayReopened.contrato.vendaAtivaId, null);
 
+  const lostBusiness = await createBusiness("Perdido com historico valido", "CONTATO");
+  const lostState = await salesA.markDealAsLost(context, lostBusiness.id, { contratoRevisao: 1, motivo: "Perda causal PostgreSQL" });
+  const lostReopened = await salesA.reopenDeal(context, lostBusiness.id, { contratoRevisao: lostState.contrato.revisao, motivo: "Retomada causal PostgreSQL" });
+  assert.equal(lostReopened.negocio.etapa, "CONTATO");
+
+  const lostWithoutHistory = await createBusiness("Perdido sem historico", "PERDIDO");
+  await assert.rejects(
+    salesA.reopenDeal(context, lostWithoutHistory.id, { contratoRevisao: 1, motivo: "Reabertura sem historico PostgreSQL" }),
+    (error) => error?.codigo === "LOST_REOPEN_HISTORY_INVALID",
+  );
+  assert.equal((await prismaA.negocio.findUnique({ where: { id: lostWithoutHistory.id } })).etapa, "PERDIDO");
+  assert.equal(await prismaA.negocioContratoVenda.findUnique({ where: { empresaId_negocioId: { empresaId: company.id, negocioId: lostWithoutHistory.id } } }), null);
+
+  const lostMalformedHistory = await createBusiness("Perdido com historico malformado", "CONTATO");
+  const malformedLostState = await salesA.markDealAsLost(context, lostMalformedHistory.id, { contratoRevisao: 1, motivo: "Historico sera corrompido PostgreSQL" });
+  const malformedLossHistory = await prismaA.historicoAtribuicao.findFirstOrThrow({
+    where: { empresaId: company.id, negocioId: lostMalformedHistory.id, tipo: "MOVIMENTAR_ETAPA", etapaNova: "PERDIDO" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+  await prismaA.historicoAtribuicao.update({ where: { id: malformedLossHistory.id }, data: { etapaAnterior: "FECHADO" } });
+  await assert.rejects(
+    salesA.reopenDeal(context, lostMalformedHistory.id, { contratoRevisao: malformedLostState.contrato.revisao, motivo: "Reabertura com historico malformado PostgreSQL" }),
+    (error) => error?.codigo === "LOST_REOPEN_HISTORY_INVALID",
+  );
+  assert.equal((await prismaA.negocio.findUnique({ where: { id: lostMalformedHistory.id } })).etapa, "PERDIDO");
+  assert.equal((await prismaA.negocioContratoVenda.findUnique({ where: { empresaId_negocioId: { empresaId: company.id, negocioId: lostMalformedHistory.id } } })).revisao, malformedLostState.contrato.revisao);
+
   const crossDeal = await createBusiness("FK cross deal", "NOVO");
   await assert.rejects(
     prismaA.negocioContratoVenda.create({ data: { empresaId: company.id, negocioId: crossDeal.id, propostaPrincipalId: proposalA.id } }),

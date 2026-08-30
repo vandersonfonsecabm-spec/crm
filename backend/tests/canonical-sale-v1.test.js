@@ -253,9 +253,32 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   const lostResult = await request("POST", `/negocios/${lost.business.id}/marcar-perdido`, { contratoRevisao: 1, motivo: "Cliente adiou o projeto" }, sellerA.token);
   assert.equal(lostResult.status, 200);
   assert.equal(lostResult.body.negocio.etapa, "PERDIDO");
+  const lostSellerReopen = await request("POST", `/negocios/${lost.business.id}/reabrir`, { contratoRevisao: 2, motivo: "Vendedor nao pode reabrir" }, sellerA.token);
+  assert.equal(lostSellerReopen.status, 403);
   const lostReopened = await request("POST", `/negocios/${lost.business.id}/reabrir`, { contratoRevisao: 2, motivo: "Cliente retomou o projeto" }, adminA.token);
   assert.equal(lostReopened.status, 200);
   assert.equal(lostReopened.body.negocio.etapa, "CONTATO");
+
+  const lostWithoutHistory = await businessFixture(adminA, sellerA.usuarioId, "Cliente Perdido Sem Historico", "PERDIDO", null);
+  const lostWithoutHistoryReopen = await request("POST", `/negocios/${lostWithoutHistory.business.id}/reabrir`, { contratoRevisao: 1, motivo: "Tentativa sem historico causal" }, adminA.token);
+  assert.equal(lostWithoutHistoryReopen.status, 409);
+  assert.equal(lostWithoutHistoryReopen.body.codigo, "LOST_REOPEN_HISTORY_INVALID");
+  assert.equal((await prisma.negocio.findUnique({ where: { id: lostWithoutHistory.business.id } })).etapa, "PERDIDO");
+  assert.equal(await prisma.negocioContratoVenda.findUnique({ where: { empresaId_negocioId: { empresaId: adminA.empresaId, negocioId: lostWithoutHistory.business.id } } }), null);
+
+  const lostWithMalformedHistory = await businessFixture(adminA, sellerA.usuarioId, "Cliente Perdido Historico Invalido", "CONTATO", null);
+  const malformedLostResult = await request("POST", `/negocios/${lostWithMalformedHistory.business.id}/marcar-perdido`, { contratoRevisao: 1, motivo: "Historico sera corrompido no teste" }, sellerA.token);
+  assert.equal(malformedLostResult.status, 200);
+  const malformedLossHistory = await prisma.historicoAtribuicao.findFirstOrThrow({
+    where: { empresaId: adminA.empresaId, negocioId: lostWithMalformedHistory.business.id, tipo: "MOVIMENTAR_ETAPA", etapaNova: "PERDIDO" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+  await prisma.historicoAtribuicao.update({ where: { id: malformedLossHistory.id }, data: { etapaAnterior: "FECHADO" } });
+  const malformedHistoryReopen = await request("POST", `/negocios/${lostWithMalformedHistory.business.id}/reabrir`, { contratoRevisao: 2, motivo: "Tentativa com historico malformado" }, adminA.token);
+  assert.equal(malformedHistoryReopen.status, 409);
+  assert.equal(malformedHistoryReopen.body.codigo, "LOST_REOPEN_HISTORY_INVALID");
+  assert.equal((await prisma.negocio.findUnique({ where: { id: lostWithMalformedHistory.business.id } })).etapa, "PERDIDO");
+  assert.equal((await prisma.negocioContratoVenda.findUnique({ where: { empresaId_negocioId: { empresaId: adminA.empresaId, negocioId: lostWithMalformedHistory.business.id } } })).revisao, 2);
 
   const legacyAccepted = await businessFixture(adminA, sellerA.usuarioId, "Cliente Aceite Legado", "PROPOSTA", null);
   const legacyAcceptedProposal = await createReadyProposal(legacyAccepted.business.id, sellerA.token, "Proposta Aceita Legada");
@@ -272,6 +295,11 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   assert.equal(legacyWonView.status, 200, JSON.stringify(legacyWonView.body));
   assert.equal(legacyWonView.body.integridadeComercial, "LEGACY_WON_UNRECONCILED");
   assert.equal(legacyWonView.body.permissoes.reabrir, false);
+  const legacyWonReopen = await request("POST", `/negocios/${legacyWon.business.id}/reabrir`, { contratoRevisao: 1, motivo: "Tentativa sem reconciliacao legada" }, adminA.token);
+  assert.equal(legacyWonReopen.status, 409);
+  assert.equal(legacyWonReopen.body.codigo, "ACTIVE_SALE_MISSING");
+  assert.equal((await prisma.negocio.findUnique({ where: { id: legacyWon.business.id } })).etapa, "FECHADO");
+  assert.equal(await prisma.negocioContratoVenda.findUnique({ where: { empresaId_negocioId: { empresaId: adminA.empresaId, negocioId: legacyWon.business.id } } }), null);
 
   const ambiguousWinner = await businessFixture(adminA, sellerA.usuarioId, "Cliente Vencedora Ambigua", "PROPOSTA", null);
   const ambiguousProposalA = await createReadyProposal(ambiguousWinner.business.id, sellerA.token, "Proposta Ambigua A");

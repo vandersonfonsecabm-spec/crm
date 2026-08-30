@@ -28,6 +28,16 @@ Transições:
 - OPEN -> WON: somente `closeDealAsWon`.
 - OPEN -> LOST: somente `markDealAsLost`, com motivo obrigatório.
 - WON/LOST -> OPEN: somente `reopenDeal`, por ADMIN/GERENTE e com motivo.
+- LOST -> OPEN restaura exclusivamente a etapa aberta anterior registrada na
+  transição causal atual para `PERDIDO`. Histórico ausente, terminal, inválido
+  ou pertencente a uma transição anterior falha fechado com
+  `LOST_REOPEN_HISTORY_INVALID`; nunca existe fallback implícito para
+  `PROPOSTA`.
+- Um Negócio `FECHADO` legado classificado como `LEGACY_WON_UNRECONCILED` não
+  pode ser reaberto: sem `VendaCanonica` ACTIVE não há snapshot confiável da
+  etapa anterior. Ele permanece fail-closed com `ACTIVE_SALE_MISSING` até uma
+  reconciliação futura explícita; `Cliente.valor`, `Negocio.valor` e o estado
+  terminal legado não são reinterpretados como venda ou etapa anterior.
 - WON/LOST não mudam pelo PATCH genérico de Kanban.
 - Reabrir WON invalida a venda ativa e restaura a etapa aberta anterior
   persistida no snapshot.

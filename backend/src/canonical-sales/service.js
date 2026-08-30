@@ -394,7 +394,15 @@ function createCanonicalSaleService({ prisma, clock = () => new Date() }) {
       } else {
         if (contract.vendaAtivaId) throw conflict("ACTIVE_SALE_LOST_CONFLICT", "Negocio perdido nao pode possuir venda ativa.");
         const lastLoss = await tx.historicoAtribuicao.findFirst({ where: { empresaId: context.empresaId, negocioId, tipo: "MOVIMENTAR_ETAPA", etapaNova: "PERDIDO" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
-        targetStage = OPEN_STAGES.includes(lastLoss?.etapaAnterior) ? lastLoss.etapaAnterior : "PROPOSTA";
+        const currentLossAt = business.etapaEntrouEm || business.perdidoEm;
+        const recordedLossAt = lastLoss?.etapaSaiuEm;
+        if (!OPEN_STAGES.includes(lastLoss?.etapaAnterior)
+          || !currentLossAt
+          || !recordedLossAt
+          || new Date(recordedLossAt).getTime() !== new Date(currentLossAt).getTime()) {
+          throw conflict("LOST_REOPEN_HISTORY_INVALID", "O Negocio perdido nao possui historico valido da etapa aberta anterior.");
+        }
+        targetStage = lastLoss.etapaAnterior;
       }
       if ((await tx.negocioContratoVenda.updateMany({ where: { empresaId: context.empresaId, negocioId, revisao: contratoRevisao, vendaAtivaId: contract.vendaAtivaId }, data: { vendaAtivaId: null, revisao: { increment: 1 } } })).count !== 1) throw contractConflict();
       const effectiveEntry = business.etapaEntrouEm || business.updatedAt || business.createdAt;

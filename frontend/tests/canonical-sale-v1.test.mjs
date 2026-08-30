@@ -30,7 +30,7 @@ test("Venda Canônica V1 expõe proveniência e bloqueia fechamento silencioso",
   assert.match(kanban, /controller\.signal\.aborted/);
   assert.match(kanban, /Motivo obrigatório/);
   assert.match(kanban, /Exportar vendas CSV/);
-  assert.match(kanban, /sale\.totalCentavos/);
+  assert.match(kanban, /buildCanonicalSalesCsv/);
   assert.doesNotMatch(kanban, /empresaId|Authorization|localStorage|sessionStorage/);
 
   for (const label of ["Principal", "Vencedora", "Aceitar como vencedora", "Substituir vencedora", "Reconciliar vencedora", "Remover vencedora"]) {
