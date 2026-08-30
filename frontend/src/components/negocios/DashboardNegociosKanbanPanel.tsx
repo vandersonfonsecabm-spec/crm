@@ -240,12 +240,17 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
 
   async function refreshCanonicalBusiness(id: number, message: string) {
     const sequence = ++detailRequestSequence.current;
-    const updated = await adapter.fetchNegocioKanban(id);
-    if (sequence !== detailRequestSequence.current) return;
-    setSelected(updated);
-    setBusinesses((items) => items.map((business) => business.id === id ? updated : business));
-    onToast(message);
-    await load(true);
+    setDetailLoading(true);
+    try {
+      const updated = await adapter.fetchNegocioKanban(id);
+      if (sequence !== detailRequestSequence.current) return;
+      setSelected(updated);
+      setBusinesses((items) => items.map((business) => business.id === id ? updated : business));
+      onToast(message);
+      await load(true);
+    } finally {
+      if (sequence === detailRequestSequence.current) setDetailLoading(false);
+    }
   }
 
   async function exportCanonicalSalesCsv() {

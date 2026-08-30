@@ -82,5 +82,5 @@ test("deep link e trocas rápidas de Negócio descartam respostas assíncronas o
   assert.match(kanban, /setDetailLoading\(false\);\s*onInitialBusinessHandled\?\.\(\)/);
   assert.match(kanban, /detailRequestSequence\.current \+= 1/);
   assert.match(kanban, /const closeBusiness = useCallback[\s\S]*?detailRequestSequence\.current \+= 1;\s*setDetailLoading\(false\)/);
-  assert.match(kanban, /async function refreshCanonicalBusiness[\s\S]*?const sequence = \+\+detailRequestSequence\.current[\s\S]*?sequence !== detailRequestSequence\.current/);
+  assert.match(kanban, /async function refreshCanonicalBusiness[\s\S]*?const sequence = \+\+detailRequestSequence\.current[\s\S]*?setDetailLoading\(true\)[\s\S]*?sequence !== detailRequestSequence\.current[\s\S]*?finally[\s\S]*?sequence === detailRequestSequence\.current\) setDetailLoading\(false\)/);
 });
