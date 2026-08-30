@@ -4,7 +4,7 @@ Data: 2026-08-29
 
 Branch: `feature/canonical-sale-v1`
 
-HEAD verificado: `020394acc65f0f653ea8d4cb7b14d0844d13b50e`
+CANDIDATE_CODE_SHA: `020394acc65f0f653ea8d4cb7b14d0844d13b50e`
 
 Commit do candidato: `020394a` (`close-terminal-commercial-ui-gaps`)
 
@@ -117,7 +117,7 @@ foreign keys e 32 paises únicos, sem órfãos ou vínculos cruzados.
 | PostgreSQL causal atual | UNTESTED/BLOCKED_EXTERNAL | Docker indisponível e nenhuma URL descartável autorizada |
 | Passagem independente 1 | PASS após correções | findings CV1-R1–CV1-R12 retestados |
 | Passagem independente 2 | PASS | reviewer limpo sobre SHA `020394a` |
-| Staging E2E/soak | PENDING_EXTERNAL | não iniciado enquanto o review estiver bloqueado |
+| Staging E2E/soak | PENDING_SEPARATE_PHASE | não iniciado; exige autorização de staging e gate PostgreSQL |
 
 ## Testes e evidências
 
@@ -202,8 +202,8 @@ não deve ser chamado de PASS.
 - `PENDING_INTERNAL=0` e `FALSE_PASS=0` após a reconciliação local; o único
   gate externo não testado neste checkpoint é o PostgreSQL causal.
 - Checkpoint do Sol: baseline congelado → contrato/state machine → migration →
-  implementação → correções dos findings → retestes SQLite/PostgreSQL →
-  regressão local → bloqueio no segundo review.
+  implementação → correções dos findings → retestes SQLite → regressão local →
+  duas revisões independentes limpas → bloqueio externo somente no PostgreSQL.
 
 ## Próximos gates mínimos
 
