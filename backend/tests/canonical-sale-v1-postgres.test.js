@@ -158,6 +158,14 @@ test("PostgreSQL converge close/accept/update concorrentes sem venda duplicada",
   const reopenedBusiness = await prismaA.negocio.findUnique({ where: { id: reopenBusiness.id } });
   assert.equal(reopenedBusiness.etapa, "PROPOSTA");
   assert.equal(await prismaA.vendaCanonica.count({ where: { empresaId: company.id, negocioId: reopenBusiness.id, status: "ACTIVE" } }), 0);
+  const replayReopenBusiness = await createBusiness("Replay apos reabertura", "PROPOSTA");
+  const replaySeed = await salesA.closeDealAsWon(context, replayReopenBusiness.id, { origem: "MANUAL_CLOSE", idempotencyKey: `pg-replay-seed-${suffix}`, contratoRevisao: 1, valorFinalCentavos: 88000 });
+  const replayReopened = await salesA.reopenDeal(context, replayReopenBusiness.id, { contratoRevisao: replaySeed.contrato.revisao, motivo: "Reabertura para validar replay" });
+  await assert.rejects(
+    salesA.closeDealAsWon(context, replayReopenBusiness.id, { origem: "MANUAL_CLOSE", idempotencyKey: `pg-replay-seed-${suffix}`, contratoRevisao: replaySeed.contrato.revisao, valorFinalCentavos: 88000 }),
+    (error) => error?.codigo === "IDEMPOTENCY_KEY_REPLAY_INVALIDATED",
+  );
+  assert.equal(replayReopened.contrato.vendaAtivaId, null);
 
   const crossDeal = await createBusiness("FK cross deal", "NOVO");
   await assert.rejects(
@@ -166,6 +174,27 @@ test("PostgreSQL converge close/accept/update concorrentes sem venda duplicada",
   );
 
   const otherClient = await prismaA.cliente.create({ data: { empresaId: company.id, nome: "Cliente divergente PostgreSQL", origem: "QA PostgreSQL" } });
+  const mismatchBusiness = await createBusiness("Contrato cliente divergente", "PROPOSTA");
+  const mismatchProposal = await prismaA.propostaComercial.create({
+    data: {
+      empresaId: company.id,
+      clienteId: otherClient.id,
+      negocioId: mismatchBusiness.id,
+      responsavelId: actor.id,
+      autorId: actor.id,
+      codigo: `PROP-PG-MISMATCH-${suffix}`,
+      titulo: "Proposta de cliente divergente",
+      descontoGeralCentavos: 0,
+      subtotalCentavos: 100,
+      totalCentavos: 100,
+      validade: new Date("2026-12-31T00:00:00.000Z"),
+      status: "PRONTA",
+    },
+  });
+  await assert.rejects(
+    prismaA.negocioContratoVenda.create({ data: { empresaId: company.id, negocioId: mismatchBusiness.id, propostaPrincipalId: mismatchProposal.id } }),
+    (error) => error?.code === "P2003" || error?.code === "P2010",
+  );
   const constraintBusiness = await createBusiness("Constraints PostgreSQL", "PROPOSTA");
   const timestamp = new Date();
   await assert.rejects(prismaA.$executeRaw`
@@ -198,6 +227,7 @@ test("PostgreSQL converge close/accept/update concorrentes sem venda duplicada",
   `);
   await assert.rejects(prismaA.itemVendaCanonica.create({ data: { empresaId: company.id, vendaId: protectedSaleId, propostaIdOriginal: itemConstraintProposal.id, propostaItemId: itemConstraintProposal.itens[0].id, itemTypeOriginal: "LEGACY_ITEM", descricao: "Inclusao tardia proibida", quantidade: "1", valorUnitarioCentavos: 100, descontoCentavos: 0, subtotalCentavos: 100, totalCentavos: 100, ordem: 98 } }));
   await assert.rejects(prismaA.historicoVendaCanonica.create({ data: { empresaId: company.id, vendaId: protectedSaleId, negocioId: itemConstraintBusiness.id, autorId: actor.id, acao: "INVALIDATE", statusAnterior: "ACTIVE", statusNovo: "INVALIDATED", motivo: "Invalidacao fora do lifecycle" } }));
+  await assert.rejects(prismaA.vendaCanonica.update({ where: { id: protectedSaleId }, data: { status: "ACTIVE" } }));
   await assert.rejects(prismaA.itemVendaCanonica.delete({ where: { id: protectedItem.id } }));
   await assert.rejects(prismaA.historicoVendaCanonica.delete({ where: { id: protectedHistory.id } }));
   await assert.rejects(prismaA.vendaCanonica.delete({ where: { id: protectedSaleId } }));

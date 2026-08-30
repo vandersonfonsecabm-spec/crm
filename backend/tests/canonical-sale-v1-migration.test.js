@@ -54,8 +54,8 @@ test("Venda Canônica V1 adiciona contrato e snapshots sem reinterpretar legado"
   assert.throws(() => database.prepare(`
     INSERT INTO "NegocioContratoVenda"
       ("empresaId", "negocioId", "propostaPrincipalId", "revisao", "createdAt", "updatedAt")
-    VALUES (1, 2, 1, 1, ?, ?)
-  `).run(now(), now()), /FOREIGN KEY constraint failed/);
+      VALUES (1, 2, 1, 1, ?, ?)
+  `).run(now(), now()), /(FOREIGN KEY constraint failed|NEGOCIO_CONTRATO_VENDA_CUSTOMER_MISMATCH)/);
 
   database.prepare(`
     INSERT INTO "NegocioContratoVenda"

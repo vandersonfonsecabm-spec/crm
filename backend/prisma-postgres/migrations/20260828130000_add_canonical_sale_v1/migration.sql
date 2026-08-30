@@ -57,7 +57,7 @@ CREATE TABLE "VendaCanonica" (
   ),
   CONSTRAINT "VendaCanonica_lifecycle_ck" CHECK (
     ("status" = 'ACTIVE' AND "invalidadoEm" IS NULL AND "invalidadoPorId" IS NULL AND "motivoInvalidacao" IS NULL)
-    OR ("status" = 'INVALIDATED' AND "invalidadoEm" IS NOT NULL AND "invalidadoPorId" IS NOT NULL AND "motivoInvalidacao" IS NOT NULL)
+    OR ("status" = 'INVALIDATED' AND "invalidadoEm" IS NOT NULL AND "invalidadoPorId" IS NOT NULL AND "motivoInvalidacao" IS NOT NULL AND btrim("motivoInvalidacao") <> '')
   ),
   CONSTRAINT "VendaCanonica_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "VendaCanonica_empresaId_clienteId_negocioId_fkey" FOREIGN KEY ("empresaId", "clienteId", "negocioId") REFERENCES "Negocio"("empresaId", "clienteId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
@@ -216,6 +216,41 @@ CREATE INDEX "NegocioContratoVenda_empresaId_propostaPrincipalId_idx" ON "Negoci
 CREATE INDEX "NegocioContratoVenda_empresaId_propostaVencedoraId_idx" ON "NegocioContratoVenda"("empresaId", "propostaVencedoraId");
 CREATE INDEX "NegocioContratoVenda_empresaId_vendaAtivaId_idx" ON "NegocioContratoVenda"("empresaId", "vendaAtivaId");
 
+CREATE FUNCTION "guardNegocioContratoVendaCustomerV1"() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."propostaPrincipalId" IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+    FROM "Negocio" AS negocio
+    JOIN "PropostaComercial" AS proposta
+      ON proposta."empresaId" = negocio."empresaId"
+     AND proposta."negocioId" = negocio."id"
+     AND proposta."id" = NEW."propostaPrincipalId"
+     AND proposta."clienteId" = negocio."clienteId"
+    WHERE negocio."empresaId" = NEW."empresaId" AND negocio."id" = NEW."negocioId"
+  ) THEN
+    RAISE EXCEPTION 'NEGOCIO_CONTRATO_VENDA_CUSTOMER_MISMATCH' USING ERRCODE = '23514';
+  END IF;
+  IF NEW."propostaVencedoraId" IS NOT NULL AND NOT EXISTS (
+    SELECT 1
+    FROM "Negocio" AS negocio
+    JOIN "PropostaComercial" AS proposta
+      ON proposta."empresaId" = negocio."empresaId"
+     AND proposta."negocioId" = negocio."id"
+     AND proposta."id" = NEW."propostaVencedoraId"
+     AND proposta."clienteId" = negocio."clienteId"
+    WHERE negocio."empresaId" = NEW."empresaId" AND negocio."id" = NEW."negocioId"
+  ) THEN
+    RAISE EXCEPTION 'NEGOCIO_CONTRATO_VENDA_CUSTOMER_MISMATCH' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "NegocioContratoVenda_customer_consistency"
+BEFORE INSERT OR UPDATE OF "empresaId", "negocioId", "propostaPrincipalId", "propostaVencedoraId"
+ON "NegocioContratoVenda"
+FOR EACH ROW EXECUTE FUNCTION "guardNegocioContratoVendaCustomerV1"();
+
 CREATE FUNCTION "guardVendaCanonicaSnapshotV1"() RETURNS TRIGGER AS $$
 BEGIN
   IF NEW."empresaId" IS DISTINCT FROM OLD."empresaId"
@@ -237,6 +272,25 @@ BEGIN
     OR NEW."createdAt" IS DISTINCT FROM OLD."createdAt"
   THEN
     RAISE EXCEPTION 'CANONICAL_SALE_SNAPSHOT_IMMUTABLE' USING ERRCODE = '23514';
+  END IF;
+  IF OLD."status" = 'INVALIDATED' AND (
+    NEW."status" IS DISTINCT FROM OLD."status"
+    OR NEW."invalidadoEm" IS DISTINCT FROM OLD."invalidadoEm"
+    OR NEW."invalidadoPorId" IS DISTINCT FROM OLD."invalidadoPorId"
+    OR NEW."motivoInvalidacao" IS DISTINCT FROM OLD."motivoInvalidacao"
+  ) THEN
+    RAISE EXCEPTION 'CANONICAL_SALE_LIFECYCLE_TRANSITION_INVALID' USING ERRCODE = '23514';
+  END IF;
+  IF OLD."status" <> 'ACTIVE' OR NEW."status" NOT IN ('ACTIVE', 'INVALIDATED') THEN
+    RAISE EXCEPTION 'CANONICAL_SALE_LIFECYCLE_TRANSITION_INVALID' USING ERRCODE = '23514';
+  END IF;
+  IF OLD."status" = 'ACTIVE' AND NEW."status" = 'INVALIDATED' AND (
+    NEW."invalidadoEm" IS NULL
+    OR NEW."invalidadoPorId" IS NULL
+    OR NEW."motivoInvalidacao" IS NULL
+    OR btrim(NEW."motivoInvalidacao") = ''
+  ) THEN
+    RAISE EXCEPTION 'CANONICAL_SALE_LIFECYCLE_TRANSITION_INVALID' USING ERRCODE = '23514';
   END IF;
   RETURN NEW;
 END;

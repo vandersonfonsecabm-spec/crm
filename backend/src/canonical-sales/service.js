@@ -265,6 +265,9 @@ function createCanonicalSaleService({ prisma, clock = () => new Date() }) {
         const existing = await tx.vendaCanonica.findFirst({ where: { empresaId: context.empresaId, idempotencyKey } });
         if (existing) {
           assertIdempotentReplay(existing, { negocioId, origem, contratoRevisao, manualValue });
+          if (existing.status !== "ACTIVE") {
+            throw conflict("IDEMPOTENCY_KEY_REPLAY_INVALIDATED", "A venda associada a esta chave foi invalidada; use uma nova chave para um novo fechamento.");
+          }
           replayed = true;
           return;
         }
@@ -618,7 +621,7 @@ function presentSale(sale) {
 }
 
 function proposalSummarySelect() {
-  return { id: true, codigo: true, titulo: true, status: true, totalCentavos: true, moeda: true, revisao: true, versao: true };
+  return { id: true, codigo: true, titulo: true, status: true, totalCentavos: true, moeda: true, revisao: true, versao: true, clienteId: true };
 }
 
 function saleIncludes() {
@@ -638,6 +641,9 @@ function assertCommercialPointers(business) {
     if (!contract.propostaPrincipal || !PRIMARY_PROPOSAL_STATUSES.has(contract.propostaPrincipal.status)) {
       throw conflict("COMMERCIAL_POINTER_INTEGRITY_ERROR", "A proposta principal persistida esta inconsistente.");
     }
+    if (contract.propostaPrincipal.clienteId !== undefined && contract.propostaPrincipal.clienteId !== business.clienteId) {
+      throw conflict("COMMERCIAL_POINTER_INTEGRITY_ERROR", "A proposta principal pertence a outro Cliente.");
+    }
   }
   if (contract.propostaVencedoraId) {
     if (!contract.propostaVencedora || contract.propostaVencedora.status !== "ACEITA") {
@@ -645,6 +651,9 @@ function assertCommercialPointers(business) {
     }
     if (contract.propostaPrincipalId !== contract.propostaVencedoraId) {
       throw conflict("COMMERCIAL_POINTER_INTEGRITY_ERROR", "A proposta vencedora precisa permanecer principal.");
+    }
+    if (contract.propostaVencedora.clienteId !== undefined && contract.propostaVencedora.clienteId !== business.clienteId) {
+      throw conflict("COMMERCIAL_POINTER_INTEGRITY_ERROR", "A proposta vencedora pertence a outro Cliente.");
     }
   }
   if (contract.vendaAtivaId) {

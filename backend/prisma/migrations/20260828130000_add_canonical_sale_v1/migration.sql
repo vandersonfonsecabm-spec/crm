@@ -53,7 +53,7 @@ CREATE TABLE "VendaCanonica" (
   ),
   CONSTRAINT "VendaCanonica_lifecycle_ck" CHECK (
     ("status" = 'ACTIVE' AND "invalidadoEm" IS NULL AND "invalidadoPorId" IS NULL AND "motivoInvalidacao" IS NULL)
-    OR ("status" = 'INVALIDATED' AND "invalidadoEm" IS NOT NULL AND "invalidadoPorId" IS NOT NULL AND "motivoInvalidacao" IS NOT NULL)
+    OR ("status" = 'INVALIDATED' AND "invalidadoEm" IS NOT NULL AND "invalidadoPorId" IS NOT NULL AND "motivoInvalidacao" IS NOT NULL AND length(trim("motivoInvalidacao")) > 0)
   ),
   CONSTRAINT "VendaCanonica_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "VendaCanonica_empresaId_clienteId_negocioId_fkey" FOREIGN KEY ("empresaId", "clienteId", "negocioId") REFERENCES "Negocio"("empresaId", "clienteId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
@@ -201,6 +201,56 @@ CREATE INDEX "NegocioContratoVenda_empresaId_propostaPrincipalId_idx" ON "Negoci
 CREATE INDEX "NegocioContratoVenda_empresaId_propostaVencedoraId_idx" ON "NegocioContratoVenda"("empresaId", "propostaVencedoraId");
 CREATE INDEX "NegocioContratoVenda_empresaId_vendaAtivaId_idx" ON "NegocioContratoVenda"("empresaId", "vendaAtivaId");
 
+CREATE TRIGGER "NegocioContratoVenda_customer_consistency_insert"
+BEFORE INSERT ON "NegocioContratoVenda"
+WHEN (NEW."propostaPrincipalId" IS NOT NULL AND NOT EXISTS (
+  SELECT 1
+  FROM "Negocio" AS negocio
+  JOIN "PropostaComercial" AS proposta
+    ON proposta."empresaId" = negocio."empresaId"
+   AND proposta."negocioId" = negocio."id"
+   AND proposta."id" = NEW."propostaPrincipalId"
+   AND proposta."clienteId" = negocio."clienteId"
+  WHERE negocio."empresaId" = NEW."empresaId" AND negocio."id" = NEW."negocioId"
+)) OR (NEW."propostaVencedoraId" IS NOT NULL AND NOT EXISTS (
+  SELECT 1
+  FROM "Negocio" AS negocio
+  JOIN "PropostaComercial" AS proposta
+    ON proposta."empresaId" = negocio."empresaId"
+   AND proposta."negocioId" = negocio."id"
+   AND proposta."id" = NEW."propostaVencedoraId"
+   AND proposta."clienteId" = negocio."clienteId"
+  WHERE negocio."empresaId" = NEW."empresaId" AND negocio."id" = NEW."negocioId"
+))
+BEGIN
+  SELECT RAISE(ABORT, 'NEGOCIO_CONTRATO_VENDA_CUSTOMER_MISMATCH');
+END;
+
+CREATE TRIGGER "NegocioContratoVenda_customer_consistency_update"
+BEFORE UPDATE OF "empresaId", "negocioId", "propostaPrincipalId", "propostaVencedoraId" ON "NegocioContratoVenda"
+WHEN (NEW."propostaPrincipalId" IS NOT NULL AND NOT EXISTS (
+  SELECT 1
+  FROM "Negocio" AS negocio
+  JOIN "PropostaComercial" AS proposta
+    ON proposta."empresaId" = negocio."empresaId"
+   AND proposta."negocioId" = negocio."id"
+   AND proposta."id" = NEW."propostaPrincipalId"
+   AND proposta."clienteId" = negocio."clienteId"
+  WHERE negocio."empresaId" = NEW."empresaId" AND negocio."id" = NEW."negocioId"
+)) OR (NEW."propostaVencedoraId" IS NOT NULL AND NOT EXISTS (
+  SELECT 1
+  FROM "Negocio" AS negocio
+  JOIN "PropostaComercial" AS proposta
+    ON proposta."empresaId" = negocio."empresaId"
+   AND proposta."negocioId" = negocio."id"
+   AND proposta."id" = NEW."propostaVencedoraId"
+   AND proposta."clienteId" = negocio."clienteId"
+  WHERE negocio."empresaId" = NEW."empresaId" AND negocio."id" = NEW."negocioId"
+))
+BEGIN
+  SELECT RAISE(ABORT, 'NEGOCIO_CONTRATO_VENDA_CUSTOMER_MISMATCH');
+END;
+
 -- Snapshot fields are immutable. Reopening may only change lifecycle/audit fields.
 CREATE TRIGGER "VendaCanonica_snapshot_immutable_update"
 BEFORE UPDATE ON "VendaCanonica"
@@ -223,6 +273,23 @@ WHEN NEW."empresaId" IS NOT OLD."empresaId"
   OR NEW."createdAt" IS NOT OLD."createdAt"
 BEGIN
   SELECT RAISE(ABORT, 'CANONICAL_SALE_SNAPSHOT_IMMUTABLE');
+END;
+
+CREATE TRIGGER "VendaCanonica_lifecycle_transition_guard"
+BEFORE UPDATE ON "VendaCanonica"
+WHEN (OLD."status" = 'INVALIDATED' AND (
+  NEW."status" IS NOT OLD."status"
+  OR NEW."invalidadoEm" IS NOT OLD."invalidadoEm"
+  OR NEW."invalidadoPorId" IS NOT OLD."invalidadoPorId"
+  OR NEW."motivoInvalidacao" IS NOT OLD."motivoInvalidacao"
+)) OR (OLD."status" = 'ACTIVE' AND NEW."status" NOT IN ('ACTIVE', 'INVALIDATED')) OR (
+  OLD."status" = 'ACTIVE' AND NEW."status" = 'INVALIDATED' AND (
+    NEW."invalidadoEm" IS NULL OR NEW."invalidadoPorId" IS NULL
+    OR NEW."motivoInvalidacao" IS NULL OR length(trim(NEW."motivoInvalidacao")) = 0
+  )
+)
+BEGIN
+  SELECT RAISE(ABORT, 'CANONICAL_SALE_LIFECYCLE_TRANSITION_INVALID');
 END;
 
 CREATE TRIGGER "ItemVendaCanonica_snapshot_immutable_update"

@@ -55,6 +55,29 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   const proposalA = await createReadyProposal(fixture.business.id, sellerA.token, "Proposta A");
   const proposalB = await createReadyProposal(fixture.business.id, sellerA.token, "Proposta B");
   const proposalOtherTenant = await createReadyProposal(otherTenant.business.id, adminB.token, "Proposta Outro Tenant");
+  const sameTenantOther = await businessFixture(adminA, sellerA.usuarioId, "Cliente Outro Mesmo Tenant", "PROPOSTA", null);
+  const mismatchedProposal = await prisma.propostaComercial.create({
+    data: {
+      empresaId: adminA.empresaId,
+      clienteId: sameTenantOther.client.id,
+      negocioId: fixture.business.id,
+      autorId: sellerA.usuarioId,
+      codigo: `MISMATCH_PROPOSAL_${process.pid}`,
+      titulo: "Proposta de cliente incorreto",
+      validade: new Date("2026-12-31T00:00:00.000Z"),
+      status: "PRONTA",
+      subtotalCentavos: 100,
+      totalCentavos: 100,
+      descontoGeralCentavos: 0,
+    },
+  });
+  await assert.rejects(prisma.negocioContratoVenda.create({
+    data: {
+      empresaId: adminA.empresaId,
+      negocioId: fixture.business.id,
+      propostaPrincipalId: mismatchedProposal.id,
+    },
+  }));
 
   const primary = await request("PUT", `/negocios/${fixture.business.id}/proposta-principal`, { propostaId: proposalA.id, revisao: 1 }, sellerA.token);
   assert.equal(primary.status, 200, JSON.stringify(primary.body));
@@ -162,6 +185,10 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   const invalidated = await prisma.vendaCanonica.findUnique({ where: { id: firstSaleId } });
   assert.equal(invalidated.status, "INVALIDATED");
   assert.equal(invalidated.motivoInvalidacao, "Correcao comercial auditada");
+  await assert.rejects(prisma.vendaCanonica.update({ where: { id: firstSaleId }, data: { status: "ACTIVE" } }));
+  const staleReplay = await request("POST", `/negocios/${fixture.business.id}/fechar-ganho`, closePayload, sellerA.token);
+  assert.equal(staleReplay.status, 409, JSON.stringify(staleReplay.body));
+  assert.equal(staleReplay.body.codigo, "IDEMPOTENCY_KEY_REPLAY_INVALIDATED");
 
   const reclosed = await request("POST", `/negocios/${fixture.business.id}/fechar-ganho`, { origem: "ACCEPTED_PROPOSAL", idempotencyKey: "canonical-proposal-close-003", contratoRevisao: reopened.body.contrato.revisao }, sellerA.token);
   assert.equal(reclosed.status, 200, JSON.stringify(reclosed.body));
