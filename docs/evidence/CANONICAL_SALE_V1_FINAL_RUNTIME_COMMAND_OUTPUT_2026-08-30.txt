@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "targetVerified": true,
+  "databaseVerified": true,
+  "runtimeManifestVersion": "backend-runtime-v3-lf",
+  "runtimeManifestSha256": "bef4bab2726db40731ac1473cad95ae623e12cc656c189bb2cd1985a9b84f8d8",
+  "providersConnected": false,
+  "outboundEnabled": false,
+  "migrationsApplied": 20,
+  "migrationsFailed": 0,
+  "latestMigration": "20260830133500_harden_canonical_sale_delete_guard",
+  "qaCompaniesTotal": 2,
+  "qaCompaniesActive": 0,
+  "qaUsersActive": 0,
+  "qaSessions": 0,
+  "qaRefreshTokens": 0,
+  "retainedImmutableSales": 4,
+  "retainedContracts": 3,
+  "credentialFilePresent": false,
+  "fixtureManifestPresent": false
+}

@@ -1,0 +1,36 @@
+{
+  "status": "passed",
+  "runIdHash": "76faf8cc92984ed808da",
+  "gates": {
+    "auth": "PASS",
+    "tenantRbac": "PASS",
+    "proposals": "PASS",
+    "idempotency": "PASS",
+    "snapshot": "PASS",
+    "reopen": "PASS",
+    "manualZero": "PASS",
+    "concurrency": "PASS",
+    "pagination101": "PASS",
+    "revenueProvenance": "PASS"
+  },
+  "fixtureCounts": {
+    "companies": 2,
+    "users": 8,
+    "clients": 5,
+    "businesses": 5,
+    "proposals": 104,
+    "sales": 4
+  },
+  "browserFixture": {
+    "tenantId": 13,
+    "clientId": 55,
+    "businessId": 48,
+    "winningProposalId": 347,
+    "activeSaleId": 74
+  },
+  "credentialFileReady": true,
+  "manifestFileReady": true,
+  "productionRequests": 0,
+  "productProviderConnections": 0,
+  "outbound": 0
+}

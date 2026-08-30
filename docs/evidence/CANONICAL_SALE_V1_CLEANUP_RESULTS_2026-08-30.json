@@ -37,6 +37,7 @@
     "usersDeleted": 8,
     "salesDeletedBeforeUnconditionalGuard": 64
   },
+  "rawCommandOutput": "docs/evidence/CANONICAL_SALE_V1_CLEANUP_COMMAND_OUTPUT_2026-08-30.txt",
   "containsCredentials": false,
   "containsRealCustomerData": false
 }

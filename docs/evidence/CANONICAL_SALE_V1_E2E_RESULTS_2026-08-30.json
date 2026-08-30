@@ -47,6 +47,7 @@
     "fixtureManifestSha256": "6ef4db8c0fe7ae4f91047debcb4d176d5c2fba0db216391f79c53daa9bd1480e"
   },
   "cleanupManifest": "docs/evidence/CANONICAL_SALE_V1_CLEANUP_RESULTS_2026-08-30.json",
+  "rawCommandOutput": "docs/evidence/CANONICAL_SALE_V1_E2E_COMMAND_OUTPUT_2026-08-30.txt",
   "containsCredentials": false,
   "containsRealCustomerData": false
 }

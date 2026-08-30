@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "mode": "DEACTIVATE_AND_RETAIN_APPEND_ONLY_HISTORY",
+  "runIdHash": "76faf8cc92984ed808da",
+  "changed": {
+    "refreshTokens": 7,
+    "sessions": 6,
+    "features": 2,
+    "users": 8,
+    "companies": 2
+  },
+  "activeCompanies": 0,
+  "activeUsers": 0,
+  "sessionsRemaining": 0,
+  "refreshTokensRemaining": 0,
+  "retainedImmutableSales": 4,
+  "retainedContracts": 3,
+  "loginRejected": true,
+  "credentialFileRemoved": true,
+  "manifestFileRemoved": true
+}

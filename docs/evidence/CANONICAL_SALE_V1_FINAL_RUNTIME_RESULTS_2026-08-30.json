@@ -54,6 +54,7 @@
   "productProviderCredentialsUsedByMission": 0,
   "realOutbound": 0,
   "runtimeVerifierScope": "outbound flags plus active MetaCredential and Bling integration rows",
+  "rawCommandOutput": "docs/evidence/CANONICAL_SALE_V1_FINAL_RUNTIME_COMMAND_OUTPUT_2026-08-30.txt",
   "containsCredentials": false,
   "containsRealCustomerData": false
 }
