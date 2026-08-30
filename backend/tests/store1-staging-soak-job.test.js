@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+const { SOURCE_MANIFEST_VERSION } = require("../src/runtime-fingerprint");
 const { createDistributedOperationLease } = require("../src/shared/distributedOperationLease");
 
 const {
@@ -36,6 +37,7 @@ function jobEnv(overrides = {}) {
     STORE1_SOAK_BASE_URL: "https://crm-ga3-bundle-staging.vercel.app",
     STORE1_SOAK_ALLOWED_HOST: "crm-ga3-bundle-staging.vercel.app",
     STORE1_SOAK_SOURCE_SHA: "a".repeat(40),
+    STORE1_SOAK_SOURCE_MANIFEST_VERSION: SOURCE_MANIFEST_VERSION,
     STORE1_SOAK_SOURCE_MANIFEST_SHA256: "b".repeat(64),
     STORE1_SOAK_PROBE_TOKEN: "p".repeat(32),
     STORE1_SOAK_JOBS_PATH: "/api/test/jobs",
@@ -235,6 +237,7 @@ test("restart hook usa somente API staging exata, espera SUCCESS e revalida prob
     readyPath: "/api/ready",
     fingerprintPath: "/api/runtime-fingerprint",
     probeToken: "p".repeat(32),
+    sourceManifestVersion: SOURCE_MANIFEST_VERSION,
     sourceManifestSha256: "b".repeat(64),
     timeoutMs: 1000,
   };
@@ -249,7 +252,7 @@ test("restart hook usa somente API staging exata, espera SUCCESS e revalida prob
       return [{ id: "new-deployment", status: deploymentPolls >= 3 ? "SUCCESS" : "DEPLOYING" }];
     },
     fetchImpl: async (url) => {
-      if (url.pathname.endsWith("runtime-fingerprint")) return { status: 200, async json() { return { environment: "staging", targetVerified: true, databaseVerified: true, providersConnected: false, outboundEnabled: false, sourceManifestSha256: "b".repeat(64) }; } };
+      if (url.pathname.endsWith("runtime-fingerprint")) return { status: 200, async json() { return { environment: "staging", targetVerified: true, databaseVerified: true, sourceManifestVersion: SOURCE_MANIFEST_VERSION, providersConnected: false, outboundEnabled: false, sourceManifestSha256: "b".repeat(64) }; } };
       return { status: 200 };
     },
   });

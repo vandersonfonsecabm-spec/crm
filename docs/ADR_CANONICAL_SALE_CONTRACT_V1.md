@@ -209,10 +209,13 @@ executa o PATCH terminal silenciosamente.
 
 - Migration local estritamente aditiva: tabelas, índices, constraints e enum
   adicional; nenhum DROP, rename, backfill ou reinterpretação.
-- O runtime anterior ignora as estruturas novas, permitindo rollback de
-  artefato enquanto nenhuma escrita V1 ocorrer.
-- Depois da primeira Venda V1, rollback é forward-fix ou pausa de escrita;
-  nunca remover tabelas com dados.
+- O schema aditivo não quebra consultas do runtime anterior, mas o startup de
+  um artefato que não carregue a migration atual pode recusar um banco que já a
+  registrou. Rollback operacional exige artefato-ponte migration-aware ou
+  pausa de escrita com forward-fix; nunca presumir que basta redeployar um SHA
+  anterior.
+- Depois da primeira Venda V1, rollback permanece forward-fix ou pausa de
+  escrita; nunca remover tabelas com dados.
 - Ensaio obrigatório: migrate-empty, upgrade histórico, repetição idempotente,
   SQLite, PostgreSQL causal, integridade e `dev.db` imutável.
 

@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { SOURCE_MANIFEST_VERSION } = require("../src/runtime-fingerprint");
 
 const TARGET_CONFIRMATION = "store1-staging-only";
 const MAX_INFLIGHT = 6;
@@ -338,12 +339,14 @@ function resolveConfig({ env = process.env, testOverrides, allowTestOverrides = 
   if (!restartPath && requireCredentials) throw new SoakError("SOAK_RESTART_PATH_REQUIRED", "Endpoint staging-only de restart obrigatorio.");
   for (const requestPath of [jobsPath, restartPath].filter(Boolean)) assertSameOriginRequest(target, requestPath);
   const sourceSha = String(env.STORE1_SOAK_SOURCE_SHA || "").trim();
+  const sourceManifestVersion = String(env.STORE1_SOAK_SOURCE_MANIFEST_VERSION || SOURCE_MANIFEST_VERSION).trim();
   const sourceManifestSha256 = String(env.STORE1_SOAK_SOURCE_MANIFEST_SHA256 || "").trim().toLowerCase();
   const probeToken = String(env.STORE1_SOAK_PROBE_TOKEN || "");
   if (!/^[a-f0-9]{40}$/i.test(sourceSha) && !(env.NODE_ENV === "test" && /^[A-Za-z0-9._-]{7,80}$/.test(sourceSha))) {
     throw new SoakError("SOAK_SOURCE_SHA_REQUIRED", "SHA funcional exato obrigatorio.");
   }
   if (!/^[a-f0-9]{64}$/.test(sourceManifestSha256) && env.NODE_ENV !== "test") throw new SoakError("SOAK_SOURCE_MANIFEST_REQUIRED", "Manifesto calculado do runtime obrigatorio.");
+  if (sourceManifestVersion !== SOURCE_MANIFEST_VERSION) throw new SoakError("SOAK_SOURCE_MANIFEST_VERSION_MISMATCH", "Versao do manifesto de runtime invalida.");
   if (probeToken.length < 32 && env.NODE_ENV !== "test") throw new SoakError("SOAK_PROBE_TOKEN_REQUIRED", "Token tecnico do probe obrigatorio.");
   return {
     target,
@@ -356,6 +359,7 @@ function resolveConfig({ env = process.env, testOverrides, allowTestOverrides = 
     restartPath,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     sourceSha,
+    sourceManifestVersion,
     sourceManifestSha256,
     probeToken,
   };
@@ -747,6 +751,7 @@ async function verifyRuntimeFingerprint({ config, fetchImpl = globalThis.fetch }
     ? await fingerprintResponse.json().catch(() => null)
     : null;
   if (!fingerprint || fingerprint.environment !== "staging" || fingerprint.targetVerified !== true || fingerprint.databaseVerified !== true
+    || fingerprint.sourceManifestVersion !== config.sourceManifestVersion
     || (config.sourceManifestSha256 && String(fingerprint.sourceManifestSha256 || "").toLowerCase() !== config.sourceManifestSha256)
     || fingerprint.providersConnected !== false || fingerprint.outboundEnabled !== false) {
     throw new SoakError("SOAK_RUNTIME_FINGERPRINT_MISMATCH", "Runtime staging nao corresponde ao candidato seguro.");
@@ -757,6 +762,7 @@ async function verifyRuntimeFingerprint({ config, fetchImpl = globalThis.fetch }
     databaseVerified: true,
     providersConnected: false,
     outboundEnabled: false,
+    sourceManifestVersion: fingerprint.sourceManifestVersion,
     sourceManifestSha256: String(fingerprint.sourceManifestSha256 || "").toLowerCase(),
   };
 }

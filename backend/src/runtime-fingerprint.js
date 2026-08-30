@@ -7,15 +7,27 @@ const STAGING_IDS = Object.freeze({
   environment: "d6b6f137-cffd-4647-a102-3619fc54133a",
   apiService: "8af12b8e-4f4d-498c-9ceb-3182417905f8",
 });
+const SOURCE_MANIFEST_VERSION = "backend-runtime-v2-lf";
+const TEXT_MANIFEST_EXTENSIONS = new Set([".cjs", ".js", ".json", ".mjs", ".prisma", ".sql", ".ts", ".tsx"]);
 
 function sourceManifestSha256(root = path.resolve(__dirname, "..")) {
-  if (sourceManifestSha256.cached) return sourceManifestSha256.cached;
+  const resolvedRoot = path.resolve(root);
+  sourceManifestSha256.cache ||= new Map();
+  if (sourceManifestSha256.cache.has(resolvedRoot)) return sourceManifestSha256.cache.get(resolvedRoot);
   const files = [];
-  for (const relative of ["src", "scripts", "railway.json", "prisma/schema.prisma", "prisma/migrations", "prisma-postgres/migrations", "package.json", "package-lock.json"]) collect(path.join(root, relative), root, files);
+  for (const relative of ["src", "scripts", "railway.json", "prisma/schema.prisma", "prisma/migrations", "prisma-postgres/migrations", "package.json", "package-lock.json"]) collect(path.join(resolvedRoot, relative), resolvedRoot, files);
   const hash = crypto.createHash("sha256");
-  for (const file of files.sort()) hash.update(file).update("\0").update(fs.readFileSync(path.join(root, file))).update("\0");
-  sourceManifestSha256.cached = hash.digest("hex");
-  return sourceManifestSha256.cached;
+  hash.update(SOURCE_MANIFEST_VERSION).update("\0");
+  for (const file of files.sort()) hash.update(file).update("\0").update(manifestFileBytes(path.join(resolvedRoot, file))).update("\0");
+  const digest = hash.digest("hex");
+  sourceManifestSha256.cache.set(resolvedRoot, digest);
+  return digest;
+}
+
+function manifestFileBytes(filePath) {
+  const bytes = fs.readFileSync(filePath);
+  if (!TEXT_MANIFEST_EXTENSIONS.has(path.extname(filePath).toLowerCase())) return bytes;
+  return Buffer.from(bytes.toString("utf8").replace(/\r\n?/g, "\n"), "utf8");
 }
 
 function isStagingTarget(env) {
@@ -55,6 +67,7 @@ async function buildRuntimeFingerprint({ env = process.env, prisma }) {
   ]) : [null, null];
   return {
     environment: targetVerified ? "staging" : "unknown",
+    sourceManifestVersion: SOURCE_MANIFEST_VERSION,
     sourceManifestSha256: sourceManifestSha256(),
     targetVerified,
     databaseVerified: databaseVerified(env),
@@ -63,4 +76,4 @@ async function buildRuntimeFingerprint({ env = process.env, prisma }) {
   };
 }
 
-module.exports = { STAGING_IDS, buildRuntimeFingerprint, databaseVerified, isStagingTarget, outboundDisabled, probeAuthorized, sourceManifestSha256 };
+module.exports = { SOURCE_MANIFEST_VERSION, STAGING_IDS, buildRuntimeFingerprint, databaseVerified, isStagingTarget, manifestFileBytes, outboundDisabled, probeAuthorized, sourceManifestSha256 };

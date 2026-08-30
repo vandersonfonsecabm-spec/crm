@@ -4,7 +4,7 @@ const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
-const { sourceManifestSha256 } = require("../src/runtime-fingerprint");
+const { SOURCE_MANIFEST_VERSION, sourceManifestSha256 } = require("../src/runtime-fingerprint");
 const { createDistributedOperationLease } = require("../src/shared/distributedOperationLease");
 
 const {
@@ -471,7 +471,7 @@ async function runLocalStagingSoakLauncher(options = {}) {
   const target = assertLocalLauncherTarget(env);
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const apiMetadata = options.apiMetadata || loadApiStagingMetadata({ runRailway: options.runRailway });
-  const privateEnv = { ...env, STORE1_SOAK_PROBE_TOKEN: apiMetadata.probeToken, STORE1_SOAK_SOURCE_MANIFEST_SHA256: sourceManifestSha256() };
+  const privateEnv = { ...env, STORE1_SOAK_PROBE_TOKEN: apiMetadata.probeToken, STORE1_SOAK_SOURCE_MANIFEST_VERSION: SOURCE_MANIFEST_VERSION, STORE1_SOAK_SOURCE_MANIFEST_SHA256: sourceManifestSha256() };
   const config = resolveConfig({ env: privateEnv, requireCredentials: false });
   const verifyFingerprint = options.verifyFingerprint || verifyRuntimeFingerprint;
   await verifyFingerprint({ config, fetchImpl });

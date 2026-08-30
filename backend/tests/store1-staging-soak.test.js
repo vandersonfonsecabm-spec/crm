@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+const { SOURCE_MANIFEST_VERSION } = require("../src/runtime-fingerprint");
 
 const {
   DEFAULT_PHASES,
@@ -194,6 +195,10 @@ test("agenda canonica preserva as cinco fases e overrides existem somente em tes
     () => resolvePhases({ env: { NODE_ENV: "test" }, testOverrides: shortPhases() }),
     (error) => error.code === "SOAK_TEST_OVERRIDE_FORBIDDEN",
   );
+  assert.throws(
+    () => resolveConfig({ env: baseEnv({ STORE1_SOAK_SOURCE_MANIFEST_VERSION: "backend-runtime-v1" }), testOverrides: shortPhases(), allowTestOverrides: true, testAllowedHosts: ["store1-staging.example.test"] }),
+    (error) => error.code === "SOAK_SOURCE_MANIFEST_VERSION_MISMATCH",
+  );
 });
 
 test("snapshot de jobs mapeia o contrato real e rejeita shape incompleto", () => {
@@ -240,7 +245,7 @@ test("orquestrador exercita tres roles, limita concorrencia e gera ledger sem eg
     randomUUID: () => `request-${++requestCounter}`,
     fetchImpl: async (url, init) => {
       assert.equal(url.hostname, "store1-staging.example.test");
-      if (url.pathname.endsWith("/runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, providersConnected: false, outboundEnabled: false });
+      if (url.pathname.endsWith("/runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, sourceManifestVersion: SOURCE_MANIFEST_VERSION, providersConnected: false, outboundEnabled: false });
       if (init.headers?.Authorization) seenAuthorization.push(init.headers.Authorization);
       if (url.pathname === "/api/test/jobs") {
         assert.equal(init.headers.Authorization, "Bearer admin-secret");
@@ -293,7 +298,7 @@ test("invariantes de jobs aceitam baseline failed estável e bloqueiam deltas/de
       config, env, allowInjectedConfig: true, writeLedger: false, now: () => clock, sleep: async (ms) => { clock += ms; }, randomUUID: () => `ops-${++counter}`, restartHook: async () => {},
       jobMetricsProvider: async () => (++samples === 1 ? baseline : final),
       fetchImpl: async (url) => {
-        if (url.pathname.endsWith("runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, providersConnected: false, outboundEnabled: false });
+        if (url.pathname.endsWith("runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, sourceManifestVersion: SOURCE_MANIFEST_VERSION, providersConnected: false, outboundEnabled: false });
         return response(200);
       },
     });
@@ -338,7 +343,7 @@ test("5xx e redirect externo impedem PASS sem seguir o provider", async () => {
     randomUUID: () => `blocked-${++requestCounter}`,
     restartHook: async () => {},
     fetchImpl: async (url) => {
-      if (url.pathname.endsWith("/runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, providersConnected: false, outboundEnabled: false });
+      if (url.pathname.endsWith("/runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, sourceManifestVersion: SOURCE_MANIFEST_VERSION, providersConnected: false, outboundEnabled: false });
       if (url.pathname === "/api/clientes") return response(503);
       if (url.pathname === "/api/negocios") return response(302, null, { location: "https://graph.facebook.com/me" });
       if (url.pathname === "/api/test/jobs") return response(401, { erro: "unauthorized" });
@@ -362,7 +367,7 @@ test("um unico 401 de role bloqueia o soak mesmo sem 5xx", async () => {
   const ledger = await runStore1StagingSoak({
     config, env, allowInjectedConfig: true, writeLedger: false, now: () => clock, sleep: async (ms) => { clock += ms; }, randomUUID: () => `role401-${++counter}`, restartHook: async () => {},
     fetchImpl: async (url) => {
-      if (url.pathname.endsWith("runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, providersConnected: false, outboundEnabled: false });
+      if (url.pathname.endsWith("runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, sourceManifestVersion: SOURCE_MANIFEST_VERSION, providersConnected: false, outboundEnabled: false });
       if (url.pathname === "/api/forbidden") return response(401, { erro: "unauthorized" });
       if (url.pathname === "/api/test/jobs") return response(200, { jobs: 0, pendingJobs: 0, processingJobs: 0, succeededJobs: 0, failedJobs: 0 });
       return response(200);
@@ -387,7 +392,7 @@ test("perda do lease interrompe o soak e ainda executa cleanup", async () => {
     leaseContext: { assertOwned() { ownershipChecks += 1; if (ownershipChecks >= 3) throw Object.assign(new Error("lost"), { code: "DISTRIBUTED_LEASE_LOST" }); } },
     cleanupHook: async () => { cleanupCalls += 1; return { finalStateVerified: true }; },
     fetchImpl: async (url) => {
-      if (url.pathname.endsWith("runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, providersConnected: false, outboundEnabled: false });
+      if (url.pathname.endsWith("runtime-fingerprint")) return response(200, { environment: "staging", targetVerified: true, databaseVerified: true, sourceManifestVersion: SOURCE_MANIFEST_VERSION, providersConnected: false, outboundEnabled: false });
       if (url.pathname === "/api/test/jobs") return response(200, { jobs: 0, pendingJobs: 0, processingJobs: 0, succeededJobs: 0, failedJobs: 0 });
       return response(200);
     },
