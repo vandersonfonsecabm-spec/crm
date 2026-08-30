@@ -30,7 +30,7 @@ import {
 } from "../../utils/commercialMoney.js";
 import { Badge, Button, EmptyState, ErrorState, Input, LoadingState, Select, Textarea } from "../ui";
 
-type Props = { businessId: number; onChanged?: () => void };
+type Props = { businessId: number; canCreate?: boolean; onChanged?: () => void };
 type FormItem = {
   key: string;
   itemType: "LEGACY_ITEM" | "CATALOG_ITEM";
@@ -72,7 +72,7 @@ const nextStatuses: Record<CommercialProposalStatus, CommercialProposalStatus[]>
   SUBSTITUIDA: [],
 };
 
-export default function CommercialProposalsPanel({ businessId, onChanged }: Props) {
+export default function CommercialProposalsPanel({ businessId, canCreate = true, onChanged }: Props) {
   const [proposals, setProposals] = useState<CommercialProposal[]>([]);
   const [selected, setSelected] = useState<CommercialProposal | null>(null);
   const [history, setHistory] = useState<CommercialProposalHistory[]>([]);
@@ -325,7 +325,7 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
         </div>
         <div className="flex gap-1.5">
           <Button aria-label="Atualizar propostas" disabled={busy} onClick={() => void load()} size="sm" variant="ghost"><RefreshCw size={13} /></Button>
-          <Button disabled={busy || editing} leftIcon={<Plus size={13} />} onClick={beginCreate} size="sm">Nova proposta</Button>
+          {canCreate ? <Button disabled={busy || editing} leftIcon={<Plus size={13} />} onClick={beginCreate} size="sm">Nova proposta</Button> : <span className="self-center text-[10px] text-[var(--text-muted)]">Somente leitura após encerramento</span>}
         </div>
       </div>
 

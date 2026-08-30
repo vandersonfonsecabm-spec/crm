@@ -294,7 +294,9 @@ function businessView(context, business, now) {
       movimentar: !TERMINAL_BUSINESS_STAGES.has(business.etapa) && (isManager(context) || business.responsavelId === context.usuarioId),
       fechar: ACTIVE_BUSINESS_STAGES.includes(business.etapa) && (isManager(context) || business.responsavelId === context.usuarioId),
       marcarPerdido: ACTIVE_BUSINESS_STAGES.includes(business.etapa) && (isManager(context) || business.responsavelId === context.usuarioId),
-      reabrir: TERMINAL_BUSINESS_STAGES.has(business.etapa) && isManager(context),
+      reabrir: TERMINAL_BUSINESS_STAGES.has(business.etapa)
+        && isManager(context)
+        && (business.etapa === "PERDIDO" || Boolean(contratoVenda?.vendaAtivaId)),
     },
   };
 }

@@ -266,6 +266,12 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   assert.equal(lostWithLegacyWinner.status, 409);
   assert.equal(lostWithLegacyWinner.body.codigo, "WINNER_RECONCILIATION_REQUIRED");
 
+  const legacyWon = await businessFixture(adminA, sellerA.usuarioId, "Cliente Ganho Legado", "FECHADO", null);
+  const legacyWonView = await request("GET", `/negocios/${legacyWon.business.id}`, undefined, adminA.token);
+  assert.equal(legacyWonView.status, 200, JSON.stringify(legacyWonView.body));
+  assert.equal(legacyWonView.body.integridadeComercial, "LEGACY_WON_UNRECONCILED");
+  assert.equal(legacyWonView.body.permissoes.reabrir, false);
+
   const ambiguousWinner = await businessFixture(adminA, sellerA.usuarioId, "Cliente Vencedora Ambigua", "PROPOSTA", null);
   const ambiguousProposalA = await createReadyProposal(ambiguousWinner.business.id, sellerA.token, "Proposta Ambigua A");
   const ambiguousProposalB = await createReadyProposal(ambiguousWinner.business.id, sellerA.token, "Proposta Ambigua B");

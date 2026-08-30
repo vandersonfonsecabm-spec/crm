@@ -675,7 +675,7 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
             <BusinessStageTimingPanel business={business} key={business.id} onOpenAgenda={onOpenAgenda} />
           </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
-            <CommercialProposalsPanel businessId={business.id} onChanged={() => void onCanonicalChanged(business.id, "Contrato comercial atualizado.")} />
+            <CommercialProposalsPanel businessId={business.id} canCreate={business.permissoes?.movimentar === true && ["NOVO", "CONTATO", "PROPOSTA"].includes(business.etapa)} onChanged={() => void onCanonicalChanged(business.id, "Contrato comercial atualizado.")} />
           </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]">Conversas relacionadas</h3>
