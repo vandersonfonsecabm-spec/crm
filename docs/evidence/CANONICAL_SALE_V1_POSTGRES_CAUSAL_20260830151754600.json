@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "canonical-sale-v1-postgres-causal-evidence-v1",
+  "originalRunId": "20260830151754600-1400-280f48eef1c6",
+  "status": "passed",
+  "mode": "external",
+  "image": "postgres:18.6",
+  "suite": [
+    "tests/tenant-isolation-pending-migrations-postgres.test.js",
+    "tests/postgres-migration-prep.test.js",
+    "tests/auth-admin-concurrency-postgres.test.js",
+    "tests/internal-automations-h7.test.js",
+    "tests/next-follow-up-projection.test.js",
+    "tests/v54-lifecycle-lock.test.js",
+    "tests/email-inbound-lifecycle.test.js",
+    "tests/email-inbound-processing.test.js",
+    "tests/bling-distributed-coordination-postgres.test.js",
+    "tests/commercial-proposal-catalog-v1-postgres.test.js",
+    "tests/canonical-sale-v1-postgres.test.js"
+  ],
+  "harnessTests": 24,
+  "sourceManifestSha256": "13bafb9812beaa34793cb91cf424a8c308ce64ebadec4f7ff01c040384821ae1",
+  "originalManifestSha256": "6e5343ca12fa3065a5868aefa3dbfc53440c1df7b71e72a8eb89ae55fd6c35c0",
+  "logsSha256": "f27b7b9ef544a0ee436a183cc1988e0de4325b1f97ed13171c196ddf0fbffd44",
+  "versionedLogFile": "CANONICAL_SALE_V1_POSTGRES_CAUSAL_20260830151754600.log",
+  "runnerCleanupField": "not-required",
+  "externalWslCleanupVerified": true,
+  "temporaryClusterRemoved": true,
+  "temporaryPortClosed": true,
+  "officialDatabaseTouched": false,
+  "containsCredentials": false,
+  "containsRealCustomerData": false
+}

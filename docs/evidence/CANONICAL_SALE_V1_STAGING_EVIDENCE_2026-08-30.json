@@ -18,6 +18,8 @@
     "export": { "file": "CANONICAL_SALE_V1_EXPORT_RESULTS_2026-08-30.json", "sha256": "ca0b9edf8a19ff06bf6a6f7385d3e838e943f7762251bcdced132948560974bf" },
     "exportCsv": { "file": "CANONICAL_SALE_V1_STAGING_EXPORT_2026-08-30.csv", "sha256": "7509e195de0fe377e68333347116abc890d57d28dd3bf3c9cb7bd9aadfbe18ef" },
     "runtime": { "file": "CANONICAL_SALE_V1_FINAL_RUNTIME_RESULTS_2026-08-30.json", "sha256": "274a07aafae347c94204cb93163ed10bd2fc5cdcccc055bfe0520efadff093ae" },
+    "postgresManifest": { "file": "CANONICAL_SALE_V1_POSTGRES_CAUSAL_20260830151754600.json", "sha256": "f0e652f37b41e39361a2fbedfed0d349a6e8cfcd9baea104e4e82384e6c0a6cd" },
+    "postgresLog": { "file": "CANONICAL_SALE_V1_POSTGRES_CAUSAL_20260830151754600.log", "sha256": "f27b7b9ef544a0ee436a183cc1988e0de4325b1f97ed13171c196ddf0fbffd44" },
     "rollbackForwardFix": { "file": "CANONICAL_SALE_V1_ROLLBACK_FORWARD_FIX_REHEARSAL_2026-08-30.json", "sha256": "c3746b6b637581a11a00f5ec6915d2fbc5dab7f9561ce4ccf24d3464f93c6340" },
     "soakPhase1Tracked": { "file": "CANONICAL_SALE_V1_SOAK_PHASE1_2026-08-30.json", "sha256": "a8e9e5819eb94d9f52e8490f76927f52b5cf26b30ba62fce66aab4971c81b338" },
     "soakPhase2Tracked": { "file": "CANONICAL_SALE_V1_SOAK_PHASE2_2026-08-30.json", "sha256": "ca434a72ee1b162a121a7154887fd322dfe236a6c3a636b579e24595dc6fe9e0" }
@@ -156,6 +158,8 @@
     "evidenceManifestFile": "20260830151754600-1400-280f48eef1c6.json",
     "evidenceManifestSha256": "6e5343ca12fa3065a5868aefa3dbfc53440c1df7b71e72a8eb89ae55fd6c35c0",
     "logsSha256": "f27b7b9ef544a0ee436a183cc1988e0de4325b1f97ed13171c196ddf0fbffd44",
+    "versionedManifest": "docs/evidence/CANONICAL_SALE_V1_POSTGRES_CAUSAL_20260830151754600.json",
+    "versionedLog": "docs/evidence/CANONICAL_SALE_V1_POSTGRES_CAUSAL_20260830151754600.log",
     "wslEnvironmentCleaned": true
   },
   "authenticatedE2E": {

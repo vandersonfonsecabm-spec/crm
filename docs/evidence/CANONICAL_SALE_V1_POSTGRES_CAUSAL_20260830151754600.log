@@ -1,0 +1,309 @@
+event=postgres_real_start mode=external image=postgres:18.6
+sourceManifestSha256=13bafb9812beaa34793cb91cf424a8c308ce64ebadec4f7ff01c040384821ae1
+external_url=confirmed
+suite_logs
+✔ PostgreSQL migration boundary preserva prefixes historicos e o conjunto final (4309.3709ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4575.9416
+✔ preparacao PostgreSQL deriva provider sem alterar o schema canonico SQLite (0.7765ms)
+✔ preparacao PostgreSQL direciona client temporario para output explicito (0.2086ms)
+✔ workspace PostgreSQL padrao permanece sob o package root do backend (5.4995ms)
+✔ workspace PostgreSQL preserva baseline congelada e inclui migrations incrementais atuais (28.1611ms)
+✔ runner PostgreSQL usa workspace e client isolados sem regenerar SQLite (1.8357ms)
+✔ runner PostgreSQL permite provar somente a fronteira de migrations (0.8697ms)
+✔ runner PostgreSQL limpa workspace isolado apos falha sem esconder o erro original (1.168ms)
+✔ argumentos do runner aceitam somente workspace temporario explicito (0.408ms)
+✔ guard de teste PostgreSQL exige URL e confirmacao explicita (0.2014ms)
+✔ createPrismaClient seleciona datasource PostgreSQL somente no modo de teste explicito (0.6035ms)
+✔ startup reconhece SQLite e PostgreSQL sem expor URL (0.1963ms)
+✔ provider de banco usa SQLite por padrao e rejeita valor invalido (0.1408ms)
+✔ runtime Prisma seleciona schema SQLite somente para provider SQLite (0.1873ms)
+✔ runtime Prisma seleciona schema PostgreSQL derivado para provider PostgreSQL (4.0054ms)
+✔ runtime Prisma falha quando provider e DATABASE_URL divergem (0.2461ms)
+✔ script de build runtime executa Prisma com schema do provider escolhido (4.372ms)
+✔ check de conexao PostgreSQL aceita somente URL PostgreSQL explicita (0.1861ms)
+✔ importador ordena tabelas por dependencias de foreign key (0.2612ms)
+✔ importador converte booleanos e timestamps para PostgreSQL (0.1734ms)
+✔ importador valida contagens antes do commit e reverte divergencias (0.3537ms)
+✔ importador confirma somente depois da validacao sem divergencias (0.1449ms)
+✔ logs de migracao sanitizam URLs e termos sensiveis (0.5682ms)
+✔ score do dashboard usa SQL equivalente em SQLite e PostgreSQL (70.4077ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 244.1064
+✔ PostgreSQL preserva ao menos um ADMIN ativo sob remocoes concorrentes (162.403ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 231.7651
+✔ H7 respeita feature gate, ativacao sem retroatividade e simulacao sem efeitos (132.8664ms)
+✔ H8.3 cancelamento reconcilia execucao e preserva estados terminais (69.2823ms)
+✔ H8.3 cancelamento repetido e concorrente e idempotente (94.5973ms)
+✔ H8.3 cancelamento aborta se o job mudar antes do update protegido (38.6015ms)
+✔ H8.3 cancelamento nao altera job ou execucao ja concluidos (32.0055ms)
+✔ retry da primeira acao reabre downstream cancelado por predecessor (103.2539ms)
+✔ H8.1 processa CREATE_INTERNAL_EVENT com idempotencia e reprocessamento controlado (68.2927ms)
+✔ retry reabre execucao terminal antes de reprocessar o job (59.4146ms)
+✔ H8.3 usa allowlists canonicas e bloqueia acoes indisponiveis (47.6352ms)
+✔ H8.3 ASSIGN_OWNER atribui Lead uma vez e preserva idempotencia no retry (121.2723ms)
+✔ H8.3 ASSIGN_OWNER atribui Negocio e registra um historico (47.1448ms)
+✔ H8.3 ASSIGN_OWNER rejeita usuario inativo, inexistente e de outro tenant (130.574ms)
+✔ H8.3 ASSIGN_OWNER reverte atribuicao se o historico falhar (45.7991ms)
+✔ H8.3 projecao standalone e CREATE_FOLLOW_UP usam o helper compartilhado (79.6992ms)
+✔ H8.3 CREATE_FOLLOW_UP cria uma vez para Lead e Negocio e reconcilia a projecao (115.7238ms)
+✔ H8.3 CREATE_FOLLOW_UP rejeita cliente e autor invalidos como erro permanente (83.9017ms)
+✔ H8.3 CREATE_FOLLOW_UP rejeita autor inativo ou de outro tenant e reverte falha intermediaria (99.9185ms)
+✔ H7 varre gatilhos temporais e o worker permanece desligado por padrao em teste (42.1366ms)
+✔ H7 varre todos os tenants em paginas sem repetir a primeira pagina (103.6087ms)
+Falha isolada na varredura temporal. {
+  source: 'LEAD_WITHOUT_FOLLOW_UP_ITEM',
+  tenantId: 33,
+  ruleId: 35,
+  code: 'TEMPORAL_SCAN_ERROR'
+}
+✔ H7 isola item temporal defeituoso e continua no proximo candidato (67.5133ms)
+✔ H8.1 interpreta gate e configuracao do worker com defaults seguros (6.3468ms)
+✔ worker isola falha de H7 e continua processando H8 (4.5781ms)
+✔ worker continua os jobs H7 quando a varredura temporal falha (4.4429ms)
+✔ worker encerra o processo apos falhas persistentes de um subsistema (5.1204ms)
+✔ H8.1 dois workers logicos nao processam o mesmo job (40.1684ms)
+✔ H8.1 reconcilia job preso na ultima tentativa apos crash do worker (29.5337ms)
+✔ H8.1 lease valido nao e roubado e lease expirado e recuperado (40.8343ms)
+✔ H8.1 adiamentos por janela acima de maxAttempts preservam elegibilidade (68.8417ms)
+✔ H8.1 janela cruzando meia-noite preserva falhas reais em outro timezone (92.2465ms)
+✔ H8.1 adiamento concorrente restitui uma vez e chamada repetida nao altera tentativas (31.8009ms)
+✔ H8.1 adiamento nao interfere em job de outro tenant (55.6737ms)
+✔ H8.1 lease alheio ou expirado nao restitui tentativa no adiamento (64.6856ms)
+✔ H8.1 shutdown aguarda ciclo ativo e nao agenda novo polling (4.1122ms)
+✔ H8.2 produtor controlado cria jobs idempotentes sem entidade comercial (80.9994ms)
+{"operation":"INSERT_AUTOMATION_EXECUTION","prismaCode":"P2010","postgresCode":"23505","postgresMessage":"database operation failed","actionType":"CREATE_INTERNAL_EVENT","entityType":"LEAD","tenantRef":"tenant_811786ad1ae74adf","occurrenceRef":"occurrence_48cae084245245da"}
+✔ H8.2 rollback preserva atomicidade quando conflito inesperado ocorre em regra posterior (40.7138ms)
+✔ H8.2 idempotencia de produtor e isolada por tenant (29.3074ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2337.9779
+✔ projecao seleciona ativo mais antigo, desempata por id e aceita vencido (51.9501ms)
+✔ projecao sem ativo usa sentinela e no-op nao incrementa revisao (30.5324ms)
+✔ projecao isola tenant e informa cliente ausente (16.8051ms)
+✔ conflito CAS nao persiste projecao e rollback preserva cliente (23.5102ms)
+✔ retry de conflito CAS e limitado e encerra na terceira tentativa (4.9623ms)
+✔ consulta portavel do dashboard conta clientes com acompanhamento ativo no dia (14.1928ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 240.7874
+✔ V54 lifecycle lock is shared, tenant-scoped and ordered (6.053ms)
+✔ V54 PostgreSQL concurrency proof runs only with an explicit disposable URL (701.8873ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 783.5403
+{
+  event: 'email_inbound_channel_provisioning',
+  action: 'CREATED',
+  actorUserId: 56,
+  tenantId: 57,
+  channelRef: '5f0f9741bb7a29d4',
+  changedFields: [ 'name', 'emailAddress', 'aliases', 'providerType' ],
+  reason: 'Provisionamento sintetico controlado',
+  correlationId: null,
+  timestamp: '2026-08-30T15:18:14.118Z'
+}
+✔ provisionamento platform-only cria caixa inativa, sanitizada e idempotente (159.6533ms)
+{
+  event: 'email_inbound_channel_provisioning',
+  action: 'CREATED',
+  actorUserId: 61,
+  tenantId: 62,
+  channelRef: '94484fb944215318',
+  changedFields: [ 'name', 'emailAddress', 'aliases', 'providerType' ],
+  reason: 'Provisionamento sintetico controlado',
+  correlationId: null,
+  timestamp: '2026-08-30T15:18:14.190Z'
+}
+{
+  event: 'email_inbound_channel_provisioning',
+  action: 'UPDATED',
+  actorUserId: 61,
+  tenantId: 62,
+  channelRef: '94484fb944215318',
+  changedFields: [ 'name', 'aliases' ],
+  reason: 'Atualizacao controlada de metadata',
+  correlationId: null,
+  timestamp: '2026-08-30T15:18:14.206Z'
+}
+✔ metadata usa CAS e identidade primaria permanece imutavel (47.1101ms)
+{
+  event: 'email_inbound_channel_provisioning',
+  action: 'CREATED',
+  actorUserId: 63,
+  tenantId: 64,
+  channelRef: '94a8a17eb732bed1',
+  changedFields: [ 'name', 'emailAddress', 'aliases', 'providerType' ],
+  reason: 'Provisionamento sintetico controlado',
+  correlationId: 'email-create-race',
+  timestamp: '2026-08-30T15:18:14.271Z'
+}
+{
+  event: 'email_inbound_channel_provisioning',
+  action: 'UPDATED',
+  actorUserId: 63,
+  tenantId: 64,
+  channelRef: '94a8a17eb732bed1',
+  changedFields: [ 'name' ],
+  reason: 'CAS concorrente 1',
+  correlationId: 'email-cas-race-1',
+  timestamp: '2026-08-30T15:18:14.288Z'
+}
+{
+  event: 'email_inbound_channel_provisioning',
+  action: 'CREATED',
+  actorUserId: 63,
+  tenantId: 65,
+  channelRef: '5bf2d6f5d78507dc',
+  changedFields: [ 'name', 'emailAddress', 'aliases', 'providerType' ],
+  reason: 'Provisionamento sintetico controlado',
+  correlationId: 'email-identity-race-0',
+  timestamp: '2026-08-30T15:18:14.300Z'
+}
+✔ provisionamento e CAS concorrentes convergem no PostgreSQL (82.7536ms)
+{
+  event: 'email_inbound_channel_provisioning',
+  action: 'CREATED',
+  actorUserId: 67,
+  tenantId: 68,
+  channelRef: 'aaf5c0c2e52183fb',
+  changedFields: [ 'name', 'emailAddress', 'aliases', 'providerType' ],
+  reason: 'Provisionamento sintetico controlado',
+  correlationId: null,
+  timestamp: '2026-08-30T15:18:14.320Z'
+}
+{
+  event: 'email_inbound_lifecycle',
+  action: 'ACTIVATE',
+  actorUserId: 67,
+  tenantId: 68,
+  channelRef: 'aaf5c0c2e52183fb',
+  reason: 'Ativar intake sintetico',
+  correlationId: null,
+  timestamp: '2026-08-30T15:18:14.348Z'
+}
+{
+  event: 'email_inbound_lifecycle',
+  action: 'PAUSE',
+  actorUserId: 67,
+  tenantId: 68,
+  channelRef: 'aaf5c0c2e52183fb',
+  reason: 'Pausar intake',
+  correlationId: null,
+  timestamp: '2026-08-30T15:18:14.374Z'
+}
+{
+  event: 'email_inbound_lifecycle',
+  action: 'REACTIVATE',
+  actorUserId: 67,
+  tenantId: 68,
+  channelRef: 'aaf5c0c2e52183fb',
+  reason: 'Reativar intake',
+  correlationId: null,
+  timestamp: '2026-08-30T15:18:14.385Z'
+}
+✔ activate pause e reactivate sao atomicos, auditados e preservam timestamps (79.8045ms)
+{
+  event: 'email_inbound_channel_provisioning',
+  action: 'CREATED',
+  actorUserId: 69,
+  tenantId: 70,
+  channelRef: '9e083dfd9e71048c',
+  changedFields: [ 'name', 'emailAddress', 'aliases', 'providerType' ],
+  reason: 'Provisionamento sintetico controlado',
+  correlationId: null,
+  timestamp: '2026-08-30T15:18:14.399Z'
+}
+✔ falha do logger pos-commit nao desfaz lifecycle (31.0494ms)
+✔ writers genericos bloqueiam canal EMAIL real antes de persistir (9.2415ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 743.5282
+✔ texto MIME cria pipeline comercial, metadata sanitizada e replay idempotente (181.1187ms)
+✔ threading por In-Reply-To preserva conversa e remetente sem telefone (181.7988ms)
+✔ inbound reutiliza Cliente existente pelo e-mail antes de criar cadastro (46.5465ms)
+✔ inbound restaura estado coerente e preserva responsavel ao reabrir thread (125.6668ms)
+✔ threading ambiguo e replay divergente falham sem sobrescrever o fluxo original (236.2235ms)
+✔ lead novo de E-mail aciona automacao canonicamente e uma unica vez (99.2696ms)
+✔ duas threads raiz concorrentes convergem para um lead no PostgreSQL (150.117ms)
+✔ envelope confiavel aceita BCC e usa fallback normalizado sem Message-ID (41.2775ms)
+✔ auto-reply bounce e anexo sem texto sao terminais sem escrita comercial (60.3539ms)
+✔ concorrencia e isolamento multi-tenant produzem uma cadeia por canal (182.8762ms)
+✔ gates e limites falham fechado e timeout transacional vira falha sanitizada (43.5065ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4562.1176
+✔ PostgreSQL coordena lease Bling entre dois PrismaClient e aplica fencing apos expiry (112.5279ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 181.9876
+✔ V1 PostgreSQL valida isolamento, snapshots, revalidacao, retention e CAS (298.4778ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 402.7937
+✔ PostgreSQL converge close/accept/update concorrentes sem venda duplicada (623.6391ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 725.755
+
+
+suite=status_ok
