@@ -206,3 +206,46 @@ isso o resultado permanece `BLOCKED_EXTERNAL`, não `SHIP`.
   focado no teste causal atual após a falha por limite de execução.
 - O recurso PostgreSQL temporário e o proxy foram removidos após o uso, sem
   tocar nos serviços oficiais.
+
+## Retomada controlada sob autorização do usuário
+
+Esta retomada aplicou o perfil documental `USER_AUTHORIZED` definido depois do
+primeiro checkpoint:
+
+```text
+REQUESTED_MODEL=gpt-5.6-luna
+REQUESTED_REASONING_EFFORT=max
+MODEL_IDENTITY_POLICY=USER_AUTHORIZED
+EFFECTIVE_MODEL=UNVERIFIED
+EFFECTIVE_REASONING_EFFORT=UNVERIFIED
+MODEL_IDENTITY_GATE=UNVERIFIED
+MODEL_EXECUTION_AUTHORIZATION=USER_CONFIRMED
+USER_ASSERTED_MODEL=gpt-5.6-luna
+USER_ASSERTED_REASONING_EFFORT=max
+LUNA_MAX_EXECUTION_PROVENANCE=UNVERIFIED
+```
+
+Nenhuma implementação foi refeita. Duas tentativas de iniciar a Passagem
+Independente 1 com o papel `luna_worker` ficaram sem checkpoint ou findings e
+foram interrompidas após janelas de espera controladas. O primeiro reviewer
+ficou ativo sem resposta; o retry também ficou ativo sem resposta. Isso é
+classificado como indisponibilidade/stall do reviewer ou harness, não como
+`PASS` nem como finding do candidato.
+
+```text
+SECOND_REVIEW_PASS_1=BLOCKED_EXTERNAL
+SECOND_REVIEW_PASS_2=NOT_STARTED
+STALLED_GATE=SECOND_REVIEW_INDEPENDENT_PASS_1
+LAST_KNOWN_GOOD=CANDIDATE_782e2d9_UNCHANGED
+ATTEMPTED_SAFE_ALTERNATIVES=checkpoint_request + bounded_wait + single_retry
+RISK=no code/database mutation observed
+NEXT_MINIMUM_SAFE_ACTION=reviewer independente disponível para Passagem 1
+```
+
+O resultado não altera a evidência técnica existente:
+
+```text
+CANONICAL_SALE_LOCAL_EVIDENCE=VALID
+EXECUTION_PROVENANCE=CODEX_ROOT
+LUNA_MAX_EXECUTION_PROVENANCE=UNVERIFIED
+```
