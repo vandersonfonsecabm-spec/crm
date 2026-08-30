@@ -80,6 +80,7 @@ test("H3 cria, calcula, versiona e protege propostas por tenant e concorrencia",
   assert.equal(created.body.leadId, fixtureA.lead.id);
 
   const sameTenantOtherClient = await prisma.cliente.create({ data: { empresaId: adminA.empresaId, nome: "Cliente contexto divergente", origem: "QA H3" } });
+  await prisma.$executeRawUnsafe('DROP TRIGGER "PropostaComercial_customer_consistency_update"');
   await prisma.propostaComercial.update({ where: { id: created.body.id }, data: { clienteId: sameTenantOtherClient.id } });
   const mismatchedContext = await request("GET", `/propostas/${created.body.id}`, undefined, sellerA.token);
   assert.equal(mismatchedContext.status, 409);
