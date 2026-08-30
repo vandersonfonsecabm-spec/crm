@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "canonical-sale-v1-export-results-v1",
+  "executedAt": "2026-08-30T15:28:00-03:00",
+  "environment": "ga3-bundle-staging",
+  "releaseHead": "2da896aac84dd683e844b266331716e9600e6357",
+  "frontendDeploymentId": "dpl_DvVGWZV8Mb4HWbKtyfKTk3uk8r1k",
+  "syntheticLogin": true,
+  "downloadFilename": "vendas-canonicas.csv",
+  "downloadCaptured": true,
+  "downloadBytes": 531,
+  "downloadSha256": "4c54ee6e3b0902a149b3be92791e07d161f677bb27311aee88dd4206bba8c44f",
+  "trackedSanitizedCopy": "docs/evidence/CANONICAL_SALE_V1_STAGING_EXPORT_2026-08-30.csv",
+  "trackedSanitizedCopyBytes": 532,
+  "trackedSanitizedCopySha256": "7509e195de0fe377e68333347116abc890d57d28dd3bf3c9cb7bd9aadfbe18ef",
+  "rowCount": 4,
+  "checks": {
+    "header": "PASS",
+    "brlPresentation": "PASS",
+    "centValues": "PASS",
+    "manualZeroDistinctFromNull": "PASS",
+    "proposalSource": "PASS",
+    "manualSource": "PASS",
+    "activeStatus": "PASS",
+    "invalidatedStatus": "PASS",
+    "proposalCode": "PASS",
+    "revision": "PASS",
+    "browserSuccessToast": "PASS",
+    "browserConsoleErrors": 0
+  },
+  "unitExecution": {
+    "focused": "4/4 PASS",
+    "frontendFull": "232/232 PASS",
+    "build": "PASS",
+    "lint": "PASS"
+  },
+  "containsCredentials": false,
+  "containsRealCustomerData": false
+}

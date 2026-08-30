@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "phase": 1,
+  "releaseHead": "5d0e427af877ba81b5cb6e8d32187e4797e3c9ba",
+  "startedAt": "2026-08-30T13:12:39.288Z",
+  "finishedAt": "2026-08-30T13:17:27.148Z",
+  "durationSeconds": 288,
+  "requestedIterations": 15,
+  "completedIterations": 15,
+  "requests": 156,
+  "failures": [],
+  "http5xx": 0,
+  "timeouts": 0,
+  "duplicateSales": 0,
+  "stuckOperations": 0,
+  "valueDrift": 0,
+  "saleIdsHash": "d72a2a950e81f775ad6aa89fd2aa4b991ba7dcc3bde26928f2ca8cfaa4d84393",
+  "productionRequests": 0,
+  "productProviderConnections": 0,
+  "realOutbound": 0
+}

@@ -1,0 +1,5 @@
+"Venda","Negócio","Cliente","Moeda","Valor (BRL)","Centavos","Origem","Status","Fechado em","Proposta","Revisão"
+"76","51","58","BRL","12,00","1200","MANUAL_CLOSE","ACTIVE","2026-08-30T15:22:01.034Z","","1"
+"75","50","57","BRL","0,00","0","MANUAL_CLOSE","ACTIVE","2026-08-30T15:22:00.954Z","","1"
+"74","48","55","BRL","65,00","6500","ACCEPTED_PROPOSAL","ACTIVE","2026-08-30T15:22:00.872Z","PROP-2026-00002","2"
+"73","48","55","BRL","65,00","6500","ACCEPTED_PROPOSAL","INVALIDATED","2026-08-30T15:22:00.488Z","PROP-2026-00002","1"

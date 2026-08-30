@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "canonical-sale-v1-rollback-forward-fix-rehearsal-v1",
+  "environment": "ga3-bundle-staging",
+  "stagingDatabaseMigrationCount": 20,
+  "migrationAwareBridge": {
+    "releaseHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
+    "deploymentId": "ecc3a785-b4a1-4b1f-93e2-539cf2de3fb8",
+    "runtimeManifest": "bea0a256eb86fe2833258f28b7a1438b440a284762ce6784bee6d7776ffe8fab",
+    "statusBeforeFailure": "SUCCESS"
+  },
+  "failedCandidateDeployment": {
+    "deploymentId": "254bb33d-48d9-4a7e-b67f-4472ba93d9d8",
+    "status": "FAILED",
+    "failureIntentional": true,
+    "failureStage": "BUILD",
+    "databaseMigrationExecuted": false,
+    "productionAffected": false
+  },
+  "readOnlyRecoveryWindow": {
+    "activeDeploymentStayed": "ecc3a785-b4a1-4b1f-93e2-539cf2de3fb8",
+    "healthHttpStatus": 200,
+    "readinessHttpStatus": 200,
+    "databaseReady": true,
+    "runtimeFingerprintMatchedBridge": true,
+    "applicationWritesExecuted": 0,
+    "realOutbound": 0
+  },
+  "forwardFix": {
+    "releaseHead": "2da896aac84dd683e844b266331716e9600e6357",
+    "deploymentId": "313650fd-be82-4a28-a89a-9f1d525b400e",
+    "status": "SUCCESS",
+    "healthHttpStatus": 200,
+    "readinessHttpStatus": 200,
+    "runtimeManifest": "bef4bab2726db40731ac1473cad95ae623e12cc656c189bb2cd1985a9b84f8d8",
+    "runtimeFingerprintMatched": true
+  },
+  "conclusion": "A failed post-migration staging deployment did not replace the migration-aware bridge. Health/readiness remained available using read-only probes, and the forward-fix candidate then became healthy with exact source/runtime parity.",
+  "containsCredentials": false,
+  "containsRealCustomerData": false
+}

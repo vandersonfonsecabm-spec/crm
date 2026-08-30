@@ -1,5 +1,46 @@
 # Estado atual do CRM
 
+## Venda Canônica V1 — staging pós-adversarial (2026-08-30)
+
+- O release artifact atual é `2da896aac84dd683e844b266331716e9600e6357`
+  na branch `feature/canonical-sale-v1`; o Git tree é
+  `5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce`. O commit documental-base é
+  `a56f936eae6511bd9f090fa84bed4fadf39b43aa`; commits documentais posteriores
+  não mudam a identidade do artefato implantado.
+- Staging está no backend Railway
+  `313650fd-be82-4a28-a89a-9f1d525b400e` (`SUCCESS`) e frontend Vercel
+  `dpl_EmnYbZQWFWxyaD1u8A5fXk19v5Cr` (`READY`) no alias dedicado. O runtime
+  confirmou `backend-runtime-v3-lf` e manifesto
+  `bef4bab2726db40731ac1473cad95ae623e12cc656c189bb2cd1985a9b84f8d8`,
+  com alvo/banco de staging verificados, providers conectados false e outbound
+  false.
+- O PostgreSQL causal atual passou no source manifest
+  `13bafb9812beaa34793cb91cf424a8c308ce64ebadec4f7ff01c040384821ae1`.
+  E2E autenticado sintético final, concorrência, idempotência, reopen, receita,
+  tenant/RBAC, snapshots e CSV real passaram no release `2da896a`; o CSV
+  capturado tem SHA-256
+  `4c54ee6e3b0902a149b3be92791e07d161f677bb27311aee88dd4206bba8c44f`.
+- O primeiro adversarial final retornou `FIX_FIRST`. Os findings foram
+  corrigidos e retestados: LOST sem histórico causal agora falha fechado;
+  `LEGACY_WON_UNRECONCILED` continua sem reinterpretação; a exportação CSV é
+  executável e testada; o rollback/forward-fix foi ensaiado com falha de deploy
+  controlada; os manifests de evidência foram persistidos; e as alegações de
+  provider foram estreitadas ao que a missão usou e o runtime mediu.
+- O cleanup final não contorna o ledger append-only. As duas empresas e oito
+  usuários QA finais foram desativados, sessões/tokens removidos e login
+  rejeitado; quatro vendas e três contratos sintéticos permanecem inativos e
+  historicamente imutáveis por design. Credencial e manifesto remoto temporário
+  foram removidos.
+- Produção não recebeu request de aplicação, migration, deploy, escrita ou
+  outbound. Somente os deployments oficiais foram consultados read-only e
+  permaneceram nos IDs anteriores. Conectores/credenciais reais de produto não
+  foram usados por esta missão.
+- Estado deste checkpoint: `FINAL_ADVERSARIAL_VERDICT=PENDING_REVIEW_AFTER_FIXES`.
+  Não declarar `CANONICAL_SALE_V1=COMPLETE` nem
+  `READY_FOR_PRODUCTION=YES` antes da nova revisão e reconciliação do Sol.
+  Autoridade: `docs/CANONICAL_SALE_V1_FINAL_2026-08-29.md` e
+  `docs/evidence/CANONICAL_SALE_V1_STAGING_EVIDENCE_2026-08-30.json`.
+
 ## STORE-1 — hardening de integridade de valores comerciais (2026-08-28)
 
 - O commit funcional local `79eed4f` endurece precisão/ROUND_HALF_UP, limites `INTEGER`, snapshots catalogados, CAS de `Cliente.valor`, contexto proposta/negócio, importação/Bling, `null` versus zero e apresentação monetária. Leituras/PDF/status/duplicação agora recalculam totais persistidos e falham fechado diante de corrupção.

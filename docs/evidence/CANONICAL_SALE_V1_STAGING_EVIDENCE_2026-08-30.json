@@ -11,6 +11,17 @@
     "containsRealCustomerData": false,
     "containsConnectionStrings": false
   },
+  "evidenceArtifacts": {
+    "browserQa": { "file": "CANONICAL_SALE_V1_BROWSER_QA_RESULTS_2026-08-30.json", "sha256": "cbd2141b1e46753ef7c4c5b5bbbab2bfc265d0ea257aec92d134d8b683f0b28b" },
+    "cleanup": { "file": "CANONICAL_SALE_V1_CLEANUP_RESULTS_2026-08-30.json", "sha256": "3b835decb7c9ceb9b65b8f461c403235ae2bb44eedae74abcda6833b31dd48ae" },
+    "e2e": { "file": "CANONICAL_SALE_V1_E2E_RESULTS_2026-08-30.json", "sha256": "0f0ace08c1690d0bce116ca33ba200936705a5bde716bf26389c72abe6c0386e" },
+    "export": { "file": "CANONICAL_SALE_V1_EXPORT_RESULTS_2026-08-30.json", "sha256": "ca0b9edf8a19ff06bf6a6f7385d3e838e943f7762251bcdced132948560974bf" },
+    "exportCsv": { "file": "CANONICAL_SALE_V1_STAGING_EXPORT_2026-08-30.csv", "sha256": "7509e195de0fe377e68333347116abc890d57d28dd3bf3c9cb7bd9aadfbe18ef" },
+    "runtime": { "file": "CANONICAL_SALE_V1_FINAL_RUNTIME_RESULTS_2026-08-30.json", "sha256": "274a07aafae347c94204cb93163ed10bd2fc5cdcccc055bfe0520efadff093ae" },
+    "rollbackForwardFix": { "file": "CANONICAL_SALE_V1_ROLLBACK_FORWARD_FIX_REHEARSAL_2026-08-30.json", "sha256": "c3746b6b637581a11a00f5ec6915d2fbc5dab7f9561ce4ccf24d3464f93c6340" },
+    "soakPhase1Tracked": { "file": "CANONICAL_SALE_V1_SOAK_PHASE1_2026-08-30.json", "sha256": "a8e9e5819eb94d9f52e8490f76927f52b5cf26b30ba62fce66aab4971c81b338" },
+    "soakPhase2Tracked": { "file": "CANONICAL_SALE_V1_SOAK_PHASE2_2026-08-30.json", "sha256": "ca434a72ee1b162a121a7154887fd322dfe236a6c3a636b579e24595dc6fe9e0" }
+  },
   "release": {
     "branch": "feature/canonical-sale-v1",
     "baseline": "79eed4f",
@@ -18,10 +29,13 @@
     "harnessFixCommit": "3525651",
     "frontendStabilizationHead": "5d0e427",
     "deleteGuardHardeningHead": "f8f4961",
-    "releaseArtifactHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
-    "gitTree": "80806ac71f039c7bc79bf2a1931c7afdaa9c9d58",
+    "idempotencyRecoveryHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
+    "releaseArtifactHead": "2da896aac84dd683e844b266331716e9600e6357",
+    "gitTree": "5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce",
     "remoteBranchMatches": true,
-    "reportCommit": null
+    "reportDraftCommit": "a56f936eae6511bd9f090fa84bed4fadf39b43aa",
+    "reportCommit": "a56f936eae6511bd9f090fa84bed4fadf39b43aa",
+    "finalReconciliationCommit": null
   },
   "stagingTargets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -39,18 +53,19 @@
   },
   "deployments": {
     "backend": {
-      "deploymentId": "ecc3a785-b4a1-4b1f-93e2-539cf2de3fb8",
+      "deploymentId": "313650fd-be82-4a28-a89a-9f1d525b400e",
       "status": "SUCCESS",
-      "releaseHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
-      "imageDigest": "sha256:26677c3939c82e6aa59d4ae568b8324c94d1d9b908dc4bc8e6b95ad380f57250",
+      "releaseHead": "2da896aac84dd683e844b266331716e9600e6357",
+      "imageDigest": "sha256:70e89dd1d625a7eb08214b6da0af0b8733f97ca656860d5ecbfff3418dc18580",
       "healthHttpStatus": 200,
       "readinessHttpStatus": 200
     },
     "frontend": {
-      "deploymentId": "dpl_DJuYkeaS6w2xXoXYnkkSB355U9uH",
+      "deploymentId": "dpl_EmnYbZQWFWxyaD1u8A5fXk19v5Cr",
       "status": "READY",
-      "releaseHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
-      "stableAliasCurrent": true
+      "releaseHead": "2da896aac84dd683e844b266331716e9600e6357",
+      "stableAliasCurrent": true,
+      "cleanDetachedSource": true
     },
     "worker": {
       "inCanonicalSaleCausalPath": false,
@@ -59,7 +74,7 @@
   },
   "runtimeFingerprint": {
     "version": "backend-runtime-v3-lf",
-    "sha256": "bea0a256eb86fe2833258f28b7a1438b440a284762ce6784bee6d7776ffe8fab",
+    "sha256": "bef4bab2726db40731ac1473cad95ae623e12cc656c189bb2cd1985a9b84f8d8",
     "targetVerified": true,
     "databaseVerified": true,
     "providersConnected": false,
@@ -67,6 +82,7 @@
     "sourceRuntimeParity": "PASS",
     "stableAliasParity": "PASS"
   },
+  "finalRuntimeEvidence": "docs/evidence/CANONICAL_SALE_V1_FINAL_RUNTIME_RESULTS_2026-08-30.json",
   "migrations": {
     "appliedCount": 20,
     "failedCount": 0,
@@ -113,10 +129,19 @@
       "keyTablesChecked": 5
     }
   },
+  "rollbackForwardFixRehearsal": {
+    "status": "PASS",
+    "migrationAwareBridgeHead": "3b2e462cfd9ef62848577694c31f1005e7bd23f3",
+    "bridgeDeploymentId": "ecc3a785-b4a1-4b1f-93e2-539cf2de3fb8",
+    "intentionalFailedDeploymentId": "254bb33d-48d9-4a7e-b67f-4472ba93d9d8",
+    "forwardFixHead": "2da896aac84dd683e844b266331716e9600e6357",
+    "forwardFixDeploymentId": "313650fd-be82-4a28-a89a-9f1d525b400e",
+    "evidence": "docs/evidence/CANONICAL_SALE_V1_ROLLBACK_FORWARD_FIX_REHEARSAL_2026-08-30.json"
+  },
   "localIntegrity": {
     "protectedDevDbSha256": "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533",
     "devDbChanged": false,
-    "frontendRegression": "230/230 PASS",
+    "frontendRegression": "232/232 PASS",
     "frontendBuild": "PASS",
     "frontendLint": "PASS",
     "backendRegression": "PASS_WITH_PROPORTIONAL_RETEST"
@@ -127,18 +152,18 @@
     "environment": "disposable WSL",
     "officialDatabaseTouched": false,
     "harnessTests": 24,
-    "sourceManifestSha256": "8a2f0bb816e338a8392a79bd72b42114f6a10532644efaabc2c0d7ed8327d25b",
-    "evidenceManifestFile": "20260830142504707-8116-35dbe6dfdb7e.json",
-    "evidenceManifestSha256": "592b9301752514aee44d783429d32efe20af40bef958d0f835831cd8dda02197",
-    "logsSha256": "176b975dfa34e9b381801935e86747ce878de6e87c55898235987ee2a29ab4e2",
+    "sourceManifestSha256": "13bafb9812beaa34793cb91cf424a8c308ce64ebadec4f7ff01c040384821ae1",
+    "evidenceManifestFile": "20260830151754600-1400-280f48eef1c6.json",
+    "evidenceManifestSha256": "6e5343ca12fa3065a5868aefa3dbfc53440c1df7b71e72a8eb89ae55fd6c35c0",
+    "logsSha256": "f27b7b9ef544a0ee436a183cc1988e0de4325b1f97ed13171c196ddf0fbffd44",
     "wslEnvironmentCleaned": true
   },
   "authenticatedE2E": {
     "status": "PASS",
     "syntheticLoginConfirmed": true,
-    "runHash": "c3e73463008d0d71f692",
-    "fixtureRunId": "ce200b1d298eea6d",
-    "fixtureManifestSha256": "6ef4db8c0fe7ae4f91047debcb4d176d5c2fba0db216391f79c53daa9bd1480e",
+    "runHash": "76faf8cc92984ed808da",
+    "fixtureRunId": "bf1d9e90d8dd9af9",
+    "fixtureManifestSha256": "ee8f850c915cffe0d8621b77c46e275041876a33d528709c20cd23a4e58d5355",
     "fixtureCounts": {
       "companies": 2,
       "users": 8,
@@ -154,7 +179,9 @@
     "concurrency": "PASS",
     "tenantRbac": "PASS",
     "revenueProvenance": "PASS",
-    "databaseApiUiConverged": true
+    "databaseApiUiConverged": true,
+    "authenticatedCsvDownload": "PASS",
+    "resultsManifest": "docs/evidence/CANONICAL_SALE_V1_E2E_RESULTS_2026-08-30.json"
   },
   "idempotencyRecoveryFinding": {
     "id": "STG-S2-IDEMP-01",
@@ -179,7 +206,9 @@
     "rapidBusinessSwitch": "PASS",
     "twoTabs": "PASS",
     "drawerAsync01": "RETESTED",
-    "exportDownloadCapture": "BROWSER_CONTROL_FAILURE_RESOLVED_BY_API_AND_UNIT_TEST"
+    "exportDownloadCapture": "PASS_AFTER_EXECUTABLE_FIX",
+    "exportFileSha256": "4c54ee6e3b0902a149b3be92791e07d161f677bb27311aee88dd4206bba8c44f",
+    "resultsManifest": "docs/evidence/CANONICAL_SALE_V1_BROWSER_QA_RESULTS_2026-08-30.json"
   },
   "soak": {
     "status": "PASS_WITH_CAUSAL_SUPPLEMENT",
@@ -196,32 +225,23 @@
     "restartResult": "PASS",
     "phase1Sha256": "b2ef2c3678676298aebdcb59babe32537feb1cd162366e7c87761f699a15b51e",
     "phase2Sha256": "702d681a25adc7e32dff84cd18b52e88dd9ce93f6cb79b80e87e6bb25c678676",
-    "postSoakDeltaRetest": "FOCUSED_SQLITE_AND_POSTGRES_PASS"
+    "postSoakDeltaRetest": "FOCUSED_SQLITE_POSTGRES_FRONTEND_AND_FINAL_E2E_PASS",
+    "phase1Manifest": "docs/evidence/CANONICAL_SALE_V1_SOAK_PHASE1_2026-08-30.json",
+    "phase2Manifest": "docs/evidence/CANONICAL_SALE_V1_SOAK_PHASE2_2026-08-30.json"
   },
   "cleanup": {
     "status": "PASS",
-    "qaCompaniesRemaining": 0,
+    "mode": "DEACTIVATE_AND_RETAIN_APPEND_ONLY_HISTORY",
+    "activeQaCompanies": 0,
+    "activeQaUsers": 0,
+    "sessionsRemaining": 0,
+    "refreshTokensRemaining": 0,
     "syntheticCredentialFileRemoved": true,
-    "temporaryApiArtifactsRemovedByRedeploy": true,
+    "remoteFixtureManifestRemoved": true,
     "temporaryPostgresRemoved": true,
-    "deletedCounts": {
-      "saleHistory": 95,
-      "saleItems": 62,
-      "contracts": 33,
-      "sales": 64,
-      "proposalHistory": 130,
-      "proposalItems": 134,
-      "proposals": 134,
-      "assignmentHistory": 95,
-      "businesses": 35,
-      "clients": 35,
-      "refreshTokens": 30,
-      "sessions": 15,
-      "securityAudit": 30,
-      "features": 2,
-      "users": 8,
-      "companies": 2
-    }
+    "retainedImmutableSales": 4,
+    "retainedContracts": 3,
+    "resultsManifest": "docs/evidence/CANONICAL_SALE_V1_CLEANUP_RESULTS_2026-08-30.json"
   },
   "reviewGates": {
     "stagingAuditSweep1": "PASS_AFTER_RETESTS",
@@ -231,13 +251,26 @@
     "finalAdversarialVerdict": "PENDING_RECONCILIATION",
     "finalSolReconciliation": "PENDING_RECONCILIATION"
   },
+  "firstFinalAdversarial": {
+    "verdict": "FIX_FIRST",
+    "findings": {
+      "legacyReopen": "RETESTED_RECONCILED",
+      "rollbackForwardFix": "RETESTED_RECONCILED",
+      "csvBrowser": "RETESTED_RECONCILED",
+      "durableEvidenceAndState": "EVIDENCE_PERSISTED_STATE_UPDATE_PENDING",
+      "providerClaimScope": "RECONCILED"
+    },
+    "requiredSecondVerdict": "PENDING_REVIEW_AFTER_FIXES"
+  },
   "safety": {
-    "productionRequests": 0,
+    "productionApplicationRequests": 0,
+    "productionControlPlaneReadOnlyChecks": true,
     "productionChanged": false,
-    "realProductProviderConnections": 0,
-    "realProductProviderCredentialsUsed": 0,
+    "realProductProviderConnectionsUsedByMission": 0,
+    "realProductProviderCredentialsUsedByMission": 0,
     "realOutbound": 0,
-    "hostingControlPlane": "STAGING_ONLY"
+    "hostingControlPlane": "STAGING_ONLY",
+    "runtimeVerifierScope": "outbound flags plus active MetaCredential and Bling integration rows; no broader stored-provider absence is claimed"
   },
   "finalState": {
     "canonicalSaleV1": "NOT_YET_FINAL",

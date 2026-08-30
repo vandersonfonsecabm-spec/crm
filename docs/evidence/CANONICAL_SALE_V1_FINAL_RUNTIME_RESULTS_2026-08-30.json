@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "canonical-sale-v1-final-runtime-results-v1",
+  "environment": "ga3-bundle-staging",
+  "releaseHead": "2da896aac84dd683e844b266331716e9600e6357",
+  "backend": {
+    "deploymentId": "313650fd-be82-4a28-a89a-9f1d525b400e",
+    "status": "SUCCESS",
+    "imageDigest": "sha256:70e89dd1d625a7eb08214b6da0af0b8733f97ca656860d5ecbfff3418dc18580",
+    "healthHttpStatus": 200,
+    "readinessHttpStatus": 200,
+    "databaseReady": true,
+    "errorLogsLastHour": 0,
+    "http5xxLastHour": 0
+  },
+  "frontend": {
+    "deploymentId": "dpl_EmnYbZQWFWxyaD1u8A5fXk19v5Cr",
+    "status": "READY",
+    "stableAliasCurrent": true,
+    "cleanDetachedSource": true,
+    "gitCommitSha": "2da896aac84dd683e844b266331716e9600e6357"
+  },
+  "fingerprint": {
+    "version": "backend-runtime-v3-lf",
+    "sha256": "bef4bab2726db40731ac1473cad95ae623e12cc656c189bb2cd1985a9b84f8d8",
+    "targetVerified": true,
+    "databaseVerified": true,
+    "providersConnected": false,
+    "outboundEnabled": false
+  },
+  "database": {
+    "migrationsApplied": 20,
+    "migrationsFailed": 0,
+    "latestMigration": "20260830133500_harden_canonical_sale_delete_guard"
+  },
+  "qaCleanup": {
+    "companiesTotalRetainedInactive": 2,
+    "companiesActive": 0,
+    "usersActive": 0,
+    "sessions": 0,
+    "refreshTokens": 0,
+    "retainedImmutableSales": 4,
+    "retainedContracts": 3,
+    "credentialFilePresent": false,
+    "fixtureManifestPresent": false
+  },
+  "production": {
+    "applicationRequests": 0,
+    "mutations": 0,
+    "frontendDeploymentObservedReadOnly": "dpl_GzT5h7Q7paK6mLr7ExAxbkBFFABh",
+    "backendDeploymentObservedReadOnly": "5bdfb9e8-2e36-4a8c-a177-9595efc36ac5",
+    "workerDeploymentObservedReadOnly": "db381e6e-3b3a-4c67-a3b9-06a3d52c74d5"
+  },
+  "productProviderConnectionsUsedByMission": 0,
+  "productProviderCredentialsUsedByMission": 0,
+  "realOutbound": 0,
+  "runtimeVerifierScope": "outbound flags plus active MetaCredential and Bling integration rows",
+  "containsCredentials": false,
+  "containsRealCustomerData": false
+}

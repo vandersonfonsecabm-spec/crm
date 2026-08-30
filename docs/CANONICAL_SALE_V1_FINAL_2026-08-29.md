@@ -4,13 +4,14 @@ Data de consolidação: 2026-08-30
 
 Branch: `feature/canonical-sale-v1`
 
-Estado deste documento: `PENDING_FINAL_ADVERSARIAL_RECONCILIATION`
+Estado deste documento: `PENDING_REVIEW_AFTER_FIXES`
 
 Este documento substitui o relatório local anterior, que registrava staging
 como não iniciado. Ele consolida somente fatos comprovados até o artefato de
-release atual. O adversarial final e o secret sweep sobre os próprios artefatos
-documentais ainda estão pendentes neste rascunho; portanto ele não declara
-`COMPLETE`, `SHIP` nem prontidão para produção antes desses gates.
+release atual. O primeiro adversarial retornou `FIX_FIRST`; os findings foram
+corrigidos e retestados, mas uma nova revisão adversarial limpa e o secret
+sweep sobre os artefatos documentais ainda estão pendentes. Este rascunho não
+declara `COMPLETE`, `SHIP` nem prontidão para produção antes desses gates.
 
 ## 1. Veredito atual
 
@@ -20,9 +21,9 @@ MODEL_SELECTION_PRECONDITION=SATISFIED
 RUNTIME_MODEL_ATTESTATION=NOT_REQUIRED
 MODEL_IDENTITY_GATE=NOT_APPLICABLE
 
-RELEASE_ARTIFACT_HEAD=3b2e462cfd9ef62848577694c31f1005e7bd23f3
-RELEASE_GIT_TREE=80806ac71f039c7bc79bf2a1931c7afdaa9c9d58
-REPORT_COMMIT=PENDING
+RELEASE_ARTIFACT_HEAD=2da896aac84dd683e844b266331716e9600e6357
+RELEASE_GIT_TREE=5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce
+REPORT_COMMIT=a56f936eae6511bd9f090fa84bed4fadf39b43aa
 
 IMPLEMENTATION_COMPLETE=PASS
 LOCAL_GATES=PASS
@@ -35,31 +36,36 @@ STAGING_BACKEND_RUNTIME=PASS
 STAGING_FRONTEND_RUNTIME=PASS
 SOURCE_RUNTIME_PARITY=PASS
 STABLE_ALIAS_PARITY=PASS
+FINAL_RUNTIME_QA=PASS
 
 CANONICAL_SALE_STAGING_E2E=PASS
 STAGING_IDEMPOTENCY=PASS_WITH_POST_FINDING_CAUSAL_RETEST
 STAGING_CONCURRENCY=PASS
-STAGING_REOPEN=PASS
+STAGING_REOPEN=PASS_AFTER_FAIL_CLOSED_HARDENING
 STAGING_REVENUE_PROVENANCE=PASS
+STAGING_CSV_EXPORT=PASS_AUTHENTICATED_DOWNLOAD
 STAGING_TENANT_SECURITY=PASS
 STAGING_SNAPSHOT_IMMUTABILITY=PASS
 STAGING_BROWSER_QA=PASS
 CONTINUOUS_USE_REVIEW=PASS
 COMMERCIAL_TRANSACTION_SOAK=PASS_WITH_CAUSAL_SUPPLEMENT
-STAGING_QA_CLEANUP=PASS
+STAGING_QA_CLEANUP=PASS_DEACTIVATE_AND_RETAIN_APPEND_ONLY_HISTORY
+ROLLBACK_FORWARD_FIX_REHEARSAL=PASS
 
 STAGING_AUDIT_SWEEP_1=PASS_AFTER_RETESTS
 STAGING_AUDIT_SWEEP_2=PASS_AFTER_RETESTS
 SECOND_REVIEW_FINDING_IDEMPOTENCY_RECOVERY=RETESTED
 FINAL_SECRET_SWEEP=PENDING_RECONCILIATION
-FINAL_ADVERSARIAL_VERDICT=PENDING_RECONCILIATION
+FIRST_FINAL_ADVERSARIAL_VERDICT=FIX_FIRST
+FIRST_FINAL_ADVERSARIAL_FINDINGS=RETESTED_RECONCILED
+FINAL_ADVERSARIAL_VERDICT=PENDING_REVIEW_AFTER_FIXES
 FINAL_SOL_RECONCILIATION=PENDING_RECONCILIATION
 
 CANONICAL_SALE_V1=NOT_YET_FINAL
-READY_FOR_PRODUCTION=PENDING_RECONCILIATION
+READY_FOR_PRODUCTION=PENDING_REVIEW_AFTER_FIXES
 PRODUCTION_CHANGED=false
-REAL_PRODUCT_PROVIDER_CONNECTIONS=0
-REAL_PRODUCT_PROVIDER_CREDENTIALS_USED=0
+REAL_PRODUCT_PROVIDER_CONNECTIONS_USED_BY_THIS_MISSION=0
+REAL_PRODUCT_PROVIDER_CREDENTIALS_USED_BY_THIS_MISSION=0
 REAL_OUTBOUND=0
 HOSTING_CONTROL_PLANE=STAGING_ONLY
 ```
@@ -75,9 +81,11 @@ Nenhuma promoção para produção está autorizada ou foi realizada.
 - Candidato de UI estabilizado após `DRAWER-ASYNC-01`: `5d0e427`.
 - Hardening aditivo de ledger/migration/runtime: `f8f4961`.
 - Correção funcional encontrada no segundo sweep: `3b2e462`.
-- HEAD remoto da branch após push controlado: exatamente `3b2e462`.
+- Correções do primeiro adversarial — reopen fail-closed, CSV executável e
+  evidência final: `2da896a`.
+- HEAD remoto da branch após push controlado: exatamente `2da896a`.
 - Manifesto de fonte do release: Git tree
-  `80806ac71f039c7bc79bf2a1931c7afdaa9c9d58`.
+  `5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce`.
 - `backend/prisma/dev.db` permaneceu imutável, SHA-256
   `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
 
@@ -102,6 +110,11 @@ autoridade de domínio:
 - Dinheiro canônico usa centavos, BRL e preserva `null != 0`.
 - Snapshot monetário, itens, origem e revisão são históricos.
 - Reopen invalida a venda anterior com motivo e preserva a fotografia.
+- Reopen de Negócio `PERDIDO` exige histórico causal da transição terminal
+  atual; histórico ausente, inválido ou antigo falha fechado com
+  `LOST_REOPEN_HISTORY_INVALID`, sem fallback implícito para `PROPOSTA`.
+- `LEGACY_WON_UNRECONCILED` sem venda ativa falha fechado com
+  `ACTIVE_SALE_MISSING`; nenhum valor legado é reinterpretado como snapshot.
 - Retry, CAS, locks e idempotência convergem para uma operação lógica.
 - Relações são sempre fechadas por tenant, Cliente, Negócio e papel.
 
@@ -123,7 +136,8 @@ feito somente para `feature/canonical-sale-v1`; não houve merge em `main`.
 
 Os alvos de produção são distintos. A API de produção permaneceu no deployment
 `5bdfb9e8-2e36-4a8c-a177-9595efc36ac5`; o alias de frontend de produção
-permaneceu no deployment `dpl_GzT5h7Q7paK6mLr7ExAxbkBFFABh`.
+permaneceu no deployment `dpl_GzT5h7Q7paK6mLr7ExAxbkBFFABh`; o worker de
+produção permaneceu em `db381e6e-3b3a-4c67-a3b9-06a3d52c74d5`.
 
 ## 5. Migration, backup e rollback
 
@@ -138,7 +152,9 @@ As migrations canônicas são aditivas e forward-only:
 
 O banco de staging terminou com 20 migrations aplicadas e sem migration falha.
 O verifier confirmou a última migration, oito triggers protegidos, bypass por
-sessão bloqueado, `TRUNCATE` bloqueado e zero empresas QA após cleanup.
+sessão bloqueado, `TRUNCATE` bloqueado e zero empresas QA no checkpoint
+pré-E2E final. As fixtures criadas depois foram desativadas e retidas conforme
+o contrato append-only, como detalhado no cleanup final.
 
 O backup pré-hardening `canonical-sale-staging-pre-delete-hardening.dump` tem
 670217 bytes e SHA-256
@@ -149,16 +165,30 @@ backup anterior à migration inicial também foi ensaiado; o índice sanitizado
 ancora o backup mais recente cujo hash completo foi revalidado.
 
 O rollback contratual permanece forward-fix ou pausa de escrita; não existe
-`DROP`, reset ou reinterpretação silenciosa de legado.
+`DROP`, reset ou reinterpretação silenciosa de legado. O rehearsal executou um
+deploy intencionalmente falho (`254bb33d-48d9-4a7e-b67f-4472ba93d9d8`), sem
+migration. O bridge migration-aware `3b2e462`/`ecc3a785` permaneceu ativo com
+health, readiness, banco e fingerprint corretos, zero writes e zero outbound.
+O forward-fix `2da896a`/`313650fd` então assumiu saudável e com paridade exata.
+O resultado sanitizado está em
+`docs/evidence/CANONICAL_SALE_V1_ROLLBACK_FORWARD_FIX_REHEARSAL_2026-08-30.json`.
+
+```text
+ROLLBACK_FORWARD_FIX_REHEARSAL=PASS
+```
 
 ## 6. Deploy e paridade source/runtime
 
-Deploys atuais do release `3b2e462`:
+Deploys atuais do release `2da896a`:
 
-- Railway API: `ecc3a785-b4a1-4b1f-93e2-539cf2de3fb8`, `SUCCESS`, image
-  digest `sha256:26677c3939c82e6aa59d4ae568b8324c94d1d9b908dc4bc8e6b95ad380f57250`.
-- Vercel frontend: `dpl_DJuYkeaS6w2xXoXYnkkSB355U9uH`, `READY`, vinculado ao
-  alias estável de staging.
+- Railway API: `313650fd-be82-4a28-a89a-9f1d525b400e`, `SUCCESS`, image digest
+  `sha256:70e89dd1d625a7eb08214b6da0af0b8733f97ca656860d5ecbfff3418dc18580`.
+- Vercel frontend final: `dpl_EmnYbZQWFWxyaD1u8A5fXk19v5Cr`, `READY`,
+  vinculado ao alias estável de staging, com `gitCommitSha/releaseHead=2da896a`
+  e `gitDirty=false` a partir de worktree detached limpo.
+- O E2E e a captura CSV rodaram antes no deployment
+  `dpl_DvVGWZV8Mb4HWbKtyfKTk3uk8r1k`, de fonte `2da896a` idêntica. Esse ID é
+  preservado como deployment de execução, não como alias final.
 - Worker staging permaneceu saudável e não participa do caminho causal da
   Venda Canônica V1.
 
@@ -167,7 +197,7 @@ runtime expôs:
 
 ```text
 SOURCE_MANIFEST_VERSION=backend-runtime-v3-lf
-SOURCE_MANIFEST_SHA256=bea0a256eb86fe2833258f28b7a1438b440a284762ce6784bee6d7776ffe8fab
+SOURCE_MANIFEST_SHA256=bef4bab2726db40731ac1473cad95ae623e12cc656c189bb2cd1985a9b84f8d8
 TARGET_VERIFIED=true
 DATABASE_VERIFIED=true
 PROVIDERS_CONNECTED=false
@@ -176,6 +206,9 @@ OUTBOUND_ENABLED=false
 
 Branch, Git tree, backend deployment, frontend deployment, migrations, banco
 e alias estável convergiram para o mesmo release. `SOURCE_RUNTIME_PARITY=PASS`.
+Na janela final, backend teve zero error logs e zero HTTP 5xx; o banco tinha 20
+migrations aplicadas e zero falhas. Evidência sanitizada:
+`docs/evidence/CANONICAL_SALE_V1_FINAL_RUNTIME_RESULTS_2026-08-30.json`.
 
 ## 7. PostgreSQL causal final
 
@@ -184,13 +217,13 @@ banco/usuário exclusivos e cleanup externo. Nenhum banco oficial foi usado.
 
 - Harness tests: 24.
 - Manifesto de fonte:
-  `8a2f0bb816e338a8392a79bd72b42114f6a10532644efaabc2c0d7ed8327d25b`.
+  `13bafb9812beaa34793cb91cf424a8c308ce64ebadec4f7ff01c040384821ae1`.
 - Manifesto de evidência:
-  `20260830142504707-8116-35dbe6dfdb7e.json`.
+  `20260830151754600-1400-280f48eef1c6.json`.
 - SHA-256 do manifesto:
-  `592b9301752514aee44d783429d32efe20af40bef958d0f835831cd8dda02197`.
+  `6e5343ca12fa3065a5868aefa3dbfc53440c1df7b71e72a8eb89ae55fd6c35c0`.
 - SHA-256 dos logs sanitizados:
-  `176b975dfa34e9b381801935e86747ce878de6e87c55898235987ee2a29ab4e2`.
+  `f27b7b9ef544a0ee436a183cc1988e0de4325b1f97ed13171c196ddf0fbffd44`.
 
 Migration, constraints, CAS, locks, close/accept/update concorrentes,
 idempotência, replay divergente/invalidation, tenant, snapshots e cleanup
@@ -211,12 +244,19 @@ clique duplo, duas chaves, duas abas, concorrência close/accept/update, reopen,
 nova revisão, paginação com 101 propostas, cross-client, cross-tenant e RBAC de
 ADMIN/GERENTE/VENDEDOR.
 
-- hash do run E2E: `c3e73463008d0d71f692`;
-- fixture run ID: `ce200b1d298eea6d`;
+- hash do run E2E final no release `2da896a`: `76faf8cc92984ed808da`;
+- fixture run ID: `bf1d9e90d8dd9af9`;
 - SHA-256 do manifesto de fixtures:
-  `6ef4db8c0fe7ae4f91047debcb4d176d5c2fba0db216391f79c53daa9bd1480e`;
+  `ee8f850c915cffe0d8621b77c46e275041876a33d528709c20cd23a4e58d5355`;
 - fixtures: 2 empresas, 8 usuários, 5 clientes, 5 negócios, 104 propostas e
   4 vendas sintéticas.
+
+A execução ocorreu no backend `313650fd-be82-4a28-a89a-9f1d525b400e` e no
+frontend `dpl_DvVGWZV8Mb4HWbKtyfKTk3uk8r1k`, ambos com source `2da896a` e
+runtime manifest
+`bef4bab2726db40731ac1473cad95ae623e12cc656c189bb2cd1985a9b84f8d8`.
+O resultado sanitizado está em
+`docs/evidence/CANONICAL_SALE_V1_E2E_RESULTS_2026-08-30.json`.
 
 DB, API e UI convergiram para a mesma venda ativa e proveniência de receita.
 
@@ -234,8 +274,9 @@ Retestes após a correção:
 - suíte canônica SQLite: PASS;
 - suíte focal canônica PostgreSQL: PASS;
 - gate PostgreSQL completo: PASS;
-- branch remota e runtime staging atualizados para `3b2e462`;
-- fingerprint novo confirmado.
+- o finding permaneceu fechado nos testes do release posterior `2da896a`;
+- branch remota e runtime staging atualizados para `2da896a`;
+- fingerprint final confirmado.
 
 O reviewer independente repetiu a revisão após os retestes e retornou `SHIP`,
 sem finding remanescente em seu escopo. Logo:
@@ -270,10 +311,24 @@ invalidada, `Cliente.valor`, `Negocio.valor` e proposta aceita isoladamente
 ficam fora. Pipeline e estimativa permanecem separados; zero é conhecido e
 `null` é desconhecido; BRL, centavos, subtotal, desconto e total convergem.
 
-A captura do download pelo controlador de navegador expirou sem criar arquivo
-local. A falha foi classificada `BROWSER_CONTROL_FAILURE`, não falha da SaaS:
-o teste unitário do export frontend e a API `/vendas` com as mesmas fixtures
-passaram. Nenhum PASS é atribuído a um download não capturado.
+O primeiro adversarial não aceitou a tentativa anterior, em que o controlador
+de navegador não capturou arquivo. O export foi extraído para uma unidade
+executável, endurecido contra formula injection e corrigido em `2da896a`.
+Depois disso:
+
+- testes focais CSV: 4/4 PASS;
+- frontend completo: 232/232 PASS;
+- build e lint: PASS;
+- download autenticado no staging: PASS;
+- arquivo capturado: 531 bytes, 4 linhas, SHA-256
+  `4c54ee6e3b0902a149b3be92791e07d161f677bb27311aee88dd4206bba8c44f`;
+- header, BRL, centavos, zero/null, origem, status, proposta e revisão: PASS;
+- console do browser: zero erros.
+
+A cópia rastreada foi sanitizada em
+`docs/evidence/CANONICAL_SALE_V1_STAGING_EXPORT_2026-08-30.csv`; nenhuma
+credencial ou dado real foi incorporado. O manifesto executável está em
+`docs/evidence/CANONICAL_SALE_V1_EXPORT_RESULTS_2026-08-30.json`.
 
 ## 12. Browser QA e uso contínuo
 
@@ -289,8 +344,12 @@ perdido e reopen.
 - duas abas, mutações repetidas, close/reopen e sessão renovada sem stuck state.
 
 `DRAWER-ASYNC-01` foi corrigido em `a00b4c4`, `de4ebd8`, `186fb4b`, `478c70e`
-e `5d0e427`. A regressão frontend passou 230/230, lint e build. `f8f4961` e
-`3b2e462` não alteraram o frontend; a evidência foi preservada causalmente.
+e `5d0e427`. Após o fix do CSV em `2da896a`, a regressão frontend final passou
+232/232, lint e build. O download autenticado foi repetido no deployment de
+execução `dpl_DvVGWZV8Mb4HWbKtyfKTk3uk8r1k`, e o alias final foi redeployado
+de worktree limpo no deployment `dpl_EmnYbZQWFWxyaD1u8A5fXk19v5Cr`.
+O manifesto durável do QA está em
+`docs/evidence/CANONICAL_SALE_V1_BROWSER_QA_RESULTS_2026-08-30.json`.
 
 ## 13. Soak comercial
 
@@ -313,22 +372,43 @@ e `5d0e427`. A regressão frontend passou 230/230, lint e build. `f8f4961` e
 - restart controlado: PASS;
 - produção 0, providers reais 0, outbound real 0.
 
-O soak rodou em `5d0e427`. `f8f4961` alterou migration/runtime/testes e
-`3b2e462` alterou apenas o fallback de recovery, coberto depois por focal,
-SQLite e PostgreSQL completo. O fluxo regular foi preservado e o delta recebeu
-reteste causal; por isso o gate é `PASS_WITH_CAUSAL_SUPPLEMENT`, sem afirmar
-que o soak inteiro foi repetido no novo SHA.
+O soak rodou em `5d0e427`. Os deltas posteriores foram cobertos
+proporcionalmente: hardening/migration/runtime em `f8f4961`, recovery de
+idempotência em `3b2e462`, reopen fail-closed e CSV em `2da896a`. O release
+final passou focal, SQLite, PostgreSQL completo, frontend 232/232 e novo E2E
+autenticado. Por isso o gate é `PASS_WITH_CAUSAL_SUPPLEMENT`, sem afirmar que o
+soak inteiro foi repetido no novo SHA.
+
+As duas fases foram copiadas para manifests sanitizados duráveis em
+`docs/evidence/CANONICAL_SALE_V1_SOAK_PHASE1_2026-08-30.json` e
+`docs/evidence/CANONICAL_SALE_V1_SOAK_PHASE2_2026-08-30.json`.
 
 ## 14. Cleanup
 
-O cleanup removeu 95 históricos de venda, 62 itens, 33 contratos, 64 vendas,
-130 históricos de proposta, 134 itens, 134 propostas, 95 históricos de
-atribuição, 35 negócios, 35 clientes, 30 refresh tokens, 15 sessões, 30
-security audits, 2 features, 8 usuários e 2 empresas QA.
+O cleanup final respeitou a imutabilidade recém-endurecida:
 
-O verifier final confirmou zero empresas QA. A credencial sintética temporária
-foi removida. O redeploy limpou scripts/verifiers do `/tmp` da API e o
-PostgreSQL WSL descartável foi encerrado/removido.
+```text
+STAGING_QA_CLEANUP=PASS
+CLEANUP_MODE=DEACTIVATE_AND_RETAIN_APPEND_ONLY_HISTORY
+```
+
+- 2 empresas e 8 usuários QA foram desativados;
+- 2 features foram desativadas;
+- 7 refresh tokens e 6 sessões foram removidos;
+- empresas ativas, usuários ativos, sessões e refresh tokens QA: zero;
+- novo login sintético foi rejeitado;
+- reload do browser voltou à tela de login;
+- arquivo local de credencial e manifesto remoto de fixtures foram removidos;
+- PostgreSQL temporário foi encerrado e sua porta ficou fechada;
+- 4 vendas e 3 contratos sintéticos permaneceram retidos, inativos e
+  imutáveis por desenho append-only.
+
+O cleanup anterior ao hardening havia apagado dados QA descartáveis, inclusive
+64 vendas, quando o contrato ainda permitia a operação. Isso é evidência
+histórica, não o método final. O cleanup atual não bypassou triggers nem
+apagou o ledger para satisfazer artificialmente uma contagem zero.
+O resultado durável está em
+`docs/evidence/CANONICAL_SALE_V1_CLEANUP_RESULTS_2026-08-30.json`.
 
 ## 15. Ledger canônico de findings
 
@@ -341,12 +421,18 @@ PostgreSQL WSL descartável foi encerrado/removido.
 | STG-S1-DELETE-01 | HIGH | GUC liberava delete e faltava guard de truncate | `f8f4961` | RETESTED local/staging |
 | STG-S1-CONTRACT-01 | HIGH | delete de contrato ocultava receita ativa | `f8f4961` | RETESTED |
 | STG-S1-RUNTIME-01 | MEDIUM | manifesto omitia normalização `.toml` | runtime v3-lf | RETESTED |
-| STG-S1-EVIDENCE-01 | MEDIUM | soak sem atribuição/cleanup consolidado | este relatório/índice | FIXED_DRAFT; secret check pendente |
+| STG-S1-EVIDENCE-01 | MEDIUM | soak sem atribuição/cleanup consolidado | relatório e manifests duráveis | RETESTED; secret check final pendente |
 | STG-S2-IDEMP-01 | HIGH | recovery aceitava venda invalidada | `3b2e462` | RETESTED; reviewer SHIP |
+| ADV-FIX-REOPEN | gate blocker | LOST sem histórico causal tinha fallback implícito; legado WON não podia ser reinterpretado | `2da896a`, fail-closed | RETESTED SQLite/PG/E2E |
+| ADV-FIX-CSV | gate blocker | export não possuía prova executável/download capturado | utilitário/testes/download `2da896a` | RETESTED 4/4, 232/232, browser |
+| ADV-FIX-ROLLBACK | gate blocker | rollback/forward-fix pós-migration não estava ensaiado | bridge + falha intencional + forward-fix | RETESTED em staging |
+| ADV-FIX-CLEANUP | gate blocker | cleanup físico conflitaria com ledger append-only | desativar e reter histórico | RETESTED; login rejeitado |
+| ADV-FIX-PROVIDER | gate blocker | alegação de ausência de toda credencial era ampla demais | claims estreitos ao escopo verificado | RECONCILED |
 
-Não há finding de produto conhecido sem correção. Os gates ainda pendentes são
-reconciliação documental/secret sweep e adversarial final, não uma ressalva
-convertida em PASS.
+As severidades individuais dos cinco findings adversariais não foram
+reclassificadas neste relatório; todos bloquearam o gate `FIX_FIRST` e foram
+tratados como obrigatórios. Não há finding conhecido sem correção. Permanecem
+pendentes o secret sweep documental e uma nova revisão adversarial limpa.
 
 ## 16. Auditorias independentes
 
@@ -358,10 +444,19 @@ O segundo sweep do zero encontrou `STG-S2-IDEMP-01`; após `3b2e462`, focal,
 SQLite, PostgreSQL completo, redeploy e fingerprint, o reviewer repetiu a
 revisão e retornou `SHIP` sem finding remanescente.
 
+O primeiro adversarial final, executado depois dos dois sweeps, retornou
+`FIX_FIRST` para: semântica fail-closed do reopen LOST/legado WON, prova
+executável do CSV, rehearsal de rollback/forward-fix, cleanup compatível com
+append-only e amplitude das alegações de provider. `2da896a` e os manifests
+duráveis corrigiram/retestaram todos esses pontos. O primeiro veredito não é
+reescrito retroativamente como SHIP; uma nova revisão adversarial é obrigatória.
+
 ```text
 STAGING_AUDIT_SWEEP_1=PASS_AFTER_RETESTS
 STAGING_AUDIT_SWEEP_2=PASS_AFTER_RETESTS
-FINAL_ADVERSARIAL_VERDICT=PENDING_RECONCILIATION
+FIRST_FINAL_ADVERSARIAL_VERDICT=FIX_FIRST
+FIRST_FINAL_ADVERSARIAL_FINDINGS=RETESTED_RECONCILED
+FINAL_ADVERSARIAL_VERDICT=PENDING_REVIEW_AFTER_FIXES
 ```
 
 O adversarial final somente poderá retornar `SHIP` ou `FIX_FIRST` depois do
@@ -377,44 +472,59 @@ secret sweep, commit documental e rechecagem final de runtime.
 | Atomic/manual close | PASS | SQLite, PG e staging |
 | Idempotência | PASS_WITH_POST_FINDING_CAUSAL_RETEST | 3/3 + SQLite + PG + redeploy |
 | Concorrência/CAS/locks | PASS | PostgreSQL causal + staging |
-| Reopen/histórico | PASS | E2E + snapshot attacks |
+| Reopen/histórico | PASS_AFTER_FAIL_CLOSED_HARDENING | LOST causal + legacy WON fail-closed + SQLite/PG/E2E |
 | Money/receita | PASS | DB/API/UI/360/dashboard/export |
 | Tenant/RBAC | PASS | requests reais + constraints |
 | Snapshot imutável | PASS | ataques update/delete/truncate/item tardio |
-| Browser/continuous | PASS | 4 viewports, refresh, duas abas, 230/230 |
+| CSV autenticado | PASS | 531 bytes, 4 rows, SHA, console 0, 4/4 e 232/232 |
+| Browser/continuous | PASS | 4 viewports, refresh, duas abas, 232/232 |
 | Soak | PASS_WITH_CAUSAL_SUPPLEMENT | 30 iterações + reteste do delta |
-| Cleanup | PASS | contagens e verifier zero QA |
-| Runtime/parity | PASS | deployments, SHA, manifest, health |
+| Cleanup | PASS | desativação, auth revogada e ledger retido imutável |
+| Rollback/forward-fix | PASS | failure intencional, bridge saudável, forward-fix 2da |
+| Runtime/parity/final QA | PASS | deployments, SHA, manifest, health, logs 0, 5xx 0 |
 | Sweep 1 | PASS_AFTER_RETESTS | findings corrigidos/revistos |
 | Sweep 2 | PASS_AFTER_RETESTS | finding corrigido; reviewer SHIP |
 | Secret sweep final | PENDING_RECONCILIATION | executar nos docs finais |
-| Adversarial final | PENDING_RECONCILIATION | depende dos gates acima |
+| Adversarial final | PENDING_REVIEW_AFTER_FIXES | primeiro FIX_FIRST fechado; nova revisão exigida |
 
 ## 18. Produção, providers e segredos
 
 ```text
-PRODUCTION_REQUESTS=0
+PRODUCTION_APPLICATION_REQUESTS=0
+PRODUCTION_CONTROL_PLANE_READ_ONLY_CHECKS=true
 PRODUCTION_CHANGED=false
-REAL_PRODUCT_PROVIDER_CONNECTIONS=0
-REAL_PRODUCT_PROVIDER_CREDENTIALS_USED=0
+REAL_PRODUCT_PROVIDER_CONNECTIONS_USED_BY_THIS_MISSION=0
+REAL_PRODUCT_PROVIDER_CREDENTIALS_USED_BY_THIS_MISSION=0
 REAL_OUTBOUND=0
 HOSTING_CONTROL_PLANE=STAGING_ONLY
 ```
 
-Não houve migration, deploy, escrita, provider ou outbound em produção. Este
+Não houve request de aplicação, migration, deploy, escrita, provider ou
+outbound em produção. Houve somente inspeção read-only do plano de controle
+para confirmar que os deployments oficiais permaneceram inalterados. Este
 relatório usa “provider” para os conectores de produto (Meta, WhatsApp, Bling,
 e-mail e IA); os planos de controle Railway/Vercel foram usados somente no
-staging declarado. Ele não contém URL com credencial, token, cookie, senha,
+staging declarado. O verifier de runtime prova flags de outbound e linhas
+ativas de `MetaCredential`/integração Bling; ele não prova ausência de toda e
+qualquer credencial armazenada em todos os subsistemas. A alegação correta é
+que esta missão não conectou nem utilizou credencial real de provider de
+produto. O relatório não contém URL com credencial, token, cookie, senha,
 private key ou dado real. `FINAL_SECRET_SWEEP` deve rodar novamente sobre o
 commit documental.
+
+O índice sanitizado central desta missão é
+`docs/evidence/CANONICAL_SALE_V1_STAGING_EVIDENCE_2026-08-30.json`; ele aponta
+para E2E, browser, CSV, soak, rollback/forward-fix e cleanup duráveis.
 
 ## 19. Critério de encerramento
 
 Este rascunho só pode mudar para estado final depois de:
 
 1. secret sweep do relatório/índice;
-2. commit documental separado, preservando `RELEASE_ARTIFACT_HEAD=3b2e462`;
-3. adversarial final independente com veredito `SHIP`;
+2. consolidar o relatório posterior ao draft commit
+   `a56f936eae6511bd9f090fa84bed4fadf39b43aa`, preservando
+   `RELEASE_ARTIFACT_HEAD=2da896a`;
+3. nova revisão adversarial independente, pós-fixes, com veredito `SHIP`;
 4. reconciliação do Sol e rechecagem runtime/alias/produção.
 
 Até lá:
@@ -426,7 +536,7 @@ OPEN_MEDIUM=0
 UNTESTED_PRODUCT_SCOPE=0
 FALSE_PASS=0
 CANONICAL_SALE_V1=NOT_YET_FINAL
-READY_FOR_PRODUCTION=PENDING_RECONCILIATION
+READY_FOR_PRODUCTION=PENDING_REVIEW_AFTER_FIXES
 ```
 
 Quando e somente quando esses gates passarem, a autoridade final poderá

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "canonical-sale-v1-cleanup-results-v2",
+  "environment": "ga3-bundle-staging",
+  "fixtureRunIdHash": "76faf8cc92984ed808da",
+  "releaseHead": "2da896aac84dd683e844b266331716e9600e6357",
+  "status": "PASS",
+  "mode": "DEACTIVATE_AND_RETAIN_APPEND_ONLY_HISTORY",
+  "reason": "The final schema forbids DELETE/TRUNCATE of the canonical ledger, including QA rows. Cleanup therefore disables the synthetic tenants and retains immutable history instead of bypassing the contract.",
+  "changedCounts": {
+    "refreshTokensDeleted": 7,
+    "sessionsDeleted": 6,
+    "featuresDisabled": 2,
+    "usersDisabled": 8,
+    "companiesDisabled": 2
+  },
+  "verification": {
+    "activeQaCompanies": 0,
+    "activeQaUsers": 0,
+    "sessionsRemaining": 0,
+    "refreshTokensRemaining": 0,
+    "loginRejected": true,
+    "browserReloadReturnedToLogin": true,
+    "syntheticCredentialFileRemoved": true,
+    "remoteFixtureManifestRemoved": true,
+    "temporaryPostgresRemoved": true,
+    "temporaryPostgresPortClosed": true
+  },
+  "retainedAppendOnlyHistory": {
+    "canonicalSales": 4,
+    "contracts": 3,
+    "expected": true,
+    "mutableByCleanupBypass": false
+  },
+  "priorPreHardeningCleanup": {
+    "status": "PASS",
+    "companiesDeleted": 2,
+    "usersDeleted": 8,
+    "salesDeletedBeforeUnconditionalGuard": 64
+  },
+  "containsCredentials": false,
+  "containsRealCustomerData": false
+}

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "canonical-sale-v1-browser-qa-v1",
+  "environment": "ga3-bundle-staging",
+  "syntheticOnly": true,
+  "frontendHead": "5d0e427af877ba81b5cb6e8d32187e4797e3c9ba",
+  "frontendDeploymentId": "dpl_5Zw4sP5Qs3GK8mSwQuY4F4rPqoXY",
+  "viewports": ["900x768", "1366x768", "1440x900", "1920x1080"],
+  "results": {
+    "board": "PASS",
+    "loading": "PASS",
+    "empty": "PASS",
+    "error": "PASS",
+    "manualSale": "PASS",
+    "proposalSale": "PASS",
+    "winningProposal": "PASS",
+    "supersededProposal": "PASS",
+    "legacyState": "PASS",
+    "lostState": "PASS",
+    "reopen": "PASS",
+    "directDeepLink": "PASS",
+    "stableRefreshes": "3/3 PASS",
+    "rapidBusinessSwitch": "PASS",
+    "twoTabs": "PASS",
+    "drawerAsync01": "RETESTED",
+    "consoleErrors": 0,
+    "horizontalOverflow": 0
+  },
+  "exportDownload": {
+    "status": "PASS",
+    "priorControlAttempt": "BROWSER_CONTROL_FAILURE",
+    "priorFileCaptured": false,
+    "finalReleaseHead": "2da896aac84dd683e844b266331716e9600e6357",
+    "finalFrontendDeploymentId": "dpl_DvVGWZV8Mb4HWbKtyfKTk3uk8r1k",
+    "finalFileCaptured": true,
+    "finalFileSha256": "4c54ee6e3b0902a149b3be92791e07d161f677bb27311aee88dd4206bba8c44f",
+    "finalConsoleErrors": 0,
+    "evidence": "docs/evidence/CANONICAL_SALE_V1_EXPORT_RESULTS_2026-08-30.json"
+  },
+  "causalPreservation": {
+    "laterFrontendChangesBeforeFinalExportRetest": true,
+    "finalFrontendChange": "2da896a executable CSV export hardening",
+    "backendOnlyChangesAfterFrontendHead": ["f8f4961", "3b2e462"]
+  },
+  "containsCredentials": false,
+  "containsRealCustomerData": false
+}
