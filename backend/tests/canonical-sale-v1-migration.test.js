@@ -51,6 +51,11 @@ test("Venda Canônica V1 adiciona contrato e snapshots sem reinterpretar legado"
   assert.equal(database.prepare("PRAGMA quick_check").get().quick_check, "ok");
   assert.equal(database.prepare("PRAGMA foreign_key_check").all().length, 0);
 
+  const canonicalMigration = fs.readFileSync(path.join(backendDir, "prisma", "migrations", migrationName, "migration.sql"), "utf8");
+  assert.match(canonicalMigration, /PropostaComercial_customer_consistency_insert/);
+  assert.match(canonicalMigration, /PropostaComercial_customer_consistency_update/);
+  assert.match(canonicalMigration, /Negocio_customer_reparent_guard/);
+
   assert.throws(() => database.prepare(`
     INSERT INTO "NegocioContratoVenda"
       ("empresaId", "negocioId", "propostaPrincipalId", "revisao", "createdAt", "updatedAt")
