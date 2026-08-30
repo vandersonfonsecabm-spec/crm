@@ -36,8 +36,8 @@ test("gate A oferece movimentação de Negócio por teclado no drawer usando a m
 
   assert.match(drawer, /const canMove = business\.permissoes\?\.movimentar === true/);
   assert.match(drawer, /<Select[\s\S]*?label="Mover para etapa"/);
-  assert.match(drawer, /disabled=\{!canMove \|\| isMoving\}/);
-  assert.match(drawer, /aria-busy=\{isMoving\}/);
+  assert.match(drawer, /disabled=\{!canMove \|\| isMoving \|\| canonicalBusy\}/);
+  assert.match(drawer, /aria-busy=\{isMoving \|\| canonicalBusy\}/);
   assert.match(drawer, /ref=\{stageSelectRef\}/);
   assert.match(drawer, /onChange=\{\(event\) => handleStageChange\(event\.target\.value as BusinessStage\)\}/);
   assert.match(drawer, /\{stages\.map\(\(stage\) => <option key=\{stage\} value=\{stage\}>\{stageLabels\[stage\]\}<\/option>\)\}/);

@@ -86,4 +86,7 @@ test("deep link e trocas rápidas de Negócio descartam respostas assíncronas o
   assert.match(kanban, /async function refreshCanonicalBusiness[\s\S]*?expectedDrawerSession !== drawerSessionSequence\.current[\s\S]*?const sequence = \+\+detailRequestSequence\.current[\s\S]*?setDetailLoading\(true\)[\s\S]*?currentDrawerBusinessId\.current !== id[\s\S]*?finally[\s\S]*?expectedDrawerSession === drawerSessionSequence\.current/);
   assert.match(kanban, /if \(isMoving \|\| canonicalBusy\) return/);
   assert.match(kanban, /disabled=\{isMoving \|\| canonicalBusy\}/);
+  assert.match(kanban, /const drawerMounted = useRef\(true\)/);
+  assert.match(kanban, /if \(!drawerMounted\.current\) return;[\s\S]*?await refreshCanonicalState\(\)/);
+  assert.match(kanban, /<BusinessDrawer[\s\S]*?key=\{selected\.id\}/);
 });

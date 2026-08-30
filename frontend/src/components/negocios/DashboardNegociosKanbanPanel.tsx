@@ -329,7 +329,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
         <Pagination disabled={refreshing} itemLabel="Negócios" onPageChange={setPage} page={page} total={pagination.total} totalPages={pagination.totalPages} visibleCount={businesses.length} />
       </Surface>
 
-      {selected && <BusinessDrawer authSession={authSession} business={selected} isMoving={movingBusinessId === selected.id} loading={detailLoading} onCanonicalChanged={(id, message) => refreshCanonicalBusiness(id, message, activeDrawerSession)} onClose={closeBusiness} onMoveBusiness={moveBusiness} onOpenAgenda={onOpenAgenda} />}
+      {selected && <BusinessDrawer authSession={authSession} business={selected} isMoving={movingBusinessId === selected.id} key={selected.id} loading={detailLoading} onCanonicalChanged={(id, message) => refreshCanonicalBusiness(id, message, activeDrawerSession)} onClose={closeBusiness} onMoveBusiness={moveBusiness} onOpenAgenda={onOpenAgenda} />}
     </section>
   );
 }
@@ -528,8 +528,10 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
   const [canonicalStateError, setCanonicalStateError] = useState("");
   const canonicalRequestSequence = useRef(0);
   const canonicalRequestController = useRef<AbortController | null>(null);
+  const drawerMounted = useRef(true);
 
   const refreshCanonicalState = useCallback(async () => {
+    if (!drawerMounted.current) return;
     const requestSequence = canonicalRequestSequence.current + 1;
     canonicalRequestSequence.current = requestSequence;
     canonicalRequestController.current?.abort();
@@ -539,13 +541,13 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
     setCanonicalStateError("");
     try {
       const nextState = await fetchCanonicalCommercialState(business.id, { signal: controller.signal });
-      if (controller.signal.aborted || canonicalRequestSequence.current !== requestSequence) return;
+      if (!drawerMounted.current || controller.signal.aborted || canonicalRequestSequence.current !== requestSequence) return;
       setCanonicalState(nextState);
     } catch {
-      if (controller.signal.aborted || canonicalRequestSequence.current !== requestSequence) return;
+      if (!drawerMounted.current || controller.signal.aborted || canonicalRequestSequence.current !== requestSequence) return;
       setCanonicalStateError("Não foi possível carregar o histórico canônico.");
     } finally {
-      if (canonicalRequestSequence.current === requestSequence) {
+      if (drawerMounted.current && canonicalRequestSequence.current === requestSequence) {
         canonicalRequestController.current = null;
         setCanonicalStateLoading(false);
       }
@@ -559,6 +561,7 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
     });
     return () => {
       cancelled = true;
+      drawerMounted.current = false;
       canonicalRequestSequence.current += 1;
       canonicalRequestController.current?.abort();
       canonicalRequestController.current = null;
@@ -571,7 +574,7 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
   }, [canonicalBusy, isMoving, onClose]);
 
   function handleStageChange(nextStage: BusinessStage) {
-    if (!canMove || isMoving || nextStage === business.etapa) return;
+    if (!canMove || isMoving || canonicalBusy || nextStage === business.etapa) return;
     void onMoveBusiness(business.id, nextStage).finally(() => {
       window.requestAnimationFrame(() => stageSelectRef.current?.focus({ preventScroll: true }));
     });
@@ -613,14 +616,15 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
         await reopenCanonicalDeal(business.id, contract.revisao, reason);
         await onCanonicalChanged(business.id, "Negócio reaberto; o histórico anterior foi preservado.");
       }
+      if (!drawerMounted.current) return;
       await refreshCanonicalState();
       setCanonicalAction(null);
       setCanonicalReason("");
       setManualValue("");
     } catch (error) {
-      setCanonicalError(error instanceof Error ? error.message : "Não foi possível concluir a operação comercial.");
+      if (drawerMounted.current) setCanonicalError(error instanceof Error ? error.message : "Não foi possível concluir a operação comercial.");
     } finally {
-      setCanonicalBusy(false);
+      if (drawerMounted.current) setCanonicalBusy(false);
     }
   }
 
@@ -685,9 +689,9 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
           <section aria-labelledby={`negocios-move-stage-${business.id}`} className="mt-5 border-t border-[var(--border-default)] pt-4">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]" id={`negocios-move-stage-${business.id}`}>Movimentar etapa</h3>
             <Select
-              aria-busy={isMoving}
+              aria-busy={isMoving || canonicalBusy}
               containerClassName="mt-2 max-w-sm"
-              disabled={!canMove || isMoving}
+              disabled={!canMove || isMoving || canonicalBusy}
               helperText={canMove ? isMoving ? "Movendo Negócio..." : "Selecione a próxima etapa." : "Você não tem permissão para movimentar este Negócio."}
               label="Mover para etapa"
               onChange={(event) => handleStageChange(event.target.value as BusinessStage)}
