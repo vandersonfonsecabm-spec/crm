@@ -1,5 +1,21 @@
 BEGIN;
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM "PropostaComercial" AS proposta
+    LEFT JOIN "Negocio" AS negocio
+      ON negocio."empresaId" = proposta."empresaId"
+     AND negocio."id" = proposta."negocioId"
+     AND negocio."clienteId" = proposta."clienteId"
+    WHERE negocio."id" IS NULL
+  ) THEN
+    RAISE EXCEPTION 'CANONICAL_SALE_LEGACY_CUSTOMER_CONFLICT' USING ERRCODE = '23514';
+  END IF;
+END;
+$$;
+
 ALTER TYPE "StatusPropostaComercial" ADD VALUE IF NOT EXISTS 'SUBSTITUIDA';
 ALTER TYPE "TipoAcaoPropostaComercial" ADD VALUE IF NOT EXISTS 'DEFINIR_PRINCIPAL';
 ALTER TYPE "TipoAcaoPropostaComercial" ADD VALUE IF NOT EXISTS 'REMOVER_PRINCIPAL';
@@ -136,7 +152,7 @@ CREATE TABLE "HistoricoVendaCanonica" (
   CONSTRAINT "HistoricoVendaCanonica_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "HistoricoVendaCanonica_transition_ck" CHECK (
     ("acao" = 'CREATE' AND "statusAnterior" IS NULL AND "statusNovo" = 'ACTIVE' AND "motivo" IS NULL)
-    OR ("acao" = 'INVALIDATE' AND "statusAnterior" = 'ACTIVE' AND "statusNovo" = 'INVALIDATED' AND "motivo" IS NOT NULL)
+    OR ("acao" = 'INVALIDATE' AND "statusAnterior" = 'ACTIVE' AND "statusNovo" = 'INVALIDATED' AND "motivo" IS NOT NULL AND btrim("motivo") <> '')
   ),
   CONSTRAINT "HistoricoVendaCanonica_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "HistoricoVendaCanonica_empresaId_negocioId_vendaId_fkey" FOREIGN KEY ("empresaId", "negocioId", "vendaId") REFERENCES "VendaCanonica"("empresaId", "negocioId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,

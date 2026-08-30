@@ -2501,8 +2501,8 @@ export async function updateCustomerRegistration(
   return mapApiClienteToClient(response);
 }
 
-export async function fetchBusinessProposals(negocioId: number) {
-  return requestApiGetAuthenticated<ApiPaginatedResponse<CommercialProposal>>(`/propostas${toQueryString({ negocioId, limit: 100 })}`);
+export async function fetchBusinessProposals(negocioId: number, page = 1) {
+  return requestApiGetAuthenticated<ApiPaginatedResponse<CommercialProposal>>(`/propostas${toQueryString({ negocioId, limit: 100, page })}`);
 }
 
 export async function fetchCommercialProposal(id: number) {

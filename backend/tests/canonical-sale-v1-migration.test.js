@@ -72,6 +72,39 @@ test("Venda Canônica V1 adiciona contrato e snapshots sem reinterpretar legado"
   database.close();
 });
 
+test("migration canônica falha fechado diante de legado Cliente–Negócio inconsistente", () => {
+  const supervisorRunDir = process.env.CRM_PRISMA_TEST_RUN_DIR;
+  if (!supervisorRunDir || !path.isAbsolute(supervisorRunDir)) {
+    throw new Error("CRM_PRISMA_TEST_RUN_DIR absoluto e obrigatorio.");
+  }
+  const workDir = path.join(supervisorRunDir, "canonical-sale-v1-legacy-conflict");
+  const prismaDir = path.join(workDir, "prisma");
+  const migrationsDir = path.join(prismaDir, "migrations");
+  const schemaPath = path.join(prismaDir, "schema.prisma");
+  const databasePath = path.join(prismaDir, "legacy-conflict.db");
+  fs.mkdirSync(prismaDir, { recursive: true });
+  fs.copyFileSync(path.join(backendDir, "prisma", "schema.prisma"), schemaPath);
+  copyMigrationsBefore({ backendDir, migrationsDir, migrationName });
+  fs.writeFileSync(databasePath, "");
+
+  runPrisma(schemaPath, databasePath, ["migrate", "deploy"]);
+  let database = new DatabaseSync(databasePath);
+  database.exec("PRAGMA foreign_keys = ON");
+  seedLegacyCommercialRows(database);
+  database.prepare('INSERT INTO "Cliente" ("id", "empresaId", "nome", "valor", "origem", "createdAt") VALUES (2, 1, ?, 0, ?, ?)')
+    .run("Cliente divergente", "QA", now());
+  database.prepare('UPDATE "PropostaComercial" SET "clienteId" = 2 WHERE "id" = 1').run();
+  database.close();
+
+  copyTargetMigration({ backendDir, migrationsDir, migrationName });
+  assert.throws(() => runPrisma(schemaPath, databasePath, ["migrate", "deploy"]), /CANONICAL_SALE_LEGACY_CUSTOMER_CONFLICT/);
+
+  database = new DatabaseSync(databasePath, { readOnly: true });
+  assert.equal(appliedMigrations(database), 41);
+  assert.equal(Number(database.prepare('SELECT "clienteId" FROM "PropostaComercial" WHERE "id" = 1').get().clienteId), 2);
+  database.close();
+});
+
 function seedLegacyCommercialRows(database) {
   const timestamp = now();
   database.prepare('INSERT INTO "Empresa" ("id", "nome", "slug", "ativo", "createdAt", "updatedAt") VALUES (1, ?, ?, 1, ?, ?)')

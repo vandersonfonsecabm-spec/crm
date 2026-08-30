@@ -56,7 +56,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260824160000_add_ai_commerce_persistent_audit_effects": "fb90ee7c62783fb5369cca2736b0c0b23e31a8d7861a5d484fece44640bd02b6",
     "20260825170000_add_commercial_proposal_catalog_items": "20d18cdec5fb781bb81572188a90f4b5e3f0feafe478f520c2bc910f6f5f2295",
     "20260827200000_add_store1_provider_readiness": "6aa6ee3e3097df108765da05ecd1ea303f719473afd51402db916789a3fffa4c",
-    "20260828130000_add_canonical_sale_v1": "95c9c4a1f088cc1568e5b07c06b94542927e6e3ba1dabffe2ab8d071335181cf",
+    "20260828130000_add_canonical_sale_v1": "00d7064d74e167503280b625f6a5a076efedf1824c4c9bf8f284b8b0430b8d37",
   }),
   postgresql: Object.freeze({
     "20260728090000_postgres_baseline": "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
@@ -77,7 +77,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260824160000_add_ai_commerce_persistent_audit_effects": "e491d9342ddced5a5769a0030d586e337bc55867ce2564803f4a8e623f9230cc",
     "20260825170000_add_commercial_proposal_catalog_items": "ee6535644e267c6490c98ec580b958db56926054e4cf66bdb522d1bd2fc68f05",
     "20260827200000_add_store1_provider_readiness": "caad5bb24aac5943e5a6f9f36e3ad8d35598ef22914714f9177c17c690246e2e",
-    "20260828130000_add_canonical_sale_v1": "95203397a9effb7829cc17883ff2a25f93991552c35617351bb98af33bd344b6",
+    "20260828130000_add_canonical_sale_v1": "b9d6e0f3f56181f1a1fde44a7c454a2f525a8733eb9c065c1e900fdfa65971e1",
   }),
 });
 
@@ -341,8 +341,8 @@ const MIGRATION_REGISTRY = Object.freeze({
   "20260828130000_add_canonical_sale_v1": Object.freeze({
     relationCount: EXPECTED_RELATION_COUNT,
     relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
-    sqliteSha256: "95c9c4a1f088cc1568e5b07c06b94542927e6e3ba1dabffe2ab8d071335181cf",
-    postgresSha256: "95203397a9effb7829cc17883ff2a25f93991552c35617351bb98af33bd344b6",
+    sqliteSha256: "00d7064d74e167503280b625f6a5a076efedf1824c4c9bf8f284b8b0430b8d37",
+    postgresSha256: "b9d6e0f3f56181f1a1fde44a7c454a2f525a8733eb9c065c1e900fdfa65971e1",
     preMigrationUnavailableTenantRelations: Object.freeze([
       "NegocioContratoVenda.negocioId->Negocio",
       "VendaCanonica.clienteId->Cliente",

@@ -91,7 +91,7 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
     setLoading(true);
     setError("");
     try {
-      const response = await fetchBusinessProposals(businessId);
+      const response = await fetchAllBusinessProposals(businessId);
       setProposals(response.data);
     } catch (nextError) {
       setError(proposalErrorMessage(nextError));
@@ -300,14 +300,14 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
   }
 
   async function refreshList(selectedId: number) {
-    const response = await fetchBusinessProposals(businessId);
+    const response = await fetchAllBusinessProposals(businessId);
     setProposals(response.data);
     const listItem = response.data.find((proposal) => proposal.id === selectedId);
     if (listItem && !editing) setSelected((current) => current?.id === selectedId ? { ...current, ...listItem } : current);
   }
 
   async function refreshContractSelection(selectedId: number) {
-    const [response, proposal] = await Promise.all([fetchBusinessProposals(businessId), fetchCommercialProposal(selectedId)]);
+    const [response, proposal] = await Promise.all([fetchAllBusinessProposals(businessId), fetchCommercialProposal(selectedId)]);
     setProposals(response.data);
     setSelected(proposal);
     setHistory(proposal.historico ?? []);
@@ -399,6 +399,15 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
       )}
     </section>
   );
+}
+
+async function fetchAllBusinessProposals(businessId: number) {
+  const first = await fetchBusinessProposals(businessId);
+  const data = [...first.data];
+  for (let page = 2; page <= first.pagination.totalPages; page += 1) {
+    data.push(...(await fetchBusinessProposals(businessId, page)).data);
+  }
+  return { ...first, data, pagination: { ...first.pagination, page: 1, limit: data.length } };
 }
 
 export function CommercialProposalEditorFixture({ proposal }: { proposal: CommercialProposal }) {

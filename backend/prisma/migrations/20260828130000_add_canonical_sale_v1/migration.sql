@@ -1,6 +1,23 @@
 -- Canonical Sale V1 is additive. Legacy Cliente.valor and Negocio.valor are
 -- intentionally preserved without conversion or backfill.
 
+-- Fail closed before adding the V1 contract if a legacy proposal already points
+-- to a different Cliente than its Negocio. The no-op UPDATE only activates the
+-- temporary preflight trigger; it does not reinterpret or rewrite any row.
+CREATE TEMP TRIGGER "canonical_sale_legacy_customer_preflight"
+BEFORE UPDATE ON "PropostaComercial"
+WHEN NOT EXISTS (
+  SELECT 1 FROM "Negocio" AS negocio
+  WHERE negocio."empresaId" = NEW."empresaId"
+    AND negocio."id" = NEW."negocioId"
+    AND negocio."clienteId" = NEW."clienteId"
+)
+BEGIN
+  SELECT RAISE(ABORT, 'CANONICAL_SALE_LEGACY_CUSTOMER_CONFLICT');
+END;
+UPDATE "PropostaComercial" SET "updatedAt" = "updatedAt";
+DROP TRIGGER "canonical_sale_legacy_customer_preflight";
+
 ALTER TABLE "PropostaComercial" ADD COLUMN "moeda" TEXT NOT NULL DEFAULT 'BRL';
 
 CREATE UNIQUE INDEX "PropostaComercial_empresaId_negocioId_id_key"
@@ -135,7 +152,7 @@ CREATE TABLE "HistoricoVendaCanonica" (
   CONSTRAINT "HistoricoVendaCanonica_status_novo_ck" CHECK ("statusNovo" IN ('ACTIVE','INVALIDATED')),
   CONSTRAINT "HistoricoVendaCanonica_transition_ck" CHECK (
     ("acao" = 'CREATE' AND "statusAnterior" IS NULL AND "statusNovo" = 'ACTIVE' AND "motivo" IS NULL)
-    OR ("acao" = 'INVALIDATE' AND "statusAnterior" = 'ACTIVE' AND "statusNovo" = 'INVALIDATED' AND "motivo" IS NOT NULL)
+    OR ("acao" = 'INVALIDATE' AND "statusAnterior" = 'ACTIVE' AND "statusNovo" = 'INVALIDATED' AND "motivo" IS NOT NULL AND length(trim("motivo")) > 0)
   ),
   CONSTRAINT "HistoricoVendaCanonica_empresaId_fkey" FOREIGN KEY ("empresaId") REFERENCES "Empresa"("id") ON DELETE RESTRICT ON UPDATE RESTRICT,
   CONSTRAINT "HistoricoVendaCanonica_empresaId_negocioId_vendaId_fkey" FOREIGN KEY ("empresaId", "negocioId", "vendaId") REFERENCES "VendaCanonica"("empresaId", "negocioId", "id") ON DELETE RESTRICT ON UPDATE RESTRICT,
