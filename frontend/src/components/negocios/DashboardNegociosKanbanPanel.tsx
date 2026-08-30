@@ -73,6 +73,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
   const [selected, setSelected] = useState<CommunicationBusiness | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const requestSequence = useRef(0);
+  const detailRequestSequence = useRef(0);
   const stageUpdates = useRef(new Set<number>());
   const detailTrigger = useRef<HTMLElement | null>(null);
   const detailTriggerBusinessId = useRef<number | null>(null);
@@ -114,6 +115,10 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
     };
   }, [load]);
 
+  useEffect(() => () => {
+    detailRequestSequence.current += 1;
+  }, []);
+
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       setPage(1);
@@ -125,34 +130,49 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
   useEffect(() => {
     if (!initialBusinessId) return;
     let active = true;
+    const sequence = ++detailRequestSequence.current;
     const timer = window.setTimeout(() => {
       setDetailLoading(true);
       adapter.fetchNegocioKanban(initialBusinessId)
-        .then((business) => { if (active) setSelected(business); })
-        .catch(() => { if (active) onToast("Não foi possível abrir o Negócio selecionado."); })
-        .finally(() => {
-          if (active) setDetailLoading(false);
+        .then((business) => {
+          if (!active || sequence !== detailRequestSequence.current) return;
+          setSelected(business);
+          setDetailLoading(false);
+          onInitialBusinessHandled?.();
+        })
+        .catch(() => {
+          if (!active || sequence !== detailRequestSequence.current) return;
+          onToast("Não foi possível abrir o Negócio selecionado.");
+          setDetailLoading(false);
           onInitialBusinessHandled?.();
         });
     }, 0);
-    return () => { active = false; window.clearTimeout(timer); };
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      if (sequence === detailRequestSequence.current) detailRequestSequence.current += 1;
+    };
   }, [adapter, initialBusinessId, onInitialBusinessHandled, onToast]);
 
   async function openBusiness(business: CommunicationBusiness, trigger: HTMLElement) {
+    const sequence = ++detailRequestSequence.current;
     detailTrigger.current = trigger;
     detailTriggerBusinessId.current = business.id;
     setSelected(business);
     setDetailLoading(true);
     try {
-      setSelected(await adapter.fetchNegocioKanban(business.id));
+      const detail = await adapter.fetchNegocioKanban(business.id);
+      if (sequence === detailRequestSequence.current) setSelected(detail);
     } catch {
-      onToast("Não foi possível carregar todos os detalhes.");
+      if (sequence === detailRequestSequence.current) onToast("Não foi possível carregar todos os detalhes.");
     } finally {
-      setDetailLoading(false);
+      if (sequence === detailRequestSequence.current) setDetailLoading(false);
     }
   }
 
   const closeBusiness = useCallback(() => {
+    detailRequestSequence.current += 1;
+    setDetailLoading(false);
     const businessId = detailTriggerBusinessId.current;
     const originalTrigger = detailTrigger.current;
     detailTriggerBusinessId.current = null;
@@ -178,16 +198,21 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
     const current = businesses.find((business) => business.id === id);
     if (!current || !current.permissoes?.movimentar || current.etapa === nextStage || stageUpdates.current.has(id)) return false;
     if (nextStage === "FECHADO" || nextStage === "PERDIDO") {
+      const sequence = ++detailRequestSequence.current;
       setSelected(current);
       setDetailLoading(true);
       try {
-        setSelected(await adapter.fetchNegocioKanban(id));
+        const detail = await adapter.fetchNegocioKanban(id);
+        if (sequence !== detailRequestSequence.current) return false;
+        setSelected(detail);
         onToast(nextStage === "FECHADO" ? "Conclua a venda pelo fechamento explícito do Negócio." : "Informe o motivo para marcar o Negócio como perdido.");
       } catch {
-        onToast("Não foi possível abrir o fechamento comercial.");
+        if (sequence === detailRequestSequence.current) onToast("Não foi possível abrir o fechamento comercial.");
       } finally {
-        setDetailLoading(false);
-        setDragOverStage(null);
+        if (sequence === detailRequestSequence.current) {
+          setDetailLoading(false);
+          setDragOverStage(null);
+        }
       }
       return false;
     }
@@ -214,7 +239,9 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
   }
 
   async function refreshCanonicalBusiness(id: number, message: string) {
+    const sequence = ++detailRequestSequence.current;
     const updated = await adapter.fetchNegocioKanban(id);
+    if (sequence !== detailRequestSequence.current) return;
     setSelected(updated);
     setBusinesses((items) => items.map((business) => business.id === id ? updated : business));
     onToast(message);

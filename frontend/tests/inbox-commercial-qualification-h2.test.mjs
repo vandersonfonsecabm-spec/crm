@@ -67,3 +67,20 @@ test("H2 abre o Negocio real no Kanban sem criar fluxo paralelo", async () => {
   assert.match(kanban, /fetchNegocioKanban\(initialBusinessId\)/);
   assert.doesNotMatch(panel, /mock|fallback.*Negócio|sucesso falso/i);
 });
+
+test("deep link e trocas rápidas de Negócio descartam respostas assíncronas obsoletas", async () => {
+  const [dashboard, kanban] = await Promise.all([
+    source("src/pages/Dashboard.tsx"),
+    source("src/components/negocios/DashboardNegociosKanbanPanel.tsx"),
+  ]);
+
+  assert.match(dashboard, /const consumeKanbanBusinessTarget = useCallback/);
+  assert.match(dashboard, /onInitialBusinessHandled=\{consumeKanbanBusinessTarget\}/);
+  assert.match(kanban, /const detailRequestSequence = useRef\(0\)/);
+  assert.match(kanban, /sequence !== detailRequestSequence\.current/);
+  assert.match(kanban, /sequence === detailRequestSequence\.current\) setSelected\(detail\)/);
+  assert.match(kanban, /setDetailLoading\(false\);\s*onInitialBusinessHandled\?\.\(\)/);
+  assert.match(kanban, /detailRequestSequence\.current \+= 1/);
+  assert.match(kanban, /const closeBusiness = useCallback[\s\S]*?detailRequestSequence\.current \+= 1;\s*setDetailLoading\(false\)/);
+  assert.match(kanban, /async function refreshCanonicalBusiness[\s\S]*?const sequence = \+\+detailRequestSequence\.current[\s\S]*?sequence !== detailRequestSequence\.current/);
+});

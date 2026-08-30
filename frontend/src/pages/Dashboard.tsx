@@ -614,6 +614,10 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
     handleSetActivePage("kanban");
   }, [handleSetActivePage]);
 
+  const consumeKanbanBusinessTarget = useCallback(() => {
+    setKanbanBusinessId(null);
+  }, []);
+
   const openTodayAgenda = useCallback(() => {
     setAgendaTodayRequestKey((current) => current + 1);
     handleSetActivePage("agenda");
@@ -1151,7 +1155,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
                 <DashboardNegociosKanbanPanel
                   authSession={authSession}
                   initialBusinessId={kanbanBusinessId}
-                  onInitialBusinessHandled={() => setKanbanBusinessId(null)}
+                  onInitialBusinessHandled={consumeKanbanBusinessTarget}
                   onOpenAgenda={() => handleSetActivePage("agenda")}
                   onToast={setToast}
                 />
