@@ -182,6 +182,7 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
       setStatusChoice("");
       setFeedback(`Status alterado para ${statusLabels[proposal.status]}.`);
       await refreshList(proposal.id);
+      onChanged?.();
     } catch (nextError) {
       setError(proposalErrorMessage(nextError));
       if (nextError instanceof ApiHttpError && nextError.status === 409) await selectProposal(selected.id);
