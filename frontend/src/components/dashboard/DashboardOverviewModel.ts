@@ -40,8 +40,8 @@ export type DashboardOverviewInput = {
 
 const unavailableMetrics = (): DashboardOverviewMetric[] => [
   { label: "Clientes na carteira", kind: "count", value: null },
-  { label: "Valor informado em clientes fechados", kind: "money", value: null },
-  { label: "Valor informado em clientes — Novo e Proposta", kind: "money", value: null },
+  { label: "Receita realizada — vendas canônicas", kind: "money", value: null },
+  { label: "Pipeline estimado — Negócios abertos", kind: "money", value: null },
   { label: "Clientes em acompanhamento comercial", kind: "count", value: null },
 ];
 
@@ -72,8 +72,8 @@ export function buildDashboardOverviewModel({
   const coreKnown = [clients, wonValue, forecastValue, activePipeline, highRiskCount, silentCount, hotProposalCount].every((value) => value !== null);
   const metrics: DashboardOverviewMetric[] = [
     { label: "Clientes na carteira", kind: "count", value: clients },
-    { label: "Valor informado em clientes fechados", kind: "money", value: wonValue },
-    { label: "Valor informado em clientes — Novo e Proposta", kind: "money", value: forecastValue },
+    { label: "Receita realizada — vendas canônicas", kind: "money", value: wonValue },
+    { label: "Pipeline estimado — Negócios abertos", kind: "money", value: forecastValue },
     { label: "Clientes em acompanhamento comercial", kind: "count", value: activePipeline },
   ];
   const attentionSignals = buildAttentionSignals(highRiskCount, silentCount, hotProposalCount);

@@ -352,11 +352,11 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         silentCount: semContato,
         hotProposalCount: propostasQuentes,
         activePipeline: ["NOVO", "CONTATO", "PROPOSTA"].reduce((total, stage) => total + businessStageCount(stage), 0),
-        conversionRate: pipeline === null ? null : Math.round((faturamento / Math.max(1, pipeline)) * 100),
+        conversionRate: pipeline === null || pipeline <= 0 ? null : Math.round((faturamento / pipeline) * 100),
         pipelineValueAvailable: pipeline !== null,
         forecastValueAvailable: forecastValue !== null,
         wonValueAvailable: true,
-        conversionRateAvailable: pipeline !== null,
+        conversionRateAvailable: pipeline !== null && pipeline > 0,
         monetaryDataAvailable: pipeline !== null && forecastValue !== null,
       },
       status: porStatus.map((item) => ({

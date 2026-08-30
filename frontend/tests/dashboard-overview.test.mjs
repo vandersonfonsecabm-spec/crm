@@ -44,8 +44,8 @@ test("Visão Geral mapeia exclusivamente a matriz contratual L0", async () => {
   assert.equal(model.state, "ready");
   assert.deepEqual(model.metrics.map((metric) => [metric.label, metric.kind, metric.value]), [
     ["Clientes na carteira", "count", 12],
-    ["Valor informado em clientes fechados", "money", 240000],
-    ["Valor informado em clientes — Novo e Proposta", "money", 420000],
+    ["Receita realizada — vendas canônicas", "money", 240000],
+    ["Pipeline estimado — Negócios abertos", "money", 420000],
     ["Clientes em acompanhamento comercial", "count", 8],
   ]);
   assert.deepEqual(model.statusRows.map((stage) => [stage.stage, stage.total, stage.value]), [

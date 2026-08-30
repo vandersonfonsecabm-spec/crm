@@ -190,6 +190,8 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   assert.equal(reclosed.body.contrato.vendaAtiva.revisao, 2);
   assert.equal(reclosed.body.contrato.vendaAtiva.itens[0].descricao, "Descricao alterada depois da primeira venda");
   assert.equal(await prisma.vendaCanonica.count({ where: { empresaId: adminA.empresaId, negocioId: fixture.business.id } }), 2);
+  await assert.rejects(prisma.propostaComercial.update({ where: { id: replacementId }, data: { clienteId: sameTenantOther.client.id } }));
+  await assert.rejects(prisma.negocio.update({ where: { id: fixture.business.id }, data: { clienteId: sameTenantOther.client.id } }));
 
   const terminalProposalBusiness = await businessFixture(adminA, sellerA.usuarioId, "Proposta apos fechamento", "PROPOSTA", null);
   const terminalDraft = await request("POST", `/negocios/${terminalProposalBusiness.business.id}/propostas`, {
@@ -355,6 +357,16 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   assert.equal(dashboardUnknown.body.indicadores.pipeline, null);
   assert.equal(dashboardUnknown.body.analytics.totalValue, null);
   assert.equal(dashboardUnknown.body.analytics.monetaryDataAvailable, false);
+
+  const zeroPipelineAdmin = await registerAndLogin("Empresa Conversao Zero", "Admin Conversao Zero", "admin-zero@canonical-sale.test");
+  const zeroPipelineBusiness = await businessFixture(zeroPipelineAdmin, zeroPipelineAdmin.usuarioId, "Cliente Conversao Zero", "NOVO", null);
+  const zeroPipelineClosed = await request("POST", `/negocios/${zeroPipelineBusiness.business.id}/fechar-ganho`, manualClose("conversion-zero-close", 1, 2500), zeroPipelineAdmin.token);
+  assert.equal(zeroPipelineClosed.status, 200, JSON.stringify(zeroPipelineClosed.body));
+  const zeroPipelineDashboard = await request("GET", "/dashboard", undefined, zeroPipelineAdmin.token);
+  assert.equal(zeroPipelineDashboard.body.indicadores.pipeline, 0);
+  assert.equal(zeroPipelineDashboard.body.analytics.wonValue > 0, true);
+  assert.equal(zeroPipelineDashboard.body.analytics.conversionRate, null);
+  assert.equal(zeroPipelineDashboard.body.analytics.conversionRateAvailable, false);
 
   assert.equal((await request("PATCH", `/negocios/${manual.business.id}/etapa`, { etapa: "PERDIDO", etapaAnterior: "FECHADO" }, adminA.token)).body.codigo, "NEGOCIO_TERMINAL_ACTION_REQUIRED");
   assert.equal((await request("PATCH", `/negocios/${lost.business.id}/etapa`, { etapa: "FECHADO", etapaAnterior: "CONTATO" }, adminA.token)).body.codigo, "NEGOCIO_TERMINAL_ACTION_REQUIRED");

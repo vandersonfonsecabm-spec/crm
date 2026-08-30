@@ -353,7 +353,7 @@ export default function CommercialProposalsPanel({ businessId, onChanged }: Prop
       {!editing && selected && (
         <div className="space-y-3 border-t border-[var(--border-default)] pt-3">
           <div aria-label="Proveniência comercial" className="grid grid-cols-4 gap-px overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--border-default)] text-[9px] max-[640px]:grid-cols-2">
-            <ProvenanceStep active label="Negócio" value="Em negociação" />
+            <ProvenanceStep active={selected.negocio.etapa !== "PERDIDO"} label="Negócio" value={proposalBusinessStageLabel(selected.negocio.etapa)} />
             <ProvenanceStep active={selected.contratoComercial.principal} label="Principal" value={selected.contratoComercial.principal ? selected.codigo : "Não é esta"} />
             <ProvenanceStep active={selected.contratoComercial.vencedora} label="Vencedora" value={selected.contratoComercial.vencedora ? "Aceita" : currentWinner?.codigo || "Não definida"} />
             <ProvenanceStep active={Boolean(selected.contratoComercial.vendaAtivaId)} label="Venda" value={selected.contratoComercial.vendaAtivaId ? "Registrada" : "Ainda não realizada"} />
@@ -463,6 +463,14 @@ function ProposalStatus({ status }: { status: CommercialProposalStatus }) {
 
 function ProvenanceStep({ active, label, value }: { active: boolean; label: string; value: string }) {
   return <div className="bg-[var(--bg-surface)] px-2.5 py-2"><p className="font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</p><p className={`mt-1 truncate font-medium ${active ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"}`}>{value}</p></div>;
+}
+
+function proposalBusinessStageLabel(stage: CommercialProposal["negocio"]["etapa"]) {
+  if (stage === "FECHADO") return "Ganho";
+  if (stage === "PERDIDO") return "Perdido";
+  if (stage === "PROPOSTA") return "Em proposta";
+  if (stage === "CONTATO") return "Em contato";
+  return "Novo";
 }
 
 function Total({ emphasis, label, value }: { emphasis?: boolean; label: string; value: number }) {

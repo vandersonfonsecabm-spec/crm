@@ -76,7 +76,7 @@ test("Painel Comercial mapeia somente os quatro KPIs globais autorizados", async
   assert.deepEqual(
     filled.metrics.map((metric) => [metric.key, metric.label, metric.kind, metric.value]),
     [
-      ["forecastValue", "Valor informado em clientes — Novo e Proposta", "money", 125000],
+      ["forecastValue", "Pipeline estimado — Negócios abertos", "money", 125000],
       ["todayFollowUps", "Clientes com acompanhamento hoje", "count", 3],
       ["hotProposalCount", "Clientes quentes em Proposta", "count", 2],
       ["silentCount", "Clientes sem contato recente", "count", 4],
@@ -159,7 +159,7 @@ test("componente preserva CTA, Cliente 360 e composição 8/4 sem painel de risc
   ]) assert.match(panel, new RegExp(text));
 
   for (const text of [
-    "Valor informado em clientes — Novo e Proposta",
+    "Pipeline estimado — Negócios abertos",
     "Clientes com acompanhamento hoje",
     "Clientes quentes em Proposta",
     "Clientes sem contato recente",

@@ -196,7 +196,7 @@ function buildMetrics(analytics: CommercialAnalytics): CommercialMetric[] {
   return [
     {
       key: "forecastValue",
-      label: "Valor informado em clientes — Novo e Proposta",
+      label: "Pipeline estimado — Negócios abertos",
       kind: "money",
       value: analytics.forecastValue,
     },
