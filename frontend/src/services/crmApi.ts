@@ -275,17 +275,17 @@ export type ApiDashboardSummary = {
     clientes: number;
     produtos: number;
     pedidos: number;
-    contasPendentes: number;
+    contasPendentes: number | null;
     faturamento: number;
     faturamentoCentavos: number;
-    pipeline: number;
+    pipeline: number | null;
     quentes: number;
   };
   analytics: {
-    totalValue: number;
+    totalValue: number | null;
     wonValue: number;
     wonValueCents: number;
-    forecastValue: number;
+    forecastValue: number | null;
     hotCount: number;
     averageScore: number;
     todayFollowUps: number;
@@ -293,11 +293,13 @@ export type ApiDashboardSummary = {
     silentCount: number;
     hotProposalCount: number;
     activePipeline: number;
-    conversionRate: number;
+    conversionRate: number | null;
+    monetaryDataAvailable: boolean;
   };
-  status: Array<{ status: string; total: number; valor: number }>;
+  status: Array<{ status: string; total: number; valor: number | null }>;
   estoqueBaixo: unknown[];
   pedidosRecentes: ApiCliente[];
+  pedidosRecentesDeprecado: "USE_VENDAS_RECENTES";
   vendasRecentes: Array<{ id: number; negocioId: number; clienteId: number; cliente: string; negocio: string; totalCentavos: number; moeda: "BRL"; origem: "ACCEPTED_PROPOSAL" | "MANUAL_CLOSE"; fechadoEm: string; proposta: { id: number; codigo: string; titulo: string } | null }>;
   receita: { fonte: "CANONICAL_SALE"; totalCentavos: number; vendas: number };
   contasVencidas: ApiCliente[];
@@ -438,6 +440,15 @@ export type CanonicalSale = {
   fechadoPor: { id: number; nome: string } | null;
   invalidadoPor: { id: number; nome: string } | null;
   propostaVencedora: { id: number; codigo: string; titulo: string; status: CommercialProposalStatus } | null;
+  historico?: Array<{
+    id: number;
+    acao: "CREATE" | "INVALIDATE";
+    statusAnterior: CanonicalSaleStatus | null;
+    statusNovo: CanonicalSaleStatus;
+    motivo: string | null;
+    createdAt: string;
+    autor: { id: number; nome: string } | null;
+  }>;
 };
 
 export type CanonicalSaleContract = {
@@ -445,9 +456,10 @@ export type CanonicalSaleContract = {
   propostaPrincipalId: number | null;
   propostaVencedoraId: number | null;
   vendaAtivaId: number | null;
-  propostaPrincipal: { id: number; codigo: string; titulo: string; status: CommercialProposalStatus; totalCentavos: number; moeda: "BRL"; revisao: number } | null;
-  propostaVencedora: { id: number; codigo: string; titulo: string; status: CommercialProposalStatus; totalCentavos: number; moeda: "BRL"; revisao: number } | null;
+  propostaPrincipal: { id: number; codigo: string; titulo: string; status: CommercialProposalStatus; totalCentavos: number; moeda: "BRL"; revisao: number; clienteId: number } | null;
+  propostaVencedora: { id: number; codigo: string; titulo: string; status: CommercialProposalStatus; totalCentavos: number; moeda: "BRL"; revisao: number; clienteId: number } | null;
   vendaAtiva: CanonicalSale | null;
+  propostasAceitasCount: number;
 };
 
 export type CanonicalCommercialState = {

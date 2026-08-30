@@ -1,6 +1,7 @@
 import type { Client, Status } from "../types/dashboard";
 
-export function money(value: number) {
+export function money(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "Não informado";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 

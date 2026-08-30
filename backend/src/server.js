@@ -244,7 +244,6 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
       semContato,
       followUpsHoje,
       propostasQuentes,
-      propostasRecentes,
       contasVencidas,
       atividadesRecentes,
       scoreRows,
@@ -260,7 +259,7 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
       prisma.cliente.groupBy({
         by: ["status"],
         where: { empresaId, arquivadoEm: null },
-        _count: { _all: true },
+        _count: { _all: true, valor: true },
         _sum: { valor: true },
       }),
       prisma.cliente.count({ where: { empresaId, arquivadoEm: null, quente: true } }),
@@ -277,11 +276,6 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         },
       }),
       prisma.cliente.count({ where: { empresaId, arquivadoEm: null, status: "Proposta", quente: true } }),
-      prisma.cliente.findMany({
-        where: { empresaId, arquivadoEm: null, status: "Proposta" },
-        orderBy: [{ id: "desc" }],
-        take: 5,
-      }),
       prisma.cliente.findMany({
         where: { empresaId, arquivadoEm: null, ultimoContato: { gte: 7 } },
         orderBy: [{ ultimoContato: "desc" }, { id: "desc" }],
@@ -312,16 +306,26 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
       prisma.negocio.groupBy({
         by: ["etapa"],
         where: { empresaId, etapa: { in: ["NOVO", "CONTATO", "PROPOSTA"] }, cliente: { arquivadoEm: null } },
-        _count: { _all: true },
+        _count: { _all: true, valor: true },
         _sum: { valor: true },
       }),
     ]);
     const statusMap = new Map(porStatus.map((item) => [item.status, item]));
-    const statusValue = (status) => Number(statusMap.get(status)?._sum?.valor || 0);
+    const groupedValue = (row) => {
+      if (!row) return 0;
+      const total = Number(row._count?._all || 0);
+      const known = Number(row._count?.valor || 0);
+      if (total > known) return null;
+      return row._sum?.valor === null || row._sum?.valor === undefined ? 0 : Number(row._sum.valor);
+    };
+    const statusValue = (status) => groupedValue(statusMap.get(status));
     const businessStageMap = new Map(negociosAbertos.map((item) => [item.etapa, item]));
-    const businessStageValue = (stage) => Number(businessStageMap.get(stage)?._sum?.valor || 0);
+    const businessStageValue = (stage) => groupedValue(businessStageMap.get(stage));
     const businessStageCount = (stage) => businessStageMap.get(stage)?._count?._all || 0;
-    const pipeline = ["NOVO", "CONTATO", "PROPOSTA"].reduce((total, stage) => total + businessStageValue(stage), 0);
+    const pipelineValues = ["NOVO", "CONTATO", "PROPOSTA"].map((stage) => businessStageValue(stage));
+    const pipeline = pipelineValues.some((value) => value === null) ? null : pipelineValues.reduce((total, value) => total + value, 0);
+    const forecastValues = ["NOVO", "PROPOSTA"].map((stage) => businessStageValue(stage));
+    const forecastValue = forecastValues.some((value) => value === null) ? null : forecastValues.reduce((total, value) => total + value, 0);
     const faturamentoCentavos = Number(vendasCanonicas._sum.totalCentavos || 0);
     const faturamento = faturamentoCentavos / 100;
 
@@ -340,7 +344,7 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         totalValue: pipeline,
         wonValue: faturamento,
         wonValueCents: faturamentoCentavos,
-        forecastValue: businessStageValue("PROPOSTA") + businessStageValue("NOVO"),
+        forecastValue,
         hotCount: quentes,
         averageScore: Math.round(Number(scoreRows[0]?.averageScore || 0)),
         todayFollowUps: followUpsHoje.length,
@@ -348,15 +352,19 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         silentCount: semContato,
         hotProposalCount: propostasQuentes,
         activePipeline: ["NOVO", "CONTATO", "PROPOSTA"].reduce((total, stage) => total + businessStageCount(stage), 0),
-        conversionRate: Math.round((faturamento / Math.max(1, pipeline)) * 100),
+        conversionRate: pipeline === null ? null : Math.round((faturamento / Math.max(1, pipeline)) * 100),
+        monetaryDataAvailable: pipeline !== null && forecastValue !== null,
       },
       status: porStatus.map((item) => ({
         status: item.status,
         total: item._count._all,
-        valor: Number(item._sum.valor || 0),
+        valor: statusValue(item.status),
       })),
       estoqueBaixo: [],
-      pedidosRecentes: propostasRecentes,
+      // Legacy field retained as an explicit empty projection. Proposals are
+      // never orders; consumers must use vendasRecentes for realized sales.
+      pedidosRecentes: [],
+      pedidosRecentesDeprecado: "USE_VENDAS_RECENTES",
       vendasRecentes: vendasRecentes.map((sale) => ({
         id: sale.id,
         negocioId: sale.negocioId,

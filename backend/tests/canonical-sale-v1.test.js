@@ -196,6 +196,34 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   assert.equal(reclosed.body.contrato.vendaAtiva.itens[0].descricao, "Descricao alterada depois da primeira venda");
   assert.equal(await prisma.vendaCanonica.count({ where: { empresaId: adminA.empresaId, negocioId: fixture.business.id } }), 2);
 
+  const terminalProposalBusiness = await businessFixture(adminA, sellerA.usuarioId, "Proposta apos fechamento", "PROPOSTA", null);
+  const terminalDraft = await request("POST", `/negocios/${terminalProposalBusiness.business.id}/propostas`, {
+    titulo: "Rascunho antes do fechamento",
+    validade: "2026-12-31",
+    descontoGeralCentavos: 0,
+    itens: [{ descricao: "Item terminal", quantidade: "1", valorUnitarioCentavos: 100, descontoCentavos: 0 }],
+  }, sellerA.token);
+  assert.equal(terminalDraft.status, 201, JSON.stringify(terminalDraft.body));
+  const terminalClose = await request("POST", `/negocios/${terminalProposalBusiness.business.id}/fechar-ganho`, manualClose("terminal-proposal-close", 1, 100), sellerA.token);
+  assert.equal(terminalClose.status, 200, JSON.stringify(terminalClose.body));
+  const terminalUpdate = await request("PATCH", `/propostas/${terminalDraft.body.id}/rascunho`, {
+    titulo: "Tentativa apos fechamento",
+    validade: "2026-12-31",
+    descontoGeralCentavos: 0,
+    itens: [{ descricao: "Item terminal", quantidade: "1", valorUnitarioCentavos: 100, descontoCentavos: 0 }],
+    revisao: terminalDraft.body.revisao,
+  }, sellerA.token);
+  assert.equal(terminalUpdate.status, 409);
+  const terminalStatus = await request("POST", `/propostas/${terminalDraft.body.id}/status`, { status: "PRONTA", revisao: terminalDraft.body.revisao }, sellerA.token);
+  assert.equal(terminalStatus.status, 409);
+  const terminalCreate = await request("POST", `/negocios/${terminalProposalBusiness.business.id}/propostas`, {
+    titulo: "Tentativa nova apos fechamento",
+    validade: "2026-12-31",
+    descontoGeralCentavos: 0,
+    itens: [{ descricao: "Item bloqueado", quantidade: "1", valorUnitarioCentavos: 100, descontoCentavos: 0 }],
+  }, sellerA.token);
+  assert.equal(terminalCreate.status, 409);
+
   const manual = await businessFixture(adminA, sellerA.usuarioId, "Cliente Venda Manual", "NOVO", null);
   const manualClosed = await request("POST", `/negocios/${manual.business.id}/fechar-ganho`, manualClose("manual-close-zero", 1, 0), sellerA.token);
   assert.equal(manualClosed.status, 200, JSON.stringify(manualClosed.body));
@@ -317,13 +345,19 @@ test("Venda Canônica V1 fecha, deduplica, reabre e protege tenant/concorrência
   const provenanceFixture = await businessFixture(adminA, sellerA.usuarioId, "Cliente Proveniencia Dashboard", "NOVO", 7777);
   await prisma.cliente.update({ where: { id: provenanceFixture.client.id }, data: { valor: 888888 } });
   const dashboardOpen = await request("GET", "/dashboard", undefined, adminA.token);
-  assert.equal(dashboardOpen.body.indicadores.pipeline - dashboardBefore.body.indicadores.pipeline, 7777);
+  assert.equal(dashboardOpen.body.indicadores.pipeline, null);
+  assert.equal(dashboardOpen.body.analytics.monetaryDataAvailable, false);
   const provenanceClosed = await request("POST", `/negocios/${provenanceFixture.business.id}/fechar-ganho`, manualClose("dashboard-provenance-close", 1, 123400), sellerA.token);
   assert.equal(provenanceClosed.status, 200);
   const dashboardClosed = await request("GET", "/dashboard", undefined, adminA.token);
   assert.equal(dashboardClosed.body.receita.fonte, "CANONICAL_SALE");
   assert.equal(dashboardClosed.body.analytics.wonValueCents - dashboardOpen.body.analytics.wonValueCents, 123400);
   assert.equal(dashboardClosed.body.indicadores.pipeline, dashboardBefore.body.indicadores.pipeline);
+  await businessFixture(adminA, sellerA.usuarioId, "Cliente Pipeline Sem Valor", "NOVO", null);
+  const dashboardUnknown = await request("GET", "/dashboard", undefined, adminA.token);
+  assert.equal(dashboardUnknown.body.indicadores.pipeline, null);
+  assert.equal(dashboardUnknown.body.analytics.totalValue, null);
+  assert.equal(dashboardUnknown.body.analytics.monetaryDataAvailable, false);
 
   assert.equal((await request("PATCH", `/negocios/${manual.business.id}/etapa`, { etapa: "PERDIDO", etapaAnterior: "FECHADO" }, adminA.token)).body.codigo, "NEGOCIO_TERMINAL_ACTION_REQUIRED");
   assert.equal((await request("PATCH", `/negocios/${lost.business.id}/etapa`, { etapa: "FECHADO", etapaAnterior: "CONTATO" }, adminA.token)).body.codigo, "NEGOCIO_TERMINAL_ACTION_REQUIRED");

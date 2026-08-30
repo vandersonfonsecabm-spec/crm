@@ -38,9 +38,9 @@ export type Client = {
 };
 
 export type Analytics = {
-  totalValue: number;
-  wonValue: number;
-  forecastValue: number;
+  totalValue: number | null;
+  wonValue: number | null;
+  forecastValue: number | null;
   hotCount: number;
   averageScore: number;
   todayFollowUps: number;

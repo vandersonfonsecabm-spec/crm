@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { RefObject } from "react";
 import {
   closeDealAsWon,
+  fetchCanonicalCommercialState,
   fetchCanonicalSales,
   fetchNegocioKanban,
   fetchNegociosKanban,
@@ -14,6 +15,8 @@ import type {
   AuthSession,
   BusinessOperationalFilter,
   BusinessStage,
+  CanonicalCommercialState,
+  CanonicalSale,
   CommunicationBusiness,
   NegociosKanbanResponse,
 } from "../../services/crmApi";
@@ -465,13 +468,27 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
   const drawerRef = useRef<HTMLElement>(null);
   const stageSelectRef = useRef<HTMLSelectElement>(null);
   const canMove = business.permissoes?.movimentar === true;
-  const contract = business.contratoComercial ?? { revisao: 1, propostaPrincipalId: null, propostaVencedoraId: null, vendaAtivaId: null, propostaPrincipal: null, propostaVencedora: null, vendaAtiva: null };
+  const contract = business.contratoComercial ?? { revisao: 1, propostaPrincipalId: null, propostaVencedoraId: null, vendaAtivaId: null, propostaPrincipal: null, propostaVencedora: null, vendaAtiva: null, propostasAceitasCount: 0 };
   const [canonicalAction, setCanonicalAction] = useState<"proposal" | "manual" | "lost" | "reopen" | null>(null);
   const [canonicalReason, setCanonicalReason] = useState("");
   const [manualValue, setManualValue] = useState("");
   const [canonicalError, setCanonicalError] = useState("");
   const [canonicalBusy, setCanonicalBusy] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState(() => newIdempotencyKey(business.id));
+  const [canonicalState, setCanonicalState] = useState<CanonicalCommercialState | null>(null);
+  const [canonicalStateLoading, setCanonicalStateLoading] = useState(false);
+  const [canonicalStateError, setCanonicalStateError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setCanonicalStateLoading(true);
+    setCanonicalStateError("");
+    fetchCanonicalCommercialState(business.id)
+      .then((nextState) => { if (active) setCanonicalState(nextState); })
+      .catch(() => { if (active) setCanonicalStateError("Não foi possível carregar o histórico canônico."); })
+      .finally(() => { if (active) setCanonicalStateLoading(false); });
+    return () => { active = false; };
+  }, [business.id]);
 
   const requestClose = useCallback(() => {
     if (isMoving) return;
@@ -619,10 +636,20 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
               <SaleStep label="Venda" value={contract.vendaAtiva ? formatCents(contract.vendaAtiva.totalCentavos) : "Não realizada"} />
             </div>
             {contract.vendaAtiva && <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">Venda ativa · revisão {contract.vendaAtiva.revisao}</p><p className="text-sm font-semibold tabular-nums text-emerald-950">{formatCents(contract.vendaAtiva.totalCentavos)}</p></div><p className="mt-1 text-[10px] text-emerald-800">Origem: {contract.vendaAtiva.origem === "ACCEPTED_PROPOSAL" ? `proposta ${contract.propostaVencedora?.codigo || "vencedora"}` : "fechamento manual"} · {new Date(contract.vendaAtiva.fechadoEm).toLocaleString("pt-BR")}</p></div>}
+            <section aria-labelledby={`negocios-sale-history-${business.id}`} className="mt-3 rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-secondary)]" id={`negocios-sale-history-${business.id}`}>Histórico da venda</h4>
+                {canonicalStateLoading && <span className="text-[9px] text-[var(--text-muted)]">Carregando…</span>}
+              </div>
+              {canonicalStateError && <p aria-live="polite" className="mt-2 text-[10px] text-rose-700">{canonicalStateError}</p>}
+              {!canonicalStateLoading && !canonicalStateError && <CanonicalSaleHistory sales={canonicalState?.vendas || []} />}
+            </section>
             <div className="mt-3 flex flex-wrap gap-2">
               {business.permissoes?.fechar && contract.propostaVencedoraId && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("proposal")} size="sm">Fechar com proposta vencedora</Button>}
-              {business.permissoes?.fechar && !contract.propostaVencedoraId && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("manual")} size="sm">Fechar venda manual</Button>}
-              {business.permissoes?.marcarPerdido && !contract.propostaVencedoraId && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("lost")} size="sm" variant="secondary">Marcar como perdido</Button>}
+              {business.permissoes?.fechar && !contract.propostaVencedoraId && contract.propostasAceitasCount === 0 && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("manual")} size="sm">Fechar venda manual</Button>}
+              {business.permissoes?.fechar && !contract.propostaVencedoraId && contract.propostasAceitasCount > 0 && <p className="self-center text-[10px] text-[var(--text-muted)]">Reconcilie a proposta aceita antes de fechar a venda.</p>}
+              {business.permissoes?.marcarPerdido && !contract.propostaVencedoraId && contract.propostasAceitasCount === 0 && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("lost")} size="sm" variant="secondary">Marcar como perdido</Button>}
+              {business.permissoes?.marcarPerdido && !contract.propostaVencedoraId && contract.propostasAceitasCount > 0 && <p className="self-center text-[10px] text-[var(--text-muted)]">Reconcilie a proposta aceita antes de perder o Negócio.</p>}
               {business.permissoes?.marcarPerdido && contract.propostaVencedoraId && <p className="self-center text-[10px] text-[var(--text-muted)]">Remova a vencedora antes de marcar como perdido.</p>}
               {business.permissoes?.reabrir && <Button disabled={canonicalBusy} onClick={() => beginCanonicalAction("reopen")} size="sm" variant="secondary">Reabrir com auditoria</Button>}
             </div>
@@ -672,6 +699,25 @@ function Detail({ label, value }: { label: string; value: string }) {
 
 function SaleStep({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0 bg-[var(--bg-surface)] px-2.5 py-2"><p className="font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</p><p className="mt-1 truncate font-medium text-[var(--text-primary)]" title={value}>{value}</p></div>;
+}
+
+function CanonicalSaleHistory({ sales }: { sales: CanonicalSale[] }) {
+  if (!sales.length) return <p className="mt-2 text-[10px] text-[var(--text-muted)]">Nenhuma venda canônica registrada.</p>;
+  return (
+    <div className="mt-2 space-y-2">
+      {sales.map((sale) => (
+        <article className="rounded border border-[var(--border-default)] bg-[var(--bg-surface)] px-2.5 py-2" key={sale.id}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[10px] font-semibold text-[var(--text-primary)]">Venda #{sale.id} · revisão {sale.revisao}</p>
+            <span className={`text-[9px] font-semibold uppercase tracking-wide ${sale.status === "ACTIVE" ? "text-emerald-700" : "text-amber-700"}`}>{sale.status === "ACTIVE" ? "Ativa" : "Invalidada"}</span>
+          </div>
+          <p className="mt-1 text-[10px] text-[var(--text-secondary)]">{sale.origem === "ACCEPTED_PROPOSAL" ? "Proposta vencedora" : "Fechamento manual"} · {formatCents(sale.totalCentavos)} · {new Date(sale.fechadoEm).toLocaleString("pt-BR")}</p>
+          {sale.status === "INVALIDATED" && <p className="mt-1 text-[10px] text-amber-800">Motivo da invalidação: {sale.motivoInvalidacao || "não informado"}{sale.invalidadoEm ? ` · ${new Date(sale.invalidadoEm).toLocaleString("pt-BR")}` : ""}</p>}
+          {(sale.historico || []).length > 0 && <div className="mt-1.5 border-t border-[var(--border-default)] pt-1.5">{sale.historico?.map((entry) => <p className="text-[9px] text-[var(--text-muted)]" key={entry.id}>{entry.acao === "CREATE" ? "Venda criada" : "Venda invalidada"}{entry.motivo ? ` · ${entry.motivo}` : ""} · {new Date(entry.createdAt).toLocaleString("pt-BR")}</p>)}</div>}
+        </article>
+      ))}
+    </div>
+  );
 }
 
 function formatBusinessValue(value: number | null, emptyLabel = "Sem valor") {

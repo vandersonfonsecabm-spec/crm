@@ -430,6 +430,7 @@ async function loadBusiness(client, context, id, { details = false } = {}) {
         },
       } : true,
       ...(details ? { vendasCanonicas: { include: saleIncludes(), orderBy: [{ revisao: "desc" }, { id: "desc" }], take: 20 } } : {}),
+      ...(details ? { propostasComerciais: { where: { status: "ACEITA" }, select: { id: true } } } : {}),
     },
   });
   if (!business) throw notFound("Negocio nao encontrado.");
@@ -602,6 +603,7 @@ function presentCommercialState(business) {
       propostaPrincipal: contract?.propostaPrincipal ? withoutTenant(contract.propostaPrincipal) : null,
       propostaVencedora: contract?.propostaVencedora ? withoutTenant(contract.propostaVencedora) : null,
       vendaAtiva: contract?.vendaAtiva ? presentSale(contract.vendaAtiva) : null,
+      propostasAceitasCount: business.propostasComerciais?.length || 0,
     },
     vendas: (business.vendasCanonicas || []).map(presentSale),
   };

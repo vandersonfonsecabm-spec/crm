@@ -5,7 +5,7 @@ import type { Client } from "../../types/dashboard";
 type DashboardKanbanCommandBarProps = {
   clients: Client[];
   loadedPage: number;
-  money: (value: number) => string;
+  money: (value: number | null | undefined) => string;
   getLeadScore: (client: Client) => number;
 };
 
@@ -21,9 +21,10 @@ export default function DashboardKanbanCommandBar({
   const contactCount = clients.filter((client) => client.status === "Contato").length;
   const proposalCount = clients.filter((client) => client.status === "Proposta").length;
   const biggestBottleneck = contactCount >= proposalCount ? "Contato" : "Proposta";
-  const informedForecastValue = clients
-    .filter((client) => client.status === "Novo" || client.status === "Proposta")
-    .reduce((sum, client) => sum + client.value, 0);
+  const forecastClients = clients.filter((client) => client.status === "Novo" || client.status === "Proposta");
+  const informedForecastValue = forecastClients.some((client) => client.valueKnown === false)
+    ? null
+    : forecastClients.reduce((sum, client) => sum + client.value, 0);
   const conversionRate = Math.round((clients.filter((client) => client.status === "Fechado").length / Math.max(clients.length, 1)) * 100);
 
   return (

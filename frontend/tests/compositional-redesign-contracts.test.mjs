@@ -13,20 +13,20 @@ const COMPOSITIONAL_CONTRACT_MATRIX = {
     fields: [
       field("ApiDashboardSummary", "indicadores.clientes", "Clientes na carteira", /indicadores:\s*\{[\s\S]*?\bclientes\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.wonValue", "Valor informado em clientes fechados", /analytics:\s*\{[\s\S]*?\bwonValue\s*:\s*number;/),
-      field("ApiDashboardSummary", "analytics.forecastValue", "Valor informado em clientes — Novo e Proposta", /analytics:\s*\{[\s\S]*?\bforecastValue\s*:\s*number;/),
+      field("ApiDashboardSummary", "analytics.forecastValue", "Valor informado em clientes — Novo e Proposta", /analytics:\s*\{[\s\S]*?\bforecastValue\s*:\s*number(?:\s*\|\s*null)?;/),
       field("ApiDashboardSummary", "analytics.activePipeline", "Clientes em acompanhamento comercial", /analytics:\s*\{[\s\S]*?\bactivePipeline\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.todayFollowUps", "Clientes com acompanhamento hoje", /analytics:\s*\{[\s\S]*?\btodayFollowUps\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.highRiskCount", "Clientes em alto risco", /analytics:\s*\{[\s\S]*?\bhighRiskCount\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.silentCount", "Clientes sem contato recente", /analytics:\s*\{[\s\S]*?\bsilentCount\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.hotProposalCount", "Clientes quentes em Proposta", /analytics:\s*\{[\s\S]*?\bhotProposalCount\s*:\s*number;/),
-      field("ApiDashboardSummary", "status[].status,total,valor", "Carteira por status", /status:\s*Array<\{\s*status:\s*string;\s*total:\s*number;\s*valor:\s*number\s*\}>;/),
+      field("ApiDashboardSummary", "status[].status,total,valor", "Carteira por status", /status:\s*Array<\{\s*status:\s*string;\s*total:\s*number;\s*valor:\s*number(?:\s*\|\s*null)?\s*\}>;/),
     ],
   },
   comercial: {
     scope: "Resumo global da carteira; fila da página atual de Clientes",
     forbiddenLabels: ["Score de lead", "Ranking por score", "Previsão individual"],
     fields: [
-      field("ApiDashboardSummary", "analytics.forecastValue", "Valor informado em clientes — Novo e Proposta", /analytics:\s*\{[\s\S]*?\bforecastValue\s*:\s*number;/),
+      field("ApiDashboardSummary", "analytics.forecastValue", "Valor informado em clientes — Novo e Proposta", /analytics:\s*\{[\s\S]*?\bforecastValue\s*:\s*number(?:\s*\|\s*null)?;/),
       field("ApiDashboardSummary", "analytics.todayFollowUps", "Clientes com acompanhamento hoje", /analytics:\s*\{[\s\S]*?\btodayFollowUps\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.hotProposalCount", "Clientes quentes em Proposta", /analytics:\s*\{[\s\S]*?\bhotProposalCount\s*:\s*number;/),
       field("ApiDashboardSummary", "analytics.silentCount", "Clientes sem contato recente", /analytics:\s*\{[\s\S]*?\bsilentCount\s*:\s*number;/),

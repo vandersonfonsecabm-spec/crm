@@ -8,14 +8,14 @@ import { classifyNextFollowUp } from "../../utils/followUpProjection";
 import { Surface } from "../ui";
 
 type KanbanEnterpriseStats = {
-  totalValue: number;
-  forecastValue: number;
-  wonValue: number;
+  totalValue: number | null;
+  forecastValue: number | null;
+  wonValue: number | null;
   averageScore: number;
   highRiskCount: number;
   todayFollowUps: number;
   activePipeline: number;
-  conversionRate: number;
+  conversionRate: number | null;
   monetaryDataAvailable: boolean;
 };
 
@@ -32,7 +32,7 @@ type DashboardKanbanBoardProps = {
   dragOverStatus: Status | null;
   isDraggingKanban: boolean;
   selectedId: number | null;
-  money: (value: number) => string;
+  money: (value: number | null | undefined) => string;
   initials: (name: string) => string;
   leadOwner: (client: Client) => string;
   getLeadScore: (client: Client) => number;
@@ -161,7 +161,9 @@ export default function DashboardKanbanBoard({
         <div className={`grid gap-3 ${visibleStatuses.length === 2 ? "min-w-[680px] grid-cols-2" : "min-w-[960px] grid-cols-3"}`}>
           {visibleStatuses.map((status) => {
             const stageClients = kanbanClients.filter((client) => client.status === status);
-            const stageValue = stageClients.reduce((sum, client) => sum + client.value, 0);
+            const stageValue = stageClients.some((client) => client.valueKnown === false)
+              ? null
+              : stageClients.reduce((sum, client) => sum + client.value, 0);
             const stageScore = Math.round(
               stageClients.reduce((sum, client) => sum + getLeadScore(client), 0) / Math.max(1, stageClients.length)
             );

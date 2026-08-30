@@ -59,11 +59,12 @@ function createCommercialProposalService({ prisma }) {
 
   async function createDraft(context, negocioId, input) {
     const body = parseProposalInput(input, { create: true });
-    const business = await loadBusiness(prisma, context, negocioId, true);
     let created;
     try {
       created = await prisma.$transaction(async (tx) => {
+        let business = await loadBusiness(tx, context, negocioId, false);
         await lockActiveClienteRows(tx, context.empresaId, [business.clienteId]);
+        business = await loadBusiness(tx, context, negocioId, true);
         const sequence = await tx.propostaComercial.count({ where: { empresaId: context.empresaId } }) + 1;
         const codigo = `PROP-${new Date().getUTCFullYear()}-${String(sequence).padStart(5, "0")}`;
         const items = await resolveProposalItems(tx, context, body.itens, {
@@ -114,13 +115,17 @@ function createCommercialProposalService({ prisma }) {
     if (body.revisao !== current.revisao) throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
     await prisma.$transaction(async (tx) => {
       await lockActiveClienteRows(tx, context.empresaId, [current.clienteId, current.negocio?.clienteId]);
+      const transactional = await loadProposal(tx, context, id, false);
+      requireProposalWrite(context, transactional.negocio);
+      if (transactional.status !== "RASCUNHO") throw conflict("PROPOSAL_IMMUTABLE", "Crie uma nova versao para editar esta proposta.");
+      if (body.revisao !== transactional.revisao) throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
       const items = await resolveProposalItems(tx, context, body.itens, {
-        clienteId: current.clienteId,
+        clienteId: transactional.clienteId,
         now: new Date(),
       });
       const totals = calculateTotals(items, body.descontoGeralCentavos);
       const updated = await tx.propostaComercial.updateMany({
-        where: { id, empresaId: context.empresaId, revisao: body.revisao, status: "RASCUNHO", cliente: { arquivadoEm: null }, negocio: { cliente: { arquivadoEm: null } } },
+        where: { id, empresaId: context.empresaId, revisao: body.revisao, status: "RASCUNHO", cliente: { arquivadoEm: null }, negocio: { etapa: { in: ["NOVO", "CONTATO", "PROPOSTA"] }, cliente: { arquivadoEm: null } } },
         data: {
           titulo: body.titulo,
           descricao: body.descricao,
@@ -138,9 +143,9 @@ function createCommercialProposalService({ prisma }) {
       await tx.itemPropostaComercial.createMany({
         data: totals.itens.map((item) => itemStorageData(tx, id, context, item)),
       });
-      await history(tx, context, { ...current, revisao: current.revisao + 1 }, "ATUALIZAR", current.status, current.status, body.observacaoHistorico);
+      await history(tx, context, { ...transactional, revisao: transactional.revisao + 1 }, "ATUALIZAR", transactional.status, transactional.status, body.observacaoHistorico);
       if (totals.itens.some((item) => item.itemType === "CATALOG_ITEM")) {
-        await history(tx, context, { ...current, revisao: current.revisao + 1 }, "ADICIONAR_ITEM_CATALOGADO", current.status, current.status, catalogAuditObservation(totals.itens));
+        await history(tx, context, { ...transactional, revisao: transactional.revisao + 1 }, "ADICIONAR_ITEM_CATALOGADO", transactional.status, transactional.status, catalogAuditObservation(totals.itens));
       }
     });
     return getProposal(context, id);
@@ -158,21 +163,22 @@ function createCommercialProposalService({ prisma }) {
     if (revisao !== current.revisao) throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
     if (current.status === nextStatus) return getProposal(context, id);
     if (nextStatus === "ACEITA") throw invalid("Use a acao dedicada para aceitar e definir a proposta vencedora.", "PROPOSAL_ACCEPT_REQUIRES_WINNER_ACTION");
-    if (!TRANSITIONS[current.status]?.has(nextStatus)) throw invalid("Transicao de status invalida.", "PROPOSAL_STATUS_INVALID");
     let result;
     try {
       result = await prisma.$transaction(async (tx) => {
         await lockActiveClienteRows(tx, context.empresaId, [current.clienteId, current.negocio?.clienteId]);
         const transactional = await loadProposal(tx, context, id, false);
+        requireProposalWrite(context, transactional.negocio);
         if (transactional.revisao !== revisao || transactional.status !== current.status) {
           throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
         }
+        if (!TRANSITIONS[transactional.status]?.has(nextStatus)) throw invalid("Transicao de status invalida.", "PROPOSAL_STATUS_INVALID");
         if (MATERIAL_STATUSES.has(nextStatus)) {
           const revalidation = await revalidateProposalCatalogItems(tx, context, transactional, new Date());
           if (!revalidation.valid) throw proposalRevalidationError(revalidation, transactional.revisao);
         }
         const updated = await tx.propostaComercial.updateMany({
-          where: { id, empresaId: context.empresaId, revisao, status: current.status, cliente: { arquivadoEm: null }, negocio: { cliente: { arquivadoEm: null } } },
+          where: { id, empresaId: context.empresaId, revisao, status: current.status, cliente: { arquivadoEm: null }, negocio: { etapa: { in: ["NOVO", "CONTATO", "PROPOSTA"] }, cliente: { arquivadoEm: null } } },
           data: { status: nextStatus, revisao: { increment: 1 } },
         });
         if (updated.count !== 1) throw conflict("PROPOSAL_REVISION_CONFLICT", "A proposta foi alterada por outro usuario.");
@@ -340,6 +346,7 @@ function presentProposal(context, proposal) {
   const { empresaId: _empresaId, itens: rawItems, ...safeProposal } = proposal;
   const negocioAberto = ["NOVO", "CONTATO", "PROPOSTA"].includes(proposal.negocio.etapa);
   const podeOperar = negocioAberto && (isManager(context) || proposal.negocio.responsavelId === context.usuarioId);
+  const winnerPersisted = Boolean(proposal.negocio?.contratoVenda?.propostaVencedoraId);
   const safeRelations = {
     cliente: withoutTenantContext(proposal.cliente),
     negocio: withoutTenantContext(proposal.negocio),
@@ -368,7 +375,7 @@ function presentProposal(context, proposal) {
       alterarStatus: podeOperar,
       duplicar: podeOperar,
       aceitar: podeOperar && ["PRONTA", "ENVIADA"].includes(proposal.status),
-      definirPrincipal: podeOperar && ["RASCUNHO", "PRONTA", "ENVIADA", "ACEITA"].includes(proposal.status),
+      definirPrincipal: podeOperar && !winnerPersisted && ["RASCUNHO", "PRONTA", "ENVIADA", "ACEITA"].includes(proposal.status),
       substituirVencedora: negocioAberto && isManager(context),
       reconciliarVencedora: negocioAberto && isManager(context),
       removerVencedora: negocioAberto && isManager(context),

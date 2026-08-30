@@ -2,14 +2,14 @@ import { AlertTriangle, CalendarDays, CheckCircle2, Gauge, GitBranch, Target, Tr
 import type { ReactNode } from "react";
 
 type KanbanEnterpriseStats = {
-  totalValue: number;
-  forecastValue: number;
-  wonValue: number;
+  totalValue: number | null;
+  forecastValue: number | null;
+  wonValue: number | null;
   averageScore: number;
   highRiskCount: number;
   todayFollowUps: number;
   activePipeline: number;
-  conversionRate: number;
+  conversionRate: number | null;
   monetaryDataAvailable: boolean;
 };
 
@@ -19,7 +19,7 @@ type DashboardKanbanSummaryProps = {
   kanbanClientsCount: number;
   kanbanOwnerFilter: KanbanOwnerFilter;
   kanbanEnterpriseStats: KanbanEnterpriseStats;
-  money: (value: number) => string;
+  money: (value: number | null | undefined) => string;
 };
 
 export default function DashboardKanbanSummary({
@@ -37,11 +37,11 @@ export default function DashboardKanbanSummary({
         </span>
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-        <SummarySignal icon={<GitBranch size={12} />} label="Funil" value={kanbanEnterpriseStats.monetaryDataAvailable ? money(kanbanEnterpriseStats.totalValue) : "Indisponível"} />
-        <SummarySignal icon={<Target size={12} />} label="Previsão" value={kanbanEnterpriseStats.monetaryDataAvailable ? money(kanbanEnterpriseStats.forecastValue) : "Indisponível"} tone="warning" />
-        <SummarySignal icon={<CheckCircle2 size={12} />} label="Ganho" value={kanbanEnterpriseStats.monetaryDataAvailable ? money(kanbanEnterpriseStats.wonValue) : "Indisponível"} tone="success" />
+        <SummarySignal icon={<GitBranch size={12} />} label="Funil" value={kanbanEnterpriseStats.monetaryDataAvailable ? money(kanbanEnterpriseStats.totalValue) : "Não informado"} />
+        <SummarySignal icon={<Target size={12} />} label="Previsão" value={kanbanEnterpriseStats.monetaryDataAvailable ? money(kanbanEnterpriseStats.forecastValue) : "Não informado"} tone="warning" />
+        <SummarySignal icon={<CheckCircle2 size={12} />} label="Ganho" value={kanbanEnterpriseStats.monetaryDataAvailable ? money(kanbanEnterpriseStats.wonValue) : "Não informado"} tone="success" />
         <SummarySignal icon={<AlertTriangle size={12} />} label="Risco" value={`${kanbanEnterpriseStats.highRiskCount} oportunidades`} tone="danger" />
-        <SummarySignal icon={<TrendingUp size={12} />} label="Conversão" value={kanbanEnterpriseStats.monetaryDataAvailable ? `${kanbanEnterpriseStats.conversionRate}%` : "Indisponível"} tone="success" />
+        <SummarySignal icon={<TrendingUp size={12} />} label="Conversão" value={kanbanEnterpriseStats.monetaryDataAvailable && kanbanEnterpriseStats.conversionRate !== null ? `${kanbanEnterpriseStats.conversionRate}%` : "Não informado"} tone="success" />
         <SummarySignal icon={<Gauge size={12} />} label="Score médio" value={`${kanbanEnterpriseStats.averageScore}/100`} tone="info" />
         <SummarySignal icon={<GitBranch size={12} />} label="Funil ativo" value={`${kanbanEnterpriseStats.activePipeline} oportunidades`} />
         <SummarySignal icon={<CalendarDays size={12} />} label="Hoje" value={`${kanbanEnterpriseStats.todayFollowUps} ações`} tone="info" />

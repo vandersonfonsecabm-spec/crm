@@ -40,7 +40,7 @@ export default function useDashboardAnalytics({
         todayFollowUps: summary.analytics.todayFollowUps,
         activePipeline: summary.analytics.activePipeline,
         conversionRate: summary.analytics.conversionRate,
-        monetaryDataAvailable: true,
+        monetaryDataAvailable: summary.analytics.monetaryDataAvailable,
       };
     }
     const totalValue = 0;

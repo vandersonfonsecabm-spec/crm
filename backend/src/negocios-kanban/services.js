@@ -231,11 +231,12 @@ function listIncludes(empresaId) {
     },
     contratoVenda: {
       include: {
-        propostaPrincipal: { select: { id: true, codigo: true, titulo: true, status: true, totalCentavos: true, moeda: true, revisao: true } },
-        propostaVencedora: { select: { id: true, codigo: true, titulo: true, status: true, totalCentavos: true, moeda: true, revisao: true } },
+        propostaPrincipal: { select: { id: true, codigo: true, titulo: true, status: true, totalCentavos: true, moeda: true, revisao: true, clienteId: true } },
+        propostaVencedora: { select: { id: true, codigo: true, titulo: true, status: true, totalCentavos: true, moeda: true, revisao: true, clienteId: true } },
         vendaAtiva: { select: { id: true, origem: true, status: true, moeda: true, totalCentavos: true, revisao: true, fechadoEm: true, propostaVencedoraId: true } },
       },
     },
+    propostasComerciais: { where: { status: "ACEITA" }, select: { id: true } },
   };
 }
 
@@ -264,7 +265,7 @@ function detailIncludes(empresaId) {
 }
 
 function businessView(context, business, now) {
-  const { acompanhamentos, historicoAtribuicoes, contratoVenda, ...data } = business;
+  const { acompanhamentos, historicoAtribuicoes, contratoVenda, propostasComerciais, ...data } = business;
   const integridadeComercial = assertCommercialPointers(business);
   const nextAction = acompanhamentos?.[0] || null;
   const stageTiming = stageTimingView(business, historicoAtribuicoes || [], now);
@@ -287,6 +288,7 @@ function businessView(context, business, now) {
       propostaPrincipal: contratoVenda?.propostaPrincipal || null,
       propostaVencedora: contratoVenda?.propostaVencedora || null,
       vendaAtiva: contratoVenda?.vendaAtiva || null,
+      propostasAceitasCount: propostasComerciais?.length || 0,
     },
     permissoes: {
       movimentar: !TERMINAL_BUSINESS_STAGES.has(business.etapa) && (isManager(context) || business.responsavelId === context.usuarioId),
