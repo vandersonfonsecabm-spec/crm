@@ -59,6 +59,9 @@ const QA_TENANTS = Object.freeze([
 ]);
 
 const EXTERNAL_FEATURE_KEYS = Object.freeze([
+  "LEADS_COMMUNICATION",
+  "SITE_LEAD_CAPTURE",
+  "AUTOMATIONS",
   "WHATSAPP_INTEGRATION",
   "WHATSAPP_INBOUND",
   "WHATSAPP_OUTBOUND",
@@ -653,8 +656,9 @@ async function setCanonicalFeature(tx, { empresaId, enabled, actorUsuarioId, run
 
 async function provisionSyntheticQa({ prisma, env = process.env, passwordHashes, apply = false, confirmation, expectedReleaseHead, target, operatorUsuarioId, runId, allowTestAttestation = false, attestation }) {
   const resolvedRunId = String(runId || env.QA_PROD_RUN_ID || "").trim();
-  const targetInfo = assertTarget(env, { expectedReleaseHead, target, runId: resolvedRunId, requireOperationalAttestation: apply && !allowTestAttestation, requireHarnessParity: apply && !allowTestAttestation, requirePrewriteSafety: apply && !allowTestAttestation, requireExplicitTarget: !allowTestAttestation, attestation });
-  if (!apply) return inspectQaState({ prisma, env, expectedReleaseHead, target: targetInfo.target, allowTestAttestation, attestation });
+  const requireRuntimeAttestation = !allowTestAttestation;
+  const targetInfo = assertTarget(env, { expectedReleaseHead, target, runId: resolvedRunId, requireOperationalAttestation: requireRuntimeAttestation, requireHarnessParity: requireRuntimeAttestation, requirePrewriteSafety: apply && requireRuntimeAttestation, requireExplicitTarget: requireRuntimeAttestation, attestation });
+  if (!apply) return inspectQaState({ prisma, env, expectedReleaseHead, target: targetInfo.target, requireOperationalAttestation: requireRuntimeAttestation, requireHarnessParity: requireRuntimeAttestation, allowTestAttestation, attestation });
   assertApplyConfirmation(confirmation);
   if (env.NEGOCIOS_KANBAN_ENABLED !== "true") throw new QaProvisioningError("QA_PROD_CANONICAL_FEATURE_GLOBAL_DISABLED", "Capability global de negócios não está habilitada; não alterar flag global pelo bootstrap.");
   if (!QA_RUN_ID.test(resolvedRunId)) throw new QaProvisioningError("QA_PROD_RUN_ID_REQUIRED", "Apply exige run ID QA estável e auditável.");

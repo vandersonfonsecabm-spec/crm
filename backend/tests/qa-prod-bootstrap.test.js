@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -25,6 +26,8 @@ const {
   generateTemporaryCredentials,
   inspectQaState,
   provisionSyntheticQa,
+  providerIsolationSafe,
+  providerIsolationState,
   releaseQaDatabaseLease,
   revokeSyntheticQa,
 } = require("../src/security/qa-provisioning.cjs");
@@ -215,6 +218,27 @@ test("production apply requires external control-plane/database attestation and 
   assert.equal(prisma.state.empresa.length, 0);
 });
 
+test("bootstrap dry-run requires external attestation and source parity", () => {
+  const stagingEnv = {
+    ...BASE_ENV,
+    RAILWAY_ENVIRONMENT_ID: "d6b6f137-cffd-4647-a102-3619fc54133a",
+    RAILWAY_SERVICE_ID: "8af12b8e-4f4d-498c-9ceb-3182417905f8",
+    QA_PROD_WORKER_SERVICE_ID: "25dab463-52c0-4425-825e-c7dcf6a65332",
+    QA_PROD_DB_SERVICE_ID: "f3a2862b-2371-4ab3-b4db-1e91680ee3b7",
+    QA_PROD_RELEASE_HEAD: RELEASE,
+    QA_PROD_EXPECTED_RELEASE_HEAD: RELEASE,
+    QA_PROD_BASE_PRODUCTION_RELEASE_HEAD: RELEASE,
+  };
+  const result = spawnSync(process.execPath, [
+    path.join(__dirname, "../scripts/qa-prod-bootstrap.cjs"),
+    "--dry-run",
+    "--target=staging",
+    "--expected-release=" + RELEASE,
+  ], { env: stagingEnv, encoding: "utf8", windowsHide: true });
+  assert.notEqual(result.status, 0);
+  assert.match(String(result.stdout) + String(result.stderr), /QA_PROD_ATTESTATION_REQUIRED/);
+});
+
 test("external attestation binds effective database, worker and harness source", () => {
   const url = BASE_ENV.POSTGRES_DATABASE_URL;
   const databaseUrlSha256 = crypto.createHash("sha256").update(url, "utf8").digest("hex");
@@ -291,6 +315,19 @@ test("status distinguishes absent, ready and mixed states instead of claiming pa
   prisma.state.empresaFuncionalidade.filter((feature) => feature.empresaId === prisma.state.empresa[0].id).forEach((feature) => { feature.habilitada = false; });
   const mixed = await inspectQaState({ prisma, env: BASE_ENV, expectedReleaseHead: RELEASE, target: QA_PRODUCTION_TARGET, ...TEST_OPTIONS });
   assert.equal(mixed.status, "MIXED");
+});
+
+test("communication and automation capabilities are treated as provider-isolation residues", async () => {
+  const prisma = new FakePrisma({
+    empresaFuncionalidade: [
+      { id: 1, empresaId: 1, chave: "LEADS_COMMUNICATION", habilitada: true },
+      { id: 2, empresaId: 1, chave: "SITE_LEAD_CAPTURE", habilitada: true },
+      { id: 3, empresaId: 1, chave: "AUTOMATIONS", habilitada: true },
+    ],
+  });
+  const state = await providerIsolationState(prisma, 1);
+  assert.equal(state.enabledFeatures, 3);
+  assert.equal(providerIsolationSafe(state), false);
 });
 
 test("database lease serializes bootstrap/revoke and expires only by TTL", async () => {

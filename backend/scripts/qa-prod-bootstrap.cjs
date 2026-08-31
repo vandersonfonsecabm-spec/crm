@@ -135,7 +135,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const env = runtimeEnv(options);
   const expectedReleaseHead = options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD;
-  const targetInfo = assertTarget(env, { expectedReleaseHead, runId: options.runId, requireExplicitTarget: true, requireOperationalAttestation: options.mode === "apply", requireHarnessParity: options.mode === "apply", requirePrewriteSafety: options.mode === "apply" && options.target === "production" });
+  const targetInfo = assertTarget(env, { expectedReleaseHead, runId: options.runId, requireExplicitTarget: true, requireOperationalAttestation: true, requireHarnessParity: true, requirePrewriteSafety: options.mode === "apply" && options.target === "production" });
   if (options.mode === "apply") assertPrewriteSafety({ env, target: targetInfo.target, runId: options.runId, attestation: targetInfo.attestation });
   const lock = acquireLock();
   activeLock = lock;
