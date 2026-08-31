@@ -1,4 +1,29 @@
 # Estado atual do CRM
+## Estado atual — produção Venda Canônica V1 e pré-bootstrap QA (2026-08-31)
+
+- A promoção de produção foi concluída no release funcional
+  2da896aac84dd683e844b266331716e9600e6357, Git tree
+  5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce. O backend Railway está no
+  deployment e865888e-2014-4885-b533-d1ab698b43ce e o worker no deployment
+  74ef572c-3f5a-4e7c-8137-2952fcb7e579; o frontend Vercel está no deployment
+  dpl_6ndNu6C75CujS4W3g68wwoPskFoc. Produção mudou somente dentro dessa
+  promoção autorizada.
+- PostgreSQL oficial e9d8a6b8-507b-45fb-92a8-3ab016f865a2 está com 20
+  migrations aplicadas, zero falhas e hardening canônico como última. As
+  tabelas VendaCanonica, ItemVendaCanonica, HistoricoVendaCanonica e
+  NegocioContratoVenda existem e estavam sem linhas no último checkpoint.
+- Backup pré-bootstrap permanece fora do repositório, com 23088049 bytes e
+  SHA-256 05b0576f61dbb8cbf57f4a01845d6f03d228c61e9b181757593a05b96080acae;
+  restore drill WSL passou com 17 migrations/zero falhas e foi limpo.
+- Não existem atualmente tenants qa-prod-canonical-a ou qa-prod-canonical-b.
+  MetaCredential ativa e canais ativos estão em zero; existe uma integração
+  Bling ativa com credencial em outro tenant e ela deve permanecer intocada.
+- O próximo escopo aprovado é o bootstrap interno QA-only, sem rota pública,
+  sem SQL direto e sem dependência de convite/e-mail. Antes de qualquer
+  escrita, o procedimento deve ser implementado, testado em staging e revisado.
+- Relatório canônico da promoção:
+  docs/CANONICAL_SALE_V1_PRODUCTION_PROMOTION_2026-08-31.md
+  e índice docs/evidence/CANONICAL_SALE_V1_PRODUCTION_EVIDENCE_2026-08-31.json.
 
 ## Venda Canônica V1 — staging pós-adversarial (2026-08-30)
 
