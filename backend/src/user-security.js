@@ -337,6 +337,8 @@ function createUserSecurity({
     const expiresAt = addMilliseconds(new Date(), inviteHours * 60 * 60 * 1000);
     try {
       const invite = await prisma.$transaction(async (tx) => {
+        const tenant = await tx.empresa.findUnique({ where: { id: empresaId }, select: { ativo: true } });
+        if (!tenant?.ativo) throw securityError("TENANT_INACTIVE", 409);
         const existingInvite = await tx.conviteUsuario.findFirst({ where: { empresaId, emailNormalizado: email } });
         const pending = existingInvite && existingInvite.aceitoEm === null && existingInvite.revogadoEm === null
           ? existingInvite
@@ -386,6 +388,8 @@ function createUserSecurity({
     try {
       usuario = await prisma.$transaction(async (tx) => {
         const acceptedAt = new Date();
+        const tenant = await tx.empresa.findUnique({ where: { id: token.empresaId }, select: { ativo: true } });
+        if (!tenant?.ativo) throw securityError("INVITE_INVALID", 400);
         const accepted = await tx.conviteUsuario.updateMany({
           where: {
             id: token.id,
@@ -742,6 +746,8 @@ function createUserSecurity({
     let invite;
     try {
       invite = await prisma.$transaction(async (tx) => {
+      const tenant = await tx.empresa.findUnique({ where: { id: req.auth.empresaId }, select: { ativo: true } });
+      if (!tenant?.ativo) throw securityError("TENANT_INACTIVE", 409);
       const changed = await tx.conviteUsuario.updateMany({ where: { id, empresaId: req.auth.empresaId, aceitoEm: null, revogadoEm: null, deliveryRevision: existing.deliveryRevision, tokenHash: existing.tokenHash }, data: { convidadoPorId: req.auth.usuarioId, tokenHash: hashToken(rawToken), expiraEm, deliveryStatus: "PENDING" } });
       if (changed.count !== 1) throw securityError("INVITE_DELIVERY_CONFLICT", 409);
       const updated = await tx.conviteUsuario.findFirst({ where: { id, empresaId: req.auth.empresaId } });

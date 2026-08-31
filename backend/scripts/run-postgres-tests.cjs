@@ -59,6 +59,7 @@ function main(options = {}) {
       "tests/bling-distributed-coordination-postgres.test.js",
       "tests/commercial-proposal-catalog-v1-postgres.test.js",
       "tests/canonical-sale-v1-postgres.test.js",
+      "tests/qa-prod-bootstrap-postgres.test.js",
     ];
     const focusedFile = focus
       ? testFiles.find((file) => file === `tests/${focus}.test.js`)

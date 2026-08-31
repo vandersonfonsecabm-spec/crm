@@ -27,8 +27,9 @@ const pgSuite = Object.freeze([
   "tests/bling-distributed-coordination-postgres.test.js",
   "tests/commercial-proposal-catalog-v1-postgres.test.js",
   "tests/canonical-sale-v1-postgres.test.js",
+  "tests/qa-prod-bootstrap-postgres.test.js",
 ]);
-const pgHarnessTestCount = 24;
+const pgHarnessTestCount = 25;
 
 function parseArguments(rawArgs = []) {
   const args = [...rawArgs];
@@ -58,11 +59,21 @@ function externalDatabaseUrlFromEnv(env = process.env) {
   if (env.CRM_POSTGRES_REAL_CONFIRM !== "disposable-external") {
     throw new Error("URL externa exige CRM_POSTGRES_REAL_CONFIRM=disposable-external.");
   }
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("URL externa descartavel invalida.");
+  }
   if (matchesProtectedDatabaseUrl(value, env)) {
     throw new Error("URL oficial ou de producao nunca pode ser usada pelo runner real.");
   }
   if (isOfficialDatabaseUrl(value, env) && !isVerifiedRailwayDisposable(value, env)) {
     throw new Error("URL oficial ou de producao nunca pode ser usada pelo runner real.");
+  }
+  const loopback = /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/i.test(parsed.hostname);
+  if (!loopback && !isVerifiedRailwayDisposable(value, env)) {
+    throw new Error("URL externa exige allowlist positiva de loopback ou Railway descartavel atestado.");
   }
   return value;
 }
@@ -273,7 +284,7 @@ function sourceFilesUnder(relativeRoot) {
   }
 }
 
-function verifyRailwayDisposableAuthority(env = process.env, runCommand = spawnSync) {
+function verifyRailwayDisposableAuthority(env = process.env, runCommand = spawnSync, expectedUrl = env.POSTGRES_TEST_DATABASE_URL) {
   const project = String(env.CRM_EXPECTED_RAILWAY_PROJECT_ID || "").trim();
   const environment = String(env.CRM_EXPECTED_RAILWAY_ENVIRONMENT_ID || "").trim();
   const service = String(env.CRM_EXPECTED_RAILWAY_SERVICE_ID || "").trim();
@@ -301,8 +312,11 @@ function verifyRailwayDisposableAuthority(env = process.env, runCommand = spawnS
   if (result?.error || result?.status !== 0) return false;
   try {
     const variables = JSON.parse(String(result.stdout || "{}"));
-    const environmentName = String(env.RAILWAY_ENVIRONMENT_NAME || variables.RAILWAY_ENVIRONMENT_NAME || "");
-    const serviceName = String(env.RAILWAY_SERVICE_NAME || variables.RAILWAY_SERVICE_NAME || "");
+    expectedUrl = String(expectedUrl || "").trim();
+    const authoritativeUrl = String(variables.DATABASE_PUBLIC_URL || variables.POSTGRES_TEST_DATABASE_URL || variables.POSTGRES_DATABASE_URL || variables.DATABASE_URL || "").trim();
+    if (!authoritativeUrl || !expectedUrl || !sameDatabaseEndpoint(authoritativeUrl, expectedUrl)) return false;
+    const environmentName = String(variables.RAILWAY_ENVIRONMENT_NAME || "");
+    const serviceName = String(variables.RAILWAY_SERVICE_NAME || "");
     return variables.CRM_DISPOSABLE_TEST_DATABASE === "true"
       && variables.CRM_DISPOSABLE_TEST_RUN_ID === expectedRun
       && /(?:staging|test|preview|sandbox)/i.test(environmentName)
@@ -480,7 +494,7 @@ async function main(options = {}) {
   const externalUrl = externalDatabaseUrlFromEnv(env);
   if (externalUrl && isVerifiedRailwayDisposable(externalUrl, env)) {
     const verifyAuthority = options.verifyExternalAuthority || verifyRailwayDisposableAuthority;
-    if (!verifyAuthority(env)) throw new Error("A autoridade externa nao confirmou o PostgreSQL descartavel.");
+    if (!verifyAuthority(env, undefined, externalUrl)) throw new Error("A autoridade externa nao confirmou o endpoint PostgreSQL descartavel.");
   }
   const runId = safeRunId(options.runId || makeRunId());
   const containerName = externalUrl ? null : makeResourceName("crm-pg-real", runId);

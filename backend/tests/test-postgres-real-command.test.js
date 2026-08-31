@@ -39,7 +39,7 @@ test("runner PostgreSQL real oferece dry-run sem consultar Docker", async () => 
   assert.equal(result.image, defaultImage);
   assert.equal(result.mode, "container");
   assert.equal(dockerCalls, 0);
-  assert.equal(result.harnessTests, 24);
+  assert.equal(result.harnessTests, 25);
   assert.match(result.sourceManifestSha256, /^[a-f0-9]{64}$/);
   assert.ok(result.suite.length >= 7);
   for (const required of [
@@ -181,6 +181,13 @@ test("runner PostgreSQL real exige confirmacao para URL externa e rejeita oficia
     }),
     /oficial|producao/i,
   );
+  assert.throws(
+    () => externalDatabaseUrlFromEnv({
+      POSTGRES_TEST_DATABASE_URL: "postgresql://user:pass@unknown.example:5432/crm_test",
+      CRM_POSTGRES_REAL_CONFIRM: "disposable-external",
+    }),
+    /allowlist|descartavel/i,
+  );
 });
 
 test("runner PostgreSQL real usa URL externa somente com confirmacao e sem Docker", async () => {
@@ -240,9 +247,20 @@ test("runner aceita Railway somente com recurso descartavel e IDs exatos", () =>
       CRM_DISPOSABLE_TEST_RUN_ID: "canonical-sale-test-run",
       RAILWAY_ENVIRONMENT_NAME: "canonical-staging",
       RAILWAY_SERVICE_NAME: "Postgres-Test1",
+      DATABASE_PUBLIC_URL: url,
     }),
-  })), true);
+  }), url), true);
   assert.equal(verifyRailwayDisposableAuthority(env, () => ({ status: 0, stdout: "{}" })), false);
+  assert.equal(verifyRailwayDisposableAuthority({ ...env, POSTGRES_TEST_DATABASE_URL: "postgresql://user:pass@evil.example:5432/railway", DATABASE_PUBLIC_URL: "postgresql://user:pass@evil.example:5432/railway" }, () => ({
+    status: 0,
+    stdout: JSON.stringify({
+      CRM_DISPOSABLE_TEST_DATABASE: "true",
+      CRM_DISPOSABLE_TEST_RUN_ID: "canonical-sale-test-run",
+      RAILWAY_ENVIRONMENT_NAME: "canonical-staging",
+      RAILWAY_SERVICE_NAME: "Postgres-Test1",
+      DATABASE_PUBLIC_URL: url,
+    }),
+  }), "postgresql://user:pass@evil.example:5432/railway"), false);
 });
 
 test("runner PostgreSQL real sanitiza URL, password, token e bearer", () => {
