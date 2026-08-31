@@ -1,4 +1,36 @@
 # Estado atual do CRM
+## Checkpoint atual — incidente de secrets e QA operator do staging (2026-08-31)
+
+- Dados de aplicação da SaaS são sintéticos/de teste; não há pessoas ou
+  clientes reais no banco. Infraestrutura, secrets, tokens e providers externos
+  continuam classificados como reais até prova contrária.
+- O incidente de dump bruto do staging foi encerrado: variáveis de banco,
+  JWT, criptografia de integrações e probe foram rotacionadas somente no
+  staging; a senha antiga do PostgreSQL foi rejeitada; sessões/refresh tokens
+  foram revogados; `INTEGRATION_ENCRYPTION_KEY_PREVIOUS` foi removida.
+- `RAW_ENV_DUMP=FORBIDDEN` agora é regra versionada em
+  `backend/scripts/qa-staging-env-sanitized.cjs`, com teste focal e saída
+  limitada a presença, classificação, contagem e fingerprint.
+- O harness está no SHA `957c10d74e2f786a96e903978b2eb6919b150bfb`, tree
+  `3aa54bb2c3860482e66929c92e7304f605b7462f`, no staging Railway oficial.
+  API e worker terminaram `SUCCESS/RUNNING`, health/readiness=200 e paridade
+  de source comprovada por atestado sanitizado.
+- O operador reservado de plataforma foi provisionado, usado para o apply,
+  revogado e teve a allowlist removida. QA-A/B foram provisionados, testados,
+  revogados, reutilizados sem duplicidade e revogados novamente. Bundle de
+  credenciais, sessões, tokens e leases terminaram ausentes/zerados; vendas e
+  histórico sintéticos permaneceram preservados.
+- Smoke autenticado por proposta e `MANUAL_CLOSE` zero, idempotência/replay,
+  reopen/revisão, cross-tenant, RBAC, snapshot e soak limitado passaram. O
+  relatório sanitizado é `docs/STAGING_SECRET_INCIDENT_AND_QA_OPERATOR_REPORT_2026-08-31.md`.
+- Produção não foi escrita nem redeployada nesta retomada:
+  `PRODUCTION_CHANGED=false`, `REAL_PROVIDER_CONNECTIONS=0` e
+  `REAL_OUTBOUND=0`. Promoção de produção e QA visual de navegador são escopos
+  separados e não foram declarados por este checkpoint.
+- Revisão operacional final retornou `FINAL_STAGING_AUDIT=PASS`; revisão de
+  segurança retornou `PASS_AFTER_LEASE_RETEST` depois de a checagem sanitizada
+  confirmar `LEASE_FINAL=ABSENT`, zero leases distribuídos e zero bundles.
+
 ## Estado atual — auditoria do QA Production Harness V1 (2026-08-31)
 
 - O comando/decisão do bootstrap QA-only foi auditado antes da execução:
