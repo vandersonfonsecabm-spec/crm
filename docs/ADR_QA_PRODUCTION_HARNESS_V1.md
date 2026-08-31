@@ -115,10 +115,20 @@ temporariamente em cada tenant e é desabilitada no revoke, com auditoria.
 - backend/scripts/qa-prod-revoke.cjs: revogação, desativação e limpeza.
 - backend/scripts/qa-staging-platform-operator.cjs: status/apply/revoke
   interno do operador de staging, sem rota HTTP.
+- backend/scripts/qa-staging-env-sanitized.cjs: diagnóstico de presença e
+  fingerprint sem dump bruto de variáveis.
 - docs/QA_PRODUCTION_HARNESS_RUNBOOK_V1.md: schema do atestado, ordem de
   prewrite, recuperação de sinal e operação dos comandos.
 
 Nenhuma dessas ferramentas é montada como rota Express pública.
+
+## Diagnóstico de configuração
+
+`RAW_ENV_DUMP=FORBIDDEN` é uma regra permanente. Verificadores e comandos de
+preflight só podem informar presença, classificação, contagem e fingerprint
+SHA-256 sanitizado. Nunca devem imprimir valores de variáveis, URLs completas,
+senhas, tokens ou chaves. O relatório de `PLATFORM_ADMIN_EMAILS` informa apenas
+`present`, `count` e `sha256`.
 
 ## Operador de plataforma do staging
 

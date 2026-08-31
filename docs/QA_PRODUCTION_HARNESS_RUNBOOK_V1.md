@@ -55,6 +55,20 @@ O estado pós-revoke deve ser `REVOKED`, com sessões/tokens inexistentes ou
 revogados. O endereço permanece reservado para reuso futuro, mas não fica em
 `PLATFORM_ADMIN_EMAILS` fora da janela controlada.
 
+## Diagnóstico sanitizado de variáveis
+
+É proibido usar listagens que exibam o valor das variáveis (`RAW_ENV_DUMP=FORBIDDEN`).
+Dentro do serviço, use apenas o verificador versionado:
+
+```cmd
+node backend\\scripts\\qa-staging-env-sanitized.cjs
+```
+
+A saída contém somente presença, classe e SHA-256; não contém URL, senha,
+token, cookie ou chave. Para a allowlist da plataforma, a saída é limitada a
+`present`, `count` e `sha256`. O mesmo formato deve ser usado em qualquer
+wrapper externo que consulte o control plane.
+
 ## Atestado externo
 
 O arquivo JSON é criado por um verificador separado do bootstrap. O campo

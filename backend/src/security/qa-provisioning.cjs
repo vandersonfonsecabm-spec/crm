@@ -16,6 +16,7 @@ const QA_HARNESS_SOURCE_FILES = Object.freeze([
   "scripts/qa-prod-status.cjs",
   "scripts/qa-prod-revoke.cjs",
   "scripts/qa-staging-platform-operator.cjs",
+  "scripts/qa-staging-env-sanitized.cjs",
   "src/user-security.js",
 ]);
 
