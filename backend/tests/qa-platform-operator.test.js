@@ -55,6 +55,8 @@ test.after(async () => {
 test("staging platform operator is isolated, idempotent and revocable", async () => {
   const absent = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead: RELEASE, runId: "qa-platform-status-0001", ...options });
   assert.equal(absent.status, "ABSENT_SAFE");
+  assert.equal(absent.allowlist.containsOperator, true);
+  assert.equal(absent.allowlist.size, 1);
 
   const passwordHash = await bcrypt.hash("synthetic-password-never-reported", 4);
   const applied = await provisionStagingPlatformOperator({

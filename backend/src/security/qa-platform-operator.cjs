@@ -121,16 +121,16 @@ async function operatorSessionState(client, empresaId, operatorId) {
 async function inspectStagingPlatformOperator({ prisma, env = process.env, expectedReleaseHead, runId, attestation, requireAttestation = true } = {}) {
   const targetInfo = assertOperatorTarget({ env, expectedReleaseHead, runId, attestation, requireAttestation });
   assertOperatorEmailNotReserved(env);
-  const tenant = await prisma.empresa.findUnique({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug }, select: { id: true, nome: true, slug: true, ativo: true } });
-  if (!tenant) return { status: "ABSENT_SAFE", target: targetInfo.target, tenant: null, operator: null, providerIsolation: null, businessInventory: null, allowlist: { exact: false, containsOperator: false, size: 0 }, credentialsInOutput: 0 };
-  const users = await prisma.usuario.findMany({ where: { empresaId: tenant.id }, select: { id: true, empresaId: true, nome: true, email: true, papel: true, ativo: true }, orderBy: { id: "asc" } });
   const operatorEmail = normalizeEmail(QA_PLATFORM_OPERATOR.email);
+  const allowlist = parsePlatformAdminEmails(env.PLATFORM_ADMIN_EMAILS);
+  const tenant = await prisma.empresa.findUnique({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug }, select: { id: true, nome: true, slug: true, ativo: true } });
+  if (!tenant) return { status: "ABSENT_SAFE", target: targetInfo.target, tenant: null, operator: null, providerIsolation: null, businessInventory: null, allowlist: { exact: false, containsOperator: allowlist.has(operatorEmail), size: allowlist.size }, credentialsInOutput: 0 };
+  const users = await prisma.usuario.findMany({ where: { empresaId: tenant.id }, select: { id: true, empresaId: true, nome: true, email: true, papel: true, ativo: true }, orderBy: { id: "asc" } });
   const operator = users.find((user) => normalizeEmail(user.email) === operatorEmail) || null;
   const globalEmailCount = await prisma.usuario.count({ where: { email: operatorEmail } });
   const providerIsolation = await providerIsolationState(prisma, tenant.id);
   const businessInventory = await strictBusinessInventory(prisma, tenant.id);
   const sessions = operator ? await operatorSessionState(prisma, tenant.id, operator.id) : null;
-  const allowlist = parsePlatformAdminEmails(env.PLATFORM_ADMIN_EMAILS);
   const exactUserSet = users.length === 1 && operator && operator.nome === QA_PLATFORM_OPERATOR.name && operator.papel === QA_PLATFORM_OPERATOR.role;
   const allowlistExact = allowlist.size === 1 && allowlist.has(operatorEmail);
   const ready = tenant.ativo === true && exactUserSet && operator.ativo === true && globalEmailCount === 1 && allowlistExact && providerIsolationSafe(providerIsolation) && businessInventorySafe(businessInventory);
