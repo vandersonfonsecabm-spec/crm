@@ -11,6 +11,7 @@ test("sanitized staging environment report never serializes raw secrets", () => 
     POSTGRES_DATABASE_URL: "postgresql://user:secret-db-password@host/db",
     JWT_SECRET: "jwt-secret-never-output",
     INTEGRATION_ENCRYPTION_KEY: "integration-key-never-output",
+    INTEGRATION_ENCRYPTION_KEY_PREVIOUS: "previous-key-never-output",
     STORE1_SOAK_PROBE_TOKEN: "probe-token-never-output",
     PLATFORM_ADMIN_EMAILS: "qa-platform-operator-staging@example.invalid",
   };
@@ -23,6 +24,7 @@ test("sanitized staging environment report never serializes raw secrets", () => 
   assert.equal(serialized.includes("secret-db-password"), false);
   assert.equal(serialized.includes("jwt-secret-never-output"), false);
   assert.equal(serialized.includes("integration-key-never-output"), false);
+  assert.equal(serialized.includes("previous-key-never-output"), false);
   assert.equal(serialized.includes("probe-token-never-output"), false);
 });
 
