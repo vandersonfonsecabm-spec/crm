@@ -240,3 +240,23 @@ Este documento é a autoridade canônica desta rodada. Ele não declara que a
 Venda Canônica QA foi executada em produção; declara que o caminho interno
 necessário para fazê-lo com segurança foi implementado, auditado e provado em
 sandboxes SQLite/PostgreSQL descartáveis.
+
+## 10. Entrega externa solicitada
+
+Foi tentado o envio em uma única mensagem para a conversa fixada `Saas adm` no
+Chrome. A aba foi localizada, mas a tomada de controle expirou repetidamente.
+O diagnóstico oficial do navegador foi:
+
+```text
+CHROME_RUNNING=true
+EXTENSION_INSTALLED=true
+EXTENSION_ENABLED=true
+NATIVE_HOST_MANIFEST_PRESENT=true
+NATIVE_HOST_REGISTRY_KEY_PRESENT=false
+PINNED_CHAT_MESSAGE_SENT=false
+```
+
+Nenhuma mensagem parcial ou alternativa foi enviada. A correção necessária é
+reinstalar o Browser plugin em **Settings → Computer use** para recriar o host
+nativo; depois disso, este mesmo relatório pode ser enviado sem alterar seu
+conteúdo.

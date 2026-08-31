@@ -1,6 +1,6 @@
 {
   "report": "docs/QA_PRODUCTION_HARNESS_AUDIT_2026-08-31.md",
-  "reportSha256": "505aa69cf10a15bc268c2b4e49377b10a81312a6ff403a114cbe810f0657dbd2",
+  "reportSha256": "24c8978f8457c01d57ae1ad98bd266b16620b49b79fc241d6d665adc65343165",
   "date": "2026-08-31",
   "missionCommandAudit": "PASS",
   "executorActual": "CODEX_ROOT",
@@ -34,6 +34,17 @@
   "userSecuritySandbox": "PASS",
   "reviewFindings": "ALL_KNOWN_FINDINGS_FIXED_AND_RETESTED",
   "freshFinalReviewer": "NOT_RETURNED_BY_TOOL",
+  "externalDelivery": {
+    "destination": "Saas adm",
+    "browser": "Chrome",
+    "chromeRunning": true,
+    "extensionInstalled": true,
+    "extensionEnabled": true,
+    "nativeHostManifestPresent": true,
+    "nativeHostRegistryKeyPresent": false,
+    "messageSent": false,
+    "failureClass": "BROWSER_CONTROL_FAILURE_NATIVE_HOST_REGISTRY_MISSING"
+  },
   "openCritical": 0,
   "openHigh": 0,
   "openMedium": 0,
