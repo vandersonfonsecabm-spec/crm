@@ -105,7 +105,8 @@ function validateCredentialBundle(fileName, runId, expectedTarget = "") {
 function listCredentialBundles(expectedTarget) {
   const matches = [];
   for (const entry of fs.readdirSync(path.resolve(os.tmpdir()), { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.isSymbolicLink() || !entry.name.toLowerCase().startsWith("qa-")) continue;
+    if (entry.name.toLowerCase().startsWith("qa-") && entry.isSymbolicLink()) throw new Error("QA_CREDENTIAL_PATH_REPARSE_POINT");
+    if (!entry.isDirectory() || !entry.name.toLowerCase().startsWith("qa-")) continue;
     const candidate = path.join(os.tmpdir(), entry.name, "credentials.json");
     const manifestPath = path.join(os.tmpdir(), entry.name, "manifest.json");
     if (!fs.existsSync(candidate) && !fs.existsSync(manifestPath)) continue;
@@ -116,7 +117,8 @@ function listCredentialBundles(expectedTarget) {
     try {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
       if (!["production", "staging"].includes(manifest.target)) throw new Error("QA_CREDENTIAL_BUNDLE_INVALID");
-      if (manifest.target === expectedTarget) matches.push(validateCredentialBundle(candidate, manifest.runId, expectedTarget));
+      const validated = validateCredentialBundle(candidate, manifest.runId, manifest.target);
+      if (manifest.target === expectedTarget) matches.push(validated);
     } catch (error) {
       if (/QA_CREDENTIAL_/.test(String(error.message || ""))) throw error;
       throw new Error("QA_CREDENTIAL_BUNDLE_MANIFEST_INVALID");

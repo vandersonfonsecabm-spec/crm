@@ -69,6 +69,7 @@ function assertCredentialPath(filePath, { allowExisting = false } = {}) {
   const tempRoot = path.resolve(os.tmpdir());
   if (!resolved.startsWith(tempRoot + path.sep)) throw new Error("QA_CREDENTIAL_FILE_MUST_BE_IN_TEMP");
   if (resolved.toLowerCase().startsWith(REPOSITORY_ROOT.toLowerCase() + path.sep)) throw new Error("QA_CREDENTIAL_FILE_MUST_BE_OUTSIDE_REPOSITORY");
+  if (path.dirname(path.dirname(resolved)) !== tempRoot) throw new Error("QA_CREDENTIAL_FILE_MUST_BE_DIRECT_TEMP_CHILD");
   const directoryName = path.basename(path.dirname(resolved)).toLowerCase();
   if (!directoryName.startsWith("qa-") || path.basename(resolved).toLowerCase() !== "credentials.json") throw new Error("QA_CREDENTIAL_FILE_NAME_INVALID");
   assertNoTempPathReparsePoint(path.dirname(resolved));

@@ -417,6 +417,7 @@ test("credential gate accepts only bcrypt hashes and no generated credential is 
 test("credential bundle path produced by bootstrap is accepted by revoke", () => {
   const generated = defaultCredentialsPath("qa-path-test-0001");
   assert.equal(assertCredentialPath(generated), generated);
+  assert.throws(() => assertCredentialPath(path.join(os.tmpdir(), "nested", "qa-path-test-0001-credentials", "credentials.json")), /DIRECT_TEMP_CHILD/);
   const parsed = parseRevokeArgs(["--confirm=" + REVOKE_CONFIRMATION, "--target=production", "--credentials-file=" + generated, "--run-id=qa-path-test-0001"]);
   assert.equal(parsed.credentialsFile, generated);
 });

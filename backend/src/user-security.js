@@ -337,8 +337,11 @@ function createUserSecurity({
     const expiresAt = addMilliseconds(new Date(), inviteHours * 60 * 60 * 1000);
     try {
       const invite = await prisma.$transaction(async (tx) => {
-        const tenant = await tx.empresa.findUnique({ where: { id: empresaId }, select: { ativo: true } });
-        if (!tenant?.ativo) throw securityError("TENANT_INACTIVE", 409);
+        // CAS de escrita na linha Empresa funciona como fence compartilhada
+        // com a quarentena QA/revoke: a criação só prossegue se ainda houver
+        // um tenant ativo, e o update adquire o lock da linha antes do convite.
+        const activeTenant = await tx.empresa.updateMany({ where: { id: empresaId, ativo: true }, data: { ativo: true } });
+        if (activeTenant.count !== 1) throw securityError("TENANT_INACTIVE", 409);
         const existingInvite = await tx.conviteUsuario.findFirst({ where: { empresaId, emailNormalizado: email } });
         const pending = existingInvite && existingInvite.aceitoEm === null && existingInvite.revogadoEm === null
           ? existingInvite
@@ -746,8 +749,8 @@ function createUserSecurity({
     let invite;
     try {
       invite = await prisma.$transaction(async (tx) => {
-      const tenant = await tx.empresa.findUnique({ where: { id: req.auth.empresaId }, select: { ativo: true } });
-      if (!tenant?.ativo) throw securityError("TENANT_INACTIVE", 409);
+      const activeTenant = await tx.empresa.updateMany({ where: { id: req.auth.empresaId, ativo: true }, data: { ativo: true } });
+      if (activeTenant.count !== 1) throw securityError("TENANT_INACTIVE", 409);
       const changed = await tx.conviteUsuario.updateMany({ where: { id, empresaId: req.auth.empresaId, aceitoEm: null, revogadoEm: null, deliveryRevision: existing.deliveryRevision, tokenHash: existing.tokenHash }, data: { convidadoPorId: req.auth.usuarioId, tokenHash: hashToken(rawToken), expiraEm, deliveryStatus: "PENDING" } });
       if (changed.count !== 1) throw securityError("INVITE_DELIVERY_CONFLICT", 409);
       const updated = await tx.conviteUsuario.findFirst({ where: { id, empresaId: req.auth.empresaId } });
