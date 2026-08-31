@@ -4,21 +4,23 @@ const { PrismaClient } = require("@prisma/client");
 const { inspectQaState } = require("../src/security/qa-provisioning.cjs");
 
 function parseArgs(argv) {
-  const options = { expectedReleaseHead: "", target: "", attestationFile: "" };
+  const options = { expectedReleaseHead: "", target: "", attestationFile: "", runId: "" };
   for (const value of argv) {
     if (value.startsWith("--expected-release=")) options.expectedReleaseHead = value.slice("--expected-release=".length);
     else if (value.startsWith("--target=")) options.target = value.slice("--target=".length);
     else if (value.startsWith("--attestation-file=")) options.attestationFile = value.slice("--attestation-file=".length);
+    else if (value.startsWith("--run-id=")) options.runId = value.slice("--run-id=".length);
     else throw new Error("QA_PROD_ARGUMENT_INVALID");
   }
   if (options.target && options.target !== "production" && options.target !== "staging") throw new Error("QA_PROD_TARGET_INVALID");
   if (!options.target) throw new Error("QA_PROD_TARGET_EXPLICIT_REQUIRED");
+  if (!/^qa-[a-z0-9][a-z0-9-]{7,119}$/.test(options.runId)) throw new Error("QA_PROD_RUN_ID_REQUIRED");
   return options;
 }
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const env = { ...process.env, QA_PROD_TARGET_ENV: options.target };
+  const env = { ...process.env, QA_PROD_TARGET_ENV: options.target, QA_PROD_RUN_ID: options.runId };
   if (options.attestationFile) env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = require("node:path").resolve(options.attestationFile);
   const prisma = new PrismaClient();
   try {

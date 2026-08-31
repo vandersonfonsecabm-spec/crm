@@ -84,8 +84,8 @@ node backend\\scripts\\qa-prod-revoke.cjs --emergency --target=production --run-
 ## Comandos (somente após preflight)
 
 ```text
-node backend/scripts/qa-prod-status.cjs --target=staging --expected-release=<sha> --attestation-file=<arquivo>
-node backend/scripts/qa-prod-bootstrap.cjs --dry-run --target=staging --expected-release=<sha> --attestation-file=<arquivo>
+node backend/scripts/qa-prod-status.cjs --target=staging --expected-release=<sha> --run-id=<qa-run-id> --attestation-file=<arquivo>
+node backend/scripts/qa-prod-bootstrap.cjs --dry-run --target=staging --expected-release=<sha> --run-id=<qa-run-id> --attestation-file=<arquivo>
 node backend/scripts/qa-prod-bootstrap.cjs --apply --target=staging --expected-release=<sha> --run-id=<qa-run-id> --operator-user-id=<id> --attestation-file=<arquivo> --confirm=QA-PROD-CANONICAL-V1-APPLY
 node backend/scripts/qa-prod-revoke.cjs --target=staging --expected-release=<sha> --run-id=<qa-run-id> --operator-user-id=<id> --attestation-file=<arquivo> --credentials-file=<temp>/credentials.json --confirm=QA-PROD-CANONICAL-V1-REVOKE
 ```

@@ -46,7 +46,7 @@ function parseArgs(argv) {
   if (!options.mode || (options.mode === "apply" && options.confirmation !== APPLY_CONFIRMATION)) throw new Error("QA_PROD_APPLY_CONFIRMATION_REQUIRED");
   if (options.target && options.target !== "production" && options.target !== "staging") throw new Error("QA_PROD_TARGET_INVALID");
   if (!options.target) throw new Error("QA_PROD_TARGET_EXPLICIT_REQUIRED");
-  options.runId = options.runId || generatedRunId();
+  if (!options.runId) throw new Error("QA_PROD_RUN_ID_REQUIRED");
   if (!/^qa-[a-z0-9][a-z0-9-]{7,119}$/.test(options.runId)) throw new Error("QA_PROD_RUN_ID_INVALID");
   return options;
 }

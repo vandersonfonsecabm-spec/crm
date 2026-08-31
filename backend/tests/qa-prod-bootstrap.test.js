@@ -8,7 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const bcrypt = require("bcryptjs");
-const { assertCredentialPath, defaultCredentialsPath } = require("../scripts/qa-prod-bootstrap.cjs");
+const { assertCredentialPath, defaultCredentialsPath, parseArgs: parseBootstrapArgs } = require("../scripts/qa-prod-bootstrap.cjs");
 const { listCredentialBundles, parseArgs: parseRevokeArgs, validateCredentialBundle } = require("../scripts/qa-prod-revoke.cjs");
 const {
   APPLY_CONFIRMATION,
@@ -233,10 +233,17 @@ test("bootstrap dry-run requires external attestation and source parity", () => 
     path.join(__dirname, "../scripts/qa-prod-bootstrap.cjs"),
     "--dry-run",
     "--target=staging",
+    "--run-id=qa-dry-run-attestation-0001",
     "--expected-release=" + RELEASE,
   ], { env: stagingEnv, encoding: "utf8", windowsHide: true });
   assert.notEqual(result.status, 0);
   assert.match(String(result.stdout) + String(result.stderr), /QA_PROD_ATTESTATION_REQUIRED/);
+});
+
+test("bootstrap requires an explicit run id when attestation is mandatory", () => {
+  assert.throws(() => parseBootstrapArgs(["--dry-run", "--target=staging"]), /QA_PROD_RUN_ID_REQUIRED/);
+  const parsed = parseBootstrapArgs(["--dry-run", "--target=staging", "--run-id=qa-run-explicit-0001"]);
+  assert.equal(parsed.runId, "qa-run-explicit-0001");
 });
 
 test("external attestation binds effective database, worker and harness source", () => {
