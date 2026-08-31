@@ -1,0 +1,216 @@
+{
+  "mission": "CANONICAL_SALE_V1_PRODUCTION_PROMOTION",
+  "date": "2026-08-31",
+  "execution": {
+    "executorActual": "CODEX_ROOT",
+    "supervisor": "SOL",
+    "modelSelectionPrecondition": "SATISFIED",
+    "runtimeModelAttestation": "NOT_REQUIRED",
+    "modelIdentityGate": "NOT_APPLICABLE",
+    "executionMode": "USER_SELECTED",
+    "modelProvenance": "USER_CONFIRMED_NOT_RUNTIME_ATTESTED"
+  },
+  "release": {
+    "baseline": "79eed4f",
+    "releaseArtifactHead": "2da896aac84dd683e844b266331716e9600e6357",
+    "releaseGitTree": "5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce",
+    "remoteBranch": "feature/canonical-sale-v1",
+    "remoteBranchSha": "49a56e9b06ff027e488885b8663ca2ffa6aeed98",
+    "harnessFixCommit": "3525651",
+    "sourceManifestVersion": "backend-runtime-v3-lf",
+    "sourceManifestSha256": "bef4bab2726db40731ac1473cad95ae623e12cc656c189bb2cd1985a9b84f8d8",
+    "protectedDevDbSha256": "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533",
+    "postArtifactChanges": "DOCUMENTATION_AND_EVIDENCE_ONLY"
+  },
+  "targets": {
+    "railway": {
+      "projectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
+      "environmentId": "e18f76b1-e38f-468e-91fe-1eff6db9a5f8",
+      "environmentName": "production",
+      "apiServiceId": "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92",
+      "workerServiceId": "4eef3b96-e33f-42ea-9fb8-86c17b077ab8",
+      "databaseServiceId": "e9d8a6b8-507b-45fb-92a8-3ab016f865a2"
+    },
+    "vercel": {
+      "projectId": "prj_xAWKcwZGDQsT3pEZLUZ5YWf6lDFq",
+      "teamId": "team_btvNofRKZUPIdjm7YZb2DGuL",
+      "productionAlias": "crm-murex-six-83.vercel.app",
+      "deploymentId": "dpl_6ndNu6C75CujS4W3g68wwoPskFoc"
+    },
+    "stagingDistinct": true,
+    "wrongTargetRisk": 0
+  },
+  "backup": {
+    "source": "official production PostgreSQL via private Railway SSH Unix socket",
+    "serviceId": "e9d8a6b8-507b-45fb-92a8-3ab016f865a2",
+    "format": "custom",
+    "bytes": 23088049,
+    "sha256": "05b0576f61dbb8cbf57f4a01845d6f03d228c61e9b181757593a05b96080acae",
+    "archiveCreatedAt": "2026-08-31T04:53:00-03:00",
+    "transport": "private_unix_socket",
+    "credentialsChanged": false
+  },
+  "restoreDrill": {
+    "environment": "WSL disposable PostgreSQL cluster",
+    "serverVersion": "18.3(Ubuntu18.3-1)",
+    "listEntries": 1201,
+    "preMigrationCount": 17,
+    "preMigrationFailedCount": 0,
+    "preMigrationLatest": "20260825170000_add_commercial_proposal_catalog_items",
+    "canonicalTablesBeforeMigration": 0,
+    "cleanup": "PASS"
+  },
+  "migration": {
+    "owner": "manual_api_ssh",
+    "migrationCountAfter": 20,
+    "failedCountAfter": 0,
+    "latest": "20260830133500_harden_canonical_sale_delete_guard",
+    "activeMigrationRunners": 0,
+    "canonicalTables": 4,
+    "canonicalRowsAtCheck": {
+      "VendaCanonica": 0,
+      "ItemVendaCanonica": 0,
+      "HistoricoVendaCanonica": 0,
+      "NegocioContratoVenda": 0
+    },
+    "canonicalTriggers": 14,
+    "canonicalIndexes": 10,
+    "migrationSqlSha256": {
+      "20260827200000_add_store1_provider_readiness": "693dbf46d41e84b78db594a4d82ba93678e94886822242b46fbc1d435a1f14b9",
+      "20260828130000_add_canonical_sale_v1": "1b30eaf751675668bf953cb3722fedbff7d1e785f39abfff493093a265bfe4de",
+      "20260830133500_harden_canonical_sale_delete_guard": "395bea80238deafcd20d7a26e4737619a3be6033a539905848a5d55745ae3275"
+    }
+  },
+  "deployments": {
+    "api": {
+      "deploymentId": "e865888e-2014-4885-b533-d1ab698b43ce",
+      "status": "SUCCESS",
+      "imageDigest": "sha256:d9d9eb5ee1b872f7129ea52a67afbbc73b57026f3a3c3163bed3c98d3fe6dcec",
+      "rootDirectory": "/backend",
+      "startCommand": "npm run start:production",
+      "sourceUpload": "detached release artifact 2da896a",
+      "runtimeValidation": "PASS"
+    },
+    "worker": {
+      "deploymentId": "74ef572c-3f5a-4e7c-8137-2952fcb7e579",
+      "status": "SUCCESS",
+      "imageDigest": "sha256:eaec8ddcaf763bb2bbd56e1a970182a8bd9fc5308f855a5b12e38b62b86cd1b0",
+      "rootDirectory": "/",
+      "startCommand": "npm --prefix backend run worker:automations",
+      "sourceUpload": "detached release artifact 2da896a"
+    },
+    "vercel": {
+      "deploymentId": "dpl_6ndNu6C75CujS4W3g68wwoPskFoc",
+      "state": "READY",
+      "target": "production",
+      "aliases": [
+        "crm-murex-six-83.vercel.app",
+        "crm-vand-s-projects.vercel.app"
+      ],
+      "metaReleaseHead": "2da896aac84dd683e844b266331716e9600e6357",
+      "metaGitTree": "5fcb51262f2ca9d68cb6403c41fcbc66cbb40fce",
+      "deploymentConfig": "static production-equivalent adapter; no versioned source change"
+    }
+  },
+  "runtimeParity": {
+    "sourceRuntimeParity": "PASS",
+    "stableAliasParity": "PASS",
+    "productionRuntimeFingerprint": "NOT_EXPOSED_BY_CONTRACT",
+    "healthHttp": 200,
+    "readyHttp": 200,
+    "frontendAliasHttp": 200,
+    "frontendSecurityHeaders": "PASS",
+    "productionMaintenanceFlag": false
+  },
+  "smoke": {
+    "readOnlyHealthAndNavigation": "PASS",
+    "invalidLoginRequest": "401_AUTH_INVALID_CREDENTIALS",
+    "authenticatedWriteSmoke": "DEFERRED_NO_SAFE_QA_TENANT",
+    "productionCanonicalRowsCreatedByMission": 0,
+    "realCustomersTouched": 0,
+    "stagingBehaviorEvidenceReused": true
+  },
+  "observation": {
+    "startedAt": "2026-08-31T05:24:33.945Z",
+    "endedAt": "2026-08-31T05:35:00.156Z",
+    "durationSeconds": 626,
+    "samples": 21,
+    "failures": 0,
+    "http5xxSamples": 0,
+    "railwayApiErrorLogs": 0,
+    "railwayHttp5xxLogs": 0,
+    "vercelRuntimeErrors": 0,
+    "workerInternetEgress": 0,
+    "apiProductProviderEgress": 0,
+    "apiStartupPrismaCheckpointTlsConnections": 2
+  },
+  "security": {
+    "unauthenticatedSalesEndpoint": "401",
+    "mutatingRequestsObservedAfterPromotion": {
+      "POST_auth_login_rejected": 1,
+      "PUT": 0,
+      "PATCH": 0,
+      "DELETE": 0
+    },
+    "crossTenantLiveWriteTest": "DEFERRED_NO_SAFE_QA_IDENTITY",
+    "snapshotMutationLiveTest": "DEFERRED_NO_SAFE_QA_IDENTITY",
+    "structuralAndStagingBehavior": "PASS",
+    "productProviderConnections": 0,
+    "productProviderCredentialsUsed": 0,
+    "productOutbound": 0,
+    "networkLiteralZero": false
+  },
+  "review": {
+    "independentReviewer": "production_adversarial_review",
+    "verdict": "SHIP",
+    "blockingFindings": 0,
+    "nonBlockingGaps": [
+      "No authenticated production write smoke without a safe QA tenant",
+      "Production runtime fingerprint endpoint is intentionally unavailable",
+      "Long soak was on an earlier ancestor with causal supplements on final release",
+      "Railway has other PostgreSQL services; future operations must pin official service ID"
+    ]
+  },
+  "cleanup": {
+    "temporaryRestoreCluster": "REMOVED",
+    "temporaryScripts": "REMOVED",
+    "deploymentWorktrees": "REMOVED",
+    "productionFixturesCreated": 0,
+    "backupRetainedOutsideRepository": true,
+    "secretsIncludedInEvidence": 0
+  },
+  "gates": {
+    "MISSION_COMMAND_AUDIT": "PASS",
+    "PRODUCTION_TARGET_VERIFIED": "PASS",
+    "CONTROLLED_PUSH": "PASS_PREEXISTING_BRANCH_VERIFIED",
+    "PRODUCTION_BACKUP": "PASS",
+    "PRODUCTION_RESTORE_DRILL": "PASS",
+    "FORWARD_FIX_PLAN": "PASS",
+    "PRODUCTION_MIGRATION": "PASS",
+    "PRODUCTION_SCHEMA_PARITY": "PASS",
+    "PRODUCTION_BACKEND_RUNTIME": "PASS",
+    "PRODUCTION_FRONTEND_RUNTIME": "PASS",
+    "SOURCE_RUNTIME_PARITY": "PASS",
+    "PRODUCTION_WRITE_SMOKE": "DEFERRED_NO_SAFE_QA_TENANT",
+    "PRODUCTION_SECURITY_LIVE_NEGATIVE": "DEFERRED_NO_SAFE_QA_IDENTITY",
+    "PRODUCTION_OBSERVATION": "PASS",
+    "PRODUCTION_REVIEW": "PASS",
+    "OPEN_CRITICAL": 0,
+    "OPEN_HIGH": 0,
+    "OPEN_MEDIUM": 0,
+    "PENDING_INTERNAL": 0,
+    "UNTESTED_INTERNAL": 0,
+    "FALSE_PASS": 0,
+    "FINAL_PRODUCTION_ADVERSARIAL_VERDICT": "SHIP",
+    "FINAL_SOL_RECONCILIATION": "PASS"
+  },
+  "final": {
+    "canonicalSaleV1ProductionPromotion": "COMPLETE",
+    "productionChanged": true,
+    "productionReleaseHead": "2da896aac84dd683e844b266331716e9600e6357",
+    "readyForProduction": "YES",
+    "realProviderConnections": 0,
+    "realProviderCredentialsUsed": 0,
+    "realOutbound": 0
+  }
+}
