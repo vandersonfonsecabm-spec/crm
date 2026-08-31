@@ -1,4 +1,45 @@
 # Estado atual do CRM
+## Estado atual — auditoria do QA Production Harness V1 (2026-08-31)
+
+- O comando/decisão do bootstrap QA-only foi auditado antes da execução:
+  `MISSION_COMMAND_AUDIT=PASS`. O escopo ficou restrito a implementação,
+  testes e auditoria local; nenhum tenant QA, usuário QA, migration, deploy,
+  push, provider ou outbound foi criado/executado.
+- Candidato do harness congelado em `acbe8fb655c6bd459a8cf75e3271c58838da141c`,
+  Git tree `09cf0332095d1103ad971d7b224386843a55c496`, branch
+  `feature/canonical-sale-v1`. O manifesto dos cinco arquivos causais é
+  `24e16f6b0dd18b99f94f3033f740c8beceb7283d4e3a0c8c62f04940537a13a2`.
+- Focos finais passaram: `qa-prod-bootstrap.test.js` + runner de comandos
+  `27/27`; sintaxe e `git diff --check` passaram; a regressão backend isolada
+  completa terminou com exit 0 e cleanup concluído. O PostgreSQL descartável
+  WSL v9 passou a suíte completa (25 harness tests), com manifesto de suíte
+  `190d27f647ebb2cdcfe15471776891bc20679e1ff6637fc4eaaa25e9e4559a9e`, log
+  sanitizado em `%TEMP%\\crm-postgres-real\\20260831190731800-8304-8b68e93f43cb.log`
+  e SHA de log `3b423030acbc1928ad74120e5d4a7c68b2200ea2bcb99dc71527b3125aed5c06`.
+- Findings de segurança/operacionais foram corrigidos e retestados: target e
+  source parity atestados externamente; lease antes da leitura; confirmação
+  emergencial; ciphertext/payload/lease provider limpos; bundles restritos a
+  filho direto do TEMP com varredura de órfãos/junctions; nome lógico do banco
+  vinculado à URL; convite/reenvio usam CAS de `Empresa.ativo=true`.
+- O executor real desta rodada foi `CODEX_ROOT`. A seleção de modelo foi
+  registrada somente como pré-condição confirmada pelo usuário:
+  `MODEL_SELECTION_PRECONDITION=SATISFIED`,
+  `RUNTIME_MODEL_ATTESTATION=NOT_REQUIRED`,
+  `MODEL_IDENTITY_GATE=NOT_APPLICABLE`; não há alegação de proveniência
+  runtime Luna/NuAuto.
+- Estado de produção permanece intocado nesta rodada:
+  `PRODUCTION_CHANGED=false`, `REAL_CUSTOMERS_TOUCHED=0`,
+  `GLOBAL_BLING_CHANGED=false`, `REAL_PROVIDER_CONNECTIONS_CREATED=0`,
+  `REAL_OUTBOUND=0`. A criação real dos tenants/identidades QA exige uma
+  missão posterior com atestado externo fresco, backup/restore e autorização
+  de escrita no alvo; não é PASS desta auditoria local.
+- Relatório canônico desta rodada: `docs/QA_PRODUCTION_HARNESS_AUDIT_2026-08-31.md`.
+  O índice sanitizado de evidências está em
+  `docs/evidence/QA_PRODUCTION_HARNESS_AUDIT_2026-08-31.json`. Reviewers
+  independentes encontraram e tiveram seus findings corrigidos/retestados; uma
+  nova instância final solicitada sobre o SHA congelado não retornou pela
+  ferramenta e permanece explicitamente `NOT_RETURNED`, sem falso PASS.
+
 ## Estado atual — produção Venda Canônica V1 e pré-bootstrap QA (2026-08-31)
 
 - A promoção de produção foi concluída no release funcional
