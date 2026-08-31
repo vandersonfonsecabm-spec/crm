@@ -20,6 +20,41 @@ reais.
 8. Confirmar estado `REVOKED`, arquivo/manifesto removidos e zero provider,
    outbox, webhook pendente, convite, reset, automação ou lease ativo.
 
+## Gate do operador de plataforma no staging
+
+O bootstrap QA não usa um ADMIN comum. Primeiro publique o candidato e gere
+um atestado externo fresco para o staging. Depois execute o operador reservado
+em modo somente leitura:
+
+```cmd
+node backend\\scripts\\qa-staging-platform-operator.cjs --status --expected-release=<sha> --run-id=<qa-platform-run-id> --attestation-file=<arquivo>
+```
+
+O estado inicial esperado é `ABSENT_SAFE`. O apply exige confirmação literal,
+gera o hash bcrypt em memória e nunca imprime a senha:
+
+```cmd
+node backend\\scripts\\qa-staging-platform-operator.cjs --apply --expected-release=<sha> --run-id=<qa-platform-run-id> --attestation-file=<arquivo> --confirm=QA-PLATFORM-STAGING-OPERATOR-APPLY
+```
+
+Configure `PLATFORM_ADMIN_EMAILS` exclusivamente no ambiente de staging com
+`qa-platform-operator-staging@example.invalid`, faça o redeploy controlado da
+API para reler a variável e repita `--status`. O gate só passa quando retornar
+`READY`, com usuário ativo, e-mail globalmente único, allowlist exata e zero
+dados comerciais/providers no tenant reservado. Qualquer outra identidade na
+allowlist, colisão de slug/e-mail ou divergência de target é hard stop.
+
+Ao final da janela QA, revogue o operador; a operação é idempotente e preserva
+auditoria:
+
+```cmd
+node backend\\scripts\\qa-staging-platform-operator.cjs --revoke --expected-release=<sha> --run-id=<qa-platform-run-id> --attestation-file=<arquivo> --confirm=QA-PLATFORM-STAGING-OPERATOR-REVOKE
+```
+
+O estado pós-revoke deve ser `REVOKED`, com sessões/tokens inexistentes ou
+revogados. O endereço permanece reservado para reuso futuro, mas não fica em
+`PLATFORM_ADMIN_EMAILS` fora da janela controlada.
+
 ## Atestado externo
 
 O arquivo JSON é criado por um verificador separado do bootstrap. O campo

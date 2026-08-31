@@ -11,9 +11,11 @@ const QA_CANONICAL_FEATURE = "NEGOCIOS_KANBAN";
 const QA_DATABASE_LOCK_KEY = "qa-prod-bootstrap-v1-lock";
 const QA_HARNESS_SOURCE_FILES = Object.freeze([
   "src/security/qa-provisioning.cjs",
+  "src/security/qa-platform-operator.cjs",
   "scripts/qa-prod-bootstrap.cjs",
   "scripts/qa-prod-status.cjs",
   "scripts/qa-prod-revoke.cjs",
+  "scripts/qa-staging-platform-operator.cjs",
   "src/user-security.js",
 ]);
 

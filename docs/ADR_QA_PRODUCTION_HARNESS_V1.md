@@ -107,11 +107,36 @@ temporariamente em cada tenant e é desabilitada no revoke, com auditoria.
 
 - backend/src/security/qa-provisioning.cjs: regras, allowlist, transações e
   estado sanitizado.
+- backend/src/security/qa-platform-operator.cjs: identidade exclusiva e
+  tenant reservado do operador de plataforma de staging.
 - backend/scripts/qa-prod-status.cjs: preflight somente leitura.
 - backend/scripts/qa-prod-bootstrap.cjs: dry-run/apply e credenciais
   temporárias.
 - backend/scripts/qa-prod-revoke.cjs: revogação, desativação e limpeza.
+- backend/scripts/qa-staging-platform-operator.cjs: status/apply/revoke
+  interno do operador de staging, sem rota HTTP.
 - docs/QA_PRODUCTION_HARNESS_RUNBOOK_V1.md: schema do atestado, ordem de
   prewrite, recuperação de sinal e operação dos comandos.
 
 Nenhuma dessas ferramentas é montada como rota Express pública.
+
+## Operador de plataforma do staging
+
+O gate de autoridade não reutiliza um ADMIN de tenant. O staging possui um
+tenant reservado e sem dados comerciais, com slug
+`qa-platform-operator-staging`, e uma única identidade allowlisted:
+`qa-platform-operator-staging@example.invalid`. A identidade é criada e
+revogada somente por `qa-staging-platform-operator.cjs`, usando o hash oficial
+de senha dentro de uma transação serializable e lease PostgreSQL distribuído.
+
+Antes do apply do harness, `PLATFORM_ADMIN_EMAILS` deve conter exclusivamente
+esse endereço no ambiente de staging. A inspeção só retorna `READY` quando o
+tenant, o usuário ativo, a unicidade global do e-mail, a allowlist e o
+isolamento de providers estiverem coerentes. Produção nunca recebe essa
+allowlist nem esse tenant.
+
+O primeiro provisionamento registra a operação como bootstrap auto-auditado,
+pois ainda não existe um ator de plataforma no staging; a auditoria de
+segurança registra o `runId` e o próprio usuário criado como alvo. Reexecução
+em `READY` é no-op; estado divergente falha fechado. O revoke desativa a
+identidade e o tenant, preserva auditorias e não apaga dados canônicos.
