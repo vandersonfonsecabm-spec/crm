@@ -92,6 +92,7 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
     data: "data:text/plain,secret123",
     slashCallback: "/mailto:alice@example.com?body=code=secret123",
     slashData: "/data:text/plain,secret123",
+    hierarchicalUnknown: "https://provider.test/private/tenant-42?opaque=secret123",
   });
   assert.deepEqual(opaqueRedacted, {
     callback: "[redacted]",
@@ -100,6 +101,7 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
     data: "[redacted]",
     slashCallback: "/[redacted]",
     slashData: "/[redacted]",
+    hierarchicalUnknown: "https://provider.test/[redacted]",
   });
 });
 
@@ -124,6 +126,25 @@ test("integração genérica não pode declarar ativa sem validação", () => {
     () => _private.assertIntegrationStatusTransitionAllowed({
       current: { status: "INATIVA", ativo: false, ultimoSucessoEm: new Date(), credenciaisCriptografadas: "ciphertext" },
       data: { status: "ATIVA", ativo: true },
+      encryptedCredentials: undefined,
+      env: { NODE_ENV: "staging", EXTERNAL_PROVIDER_ACTIVATION_ENABLED: "false" },
+    }),
+    (error) => error.code === "PROVIDER_ACTIVATION_PAUSED",
+  );
+  assert.throws(
+    () => _private.assertIntegrationStatusTransitionAllowed({
+      current: {
+        tipo: "OMIE",
+        status: "ATIVA",
+        ativo: true,
+        configuracaoJson: "{\"endpoint\":\"https://provider.test/old\"}",
+        ultimoSucessoEm: new Date(),
+        credenciaisCriptografadas: "ciphertext",
+      },
+      data: {
+        tipo: "CUSTOM",
+        configuracaoJson: "{\"endpoint\":\"https://provider.test/new\"}",
+      },
       encryptedCredentials: undefined,
       env: { NODE_ENV: "staging", EXTERNAL_PROVIDER_ACTIVATION_ENABLED: "false" },
     }),

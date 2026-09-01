@@ -759,7 +759,11 @@ function assertIntegrationStatusTransitionAllowed({ current, data, encryptedCred
   const nextActive = data.ativo ?? current?.ativo;
   if (nextStatus !== "ATIVA" || nextActive !== true) return true;
   const activationRequested = !current || current.status !== "ATIVA" || current.ativo !== true;
-  if (activationRequested) assertExternalProviderActivationEnabled(env);
+  const activeProviderMutation = current?.status === "ATIVA"
+    && current?.ativo === true
+    && ((Object.hasOwn(data, "tipo") && data.tipo !== current.tipo)
+      || (Object.hasOwn(data, "configuracaoJson") && data.configuracaoJson !== current.configuracaoJson));
+  if (activationRequested || activeProviderMutation) assertExternalProviderActivationEnabled(env);
   const hasCredentials = Boolean(encryptedCredentials ?? current?.credenciaisCriptografadas);
   const hasValidation = Boolean(current?.ultimoSucessoEm);
   if (!hasCredentials || !hasValidation) {
@@ -1205,6 +1209,10 @@ function redactSensitiveText(value) {
     // URLs.  Redact URI userinfo for every registered URI scheme, not only
     // https, before exposing an adapter error or legacy configuration.
     .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]*:[^\s/@]+@/gi, "$1[redacted]@")
+    // Paths, query strings and fragments can carry private tenant data even
+    // when they do not use a known secret key. Preserve the authority for
+    // operator context, but replace the rest of every hierarchical URI.
+    .replace(/([a-z][a-z0-9+.-]*:\/\/[^\s/?#]+)[/?#][^\s]*/gi, "$1/[redacted]")
     // Opaque URI schemes (mailto:, urn:, data: and custom provider schemes)
     // do not contain `//` but can still carry secrets or private payloads.
     // The hierarchical pass above runs first so a userinfo segment is not

@@ -475,6 +475,21 @@ async function seedSyntheticTenant(label, identity, channelOverrides = {}) {
       ...channelOverrides,
     },
   });
+  const credentialReference = `meta-whatsapp-webhook-${label}-${suffix}-${tenant.id}`;
+  await prisma.metaCredential.create({
+    data: {
+      empresaId: tenant.id,
+      canalIntegracaoId: channel.id,
+      provider: "META_WHATSAPP",
+      reference: credentialReference,
+      ciphertext: "ciphertext-synthetic",
+      status: "ATIVA",
+    },
+  });
+  const linkedChannel = await prisma.canalIntegracao.update({
+    where: { id: channel.id },
+    data: { accessTokenRef: credentialReference },
+  });
   for (const chave of ["WHATSAPP_INTEGRATION", "WHATSAPP_INBOUND"]) {
     await prisma.empresaFuncionalidade.create({
       data: {
@@ -485,7 +500,7 @@ async function seedSyntheticTenant(label, identity, channelOverrides = {}) {
       },
     });
   }
-  return { actor, channel, tenant };
+  return { actor, channel: linkedChannel, tenant };
 }
 
 async function commercialCounts(empresaId) {
