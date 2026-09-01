@@ -754,10 +754,12 @@ function integrationPayload(body = {}, { partial }) {
   return { data, credentials: sanitizeCredentialInput(body.credenciais) };
 }
 
-function assertIntegrationStatusTransitionAllowed({ current, data, encryptedCredentials }) {
+function assertIntegrationStatusTransitionAllowed({ current, data, encryptedCredentials, env = process.env }) {
   const nextStatus = data.status ?? current?.status;
   const nextActive = data.ativo ?? current?.ativo;
   if (nextStatus !== "ATIVA" || nextActive !== true) return true;
+  const activationRequested = !current || current.status !== "ATIVA" || current.ativo !== true;
+  if (activationRequested) assertExternalProviderActivationEnabled(env);
   const hasCredentials = Boolean(encryptedCredentials ?? current?.credenciaisCriptografadas);
   const hasValidation = Boolean(current?.ultimoSucessoEm);
   if (!hasCredentials || !hasValidation) {
@@ -1199,13 +1201,16 @@ function safeAdapterErrorMessage(error) {
 function redactSensitiveText(value) {
   if (value === undefined || value === null || value === "") return value ?? null;
   return String(value)
-    // Opaque URI schemes (mailto:, urn:, data: and custom provider schemes)
-    // do not contain `//` but can still carry secrets or private payloads.
-    .replace(/(?<![A-Za-z0-9_\/])\b[a-z][a-z0-9+.-]*:(?!\/\/)[^\s]+/gi, "[redacted]")
     // Connection strings for queues/databases are just as sensitive as HTTP
     // URLs.  Redact URI userinfo for every registered URI scheme, not only
     // https, before exposing an adapter error or legacy configuration.
     .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]*:[^\s/@]+@/gi, "$1[redacted]@")
+    // Opaque URI schemes (mailto:, urn:, data: and custom provider schemes)
+    // do not contain `//` but can still carry secrets or private payloads.
+    // The hierarchical pass above runs first so a userinfo segment is not
+    // mistaken for an opaque scheme; path-prefixed opaque values are still
+    // redacted.
+    .replace(/(?<![A-Za-z0-9_])\b[a-z][a-z0-9+.-]*:(?!\/\/)[^\s]+/gi, "[redacted]")
     .replace(/(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "$1[redacted]")
     .replace(/((?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
     .replace(/([?#&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code)=)[^&#\s]+/gi, "$1[redacted]")

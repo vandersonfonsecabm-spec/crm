@@ -90,12 +90,16 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
     opaque: "urn:crm:tenant:token:secret123",
     custom: "custom+provider:accessToken=secret123",
     data: "data:text/plain,secret123",
+    slashCallback: "/mailto:alice@example.com?body=code=secret123",
+    slashData: "/data:text/plain,secret123",
   });
   assert.deepEqual(opaqueRedacted, {
     callback: "[redacted]",
     opaque: "[redacted]",
     custom: "[redacted]",
     data: "[redacted]",
+    slashCallback: "/[redacted]",
+    slashData: "/[redacted]",
   });
 });
 
@@ -115,5 +119,14 @@ test("integração genérica não pode declarar ativa sem validação", () => {
   assert.equal(
     _private.assertIntegrationStatusTransitionAllowed({ current: { status: "ATIVA", ativo: true, ultimoSucessoEm: new Date(), credenciaisCriptografadas: "ciphertext" }, data: {}, encryptedCredentials: undefined }),
     true,
+  );
+  assert.throws(
+    () => _private.assertIntegrationStatusTransitionAllowed({
+      current: { status: "INATIVA", ativo: false, ultimoSucessoEm: new Date(), credenciaisCriptografadas: "ciphertext" },
+      data: { status: "ATIVA", ativo: true },
+      encryptedCredentials: undefined,
+      env: { NODE_ENV: "staging", EXTERNAL_PROVIDER_ACTIVATION_ENABLED: "false" },
+    }),
+    (error) => error.code === "PROVIDER_ACTIVATION_PAUSED",
   );
 });
