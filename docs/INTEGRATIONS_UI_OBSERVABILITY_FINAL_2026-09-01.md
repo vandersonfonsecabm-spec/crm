@@ -25,12 +25,12 @@ REAL_OUTBOUND=0
 
 ```text
 BRANCH=feature/canonical-sale-v1
-RELEASE_HEAD=2214b846585dbb454e1349c1fd7018b848c120e5
-RELEASE_TREE=87bf14a075cc8beb1c101980b0fa4976ed04ee9a
+RELEASE_HEAD=696e2a7e0bac6e1e85484a5ad9819e7b36f6c27c
+RELEASE_TREE=d416ba96a5817540f70c198617e330286d8607a4
 BACKEND_CAUSAL_HEAD=e044d5852de15ad52b69f4025db9b80b3fec822b
 BASELINE_FUNCTIONAL=79eed4f
 FRONTEND_SOURCE_FIX=API fallback canônico de staging + teste de regressão
-REMOTE_BRANCH_SHA=2214b846585dbb454e1349c1fd7018b848c120e5
+REMOTE_BRANCH_SHA=ca4127d716cc6abd93b9efb208611603c1d6ba01
 ```
 
 O frontend recebeu uma correção mínima porque o bundle estático publicado
@@ -58,7 +58,7 @@ RAILWAY_ENVIRONMENT=d6b6f137-cffd-4647-a102-3619fc54133a
 RAILWAY_API_SERVICE=8af12b8e-4f4d-498c-9ceb-3182417905f8
 RAILWAY_WORKER_SERVICE=25dab463-52c0-4425-825e-c7dcf6a65332
 RAILWAY_DATABASE_SERVICE=f3a2862b-2371-4ab3-b4db-1e91680ee3b7
-RAILWAY_API_DEPLOYMENT_AFTER_CLEANUP=f03b3cf7-fce2-4923-ad47-ebdc476b0fd5
+RAILWAY_API_DEPLOYMENT_AFTER_CLEANUP=63d3924d-fddb-46b2-bc50-7a2809d46186
 RAILWAY_WORKER_DEPLOYMENT=ebefe2db-ad83-4446-978f-c495c30a0810
 VERCEL_PROJECT=prj_AJE06pNRGunJoguCNWee0RgZV6t8
 VERCEL_DEPLOYMENT=dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3
@@ -83,7 +83,18 @@ byte com o build local:
 index.html                 479/479 bytes  SHA-256 e35a3ebef6f7ddc9cd0791857f3c48cc4fb106a0901da69b44f5412ab7cd3ead
 assets/index-kHoJ1Ly6.js   287275/287275  SHA-256 e9ec5882b7bf241dff7b98aa37741ec7c29ad08e88e866ebbf9ff69428445e0f
 assets/index-DnvstQIY.css  92545/92545    SHA-256 4148c1a6ae931f29534c41e14e11fcf5280afed06fd41e7eae19253a22ecbbf6
-SOURCE_RUNTIME_PARITY=PASS_FOR_PUBLISHED_ASSETS
+SOURCE_RUNTIME_PARITY=PASS_FOR_PUBLISHED_ASSETS_AND_BACKEND_HASHES
+```
+
+Hashes SHA-256 dos arquivos backend causais do candidato foram comparados
+byte a byte com os arquivos no runtime `/app` do deployment `63d3924d`:
+
+```text
+src/integrations/providerActivation.js  f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d
+src/platform/routes.js                  8aa2be8a92d2c2dc3aa61c9078889e26320d50d3d30c98cf14e42a9e2c43d150
+src/integrations/routes.js              cea9af5a370cffccc1e7d8d4e2606d405a9c019db08737ce4022d77472cab64c
+src/security/auditReason.js             f979ff314da0972f58b1c27c7e944e7a5048a6aa48429a7f9441db4770405026
+BACKEND_RUNTIME_HASH_PARITY=PASS
 ```
 
 ## QA autenticado executado
@@ -209,6 +220,47 @@ FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
 FINAL_SOL_RECONCILIATION=NOT_CLOSED
 READY_FOR_PRODUCTION=false
 ```
+
+## Addendum — redaction universal e paridade backend (2026-09-01)
+
+A revisão adversarial pós-correção encontrou `INT-ADV-002` (HIGH): o helper
+compartilhado não redigia URI schemes opacos (`mailto:`, `urn:`, `data:`) e
+seis módulos ainda mantinham lógica local duplicada. Encontrou também
+`INT-ADV-003` (MEDIUM): o índice não trazia hashes verificáveis dos arquivos
+backend no runtime.
+
+Correção aplicada no commit funcional
+`696e2a7e0bac6e1e85484a5ad9819e7b36f6c27c`, tree
+`d416ba96a5817540f70c198617e330286d8607a4`:
+
+- `auditReason` passou a redigir qualquer esquema URI, inclusive opaco;
+- provisionamento/lifecycle de WhatsApp, Instagram e Messenger delegam ao
+  helper compartilhado;
+- o formato canônico de chaves sensíveis (`phoneNumberId=[REDACTED]`, etc.)
+  foi preservado;
+- o teste focal cobre esquemas opacos e a ausência de sanitizadores duplicados.
+
+Retestes:
+
+```text
+AUDIT_REASON_REDACTION_TEST=3/3 PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+SOURCE_RUNTIME_BACKEND_HASH_PARITY=PASS
+RAILWAY_STAGING_DEPLOYMENT=63d3924d-fddb-46b2-bc50-7a2809d46186 SUCCESS
+```
+
+O evidence index agora inclui os hashes backend comparados com `/app`:
+
+```text
+providerActivation.js=f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d
+platform/routes.js=8aa2be8a92d2c2dc3aa61c9078889e26320d50d3d30c98cf14e42a9e2c43d150
+integrations/routes.js=cea9af5a370cffccc1e7d8d4e2606d405a9c019db08737ce4022d77472cab64c
+security/auditReason.js=f979ff314da0972f58b1c27c7e944e7a5048a6aa48429a7f9441db4770405026
+```
+
+Os findings `INT-ADV-002` e `INT-ADV-003` estão `RETESTED`. Nova revisão
+adversarial limpa ainda é obrigatória antes da reconciliação final; manter
+`READY_FOR_PRODUCTION=false`.
 
 Não houve alteração de produção, migration oficial, provider real, credencial
 real de produto ou outbound.

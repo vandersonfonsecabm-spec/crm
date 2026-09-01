@@ -2169,3 +2169,14 @@ integracoes autorizadas.
   arquivos causais conferidos no runtime. `pause` continua permitido como
   disable local seguro. O finding está `RETESTED`; nova revisão adversarial do
   SHA `2214b846` ainda é necessária antes de `SHIP`.
+- A revisão pós-correção encontrou `INT-ADV-002` (HIGH), redaction incompleta
+  para esquemas URI opacos, e `INT-ADV-003` (MEDIUM), ausência de hashes
+  backend no índice. Ambos foram corrigidos e retestados no commit funcional
+  `696e2a7`, com suíte backend isolada PASS e hashes dos arquivos causais
+  conferidos byte a byte no deployment de staging `63d3924d`; nova revisão
+  adversarial limpa permanece obrigatória.
+- O candidato funcional vigente para a próxima revisão é `696e2a7`, tree
+  `d416ba96a5817540f70c198617e330286d8607a4`; a branch também contém apenas
+  o teste/documentação posterior `ca4127d`. O backend staging está no deploy
+  `63d3924d`, com health/ready 200 e paridade dos hashes backend registrada no
+  evidence index.
