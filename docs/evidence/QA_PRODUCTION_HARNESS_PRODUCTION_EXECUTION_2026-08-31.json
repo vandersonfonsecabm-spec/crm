@@ -1,0 +1,195 @@
+{
+  "report": "docs/QA_PRODUCTION_HARNESS_PRODUCTION_EXECUTION_REPORT_2026-08-31.md",
+  "date": "2026-08-31",
+  "runId": "qa-prod-harness-1788224005260",
+  "executorActual": "CODEX_ROOT",
+  "supervisor": "SOL",
+  "modelSelectionPrecondition": "SATISFIED_BY_USER",
+  "runtimeModelAttestation": "NOT_REQUIRED",
+  "modelIdentityGate": "NOT_APPLICABLE",
+  "applicationDataClassification": "SYNTHETIC_ONLY",
+  "branch": "feature/canonical-sale-v1",
+  "functionalReleaseBase": "2da896aac84dd683e844b266331716e9600e6357",
+  "harnessFunctionalCandidate": "957c10d74e2f786a96e903978b2eb6919b150bfb",
+  "harnessGitTree": "3aa54bb2c3860482e66929c92e7304f605b7462f",
+  "documentationHeadAtStart": "d09df40d365ac0d9e22c5792f754c26af222f29d",
+  "protectedDevDbSha256": "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533",
+  "targets": {
+    "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
+    "railwayEnvironmentId": "e18f76b1-e38f-468e-91fe-1eff6db9a5f8",
+    "apiServiceId": "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92",
+    "workerServiceId": "4eef3b96-e33f-42ea-9fb8-86c17b077ab8",
+    "databaseServiceId": "e9d8a6b8-507b-45fb-92a8-3ab016f865a2",
+    "vercelProjectId": "prj_xAWKcwZGDQsT3pEZLUZ5YWf6lDFq",
+    "frontendAlias": "crm-murex-six-83.vercel.app"
+  },
+  "backup": {
+    "format": "custom",
+    "bytes": 25776513,
+    "sha256": "fa1dd9286440160666f20580991cc17b9ce1e081ef90878dae504ca6aa06ce70",
+    "transport": "PRIVATE_UNIX_SOCKET",
+    "acl": "OWNER_SYSTEM_ADMIN_ONLY",
+    "restore": {
+      "engine": "PostgreSQL 18.3 WSL disposable",
+      "listEntries": 1351,
+      "migrationCount": 20,
+      "failedMigrations": 0,
+      "latestMigration": "20260830133500_harden_canonical_sale_delete_guard",
+      "canonicalTables": 4,
+      "cleanup": "PASS"
+    }
+  },
+  "deployments": {
+    "api": {
+      "deploymentId": "2fad0d3a-004e-441b-ae2b-91552285d302",
+      "status": "SUCCESS/RUNNING",
+      "imageDigest": "sha256:8eadf59c6550bdf9bba533eb0ea3a00912015f4eb46b85a3fbc0b099addca89e"
+    },
+    "worker": {
+      "deploymentId": "74ef572c-3f5a-4e7c-8137-2952fcb7e579",
+      "status": "SUCCESS/RUNNING"
+    },
+    "frontend": {
+      "deploymentId": "dpl_6ndNu6C75CujS4W3g68wwoPskFoc",
+      "status": "READY",
+      "http": 200
+    }
+  },
+  "sourceParity": {
+    "harnessManifestVersion": "backend-runtime-v3-lf",
+    "harnessManifestSha256": "36069c14396317beb5b2790f94e916fda431959af0151b4634046a7f9aa9f1cd",
+    "fullRuntimeManifestVersion": "backend-runtime-v3-lf",
+    "fullRuntimeManifestSha256": "bdba055e0e37b8b324d52252ea39a4fbe7ce7e305d0ce6468abaac32eaef89b5",
+    "harnessSourceParity": "PASS",
+    "fullRuntimeSourceParity": "PASS"
+  },
+  "database": {
+    "migration": "PASS",
+    "migrationCount": 20,
+    "failedMigrations": 0,
+    "latestMigration": "20260830133500_harden_canonical_sale_delete_guard",
+    "canonicalTables": 4,
+    "canonicalTriggers": 14,
+    "canonicalIndexes": 10
+  },
+  "qaBootstrap": {
+    "operatorGate": "PASS_DURING_WINDOW",
+    "source": "EXISTING_ALLOWLISTED_PLATFORM_IDENTITY",
+    "tenantA": { "slug": "qa-prod-canonical-a", "id": 4 },
+    "tenantB": { "slug": "qa-prod-canonical-b", "id": 5 },
+    "userCount": 5,
+    "userIds": [17, 18, 19, 20, 21],
+    "credentialsInReport": 0,
+    "credentialsInLogs": 0
+  },
+  "smoke": {
+    "requests": 38,
+    "status": "PASS",
+    "proposalAcceptedAloneIsRevenue": false,
+    "activeCanonicalSaleIsRevenue": true,
+    "manualCloseZeroBrl": "PASS",
+    "nullDistinctFromZero": "PASS",
+    "brlCentsAndSnapshot": "PASS"
+  },
+  "concurrency": {
+    "acceptVsAccept": [200, 409],
+    "closeVsClose": [200, 409],
+    "reopenVsClose": [200, 409],
+    "activeSalesAfterRace": 0,
+    "saleCountAfterRace": 1,
+    "duplicateActiveSales": 0,
+    "status": "PASS"
+  },
+  "crossTenant": { "attempts": 8, "denied": 8, "status": "PASS" },
+  "snapshotAttacks": { "attempts": 7, "blocked": 7, "status": "PASS" },
+  "soak": {
+    "durationSeconds": 19,
+    "iterations": 20,
+    "requests": 182,
+    "failures": 0,
+    "http5xx": 0,
+    "duplicateSales": 0,
+    "stuckOperations": 0,
+    "valueDrift": 0,
+    "providerEgress": 0,
+    "status": "PASS"
+  },
+  "cleanup": {
+    "tenantsRetained": true,
+    "tenantsActive": false,
+    "usersActive": 0,
+    "sessions": 0,
+    "refreshTokens": 0,
+    "credentialBundlePresent": false,
+    "temporaryAttestationPresent": false,
+    "temporaryBuildManifestPresent": false,
+    "providerConnections": 0,
+    "outbox": 0,
+    "webhooks": 0,
+    "leases": 0,
+    "status": "PASS"
+  },
+  "providerAndNetwork": {
+    "realProductProviderConnections": 0,
+    "realProductProviderCredentialsUsed": 0,
+    "realProductOutbound": 0,
+    "prismaTelemetryTlsConnections": 2,
+    "globalBlingChanged": false
+  },
+  "review": {
+    "security": "PASS",
+    "operational": "PASS",
+    "adversarial": "SHIP",
+    "blockingFindings": 0
+  },
+  "gates": {
+    "missionCommandAudit": "PASS",
+    "productionTargetVerified": "PASS",
+    "sourceRuntimeParity": "PASS",
+    "productionBackup": "PASS",
+    "productionRestoreDrill": "PASS",
+    "productionMigration": "PASS",
+    "productionBackendRuntime": "PASS",
+    "productionFrontendRuntime": "PASS",
+    "productionQaApply": "PASS",
+    "productionAuthenticatedWriteSmoke": "PASS",
+    "productionQaRevenueProvenance": "PASS",
+    "productionQaIdempotency": "PASS",
+    "productionQaConcurrency": "PASS",
+    "productionQaReopen": "PASS",
+    "productionLiveCrossTenantTest": "PASS",
+    "productionQaRbac": "PASS",
+    "productionQaSnapshotImmutability": "PASS",
+    "productionQaSoak": "PASS",
+    "qaCredentialCleanup": "PASS",
+    "finalSecretSweep": "PASS",
+    "finalRuntimeQa": "PASS",
+    "finalSolReconciliation": "PASS"
+  },
+  "findings": [
+    { "id": "PROD-ENV-001", "status": "CLOSED/RETESTED" },
+    { "id": "PROD-UPLOAD-001", "status": "CLOSED/RETESTED" },
+    { "id": "PROD-MANIFEST-001", "status": "CLOSED/RETESTED" },
+    { "id": "PROD-SMOKE-HARNESS-001", "status": "CLOSED/RETESTED" },
+    { "id": "PROD-SMOKE-HARNESS-002", "status": "CLOSED/RETESTED" },
+    { "id": "PROD-SMOKE-HARNESS-003", "status": "CLOSED/RETESTED" },
+    { "id": "PROD-CREDENTIAL-001", "status": "CLOSED/RETESTED" },
+    { "id": "PROD-SECRET-001", "status": "CLOSED/RETESTED" },
+    { "id": "PROD-RESTORE-001", "status": "CLOSED/RETESTED" },
+    { "id": "PROD-DEPLOY-001", "status": "CLOSED/RETESTED" }
+  ],
+  "openCritical": 0,
+  "openHigh": 0,
+  "openMedium": 0,
+  "pendingInternal": 0,
+  "untestedInternal": 0,
+  "falsePass": 0,
+  "productionChanged": true,
+  "realCustomersTouched": 0,
+  "qaTenantsRetained": true,
+  "qaTenantsActive": false,
+  "qaUsersActive": 0,
+  "qaSessions": 0,
+  "qaRefreshTokens": 0,
+  "finalVerdict": "CANONICAL_SALE_V1_PRODUCTION_QA=COMPLETE"
+}

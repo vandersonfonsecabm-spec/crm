@@ -1,4 +1,63 @@
 # Estado atual do CRM
+## Checkpoint atual — execução final do QA Production Harness em produção (2026-08-31)
+
+- A missão de execução do harness QA-only em produção foi concluída com dados
+  de aplicação exclusivamente sintéticos. O executor real foi `CODEX_ROOT`;
+  a seleção do modelo foi registrada apenas como pré-condição confirmada pelo
+  usuário (`MODEL_SELECTION_PRECONDITION=SATISFIED_BY_USER`,
+  `RUNTIME_MODEL_ATTESTATION=NOT_REQUIRED`,
+  `MODEL_IDENTITY_GATE=NOT_APPLICABLE`). Não há alegação de proveniência Luna
+  ou NuAuto atestada pelo host.
+- O release funcional base foi `2da896aac84dd683e844b266331716e9600e6357`;
+  o candidato do harness foi `957c10d74e2f786a96e903978b2eb6919b150bfb`, tree
+  `3aa54bb2c3860482e66929c92e7304f605b7462f`. O worktree da branch
+  `feature/canonical-sale-v1` terminou limpo, e
+  `backend/prisma/dev.db` preservou SHA-256
+  `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- O alvo foi verificado como o Railway de produção oficial e o PostgreSQL
+  `e9d8a6b8-507b-45fb-92a8-3ab016f865a2`. A API final do harness ficou no
+  deployment `2fad0d3a-004e-441b-ae2b-91552285d302` em `SUCCESS/RUNNING`; o
+  worker compatível permaneceu em `74ef572c-3f5a-4e7c-8137-2952fcb7e579`; o
+  alias Vercel canônico permaneceu 200 em
+  `dpl_6ndNu6C75CujS4W3g68wwoPskFoc`.
+- A paridade do artefato LF do harness foi comprovada pelo manifesto
+  `36069c14396317beb5b2790f94e916fda431959af0151b4634046a7f9aa9f1cd`; a do
+  runtime backend completo pelo manifesto
+  `bdba055e0e37b8b324d52252ea39a4fbe7ce7e305d0ce6468abaac32eaef89b5`.
+  A diferença CRLF observada no checkout Windows foi classificada e não foi
+  usada como prova de runtime.
+- O backup pré-escrita foi criado sem expor credenciais, protegido fora do
+  repositório, com 25.776.513 bytes e SHA-256
+  `fa1dd9286440160666f20580991cc17b9ce1e081ef90878dae504ca6aa06ce70`.
+  O restore drill PostgreSQL 18.3 descartável passou com 1.351 entradas,
+  20 migrations, zero falhas, quatro tabelas canônicas e cleanup concluído.
+- O bootstrap interno transacional criou e depois revogou os tenants
+  sintéticos `qa-prod-canonical-a` (ID 4) e `qa-prod-canonical-b` (ID 5), com
+  cinco usuários temporários. Smoke autenticado, venda por proposta, venda
+  manual zero, idempotência, concorrência real, reopen, cross-tenant, RBAC,
+  snapshot e soak passaram. QA-A/B foram mantidos inativos para reuso; não há
+  usuários ativos, sessões, refresh tokens, leases, outbox, webhooks ou bundle
+  de credenciais.
+- O incidente de credencial/bundle e os findings de URL stale, upload,
+  manifesto, harness de smoke e ACL foram corrigidos e retestados. HMAC foi
+  rotacionado, cópias temporárias foram removidas e a varredura final não
+  encontrou segredo no repositório, runtime ou logs. A integração Bling global
+  existente permaneceu intocada; conexões de providers de produto e outbound
+  foram zero. Duas conexões TLS de inicialização do Prisma foram classificadas
+  apenas como telemetria.
+- Revisões independentes de segurança/operação e o adversarial final
+  terminaram `PASS`, `PASS` e `SHIP`; `FINAL_SOL_RECONCILIATION=PASS`, sem
+  findings críticos/altos/médios nem pendências internas. A autoridade
+  consolidada está em
+  `docs/QA_PRODUCTION_HARNESS_PRODUCTION_EXECUTION_REPORT_2026-08-31.md`, com
+  índice sanitizado em
+  `docs/evidence/QA_PRODUCTION_HARNESS_PRODUCTION_EXECUTION_2026-08-31.json`.
+- Estado canônico: `CANONICAL_SALE_V1_PRODUCTION_QA=COMPLETE`,
+  `PRODUCTION_CHANGED=true` (somente runtime do harness e fixtures
+  sintéticas), `QA_TENANTS_RETAINED=true`, `QA_TENANTS_ACTIVE=false`,
+  `QA_USERS_ACTIVE=0`, `QA_SESSIONS=0`, `QA_REFRESH_TOKENS=0`,
+  `REAL_PRODUCT_PROVIDER_CONNECTIONS=0`, `REAL_PRODUCT_OUTBOUND=0`.
+
 ## Checkpoint atual — incidente de secrets e QA operator do staging (2026-08-31)
 
 - Dados de aplicação da SaaS são sintéticos/de teste; não há pessoas ou
