@@ -1,4 +1,24 @@
 # Estado atual do CRM
+## Integrações visíveis + observabilidade — redaction quoted final (2026-09-01)
+
+- O reviewer independente encontrou `ADV-REVIEW-001` e `ADV-REVIEW-002`
+  (HIGH): regras de redaction antigas truncavam `password/access_token` e
+  `auditReason` no primeiro espaço de valores entre aspas.
+- A regra conflitante foi removida e o sanitizer compartilhado foi corrigido
+  no commit funcional `98a8cf2428a3b5512565e56d9ed995deb8f75d8d`, tree
+  `42014f598424948c0438de7e2d38eb2b4548df83`; o backend foi publicado no
+  staging `9a93dc5b-986b-43df-8cfd-b0fa68878fd2`.
+- `INTEGRATION_SECURITY_HARDENING=6/6`, `AUDIT_REASON_REDACTION=3/3`,
+  `WHATSAPP_INBOUND_PROVISIONING=5/5` e `BACKEND_ISOLATED_SUITE=PASS_EXIT_0`.
+  Runtime confirmou `deploymentId=9a93dc5b-986b-43df-8cfd-b0fa68878fd2`,
+  `deploymentIdentityVerified=true`, manifesto
+  `fede7d09667d155c3cbd00dffdaa51c200bc5c6585414082d4a8925e11d854a0`,
+  health/readiness 200 e providers/outbound desligados.
+- Nova instância adversarial precisa auditar o candidato `98a8cf2` do zero;
+  até lá `FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW`,
+  `FINAL_SOL_RECONCILIATION=NOT_CLOSED`, `READY_FOR_PRODUCTION=false` e
+  `PRODUCTION_CHANGED=false`.
+
 ## Integrações visíveis + observabilidade — pós-fix adversarial (2026-09-01)
 
 - A revisão independente posterior encontrou `ADV-POSTFIX-001` (HIGH): a

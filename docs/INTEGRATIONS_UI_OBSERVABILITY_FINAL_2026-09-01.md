@@ -21,6 +21,55 @@ REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
 ```
 
+## Addendum — segunda correção da fronteira de redaction (2026-09-01)
+
+O reviewer adversarial independente encontrou `ADV-REVIEW-001` (HIGH): uma
+regra antiga ainda truncava valores `password/access_token` entre aspas antes
+da regra completa; e `ADV-REVIEW-002` (HIGH): o sanitizador compartilhado de
+auditoria também deixava escapar a segunda parte de valores com espaços.
+
+Correção aplicada no commit funcional
+`98a8cf2428a3b5512565e56d9ed995deb8f75d8d`, tree
+`42014f598424948c0438de7e2d38eb2b4548df83`, e publicada no deployment staging
+`9a93dc5b-986b-43df-8cfd-b0fa68878fd2` (`SUCCESS`). A regra conflitante foi
+removida; o redactor genérico e `auditReason` agora redigem o valor quoted
+inteiro e preservam a forma canônica `key=[REDACTED]`.
+
+Retestes:
+
+```text
+INTEGRATION_SECURITY_HARDENING=6/6 PASS
+AUDIT_REASON_REDACTION=3/3 PASS
+WHATSAPP_INBOUND_PROVISIONING=5/5 PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+PROTECTED_DEV_DB_UNCHANGED=PASS
+STAGING_HEALTH=200
+STAGING_READY=200
+```
+
+O fingerprint protegido retornou `deploymentId=9a93dc5b-986b-43df-8cfd-b0fa68878fd2`,
+`deploymentIdentityVerified=true`, manifesto
+`fede7d09667d155c3cbd00dffdaa51c200bc5c6585414082d4a8925e11d854a0`,
+`trackedProviderConnections=false`, ativação externa `false` e outbound
+`false`. Hashes locais e `/app` conferem para os arquivos causais.
+
+O adversarial final e a reconciliação do Sol continuam pendentes; não declarar
+`SHIP` sem nova instância independente.
+
+```text
+RELEASE_FUNCTIONAL_HEAD=98a8cf2428a3b5512565e56d9ed995deb8f75d8d
+RELEASE_FUNCTIONAL_TREE=42014f598424948c0438de7e2d38eb2b4548df83
+REMOTE_BRANCH_SHA=98a8cf2428a3b5512565e56d9ed995deb8f75d8d
+RAILWAY_API_DEPLOYMENT=9a93dc5b-986b-43df-8cfd-b0fa68878fd2
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+```
+
 ## Addendum — correções do adversarial final e novo candidato (2026-09-01)
 
 O reviewer adversarial independente retornou `FIX_FIRST` para o candidato
