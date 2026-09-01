@@ -192,12 +192,14 @@ export type PlatformObservabilitySummary = {
   jobs: Record<string, number>;
   executions: Record<string, number>;
   retryingJobs: number;
+  credentials: Record<string, number>;
   webhooks: Record<string, number>;
   outbox: {
     email: Record<string, number>;
     stock: Record<string, number>;
   };
   unresolvedIntegrationErrors: number;
+  lastIntegrationErrorAt: string | null;
 };
 
 export type PlatformTenantCreatePayload = {

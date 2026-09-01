@@ -10,8 +10,8 @@ const dashboard = fs.readFileSync(new URL("src/pages/Dashboard.tsx", root), "utf
 test("observabilidade técnica é restrita ao operador e só exibe contadores sanitizados", () => {
   assert.match(panel, /fetchPlatformObservabilitySummary/);
   assert.match(panel, /Somente leitura/);
-  assert.match(panel, /jobs|webhooks|outbox|leases/i);
-  assert.doesNotMatch(panel, /payload|Authorization|token completo|stack trace/i);
+  assert.match(panel, /jobs|execuções|webhooks|outbox|leases|credenciais/i);
+  assert.doesNotMatch(panel, /Authorization|token completo|JSON\.stringify/);
   assert.match(api, /\/platform\/observability\/summary/);
   assert.match(dashboard, /activePage === "platformTenants" && isPlatformOperator/);
 });

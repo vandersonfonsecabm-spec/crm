@@ -105,13 +105,16 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
       empresaId: adminA.empresaId,
       nome: "Config legado",
       tipo: "JSON",
-      configuracaoJson: JSON.stringify({ endpoint: "https://provider.test/callback?access_token=legado-url-nao-retornar", nested: { accessToken: "legado-nao-retornar" } }),
+      configuracaoJson: JSON.stringify({ endpoint: "https://user:legado-userinfo-nao-retornar@provider.test/callback?access_token=legado-url-nao-retornar&secret=legado-secret-nao-retornar&apiKey=legado-api-key-nao-retornar", nested: { accessToken: "legado-nao-retornar" } }),
     },
   });
   const legacyRead = await request("GET", `/integracoes/${legacyUnsafe.id}`, undefined, adminA.token);
   assert.equal(legacyRead.status, 200);
   assert.equal(legacyRead.body.configuracao.nested.accessToken, "[redacted]");
   assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-url-nao-retornar"), false);
+  assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-userinfo-nao-retornar"), false);
+  assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-secret-nao-retornar"), false);
+  assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-api-key-nao-retornar"), false);
   assert.equal(JSON.stringify(legacyRead.body).includes("legado-nao-retornar"), false);
 
   const listA = await request("GET", "/integracoes", undefined, adminA.token);

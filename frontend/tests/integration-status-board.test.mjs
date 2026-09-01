@@ -15,6 +15,7 @@ test("status board cobre os seis providers com estado honesto", () => {
   }
   assert.match(board, /return \[\s*whatsappCard\(input\),\s*instagramCard\(input\),\s*messengerCard\(input\),\s*blingCard\(input\),\s*emailCard\(input\),\s*aiCard\(input\),/s);
   assert.match(board, /stateCopy\(state, title\)/);
+  assert.match(board, /Próximo requisito:/);
 });
 
 test("ativação externa permanece bloqueada nos três painéis", () => {
@@ -40,4 +41,5 @@ test("hub usa leituras parciais e tabs com relação ARIA explícita", () => {
   assert.match(integrations, /aria-controls=\{panelId\}/);
   assert.match(integrations, /role="tabpanel"/);
   assert.match(integrations, /min-h-10/);
+  assert.match(board, /AI_COMMERCE_DISABLED/);
 });

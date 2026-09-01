@@ -51,17 +51,28 @@ export default function DashboardPlatformObservabilityPanel() {
       {error && !summary && <div className="p-4"><ErrorState description={error} onRetry={() => void load()} title="Observabilidade indisponível" /></div>}
       {summary && (
         <div className="space-y-3 p-4">
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
             <Metric icon={<Server size={14} />} label="Checkpoints do worker" value={summary.worker.checkpointCount} />
             <Metric icon={<ShieldCheck size={14} />} label="Leases ativos" tone={summary.worker.activeLeases > 0 ? "success" : "neutral"} value={summary.worker.activeLeases} />
             <Metric icon={<AlertTriangle size={14} />} label="Leases expirados" tone={summary.worker.expiredLeases > 0 ? "warning" : "neutral"} value={summary.worker.expiredLeases} />
             <Metric icon={<AlertTriangle size={14} />} label="Erros de integração abertos" tone={summary.unresolvedIntegrationErrors > 0 ? "danger" : "neutral"} value={summary.unresolvedIntegrationErrors} />
+            <Metric icon={<RefreshCw size={14} />} label="Jobs em retry" tone={summary.retryingJobs > 0 ? "warning" : "neutral"} value={summary.retryingJobs} />
           </div>
 
-          <div className="grid gap-3 xl:grid-cols-3">
+          <div className="grid gap-3 xl:grid-cols-4">
             <QueueCard icon={<Activity size={14} />} label="Jobs de automação" values={summary.jobs} />
+            <QueueCard icon={<Activity size={14} />} label="Execuções" values={summary.executions} />
             <QueueCard icon={<Webhook size={14} />} label="Webhooks" values={summary.webhooks} />
             <QueueCard icon={<Database size={14} />} label="Outbox" values={{ ...summary.outbox.email, ...summary.outbox.stock }} />
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-2">
+            <QueueCard icon={<ShieldCheck size={14} />} label="Estado de credenciais (sem segredos)" values={summary.credentials} />
+            <div className="rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-[11px] text-[var(--text-muted)]">
+              <p className="font-semibold text-[var(--text-secondary)]">Último erro de integração</p>
+              <p className="mt-2">{summary.lastIntegrationErrorAt ? formatDate(summary.lastIntegrationErrorAt) : "Nenhum erro aberto"}</p>
+              <p className="mt-2 text-[10px]">Somente horário e contadores são exibidos; payloads, tokens e stack traces permanecem restritos.</p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border-default)] pt-3 text-[10px] text-[var(--text-muted)]">

@@ -142,11 +142,11 @@ logs ou mensagens de erro. ADMIN e GERENTE continuam sendo papeis de tenant,
 sem autoridade global.
 
 `EXTERNAL_PROVIDER_ACTIVATION_ENABLED` permanece ausente ou `false` enquanto
-uma missao de ativacao externa nao estiver autorizada. As rotas de OAuth,
-credenciais e sincronizacao falham fechado nesse estado; a UI de Integracoes
-continua somente leitura. `BLING_EXTERNAL_NETWORK_ENABLED` e um marcador
-operacional adicional do fingerprint: ele tambem precisa permanecer ausente ou
-`false` para que o runtime declare outbound externo desabilitado.
+uma missao de ativacao externa nao estiver autorizada. Fora do runner de testes,
+as rotas de OAuth, credenciais e sincronizacao falham fechado nesse estado; a UI
+de Integracoes continua somente leitura. `BLING_EXTERNAL_NETWORK_ENABLED` e um
+marcador operacional adicional do fingerprint: ele tambem precisa permanecer
+ausente ou `false` para que o runtime declare outbound externo desabilitado.
 
 O bootstrap seguro de operacoes da plataforma deve publicar primeiro o codigo,
 confirmar o proprio e-mail via `/auth/me`, configurar somente

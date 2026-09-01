@@ -292,8 +292,13 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
       warnings.push("Canais de comunicação indisponíveis");
     }
     setLoadWarnings(warnings);
-    setState("success");
-    setMessage("");
+    if (warnings.length === 5) {
+      setState("error");
+      setMessage("Não foi possível confirmar os dados das integrações agora.");
+    } else {
+      setState("success");
+      setMessage("");
+    }
   }
 
   async function reloadImports() {

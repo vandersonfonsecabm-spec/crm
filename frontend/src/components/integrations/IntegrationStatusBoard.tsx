@@ -60,6 +60,7 @@ export type IntegrationStatusCard = {
   badge: "conectado" | "desconectado" | "alerta" | "erro" | "informacao" | "indisponivel";
   icon: ReactNode;
   lastUpdated: string | null;
+  nextRequirement: string | null;
 };
 
 type StatusInput = {
@@ -75,6 +76,7 @@ type StatusInput = {
   channelsUnavailable?: boolean;
   ai?: AICommerceConnectionStatus | null;
   aiUnavailable?: boolean;
+  aiUnavailableCode?: string;
 };
 
 type LoadState = "loading" | "ready" | "error";
@@ -119,6 +121,7 @@ export default function IntegrationStatusBoard({ onUnauthorized }: { onUnauthori
       channelsUnavailable: rejected(channels),
       ai: fulfilledValue(ai),
       aiUnavailable: rejected(ai),
+      aiUnavailableCode: rejectionCode(ai),
     });
     setCards(nextCards);
     setState("ready");
@@ -174,6 +177,7 @@ function IntegrationStatusCardView({ card }: { card: IntegrationStatusCard }) {
         <StatusBadge label={card.label} status={card.badge} />
       </div>
       <p className="mt-3 min-h-8 text-[11px] leading-4 text-[var(--text-secondary)]">{card.detail}</p>
+      {card.nextRequirement && <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.05em] text-[var(--text-tertiary)]">Próximo requisito: {card.nextRequirement}</p>}
       <div className="mt-3 flex min-w-0 items-center gap-1.5 border-t border-[var(--border-default)] pt-2 text-[10px] text-[var(--text-muted)]">
         <Clock3 aria-hidden="true" size={12} />
         <span className="truncate">{card.lastUpdated ? `Última atualização: ${formatDate(card.lastUpdated)}` : "Última atualização: nunca"}</span>
@@ -201,24 +205,24 @@ function whatsappCard(input: StatusInput): IntegrationStatusCard {
   const icon = <MessageCircle size={16} />;
   if (input.whatsappUnavailable) return unavailable("whatsapp", "WhatsApp", "Não foi possível confirmar o canal agora.", icon);
   const status = mapWhatsAppConnectionStatus(input.whatsapp);
-  return mapMetaCard("whatsapp", "WhatsApp", status.state, status.verifiedAt || status.connectedAt || status.lastWebhookAt, icon);
+  return mapMetaCard("whatsapp", "WhatsApp", status.state, status.verifiedAt || status.connectedAt || status.lastWebhookAt, "CONFIGURE_WHATSAPP_PROVIDER", icon);
 }
 
 function instagramCard(input: StatusInput): IntegrationStatusCard {
   const icon = <Globe2 size={16} />;
   if (input.instagramUnavailable) return unavailable("instagram", "Instagram", "Não foi possível confirmar o canal agora. Tente atualizar.", icon);
   const status = deriveMetaInstagramReadiness({ ...(input.instagram || {}), source: "backend" });
-  return mapMetaCard("instagram", "Instagram", status.state, input.instagram?.verifiedAt || input.instagram?.connectedAt || input.instagram?.lastWebhookAt, icon);
+  return mapMetaCard("instagram", "Instagram", status.state, input.instagram?.verifiedAt || input.instagram?.connectedAt || input.instagram?.lastWebhookAt, input.instagram?.nextRequirement || "REAL_META_ACCOUNT_REQUIRED_FOR_E2E", icon);
 }
 
 function messengerCard(input: StatusInput): IntegrationStatusCard {
   const icon = <Globe2 size={16} />;
   if (input.messengerUnavailable) return unavailable("messenger", "Messenger", "Não foi possível confirmar o canal agora. Tente atualizar.", icon);
   const status = mapMessengerConnectionStatus(input.messenger);
-  return mapMetaCard("messenger", "Messenger", status.state, status.verifiedAt || status.connectedAt || status.lastWebhookAt, icon);
+  return mapMetaCard("messenger", "Messenger", status.state, status.verifiedAt || status.connectedAt || status.lastWebhookAt, input.messenger?.nextRequirement || "CONFIGURE_MESSENGER_PROVIDER", icon);
 }
 
-function mapMetaCard(key: "whatsapp" | "instagram" | "messenger", title: string, rawState: string, lastUpdated: string | null | undefined, icon: ReactNode): IntegrationStatusCard {
+function mapMetaCard(key: "whatsapp" | "instagram" | "messenger", title: string, rawState: string, lastUpdated: string | null | undefined, nextRequirement: string | null, icon: ReactNode): IntegrationStatusCard {
   const state = rawState === "CONNECTED"
     ? "CONNECTED"
     : rawState === "ERROR"
@@ -231,7 +235,7 @@ function mapMetaCard(key: "whatsapp" | "instagram" | "messenger", title: string,
             ? "CONFIGURATION_INCOMPLETE"
             : "NOT_CONFIGURED";
   const copy = stateCopy(state, title);
-  return { key, title, ...copy, icon, lastUpdated: lastUpdated || null };
+  return { key, title, ...copy, icon, lastUpdated: lastUpdated || null, nextRequirement: rawState === "CONNECTED" ? null : nextRequirement };
 }
 
 function blingCard(input: StatusInput): IntegrationStatusCard {
@@ -250,7 +254,7 @@ function blingCard(input: StatusInput): IntegrationStatusCard {
           ? "DISCONNECTED"
           : "NOT_CONFIGURED";
   const copy = stateCopy(state, "Bling");
-  return { key: "bling", title: "Bling", ...copy, icon, lastUpdated: latest?.updatedAt || latest?.ultimaSincronizacaoEm || null };
+  return { key: "bling", title: "Bling", ...copy, icon, lastUpdated: latest?.updatedAt || latest?.ultimaSincronizacaoEm || null, nextRequirement: state === "CONNECTED" ? null : state === "ERROR" ? "TENTE_NOVAMENTE" : "CONFIGURE_BLING_PROVIDER" };
 }
 
 function emailCard(input: StatusInput): IntegrationStatusCard {
@@ -263,12 +267,17 @@ function emailCard(input: StatusInput): IntegrationStatusCard {
       ? "CONFIGURATION_INCOMPLETE"
       : "DISCONNECTED";
   const copy = stateCopy(state, "E-mail");
-  return { key: "email", title: "E-mail", ...copy, icon, lastUpdated: channel?.updatedAt || null };
+  return { key: "email", title: "E-mail", ...copy, icon, lastUpdated: channel?.updatedAt || null, nextRequirement: state === "CONFIGURATION_INCOMPLETE" ? "VALIDATE_EMAIL_PROVIDER" : "CONFIGURE_EMAIL_PROVIDER" };
 }
 
 function aiCard(input: StatusInput): IntegrationStatusCard {
   const icon = <Bot size={16} />;
-  if (input.aiUnavailable) return unavailable("ai", "IA Comercial", "Não foi possível confirmar a fundação de IA agora.", icon);
+  if (input.aiUnavailable) {
+    if (isDisabledCode(input.aiUnavailableCode)) {
+      return unavailable("ai", "IA Comercial", "A capacidade de IA está desativada neste ambiente; nenhum provider real está disponível.", icon, "disabled");
+    }
+    return unavailable("ai", "IA Comercial", "Não foi possível confirmar a fundação de IA agora.", icon);
+  }
   const status = input.ai?.status;
   const state: IntegrationCanonicalState = status === "REAL_CONNECTED"
     ? "CONNECTED"
@@ -283,11 +292,14 @@ function aiCard(input: StatusInput): IntegrationStatusCard {
     copy.detail = "Mock determinístico disponível sem conexão externa; o provider real permanece desligado.";
     copy.badge = "informacao";
   }
-  return { key: "ai", title: "IA Comercial", ...copy, icon, lastUpdated: input.ai?.lastValidatedAt || null };
+  return { key: "ai", title: "IA Comercial", ...copy, icon, lastUpdated: input.ai?.lastValidatedAt || null, nextRequirement: status === "REAL_CONNECTED" ? null : status === "MOCK_AVAILABLE" ? "ATIVAR_PROVIDER_EM_MISSAO_SEPARADA" : "CONFIGURE_AI_PROVIDER" };
 }
 
-function unavailable(key: IntegrationStatusCard["key"], title: string, detail: string, icon: ReactNode): IntegrationStatusCard {
-  return { key, title, description: "Estado não confirmado", detail, label: "Indisponível", state: "UNAVAILABLE", badge: "indisponivel", icon, lastUpdated: null };
+function unavailable(key: IntegrationStatusCard["key"], title: string, detail: string, icon: ReactNode, variant: "unknown" | "disabled" = "unknown"): IntegrationStatusCard {
+  if (variant === "disabled") {
+    return { key, title, description: `${title} está desativada.`, detail, label: "Desativado", state: "UNAVAILABLE", badge: "informacao", icon, lastUpdated: null, nextRequirement: "ATIVAR_CAPACIDADE_EM_MISSAO_SEPARADA" };
+  }
+  return { key, title, description: "Estado não confirmado", detail, label: "Indisponível", state: "UNAVAILABLE", badge: "indisponivel", icon, lastUpdated: null, nextRequirement: "TENTE_NOVAMENTE" };
 }
 
 function stateCopy(state: IntegrationCanonicalState, title: string) {
@@ -313,6 +325,16 @@ function fulfilledValue<T>(result: PromiseSettledResult<T>) {
 
 function rejected<T>(result: PromiseSettledResult<T>) {
   return result.status === "rejected";
+}
+
+function rejectionCode(result: PromiseSettledResult<unknown>) {
+  if (result.status !== "rejected") return undefined;
+  const error = result.reason;
+  return error instanceof ApiHttpError ? error.code : undefined;
+}
+
+function isDisabledCode(code?: string) {
+  return ["AI_COMMERCE_DISABLED", "CAPABILITY_DISABLED", "INTEGRATION_DISABLED", "PROVIDER_DISABLED"].includes(String(code || "").toUpperCase());
 }
 
 function isUnauthorized(error: unknown) {

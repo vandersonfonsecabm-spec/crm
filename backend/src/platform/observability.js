@@ -8,7 +8,7 @@ function createPlatformObservabilityService({ prisma }) {
   if (!prisma) throw new Error("Prisma obrigatorio para observabilidade da plataforma.");
 
   async function summary({ now = new Date() } = {}) {
-    const [checkpoints, jobs, executions, webhooks, emailOutbox, stockOutbox, integrationErrors, activeLeases, expiredLeases, retryingJobs] = await Promise.all([
+    const [checkpoints, jobs, executions, webhooks, emailOutbox, stockOutbox, integrationErrors, lastIntegrationError, credentials, activeLeases, expiredLeases, retryingJobs] = await Promise.all([
       prisma.workerCheckpoint.findMany({ select: { updatedAt: true } }),
       prisma.automacaoAcaoJob.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.automacaoExecucao.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -16,6 +16,8 @@ function createPlatformObservabilityService({ prisma }) {
       prisma.emailDeliveryOutbox.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.eventoOutboxEstoque.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.erroIntegracao.count({ where: { resolvido: false } }),
+      prisma.erroIntegracao.findFirst({ where: { resolvido: false }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
+      prisma.metaCredential.groupBy({ by: ["status"], _count: { _all: true } }),
       countLiveLeases(now),
       countExpiredLeases(now),
       prisma.automacaoAcaoJob.count({ where: { status: "FALHOU", nextAttemptAt: { not: null } } }),
@@ -32,12 +34,14 @@ function createPlatformObservabilityService({ prisma }) {
       jobs: countMap(jobs),
       executions: countMap(executions),
       retryingJobs,
+      credentials: countMap(credentials),
       webhooks: countMap(webhooks),
       outbox: {
         email: countMap(emailOutbox),
         stock: countMap(stockOutbox),
       },
       unresolvedIntegrationErrors: integrationErrors,
+      lastIntegrationErrorAt: lastIntegrationError?.createdAt instanceof Date ? lastIntegrationError.createdAt.toISOString() : lastIntegrationError?.createdAt ? new Date(lastIntegrationError.createdAt).toISOString() : null,
     };
   }
 

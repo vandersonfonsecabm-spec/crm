@@ -1059,8 +1059,8 @@ function stringifySafeConfig(value) {
 function assertExternalProviderActivationEnabled(env = process.env) {
   const configured = env.EXTERNAL_PROVIDER_ACTIVATION_ENABLED;
   const enabled = String(configured || "").trim().toLowerCase() === "true";
-  const explicitlyDisabled = configured !== undefined && !enabled;
-  if ((env.NODE_ENV === "production" || explicitlyDisabled) && !enabled) {
+  const testRuntime = env.NODE_ENV === "test";
+  if (!testRuntime && !enabled) {
     throw httpError(503, "A ativação externa está pausada nesta fase.", "PROVIDER_ACTIVATION_PAUSED");
   }
   return true;
@@ -1148,9 +1148,11 @@ function safeAdapterErrorMessage(error) {
 function redactSensitiveText(value) {
   if (value === undefined || value === null || value === "") return value ?? null;
   return String(value)
+    .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, "$1[redacted]@")
     .replace(/(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "$1[redacted]")
     .replace(/((?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
-    .replace(/([?&](?:api_key|client_secret|access_token|refresh_token|token)=)[^&\s]+/gi, "$1[redacted]")
+    .replace(/([?&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token|secret|credential|signature)=)[^&\s]+/gi, "$1[redacted]")
+    .replace(/(["']?(?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token|secret|credential|signature)["']?\s*[:=]\s*["']?)[^"'\s,;}]+/gi, "$1[redacted]")
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
     .slice(0, 500);
 }

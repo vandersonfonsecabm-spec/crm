@@ -1,7 +1,7 @@
 import { Globe2, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
-import { fetchInstagramOperationalStatus, iniciarConexaoInstagram, removeMessengerCredential, replaceMessengerCredential, storeMessengerCredential } from "../../services/crmApi";
+import { ApiHttpError, fetchInstagramOperationalStatus, iniciarConexaoInstagram, removeMessengerCredential, replaceMessengerCredential, storeMessengerCredential } from "../../services/crmApi";
 import { createLocalMetaInstagramReadiness, deriveMetaInstagramReadiness, isApprovedInstagramAuthorizationUrl } from "../../services/metaInstagramBoundary";
 import { useMessengerConnectionStatus } from "../integrations/useMessengerConnectionStatus";
 import type { MessengerConnectionState } from "../integrations/messengerConnectionState";
@@ -56,15 +56,19 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, 
         if (cancelled) return;
         setInstagramReadiness(deriveMetaInstagramReadiness({ ...status, source: "backend" }));
         setInstagramLoadState("ready");
-      } catch {
+      } catch (loadError) {
         if (cancelled) return;
+        if (loadError instanceof ApiHttpError && loadError.status === 401) {
+          onUnauthorized();
+          return;
+        }
         setInstagramReadiness(deriveMetaInstagramReadiness({ state: "UNAVAILABLE", source: "backend", nextRequirement: "TENTE_NOVAMENTE" }));
         setInstagramLoadState("error");
       }
     };
     void loadInstagramStatus();
     return () => { cancelled = true; };
-  }, [canalIntegracaoId, instagramRetry]);
+  }, [canalIntegracaoId, instagramRetry, onUnauthorized]);
   const instagramActionAllowed = Boolean(canalIntegracaoId)
     && EXTERNAL_PROVIDER_ACTIVATION_ENABLED
     && instagramLoadState === "ready"
