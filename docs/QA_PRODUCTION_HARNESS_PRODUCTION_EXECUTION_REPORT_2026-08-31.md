@@ -1,10 +1,10 @@
 # QA Production Harness V1 — execução controlada em produção
 
-Data: 2026-08-31  
-Estado: FINAL  
-Executor real: `CODEX_ROOT`  
-Supervisor/gates: `SOL`  
-Classificação dos dados da aplicação: 100% sintéticos/de teste  
+Data: 2026-08-31
+Estado: FINAL
+Executor real: `CODEX_ROOT`
+Supervisor/gates: `SOL`
+Classificação dos dados da aplicação: 100% sintéticos/de teste
 Infraestrutura, secrets, tokens e providers externos: tratados como reais
 
 Este relatório é a autoridade consolidada da execução do harness QA-only em
