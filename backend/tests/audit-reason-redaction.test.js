@@ -43,4 +43,9 @@ test("audit reasons redact OAuth fields and email lifecycle keeps the same bound
   const quoted = sanitizeAuditReason('cookie="synthetic-secret-part-one synthetic-secret-part-two"');
   assert.equal(quoted.includes("synthetic-secret"), false);
   assert.equal(quoted, "cookie=[REDACTED]");
+  for (const key of ["access_token", "accessToken", "refresh_token"]) {
+    const sanitizedToken = sanitizeAuditReason(`${key}=synthetic-secret-token`);
+    assert.equal(sanitizedToken.includes("synthetic-secret-token"), false, key);
+    assert.equal(sanitizedToken, `${key}=[REDACTED]`);
+  }
 });

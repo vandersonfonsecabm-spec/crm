@@ -36,7 +36,7 @@ const STATUS_INTEGRACAO = new Set(["PENDENTE", "ATIVA", "INATIVA", "ERRO"]);
 const FORMATOS_IMPORTACAO = new Set(["CSV", "XLSX", "XML", "JSON"]);
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 const MAX_CONFIG_JSON_BYTES = 32 * 1024;
-const SENSITIVE_CONFIG_KEY = /(?:api.?key|access.?key|client.?secret|app.?secret|private.?key|access.?token|refresh.?token|auth(?:orization)?|password|passwd|senha|cookie|credential|secret|token)/i;
+const SENSITIVE_CONFIG_KEY = /(?:api.?key|access.?key|client.?secret|app.?secret|private.?key|access.?token|refresh.?token|auth(?:orization)?|password|passwd|senha|cookie|credential|secret|token|state|code|signature)/i;
 const SENSITIVE_REDACTION_KEY = new RegExp(`${SENSITIVE_CONFIG_KEY.source}|signature|state|code`, "i");
 const SAFE_PUBLIC_ERROR_CODES = new Set(["PROVIDER_ACTIVATION_PAUSED", "META_EXTERNAL_NETWORK_DISABLED"]);
 

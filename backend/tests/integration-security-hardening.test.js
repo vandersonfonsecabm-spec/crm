@@ -131,6 +131,12 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
       (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
     );
   }
+  for (const key of ["state", "code", "signature"]) {
+    assert.throws(
+      () => _private.stringifySafeConfig({ [key]: "synthetic-oauth-value" }),
+      (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+    );
+  }
   assert.throws(
     () => _private.stringifySafeConfig({ note: "//provider.test/private/tenant-42?opaque=marker" }),
     (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
