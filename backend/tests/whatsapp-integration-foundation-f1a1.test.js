@@ -144,7 +144,7 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
 
   const patch = await request("PATCH", `/canais/${channelA.id}`, { accessTokenRef: "forbidden-input" }, adminA.token);
   assert.equal(patch.status, 400);
-  assert.equal((await prisma.canalIntegracao.findUnique({ where: { id: channelA.id } })).accessTokenRef, null);
+  assert.equal((await prisma.canalIntegracao.findUnique({ where: { id: channelA.id } })).accessTokenRef, channelA.accessTokenRef);
   const listed = await request("GET", "/canais", undefined, adminA.token);
   assert.equal(listed.status, 200);
   assert.equal(JSON.stringify(listed.body).includes("sandbox-ref-a"), false);
@@ -171,7 +171,7 @@ test("endpoint administrativo usa tenant da sessao e retorna somente estado loca
       { empresaId: adminC.empresaId, chave: FEATURE_KEYS.WHATSAPP_INBOUND, habilitada: true },
     ],
   });
-  const credentialChannel = await createConfiguredChannel(adminC.empresaId, "credential");
+  const credentialChannel = await createConfiguredChannel(adminC.empresaId, "credential", { attachCredential: false });
   await prisma.canalIntegracao.update({ where: { id: credentialChannel.id }, data: { connectedAt: null, verifiedAt: null } });
   let handoff = await request("POST", "/integracoes/whatsapp/credentials", {
     canalIntegracaoId: credentialChannel.id,
@@ -206,9 +206,9 @@ test("fundacao nao importa cliente de rede nem cria fluxo de credencial", () => 
   assert.match(source, /createWhatsappInboundLifecycleService/);
 });
 
-async function createConfiguredChannel(empresaId, suffix) {
+async function createConfiguredChannel(empresaId, suffix, { attachCredential = true } = {}) {
   const now = new Date();
-  return prisma.canalIntegracao.create({
+  const channel = await prisma.canalIntegracao.create({
     data: {
       empresaId,
       tipo: "WHATSAPP_META",
@@ -227,14 +227,27 @@ async function createConfiguredChannel(empresaId, suffix) {
       qualityRating: "UNKNOWN",
       graphApiVersion: "sandbox-version",
       onboardingMethod: "MANUAL",
-      // Current schema binds accessTokenRef to MetaCredential; this
-      // foundation test intentionally exercises local status without a
-      // credential payload.
       accessTokenRef: null,
       credentialStatus: null,
       connectedAt: now,
       verifiedAt: now,
     },
+  });
+  if (!attachCredential) return channel;
+  const reference = `meta-whatsapp-foundation-${suffix}-${channel.id}`;
+  await prisma.metaCredential.create({
+    data: {
+      empresaId,
+      canalIntegracaoId: channel.id,
+      provider: "META_WHATSAPP",
+      reference,
+      ciphertext: "ciphertext-synthetic",
+      status: "ATIVA",
+    },
+  });
+  return prisma.canalIntegracao.update({
+    where: { id: channel.id },
+    data: { accessTokenRef: reference },
   });
 }
 

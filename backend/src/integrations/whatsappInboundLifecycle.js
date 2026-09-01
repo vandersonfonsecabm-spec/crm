@@ -177,11 +177,25 @@ async function loadContext(client, tenantId, env) {
     (channel) => channel.chaveInterna === REAL_WHATSAPP_INBOUND_KEY,
   );
   const channel = canonicalChannels.length === 1 ? canonicalChannels[0] : null;
+  const credential = channel?.accessTokenRef
+    ? await client.metaCredential.findFirst({
+      where: {
+        empresaId: tenantId,
+        canalIntegracaoId: channel.id,
+        provider: "META_WHATSAPP",
+        reference: channel.accessTokenRef,
+        status: "ATIVA",
+        removedAt: null,
+      },
+      select: { id: true },
+    })
+    : null;
   const features = new Map(featureRows.map((row) => [row.chave, row.habilitada === true]));
   return {
     tenant,
     realChannels,
     channel,
+    credentialConfigured: Boolean(credential),
     featureRows,
     capabilities: {
       integration: features.get(FEATURE_KEYS.WHATSAPP_INTEGRATION) === true,
@@ -220,6 +234,9 @@ function deriveState(context) {
   if (!capabilities.integration || !capabilities.inbound) {
     return WHATSAPP_OPERATIONAL_STATUS.ERROR;
   }
+  if (!context.credentialConfigured) {
+    return WHATSAPP_OPERATIONAL_STATUS.WAITING_META_AUTH;
+  }
   return channel.verifiedAt
     ? WHATSAPP_OPERATIONAL_STATUS.CONNECTED
     : WHATSAPP_OPERATIONAL_STATUS.WAITING_META_AUTH;
@@ -230,7 +247,7 @@ function presentStatus(context) {
   const state = deriveState(context);
   return {
     canalIntegracaoId: channel?.id || null,
-    credentialConfigured: Boolean(channel?.accessTokenRef),
+    credentialConfigured: context.credentialConfigured,
     publicId: channel?.publicId || null,
     state,
     status: channel?.status || null,

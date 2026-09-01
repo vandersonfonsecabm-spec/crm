@@ -457,6 +457,7 @@ test("lifecycle Messenger preserva timestamps e deriva CONNECTED e PAUSED", asyn
     connectedAt,
     lastWebhookAt,
   });
+  channel = await attachActiveCredential(channel, "META_MESSENGER");
   await createFeature(target.empresaId, "MESSENGER_INTEGRATION", true);
   await createFeature(target.empresaId, "MESSENGER_INBOUND", true);
 
@@ -697,6 +698,24 @@ async function createFeature(empresaId, chave, habilitada) {
       habilitada,
       habilitadoEm: habilitada ? new Date() : null,
     },
+  });
+}
+
+async function attachActiveCredential(channel, provider) {
+  const reference = `${provider.toLowerCase()}-lifecycle-${suffix}`;
+  await prisma.metaCredential.create({
+    data: {
+      empresaId: channel.empresaId,
+      canalIntegracaoId: channel.id,
+      provider,
+      reference,
+      ciphertext: "ciphertext-synthetic",
+      status: "ATIVA",
+    },
+  });
+  return prisma.canalIntegracao.update({
+    where: { id: channel.id },
+    data: { accessTokenRef: reference },
   });
 }
 

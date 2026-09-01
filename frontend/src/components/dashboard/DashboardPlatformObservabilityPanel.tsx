@@ -67,7 +67,7 @@ export default function DashboardPlatformObservabilityPanel() {
           </div>
 
           <div className="grid gap-3 xl:grid-cols-2">
-            <QueueCard emptyLabel="Nenhuma credencial configurada." icon={<ShieldCheck size={14} />} label="Estado de credenciais (sem segredos)" values={summary.credentials} />
+            <QueueCard emptyLabel="Nenhuma credencial configurada." icon={<ShieldCheck size={14} />} label="Estado de credenciais por fonte (sem segredos)" values={summary.credentialSources ? mergeCountMaps({ meta: summary.credentialSources.meta, integration: summary.credentialSources.integration }) : summary.credentials} />
             <div className="rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-[11px] text-[var(--text-muted)]">
               <p className="font-semibold text-[var(--text-secondary)]">Último erro de integração</p>
               <p className="mt-2">{summary.lastIntegrationErrorAt ? formatDate(summary.lastIntegrationErrorAt) : "Nenhum erro aberto"}</p>

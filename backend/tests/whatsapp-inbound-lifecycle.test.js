@@ -292,6 +292,7 @@ test("F1C-2B deriva CONNECTED, PAUSED, ERROR e UNAVAILABLE sem preencher timesta
     connectedAt,
     lastWebhookAt,
   });
+  channel = await attachActiveCredential(channel, "META_WHATSAPP");
   await createFeature(target.empresaId, "WHATSAPP_INTEGRATION", true);
   await createFeature(target.empresaId, "WHATSAPP_INBOUND", true);
 
@@ -450,6 +451,24 @@ async function createFeature(empresaId, chave, habilitada) {
       habilitada,
       habilitadoEm: habilitada ? new Date() : null,
     },
+  });
+}
+
+async function attachActiveCredential(channel, provider) {
+  const reference = `${provider.toLowerCase()}-lifecycle-${suffix}`;
+  await prisma.metaCredential.create({
+    data: {
+      empresaId: channel.empresaId,
+      canalIntegracaoId: channel.id,
+      provider,
+      reference,
+      ciphertext: "ciphertext-synthetic",
+      status: "ATIVA",
+    },
+  });
+  return prisma.canalIntegracao.update({
+    where: { id: channel.id },
+    data: { accessTokenRef: reference },
   });
 }
 
