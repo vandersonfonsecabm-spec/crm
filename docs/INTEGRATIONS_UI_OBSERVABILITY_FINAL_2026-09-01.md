@@ -1,5 +1,79 @@
 # Integrações visíveis e observabilidade — relatório canônico final
 
+## Addendum — fechamento pós-correções de redaction (2026-09-01)
+
+A revisão adversarial independente do candidato f70d1a0 encontrou
+ADV-F70-001 (HIGH): os três sanitizadores encerravam valores quoted na
+primeira aspa mesmo quando ela estava escapada, deixando o sufixo visível.
+O fix focal foi aplicado em eda356cfe9b1d7b839e4c3cc5481bbc7fd496eb3 e
+publicado somente na API de staging (ee8f42f1-5ded-4cde-b036-8fa3cb318e3e).
+
+A segunda revisão independente encontrou ADV-F70-002 (HIGH): quando a
+abertura quoted era malformada e não havia aspa de fechamento, o fallback
+redigia apenas o primeiro token e deixava o restante visível. O parser foi
+endurecido para consumir o restante do campo e o teste causal foi adicionado
+no commit 20d8c9e4f9d5389660ea88a863a3d6a22f5b8094, publicado somente no
+backend staging como deployment 153e615b-0a96-445c-bc56-2168f9a80de9
+(SUCCESS).
+
+Os três caminhos (auditReason, respostas de Integrações e
+worker-observability) agora cobrem aspas escapadas, aspas simples/duplas e
+valores sem fechamento. Retestes:
+
+AUDIT_REASON_REDACTION=PASS
+INTEGRATION_SECURITY_HARDENING=PASS
+WORKER_OBSERVABILITY_ISOLATED=18/18 PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+FRONTEND_TESTS=239/239 PASS
+FRONTEND_BUILD=PASS
+FRONTEND_LINT=PASS
+PROTECTED_DEV_DB_HASH=6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533
+
+O runtime do backend staging confirmou health/readiness 200, deployment
+153e615b-0a96-445c-bc56-2168f9a80de9, manifesto
+e33213001bcd9ba32e99431a4ebd70b39c79d57e7385b816a9acc4edc2120b1d,
+targetVerified=true, databaseVerified=true,
+externalProviderActivationEnabled=false, trackedProviderConnections=false
+e outboundEnabled=false. Os hashes locais/runtime conferem:
+
+src/automations/worker-observability.js = 598e53253e2ccd51312fc50bbafd96cc7bb735fa7e510915603cb2c3e5d869e9
+src/integrations/routes.js              = 2b2234d47560703f6b175ef44e68a1d5dc8183e71e059a3964d455d80b530306
+src/security/auditReason.js             = e3bf0a4aee91a7f39a34f8345b31cae1560bbff4cf6fb0fa4a2203ef8ae07b47
+
+O fallback adversarial independente retornou FIX_FIRST sem novo bug de
+produto. Ele classificou EXT-VERCEL-001 como bloqueio externo HIGH: o
+artifact frontend do candidato ainda não foi criado no Vercel staging porque
+a plataforma recusou novas criações por api-deployments-free-per-day; o
+alias permanece dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3. Portanto, a paridade
+frontend e o runtime completo do candidato não podem ser declarados.
+Também foi corrigida nesta atualização a lacuna documental que ainda apontava
+f70d1a0 como candidato atual.
+
+Estado canônico após esta retomada:
+
+RELEASE_FUNCTIONAL_HEAD=20d8c9e4f9d5389660ea88a863a3d6a22f5b8094
+RELEASE_FUNCTIONAL_TREE=b2b38d05c3ffc55bac96cb2f91467a90131d1bf8
+REMOTE_BRANCH_SHA=20d8c9e4f9d5389660ea88a863a3d6a22f5b8094
+RAILWAY_API_DEPLOYMENT=153e615b-0a96-445c-bc56-2168f9a80de9
+STAGING_BACKEND_RUNTIME=PASS
+STAGING_FRONTEND_RUNTIME=BLOCKED_EXTERNAL_VERCEL_QUOTA
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_REVIEWER_INFRA=AVAILABLE_FALLBACK_REVIEWER
+FINAL_ADVERSARIAL_VERDICT=FIX_FIRST
+FINAL_ADVERSARIAL_BLOCKER=EXTERNAL_RELEASE_BLOCKER_VERCEL_QUOTA
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+
+Uma tentativa direta de executar o teste do worker fora do runner oficial foi
+classificada como erro de harness por apontar para um banco sem a migration
+necessária; ela não alterou o dev.db, cujo hash permaneceu intacto. A
+execução oficial pela sandbox foi a evidência usada para o gate.
+
 Data: 2026-09-01  
 Escopo: staging do CRM; nenhuma promoção para produção.  
 Executor real: `CODEX_ROOT`. A seleção de modo/modelo foi uma pré-condição confirmada pelo usuário; não há atestado de runtime e não se afirma execução por Luna Max.

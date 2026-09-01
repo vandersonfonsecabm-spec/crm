@@ -1,4 +1,29 @@
 # Estado atual do CRM
+## Integrações visíveis + observabilidade — estado pós-correções de redaction (2026-09-01)
+
+- Candidato funcional atual: 20d8c9e4f9d5389660ea88a863a3d6a22f5b8094,
+  tree b2b38d05c3ffc55bac96cb2f91467a90131d1bf8, branch
+  feature/canonical-sale-v1 e remoto alinhados.
+- ADV-F70-001 e ADV-F70-002 foram corrigidos e retestados: os sanitizadores
+  de auditReason, rotas de Integrações e worker cobrem valores quoted com
+  aspas escapadas e sem fechamento, sem sufixo residual.
+- Backend staging está no deployment 153e615b-0a96-445c-bc56-2168f9a80de9,
+  health/readiness 200, manifesto e33213001bcd9ba32e99431a4ebd70b39c79d57e7385b816a9acc4edc2120b1d
+  e hashes locais/runtime conferidos byte a byte. Providers, ativação externa
+  e outbound continuam desligados; produção permanece intocada.
+- Testes finais: backend isolado completo PASS_EXIT_0, worker 18/18, frontend
+  239/239, build e lint PASS. O banco protegido dev.db preservou seu SHA
+  canônico 6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533.
+- A revisão adversarial fallback retornou FIX_FIRST somente por
+  EXT-VERCEL-001: o artifact frontend do candidato não foi criado por quota
+  externa api-deployments-free-per-day; paridade frontend não é PASS e o
+  alias permanece no deployment anterior. Isso é bloqueio externo, não bug de
+  produto.
+- A documentação e o evidence index foram atualizados para o SHA 20d8c9e,
+  runtime 153e615b e estado real. Manter FINAL_ADVERSARIAL_VERDICT=FIX_FIRST,
+  FINAL_SOL_RECONCILIATION=NOT_CLOSED, READY_FOR_PRODUCTION=false,
+  PRODUCTION_CHANGED=false, REAL_PROVIDER_CONNECTIONS=0 e REAL_OUTBOUND=0.
+
 ## Integrações visíveis + observabilidade — correção dos findings C48 e bloqueio externo do Vercel (2026-09-01)
 
 - A revisão adversarial do candidato `c48bd70` encontrou `ADV-C48-001/002`

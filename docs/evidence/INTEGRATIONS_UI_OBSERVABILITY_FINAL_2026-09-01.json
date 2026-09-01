@@ -6,8 +6,8 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "f70d1a0af7b3fc8be71f1236ea1309d1ab203faa",
-    "tree": "2fde08e2144b9a19ae5b567d5d9910b9f7e37404",
+    "head": "20d8c9e4f9d5389660ea88a863a3d6a22f5b8094",
+    "tree": "b2b38d05c3ffc55bac96cb2f91467a90131d1bf8",
     "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
     "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531",
@@ -25,7 +25,9 @@
     "emptyCredentialAndNetworkPathRedactionFixCommit": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068",
     "adversarialAudit85edFindingsFixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
     "adversarialAuditE14fFindingsFixCommit": "c48bd70a30f446e26345de269b5e640d30526b0d",
-    "adversarialAuditC48FindingsFixCommit": "f70d1a0af7b3fc8be71f1236ea1309d1ab203faa"
+    "adversarialAuditC48FindingsFixCommit": "f70d1a0af7b3fc8be71f1236ea1309d1ab203faa",
+    "escapedQuotedRedactionFixCommit": "eda356cfe9b1d7b839e4c3cc5481bbc7fd496eb3",
+    "unterminatedQuotedRedactionFixCommit": "20d8c9e4f9d5389660ea88a863a3d6a22f5b8094"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -47,6 +49,8 @@
     "railwayApiDeploymentAfterAdversarialAudit85edFix": "072cd6cb-2696-4a8c-b1ca-a79ec8b2e3cc",
     "railwayApiDeploymentAfterE14fFix": "52accda9-92dd-4148-9d0d-b337f09e2eee",
     "railwayApiDeploymentAfterC48Fix": "f7626817-24d1-4dd8-8f60-cdbbee0a04d8",
+    "railwayApiDeploymentAfterEscapedQuotedRedactionFix": "ee8f42f1-5ded-4cde-b036-8fa3cb318e3e",
+    "railwayApiDeploymentAfterUnterminatedQuotedRedactionFix": "153e615b-0a96-445c-bc56-2168f9a80de9",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -81,8 +85,9 @@
     "consoleErrors": "NOT_OBSERVABLE_BY_CONNECTOR",
     "readyForProduction": false,
     "vercelDeploymentAttempt": "BLOCKED_BEFORE_CREATION_API_DEPLOYMENTS_FREE_PER_DAY",
-    "finalAdversarialReviewerInfra": "AVAILABLE_NEW_PATH",
-    "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
+    "finalAdversarialReviewerInfra": "AVAILABLE_FALLBACK_REVIEWER",
+    "finalAdversarialVerdict": "FIX_FIRST",
+    "finalAdversarialBlocker": "EXTERNAL_RELEASE_BLOCKER_VERCEL_QUOTA",
     "finalSolReconciliation": "NOT_CLOSED"
   },
   "publishedAssetHashes": [
@@ -96,21 +101,22 @@
     "src/integrations/messengerInboundLifecycle.js": "473e5f122f45fc89b583795ff2a1e7cecb9822d43ed5abd4cabe0fed06ce202c",
     "src/integrations/instagramInboundLifecycle.js": "c1a31c03642fccbd7c1f2ba811649c7b0574342750ce657aa1026b100fe9156f",
     "src/integrations/emailInboundLifecycle.js": "739b7432662d50007e5513af14d33e5ae6dc50e06be7040d1713aeeec7d4720c",
-    "src/integrations/routes.js": "c608e0291e2f70b4efa93c16f89442221f5cc94b487baff83f55e51121832792",
+    "src/integrations/routes.js": "2b2234d47560703f6b175ef44e68a1d5dc8183e71e059a3964d455d80b530306",
     "src/platform/observability.js": "d0423a6f6434cd647e1a47812f4eb8877ea3df0897802f34b34bcfd6279c78a6",
     "src/runtime-fingerprint.js": "7381b9b9a1d48b645de6134817426a5199414e3e8ea7fbf9f71e23792f1fc8ef",
-    "src/security/auditReason.js": "8eb58bc3daab163f5f8c881fcd4f1acad85b8aa2c7ae13b5b77b27ed4a7bb8b1",
+    "src/security/auditReason.js": "e3bf0a4aee91a7f39a34f8345b31cae1560bbff4cf6fb0fa4a2203ef8ae07b47",
     "src/integrations/blingService.js": "368f3a5ce2a5a0b03b1b12747f918efd218ceab8c0c4d71406ac2a7fb70e5bf0",
-    "src/integrations/providerActivation.js": "f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d"
+    "src/integrations/providerActivation.js": "f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d",
+    "src/automations/worker-observability.js": "598e53253e2ccd51312fc50bbafd96cc7bb735fa7e510915603cb2c3e5d869e9"
   },
   "runtimeFingerprint": {
-    "deploymentId": "f7626817-24d1-4dd8-8f60-cdbbee0a04d8",
+    "deploymentId": "153e615b-0a96-445c-bc56-2168f9a80de9",
     "deploymentIdentityVerified": true,
     "environment": "staging",
     "targetVerified": true,
     "databaseVerified": true,
     "sourceManifestVersion": "backend-runtime-v3-lf",
-    "sourceManifestSha256": "d8ecf0807223c1f50c3c3678b7a8d39cf2f81eeff90b43b5b554666a94b350ee",
+    "sourceManifestSha256": "e33213001bcd9ba32e99431a4ebd70b39c79d57e7385b816a9acc4edc2120b1d",
     "trackedProviderConnections": false,
     "externalProviderActivationEnabled": false,
     "outboundEnabled": false,
@@ -167,7 +173,10 @@
       "FIX_FIRST_ADV_LATEST_EMPTY_GENERIC_AND_NETWORK_PATH",
       "FIX_FIRST_AUDIT_85ED_001_008",
       "FIX_FIRST_E14F_ADV_001_005",
-      "FIX_FIRST_ADV_C48_001_002"
+      "FIX_FIRST_ADV_C48_001_002",
+      "FIX_FIRST_ADV_F70_001_ESCAPED_QUOTE",
+      "FIX_FIRST_ADV_F70_002_UNTERMINATED_QUOTE",
+      "FIX_FIRST_EXTERNAL_VERCEL_QUOTA"
     ],
     "finalAdversarialReviewerInfra": "AVAILABLE_NEW_PATH",
     "findings": [
@@ -490,9 +499,42 @@
         "status": "RETESTED_BACKEND",
         "fixCommit": "f70d1a0af7b3fc8be71f1236ea1309d1ab203faa",
         "causalRetest": "Bearer rule precedes full quoted key/value redaction; authorization multiword test PASS"
+      },
+      {
+        "id": "ADV-F70-001",
+        "severity": "HIGH",
+        "area": "escaped quoted redaction",
+        "status": "RETESTED_BACKEND",
+        "fixCommit": "eda356cfe9b1d7b839e4c3cc5481bbc7fd496eb3",
+        "causalRetest": "auditReason, integration response redaction and worker sanitizer cover escaped single/double quotes; focused tests PASS"
+      },
+      {
+        "id": "ADV-F70-002",
+        "severity": "HIGH",
+        "area": "unterminated quoted redaction",
+        "status": "RETESTED_BACKEND",
+        "fixCommit": "20d8c9e4f9d5389660ea88a863a3d6a22f5b8094",
+        "causalRetest": "unterminated quoted values consume the remaining field; focused tests, worker test and backend suite PASS"
+      },
+      {
+        "id": "EXT-VERCEL-001",
+        "severity": "HIGH",
+        "area": "external frontend release",
+        "status": "OPEN_EXTERNAL",
+        "fixCommit": null,
+        "causalRetest": "Vercel rejected deployment creation before artifact by api-deployments-free-per-day; alias remains previous deployment"
+      },
+      {
+        "id": "DOC-PARITY-001",
+        "severity": "MEDIUM",
+        "area": "evidence candidate parity",
+        "status": "FIXED_IN_DOCUMENT_UPDATE",
+        "fixCommit": null,
+        "causalRetest": "Markdown and evidence index updated to candidate 20d8c9e, tree b2b38d05 and runtime deployment 153e615b"
       }
     ],
-    "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
+    "finalAdversarialVerdict": "FIX_FIRST",
+    "finalAdversarialBlocker": "EXTERNAL_RELEASE_BLOCKER_VERCEL_QUOTA",
     "finalSolReconciliation": "NOT_CLOSED"
   }
 }
