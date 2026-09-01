@@ -2100,5 +2100,7 @@ integracoes autorizadas.
   Produção não foi publicada nem alterada por esta missão.
 - E2E autenticado e revisão adversarial autenticada de staging continuam sem
   sessão QA segura; a tentativa de controle de navegador foi classificada como
-  `BROWSER_CONTROL_FAILURE`. Não declarar promoção para produção até obter essa
-  evidência externa.
+  `BROWSER_CONTROL_FAILURE`. O reviewer independente solicitado para o SHA
+  final não retornou na janela operacional e foi interrompido, portanto o
+  veredito adversarial final permanece `BLOCKED_EXTERNAL`. Não declarar
+  promoção para produção até obter essas evidências externas.

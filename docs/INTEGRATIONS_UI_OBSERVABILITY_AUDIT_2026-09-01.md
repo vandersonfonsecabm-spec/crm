@@ -178,14 +178,16 @@ Os reviewers independentes encontraram e o executor corrigiu os pontos de
 ativação externa, estados falsos, redaction, E-mail tenant-scoped, freshness do
 worker, requisitos de próxima ação, cobertura do fingerprint, contadores de
 outbox e revogação local. Uma nova revisão independente foi solicitada para o
-SHA final; a reauditoria autenticada continua em andamento;
+SHA final, mas o agente reviewer não retornou dentro da janela operacional e
+foi interrompido; isso é uma lacuna externa de evidência, não um PASS.
 sem uma sessão autenticada segura, não declarar
 `INTEGRATIONS_UI_OBSERVABILITY=COMPLETE` nem promover para produção.
 
 ```text
-REVIEW_A_LOCAL=FINAL_REVIEW_REQUESTED_ON_E044D58
-REVIEW_B_LOCAL=FINAL_REVIEW_REQUESTED_ON_E044D58
+REVIEW_A_LOCAL=FINAL_REVIEW_BLOCKED_REVIEWER_TIMEOUT
+REVIEW_B_LOCAL=FINAL_REVIEW_BLOCKED_REVIEWER_TIMEOUT
 FINAL_ADVERSARIAL_AUTHENTICATED=NOT_EXECUTED_NO_SAFE_SESSION
+FINAL_ADVERSARIAL_REVIEW=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
 PENDING_INTERNAL=0
 UNTESTED_INTERNAL=0
 FALSE_PASS=0
