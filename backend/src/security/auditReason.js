@@ -4,6 +4,7 @@ const SENSITIVE_REASON_KEY_PATTERN = /\b(password|senha|token|secret|authorizati
 // Every URI scheme is sensitive, including opaque schemes without `//` such
 // as data:, mailto:, urn: and custom provider schemes.
 const URL_PATTERN = /\b[a-z][a-z0-9+.-]*:[^\s]+/gi;
+const NETWORK_PATH_USERINFO_PATTERN = /\/\/[^\s/@?#]*:[^\s/@?#]+@[^\s/?#]+/g;
 const NETWORK_PATH_PATTERN = /\/\/[^\s/?#]+[/?#][^\s]*/g;
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi;
 const JWT_PATTERN = /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
@@ -26,6 +27,7 @@ function sanitizeAuditReason(value, sensitiveValues = [], maxLength = 500) {
   // query and fragment values cannot survive in an audit trail.
   sanitized = sanitized
     .replace(URL_PATTERN, "[REDACTED_URL]")
+    .replace(NETWORK_PATH_USERINFO_PATTERN, "[REDACTED_URL]")
     .replace(NETWORK_PATH_PATTERN, "[REDACTED_URL]")
     .replace(BEARER_PATTERN, "Bearer [REDACTED]")
     .replace(JWT_PATTERN, "[REDACTED_TOKEN]")

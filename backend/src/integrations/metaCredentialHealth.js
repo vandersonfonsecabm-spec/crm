@@ -42,6 +42,13 @@ function isUsableEncryptedCredentials(payload, { now = new Date() } = {}) {
   try {
     const credentials = decryptCredentials(payload);
     if (!credentials || typeof credentials !== "object" || Array.isArray(credentials)) return false;
+    const material = Object.entries(credentials).filter(([key, value]) => (
+      !["expiresAt", "scopes", "tokenType", "userId"].includes(key)
+      && value !== null
+      && value !== undefined
+      && (typeof value !== "string" || value.trim())
+    ));
+    if (!material.length) return false;
     if (credentials.expiresAt !== undefined && credentials.expiresAt !== null) {
       const expiresAt = new Date(credentials.expiresAt);
       const currentTime = now instanceof Date ? now.getTime() : new Date(now).getTime();

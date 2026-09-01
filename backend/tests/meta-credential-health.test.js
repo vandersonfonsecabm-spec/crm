@@ -3,8 +3,8 @@ const { test } = require("node:test");
 
 process.env.INTEGRATION_ENCRYPTION_KEY = "meta-credential-health-test-key-with-more-than-32-bytes";
 
-const { encryptCredentialsWithContext } = require("../src/integrations/crypto");
-const { isUsableMetaCredential } = require("../src/integrations/metaCredentialHealth");
+const { encryptCredentials, encryptCredentialsWithContext } = require("../src/integrations/crypto");
+const { isUsableEncryptedCredentials, isUsableMetaCredential } = require("../src/integrations/metaCredentialHealth");
 
 const baseRow = {
   empresaId: 7,
@@ -34,4 +34,10 @@ test("Meta credential health rejects ciphertext bound to a different context", (
   const row = encryptedRow({ accessToken: "synthetic-token" });
   assert.equal(isUsableMetaCredential({ ...row, canalIntegracaoId: 12 }, { now: new Date() }), false);
   assert.equal(isUsableMetaCredential({ ...row, provider: "META_INSTAGRAM" }, { now: new Date() }), false);
+});
+
+test("generic encrypted credential health rejects empty metadata-only payloads", () => {
+  assert.equal(isUsableEncryptedCredentials(encryptCredentials({})), false);
+  assert.equal(isUsableEncryptedCredentials(encryptCredentials({ expiresAt: "2030-01-01T00:00:00.000Z" })), false);
+  assert.equal(isUsableEncryptedCredentials(encryptCredentials({ accessToken: "synthetic-token" })), true);
 });

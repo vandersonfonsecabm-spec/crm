@@ -104,11 +104,12 @@ test("observabilidade classifica ciphertext ativo inválido como INVALID em vez 
       findMany: async () => [
         { status: "ATIVA", credenciaisCriptografadas: encryptCredentials({ accessToken: "synthetic-generic-token" }) },
         { status: "ATIVA", credenciaisCriptografadas: "ciphertext-invalid" },
+        { status: "ATIVA", credenciaisCriptografadas: encryptCredentials({}) },
       ],
     },
     operacaoDistribuidaLease: { count: async () => 0 },
   };
   const result = await createPlatformObservabilityService({ prisma }).summary({ now: new Date("2026-09-01T03:00:00.000Z") });
   assert.equal(result.credentials.ATIVA, 2);
-  assert.equal(result.credentials.INVALID, 2);
+  assert.equal(result.credentials.INVALID, 3);
 });
