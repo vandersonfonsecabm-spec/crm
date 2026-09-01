@@ -6,11 +6,12 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "daef225348f715edf079c0e3f2a051b062318531",
-    "tree": "f1eb9ea120f9f9d58e633853885af5b8ac2ffc93",
+    "head": "2214b846585dbb454e1349c1fd7018b848c120e5",
+    "tree": "87bf14a075cc8beb1c101980b0fa4976ed04ee9a",
     "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
-    "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531"
+    "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531",
+    "providerActivationGateFixCommit": "2214b846585dbb454e1349c1fd7018b848c120e5"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -20,7 +21,7 @@
     "databaseServiceId": "f3a2862b-2371-4ab3-b4db-1e91680ee3b7",
     "vercelProjectId": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
     "vercelDeploymentId": "dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3",
-    "railwayApiDeploymentAfterSecurityFix": "35e96728-ba1e-4bcf-a99d-62785ea90256",
+    "railwayApiDeploymentAfterSecurityFix": "f03b3cf7-fce2-4923-ad47-ebdc476b0fd5",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -37,6 +38,7 @@
     "userObservability": "PASS_AUTHENTICATED",
     "platformObservability": "PASS_AUTHENTICATED_OPERATOR",
     "auditReasonRedaction": "PASS",
+    "providerActivationGate": "PASS",
     "platformAdminTenantBypass": 0,
     "externalSideEffects": 0,
     "integrationTabs": "PASS",
@@ -82,10 +84,21 @@
     "finalAdversarialAttempts": [
       "BLOCKED_EXTERNAL_REVIEWER_TIMEOUT",
       "INTERRUPTED_AFTER_TIMEOUT",
-      "RUNTIME_SWITCH_TIMEOUT"
+      "RUNTIME_SWITCH_TIMEOUT",
+      "FIX_FIRST_INT_ADV_001"
     ],
     "finalAdversarialReviewerInfra": "UNAVAILABLE",
-    "finalAdversarialVerdict": "BLOCKED_EXTERNAL_REVIEWER_TIMEOUT",
+    "findings": [
+      {
+        "id": "INT-ADV-001",
+        "severity": "HIGH",
+        "area": "provider activation gate",
+        "status": "RETESTED",
+        "fixCommit": "2214b846585dbb454e1349c1fd7018b848c120e5",
+        "causalRetest": "PLATFORM_PROVIDER_ACTIVATION_GATE=PASS; BACKEND_ISOLATED_SUITE=PASS_EXIT_0"
+      }
+    ],
+    "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
     "finalSolReconciliation": "NOT_CLOSED"
   }
 }

@@ -25,12 +25,12 @@ REAL_OUTBOUND=0
 
 ```text
 BRANCH=feature/canonical-sale-v1
-RELEASE_HEAD=daef225348f715edf079c0e3f2a051b062318531
-RELEASE_TREE=f1eb9ea120f9f9d58e633853885af5b8ac2ffc93
+RELEASE_HEAD=2214b846585dbb454e1349c1fd7018b848c120e5
+RELEASE_TREE=87bf14a075cc8beb1c101980b0fa4976ed04ee9a
 BACKEND_CAUSAL_HEAD=e044d5852de15ad52b69f4025db9b80b3fec822b
 BASELINE_FUNCTIONAL=79eed4f
 FRONTEND_SOURCE_FIX=API fallback canônico de staging + teste de regressão
-REMOTE_BRANCH_SHA=951b35bbd7a4d3474e8f848e746aa00b57b90a0f
+REMOTE_BRANCH_SHA=2214b846585dbb454e1349c1fd7018b848c120e5
 ```
 
 O frontend recebeu uma correção mínima porque o bundle estático publicado
@@ -58,7 +58,7 @@ RAILWAY_ENVIRONMENT=d6b6f137-cffd-4647-a102-3619fc54133a
 RAILWAY_API_SERVICE=8af12b8e-4f4d-498c-9ceb-3182417905f8
 RAILWAY_WORKER_SERVICE=25dab463-52c0-4425-825e-c7dcf6a65332
 RAILWAY_DATABASE_SERVICE=f3a2862b-2371-4ab3-b4db-1e91680ee3b7
-RAILWAY_API_DEPLOYMENT_AFTER_CLEANUP=35e96728-ba1e-4bcf-a99d-62785ea90256
+RAILWAY_API_DEPLOYMENT_AFTER_CLEANUP=f03b3cf7-fce2-4923-ad47-ebdc476b0fd5
 RAILWAY_WORKER_DEPLOYMENT=ebefe2db-ad83-4446-978f-c495c30a0810
 VERCEL_PROJECT=prj_AJE06pNRGunJoguCNWee0RgZV6t8
 VERCEL_DEPLOYMENT=dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3
@@ -328,3 +328,48 @@ READY_FOR_PRODUCTION=false
 Esse resultado é uma indisponibilidade do mecanismo de revisão adversarial,
 mesmo após a troca de runtime. Ele não autoriza converter o gate em `SHIP` nem
 reabrir o código sem um finding causal.
+
+## Addendum — finding adversarial e correção server-side (2026-09-01)
+
+Uma revisão independente em sessão separada encontrou `INT-ADV-001` (HIGH):
+as rotas mutáveis do operador de plataforma para provisionamento e ativação de
+providers não aplicavam o mesmo freeze global usado pelas rotas tenant-scoped.
+Isso permitiria ativar um canal externo com
+`EXTERNAL_PROVIDER_ACTIVATION_ENABLED=false`.
+
+Correção focal aplicada no commit `2214b846585dbb454e1349c1fd7018b848c120e5`,
+tree `87bf14a075cc8beb1c101980b0fa4976ed04ee9a`:
+
+- novo módulo compartilhado `backend/src/integrations/providerActivation.js`;
+- guard middleware nas rotas de provisionamento de WhatsApp, Instagram,
+  Messenger e E-mail;
+- guard nas transições `activate`/`reactivate` do operador de plataforma;
+- `pause` permanece permitido como desativação local segura;
+- teste de registro das rotas e resposta fail-closed `503 PROVIDER_ACTIVATION_PAUSED`.
+
+Retestes causais:
+
+```text
+PLATFORM_PROVIDER_ACTIVATION_GATE=PASS
+INTEGRATION_PROVIDER_ACTIVATION_GATE=PASS
+PLATFORM_OPERATIONS_H7_1=PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+```
+
+O backend foi publicado somente no staging no deployment
+`f03b3cf7-fce2-4923-ad47-ebdc476b0fd5`, `SUCCESS`; `/health=200` e
+`/ready=200`. Os hashes SHA-256 dos dois arquivos causais foram conferidos
+byte a byte entre o worktree e `/app` no runtime. Nenhum provider, outbound,
+produção ou banco oficial foi tocado.
+
+O finding `INT-ADV-001` está corrigido e aguarda revisão adversarial limpa no
+novo SHA. Até essa revisão e a reconciliação do Sol, manter:
+
+```text
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+INT_ADV_001=RETESTED
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+```

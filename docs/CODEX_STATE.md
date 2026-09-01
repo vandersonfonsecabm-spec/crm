@@ -2161,3 +2161,11 @@ integracoes autorizadas.
   `FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT`,
   `FINAL_SOL_RECONCILIATION=NOT_CLOSED` e `READY_FOR_PRODUCTION=false`.
 - Autoridade documental: `docs/INTEGRATIONS_UI_OBSERVABILITY_FINAL_2026-09-01.md`.
+- A revisão adversarial independente encontrou `INT-ADV-001` (HIGH): rotas
+  mutáveis de operador para provisionamento/ativação de providers não aplicavam
+  o freeze global. O fix compartilhado está em `2214b846`, com teste focal,
+  H7.1 e suíte backend isolada passando; o backend foi republicado no staging
+  como `f03b3cf7-fce2-4923-ad47-ebdc476b0fd5`, health/ready 200 e hashes dos
+  arquivos causais conferidos no runtime. `pause` continua permitido como
+  disable local seguro. O finding está `RETESTED`; nova revisão adversarial do
+  SHA `2214b846` ainda é necessária antes de `SHIP`.
