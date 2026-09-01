@@ -52,7 +52,7 @@ export default function DashboardPlatformObservabilityPanel() {
       {summary && (
         <div className="space-y-3 p-4">
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-            <Metric icon={<Server size={14} />} label="Checkpoints do worker" value={summary.worker.checkpointCount} />
+            <Metric icon={<Server size={14} />} label="Worker / checkpoints" tone={summary.worker.health === "HEALTHY" ? "success" : summary.worker.health === "STALE" ? "danger" : "warning"} value={summary.worker.checkpointCount} />
             <Metric icon={<ShieldCheck size={14} />} label="Leases ativos" tone={summary.worker.activeLeases > 0 ? "success" : "neutral"} value={summary.worker.activeLeases} />
             <Metric icon={<AlertTriangle size={14} />} label="Leases expirados" tone={summary.worker.expiredLeases > 0 ? "warning" : "neutral"} value={summary.worker.expiredLeases} />
             <Metric icon={<AlertTriangle size={14} />} label="Erros de integração abertos" tone={summary.unresolvedIntegrationErrors > 0 ? "danger" : "neutral"} value={summary.unresolvedIntegrationErrors} />
@@ -77,7 +77,7 @@ export default function DashboardPlatformObservabilityPanel() {
 
           <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border-default)] pt-3 text-[10px] text-[var(--text-muted)]">
             <Clock3 aria-hidden="true" size={12} />
-            <span>{summary.worker.lastCheckpointAt ? `Último checkpoint: ${formatDate(summary.worker.lastCheckpointAt)}` : "Nenhum checkpoint persistido"}</span>
+            <span>{summary.worker.lastCheckpointAt ? `Worker ${workerHealthLabel(summary.worker.health)} · último checkpoint: ${formatDate(summary.worker.lastCheckpointAt)}` : "Worker sem checkpoint persistido"}</span>
             <span aria-hidden="true">·</span>
             <span>Atualizado em {formatDate(summary.generatedAt)}</span>
           </div>
@@ -86,6 +86,12 @@ export default function DashboardPlatformObservabilityPanel() {
       )}
     </Surface>
   );
+}
+
+function workerHealthLabel(health: PlatformObservabilitySummary["worker"]["health"]) {
+  if (health === "HEALTHY") return "saudável";
+  if (health === "STALE") return "atrasado";
+  return "sem evidência";
 }
 
 function Metric({ icon, label, tone = "neutral", value }: { icon: React.ReactNode; label: string; tone?: "success" | "warning" | "danger" | "neutral"; value: number }) {
