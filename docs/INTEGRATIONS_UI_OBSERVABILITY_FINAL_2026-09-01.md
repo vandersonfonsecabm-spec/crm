@@ -25,12 +25,12 @@ REAL_OUTBOUND=0
 
 ```text
 BRANCH=feature/canonical-sale-v1
-RELEASE_HEAD=696e2a7e0bac6e1e85484a5ad9819e7b36f6c27c
-RELEASE_TREE=d416ba96a5817540f70c198617e330286d8607a4
+RELEASE_HEAD=4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7
+RELEASE_TREE=3e80ad611ef489ed6e0f771201f1d319f5258c8b
 BACKEND_CAUSAL_HEAD=e044d5852de15ad52b69f4025db9b80b3fec822b
 BASELINE_FUNCTIONAL=79eed4f
 FRONTEND_SOURCE_FIX=API fallback canônico de staging + teste de regressão
-REMOTE_BRANCH_SHA=ca4127d716cc6abd93b9efb208611603c1d6ba01
+REMOTE_BRANCH_SHA=4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7
 ```
 
 O frontend recebeu uma correção mínima porque o bundle estático publicado
@@ -59,6 +59,7 @@ RAILWAY_API_SERVICE=8af12b8e-4f4d-498c-9ceb-3182417905f8
 RAILWAY_WORKER_SERVICE=25dab463-52c0-4425-825e-c7dcf6a65332
 RAILWAY_DATABASE_SERVICE=f3a2862b-2371-4ab3-b4db-1e91680ee3b7
 RAILWAY_API_DEPLOYMENT_AFTER_CLEANUP=63d3924d-fddb-46b2-bc50-7a2809d46186
+RAILWAY_API_DEPLOYMENT_AFTER_GENERIC_REDACTION_FIX=54d0f59f-fd49-4e4c-9345-40ff9873f7c8
 RAILWAY_WORKER_DEPLOYMENT=ebefe2db-ad83-4446-978f-c495c30a0810
 VERCEL_PROJECT=prj_AJE06pNRGunJoguCNWee0RgZV6t8
 VERCEL_DEPLOYMENT=dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3
@@ -87,12 +88,13 @@ SOURCE_RUNTIME_PARITY=PASS_FOR_PUBLISHED_ASSETS_AND_BACKEND_HASHES
 ```
 
 Hashes SHA-256 dos arquivos backend causais do candidato foram comparados
-byte a byte com os arquivos no runtime `/app` do deployment `63d3924d`:
+byte a byte com os arquivos no runtime `/app` do deployment
+`54d0f59f-fd49-4e4c-9345-40ff9873f7c8`:
 
 ```text
 src/integrations/providerActivation.js  f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d
 src/platform/routes.js                  8aa2be8a92d2c2dc3aa61c9078889e26320d50d3d30c98cf14e42a9e2c43d150
-src/integrations/routes.js              cea9af5a370cffccc1e7d8d4e2606d405a9c019db08737ce4022d77472cab64c
+src/integrations/routes.js              425c7e40c69e5d34339acf8afcb831a0306ff7be3a9c5764cbac7776ca7fa63c
 src/security/auditReason.js             f979ff314da0972f58b1c27c7e944e7a5048a6aa48429a7f9441db4770405026
 BACKEND_RUNTIME_HASH_PARITY=PASS
 ```
@@ -216,7 +218,7 @@ estado canônico após as rechecagens é:
 ```text
 REVIEW_A_FINAL=PASS_AFTER_RECHECK
 REVIEW_B_FINAL=PASS
-FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
 FINAL_SOL_RECONCILIATION=NOT_CLOSED
 READY_FOR_PRODUCTION=false
 ```
@@ -424,4 +426,69 @@ INT_ADV_001=RETESTED
 FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
 FINAL_SOL_RECONCILIATION=NOT_CLOSED
 READY_FOR_PRODUCTION=false
+```
+
+## Addendum — redaction do endpoint genérico e novo candidato (2026-09-01)
+
+O reviewer adversarial independente encontrou `INT-ADV-004` (HIGH): o
+redactor genérico das respostas de Integrações ainda deixava passar URI
+opacas, como `mailto:`, `urn:`, `data:` e esquemas customizados, podendo
+expor payloads privados em mensagens de erro. O finding foi reproduzido no
+teste do endpoint; não foi classificado como falha de provider, tenant ou
+outbound.
+
+A correção focal foi aplicada em `backend/src/integrations/routes.js` e o
+contrato foi coberto em
+`backend/tests/integration-security-hardening.test.js`. O redactor agora
+remove qualquer esquema opaco antes da exposição, preservando a forma já
+existente para URLs hierárquicas com `://` e sem alterar o contrato de chaves
+redigidas.
+
+O candidato funcional atual é:
+
+```text
+RELEASE_HEAD=4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7
+RELEASE_TREE=3e80ad611ef489ed6e0f771201f1d319f5258c8b
+REMOTE_BRANCH_SHA=4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7
+INT_ADV_004=RETESTED
+```
+
+Retestes causais do candidato:
+
+```text
+AUTH_INTEGRATION_TEST=1/1 PASS
+INTEGRATION_SECURITY_HARDENING=6/6 PASS
+AUDIT_REASON_REDACTION=3/3 PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+PROTECTED_DEV_DB_UNCHANGED=PASS
+```
+
+O API foi republicado somente no staging como deployment
+`54d0f59f-fd49-4e4c-9345-40ff9873f7c8`, com `SUCCESS`, `/health=200` e
+`/ready=200`. Os hashes dos quatro arquivos backend causais conferem entre o
+worktree e o runtime `/app`; o hash atualizado de
+`src/integrations/routes.js` é
+`425c7e40c69e5d34339acf8afcb831a0306ff7be3a9c5764cbac7776ca7fa63c`.
+Não houve migration, alteração de produção, provider real, credencial real de
+produto ou outbound.
+
+Uma tentativa anterior de passar dois arquivos ao runner focal foi rejeitada
+pelo próprio contrato operacional (`node-test` aceita exatamente um arquivo).
+Os testes foram então executados separadamente e passaram; isso foi
+classificado como erro de harness, não como falha do produto.
+
+O finding `INT-ADV-004` está retestado, mas uma nova revisão adversarial limpa
+ainda é obrigatória. Até ela retornar `SHIP` ou `FIX_FIRST`, o estado honesto
+permanece:
+
+```text
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
 ```

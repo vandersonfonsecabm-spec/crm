@@ -2180,3 +2180,13 @@ integracoes autorizadas.
   o teste/documentação posterior `ca4127d`. O backend staging está no deploy
   `63d3924d`, com health/ready 200 e paridade dos hashes backend registrada no
   evidence index.
+- A revisão adversarial seguinte encontrou `INT-ADV-004` (HIGH): o redactor
+  genérico de respostas de Integrações ainda expunha URI opacas (`mailto:`,
+  `urn:`, `data:` e esquemas customizados). O fix foi aplicado e retestado em
+  `4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7`, tree
+  `3e80ad611ef489ed6e0f771201f1d319f5258c8b`; a suíte backend isolada,
+  `integration-security-hardening` e `audit-reason-redaction` passaram. O API
+  foi republicado no staging como `54d0f59f-fd49-4e4c-9345-40ff9873f7c8`,
+  health/ready 200 e os hashes causais conferem no runtime. `INT-ADV-004` está
+  `RETESTED`; nova revisão adversarial limpa e a reconciliação do Sol continuam
+  obrigatórias, mantendo `READY_FOR_PRODUCTION=false`.

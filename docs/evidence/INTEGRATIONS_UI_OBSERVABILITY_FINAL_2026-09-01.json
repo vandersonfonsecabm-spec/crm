@@ -6,13 +6,14 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "696e2a7e0bac6e1e85484a5ad9819e7b36f6c27c",
-    "tree": "d416ba96a5817540f70c198617e330286d8607a4",
+    "head": "4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7",
+    "tree": "3e80ad611ef489ed6e0f771201f1d319f5258c8b",
     "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
     "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531",
     "providerActivationGateFixCommit": "2214b846585dbb454e1349c1fd7018b848c120e5",
-    "redactionCentralizationFixCommit": "696e2a7e0bac6e1e85484a5ad9819e7b36f6c27c"
+    "redactionCentralizationFixCommit": "696e2a7e0bac6e1e85484a5ad9819e7b36f6c27c",
+    "genericIntegrationRedactionFixCommit": "4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -23,6 +24,7 @@
     "vercelProjectId": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
     "vercelDeploymentId": "dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3",
     "railwayApiDeploymentAfterSecurityFix": "63d3924d-fddb-46b2-bc50-7a2809d46186",
+    "railwayApiDeploymentAfterGenericRedactionFix": "54d0f59f-fd49-4e4c-9345-40ff9873f7c8",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -58,7 +60,7 @@
   "backendRuntimeHashes": {
     "src/integrations/providerActivation.js": "f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d",
     "src/platform/routes.js": "8aa2be8a92d2c2dc3aa61c9078889e26320d50d3d30c98cf14e42a9e2c43d150",
-    "src/integrations/routes.js": "cea9af5a370cffccc1e7d8d4e2606d405a9c019db08737ce4022d77472cab64c",
+    "src/integrations/routes.js": "425c7e40c69e5d34339acf8afcb831a0306ff7be3a9c5764cbac7776ca7fa63c",
     "src/security/auditReason.js": "f979ff314da0972f58b1c27c7e944e7a5048a6aa48429a7f9441db4770405026"
   },
   "apiStateComparison": [
@@ -93,7 +95,8 @@
       "BLOCKED_EXTERNAL_REVIEWER_TIMEOUT",
       "INTERRUPTED_AFTER_TIMEOUT",
       "RUNTIME_SWITCH_TIMEOUT",
-      "FIX_FIRST_INT_ADV_001"
+      "FIX_FIRST_INT_ADV_001",
+      "FIX_FIRST_INT_ADV_004"
     ],
     "finalAdversarialReviewerInfra": "UNAVAILABLE",
     "findings": [
@@ -120,6 +123,14 @@
         "status": "RETESTED",
         "fixCommit": "696e2a7e0bac6e1e85484a5ad9819e7b36f6c27c",
         "causalRetest": "SOURCE_RUNTIME_BACKEND_HASH_PARITY=PASS"
+      },
+      {
+        "id": "INT-ADV-004",
+        "severity": "HIGH",
+        "area": "generic integration response redaction",
+        "status": "RETESTED",
+        "fixCommit": "4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7",
+        "causalRetest": "INTEGRATION_SECURITY_HARDENING=6/6 PASS; AUDIT_REASON_REDACTION=3/3 PASS; BACKEND_ISOLATED_SUITE=PASS_EXIT_0"
       }
     ],
     "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
