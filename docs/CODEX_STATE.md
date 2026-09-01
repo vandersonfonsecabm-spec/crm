@@ -2081,8 +2081,8 @@ integracoes autorizadas.
 
 ## Integrações visíveis + observabilidade (2026-09-01)
 
-- O candidato local final é `5586e2ffb4ee18c7df7e663322354b1be89e5a2d`, tree
-  `bd164d11e2bff5e951d76983743bc449c1ff6a16`, com manifesto backend
+- O candidato local final é `bb9ec6da0587793415b6cd25f030e41611cd8dbc`, tree
+  `a520a9aa10f00b84c15bc69ce1ee43261a2ac5bd`, com manifesto backend
   `4b85aa5cfb0e78c0d64dec37365362e5db4651a1bcde80cce3ce683719a32868`.
 - A superfície canônica de integrações exibe seis providers com estados
   textuais verdadeiros; a observabilidade técnica é somente leitura e restrita

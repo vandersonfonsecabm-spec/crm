@@ -26,7 +26,7 @@ STAGING_WORKER_DEPLOY=PASS_FINAL_AFTER_START_COMMAND_FIX
 STAGING_FRONTEND_DEPLOY=PASS
 STAGING_HEALTH=200
 STAGING_READY=200_DATABASE_OK
-STAGING_AUTHENTICATED_E2E=NOT_EXECUTED_NO_SAFE_SESSION
+STAGING_AUTHENTICATED_E2E=NOT_EXECUTED_STAGING_SESSION_UNAVAILABLE
 PRODUCTION_DEPLOY=NOT_EXECUTED
 PRODUCTION_CHANGED_BY_THIS_MISSION=false
 REAL_PROVIDER_CONNECTIONS_CREATED=0
@@ -38,8 +38,8 @@ REAL_OUTBOUND=0
 
 ```text
 BRANCH=feature/canonical-sale-v1
-RELEASE_HEAD=5586e2ffb4ee18c7df7e663322354b1be89e5a2d
-RELEASE_TREE=bd164d11e2bff5e951d76983743bc449c1ff6a16
+RELEASE_HEAD=bb9ec6da0587793415b6cd25f030e41611cd8dbc
+RELEASE_TREE=a520a9aa10f00b84c15bc69ce1ee43261a2ac5bd
 BACKEND_SOURCE_MANIFEST_SHA256=4b85aa5cfb0e78c0d64dec37365362e5db4651a1bcde80cce3ce683719a32868
 BASELINE_FUNCTIONAL=79eed4f
 CANONICAL_SALE=preservada
@@ -57,13 +57,14 @@ DATABASE_SERVICE=f3a2862b-2371-4ab3-b4db-1e91680ee3b7
 API_DEPLOYMENT=9934b1a7-8dba-4029-9a27-c16e164cd4e6
 WORKER_DEPLOYMENT=ebefe2db-ad83-4446-978f-c495c30a0810
 VERCEL_PROJECT=prj_AJE06pNRGunJoguCNWee0RgZV6t8
-VERCEL_DEPLOYMENT=dpl_Ai4q1QdGjCtc4tGAXojNpn1d5RsZ
+VERCEL_DEPLOYMENT=dpl_4nw8KZFmRqHHL3p6DgvrRJHLaQLT
 STAGING_ALIAS=crm-ga3-bundle-staging.vercel.app
 ```
 
 O backend publicado no deployment `9934b1a7-8dba-4029-9a27-c16e164cd4e6`
-permanece causalmente idêntico ao subcommit backend `e044d58`; o delta até
-`5586e2f` é somente o ajuste do fallback de erro do frontend e seu teste. O
+permanece causalmente idêntico ao subcommit backend `e044d58`; os deltas até
+`bb9ec6d` são somente os ajustes do frontend (fallback de erro e callback
+opcional da fixture) e seus testes. O
 frontend foi republicado após esse delta.
 
 Produção foi apenas consultada read-only para confirmar o alvo; a API e o banco
@@ -114,6 +115,9 @@ Correções aplicadas:
 - A superfície antiga de readiness e o card duplicado do WhatsApp foram
   removidos do overview; o `IntegrationStatusBoard` é a fonte canônica dos seis
   providers.
+- O fallback de erro do Hub usa o número real de consultas e o componente de
+  readiness aceita fixture sem callback de logout, eliminando dois erros de
+  runtime observados no modo local.
 - Endpoint `/platform/observability/summary` e painel restrito a operador de
   plataforma expõem somente contadores, timestamps, saúde/freshness do worker,
   retries, execuções, webhooks, outbox, erros abertos e estado de credenciais.
@@ -170,10 +174,11 @@ upload explícito para o projeto/alias de staging. Isso não substitui um smoke
 autenticado.
 
 Não foi possível executar o E2E autenticado sem uma sessão QA segura no
-ambiente do executor. A sessão disponível no Chrome era do ambiente de
-produção e não foi reutilizada no staging para evitar mistura de ambientes. A
-tentativa adicional de controle do navegador integrado excedeu o tempo e foi
-classificada como `BROWSER_CONTROL_FAILURE`, não como falha da aplicação.
+ambiente do executor. A aba autenticada encontrada foi confirmada como
+produção (`crm-murex-six-83.vercel.app`) e não foi reutilizada no staging; a
+aba nova do staging exibiu o fluxo de sessão indisponível. A tentativa inicial
+de controle do navegador integrado excedeu o tempo e foi classificada como
+`BROWSER_CONTROL_FAILURE`, não como falha da aplicação.
 Não foram criadas contas, tenants ou credenciais novas em staging para contornar
 essa limitação.
 

@@ -5,8 +5,8 @@
   "modelProvenance": "USER_CONFIRMED_NOT_RUNTIME_ATTESTED",
   "missionCommandAudit": "PASS_WITH_CORRECTIONS",
   "candidate": {
-    "head": "5586e2ffb4ee18c7df7e663322354b1be89e5a2d",
-    "tree": "bd164d11e2bff5e951d76983743bc449c1ff6a16",
+    "head": "bb9ec6da0587793415b6cd25f030e41611cd8dbc",
+    "tree": "a520a9aa10f00b84c15bc69ce1ee43261a2ac5bd",
     "backendSourceManifestSha256": "4b85aa5cfb0e78c0d64dec37365362e5db4651a1bcde80cce3ce683719a32868"
   },
   "local": {
@@ -30,13 +30,13 @@
     "apiDeploymentId": "9934b1a7-8dba-4029-9a27-c16e164cd4e6",
     "workerDeploymentId": "ebefe2db-ad83-4446-978f-c495c30a0810",
     "vercelProjectId": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
-    "vercelDeploymentId": "dpl_Ai4q1QdGjCtc4tGAXojNpn1d5RsZ",
+    "vercelDeploymentId": "dpl_4nw8KZFmRqHHL3p6DgvrRJHLaQLT",
     "apiHealth": 200,
     "apiReady": 200,
     "databaseReady": true,
     "frontendAliasReady": true,
     "vercelGitMetadata": "UNAVAILABLE_DEPLOYMENT_META_EMPTY",
-    "authenticatedE2E": "NOT_EXECUTED_NO_SAFE_SESSION",
+    "authenticatedE2E": "NOT_EXECUTED_STAGING_SESSION_UNAVAILABLE_PRODUCTION_TAB_NOT_REUSED",
     "browserControl": "BROWSER_CONTROL_FAILURE",
     "providerConnectionsCreated": 0,
     "outbound": 0
