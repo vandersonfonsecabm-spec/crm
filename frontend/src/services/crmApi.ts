@@ -2925,6 +2925,7 @@ export function resolveApiBaseUrl({
     if (!configuredApiUrl) return "http://localhost:3001";
     return isApprovedDevelopmentApi(configuredApiUrl) ? configuredApiUrl : "http://localhost:3001";
   }
+  if (isStagingHost(normalizedHostname) && configuredApiUrl && isOfficialStagingApi(configuredApiUrl)) return configuredApiUrl.replace(/\/$/, "");
   if (normalizedHostname === CANONICAL_PRODUCTION_HOST || isStagingHost(normalizedHostname)) return "/api";
   if (!configuredApiUrl || isOfficialProductionApi(configuredApiUrl)) return "";
   // Production builds never send credentials to an arbitrary VITE_API_URL.

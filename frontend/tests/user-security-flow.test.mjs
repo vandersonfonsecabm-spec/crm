@@ -399,7 +399,7 @@ test("produção encaminha auth pelo mesmo host antes do fallback da SPA", async
 
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "crm-murex-six-83.vercel.app" }), "/api");
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app", configuredApiUrl: "https://api-homolog.example" }), "");
-  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "crm-ga3-bundle-staging.vercel.app", configuredApiUrl: "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app" }), "/api");
+  assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "crm-ga3-bundle-staging.vercel.app", configuredApiUrl: "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app" }), "https://ga3-bundle-api-ga3-bundle-staging.up.railway.app");
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app", configuredApiUrl: "https://api-production-875f9.up.railway.app" }), "");
   assert.equal(api.resolveApiBaseUrl({ production: true, hostname: "preview-crm.vercel.app" }), "");
   assert.equal(api.resolveApiBaseUrl({ production: false, configuredApiUrl: "https://api-homolog.example" }), "http://localhost:3001");
