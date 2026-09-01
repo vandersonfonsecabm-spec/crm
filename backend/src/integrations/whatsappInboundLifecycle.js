@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { FEATURE_KEYS } = require("../tenant-features/service");
+const { sanitizeAuditReason: sanitizeSharedAuditReason } = require("../security/auditReason");
 
 const REAL_WHATSAPP_INBOUND_KEY = "whatsapp-meta-inbound-real";
 const WHATSAPP_CHANNEL_TYPE = "WHATSAPP_META";
@@ -9,20 +10,6 @@ const SAFE_ID_PATTERN = /^[A-Za-z0-9._:-]+$/;
 const PROVIDER_ENVIRONMENT_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/;
 const ALLOWED_ACTION_FIELDS = new Set(["expectedUpdatedAt", "reason"]);
 const ACTIONS = new Set(["ACTIVATE", "PAUSE", "REACTIVATE"]);
-const SENSITIVE_REASON_KEYS = [
-  "accessTokenRef",
-  "accessToken",
-  "appSecret",
-  "verifyToken",
-  "authorization",
-  "cookie",
-  "payload",
-  "phoneNumberId",
-  "wabaId",
-  "telefone",
-  "phone",
-  "token",
-];
 
 const WHATSAPP_OPERATIONAL_STATUS = Object.freeze({
   NOT_CONFIGURED: "NOT_CONFIGURED",
@@ -634,23 +621,7 @@ function sanitizeFailureCode(value) {
 }
 
 function sanitizeAuditReason(value, sensitiveValues = []) {
-  const keys = SENSITIVE_REASON_KEYS.map(escapeRegExp).join("|");
-  let sanitized = String(value || "Operacao de lifecycle.");
-  for (const sensitiveValue of sensitiveValues) {
-    const normalized = String(sensitiveValue || "").trim();
-    if (normalized.length < 6) continue;
-    sanitized = sanitized.replace(new RegExp(escapeRegExp(normalized), "g"), "[REDACTED_ID]");
-  }
-  return sanitized
-    .replace(/[\u0000-\u001f\u007f]+/g, " ")
-    .replace(/\s+/g, " ")
-    .replace(new RegExp(`\\b(${keys})\\b\\s*[:=]\\s*[^\\s,;]+`, "gi"), "$1=[REDACTED]")
-    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
-    .replace(/(?:\+\d{1,3}[\s().-]*)?(?:\(?\d{2,3}\)?[\s.-]*)?\d{4,5}[\s.-]?\d{4}\b/g, "[REDACTED_PHONE]")
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi, "Bearer [REDACTED]")
-    .replace(/\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, "[REDACTED_TOKEN]")
-    .trim()
-    .slice(0, 240);
+  return sanitizeSharedAuditReason(value || "Operacao de auditoria.", sensitiveValues, 240);
 }
 
 function emitLifecycleAudit(logger, {
@@ -733,9 +704,6 @@ function normalizeCorrelationId(value) {
   return /^[A-Za-z0-9-]{1,120}$/.test(normalized) ? normalized : crypto.randomUUID();
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 module.exports = {
   REAL_WHATSAPP_INBOUND_KEY,

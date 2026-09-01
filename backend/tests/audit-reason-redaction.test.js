@@ -11,6 +11,13 @@ test("audit reasons redact userinfo and sensitive URI query values for every sch
   assert.match(sanitized, /\[REDACTED_URL\]/g);
 });
 
+test("audit reasons redact opaque URI schemes and provider wrappers share the boundary", () => {
+  const reason = "mailto:opaque-marker@example.invalid urn:opaque-marker data:text/plain,opaque-marker custom+scheme:opaque-marker";
+  const sanitized = sanitizeAuditReason(reason);
+  assert.doesNotMatch(sanitized, /opaque-marker|mailto:|urn:|data:|custom\+scheme:/i);
+  assert.equal((sanitized.match(/\[REDACTED_URL\]/g) || []).length, 4);
+});
+
 test("audit reasons redact OAuth fields and email lifecycle keeps the same boundary", () => {
   const reason = "callback state=STATE123 signature=SIG123 code=CODE123";
   const sanitized = sanitizeAuditReason(reason);

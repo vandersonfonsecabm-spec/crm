@@ -1,5 +1,5 @@
 const crypto = require("node:crypto");
-
+const { sanitizeAuditReason: sanitizeSharedAuditReason } = require("../security/auditReason");
 const REAL_INSTAGRAM_INBOUND_KEY = "instagram-meta-inbound-real";
 const INSTAGRAM_CHANNEL_TYPE = "INSTAGRAM_META";
 const INSTAGRAM_CAPABILITY_KEYS = Object.freeze({
@@ -26,22 +26,6 @@ const UNIQUE_CONFLICT_KIND = Object.freeze({
 });
 const TENANT_KEY_FIELDS = ["empresaId", "chaveInterna"];
 const GLOBAL_IDENTITY_FIELDS = ["instagramBusinessAccountId"];
-const SENSITIVE_REASON_KEYS = [
-  "accessTokenRef",
-  "accessToken",
-  "appSecret",
-  "verifyToken",
-  "authorization",
-  "cookie",
-  "payload",
-  "instagramBusinessAccountId",
-  "pageId",
-  "phoneNumberId",
-  "wabaId",
-  "telefone",
-  "phone",
-  "token",
-];
 const ALLOWED_INPUT_FIELDS = new Set([
   "name",
   "instagramBusinessAccountId",
@@ -700,41 +684,7 @@ function requireReason(reason) {
 }
 
 function sanitizeAuditReason(value, sensitiveValues = []) {
-  let sanitized = String(value || "Operacao de provisionamento.")
-    .replace(/[\u0000-\u001f\u007f]+/g, " ")
-    .replace(/\s+/g, " ");
-  for (const sensitiveValue of sensitiveValues) {
-    const normalized = String(sensitiveValue || "").trim();
-    if (normalized.length < 6) continue;
-    sanitized = sanitized.replace(
-      new RegExp(escapeRegExp(normalized), "g"),
-      "[REDACTED_ID]",
-    );
-  }
-  sanitized = redactSensitiveReasonPairs(sanitized)
-    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
-    .replace(/(?:\+\d{1,3}[\s().-]*)?(?:\(?\d{2,3}\)?[\s.-]*)?\d{4,5}[\s.-]?\d{4}\b/g, "[REDACTED_PHONE]")
-    .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, "[REDACTED_DOCUMENT]")
-    .replace(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, "[REDACTED_DOCUMENT]")
-    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "[REDACTED_ID]")
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi, "Bearer [REDACTED]")
-    .replace(/\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, "[REDACTED_TOKEN]")
-    .replace(/\b(?:https?|postgres(?:ql)?):\/\/[^\s]+/gi, "[REDACTED_URL]")
-    .replace(/\b(secret|password|senha|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]")
-    .replace(/[\r\n\t]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 240);
-  return sanitized;
-}
-
-function redactSensitiveReasonPairs(value) {
-  const keys = SENSITIVE_REASON_KEYS.map(escapeRegExp).join("|");
-  const pattern = new RegExp(
-    `\\b(${keys})\\b\\s*[:=]\\s*.*?(?=\\s+\\b(?:${keys})\\b\\s*[:=]|$)`,
-    "gi",
-  );
-  return value.replace(pattern, (_match, key) => `${key}=[REDACTED]`);
+  return sanitizeSharedAuditReason(value || "Operacao de auditoria.", sensitiveValues, 240);
 }
 
 function classifyCanalUniqueConflictTarget(error) {
@@ -780,10 +730,6 @@ function maskOpaqueId(value) {
   const normalized = String(value || "").trim();
   if (!normalized) return null;
   return normalized.length <= 4 ? "****" : `****${normalized.slice(-4)}`;
-}
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function stableHash(value) {

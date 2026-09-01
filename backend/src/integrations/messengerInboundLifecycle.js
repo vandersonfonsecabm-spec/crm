@@ -3,6 +3,7 @@ const {
   REAL_MESSENGER_INBOUND_KEY,
   readGlobalMessengerConfiguration,
 } = require("../platform/messengerInboundProvisioning");
+const { sanitizeAuditReason: sanitizeSharedAuditReason } = require("../security/auditReason");
 
 const MESSENGER_CHANNEL_TYPE = "MESSENGER_META";
 const MESSENGER_CAPABILITY_KEYS = Object.freeze({
@@ -12,22 +13,6 @@ const MESSENGER_CAPABILITY_KEYS = Object.freeze({
 const MAX_REASON_LENGTH = 500;
 const ALLOWED_ACTION_FIELDS = new Set(["expectedUpdatedAt", "reason"]);
 const ACTIONS = new Set(["ACTIVATE", "PAUSE", "REACTIVATE"]);
-const SENSITIVE_REASON_KEYS = [
-  "accessTokenRef",
-  "accessToken",
-  "appSecret",
-  "verifyToken",
-  "authorization",
-  "cookie",
-  "payload",
-  "messengerPageId",
-  "pageId",
-  "phoneNumberId",
-  "wabaId",
-  "telefone",
-  "phone",
-  "token",
-];
 
 const MESSENGER_OPERATIONAL_STATUS = Object.freeze({
   NOT_CONFIGURED: "NOT_CONFIGURED",
@@ -642,23 +627,7 @@ function sanitizeFailureCode(value) {
 }
 
 function sanitizeAuditReason(value, sensitiveValues = []) {
-  const keys = SENSITIVE_REASON_KEYS.map(escapeRegExp).join("|");
-  let sanitized = String(value || "Operacao de lifecycle.");
-  for (const sensitiveValue of sensitiveValues) {
-    const normalized = String(sensitiveValue || "").trim();
-    if (normalized.length < 6) continue;
-    sanitized = sanitized.replace(new RegExp(escapeRegExp(normalized), "g"), "[REDACTED_ID]");
-  }
-  return sanitized
-    .replace(/[\u0000-\u001f\u007f]+/g, " ")
-    .replace(/\s+/g, " ")
-    .replace(new RegExp(`\\b(${keys})\\b\\s*[:=]\\s*[^\\s,;]+`, "gi"), "$1=[REDACTED]")
-    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
-    .replace(/(?:\+\d{1,3}[\s().-]*)?(?:\(?\d{2,3}\)?[\s.-]*)?\d{4,5}[\s.-]?\d{4}\b/g, "[REDACTED_PHONE]")
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi, "Bearer [REDACTED]")
-    .replace(/\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, "[REDACTED_TOKEN]")
-    .trim()
-    .slice(0, 240);
+  return sanitizeSharedAuditReason(value || "Operacao de auditoria.", sensitiveValues, 240);
 }
 
 function emitLifecycleAudit(logger, {
@@ -755,9 +724,6 @@ function normalizeCorrelationId(value) {
   return /^[A-Za-z0-9-]{1,120}$/.test(normalized) ? normalized : crypto.randomUUID();
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 module.exports = {
   MESSENGER_OPERATIONAL_STATUS,
