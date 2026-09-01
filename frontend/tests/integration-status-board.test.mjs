@@ -21,6 +21,8 @@ test("status board cobre os seis providers com estado honesto", () => {
   assert.match(board, /CONFIGURE_WHATSAPP_PROVIDER: "Configurar o provedor do WhatsApp"/);
   assert.match(board, /rawState === "UNAVAILABLE"/);
   assert.match(board, /rawState === "PAUSED"/);
+  assert.match(board, /connectedEvidence = rawState === "CONNECTED"[\s\S]*providerAuthorization[\s\S]*verifiedAt/);
+  assert.match(board, /rawState === "CONNECTED"[\s\S]*CONFIGURATION_INCOMPLETE/);
 });
 
 test("ativação externa permanece bloqueada nos três painéis", () => {

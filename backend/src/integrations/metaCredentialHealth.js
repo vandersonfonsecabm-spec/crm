@@ -60,30 +60,32 @@ function isUsableEncryptedCredentials(payload, { now = new Date() } = {}) {
   try {
     const credentials = decryptCredentials(payload);
     if (!credentials || typeof credentials !== "object" || Array.isArray(credentials)) return false;
-    if (!hasCredentialMaterial(credentials)) return false;
-    if (credentials.expiresAt !== undefined && credentials.expiresAt !== null) {
-      const expiresAt = new Date(credentials.expiresAt);
-      const currentTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
-      if (!Number.isFinite(expiresAt.getTime()) || !Number.isFinite(currentTime) || expiresAt.getTime() <= currentTime) return false;
-    }
-    return true;
+    return hasCredentialMaterial(credentials, 0, undefined, now);
   } catch {
     return false;
   }
 }
 
-function hasCredentialMaterial(value, depth = 0) {
+function hasCredentialMaterial(value, depth = 0, inheritedExpiry, now = new Date()) {
   if (depth > 4 || value === null || value === undefined) return false;
-  if (Array.isArray(value)) return value.some((item) => hasCredentialMaterial(item, depth + 1));
+  if (Array.isArray(value)) return value.some((item) => hasCredentialMaterial(item, depth + 1, inheritedExpiry, now));
   if (typeof value !== "object") return false;
+  const expiry = Object.hasOwn(value, "expiresAt") ? value.expiresAt : inheritedExpiry;
   return Object.entries(value).some(([key, child]) => {
     const normalizedKey = String(key).replace(/[^a-z0-9]/gi, "").toLowerCase();
     if (CREDENTIAL_MATERIAL_KEYS.has(normalizedKey)) {
-      if (typeof child === "string") return child.trim().length > 0;
-      return hasCredentialMaterial(child, depth + 1);
+      if (typeof child === "string") return child.trim().length > 0 && isFutureOrUnboundedExpiry(expiry, now);
+      return hasCredentialMaterial(child, depth + 1, expiry, now);
     }
-    return hasCredentialMaterial(child, depth + 1);
+    return hasCredentialMaterial(child, depth + 1, expiry, now);
   });
+}
+
+function isFutureOrUnboundedExpiry(expiresAt, now) {
+  if (expiresAt === undefined || expiresAt === null) return true;
+  const parsedExpiry = new Date(expiresAt).getTime();
+  const currentTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  return Number.isFinite(parsedExpiry) && Number.isFinite(currentTime) && parsedExpiry > currentTime;
 }
 
 module.exports = { isUsableEncryptedCredentials, isUsableMetaCredential };

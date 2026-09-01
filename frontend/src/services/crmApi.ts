@@ -1705,6 +1705,14 @@ export type EmailOperationalStatusResponse = {
   lastFailureCode?: string | null;
   updatedAt?: string | null;
   nextRequirement?: string | null;
+  checklist?: {
+    globalConfiguration?: boolean;
+    providerAuthorization?: boolean;
+    channel?: boolean;
+    identity?: boolean;
+    integrationCapability?: boolean;
+    inboundCapability?: boolean;
+  };
 };
 
 export function getAuthToken() {

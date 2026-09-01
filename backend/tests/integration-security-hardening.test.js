@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+process.env.INTEGRATION_ENCRYPTION_KEY = "integration-security-hardening-test-key-with-more-than-32-bytes";
+const { encryptCredentials } = require("../src/integrations/crypto");
 const { _private } = require("../src/integrations/routes");
 
 test("configuração rejeita secrets recursivos e redige legado", () => {
@@ -117,6 +119,9 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
   const networkPathUserinfo = _private.redactSensitiveText("//123:synthetic-secret@example.test/private/tenant-42");
   assert.equal(networkPathUserinfo.includes("synthetic-secret"), false);
   assert.equal(networkPathUserinfo, "//[redacted]@example.test/[redacted]");
+  for (const value of ["https://synthetic-user@example.test", "//synthetic-user@example.test", "//synthetic-user@example.test/private"]) {
+    assert.equal(_private.redactSensitiveText(value).includes("synthetic-user"), false, value);
+  }
   const quotedStandalone = _private.redactSensitiveText('cookie="synthetic-secret-part-one synthetic-secret-part-two"');
   assert.equal(quotedStandalone.includes("synthetic-secret"), false);
   assert.equal(quotedStandalone, "cookie=[redacted]");
@@ -131,6 +136,12 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
       (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
     );
   }
+  for (const value of ["https://synthetic-user@example.test", "//synthetic-user@example.test", "//synthetic-user@example.test/private"]) {
+    assert.throws(
+      () => _private.stringifySafeConfig({ note: value }),
+      (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+    );
+  }
   for (const key of ["state", "code", "signature"]) {
     assert.throws(
       () => _private.stringifySafeConfig({ [key]: "synthetic-oauth-value" }),
@@ -138,6 +149,12 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
     );
   }
   for (const key of ["password", "access_token", "accessToken", "refresh_token", "state", "code", "signature"]) {
+    assert.throws(
+      () => _private.stringifySafeConfig({ note: `{\"${key}\":\"quoted-secret\"}` }),
+      (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+    );
+  }
+  for (const key of ["privateKey", "accessKey", "authorization", "passwd", "pass"]) {
     assert.throws(
       () => _private.stringifySafeConfig({ note: `{\"${key}\":\"quoted-secret\"}` }),
       (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
@@ -167,9 +184,15 @@ test("integração genérica não pode declarar ativa sem validação", () => {
     (error) => error.code === "INTEGRATION_STATUS_REQUIRES_VALIDATION",
   );
   assert.equal(
-    _private.assertIntegrationStatusTransitionAllowed({ current: { status: "ATIVA", ativo: true, ultimoSucessoEm: new Date(), credenciaisCriptografadas: "ciphertext" }, data: {}, encryptedCredentials: undefined }),
+    _private.assertIntegrationStatusTransitionAllowed({ current: { status: "ATIVA", ativo: true, ultimoSucessoEm: new Date(), credenciaisCriptografadas: encryptCredentials({ accessToken: "synthetic-status-token" }) }, data: {}, encryptedCredentials: undefined }),
     true,
   );
+  for (const invalid of ["ciphertext-invalid", encryptCredentials({ oauth: { accessToken: "nested-expired", expiresAt: "2020-01-01T00:00:00.000Z" } })]) {
+    assert.throws(
+      () => _private.assertIntegrationStatusTransitionAllowed({ current: { status: "ATIVA", ativo: true, ultimoSucessoEm: new Date(), credenciaisCriptografadas: invalid }, data: {}, encryptedCredentials: undefined }),
+      (error) => error.code === "INTEGRATION_STATUS_REQUIRES_VALIDATION",
+    );
+  }
   assert.throws(
     () => _private.assertIntegrationStatusTransitionAllowed({
       current: { status: "INATIVA", ativo: false, ultimoSucessoEm: new Date(), credenciaisCriptografadas: "ciphertext" },

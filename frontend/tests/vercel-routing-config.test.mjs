@@ -44,9 +44,15 @@ for (const configPath of [rootConfig, frontendConfig]) {
     assert.equal(stagingRoutes.find((route) => route.handle === "filesystem")?.handle, "filesystem");
     assert.ok(productionRoutes.findIndex((route) => route.handle === "filesystem") < productionRoutes.findIndex((route) => route.dest === "/index.html"));
     assert.ok(stagingRoutes.findIndex((route) => route.handle === "filesystem") < stagingRoutes.findIndex((route) => route.dest === "/index.html"));
+    const productionCsp = productionRoutes.find((route) => route.headers?.["Content-Security-Policy"])?.headers?.["Content-Security-Policy"];
+    const stagingCsp = stagingRoutes.find((route) => route.headers?.["Content-Security-Policy"])?.headers?.["Content-Security-Policy"];
+    assert.match(productionCsp, /connect-src 'self' https:\/\/api-production-875f9\.up\.railway\.app/);
+    assert.match(stagingCsp, /connect-src 'self' https:\/\/ga3-bundle-api-ga3-bundle-staging\.up\.railway\.app/);
+    assert.doesNotMatch(productionCsp, /ga3-bundle-api-ga3-bundle-staging/);
+    assert.doesNotMatch(stagingCsp, /api-production-875f9/);
     const configText = await readFile(configPath, "utf8");
     assert.match(configText, /Strict-Transport-Security/);
-    assert.match(configText, /connect-src 'self';/);
+    assert.match(configText, /connect-src 'self'/);
   });
 
   test(`Vercel falha fechado para projeto desconhecido (${path.basename(path.dirname(configPath))})`, () => {

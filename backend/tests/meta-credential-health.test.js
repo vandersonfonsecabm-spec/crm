@@ -42,6 +42,8 @@ test("generic encrypted credential health rejects empty metadata-only payloads",
   for (const payload of [{ metadata: {} }, { metadata: [] }, { metadata: false }, { foo: 0 }, { foo: false }, { foo: "   " }]) {
     assert.equal(isUsableEncryptedCredentials(encryptCredentials(payload)), false);
   }
+  assert.equal(isUsableEncryptedCredentials(encryptCredentials({ oauth: { accessToken: "nested-expired", expiresAt: "2020-01-01T00:00:00.000Z" } }), { now: new Date("2026-01-01T00:00:00.000Z") }), false);
+  assert.equal(isUsableEncryptedCredentials(encryptCredentials({ oauth: { accessToken: "nested-valid", expiresAt: "2030-01-01T00:00:00.000Z" } }), { now: new Date("2026-01-01T00:00:00.000Z") }), true);
   assert.equal(isUsableEncryptedCredentials(encryptCredentials({ accessToken: "synthetic-token" })), true);
   assert.equal(isUsableEncryptedCredentials(encryptCredentials({ apiKey: "synthetic-api-key" })), true);
 });

@@ -273,19 +273,24 @@ function emailCard(input: StatusInput): IntegrationStatusCard {
   if (input.emailUnavailable) return unavailable("email", "E-mail", "Não foi possível confirmar a caixa deste tenant. Tente atualizar.", icon);
   if (input.email) {
     const rawState = String(input.email.state || input.email.status || "UNAVAILABLE").toUpperCase();
-    const state: IntegrationCanonicalState = rawState === "CONNECTED"
+    const connectedEvidence = rawState === "CONNECTED"
+      && input.email.checklist?.providerAuthorization === true
+      && Boolean(input.email.verifiedAt);
+    const state: IntegrationCanonicalState = connectedEvidence
       ? "CONNECTED"
-      : rawState === "ERROR"
-        ? "ERROR"
-        : rawState === "UNAVAILABLE"
-          ? "UNAVAILABLE"
-          : rawState === "PAUSED"
-            ? "DISCONNECTED"
-            : rawState === "CONFIGURED_INACTIVE" || rawState === "WAITING_PROVIDER_AUTH"
-              ? "CONFIGURATION_INCOMPLETE"
-              : rawState === "NOT_CONFIGURED"
-                ? "NOT_CONFIGURED"
-                : "UNAVAILABLE";
+      : rawState === "CONNECTED"
+        ? "CONFIGURATION_INCOMPLETE"
+        : rawState === "ERROR"
+          ? "ERROR"
+          : rawState === "UNAVAILABLE"
+            ? "UNAVAILABLE"
+            : rawState === "PAUSED"
+              ? "DISCONNECTED"
+              : rawState === "CONFIGURED_INACTIVE" || rawState === "WAITING_PROVIDER_AUTH"
+                ? "CONFIGURATION_INCOMPLETE"
+                : rawState === "NOT_CONFIGURED"
+                  ? "NOT_CONFIGURED"
+                  : "UNAVAILABLE";
     const copy = stateCopy(state, "E-mail");
     return {
       key: "email",

@@ -1,10 +1,10 @@
 "use strict";
 
-const SENSITIVE_REASON_KEY_PATTERN = /\b(password|senha|token|secret|authorization|cookie|payload|accessTokenRef|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|app[_-]?secret|credential|signature|state|code|phoneNumberId|wabaId|instagramBusinessAccountId|messengerPageId|pageId|telefone|phone)\b/gi;
+const SENSITIVE_REASON_KEY_PATTERN = /\b(password|senha|token|secret|authorization|cookie|payload|accessTokenRef|access[_-]?token|refresh[_-]?token|api[_-]?key|access[_-]?key|client[_-]?secret|app[_-]?secret|private[_-]?key|credential|credentials|passwd|pass|signature|state|code|phoneNumberId|wabaId|instagramBusinessAccountId|messengerPageId|pageId|telefone|phone)\b/gi;
 // Every URI scheme is sensitive, including opaque schemes without `//` such
 // as data:, mailto:, urn: and custom provider schemes.
 const URL_PATTERN = /\b[a-z][a-z0-9+.-]*:[^\s]+/gi;
-const NETWORK_PATH_USERINFO_PATTERN = /\/\/[^\s/@?#]*:[^\s/@?#]+@[^\s/?#]+/g;
+const NETWORK_PATH_USERINFO_PATTERN = /\/\/[^\s/?#@]+@[^\s/?#]+(?:[/?#][^\s]*)?/g;
 const NETWORK_PATH_PATTERN = /\/\/[^\s/?#]+[/?#][^\s]*/g;
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi;
 const JWT_PATTERN = /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
