@@ -26,6 +26,7 @@ import {
   type StatusBadgeStatus,
 } from "../ui";
 import { useWhatsAppConnectionStatus } from "./useWhatsAppConnectionStatus";
+import { EXTERNAL_PROVIDER_ACTIVATION_ENABLED } from "./integrationActivationPolicy";
 import type {
   WhatsAppConnectionState,
   WhatsAppConnectionStatus,
@@ -161,7 +162,7 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
     const createAllowed = credentialMode === "create"
       && status.credentialConfigured !== true
       && ["WAITING_META_AUTH", "CONNECTED"].includes(status.state);
-    if (!status.canalIntegracaoId || (!replaceAllowed && !createAllowed) || !accessToken.trim() || credentialBusy) return;
+    if (!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || !status.canalIntegracaoId || (!replaceAllowed && !createAllowed) || !accessToken.trim() || credentialBusy) return;
     setCredentialBusy(true);
     setCredentialError("");
     try {
@@ -182,7 +183,7 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
   }
 
   async function removeCredential() {
-    if (!status.canalIntegracaoId || !status.credentialRevision || credentialBusy) return;
+    if (!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || !status.canalIntegracaoId || !status.credentialRevision || credentialBusy) return;
     if (!window.confirm("Remover a credencial TEST_ONLY deste canal?")) return;
     setCredentialBusy(true);
     setCredentialError("");
@@ -256,13 +257,13 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
                   <StatusBadge label={presentation.label} status={presentation.badge} />
                 </div>
                 <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[var(--text-secondary)]">
-                  A estrutura do CRM está pronta. Falta autorizar a conta na Meta e vincular um número para começar a receber mensagens.
+                  A estrutura do CRM está pronta. A ativação externa fica bloqueada nesta missão; nenhuma conta, token ou mensagem será solicitada aqui.
                 </p>
               </div>
             </div>
             <Button
               leftIcon={<MessageCircle className="text-[var(--text-inverse)]" size={15} />}
-              disabled={status.credentialConfigured && !status.credentialRevision}
+              disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || (status.credentialConfigured && !status.credentialRevision)}
               onClick={() => { setCredentialMode(status.credentialConfigured ? "replace" : "create"); setCredentialError(""); setConnectModalOpen(true); }}
               ref={connectButtonRef}
               variant="primary"
@@ -324,7 +325,7 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
               <UnavailableAction icon={<PauseCircle size={14} />} label="Pausar recebimento" />
               <UnavailableAction icon={<RefreshCw size={14} />} label="Reativar" />
               <UnavailableAction icon={<CloudCog size={14} />} label="Desconectar" />
-              {status.credentialConfigured && <Button className="col-span-2" disabled={credentialBusy || !status.credentialRevision} onClick={() => void removeCredential()} size="sm" variant="secondary">Remover credencial TEST_ONLY</Button>}
+              {status.credentialConfigured && <Button className="col-span-2" disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || credentialBusy || !status.credentialRevision} onClick={() => void removeCredential()} size="sm" variant="secondary">Remover credencial TEST_ONLY</Button>}
               {credentialError && <p className="col-span-2 text-[11px] font-medium text-[var(--danger)]" role="alert">{credentialError}</p>}
             </div>
           </Surface>
@@ -355,7 +356,7 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
         footer={(
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button onClick={() => { setAccessToken(""); setCredentialError(""); setConnectModalOpen(false); }} variant="secondary">Fechar</Button>
-            <Button disabled={!status.canalIntegracaoId || !accessToken.trim() || credentialBusy || (credentialMode === "replace" ? !status.credentialRevision || !status.credentialConfigured || !["WAITING_META_AUTH", "CONNECTED"].includes(status.state) : status.credentialConfigured || !["WAITING_META_AUTH", "CONNECTED"].includes(status.state))} leftIcon={<Send size={14} />} onClick={() => void storeCredential()} variant="primary">
+            <Button disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || !status.canalIntegracaoId || !accessToken.trim() || credentialBusy || (credentialMode === "replace" ? !status.credentialRevision || !status.credentialConfigured || !["WAITING_META_AUTH", "CONNECTED"].includes(status.state) : status.credentialConfigured || !["WAITING_META_AUTH", "CONNECTED"].includes(status.state))} leftIcon={<Send size={14} />} onClick={() => void storeCredential()} variant="primary">
               {credentialBusy ? "Armazenando…" : credentialMode === "replace" ? "Substituir token TEST_ONLY" : "Armazenar token TEST_ONLY"}
             </Button>
           </div>

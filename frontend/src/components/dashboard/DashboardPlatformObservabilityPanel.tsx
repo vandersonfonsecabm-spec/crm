@@ -1,0 +1,103 @@
+import { Activity, AlertTriangle, Clock3, Database, RefreshCw, Server, ShieldCheck, Webhook } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { fetchPlatformObservabilitySummary, type PlatformObservabilitySummary } from "../../services/crmApi";
+import { Badge, Button, ErrorState, LoadingState, SectionHeader, StatusBadge, Surface } from "../ui";
+
+/**
+ * Intent: a platform operator sees whether work is flowing without reading raw logs.
+ * Hierarchy: lease/error health is the focal signal; per-queue counts are secondary evidence.
+ * Palette/depth: existing semantic tokens and border-first surfaces keep operational severity legible without decoration.
+ * Spacing/typography: 4px rhythm, compact tabular counts and text labels preserve scan speed.
+ */
+
+export default function DashboardPlatformObservabilityPanel() {
+  const [summary, setSummary] = useState<PlatformObservabilitySummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await fetchPlatformObservabilitySummary({ signal });
+      if (!signal?.aborted) setSummary(result);
+    } catch (nextError) {
+      if (signal?.aborted) return;
+      setError(nextError instanceof Error ? nextError.message : "Não foi possível carregar a observabilidade da plataforma.");
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => void load(controller.signal), 0);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [load]);
+
+  return (
+    <Surface className="min-w-0 overflow-hidden" data-testid="platform-observability-panel">
+      <SectionHeader
+        actions={<Button disabled={loading} leftIcon={<RefreshCw size={14} />} loading={loading} onClick={() => void load()} size="sm" variant="secondary">Atualizar</Button>}
+        description="Resumo sanitizado de worker, filas, leases e falhas; disponível somente para operador de plataforma."
+        icon={<Activity size={15} />}
+        status={<Badge variant="info">Somente leitura</Badge>}
+        title="Observabilidade técnica"
+      />
+      {loading && !summary && <div className="p-4"><LoadingState label="Consultando operação da plataforma" rows={3} /></div>}
+      {error && !summary && <div className="p-4"><ErrorState description={error} onRetry={() => void load()} title="Observabilidade indisponível" /></div>}
+      {summary && (
+        <div className="space-y-3 p-4">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric icon={<Server size={14} />} label="Checkpoints do worker" value={summary.worker.checkpointCount} />
+            <Metric icon={<ShieldCheck size={14} />} label="Leases ativos" tone={summary.worker.activeLeases > 0 ? "success" : "neutral"} value={summary.worker.activeLeases} />
+            <Metric icon={<AlertTriangle size={14} />} label="Leases expirados" tone={summary.worker.expiredLeases > 0 ? "warning" : "neutral"} value={summary.worker.expiredLeases} />
+            <Metric icon={<AlertTriangle size={14} />} label="Erros de integração abertos" tone={summary.unresolvedIntegrationErrors > 0 ? "danger" : "neutral"} value={summary.unresolvedIntegrationErrors} />
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-3">
+            <QueueCard icon={<Activity size={14} />} label="Jobs de automação" values={summary.jobs} />
+            <QueueCard icon={<Webhook size={14} />} label="Webhooks" values={summary.webhooks} />
+            <QueueCard icon={<Database size={14} />} label="Outbox" values={{ ...summary.outbox.email, ...summary.outbox.stock }} />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border-default)] pt-3 text-[10px] text-[var(--text-muted)]">
+            <Clock3 aria-hidden="true" size={12} />
+            <span>{summary.worker.lastCheckpointAt ? `Último checkpoint: ${formatDate(summary.worker.lastCheckpointAt)}` : "Nenhum checkpoint persistido"}</span>
+            <span aria-hidden="true">·</span>
+            <span>Atualizado em {formatDate(summary.generatedAt)}</span>
+          </div>
+          {error && <p className="text-[11px] text-[var(--warning)]" role="status">A última atualização não foi concluída; os dados exibidos são a leitura anterior.</p>}
+        </div>
+      )}
+    </Surface>
+  );
+}
+
+function Metric({ icon, label, tone = "neutral", value }: { icon: React.ReactNode; label: string; tone?: "success" | "warning" | "danger" | "neutral"; value: number }) {
+  const status = tone === "success" ? "sucesso" : tone === "warning" ? "alerta" : tone === "danger" ? "erro" : "informacao";
+  return (
+    <div className="rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
+      <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]"><span aria-hidden="true">{icon}</span><span>{label}</span></div>
+      <div className="mt-2 flex items-center justify-between gap-2"><strong className="text-lg font-semibold tabular-nums text-[var(--text-primary)]">{value}</strong><StatusBadge status={status} label={tone === "neutral" ? "Normal" : undefined} /></div>
+    </div>
+  );
+}
+
+function QueueCard({ icon, label, values }: { icon: React.ReactNode; label: string; values: Record<string, number> }) {
+  const entries = Object.entries(values).filter(([, value]) => value > 0).slice(0, 8);
+  return (
+    <div className="rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
+      <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text-secondary)]"><span className="text-[var(--icon-default)]">{icon}</span>{label}</div>
+      {entries.length ? <dl className="mt-2 space-y-1.5">{entries.map(([key, value]) => <div className="flex items-center justify-between gap-3 text-[11px]" key={key}><dt className="truncate text-[var(--text-muted)]">{key}</dt><dd className="font-semibold tabular-nums text-[var(--text-primary)]">{value}</dd></div>)}</dl> : <p className="mt-2 text-[11px] text-[var(--text-muted)]">Nenhuma operação pendente.</p>}
+    </div>
+  );
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "não informado" : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
+}

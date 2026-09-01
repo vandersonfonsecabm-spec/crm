@@ -80,6 +80,14 @@ test("H7.1 protege operacoes de plataforma por allowlist backend e sem acesso te
   assert.equal(JSON.stringify(operatorMe.body).includes("PLATFORM_ADMIN_EMAILS"), false);
   assert.equal(JSON.stringify(operatorMe.body).includes("outra@platform.test"), false);
 
+  const observability = await request("GET", "/platform/observability/summary", undefined, operator.token);
+  assert.equal(observability.status, 200);
+  assert.equal(typeof observability.body.generatedAt, "string");
+  assert.equal(typeof observability.body.worker.checkpointCount, "number");
+  assert.equal(Object.hasOwn(observability.body.worker, "cursorJson"), false);
+  assert.equal(JSON.stringify(observability.body).includes("senhaHash"), false);
+  assert.equal((await request("GET", "/platform/observability/summary", undefined, control.token)).status, 403);
+
   const rejectedCollision = await request("POST", "/usuarios", {
     nome: "Operador Colidente H71",
     email: "operator-h71@platform.test",

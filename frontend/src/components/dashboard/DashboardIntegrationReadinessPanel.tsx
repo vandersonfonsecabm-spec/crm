@@ -5,6 +5,7 @@ import { fetchInstagramOperationalStatus, iniciarConexaoInstagram, removeMesseng
 import { createLocalMetaInstagramReadiness, deriveMetaInstagramReadiness, isApprovedInstagramAuthorizationUrl } from "../../services/metaInstagramBoundary";
 import { useMessengerConnectionStatus } from "../integrations/useMessengerConnectionStatus";
 import type { MessengerConnectionState } from "../integrations/messengerConnectionState";
+import { EXTERNAL_PROVIDER_ACTIVATION_ENABLED } from "../integrations/integrationActivationPolicy";
 import { CommunicationModal } from "../leads-communication/CommunicationOverlay";
 import { Button, StatusBadge, Surface } from "../ui";
 
@@ -35,7 +36,8 @@ const STATIC_READINESS_ITEMS: ReadinessItem[] = [
 
 export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, onUnauthorized }: { canalIntegracaoId?: number | null; onUnauthorized: () => void }) {
   const [instagramReadiness, setInstagramReadiness] = useState(localInstagramReadiness);
-  const [instagramLoadState, setInstagramLoadState] = useState<"loading" | "ready" | "fallback">("loading");
+  const [instagramLoadState, setInstagramLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [instagramRetry, setInstagramRetry] = useState(0);
   const handleMessengerUnauthorized = useCallback(() => onUnauthorized(), [onUnauthorized]);
   const { loadState: messengerLoadState, refresh: refreshMessengerStatus, status: messengerStatus } = useMessengerConnectionStatus(handleMessengerUnauthorized);
   const [busy, setBusy] = useState(false);
@@ -56,18 +58,19 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, 
         setInstagramLoadState("ready");
       } catch {
         if (cancelled) return;
-        setInstagramReadiness(localInstagramReadiness);
-        setInstagramLoadState("fallback");
+        setInstagramReadiness(deriveMetaInstagramReadiness({ state: "UNAVAILABLE", source: "backend", nextRequirement: "TENTE_NOVAMENTE" }));
+        setInstagramLoadState("error");
       }
     };
     void loadInstagramStatus();
     return () => { cancelled = true; };
-  }, [canalIntegracaoId]);
+  }, [canalIntegracaoId, instagramRetry]);
   const instagramActionAllowed = Boolean(canalIntegracaoId)
+    && EXTERNAL_PROVIDER_ACTIVATION_ENABLED
     && instagramLoadState === "ready"
     && ["NOT_CONFIGURED", "WAITING_META_AUTH"].includes(instagramReadiness.state);
   const instagramAction = instagramActionAllowed && canalIntegracaoId ? async () => {
-    if (busy) return;
+    if (busy || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED) return;
     setBusy(true);
     setError("");
     try {
@@ -83,6 +86,7 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, 
   const messengerPresentation = messengerStatePresentation(messengerStatus.state);
   const messengerChannelId = messengerStatus.canalIntegracaoId;
   const canStoreMessengerCredential = Number.isSafeInteger(messengerChannelId)
+    && EXTERNAL_PROVIDER_ACTIVATION_ENABLED
     && (messengerChannelId || 0) > 0
     && (messengerCredentialMode === "replace"
       ? messengerStatus.credentialConfigured === true && Boolean(messengerStatus.credentialRevision) && ["WAITING_META_AUTH", "CONNECTED"].includes(messengerStatus.state)
@@ -150,6 +154,15 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, 
     },
     STATIC_READINESS_ITEMS[0],
   ];
+  const messengerActionNote = messengerLoadState === "forbidden"
+    ? "Seu perfil não possui permissão para consultar ou configurar este canal."
+    : messengerLoadState === "error"
+      ? "Não foi possível confirmar o estado agora. Tente novamente."
+      : messengerStatus.credentialConfigured
+        ? "Credencial armazenada; aguardando validação do webhook TEST_ONLY."
+        : EXTERNAL_PROVIDER_ACTIVATION_ENABLED
+          ? canStoreMessengerCredential ? "Cole o token Page TEST_ONLY; ele será cifrado no servidor e não será exibido novamente." : "Configure primeiro um App/Página TEST_ONLY; nenhuma conexão real é solicitada aqui."
+          : "Ativação externa bloqueada nesta missão; nenhuma credencial será solicitada.";
   return (
     <Surface className="min-w-0 overflow-hidden" data-testid="integration-readiness-panel">
       <div className="border-b border-[var(--border-default)] px-4 py-3">
@@ -185,18 +198,19 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, 
                 <Button aria-label="Conectar Instagram" disabled={!instagramAction || busy} onClick={instagramAction} size="sm" variant="secondary">
                   {busy ? "Iniciando…" : "Conectar Instagram"}
                 </Button>
-                {!instagramActionAllowed && <span className="text-[10px] font-medium text-[var(--text-tertiary)] md:text-right">{!canalIntegracaoId ? "Aguardando canal Instagram real" : "Ação indisponível no estado atual"}</span>}
+                {!instagramActionAllowed && <span className="text-[10px] font-medium text-[var(--text-tertiary)] md:text-right">{instagramLoadState === "error" ? <button className="font-semibold underline" onClick={() => setInstagramRetry((current) => current + 1)} type="button">Tentar novamente</button> : !canalIntegracaoId ? "Aguardando canal Instagram real" : EXTERNAL_PROVIDER_ACTIVATION_ENABLED ? "Ação indisponível no estado atual" : "Ativação externa bloqueada nesta missão"}</span>}
                 {error && <p className="max-w-56 text-[10px] font-medium text-[var(--danger)] md:text-right" role="alert">{error}</p>}
               </div>
             ) : item.key === "messenger-meta" ? (
               <div className="grid gap-1 md:justify-items-end">
-                <Button aria-label={messengerStatus.credentialConfigured ? "Trocar credencial Messenger" : "Conectar Messenger"} disabled={(messengerStatus.credentialConfigured && !messengerStatus.credentialRevision) || (!messengerStatus.credentialConfigured && (messengerLoadState !== "ready" || !["WAITING_META_AUTH", "CONNECTED"].includes(messengerStatus.state)))} onClick={() => { setMessengerCredentialMode(messengerStatus.credentialConfigured ? "replace" : "create"); setMessengerError(""); setMessengerModalOpen(true); }} size="sm" variant="secondary">
+                <Button aria-label={messengerStatus.credentialConfigured ? "Trocar credencial Messenger" : "Conectar Messenger"} disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || (messengerStatus.credentialConfigured && !messengerStatus.credentialRevision) || (!messengerStatus.credentialConfigured && (messengerLoadState !== "ready" || !["WAITING_META_AUTH", "CONNECTED"].includes(messengerStatus.state)))} onClick={() => { setMessengerCredentialMode(messengerStatus.credentialConfigured ? "replace" : "create"); setMessengerError(""); setMessengerModalOpen(true); }} size="sm" variant="secondary">
                   {messengerStatus.credentialConfigured ? "Trocar credencial" : "Conectar Messenger"}
                 </Button>
                 <span className="max-w-56 text-[10px] font-medium text-[var(--text-tertiary)] md:text-right">
-                  {canStoreMessengerCredential ? "Cole o token Page TEST_ONLY; ele será cifrado no servidor e não será exibido novamente." : messengerStatus.credentialConfigured ? "Credencial armazenada; aguardando validação do webhook TEST_ONLY." : "Configure primeiro um App/Página TEST_ONLY; nenhuma conexão real é solicitada aqui."}
+                  {messengerActionNote}
                 </span>
-                {messengerStatus.credentialConfigured && <button className="text-[10px] font-semibold text-[var(--text-secondary)] underline disabled:cursor-not-allowed disabled:opacity-50" disabled={messengerBusy || !messengerStatus.credentialRevision} onClick={() => void removeMessengerCredentialSafely()} type="button">Remover credencial TEST_ONLY</button>}
+                {messengerLoadState === "error" && <button className="text-[10px] font-semibold text-[var(--text-secondary)] underline" onClick={() => void refreshMessengerStatus()} type="button">Tentar novamente</button>}
+                {messengerStatus.credentialConfigured && <button className="text-[10px] font-semibold text-[var(--text-secondary)] underline disabled:cursor-not-allowed disabled:opacity-50" disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || messengerBusy || !messengerStatus.credentialRevision} onClick={() => void removeMessengerCredentialSafely()} type="button">Remover credencial TEST_ONLY</button>}
                 {messengerError && <p className="max-w-56 text-[10px] font-medium text-[var(--danger)] md:text-right" role="alert">{messengerError}</p>}
               </div>
             ) : <span className="text-[10px] font-medium text-[var(--text-tertiary)] md:pt-1">Sem ação disponível</span>}

@@ -17,9 +17,9 @@ test("boundary Meta local mapeia estados reais sem chamada externa", () => {
   assert.doesNotMatch(boundary, /fetch\(|axios\(|graph\.facebook/i);
 });
 
-test("estado default da UI é preparado para conexão, não conectado", () => {
+test("estado default da UI é não conectado, não conectado falsamente", () => {
   assert.match(boundary, /createLocalMetaInstagramReadiness/);
-  assert.match(boundary, /Preparado para conexão/);
+  assert.match(boundary, /Não conectado/);
   assert.match(panel, /Próximo requisito/);
   assert.match(panel, /Conectar Instagram/);
   assert.match(panel, /Aguardando canal Instagram real/);

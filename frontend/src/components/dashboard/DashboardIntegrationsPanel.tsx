@@ -15,8 +15,8 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, ReactNode } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import {
   cancelarImportacao,
   consultarCatalogoComercial,
@@ -56,6 +56,7 @@ import {
 import DashboardMetricStrip from "./DashboardMetricStrip";
 import DashboardIntegrationReadinessPanel from "./DashboardIntegrationReadinessPanel";
 import { blingStatePresentation, isApprovedBlingAuthorizationUrl } from "../integrations/blingConnectionState";
+import { EXTERNAL_PROVIDER_ACTIVATION_ENABLED } from "../integrations/integrationActivationPolicy";
 import {
   Button as UiButton,
   EmptyState as UiEmptyState,
@@ -150,6 +151,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   const [state, setState] = useState<LoadState>("loading");
   const [activeView, setActiveView] = useState<IntegrationView>("overview");
   const [message, setMessage] = useState("");
+  const [loadWarnings, setLoadWarnings] = useState<string[]>([]);
   const [toast, setToast] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
@@ -189,6 +191,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   const [whatsappSmokeFirst, setWhatsappSmokeFirst] = useState<WhatsappSmokeCall | null>(null);
   const [whatsappSmokeRepeat, setWhatsappSmokeRepeat] = useState<WhatsappSmokeCall | null>(null);
   const loadSequenceRef = useRef(0);
+  const tabRefs = useRef<Record<IntegrationView, HTMLButtonElement | null>>({ overview: null, imports: null, catalog: null, simulator: null });
 
   const importPages = Math.max(1, Math.ceil(importsTotal / IMPORT_LIMIT));
   const catalogPages = Math.max(1, Math.ceil(catalogTotal / CATALOG_LIMIT));
@@ -196,6 +199,18 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   const whatsappScenarios = useMemo(() => buildWhatsappScenarios(whatsappProduct), [whatsappProduct]);
   const whatsappScenario = whatsappScenarios.find((scenario) => scenario.id === whatsappScenarioId) ?? whatsappScenarios[0];
   const invalidLines = validation?.resumo.linhasComErro ?? mappingResult?.linhasInvalidasEstimadas ?? 0;
+
+  function handleIntegrationTabKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const tabs: IntegrationView[] = ["overview", "imports", "catalog", "simulator"];
+    const currentIndex = tabs.indexOf(activeView);
+    const delta = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+    if (!delta && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (currentIndex + delta + tabs.length) % tabs.length;
+    const next = tabs[nextIndex];
+    setActiveView(next);
+    window.setTimeout(() => tabRefs.current[next]?.focus(), 0);
+  }
 
   useEffect(() => {
     void loadAll();
@@ -231,30 +246,54 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
 
   async function loadAll() {
     const requestSequence = ++loadSequenceRef.current;
-    try {
-      const [importList, catalogList, qualityData, blingList, channelList] = await Promise.all([
-        fetchImportacoes({ page: importsPage, limit: IMPORT_LIMIT }),
-        consultarCatalogoComercial({ ...catalogFilters, pagina: catalogPage, limite: CATALOG_LIMIT }),
-        fetchQualidadeDados(),
-        fetchIntegracoes({ tipo: "BLING", limit: 10 }),
-        fetchCanais(),
-      ]);
-      if (requestSequence !== loadSequenceRef.current) return;
-      setImports(importList.data);
-      setImportsTotal(importList.pagination.total);
-      setCatalog(catalogList.data);
-      setCatalogTotal(catalogList.pagination.total);
-      setQuality(qualityData);
-      setBlingIntegrations(blingList.data);
-      const instagramChannel = channelList.data.find((channel) => channel.tipo === "INSTAGRAM_META" && channel.ativo && !channel.modoTeste && channel.status === "ATIVO");
-      setInstagramChannelId(instagramChannel?.id ?? null);
-      setState("success");
-      setMessage("");
-    } catch (error) {
-      if (requestSequence !== loadSequenceRef.current) return;
-      setState("error");
-      setMessage(errorText(error, "Não foi possível carregar as integrações."));
+    const results = await Promise.allSettled([
+      fetchImportacoes({ page: importsPage, limit: IMPORT_LIMIT }),
+      consultarCatalogoComercial({ ...catalogFilters, pagina: catalogPage, limite: CATALOG_LIMIT }),
+      fetchQualidadeDados(),
+      fetchIntegracoes({ tipo: "BLING", limit: 10 }),
+      fetchCanais(),
+    ]);
+    if (requestSequence !== loadSequenceRef.current) return;
+    const [importList, catalogList, qualityData, blingList, channelList] = results;
+    const warnings: string[] = [];
+    if (importList.status === "fulfilled") {
+      setImports(importList.value.data);
+      setImportsTotal(importList.value.pagination.total);
+    } else {
+      setImports([]);
+      setImportsTotal(0);
+      warnings.push("Importações indisponíveis");
     }
+    if (catalogList.status === "fulfilled") {
+      setCatalog(catalogList.value.data);
+      setCatalogTotal(catalogList.value.pagination.total);
+    } else {
+      setCatalog([]);
+      setCatalogTotal(0);
+      warnings.push("Catálogo indisponível");
+    }
+    if (qualityData.status === "fulfilled") {
+      setQuality(qualityData.value);
+    } else {
+      setQuality(null);
+      warnings.push("Qualidade dos dados indisponível");
+    }
+    if (blingList.status === "fulfilled") {
+      setBlingIntegrations(blingList.value.data);
+    } else {
+      setBlingIntegrations([]);
+      warnings.push("Status do Bling indisponível");
+    }
+    if (channelList.status === "fulfilled") {
+      const instagramChannel = channelList.value.data.find((channel) => channel.tipo === "INSTAGRAM_META" && channel.ativo && !channel.modoTeste && channel.status === "ATIVO");
+      setInstagramChannelId(instagramChannel?.id ?? null);
+    } else {
+      setInstagramChannelId(null);
+      warnings.push("Canais de comunicação indisponíveis");
+    }
+    setLoadWarnings(warnings);
+    setState("success");
+    setMessage("");
   }
 
   async function reloadImports() {
@@ -504,6 +543,10 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   }
 
   async function connectBling() {
+    if (!EXTERNAL_PROVIDER_ACTIVATION_ENABLED) {
+      setBlingMessage("Ativação externa bloqueada nesta missão.");
+      return;
+    }
     setBlingBusy("connect");
     setBlingMessage("");
     try {
@@ -518,6 +561,10 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   }
 
   async function testBling(integrationId: number) {
+    if (!EXTERNAL_PROVIDER_ACTIVATION_ENABLED) {
+      setBlingMessage("Testes externos bloqueados nesta missão.");
+      return;
+    }
     setBlingBusy("test");
     setBlingMessage("");
     try {
@@ -532,6 +579,10 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   }
 
   async function syncBling(integrationId: number) {
+    if (!EXTERNAL_PROVIDER_ACTIVATION_ENABLED) {
+      setBlingMessage("Sincronização externa bloqueada nesta missão.");
+      return;
+    }
     setBlingBusy("sync");
     setBlingMessage("");
     try {
@@ -547,6 +598,10 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   }
 
   async function disconnectBling(integrationId: number) {
+    if (!EXTERNAL_PROVIDER_ACTIVATION_ENABLED) {
+      setBlingMessage("Desconexão externa bloqueada nesta missão.");
+      return;
+    }
     if (!window.confirm("Desconectar o Bling? As sincronizações serão interrompidas até uma nova conexão.")) return;
     setBlingBusy("disconnect");
     setBlingMessage("");
@@ -610,17 +665,19 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
 
       <UiSurface className="p-3">
         <UiToolbar>
-          <div aria-label="Áreas de integrações" className="flex min-w-0 flex-wrap items-center gap-1 rounded-md bg-[var(--bg-muted)] p-1" role="tablist">
-            <IntegrationTab active={activeView === "overview"} icon={<PlugZap size={13} />} label="Conexões" onClick={() => setActiveView("overview")} />
-            <IntegrationTab active={activeView === "imports"} icon={<FileSpreadsheet size={13} />} label="Importações" onClick={() => setActiveView("imports")} />
-            <IntegrationTab active={activeView === "catalog"} icon={<Database size={13} />} label="Catálogo" onClick={() => setActiveView("catalog")} />
-            <IntegrationTab active={activeView === "simulator"} icon={<MessageCircle size={13} />} label="Simulador" onClick={() => setActiveView("simulator")} />
+          <div aria-label="Áreas de integrações" className="flex min-w-0 flex-wrap items-center gap-1 rounded-md bg-[var(--bg-muted)] p-1" onKeyDown={handleIntegrationTabKeyDown} role="tablist">
+            <IntegrationTab active={activeView === "overview"} icon={<PlugZap size={13} />} label="Conexões" onClick={() => setActiveView("overview")} panelId="integrations-panel-overview" ref={(element) => { tabRefs.current.overview = element; }} tabId="integrations-tab-overview" />
+            <IntegrationTab active={activeView === "imports"} icon={<FileSpreadsheet size={13} />} label="Importações" onClick={() => setActiveView("imports")} panelId="integrations-panel-imports" ref={(element) => { tabRefs.current.imports = element; }} tabId="integrations-tab-imports" />
+            <IntegrationTab active={activeView === "catalog"} icon={<Database size={13} />} label="Catálogo" onClick={() => setActiveView("catalog")} panelId="integrations-panel-catalog" ref={(element) => { tabRefs.current.catalog = element; }} tabId="integrations-tab-catalog" />
+            <IntegrationTab active={activeView === "simulator"} icon={<MessageCircle size={13} />} label="Simulador" onClick={() => setActiveView("simulator")} panelId="integrations-panel-simulator" ref={(element) => { tabRefs.current.simulator = element; }} tabId="integrations-tab-simulator" />
           </div>
           <UiButton leftIcon={<RefreshCw size={14} />} onClick={() => void loadAll()} size="sm" variant="secondary">
             Atualizar dados
           </UiButton>
         </UiToolbar>
       </UiSurface>
+
+      {loadWarnings.length > 0 && <Alert tone="warning">Algumas áreas continuam indisponíveis: {loadWarnings.join(" · ")}. Os estados que conseguiram ser confirmados permanecem visíveis.</Alert>}
 
       {state === "loading" && (
         <UiSurface className="p-4">
@@ -639,13 +696,13 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
       )}
 
       {state === "success" && activeView === "overview" && (
+        <div aria-labelledby="integrations-tab-overview" className="space-y-3" id="integrations-panel-overview" role="tabpanel" tabIndex={0}>
         <DashboardMetricStrip metrics={[
           { label: "Produtos no Hub", value: String(quality?.totalProdutos ?? 0), context: "Catálogo consolidado", icon: <Database size={15} /> },
           { label: "Produtos ativos", value: String(quality?.produtosAtivos ?? 0), context: "Disponíveis para consulta", icon: <CheckCircle2 size={15} />, tone: (quality?.produtosAtivos ?? 0) > 0 ? "success" : "default" },
           { label: "Sem estoque", value: String(quality?.produtosSemEstoque ?? 0), context: "Saldo indisponível", icon: <PackageSearch size={15} />, tone: (quality?.produtosSemEstoque ?? 0) > 0 ? "warning" : "default" },
           { label: "Dados desatualizados", value: String(quality?.produtosComDadosDesatualizados ?? 0), context: "Pedem revisão", icon: <AlertTriangle size={15} />, tone: (quality?.produtosComDadosDesatualizados ?? 0) > 0 ? "warning" : "default" },
         ]} />
-      )}
 
       {state === "success" && activeView === "overview" && (
         <div className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -663,9 +720,12 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
         </div>
       )}
 
-      {state === "success" && activeView === "overview" && <DashboardIntegrationReadinessPanel canalIntegracaoId={instagramChannelId} onUnauthorized={onUnauthorized} />}
+      <DashboardIntegrationReadinessPanel canalIntegracaoId={instagramChannelId} onUnauthorized={onUnauthorized} />
+        </div>
+      )}
 
       {state === "success" && activeView === "simulator" && (
+        <div aria-labelledby="integrations-tab-simulator" id="integrations-panel-simulator" role="tabpanel" tabIndex={0}>
         <WhatsappSimulationSection
           scenarios={whatsappScenarios}
           scenario={whatsappScenario}
@@ -681,10 +741,11 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
           onRun={() => void runWhatsappSmoke("first")}
           onRepeat={() => void runWhatsappSmoke("repeat")}
         />
+        </div>
       )}
 
       {state === "success" && activeView === "imports" && (
-      <section className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <section aria-labelledby="integrations-tab-imports" className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_340px]" id="integrations-panel-imports" role="tabpanel" tabIndex={0}>
         <div className="min-w-0 space-y-3">
           <UiSurface className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -846,7 +907,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
       )}
 
       {state === "success" && activeView === "catalog" && (
-        <section className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <section aria-labelledby="integrations-tab-catalog" className="grid min-w-0 items-start gap-3 xl:grid-cols-[minmax(0,1fr)_300px]" id="integrations-panel-catalog" role="tabpanel" tabIndex={0}>
           <CatalogSection
             products={catalog}
             total={catalogTotal}
@@ -870,22 +931,28 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   );
 }
 
-function IntegrationTab({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
+type IntegrationTabProps = { active: boolean; icon: ReactNode; label: string; onClick: () => void; panelId: string; tabId: string };
+
+const IntegrationTab = forwardRef<HTMLButtonElement, IntegrationTabProps>(function IntegrationTab({ active, icon, label, onClick, panelId, tabId }, ref) {
   return (
     <button
       aria-selected={active}
-      className={`inline-flex h-8 items-center gap-1.5 rounded px-2.5 text-[11px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus-ring)] ${
+      aria-controls={panelId}
+      className={`inline-flex min-h-10 items-center gap-1.5 rounded px-2.5 py-2 text-[11px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus-ring)] ${
         active ? "bg-[var(--bg-surface)] text-[var(--primary)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
       }`}
+      id={tabId}
       onClick={onClick}
       role="tab"
+      ref={ref}
+      tabIndex={active ? 0 : -1}
       type="button"
     >
       {icon}
       {label}
     </button>
   );
-}
+});
 
 function UploadSummary({ upload }: { upload: HubImportacaoUploadResponse }) {
   return (
@@ -1113,18 +1180,18 @@ function BlingSection({
         actions={(
           <div className="flex flex-wrap items-center gap-2">
           {!active && (
-              <UiButton leftIcon={<PlugZap size={14} />} loading={busy === "connect"} onClick={onConnect} size="sm" variant="primary">Conectar Bling</UiButton>
+              <UiButton aria-describedby="bling-external-activation-note" disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<PlugZap size={14} />} loading={busy === "connect"} onClick={onConnect} size="sm" variant="primary">Conectar Bling</UiButton>
           )}
           {active && (
             <>
-                <UiButton disabled={Boolean(busy)} leftIcon={<CheckCircle2 size={14} />} loading={busy === "test"} onClick={() => onTest(active.id)} size="sm">Testar conexão</UiButton>
-                <UiButton disabled={Boolean(busy)} leftIcon={<RefreshCw size={14} />} loading={busy === "sync"} onClick={() => onSync(active.id)} size="sm" variant="primary">Sincronizar agora</UiButton>
-                <UiButton disabled={Boolean(busy)} leftIcon={<Power size={14} />} loading={busy === "disconnect"} onClick={() => onDisconnect(active.id)} size="sm">Desconectar</UiButton>
+                <UiButton disabled={Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<CheckCircle2 size={14} />} loading={busy === "test"} onClick={() => onTest(active.id)} size="sm">Testar conexão</UiButton>
+                <UiButton disabled={Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<RefreshCw size={14} />} loading={busy === "sync"} onClick={() => onSync(active.id)} size="sm" variant="primary">Sincronizar agora</UiButton>
+                <UiButton disabled={Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<Power size={14} />} loading={busy === "disconnect"} onClick={() => onDisconnect(active.id)} size="sm">Desconectar</UiButton>
             </>
           )}
           </div>
         )}
-        description="Produtos e estoque em modo de leitura. As ações de conexão respeitam as permissões administrativas existentes."
+        description="Produtos e estoque em modo de leitura. A ativação externa fica bloqueada até uma missão de conexão autorizada."
         icon={<PlugZap size={15} />}
         status={<UiStatusBadge label={presentation.label} status={presentation.status} />}
         title="Bling"
@@ -1135,7 +1202,8 @@ function BlingSection({
         <Info label="Último erro" value={latest?.ultimoErroEm ? dateTime(latest.ultimoErroEm) : "-"} />
         <Info label="Credenciais" value={latest?.possuiCredenciais ? "Configuradas" : "Não configuradas"} />
       </div>
-      {!active && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert tone="info">Conector disponível para configuração. Sem credenciais reais, nenhuma chamada ao Bling será iniciada.</Alert></div>}
+      {!active && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert id="bling-external-activation-note" tone="info">Conector preparado para configuração. A ativação externa está bloqueada nesta missão; nenhum OAuth ou request ao Bling será iniciado.</Alert></div>}
+      {active && !EXTERNAL_PROVIDER_ACTIVATION_ENABLED && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert id="bling-external-activation-note" tone="info">Conexão existente preservada para leitura. Teste, sincronização e desconexão ficam bloqueados nesta missão.</Alert></div>}
       {message && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert tone={(message.toLowerCase().includes("não foi") || message.toLowerCase().includes("nao foi")) ? "error" : "success"}>{message}</Alert></div>}
       {lastSync && (
         <div className="border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-[11px] text-[var(--text-secondary)]">
@@ -1416,7 +1484,7 @@ function SelectBox<T extends string>({ label, value, options, onChange }: { labe
   );
 }
 
-function Alert({ tone, children }: { tone: "error" | "warning" | "info" | "success"; children: ReactNode }) {
+function Alert({ id, tone, children }: { id?: string; tone: "error" | "warning" | "info" | "success"; children: ReactNode }) {
   const classes =
     tone === "error"
       ? "border-rose-200 bg-rose-50 text-rose-800"
@@ -1425,7 +1493,7 @@ function Alert({ tone, children }: { tone: "error" | "warning" | "info" | "succe
         : tone === "info"
           ? "border-sky-200 bg-sky-50 text-sky-800"
           : "border-amber-200 bg-amber-50 text-amber-800";
-  return <div className={`mt-3 rounded-md border px-3 py-2.5 text-[11px] font-medium leading-5 ${classes}`}>{children}</div>;
+  return <div id={id} className={`mt-3 rounded-md border px-3 py-2.5 text-[11px] font-medium leading-5 ${classes}`}>{children}</div>;
 }
 
 function dateTime(value: string) {

@@ -18,6 +18,7 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
   assert.equal(ok.targetVerified, true);
   assert.equal(ok.databaseVerified, true);
   assert.equal(ok.providersConnected, false);
+  assert.equal(ok.externalProviderActivationEnabled, false);
   assert.equal(ok.outboundEnabled, false);
   assert.equal(ok.sourceManifestVersion, SOURCE_MANIFEST_VERSION);
   assert.match(ok.sourceManifestSha256, /^[a-f0-9]{64}$/);
@@ -27,6 +28,7 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
   assert.equal(probeAuthorized(base, "wrong"), false);
   assert.equal(databaseVerified({ POSTGRES_DATABASE_URL: "postgresql://x:y@production-db.railway.internal/db" }), false);
   assert.equal(outboundDisabled({ META_EXTERNAL_NETWORK_ENABLED: "true" }), false);
+  assert.equal(outboundDisabled({ BLING_EXTERNAL_NETWORK_ENABLED: "true" }), false);
   assert.equal((await buildRuntimeFingerprint({ env: base, prisma: { metaCredential: { count: async () => 1 }, integracao: { count: async () => 0 } } })).providersConnected, true);
   assert.equal(sourceManifestSha256(), sourceManifestSha256());
 });

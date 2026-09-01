@@ -75,10 +75,12 @@ const CLIENT_DATA_PAGES = new Set<ActivePage>([
 const LazyDashboardAgendaPanel = lazy(() => import("../components/dashboard/DashboardAgendaPanel"));
 const LazyStockControlPanel = lazy(() => import("../components/stock/StockControlPanel"));
 const LazyDashboardIntegrationsPanel = lazy(() => import("../components/dashboard/DashboardIntegrationsPanel"));
+const LazyIntegrationStatusBoard = lazy(() => import("../components/integrations/IntegrationStatusBoard"));
 const LazyDashboardSiteLeadIntegrationPanel = lazy(() => import("../components/dashboard/DashboardSiteLeadIntegrationPanel"));
 const LazyDashboardUserSecurityPanel = lazy(() => import("../components/dashboard/DashboardUserSecurityPanel"));
 const LazyDashboardAutomationsPanel = lazy(() => import("../components/dashboard/DashboardAutomationsPanel"));
 const LazyDashboardPlatformTenantsPanel = lazy(() => import("../components/dashboard/DashboardPlatformTenantsPanel"));
+const LazyDashboardPlatformObservabilityPanel = lazy(() => import("../components/dashboard/DashboardPlatformObservabilityPanel"));
 const LazyWhatsAppIntegrationCard = lazy(async () => {
   const module = await import("../components/integrations/WhatsAppConnectionPanel");
   return { default: module.WhatsAppIntegrationCard };
@@ -1126,6 +1128,11 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
 
               {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
                 <Suspense fallback={<LoadingState rows={3} />}>
+                  <LazyIntegrationStatusBoard onUnauthorized={onLogout} />
+                </Suspense>
+              )}
+              {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
+                <Suspense fallback={<LoadingState rows={3} />}>
                   <LazyWhatsAppIntegrationCard
                     onOpen={() => navigate("/integracoes/whatsapp")}
                     onUnauthorized={onLogout}
@@ -1198,6 +1205,11 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
               {activePage === "automacoes" && (
                 <Suspense fallback={<LoadingState rows={4} />}>
                   <LazyDashboardAutomationsPanel />
+                </Suspense>
+              )}
+              {activePage === "platformTenants" && isPlatformOperator && (
+                <Suspense fallback={<LoadingState rows={4} />}>
+                  <LazyDashboardPlatformObservabilityPanel />
                 </Suspense>
               )}
               {activePage === "platformTenants" && isPlatformOperator && (

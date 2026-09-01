@@ -181,6 +181,25 @@ export type PlatformCapabilityChange = {
   newEnabled: boolean;
 };
 
+export type PlatformObservabilitySummary = {
+  generatedAt: string;
+  worker: {
+    checkpointCount: number;
+    lastCheckpointAt: string | null;
+    activeLeases: number;
+    expiredLeases: number;
+  };
+  jobs: Record<string, number>;
+  executions: Record<string, number>;
+  retryingJobs: number;
+  webhooks: Record<string, number>;
+  outbox: {
+    email: Record<string, number>;
+    stock: Record<string, number>;
+  };
+  unresolvedIntegrationErrors: number;
+};
+
 export type PlatformTenantCreatePayload = {
   companyName: string;
   slug: string;
@@ -1652,6 +1671,7 @@ export type MessengerOperationalStatusResponse = {
 };
 
 export type InstagramOperationalStatusResponse = {
+  canalIntegracaoId?: number | null;
   state?: "NOT_CONFIGURED" | "CONFIGURED_INACTIVE" | "WAITING_META_AUTH" | "CONNECTED" | "PAUSED" | "ERROR" | "UNAVAILABLE";
   credentialConfigured?: boolean;
   nextRequirement?: string | null;
@@ -2856,6 +2876,10 @@ export async function updatePlatformTenantAutomations(id: number, payload: { ena
 
 export async function fetchPlatformTenantAutomationsAudit(id: number, params: { page?: number; limit?: number } = {}, options: { signal?: AbortSignal } = {}) {
   return requestApiGetAuthenticated<ApiPaginatedResponse<PlatformCapabilityAudit>>(`/platform/tenants/${id}/capabilities/automations/audit${toQueryString(params)}`, options);
+}
+
+export async function fetchPlatformObservabilitySummary(options: { signal?: AbortSignal } = {}) {
+  return requestApiGetAuthenticated<PlatformObservabilitySummary>("/platform/observability/summary", options);
 }
 
 export function getApiBaseUrl() {

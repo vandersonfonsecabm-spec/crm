@@ -55,7 +55,13 @@ function databaseVerified(env) {
 }
 
 function outboundDisabled(env) {
-  return ["META_EXTERNAL_NETWORK_ENABLED", "WHATSAPP_OUTBOUND_ENABLED", "SECURITY_EMAIL_DELIVERY_WORKER_ENABLED"]
+  return [
+    "EXTERNAL_PROVIDER_ACTIVATION_ENABLED",
+    "META_EXTERNAL_NETWORK_ENABLED",
+    "WHATSAPP_OUTBOUND_ENABLED",
+    "BLING_EXTERNAL_NETWORK_ENABLED",
+    "SECURITY_EMAIL_DELIVERY_WORKER_ENABLED",
+  ]
     .every((key) => String(env[key] || "false").toLowerCase() !== "true");
 }
 
@@ -72,6 +78,7 @@ async function buildRuntimeFingerprint({ env = process.env, prisma }) {
     targetVerified,
     databaseVerified: databaseVerified(env),
     providersConnected: metaCredentials === 0 && blingConnections === 0 ? false : true,
+    externalProviderActivationEnabled: String(env.EXTERNAL_PROVIDER_ACTIVATION_ENABLED || "false").toLowerCase() === "true",
     outboundEnabled: !outboundDisabled(env),
   };
 }

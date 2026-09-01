@@ -17,7 +17,7 @@ test("preparação visual de integrações usa estados honestos e a superfície 
   assert.match(panel, /Instagram Direct \/ Meta/);
   assert.match(panel, /Facebook Messenger \/ Meta/);
   assert.match(panel, /Serasa \/ score/);
-  assert.match(boundary, /Preparado para conexão/);
+  assert.match(boundary, /Não conectado/);
   assert.match(panel, /Configuração pendente/);
   assert.match(panel, /Ainda não disponível/);
   assert.match(panel, /Conectar Instagram/);

@@ -199,11 +199,23 @@ async function loadContext(client, tenantId, env) {
     (channel) => channel.chaveInterna === REAL_INSTAGRAM_INBOUND_KEY,
   );
   const channel = canonicalChannels.length === 1 ? canonicalChannels[0] : null;
+  const credential = channel?.accessTokenRef
+    ? await client.metaCredential.findFirst({
+      where: {
+        empresaId: tenantId,
+        canalIntegracaoId: channel.id,
+        reference: channel.accessTokenRef,
+        status: "ATIVA",
+      },
+      select: { id: true },
+    })
+    : null;
   const features = new Map(featureRows.map((row) => [row.chave, row.habilitada === true]));
   return {
     tenant,
     realChannels,
     channel,
+    credentialConfigured: Boolean(credential),
     featureRows,
     capabilities: {
       integration: features.get(INSTAGRAM_CAPABILITY_KEYS.INTEGRATION) === true,
@@ -252,6 +264,8 @@ function presentStatus(context) {
   const state = deriveState(context);
   return {
     state,
+    canalIntegracaoId: channel?.id || null,
+    credentialConfigured: context.credentialConfigured,
     configured: hasEssentialIdentity(channel),
     ativo: channel?.ativo === true,
     status: channel?.status || null,
@@ -285,6 +299,8 @@ function presentStatus(context) {
 function unavailableStatus() {
   return {
     state: INSTAGRAM_OPERATIONAL_STATUS.UNAVAILABLE,
+    canalIntegracaoId: null,
+    credentialConfigured: false,
     configured: false,
     ativo: false,
     status: null,

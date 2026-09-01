@@ -62,6 +62,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.post("/integracoes/bling/iniciar", ...requireAdmin, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const result = await blingService.iniciarOAuth({ auth: req.auth });
       return res.json(result);
     } catch (error) {
@@ -75,6 +76,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       return integrationError(res, error, "Callback do Bling indisponível.");
     }
     try {
+      assertExternalProviderActivationEnabled();
       const code = clean(req.query.code);
       const state = clean(req.query.state);
       if (req.query.error) {
@@ -107,6 +109,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.post("/integracoes/whatsapp/credentials", ...requireAdmin, whatsappIntegrationGate, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const credential = await metaCredentialStore.createLocalCredential({
         empresaId: req.auth.empresaId,
         canalIntegracaoId: req.body?.canalIntegracaoId,
@@ -122,6 +125,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.post("/integracoes/messenger/credentials", ...requireAdmin, messengerIntegrationGate, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const credential = await metaCredentialStore.createLocalCredential({
         empresaId: req.auth.empresaId,
         canalIntegracaoId: req.body?.canalIntegracaoId,
@@ -137,6 +141,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.put("/integracoes/whatsapp/credentials", ...requireAdmin, whatsappIntegrationGate, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const credential = await metaCredentialStore.replaceLocalCredential({
         empresaId: req.auth.empresaId,
         canalIntegracaoId: req.body?.canalIntegracaoId,
@@ -168,6 +173,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.put("/integracoes/messenger/credentials", ...requireAdmin, messengerIntegrationGate, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const credential = await metaCredentialStore.replaceLocalCredential({
         empresaId: req.auth.empresaId,
         canalIntegracaoId: req.body?.canalIntegracaoId,
@@ -199,6 +205,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.post("/integracoes/instagram/oauth/iniciar", ...requireAdmin, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const result = await metaOAuthService.iniciarOAuth({ auth: req.auth, canalIntegracaoId: req.body?.canalIntegracaoId });
       return res.json(result);
     } catch (error) {
@@ -214,6 +221,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     res.set("Cache-Control", "no-store");
     res.set("Referrer-Policy", "no-referrer");
     try {
+      assertExternalProviderActivationEnabled();
       await metaOAuthService.concluirOAuth({
         code: req.query.code,
         state: req.query.state,
@@ -304,6 +312,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.post("/integracoes/:id/testar", ...requireAdmin, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const integracao = await findIntegrationOrThrow(prisma, req);
       if (integracao.tipo === "BLING") throw httpError(409, "Use a ação dedicada para testar o Bling.", "BLING_LIFECYCLE_REQUIRED");
       const adapter = integracao.tipo === "BLING"
@@ -370,6 +379,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.post("/integracoes/:id/bling/testar", ...requireAdmin, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const integracao = await findIntegrationOrThrow(prisma, req);
       if (integracao.tipo !== "BLING") throw httpError(400, "Esta ação exige uma integração Bling.", "INTEGRATION_INVALID_TYPE");
       const result = await blingService.testar({ integracao, empresaId: req.auth.empresaId });
@@ -381,6 +391,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.post("/integracoes/:id/bling/desconectar", ...requireAdmin, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const integracao = await findIntegrationOrThrow(prisma, req);
       if (integracao.tipo !== "BLING") throw httpError(400, "Esta ação exige uma integração Bling.", "INTEGRATION_INVALID_TYPE");
       const updated = await blingService.desconectar({ integracao, empresaId: req.auth.empresaId, usuarioId: req.auth.usuarioId });
@@ -392,6 +403,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.post("/integracoes/:id/sincronizar", ...requireAdmin, async (req, res) => {
     try {
+      assertExternalProviderActivationEnabled();
       const integracao = await findIntegrationOrThrow(prisma, req);
       const result = await blingService.sincronizar({
         integracao,
@@ -829,7 +841,7 @@ function syncResponse(sync) {
     itensProcessados: sync.itensProcessados,
     itensComErro: sync.itensComErro,
     mensagemErro: redactSensitiveText(sync.mensagemErro),
-    metadados: safeJson(sync.metadadosJson, null),
+    metadados: redactSensitiveConfig(safeJson(sync.metadadosJson, null)),
     erros: sync.erros?.map((erro) => ({
       id: erro.id,
       codigo: erro.codigo,
@@ -903,6 +915,7 @@ function sanitizedError(error) {
 }
 
 function statusFromCode(code) {
+  if (code === "PROVIDER_ACTIVATION_PAUSED") return 503;
   if (code === "BLING_OAUTH_REQUIRED" || code === "BLING_LIFECYCLE_REQUIRED" || code === "INTEGRATION_OPERATION_IN_PROGRESS") return 409;
   if (code === "CONNECTOR_NOT_IMPLEMENTED") return 501;
   if (code === "BLING_NOT_CONFIGURED") return 501;
@@ -1043,6 +1056,16 @@ function stringifySafeConfig(value) {
   return serialized;
 }
 
+function assertExternalProviderActivationEnabled(env = process.env) {
+  const configured = env.EXTERNAL_PROVIDER_ACTIVATION_ENABLED;
+  const enabled = String(configured || "").trim().toLowerCase() === "true";
+  const explicitlyDisabled = configured !== undefined && !enabled;
+  if ((env.NODE_ENV === "production" || explicitlyDisabled) && !enabled) {
+    throw httpError(503, "A ativação externa está pausada nesta fase.", "PROVIDER_ACTIVATION_PAUSED");
+  }
+  return true;
+}
+
 function assertNoSensitiveConfigValues(value, depth = 0) {
   if (depth > 8) throw httpError(400, "Configuração profunda demais.", "INTEGRATION_CONFIG_INVALID");
   if (typeof value === "string") {
@@ -1096,6 +1119,7 @@ function assertNoSensitiveConfigKeys(value, depth = 0) {
 
 function redactSensitiveConfig(value, depth = 0) {
   if (depth > 8) return "[redacted]";
+  if (typeof value === "string") return redactSensitiveText(value);
   if (!value || typeof value !== "object") return value;
   if (Array.isArray(value)) return value.map((item) => redactSensitiveConfig(item, depth + 1));
   return Object.fromEntries(Object.entries(value).map(([key, child]) => [
@@ -1194,6 +1218,7 @@ module.exports = {
     redactSensitiveConfig,
     safeAdapterErrorMessage,
     redactSensitiveText,
+    assertExternalProviderActivationEnabled,
     assertGenericIntegrationLifecycleAllowed,
     frontendCallbackBase,
   },

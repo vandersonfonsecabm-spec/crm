@@ -63,7 +63,7 @@ export function deriveMetaInstagramReadiness(payload: MetaInstagramStatusPayload
       return { state, badgeStatus: "indisponivel", label: "Indisponível", description: "A capacidade Meta não está disponível neste ambiente.", note: "Flags, capabilities e configuração global permanecem fail-closed.", nextRequirement, source };
     case "NOT_CONFIGURED":
     default:
-      return { state: "NOT_CONFIGURED", badgeStatus: "planejado", label: "Preparado para conexão", description: "O boundary local está definido; nenhuma conta foi conectada.", note: "Conta Meta real e contrato externo confirmado são necessários para E2E.", nextRequirement, source };
+      return { state: "NOT_CONFIGURED", badgeStatus: "indisponivel", label: "Não conectado", description: "Nenhuma conta Instagram foi conectada para esta empresa.", note: "A conexão externa será tratada em uma missão de ativação separada.", nextRequirement, source };
   }
 }
 

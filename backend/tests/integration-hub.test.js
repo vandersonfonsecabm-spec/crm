@@ -105,12 +105,13 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
       empresaId: adminA.empresaId,
       nome: "Config legado",
       tipo: "JSON",
-      configuracaoJson: JSON.stringify({ endpoint: "sandbox", nested: { accessToken: "legado-nao-retornar" } }),
+      configuracaoJson: JSON.stringify({ endpoint: "https://provider.test/callback?access_token=legado-url-nao-retornar", nested: { accessToken: "legado-nao-retornar" } }),
     },
   });
   const legacyRead = await request("GET", `/integracoes/${legacyUnsafe.id}`, undefined, adminA.token);
   assert.equal(legacyRead.status, 200);
   assert.equal(legacyRead.body.configuracao.nested.accessToken, "[redacted]");
+  assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-url-nao-retornar"), false);
   assert.equal(JSON.stringify(legacyRead.body).includes("legado-nao-retornar"), false);
 
   const listA = await request("GET", "/integracoes", undefined, adminA.token);
@@ -146,6 +147,13 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
   assert.equal(syncsA.body.data.length, 1);
   const syncDetail = await request("GET", `/sincronizacoes/${syncsA.body.data[0].id}`, undefined, adminA.token);
   assert.equal(syncDetail.status, 200);
+  await prisma.sincronizacaoIntegracao.update({
+    where: { id: syncsA.body.data[0].id },
+    data: { metadadosJson: JSON.stringify({ callback: "https://provider.test/?token=sync-secret-nao-retornar" }) },
+  });
+  const redactedSyncDetail = await request("GET", `/sincronizacoes/${syncsA.body.data[0].id}`, undefined, adminA.token);
+  assert.equal(redactedSyncDetail.status, 200);
+  assert.equal(JSON.stringify(redactedSyncDetail.body).includes("sync-secret-nao-retornar"), false);
   const syncCross = await request("GET", `/sincronizacoes/${syncsA.body.data[0].id}`, undefined, adminB.token);
   assert.equal(syncCross.status, 404);
 

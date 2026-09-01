@@ -26,6 +26,7 @@ const {
   createEmailInboundLifecycleService,
 } = require("../integrations/emailInboundLifecycle");
 const { isEmailError } = require("../integrations/emailFoundation");
+const { createPlatformObservabilityService } = require("./observability");
 const {
   createAuthRateLimiter,
   createPostgresAuthRateLimiter,
@@ -47,6 +48,13 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
   const messengerInboundLifecycle = createMessengerInboundLifecycleService({ prisma });
   const emailInboundProvisioning = createEmailInboundProvisioningService({ prisma });
   const emailInboundLifecycle = createEmailInboundLifecycleService({ prisma });
+  const platformObservability = createPlatformObservabilityService({ prisma });
+
+  app.get("/platform/observability/summary", ...guarded, route(async (req, res) => {
+    const result = await platformObservability.summary();
+    res.set("Cache-Control", "no-store");
+    res.json(result);
+  }));
 
   app.get("/platform/tenants", ...guarded, route(async (req, res) => {
     const page = positiveInteger(req.query.page, 1);
