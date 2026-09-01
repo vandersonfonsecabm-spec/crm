@@ -160,6 +160,10 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
     const escapedRedacted = _private.redactSensitiveText(escaped);
     assert.equal(escapedRedacted.includes("SECRET-" + key), false, key);
     assert.equal(escapedRedacted.includes("tail"), false, key);
+    const unterminated = key + '="prefix\\\"SECRET-' + key + ' PART_TWO';
+    const unterminatedRedacted = _private.redactSensitiveText(unterminated);
+    assert.equal(unterminatedRedacted.includes("SECRET-" + key), false, key);
+    assert.equal(unterminatedRedacted.includes("PART_TWO"), false, key);
   }
   assert.throws(
     () => _private.stringifySafeConfig({ note: 'authorization="Bearer synthetic-auth-part-one synthetic-auth-part-two"' }),

@@ -38,6 +38,10 @@ const FORMATOS_IMPORTACAO = new Set(["CSV", "XLSX", "XML", "JSON"]);
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 const MAX_CONFIG_JSON_BYTES = 32 * 1024;
 const SENSITIVE_CONFIG_KEY = /(?:api.?key|access.?key|client.?key|app.?key|client.?secret|app.?secret|private.?key|access.?token|refresh.?token|auth(?:orization)?|password|passwd|pass|senha|cookie|credential|secret|token|state|code|signature)/i;
+const UNTERMINATED_SENSITIVE_QUOTED_VALUE = new RegExp(
+  "(?<![A-Za-z0-9_])([\"']?" + SENSITIVE_CONFIG_KEY.source + "[\"']?\\s*[:=]\\s*)(?:\"(?:\\\\.|[^\"\\\\])*|'(?:\\\\.|[^'\\\\])*)$",
+  "gi",
+);
 const SENSITIVE_REDACTION_KEY = new RegExp(`${SENSITIVE_CONFIG_KEY.source}|signature|state|code`, "i");
 const SAFE_PUBLIC_ERROR_CODES = new Set(["PROVIDER_ACTIVATION_PAUSED", "META_EXTERNAL_NETWORK_DISABLED"]);
 
@@ -1214,6 +1218,7 @@ function redactSensitiveText(value) {
     .replace(/\\"/g, escapedDoubleQuote)
     .replace(/\\'/g, escapedSingleQuote);
   return input
+    .replace(UNTERMINATED_SENSITIVE_QUOTED_VALUE, "$1[redacted]")
     // Connection strings for queues/databases are just as sensitive as HTTP
     // URLs.  Redact URI userinfo for every registered URI scheme, not only
     // https, before exposing an adapter error or legacy configuration.

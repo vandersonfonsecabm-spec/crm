@@ -117,6 +117,7 @@ const SAFE_STATUSES = new Set([
 const SAFE_LIFECYCLE_STATUSES = new Set(["disabled", "started", "stopped", "stopping"]);
 const SAFE_PROVIDERS = new Set(["postgresql", "sqlite", "unknown"]);
 const SAFE_SUBSYSTEMS = new Set(["automation", "automation_temporal", "automation_jobs", "notifications", "stock_core", "meta_inbound", "security_email_delivery", "worker_cycle", "worker_shutdown"]);
+const UNTERMINATED_SENSITIVE_ERROR_VALUE = /\b(password|senha|secret|token|api[_-]?key)\s*[:=]\s*(?:"(?:\\.|[^"\\])*|'(?:\\.|[^'\\])*)$/gi;
 
 const NUMERIC_FIELDS = new Set([
   "tenantId",
@@ -292,6 +293,7 @@ function sanitizeErrorMessage(value, maxLength = MAX_ERROR_MESSAGE_LENGTH) {
     .replace(/\\"/g, escapedDoubleQuote)
     .replace(/\\'/g, escapedSingleQuote);
   if (looksLikePrismaPayload(text)) return "Database operation failed.";
+  text = text.replace(UNTERMINATED_SENSITIVE_ERROR_VALUE, "$1=[REDACTED]");
   const replacements = [
     [/\b(cookie|set-cookie|authorization)\s*[:=][^\r\n]*/gi, "$1=[REDACTED]"],
     [/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|https?|file):(?:\/\/)?[^\s"'<>]+/gi, "[REDACTED_URL]"],

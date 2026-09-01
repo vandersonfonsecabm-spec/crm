@@ -56,6 +56,10 @@ test("audit reasons redact OAuth fields and email lifecycle keeps the same bound
     const escapedSanitized = sanitizeAuditReason(escaped);
     assert.equal(escapedSanitized.includes("SECRET-" + key), false, key);
     assert.equal(escapedSanitized.includes("tail"), false, key);
+    const unterminated = key + '="prefix\\\"SECRET-' + key + ' PART_TWO';
+    const unterminatedSanitized = sanitizeAuditReason(unterminated);
+    assert.equal(unterminatedSanitized.includes("SECRET-" + key), false, key);
+    assert.equal(unterminatedSanitized.includes("PART_TWO"), false, key);
     assert.equal(quotedSanitized.includes(`quoted-${key}-secret`), false, key);
   }
 });

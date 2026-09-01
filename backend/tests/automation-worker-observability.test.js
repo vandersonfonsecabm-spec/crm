@@ -314,6 +314,9 @@ test("sanitizacao cobre headers compostos, credenciais, PII e payload Prisma", (
   const escaped = sanitizeErrorMessage('password="prefix\\"SECRET-AFTER\\" tail"');
   assert.equal(escaped.includes("SECRET-AFTER"), false);
   assert.equal(escaped.includes("tail"), false);
+  const unterminated = sanitizeErrorMessage('password="prefix\\"SECRET-AFTER PART_TWO');
+  assert.equal(unterminated.includes("SECRET-AFTER"), false);
+  assert.equal(unterminated.includes("PART_TWO"), false);
   assert.equal(sanitizeErrorMessage("x".repeat(MAX_ERROR_MESSAGE_LENGTH + 100)).length, MAX_ERROR_MESSAGE_LENGTH);
 });
 

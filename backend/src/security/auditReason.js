@@ -12,7 +12,7 @@ const JWT_PATTERN = /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b
 // alternative stops at the first escaped quote and can leave a secret suffix
 // in the audit trail.
 const KEY_VALUE_PATTERN = new RegExp(
-  `(?<![A-Za-z0-9_])(["']?${SENSITIVE_REASON_KEY_PATTERN.source}["']?\\s*[:=]\\s*)(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|[^\\s,;]+)`,
+  `(?<![A-Za-z0-9_])(["']?${SENSITIVE_REASON_KEY_PATTERN.source}["']?\\s*[:=]\\s*)(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|"(?:\\\\.|[^"\\\\])*|'(?:\\\\.|[^'\\\\])*|[^\\s,;]+)`,
   "gi",
 );
 
