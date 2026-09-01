@@ -29,7 +29,7 @@ function sanitizeAuditReason(value, sensitiveValues = [], maxLength = 500) {
     .replace(NETWORK_PATH_PATTERN, "[REDACTED_URL]")
     .replace(BEARER_PATTERN, "Bearer [REDACTED]")
     .replace(JWT_PATTERN, "[REDACTED_TOKEN]")
-    .replace(KEY_VALUE_PATTERN, (_match, prefix) => `${prefix}[REDACTED]`)
+    .replace(KEY_VALUE_PATTERN, (_match, prefix) => `${prefix.replace(/\s*[:=]\s*$/, "=")}[REDACTED]`)
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
     .replace(/(?:\+\d{1,3}[\s().-]*)?(?:\(?\d{2,3}\)?[\s.-]*)?\d{4,5}[\s.-]?\d{4}\b/g, "[REDACTED_PHONE]")
     .replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, "[REDACTED_DOCUMENT]")
