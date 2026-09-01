@@ -1126,7 +1126,7 @@ function stringifySafeConfig(value) {
 function assertNoSensitiveConfigValues(value, depth = 0) {
   if (depth > 8) throw httpError(400, "Configuração profunda demais.", "INTEGRATION_CONFIG_INVALID");
   if (typeof value === "string") {
-    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|[?&](?:api_key|client_secret|access_token|refresh_token|password|passwd|senha|pass|token|secret|credential|signature|state|code)=[^&\s]+|[a-z][a-z0-9+.-]*:\/\/[^\s/@]*:[^\s/@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
+    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|(?<![A-Za-z0-9_])(?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)\s*[:=]\s*[^\s,;}]+|\/\/[^\s/?#]+[/?#][^\s]+|[?&](?:api_key|client_secret|access_token|refresh_token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=[^&\s]+|[a-z][a-z0-9+.-]*:\/\/[^\s/@]*:[^\s/@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
     if (sensitiveValue.test(value)) {
       throw httpError(400, "Configuração contém valor sensível; use o armazenamento cifrado de credenciais.", "INTEGRATION_CONFIG_SENSITIVE_FIELD");
     }
@@ -1213,6 +1213,9 @@ function redactSensitiveText(value) {
     // when they do not use a known secret key. Preserve the authority for
     // operator context, but replace the rest of every hierarchical URI.
     .replace(/([a-z][a-z0-9+.-]*:\/\/[^\s/?#]+)[/?#][^\s]*/gi, "$1/[redacted]")
+    // Network-path references (//host/path) are also capable of carrying
+    // tenant paths, query strings and fragments without a scheme prefix.
+    .replace(/(\/\/[^\s/?#]+)[/?#][^\s]*/gi, "$1/[redacted]")
     // Opaque URI schemes (mailto:, urn:, data: and custom provider schemes)
     // do not contain `//` but can still carry secrets or private payloads.
     // The hierarchical pass above runs first so a userinfo segment is not
@@ -1221,8 +1224,8 @@ function redactSensitiveText(value) {
     .replace(/(?<![A-Za-z0-9_])\b[a-z][a-z0-9+.-]*:(?!\/\/)[^\s]+/gi, "[redacted]")
     .replace(/(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "$1[redacted]")
     .replace(/((?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
-    .replace(/([?#&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code)=)[^&#\s]+/gi, "$1[redacted]")
-    .replace(/(["']?(?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token|secret|credential|signature)["']?\s*[:=]\s*["']?)[^"'\s,;}]+/gi, "$1[redacted]")
+    .replace(/([?#&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=)[^&#\s]+/gi, "$1[redacted]")
+    .replace(/(?<![A-Za-z0-9_])(["']?(?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)["']?\s*[:=]\s*["']?)[^"'\s,;}]+/gi, "$1[redacted]")
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
     .slice(0, 500);
 }

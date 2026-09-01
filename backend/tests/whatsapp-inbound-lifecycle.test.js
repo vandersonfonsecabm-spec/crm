@@ -29,6 +29,7 @@ Object.assign(process.env, {
   WHATSAPP_PROVIDER_ENVIRONMENT: "F1C2B_TEST",
   WHATSAPP_APP_SECRET: "test-only-app-secret",
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-only-verify-token",
+  INTEGRATION_ENCRYPTION_KEY: "whatsapp-inbound-lifecycle-encryption-key",
 });
 delete process.env.PLATFORM_ADMIN_EMAILS;
 
@@ -456,13 +457,23 @@ async function createFeature(empresaId, chave, habilitada) {
 
 async function attachActiveCredential(channel, provider) {
   const reference = `${provider.toLowerCase()}-lifecycle-${suffix}`;
+  const { encryptCredentialsWithContext } = require("../src/integrations/crypto");
   await prisma.metaCredential.create({
     data: {
       empresaId: channel.empresaId,
       canalIntegracaoId: channel.id,
       provider,
       reference,
-      ciphertext: "ciphertext-synthetic",
+      ciphertext: encryptCredentialsWithContext({
+        accessToken: `synthetic-${provider.toLowerCase()}`,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }, {
+        empresaId: channel.empresaId,
+        canalIntegracaoId: channel.id,
+        provider,
+        reference,
+        revision: 1,
+      }),
       status: "ATIVA",
     },
   });

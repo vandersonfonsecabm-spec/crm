@@ -264,6 +264,29 @@ test("falha do logger pos-commit nao desfaz lifecycle", async () => {
   assert.equal(await prisma.auditoriaFuncionalidade.count({ where: { empresaId: target.tenant.id } }), 2);
 });
 
+test("E-mail nao anuncia CONNECTED sem autorizacao atual do provider", async () => {
+  const operator = await seedTenant("email-no-provider-auth-operator");
+  const target = await seedTenant("email-no-provider-auth-target");
+  const created = await request("PUT", basePath(target.tenant.id), provisioningPayload(target.tenant.id), operator.user.id, true);
+  const activated = await request("POST", `${basePath(target.tenant.id)}/activate`, lifecyclePayload(created.body.updatedAt, "Ativar caixa sintetica"), operator.user.id, true);
+  assert.equal(activated.status, 200);
+
+  const channel = await prisma.canalIntegracao.findFirstOrThrow({ where: { empresaId: target.tenant.id, tipo: "EMAIL", modoTeste: false } });
+  await prisma.canalIntegracao.update({
+    where: { id: channel.id },
+    data: {
+      connectedAt: new Date("2026-01-02T03:04:05.000Z"),
+      verifiedAt: new Date("2026-01-02T03:04:06.000Z"),
+    },
+  });
+
+  const status = await request("GET", statusPath(target.tenant.id), null, operator.user.id, true);
+  assert.equal(status.status, 200);
+  assert.equal(status.body.state, "WAITING_PROVIDER_AUTH");
+  assert.equal(status.body.checklist.providerAuthorization, false);
+  assert.equal(status.body.nextRequirement, "AUTHORIZE_EMAIL_PROVIDER");
+});
+
 test("writers genericos bloqueiam canal EMAIL real antes de persistir", async () => {
   const target = await seedTenant("email-writer");
   const channel = await prisma.canalIntegracao.create({ data: {

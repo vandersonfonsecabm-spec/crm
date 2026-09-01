@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const { FEATURE_KEYS } = require("../tenant-features/service");
 const { sanitizeAuditReason: sanitizeSharedAuditReason } = require("../security/auditReason");
+const { isUsableMetaCredential } = require("./metaCredentialHealth");
 
 const REAL_WHATSAPP_INBOUND_KEY = "whatsapp-meta-inbound-real";
 const WHATSAPP_CHANNEL_TYPE = "WHATSAPP_META";
@@ -187,7 +188,15 @@ async function loadContext(client, tenantId, env) {
         status: "ATIVA",
         removedAt: null,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        empresaId: true,
+        canalIntegracaoId: true,
+        provider: true,
+        reference: true,
+        ciphertext: true,
+        revision: true,
+      },
     })
     : null;
   const features = new Map(featureRows.map((row) => [row.chave, row.habilitada === true]));
@@ -195,7 +204,7 @@ async function loadContext(client, tenantId, env) {
     tenant,
     realChannels,
     channel,
-    credentialConfigured: Boolean(credential),
+    credentialConfigured: isUsableMetaCredential(credential),
     featureRows,
     capabilities: {
       integration: features.get(FEATURE_KEYS.WHATSAPP_INTEGRATION) === true,

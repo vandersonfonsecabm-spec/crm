@@ -28,6 +28,7 @@ Object.assign(process.env, {
   INSTAGRAM_INBOUND_ENABLED: "true",
   INSTAGRAM_APP_SECRET: "test-only-instagram-app-secret",
   INSTAGRAM_WEBHOOK_VERIFY_TOKEN: "test-only-instagram-verify-token",
+  INTEGRATION_ENCRYPTION_KEY: "instagram-inbound-lifecycle-encryption-key",
 });
 delete process.env.PLATFORM_ADMIN_EMAILS;
 
@@ -404,7 +405,16 @@ test("lifecycle Instagram preserva timestamps e deriva CONNECTED e PAUSED", asyn
       canalIntegracaoId: channel.id,
       provider: "META_INSTAGRAM",
       reference: credentialReference,
-      ciphertext: "ciphertext-synthetic",
+      ciphertext: require("../src/integrations/crypto").encryptCredentialsWithContext({
+        accessToken: "synthetic-instagram-token",
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }, {
+        empresaId: target.empresaId,
+        canalIntegracaoId: channel.id,
+        provider: "META_INSTAGRAM",
+        reference: credentialReference,
+        revision: 1,
+      }),
       status: "ATIVA",
     },
   });

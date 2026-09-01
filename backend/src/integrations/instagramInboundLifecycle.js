@@ -4,6 +4,7 @@ const {
   readGlobalInstagramConfiguration,
 } = require("../platform/instagramInboundProvisioning");
 const { sanitizeAuditReason: sanitizeSharedAuditReason } = require("../security/auditReason");
+const { isUsableMetaCredential } = require("./metaCredentialHealth");
 
 const INSTAGRAM_CHANNEL_TYPE = "INSTAGRAM_META";
 const INSTAGRAM_CAPABILITY_KEYS = Object.freeze({
@@ -194,7 +195,15 @@ async function loadContext(client, tenantId, env) {
         status: "ATIVA",
         removedAt: null,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        empresaId: true,
+        canalIntegracaoId: true,
+        provider: true,
+        reference: true,
+        ciphertext: true,
+        revision: true,
+      },
     })
     : null;
   const features = new Map(featureRows.map((row) => [row.chave, row.habilitada === true]));
@@ -202,7 +211,7 @@ async function loadContext(client, tenantId, env) {
     tenant,
     realChannels,
     channel,
-    credentialConfigured: Boolean(credential),
+    credentialConfigured: isUsableMetaCredential(credential),
     featureRows,
     capabilities: {
       integration: features.get(INSTAGRAM_CAPABILITY_KEYS.INTEGRATION) === true,

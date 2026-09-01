@@ -241,7 +241,16 @@ async function createConfiguredChannel(empresaId, suffix, { attachCredential = t
       canalIntegracaoId: channel.id,
       provider: "META_WHATSAPP",
       reference,
-      ciphertext: "ciphertext-synthetic",
+      ciphertext: require("../src/integrations/crypto").encryptCredentialsWithContext({
+        accessToken: `synthetic-whatsapp-${suffix}-${channel.id}`,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }, {
+        empresaId,
+        canalIntegracaoId: channel.id,
+        provider: "META_WHATSAPP",
+        reference,
+        revision: 1,
+      }),
       status: "ATIVA",
     },
   });

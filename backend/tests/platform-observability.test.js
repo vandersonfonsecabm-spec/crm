@@ -75,3 +75,40 @@ test("saude ignora checkpoint de lock ou subsistema fora do worker operacional",
   assert.equal(result.worker.healthBySubsystem.notifications, "UNKNOWN");
   assert.equal(result.worker.checkpointCount, 1);
 });
+
+test("observabilidade classifica ciphertext ativo inválido como INVALID em vez de ATIVA", async () => {
+  process.env.INTEGRATION_ENCRYPTION_KEY = "platform-observability-test-key-with-more-than-32-bytes";
+  const { encryptCredentialsWithContext, encryptCredentials } = require("../src/integrations/crypto");
+  const validMeta = {
+    empresaId: 1,
+    canalIntegracaoId: 2,
+    provider: "META_WHATSAPP",
+    reference: "observability-meta-reference",
+    revision: 1,
+  };
+  const prisma = {
+    workerCheckpoint: { findMany: async () => [] },
+    automacaoAcaoJob: { groupBy: async () => [], count: async () => 0 },
+    automacaoExecucao: { groupBy: async () => [] },
+    eventoWebhook: { groupBy: async () => [], count: async () => 0 },
+    emailDeliveryOutbox: { groupBy: async () => [], count: async () => 0 },
+    eventoOutboxEstoque: { groupBy: async () => [], count: async () => 0 },
+    erroIntegracao: { count: async () => 0, findFirst: async () => null },
+    metaCredential: {
+      findMany: async () => [
+        { ...validMeta, status: "ATIVA", ciphertext: encryptCredentialsWithContext({ accessToken: "synthetic-observability-token" }, validMeta) },
+        { ...validMeta, reference: "observability-invalid-reference", status: "ATIVA", ciphertext: "ciphertext-invalid" },
+      ],
+    },
+    integracao: {
+      findMany: async () => [
+        { status: "ATIVA", credenciaisCriptografadas: encryptCredentials({ accessToken: "synthetic-generic-token" }) },
+        { status: "ATIVA", credenciaisCriptografadas: "ciphertext-invalid" },
+      ],
+    },
+    operacaoDistribuidaLease: { count: async () => 0 },
+  };
+  const result = await createPlatformObservabilityService({ prisma }).summary({ now: new Date("2026-09-01T03:00:00.000Z") });
+  assert.equal(result.credentials.ATIVA, 2);
+  assert.equal(result.credentials.INVALID, 2);
+});

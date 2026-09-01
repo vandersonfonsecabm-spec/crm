@@ -103,6 +103,27 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
     slashData: "/[redacted]",
     hierarchicalUnknown: "https://provider.test/[redacted]",
   });
+  const standalone = _private.redactSensitiveText("cookie=marker-1 state=marker-2 code=marker-3");
+  assert.equal(standalone.includes("marker-1"), false);
+  assert.equal(standalone.includes("marker-2"), false);
+  assert.equal(standalone.includes("marker-3"), false);
+  assert.match(standalone, /cookie=\[redacted\]/i);
+  assert.match(standalone, /state=\[redacted\]/i);
+  assert.match(standalone, /code=\[redacted\]/i);
+  const networkPath = _private.redactSensitiveText("//provider.test/private/tenant-42?opaque=marker#fragment");
+  assert.equal(networkPath.includes("tenant-42"), false);
+  assert.equal(networkPath.includes("marker"), false);
+  assert.equal(networkPath, "//provider.test/[redacted]");
+  for (const key of ["cookie", "state", "code"]) {
+    assert.throws(
+      () => _private.stringifySafeConfig({ note: `${key}=marker-1` }),
+      (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+    );
+  }
+  assert.throws(
+    () => _private.stringifySafeConfig({ note: "//provider.test/private/tenant-42?opaque=marker" }),
+    (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+  );
 });
 
 test("ativação externa permanece fechada fora do modo de teste", () => {

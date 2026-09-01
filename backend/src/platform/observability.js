@@ -10,6 +10,7 @@ const OPERATIONAL_CHECKPOINT_SUBSYSTEMS = Object.freeze([
   { key: "stock", prefix: "stock:" },
   { key: "email", prefix: "email:" },
 ]);
+const { isUsableEncryptedCredentials, isUsableMetaCredential } = require("../integrations/metaCredentialHealth");
 
 function createPlatformObservabilityService({ prisma }) {
   if (!prisma) throw new Error("Prisma obrigatorio para observabilidade da plataforma.");
@@ -24,8 +25,8 @@ function createPlatformObservabilityService({ prisma }) {
       prisma.eventoOutboxEstoque.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.erroIntegracao.count({ where: { resolvido: false } }),
       prisma.erroIntegracao.findFirst({ where: { resolvido: false }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
-      prisma.metaCredential.groupBy({ by: ["status"], _count: { _all: true } }),
-      prisma.integracao.groupBy({ by: ["status"], where: { credenciaisCriptografadas: { not: null } }, _count: { _all: true } }),
+      readMetaCredentialStatuses(prisma.metaCredential, now),
+      readIntegrationCredentialStatuses(prisma.integracao, now),
       countLiveLeases(now),
       countExpiredLeases(now),
       prisma.automacaoAcaoJob.count({ where: { status: "FALHOU", nextAttemptAt: { not: null } } }),
@@ -83,6 +84,47 @@ function createPlatformObservabilityService({ prisma }) {
   }
 
   return { summary };
+}
+
+async function readMetaCredentialStatuses(model, now) {
+  if (typeof model.findMany !== "function") {
+    return model.groupBy({ by: ["status"], _count: { _all: true } });
+  }
+  const rows = await model.findMany({
+    select: {
+      status: true,
+      empresaId: true,
+      canalIntegracaoId: true,
+      provider: true,
+      reference: true,
+      ciphertext: true,
+      revision: true,
+    },
+  });
+  return statusRows(rows.map((row) => ({
+    ...row,
+    status: row.status === "ATIVA" && !isUsableMetaCredential(row, { now }) ? "INVALID" : row.status,
+  })));
+}
+
+async function readIntegrationCredentialStatuses(model, now) {
+  if (typeof model.findMany !== "function") {
+    return model.groupBy({ by: ["status"], where: { credenciaisCriptografadas: { not: null } }, _count: { _all: true } });
+  }
+  const rows = await model.findMany({
+    where: { credenciaisCriptografadas: { not: null } },
+    select: { status: true, credenciaisCriptografadas: true },
+  });
+  return statusRows(rows.map((row) => ({
+    ...row,
+    status: row.status === "ATIVA" && !isUsableEncryptedCredentials(row.credenciaisCriptografadas, { now }) ? "INVALID" : row.status,
+  })));
+}
+
+function statusRows(rows) {
+  const counts = new Map();
+  for (const row of rows) counts.set(row.status || "UNKNOWN", (counts.get(row.status || "UNKNOWN") || 0) + 1);
+  return [...counts.entries()].map(([status, count]) => ({ status, _count: { _all: count } }));
 }
 
 function countMap(rows) {

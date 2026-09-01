@@ -102,6 +102,10 @@ async function loadContext(prisma, tenantId, env) {
       integration: map.get(EMAIL_CAPABILITY_KEYS.INTEGRATION)?.habilitada === true,
       inbound: map.get(EMAIL_CAPABILITY_KEYS.INBOUND)?.habilitada === true,
     },
+    // The provider-neutral foundation deliberately has no credential store or
+    // authorization handshake.  A verified inbound event is useful history,
+    // but it is not proof that a current provider authorization exists.
+    providerAuthorization: false,
     capabilityRows: map,
     runtime: inspectRuntime(env),
   };
@@ -120,7 +124,9 @@ function deriveState(context) {
     return context.channel.verifiedAt || context.channel.connectedAt ? "PAUSED" : "CONFIGURED_INACTIVE";
   }
   if (!context.capabilities.integration || !context.capabilities.inbound || !context.runtime.ready) return "ERROR";
-  return context.channel.verifiedAt ? "CONNECTED" : "WAITING_PROVIDER_AUTH";
+  return context.providerAuthorization === true && context.channel.verifiedAt
+    ? "CONNECTED"
+    : "WAITING_PROVIDER_AUTH";
 }
 
 function presentStatus(context) {
@@ -143,7 +149,7 @@ function presentStatus(context) {
     updatedAt: context.channel?.updatedAt ?? null,
     checklist: {
       globalConfiguration: context.runtime.globalConfiguration,
-      providerAuthorization: false,
+      providerAuthorization: context.providerAuthorization === true,
       channel: Boolean(context.channel),
       identity: Boolean(context.primaryAddress),
       integrationCapability: context.capabilities.integration,

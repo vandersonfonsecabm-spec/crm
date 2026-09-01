@@ -7,6 +7,7 @@ const STAGING_IDS = Object.freeze({
   environment: "d6b6f137-cffd-4647-a102-3619fc54133a",
   apiService: "8af12b8e-4f4d-498c-9ceb-3182417905f8",
 });
+const { isUsableEncryptedCredentials, isUsableMetaCredential } = require("./integrations/metaCredentialHealth");
 const SOURCE_MANIFEST_VERSION = "backend-runtime-v3-lf";
 const TEXT_MANIFEST_EXTENSIONS = new Set([".cjs", ".js", ".json", ".mjs", ".prisma", ".sql", ".toml", ".ts", ".tsx"]);
 const TRACKED_PROVIDER_KEYS = Object.freeze(["WHATSAPP", "INSTAGRAM", "MESSENGER", "BLING", "EMAIL", "GENERIC"]);
@@ -68,24 +69,22 @@ function outboundDisabled(env) {
 
 async function buildRuntimeFingerprint({ env = process.env, prisma }) {
   const targetVerified = isStagingTarget(env);
-  const [whatsappCredentials, instagramCredentials, messengerCredentials, blingConnections, emailConnections, genericConnections] = prisma ? await Promise.all([
-    prisma.metaCredential.count({ where: { provider: "META_WHATSAPP", status: "ATIVA", removedAt: null } }),
-    prisma.metaCredential.count({ where: { provider: "META_INSTAGRAM", status: "ATIVA", removedAt: null } }),
-    prisma.metaCredential.count({ where: { provider: "META_MESSENGER", status: "ATIVA", removedAt: null } }),
-    prisma.integracao.count({ where: { tipo: "BLING", status: "ATIVA", ativo: true, credenciaisCriptografadas: { not: null } } }),
-    prisma.canalIntegracao?.count
-      ? prisma.canalIntegracao.count({ where: { tipo: "EMAIL", status: "ATIVO", ativo: true, modoTeste: false, emailProviderType: { not: null }, verifiedAt: { not: null } } })
-      : null,
-    prisma.integracao?.count
-      ? prisma.integracao.count({ where: { tipo: { not: "BLING" }, status: "ATIVA", ativo: true, credenciaisCriptografadas: { not: null } } })
-      : null,
-  ]) : [null, null, null, null, null, null];
+  const [whatsappCredentials, instagramCredentials, messengerCredentials, blingConnections, genericConnections] = prisma ? await Promise.all([
+    readMetaCredentialCount(prisma.metaCredential, "META_WHATSAPP"),
+    readMetaCredentialCount(prisma.metaCredential, "META_INSTAGRAM"),
+    readMetaCredentialCount(prisma.metaCredential, "META_MESSENGER"),
+    readIntegrationCredentialCount(prisma.integracao, { tipo: "BLING" }),
+    readIntegrationCredentialCount(prisma.integracao, { tipo: { not: "BLING" } }),
+  ]) : [null, null, null, null, null];
+  // The provider-neutral Email foundation has no credential registry. A
+  // verified inbound event alone is not evidence of a current connection.
+  const emailConnections = null;
   const providerConnectionEvidence = {
     WHATSAPP: providerEvidence(whatsappCredentials),
     INSTAGRAM: providerEvidence(instagramCredentials),
     MESSENGER: providerEvidence(messengerCredentials),
     BLING: providerEvidence(blingConnections),
-    EMAIL: providerEvidence(emailConnections),
+    EMAIL: providerEvidence(emailConnections, "NO_EMAIL_PROVIDER_CREDENTIAL_REGISTRY"),
     GENERIC: providerEvidence(genericConnections),
     // AI has no tenant credential registry in this release.  Deliberately do
     // not claim that a false boolean proves anything about it.
@@ -107,8 +106,25 @@ async function buildRuntimeFingerprint({ env = process.env, prisma }) {
   };
 }
 
-function providerEvidence(count) {
-  if (count === null || count === undefined) return { tracked: true, connected: null, source: "UNAVAILABLE" };
+async function readMetaCredentialCount(model, provider) {
+  const where = { provider, status: "ATIVA", removedAt: null };
+  if (typeof model.findMany !== "function") return model.count({ where });
+  const rows = await model.findMany({
+    where,
+    select: { empresaId: true, canalIntegracaoId: true, provider: true, reference: true, ciphertext: true, revision: true },
+  });
+  return rows.filter((row) => isUsableMetaCredential(row)).length;
+}
+
+async function readIntegrationCredentialCount(model, where) {
+  const completeWhere = { ...where, status: "ATIVA", ativo: true, credenciaisCriptografadas: { not: null } };
+  if (typeof model.findMany !== "function") return model.count({ where: completeWhere });
+  const rows = await model.findMany({ where: completeWhere, select: { credenciaisCriptografadas: true } });
+  return rows.filter((row) => isUsableEncryptedCredentials(row.credenciaisCriptografadas)).length;
+}
+
+function providerEvidence(count, unavailableSource = "UNAVAILABLE") {
+  if (count === null || count === undefined) return { tracked: true, connected: null, source: unavailableSource };
   return { tracked: true, connected: Number(count) > 0, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" };
 }
 

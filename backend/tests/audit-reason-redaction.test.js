@@ -39,4 +39,5 @@ test("audit reasons redact OAuth fields and email lifecycle keeps the same bound
   const sanitized = sanitizeAuditReason(reason);
   assert.equal(sanitized, "callback state=[REDACTED] signature=[REDACTED] code=[REDACTED]");
   assert.equal(sanitizeReason("postgresql://alice:secret@db.internal/crm", []), "[REDACTED_URL]");
+  assert.equal(sanitizeAuditReason("callback //provider.test/private/tenant-42?opaque=marker#fragment"), "callback [REDACTED_URL]");
 });

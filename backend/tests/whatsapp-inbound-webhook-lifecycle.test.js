@@ -34,6 +34,7 @@ Object.assign(process.env, {
   WHATSAPP_META_APP_ID: "TEST_APP_F1C2C",
   WHATSAPP_PROVIDER_ENVIRONMENT: "F1C2C_TEST",
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-only-verify-token-f1c2c",
+  INTEGRATION_ENCRYPTION_KEY: "whatsapp-webhook-lifecycle-encryption-key",
 });
 
 let prisma;
@@ -482,7 +483,16 @@ async function seedSyntheticTenant(label, identity, channelOverrides = {}) {
       canalIntegracaoId: channel.id,
       provider: "META_WHATSAPP",
       reference: credentialReference,
-      ciphertext: "ciphertext-synthetic",
+      ciphertext: require("../src/integrations/crypto").encryptCredentialsWithContext({
+        accessToken: `synthetic-whatsapp-webhook-${suffix}-${tenant.id}`,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }, {
+        empresaId: tenant.id,
+        canalIntegracaoId: channel.id,
+        provider: "META_WHATSAPP",
+        reference: credentialReference,
+        revision: 1,
+      }),
       status: "ATIVA",
     },
   });

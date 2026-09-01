@@ -44,7 +44,7 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
   });
   assert.deepEqual(evidence.providerConnectionEvidence.WHATSAPP, { tracked: true, connected: false, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" });
   assert.deepEqual(evidence.providerConnectionEvidence.INSTAGRAM, { tracked: true, connected: true, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" });
-  assert.deepEqual(evidence.providerConnectionEvidence.EMAIL, { tracked: true, connected: false, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" });
+  assert.deepEqual(evidence.providerConnectionEvidence.EMAIL, { tracked: true, connected: null, source: "NO_EMAIL_PROVIDER_CREDENTIAL_REGISTRY" });
   assert.deepEqual(evidence.providerConnectionEvidence.GENERIC, { tracked: true, connected: false, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" });
   assert.equal(evidence.providerConnectionEvidence.AI.connected, null);
   assert.equal(sourceManifestSha256(), sourceManifestSha256());
@@ -76,4 +76,44 @@ test("manifesto runtime versionado normaliza LF, CRLF e CR sem mudar o hash", ()
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("fingerprint ignora credenciais ativas indecifráveis ou expiradas", async () => {
+  process.env.INTEGRATION_ENCRYPTION_KEY = "runtime-fingerprint-test-key-with-more-than-32-bytes";
+  const { encryptCredentialsWithContext, encryptCredentials } = require("../src/integrations/crypto");
+  const valid = {
+    empresaId: 3,
+    canalIntegracaoId: 4,
+    provider: "META_INSTAGRAM",
+    reference: "runtime-valid-reference",
+    revision: 1,
+  };
+  const fingerprint = await buildRuntimeFingerprint({
+    env: {
+      RAILWAY_PROJECT_ID: "ddfbf66c-e274-47b1-9493-286232d2f426",
+      RAILWAY_ENVIRONMENT_ID: "d6b6f137-cffd-4647-a102-3619fc54133a",
+      RAILWAY_SERVICE_ID: "8af12b8e-4f4d-498c-9ceb-3182417905f8",
+      POSTGRES_DATABASE_URL: "postgresql://user:pass@postgres--e25.railway.internal:5432/db",
+      EXTERNAL_PROVIDER_ACTIVATION_ENABLED: "false",
+    },
+    prisma: {
+      metaCredential: {
+        findMany: async ({ where }) => where.provider === "META_INSTAGRAM"
+          ? [
+            { ...valid, ciphertext: encryptCredentialsWithContext({ accessToken: "synthetic-valid" }, valid) },
+            { ...valid, reference: "runtime-expired-reference", ciphertext: encryptCredentialsWithContext({ accessToken: "synthetic-expired", expiresAt: "2020-01-01T00:00:00.000Z" }, { ...valid, reference: "runtime-expired-reference" }) },
+            { ...valid, reference: "runtime-invalid-reference", ciphertext: "ciphertext-invalid" },
+          ]
+          : [],
+      },
+      integracao: {
+        findMany: async ({ where }) => where.tipo === "BLING"
+          ? [{ credenciaisCriptografadas: encryptCredentials({ accessToken: "synthetic-bling" }) }, { credenciaisCriptografadas: "ciphertext-invalid" }]
+          : [],
+      },
+    },
+  });
+  assert.equal(fingerprint.providerConnectionEvidence.INSTAGRAM.connected, true);
+  assert.equal(fingerprint.providerConnectionEvidence.BLING.connected, true);
+  assert.equal(fingerprint.providerConnectionEvidence.EMAIL.connected, null);
 });

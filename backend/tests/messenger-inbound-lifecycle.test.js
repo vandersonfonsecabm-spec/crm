@@ -703,13 +703,23 @@ async function createFeature(empresaId, chave, habilitada) {
 
 async function attachActiveCredential(channel, provider) {
   const reference = `${provider.toLowerCase()}-lifecycle-${suffix}`;
+  const { encryptCredentialsWithContext } = require("../src/integrations/crypto");
   await prisma.metaCredential.create({
     data: {
       empresaId: channel.empresaId,
       canalIntegracaoId: channel.id,
       provider,
       reference,
-      ciphertext: "ciphertext-synthetic",
+      ciphertext: encryptCredentialsWithContext({
+        accessToken: `synthetic-${provider.toLowerCase()}`,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }, {
+        empresaId: channel.empresaId,
+        canalIntegracaoId: channel.id,
+        provider,
+        reference,
+        revision: 1,
+      }),
       status: "ATIVA",
     },
   });
