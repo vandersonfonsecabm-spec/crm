@@ -1,4 +1,27 @@
 # Estado atual do CRM
+## Integrações visíveis + observabilidade — correção dos cinco findings E14F e bloqueio externo do Vercel (2026-09-01)
+
+- A revisão adversarial do candidato `e14f592` retornou `FIX_FIRST` com quatro
+  findings HIGH e um MEDIUM: expiração aninhada/guard por presença de
+  ciphertext, chaves sensíveis divergentes, userinfo username-only, CSP sem a
+  origem Railway e mapper de E-mail sem fail-closed.
+- Os fixes estão em `c48bd70a30f446e26345de269b5e640d30526b0d`, tree
+  `41b0d41978254e9ff92fc62429e45acccea023df`. Backend isolado passou e o
+  Railway staging está em `52accda9-92dd-4148-9d0d-b337f09e2eee` (`SUCCESS`),
+  health/readiness 200, manifesto
+  `60f3e7e8c357bb1c7da38974af7c98da4ce5ffef6499c8a8a6368e0189360464` e
+  hashes backend byte a byte conferidos.
+- Frontend local passou 239/239, build e lint. A tentativa de publicação no
+  Vercel staging foi recusada antes da criação por
+  `api-deployments-free-per-day`; o alias ainda usa
+  `dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3`. Assim, paridade completa e runtime
+  frontend do novo release ainda não são PASS.
+- Uma nova revisão adversarial limpa precisa auditar o candidato depois da
+  publicação frontend. Até lá, manter `FINAL_ADVERSARIAL_VERDICT=
+  PENDING_POST_FIX_REVIEW`, `FINAL_SOL_RECONCILIATION=NOT_CLOSED`,
+  `READY_FOR_PRODUCTION=false`, `PRODUCTION_CHANGED=false` e providers/
+  outbound desligados.
+
 ## Integrações visíveis + observabilidade — correção dos oito findings e novo candidato (2026-09-01)
 
 - A revisão adversarial independente do candidato `85ed8e2` retornou

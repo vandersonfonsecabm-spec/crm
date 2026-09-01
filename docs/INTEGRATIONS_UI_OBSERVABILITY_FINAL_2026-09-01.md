@@ -21,6 +21,82 @@ REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
 ```
 
+## Addendum — correção dos cinco findings E14F e bloqueio externo do Vercel (2026-09-01)
+
+A segunda revisão adversarial independente do candidato `e14f592` retornou
+`FIX_FIRST` com quatro findings altos e um médio (`E14F-ADV-001` a
+`E14F-ADV-005`). Ela identificou expiração aninhada não validada pelo helper e
+guard de ativação que confiava apenas na presença de ciphertext; divergência de
+chaves sensíveis entre os sanitizers; userinfo somente com usuário; CSP do
+Vercel incompatível com a API Railway cross-origin; e o mapper da UI de E-mail
+aceitando `CONNECTED` sem `providerAuthorization` e `verifiedAt`.
+
+Os fixes de backend e frontend foram aplicados no commit funcional
+`c48bd70a30f446e26345de269b5e640d30526b0d`, tree
+`41b0d41978254e9ff92fc62429e45acccea023df`, e o backend foi publicado somente
+no Railway staging no deployment
+`52accda9-92dd-4148-9d0d-b337f09e2eee` (`SUCCESS`). A validação de credenciais
+agora carrega a expiração junto ao material conhecido, a ativação exige
+credencial utilizável, os sanitizers compartilham as chaves/URI protegidas, e
+o cartão de E-mail falha fechado quando a API não traz as duas provas.
+
+Retestes locais e backend:
+
+```text
+E14F_ADV_001_GENERIC_NESTED_EXPIRY=PASS
+E14F_ADV_002_SENSITIVE_KEYS=PASS
+E14F_ADV_003_USERNAME_ONLY_USERINFO=PASS
+E14F_ADV_004_CSP_CONFIG=PASS_LOCAL
+E14F_ADV_005_EMAIL_UI_FAIL_CLOSED=PASS_LOCAL
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+FRONTEND_TESTS=239/239 PASS
+FRONTEND_BUILD=PASS
+FRONTEND_LINT=PASS
+STAGING_BACKEND_HEALTH=200
+STAGING_BACKEND_READY=200
+BACKEND_SOURCE_RUNTIME_PARITY=PASS
+```
+
+O fingerprint protegido do backend confirmou `environment=staging`,
+`deploymentId=52accda9-92dd-4148-9d0d-b337f09e2eee`,
+`deploymentIdentityVerified=true`, `targetVerified=true`,
+`databaseVerified=true`, manifesto
+`60f3e7e8c357bb1c7da38974af7c98da4ce5ffef6499c8a8a6368e0189360464`,
+`trackedProviderConnections=false`, `externalProviderActivationEnabled=false`
+e `outboundEnabled=false`. Os sete hashes backend causais conferem byte a
+byte com `/app`.
+
+A publicação frontend correspondente foi tentada no projeto Vercel staging
+correto, mas a plataforma recusou a criação antes de gerar deployment por
+limite externo `api-deployments-free-per-day` (mais de 100 deployments no dia).
+O alias continua apontando para o deployment anterior
+`dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3`; portanto `STAGING_FRONTEND_RUNTIME` e a
+paridade completa do release continuam pendentes. Não houve alteração de
+produção, provider, credencial de produto ou outbound.
+
+Uma nova revisão adversarial limpa sobre `c48bd70` ainda é obrigatória depois
+da convergência do frontend. Até a publicação frontend e seu veredito,
+manter:
+
+```text
+RELEASE_FUNCTIONAL_HEAD=c48bd70a30f446e26345de269b5e640d30526b0d
+RELEASE_FUNCTIONAL_TREE=41b0d41978254e9ff92fc62429e45acccea023df
+REMOTE_BRANCH_SHA=c48bd70a30f446e26345de269b5e640d30526b0d
+RAILWAY_API_DEPLOYMENT=52accda9-92dd-4148-9d0d-b337f09e2eee
+VERCEL_STAGING_DEPLOYMENT=dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3
+STAGING_FRONTEND_RUNTIME=BLOCKED_EXTERNAL_VERCEL_QUOTA
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_REVIEWER_INFRA=AVAILABLE_NEW_PATH
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+```
+
 ## Addendum — correção dos oito findings adversariais e novo candidato (2026-09-01)
 
 A revisão adversarial independente do candidato `85ed8e2` retornou

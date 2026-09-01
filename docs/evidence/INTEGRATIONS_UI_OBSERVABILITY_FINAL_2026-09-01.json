@@ -6,8 +6,8 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
-    "tree": "a2c85d6929b2c019b4d4fd752989d4c732798581",
+    "head": "c48bd70a30f446e26345de269b5e640d30526b0d",
+    "tree": "41b0d41978254e9ff92fc62429e45acccea023df",
     "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
     "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531",
@@ -23,7 +23,8 @@
     "quotedValueRedactionFixCommit": "98a8cf2428a3b5512565e56d9ed995deb8f75d8d",
     "oauthKeyValidationFixCommit": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab",
     "emptyCredentialAndNetworkPathRedactionFixCommit": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068",
-    "adversarialAudit85edFindingsFixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29"
+    "adversarialAudit85edFindingsFixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+    "adversarialAuditE14fFindingsFixCommit": "c48bd70a30f446e26345de269b5e640d30526b0d"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -43,6 +44,7 @@
     "railwayApiDeploymentAfterOauthKeyValidationFix": "abb7d431-f9bf-46d6-9fcb-3210f24667ac",
     "railwayApiDeploymentAfterEmptyCredentialRedactionFix": "b5078c3f-a738-4984-94da-5b353512a0ae",
     "railwayApiDeploymentAfterAdversarialAudit85edFix": "072cd6cb-2696-4a8c-b1ca-a79ec8b2e3cc",
+    "railwayApiDeploymentAfterE14fFix": "52accda9-92dd-4148-9d0d-b337f09e2eee",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -52,7 +54,10 @@
     "localBuild": "PASS",
     "stagingHealth": "PASS",
     "stagingReady": "PASS",
-    "sourceRuntimeParity": "PASS_FOR_PUBLISHED_ASSETS_AND_BACKEND_HASHES",
+    "sourceRuntimeParity": "BACKEND_PASS_FRONTEND_PENDING_VERCEL_QUOTA",
+    "backendSourceRuntimeParity": "PASS",
+    "stagingBackendLatest": "PASS",
+    "stagingFrontendLatest": "BLOCKED_EXTERNAL_VERCEL_QUOTA",
     "stagingQaAuthenticatedSession": "PASS",
     "integrationStatusTruth": "PASS_AUTHENTICATED",
     "falseConnectedStates": 0,
@@ -73,6 +78,7 @@
     "viewportControl": "UNAVAILABLE_IN_CHROME_CONNECTOR",
     "consoleErrors": "NOT_OBSERVABLE_BY_CONNECTOR",
     "readyForProduction": false,
+    "vercelDeploymentAttempt": "BLOCKED_BEFORE_CREATION_API_DEPLOYMENTS_FREE_PER_DAY",
     "finalAdversarialReviewerInfra": "AVAILABLE_NEW_PATH",
     "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
     "finalSolReconciliation": "NOT_CLOSED"
@@ -83,25 +89,26 @@
     { "path": "assets/index-DnvstQIY.css", "bytes": 92545, "sha256": "4148c1a6ae931f29534c41e14e11fcf5280afed06fd41e7eae19253a22ecbbf6" }
   ],
   "backendRuntimeHashes": {
-    "src/integrations/metaCredentialHealth.js": "373dbd8d0337cc2851f2e84528931ea07aa3fceabe6c790d967a3b07ecca3527",
+    "src/integrations/metaCredentialHealth.js": "62c9d9b47f79ae20c1c086876086f4ba0503c7a3213acc83ce71df57d74bb442",
     "src/integrations/whatsappInboundLifecycle.js": "2282c886e32b73ca9966362bbfd0190ae5e1bfa52d038ea70290a33cbc9a9ab8",
     "src/integrations/messengerInboundLifecycle.js": "473e5f122f45fc89b583795ff2a1e7cecb9822d43ed5abd4cabe0fed06ce202c",
     "src/integrations/instagramInboundLifecycle.js": "c1a31c03642fccbd7c1f2ba811649c7b0574342750ce657aa1026b100fe9156f",
     "src/integrations/emailInboundLifecycle.js": "739b7432662d50007e5513af14d33e5ae6dc50e06be7040d1713aeeec7d4720c",
-    "src/integrations/routes.js": "232431da2de1ade08332e1c49377ed751df888c7060be28c6d80b04894f43edf",
+    "src/integrations/routes.js": "96a733d3326375dd2b5b3259fc109c505804ac860802b9640cbcfafb97af1511",
     "src/platform/observability.js": "d0423a6f6434cd647e1a47812f4eb8877ea3df0897802f34b34bcfd6279c78a6",
     "src/runtime-fingerprint.js": "7381b9b9a1d48b645de6134817426a5199414e3e8ea7fbf9f71e23792f1fc8ef",
-    "src/security/auditReason.js": "6431c688a1df2f4650d035485dd97fd61dff0096effd1fe78e30f5d38bd12642",
-    "src/integrations/blingService.js": "368f3a5ce2a5a0b03b1b12747f918efd218ceab8c0c4d71406ac2a7fb70e5bf0"
+    "src/security/auditReason.js": "a4ee871c15236625739707b89c0602af260ef24ff074b5df75955fcadd6c2082",
+    "src/integrations/blingService.js": "368f3a5ce2a5a0b03b1b12747f918efd218ceab8c0c4d71406ac2a7fb70e5bf0",
+    "src/integrations/providerActivation.js": "f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d"
   },
   "runtimeFingerprint": {
-    "deploymentId": "072cd6cb-2696-4a8c-b1ca-a79ec8b2e3cc",
+    "deploymentId": "52accda9-92dd-4148-9d0d-b337f09e2eee",
     "deploymentIdentityVerified": true,
     "environment": "staging",
     "targetVerified": true,
     "databaseVerified": true,
     "sourceManifestVersion": "backend-runtime-v3-lf",
-    "sourceManifestSha256": "27c8294267cd98dd32c8628b8e45d4f243ed79bdd233bb9d1431452b667833ac",
+    "sourceManifestSha256": "60f3e7e8c357bb1c7da38974af7c98da4ce5ffef6499c8a8a6368e0189360464",
     "trackedProviderConnections": false,
     "externalProviderActivationEnabled": false,
     "outboundEnabled": false,
@@ -156,7 +163,8 @@
       "FIX_FIRST_ADV_REVIEW_001_002",
       "FIX_FIRST_ADV_NEW_001_002",
       "FIX_FIRST_ADV_LATEST_EMPTY_GENERIC_AND_NETWORK_PATH",
-      "FIX_FIRST_AUDIT_85ED_001_008"
+      "FIX_FIRST_AUDIT_85ED_001_008",
+      "FIX_FIRST_E14F_ADV_001_005"
     ],
     "finalAdversarialReviewerInfra": "AVAILABLE_NEW_PATH",
     "findings": [
@@ -423,6 +431,46 @@
         "status": "RETESTED",
         "fixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
         "causalRetest": "expiresAt equal to now rejected by callback; BLING_INTEGRATION=16/16 PASS"
+      },
+      {
+        "id": "E14F-ADV-001",
+        "severity": "HIGH",
+        "area": "nested credential expiry and activation guard",
+        "status": "RETESTED_BACKEND",
+        "fixCommit": "c48bd70a30f446e26345de269b5e640d30526b0d",
+        "causalRetest": "nested expiry is validated and activation requires usable ciphertext; backend suite PASS"
+      },
+      {
+        "id": "E14F-ADV-002",
+        "severity": "HIGH",
+        "area": "sensitive key redaction parity",
+        "status": "RETESTED_BACKEND",
+        "fixCommit": "c48bd70a30f446e26345de269b5e640d30526b0d",
+        "causalRetest": "quoted/private/access/pass keys covered by shared/local/config tests; backend suite PASS"
+      },
+      {
+        "id": "E14F-ADV-003",
+        "severity": "HIGH",
+        "area": "username-only URL userinfo",
+        "status": "RETESTED_BACKEND",
+        "fixCommit": "c48bd70a30f446e26345de269b5e640d30526b0d",
+        "causalRetest": "hierarchical and network-path username-only references rejected/redacted; security tests PASS"
+      },
+      {
+        "id": "E14F-ADV-004",
+        "severity": "HIGH",
+        "area": "staging CSP/API compatibility",
+        "status": "LOCAL_RETESTED_STAGING_PENDING",
+        "fixCommit": "c48bd70a30f446e26345de269b5e640d30526b0d",
+        "causalRetest": "both Vercel configs include project-selected API origin; local routing tests PASS; deployment blocked by quota"
+      },
+      {
+        "id": "E14F-ADV-005",
+        "severity": "MEDIUM",
+        "area": "E-mail UI fail-closed mapping",
+        "status": "LOCAL_RETESTED_STAGING_PENDING",
+        "fixCommit": "c48bd70a30f446e26345de269b5e640d30526b0d",
+        "causalRetest": "mapper requires providerAuthorization and verifiedAt for CONNECTED; frontend build/test/lint PASS; deployment pending"
       }
     ],
     "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
