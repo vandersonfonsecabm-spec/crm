@@ -165,10 +165,11 @@ PRODUCTION_CHANGED=false
 O histórico sintético permaneceu append-only: QA-A reteve 2 vendas e QA-B
 reteve 1 venda, todas com snapshots preservados; não houve exclusão destrutiva.
 
-## Revisões
+## Revisões finais executadas
 
-As revisões finais read-only de segurança e operação devem ser registradas
-abaixo antes de considerar este checkpoint encerrado:
+As revisões finais foram executadas de forma read-only e independente depois
+do cleanup. A lacuna apontada pelo reviewer de segurança foi retestada com a
+checagem sanitizada de lock/lease/bundle, sem nova mutação:
 
 ```text
 SECURITY_REVIEW_FINAL=PASS_AFTER_LEASE_RETEST
