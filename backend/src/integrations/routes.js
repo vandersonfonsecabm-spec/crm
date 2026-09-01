@@ -1199,6 +1199,9 @@ function safeAdapterErrorMessage(error) {
 function redactSensitiveText(value) {
   if (value === undefined || value === null || value === "") return value ?? null;
   return String(value)
+    // Opaque URI schemes (mailto:, urn:, data: and custom provider schemes)
+    // do not contain `//` but can still carry secrets or private payloads.
+    .replace(/(?<![A-Za-z0-9_\/])\b[a-z][a-z0-9+.-]*:(?!\/\/)[^\s]+/gi, "[redacted]")
     // Connection strings for queues/databases are just as sensitive as HTTP
     // URLs.  Redact URI userinfo for every registered URI scheme, not only
     // https, before exposing an adapter error or legacy configuration.

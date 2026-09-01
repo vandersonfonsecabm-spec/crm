@@ -85,6 +85,18 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
     assert.equal(redactedUri.includes("uri-secret"), false, scheme);
     assert.match(redactedUri, new RegExp(`${scheme}://\\[redacted\\]@`));
   }
+  const opaqueRedacted = _private.redactSensitiveConfig({
+    callback: "mailto:alice@example.com?body=code=secret123",
+    opaque: "urn:crm:tenant:token:secret123",
+    custom: "custom+provider:accessToken=secret123",
+    data: "data:text/plain,secret123",
+  });
+  assert.deepEqual(opaqueRedacted, {
+    callback: "[redacted]",
+    opaque: "[redacted]",
+    custom: "[redacted]",
+    data: "[redacted]",
+  });
 });
 
 test("ativação externa permanece fechada fora do modo de teste", () => {
