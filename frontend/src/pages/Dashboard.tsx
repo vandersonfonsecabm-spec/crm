@@ -81,10 +81,6 @@ const LazyDashboardUserSecurityPanel = lazy(() => import("../components/dashboar
 const LazyDashboardAutomationsPanel = lazy(() => import("../components/dashboard/DashboardAutomationsPanel"));
 const LazyDashboardPlatformTenantsPanel = lazy(() => import("../components/dashboard/DashboardPlatformTenantsPanel"));
 const LazyDashboardPlatformObservabilityPanel = lazy(() => import("../components/dashboard/DashboardPlatformObservabilityPanel"));
-const LazyWhatsAppIntegrationCard = lazy(async () => {
-  const module = await import("../components/integrations/WhatsAppConnectionPanel");
-  return { default: module.WhatsAppIntegrationCard };
-});
 const LazyWhatsAppConnectionPanel = lazy(async () => {
   const module = await import("../components/integrations/WhatsAppConnectionPanel");
   return { default: module.WhatsAppConnectionPanel };
@@ -1131,14 +1127,6 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
                   <LazyIntegrationStatusBoard onUnauthorized={onLogout} />
                 </Suspense>
               )}
-              {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
-                <Suspense fallback={<LoadingState rows={3} />}>
-                  <LazyWhatsAppIntegrationCard
-                    onOpen={() => navigate("/integracoes/whatsapp")}
-                    onUnauthorized={onLogout}
-                  />
-                </Suspense>
-              )}
               {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && siteLeadCaptureEnabled && (
                 <Suspense fallback={<LoadingState rows={3} />}>
                   <LazyDashboardSiteLeadIntegrationPanel />
@@ -1146,7 +1134,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
               )}
               {activePage === "integracoes" && canManageIntegrations && !isWhatsAppIntegrationDetail && (
                 <Suspense fallback={<LoadingState rows={4} />}>
-                  <LazyDashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} onUnauthorized={onLogout} />
+                  <LazyDashboardIntegrationsPanel initialBlingNotice={blingReturnMessage} />
                 </Suspense>
               )}
               {isWhatsAppIntegrationDetail && canManageIntegrations && (

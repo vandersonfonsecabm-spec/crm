@@ -252,7 +252,7 @@ test("restart hook usa somente API staging exata, espera SUCCESS e revalida prob
       return [{ id: "new-deployment", status: deploymentPolls >= 3 ? "SUCCESS" : "DEPLOYING" }];
     },
     fetchImpl: async (url) => {
-      if (url.pathname.endsWith("runtime-fingerprint")) return { status: 200, async json() { return { environment: "staging", targetVerified: true, databaseVerified: true, sourceManifestVersion: SOURCE_MANIFEST_VERSION, providersConnected: false, outboundEnabled: false, sourceManifestSha256: "b".repeat(64) }; } };
+      if (url.pathname.endsWith("runtime-fingerprint")) return { status: 200, async json() { return { environment: "staging", targetVerified: true, databaseVerified: true, sourceManifestVersion: SOURCE_MANIFEST_VERSION, trackedProviderConnections: false, outboundEnabled: false, sourceManifestSha256: "b".repeat(64) }; } };
       return { status: 200 };
     },
   });

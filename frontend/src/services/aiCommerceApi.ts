@@ -7,6 +7,7 @@ import { ApiHttpError, getApiBaseUrl, getAuthSession } from "./crmApi";
  * They do not expose a generic prompt, HTTP or tool endpoint and they never
  * send a message to a customer channel.
  */
+import { parseAICommerceErrorBody } from "./aiCommerceError";
 
 export type AICommerceMode = "OFF" | "SHADOW" | "SUGGESTION_ONLY" | "HUMAN_APPROVAL";
 export type AICommerceAvailabilityStatus =
@@ -452,12 +453,7 @@ async function request<T>(path: string, options: { method?: "GET" | "POST" | "PU
 
 async function readError(response: Response) {
   try {
-    const body = (await response.json()) as Record<string, unknown>;
-    return {
-      message: String(body.erro ?? body.error ?? body.message ?? "Não foi possível concluir a operação comercial."),
-      code: typeof body.codigo === "string" ? body.codigo : typeof body.code === "string" ? body.code : undefined,
-      details: body,
-    };
+    return parseAICommerceErrorBody(await response.json());
   } catch {
     return { message: "Não foi possível concluir a operação comercial.", code: undefined, details: undefined };
   }

@@ -17,11 +17,11 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
   const ok = await buildRuntimeFingerprint({ env: base, prisma });
   assert.equal(ok.targetVerified, true);
   assert.equal(ok.databaseVerified, true);
-  assert.equal(ok.providersConnected, false);
   assert.equal(ok.trackedProviderConnections, false);
-  assert.deepEqual(ok.providerConnectionScope, ["WHATSAPP", "INSTAGRAM", "MESSENGER", "BLING", "EMAIL"]);
+  assert.deepEqual(ok.providerConnectionScope, ["WHATSAPP", "INSTAGRAM", "MESSENGER", "BLING", "EMAIL", "GENERIC"]);
   assert.equal(ok.providerConnectionEvidence.AI.connected, null);
   assert.equal(ok.providerConnectionEvidence.AI.tracked, false);
+  assert.equal(ok.providerConnectionEvidence.GENERIC.connected, false);
   assert.equal(ok.externalProviderActivationEnabled, false);
   assert.equal(ok.outboundEnabled, false);
   assert.equal(ok.sourceManifestVersion, SOURCE_MANIFEST_VERSION);
@@ -33,7 +33,7 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
   assert.equal(databaseVerified({ POSTGRES_DATABASE_URL: "postgresql://x:y@production-db.railway.internal/db" }), false);
   assert.equal(outboundDisabled({ META_EXTERNAL_NETWORK_ENABLED: "true" }), false);
   assert.equal(outboundDisabled({ BLING_EXTERNAL_NETWORK_ENABLED: "true" }), false);
-  assert.equal((await buildRuntimeFingerprint({ env: base, prisma: { metaCredential: { count: async () => 1 }, integracao: { count: async () => 0 }, canalIntegracao: { count: async () => 0 } } })).providersConnected, true);
+  assert.equal((await buildRuntimeFingerprint({ env: base, prisma: { metaCredential: { count: async () => 1 }, integracao: { count: async () => 0 }, canalIntegracao: { count: async () => 0 } } })).trackedProviderConnections, true);
   const evidence = await buildRuntimeFingerprint({
     env: base,
     prisma: {
@@ -45,6 +45,7 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
   assert.deepEqual(evidence.providerConnectionEvidence.WHATSAPP, { tracked: true, connected: false, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" });
   assert.deepEqual(evidence.providerConnectionEvidence.INSTAGRAM, { tracked: true, connected: true, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" });
   assert.deepEqual(evidence.providerConnectionEvidence.EMAIL, { tracked: true, connected: false, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" });
+  assert.deepEqual(evidence.providerConnectionEvidence.GENERIC, { tracked: true, connected: false, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" });
   assert.equal(evidence.providerConnectionEvidence.AI.connected, null);
   assert.equal(sourceManifestSha256(), sourceManifestSha256());
 });

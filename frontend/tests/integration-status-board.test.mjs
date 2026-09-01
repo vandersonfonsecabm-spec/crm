@@ -8,6 +8,7 @@ const policy = fs.readFileSync(new URL("src/components/integrations/integrationA
 const readiness = fs.readFileSync(new URL("src/components/dashboard/DashboardIntegrationReadinessPanel.tsx", root), "utf8");
 const whatsapp = fs.readFileSync(new URL("src/components/integrations/WhatsAppConnectionPanel.tsx", root), "utf8");
 const integrations = fs.readFileSync(new URL("src/components/dashboard/DashboardIntegrationsPanel.tsx", root), "utf8");
+const dashboard = fs.readFileSync(new URL("src/pages/Dashboard.tsx", root), "utf8");
 
 test("status board cobre os seis providers com estado honesto", () => {
   for (const key of ["whatsapp", "instagram", "messenger", "bling", "email", "ai"]) {
@@ -48,4 +49,10 @@ test("hub usa leituras parciais e tabs com relação ARIA explícita", () => {
   assert.match(integrations, /role="tabpanel"/);
   assert.match(integrations, /min-h-10/);
   assert.match(board, /AI_COMMERCE_DISABLED/);
+});
+
+test("status board é a superfície canônica sem cards de provider duplicados no overview", () => {
+  assert.doesNotMatch(integrations, /DashboardIntegrationReadinessPanel/);
+  assert.equal((dashboard.match(/<LazyWhatsAppIntegrationCard/g) || []).length, 0);
+  assert.match(dashboard, /LazyIntegrationStatusBoard/);
 });

@@ -1,7 +1,7 @@
 import { Globe2, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
-import { ApiHttpError, fetchInstagramOperationalStatus, iniciarConexaoInstagram, removeMessengerCredential, replaceMessengerCredential, storeMessengerCredential } from "../../services/crmApi";
+import { ApiHttpError, fetchInstagramOperationalStatus, iniciarConexaoInstagram, removeInstagramCredential, removeMessengerCredential, replaceMessengerCredential, storeMessengerCredential } from "../../services/crmApi";
 import { createLocalMetaInstagramReadiness, deriveMetaInstagramReadiness, isApprovedInstagramAuthorizationUrl } from "../../services/metaInstagramBoundary";
 import { useMessengerConnectionStatus } from "../integrations/useMessengerConnectionStatus";
 import type { MessengerConnectionState } from "../integrations/messengerConnectionState";
@@ -36,6 +36,7 @@ const STATIC_READINESS_ITEMS: ReadinessItem[] = [
 
 export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, onUnauthorized }: { canalIntegracaoId?: number | null; onUnauthorized: () => void }) {
   const [instagramReadiness, setInstagramReadiness] = useState(localInstagramReadiness);
+  const [instagramCredentialRevision, setInstagramCredentialRevision] = useState<number | null>(null);
   const [instagramLoadState, setInstagramLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [instagramRetry, setInstagramRetry] = useState(0);
   const handleMessengerUnauthorized = useCallback(() => onUnauthorized(), [onUnauthorized]);
@@ -54,6 +55,7 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, 
       try {
         const status = await fetchInstagramOperationalStatus();
         if (cancelled) return;
+        setInstagramCredentialRevision(status.credentialRevision ?? null);
         setInstagramReadiness(deriveMetaInstagramReadiness({ ...status, source: "backend" }));
         setInstagramLoadState("ready");
       } catch (loadError) {
@@ -87,6 +89,21 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, 
       setBusy(false);
     }
   } : undefined;
+  async function removeInstagramCredentialSafely() {
+    if (!canalIntegracaoId || !instagramCredentialRevision || busy) return;
+    if (!window.confirm("Remover a credencial TEST_ONLY deste canal?")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await removeInstagramCredential({ canalIntegracaoId, expectedRevision: instagramCredentialRevision });
+      setInstagramCredentialRevision(null);
+      setInstagramRetry((current) => current + 1);
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "Não foi possível remover a credencial com segurança.");
+    } finally {
+      setBusy(false);
+    }
+  }
   const messengerPresentation = messengerStatePresentation(messengerStatus.state);
   const messengerChannelId = messengerStatus.canalIntegracaoId;
   const canStoreMessengerCredential = Number.isSafeInteger(messengerChannelId)
@@ -202,6 +219,7 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, 
                 <Button aria-label="Conectar Instagram" disabled={!instagramAction || busy} onClick={instagramAction} size="sm" variant="secondary">
                   {busy ? "Iniciando…" : "Conectar Instagram"}
                 </Button>
+                {instagramCredentialRevision && <button className="text-[10px] font-semibold text-[var(--text-secondary)] underline disabled:cursor-not-allowed disabled:opacity-50" disabled={busy} onClick={() => void removeInstagramCredentialSafely()} type="button">Remover credencial TEST_ONLY</button>}
                 {!instagramActionAllowed && <span className="text-[10px] font-medium text-[var(--text-tertiary)] md:text-right">{instagramLoadState === "error" ? <button className="font-semibold underline" onClick={() => setInstagramRetry((current) => current + 1)} type="button">Tentar novamente</button> : !canalIntegracaoId ? "Aguardando canal Instagram real" : EXTERNAL_PROVIDER_ACTIVATION_ENABLED ? "Ação indisponível no estado atual" : "Ativação externa bloqueada nesta missão"}</span>}
                 {error && <p className="max-w-56 text-[10px] font-medium text-[var(--danger)] md:text-right" role="alert">{error}</p>}
               </div>

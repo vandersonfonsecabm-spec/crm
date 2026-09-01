@@ -99,6 +99,28 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
   assert.equal(JSON.stringify(created.body).includes("segredo-nao-retornar"), false);
   assert.equal(created.body.credenciaisCriptografadas, undefined);
 
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "staging";
+  let pausedCredentialWrite;
+  let pausedCredentialPatch;
+  try {
+    pausedCredentialWrite = await request("POST", "/integracoes", {
+      nome: "Credencial bloqueada",
+      tipo: "CUSTOM",
+      credenciais: { apiKey: "nao-deve-persistir" },
+    }, adminA.token);
+    pausedCredentialPatch = await request("PATCH", `/integracoes/${created.body.id}`, {
+      credenciais: { apiKey: "nao-deve-persistir" },
+    }, adminA.token);
+  } finally {
+    process.env.NODE_ENV = previousNodeEnv;
+  }
+  assert.equal(pausedCredentialWrite.status, 503);
+  assert.equal(pausedCredentialWrite.body.codigo, "PROVIDER_ACTIVATION_PAUSED");
+  assert.equal(pausedCredentialPatch.status, 503);
+  assert.equal(pausedCredentialPatch.body.codigo, "PROVIDER_ACTIVATION_PAUSED");
+  assert.equal(await prisma.integracao.count({ where: { empresaId: adminA.empresaId, nome: "Credencial bloqueada" } }), 0);
+
   const unvalidatedActive = await request("POST", "/integracoes", {
     nome: "Ativa sem validacao",
     tipo: "CUSTOM",

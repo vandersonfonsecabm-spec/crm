@@ -187,6 +187,7 @@ export type PlatformObservabilitySummary = {
     checkpointCount: number;
     lastCheckpointAt: string | null;
     health: "HEALTHY" | "STALE" | "UNKNOWN";
+    healthBySubsystem?: Record<string, "HEALTHY" | "STALE" | "UNKNOWN">;
     staleAfterSeconds: number;
     activeLeases: number;
     expiredLeases: number;
@@ -1678,6 +1679,7 @@ export type InstagramOperationalStatusResponse = {
   canalIntegracaoId?: number | null;
   state?: "NOT_CONFIGURED" | "CONFIGURED_INACTIVE" | "WAITING_META_AUTH" | "CONNECTED" | "PAUSED" | "ERROR" | "UNAVAILABLE";
   credentialConfigured?: boolean;
+  credentialRevision?: number | null;
   nextRequirement?: string | null;
   configured?: boolean;
   ativo?: boolean;
@@ -2193,6 +2195,10 @@ export async function replaceMessengerCredential(context: MetaCredentialContext,
 
 export async function removeMessengerCredential(context: MetaCredentialContext) {
   return requestApiWrite<{ removed: boolean }>("DELETE", "/integracoes/messenger/credentials", context);
+}
+
+export async function removeInstagramCredential(context: MetaCredentialContext) {
+  return requestApiWrite<{ removed: boolean }>("DELETE", "/integracoes/instagram/credentials", context);
 }
 
 export async function createIntegracao(payload: { nome: string; tipo: HubIntegrationType; status?: HubIntegrationStatus; ativo?: boolean; configuracao?: Record<string, unknown> }) {

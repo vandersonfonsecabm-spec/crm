@@ -11,6 +11,10 @@ test("configuração rejeita secrets recursivos e redige legado", () => {
     _private.redactSensitiveConfig({ endpoint: "sandbox", nested: { refreshToken: "secret" } }),
     { endpoint: "sandbox", nested: { refreshToken: "[redacted]" } },
   );
+  assert.deepEqual(
+    _private.redactSensitiveConfig({ callback: { state: "opaque-state", code: "oauth-code", signature: "signed" } }),
+    { callback: { state: "[redacted]", code: "[redacted]", signature: "[redacted]" } },
+  );
   let legacy = { token: "deep-secret" };
   for (let depth = 0; depth < 10; depth += 1) legacy = { nested: legacy };
   const serialized = JSON.stringify(_private.redactSensitiveConfig(legacy));
@@ -26,6 +30,14 @@ test("configuração rejeita secrets recursivos e redige legado", () => {
   );
   assert.throws(
     () => _private.stringifySafeConfig({ connection: "postgresql://user:password@db.internal/crm" }),
+    (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+  );
+  assert.throws(
+    () => _private.stringifySafeConfig({ connection: "redis://:password@cache.internal/0" }),
+    (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+  );
+  assert.throws(
+    () => _private.stringifySafeConfig({ endpoint: "https://provider.test/callback?password=secret" }),
     (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
   );
 });
@@ -65,11 +77,22 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
   assert.equal(urlRedacted.includes("oauth-code"), false);
   assert.equal(urlRedacted.includes("api-secret"), false);
   assert.equal(urlRedacted.includes("fragment-secret"), false);
+  const emptyUserRedacted = _private.redactSensitiveText("redis://:uri-secret@provider.test/queue?password=query-secret");
+  assert.equal(emptyUserRedacted.includes("uri-secret"), false);
+  assert.equal(emptyUserRedacted.includes("query-secret"), false);
   for (const scheme of ["postgresql", "redis", "amqps"]) {
     const redactedUri = _private.redactSensitiveText(`${scheme}://user:uri-secret@provider.test/queue`);
     assert.equal(redactedUri.includes("uri-secret"), false, scheme);
     assert.match(redactedUri, new RegExp(`${scheme}://\\[redacted\\]@`));
   }
+});
+
+test("ativação externa permanece fechada fora do modo de teste", () => {
+  assert.throws(
+    () => _private.assertExternalProviderActivationEnabled({ NODE_ENV: "production", EXTERNAL_PROVIDER_ACTIVATION_ENABLED: "false" }),
+    (error) => error.code === "PROVIDER_ACTIVATION_PAUSED",
+  );
+  assert.equal(_private.assertExternalProviderActivationEnabled({ NODE_ENV: "test", EXTERNAL_PROVIDER_ACTIVATION_ENABLED: "false" }), true);
 });
 
 test("integração genérica não pode declarar ativa sem validação", () => {

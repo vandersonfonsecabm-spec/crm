@@ -63,7 +63,7 @@ export default function DashboardPlatformObservabilityPanel() {
             <QueueCard icon={<Activity size={14} />} label="Jobs de automação" values={summary.jobs} />
             <QueueCard icon={<Activity size={14} />} label="Execuções" values={summary.executions} />
             <QueueCard icon={<Webhook size={14} />} label="Webhooks" values={summary.webhooks} />
-            <QueueCard icon={<Database size={14} />} label="Outbox" values={mergeCountMaps(summary.outbox.email, summary.outbox.stock)} />
+            <QueueCard icon={<Database size={14} />} label="Outbox" values={mergeCountMaps({ email: summary.outbox.email, stock: summary.outbox.stock })} />
           </div>
 
           <div className="grid gap-3 xl:grid-cols-2">
@@ -81,6 +81,7 @@ export default function DashboardPlatformObservabilityPanel() {
             <span aria-hidden="true">·</span>
             <span>Atualizado em {formatDate(summary.generatedAt)}</span>
           </div>
+          {summary.worker.healthBySubsystem && <p className="text-[10px] text-[var(--text-muted)]">Checkpoints por subsistema: {formatSubsystemHealth(summary.worker.healthBySubsystem)}</p>}
           {error && <p className="text-[11px] text-[var(--warning)]" role="status">A última atualização não foi concluída; os dados exibidos são a leitura anterior.</p>}
         </div>
       )}
@@ -94,6 +95,10 @@ function workerHealthLabel(health: PlatformObservabilitySummary["worker"]["healt
   return "sem evidência";
 }
 
+function formatSubsystemHealth(values: Record<string, "HEALTHY" | "STALE" | "UNKNOWN">) {
+  return Object.entries(values).map(([key, value]) => `${key}: ${workerHealthLabel(value)}`).join(" · ");
+}
+
 function Metric({ icon, label, tone = "neutral", value }: { icon: React.ReactNode; label: string; tone?: "success" | "warning" | "danger" | "neutral"; value: number }) {
   const status = tone === "success" ? "sucesso" : tone === "warning" ? "alerta" : tone === "danger" ? "erro" : "informacao";
   return (
@@ -105,7 +110,7 @@ function Metric({ icon, label, tone = "neutral", value }: { icon: React.ReactNod
 }
 
 function QueueCard({ icon, label, values }: { icon: React.ReactNode; label: string; values: Record<string, number> }) {
-  const entries = Object.entries(values).filter(([, value]) => value > 0).slice(0, 8);
+  const entries = Object.entries(values).filter(([, value]) => value > 0);
   return (
     <div className="rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
       <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text-secondary)]"><span className="text-[var(--icon-default)]">{icon}</span>{label}</div>
@@ -114,9 +119,9 @@ function QueueCard({ icon, label, values }: { icon: React.ReactNode; label: stri
   );
 }
 
-function mergeCountMaps(...maps: Array<Record<string, number>>) {
-  return maps.reduce<Record<string, number>>((merged, map) => {
-    for (const [key, value] of Object.entries(map || {})) merged[key] = (merged[key] || 0) + Number(value || 0);
+function mergeCountMaps(namespaces: Record<string, Record<string, number>>) {
+  return Object.entries(namespaces).reduce<Record<string, number>>((merged, [namespace, values]) => {
+    for (const [key, value] of Object.entries(values || {})) merged[`${namespace}:${key}`] = Number(value || 0);
     return merged;
   }, {});
 }

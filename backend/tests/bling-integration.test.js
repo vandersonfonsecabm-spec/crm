@@ -275,6 +275,30 @@ test("Bling sincroniza com refresh, 429, paginação, normalização e idempotê
   assert.equal(disconnect.body.ativo, false);
   const disconnected = await prisma.integracao.findUnique({ where: { id: integration.id } });
   assert.equal(disconnected.credenciaisCriptografadas, null);
+
+  const localOnly = await prisma.integracao.create({
+    data: {
+      empresaId: adminA.empresaId,
+      nome: "Bling Local Only",
+      tipo: "BLING",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      credenciaisCriptografadas: require("../src/integrations/crypto").encryptCredentials({ accessToken: "local-only-access" }),
+      configuracaoJson: "{}",
+      ativo: true,
+    },
+  });
+  const previousNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "staging";
+  try {
+    const localDisconnect = await request("POST", `/integracoes/${localOnly.id}/bling/desconectar`, {}, adminA.token);
+    assert.equal(localDisconnect.status, 200);
+    assert.equal(localDisconnect.body.ativo, false);
+  } finally {
+    process.env.NODE_ENV = previousNodeEnv;
+  }
+  const localDisconnected = await prisma.integracao.findUnique({ where: { id: localOnly.id } });
+  assert.equal(localDisconnected.credenciaisCriptografadas, null);
 });
 
 test("Bling sincronizacao padrao usa apenas produtos e estoque", async () => {

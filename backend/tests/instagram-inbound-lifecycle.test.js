@@ -380,6 +380,24 @@ test("lifecycle Instagram preserva timestamps e deriva CONNECTED e PAUSED", asyn
   assert.equal(response.body.state, "WAITING_META_AUTH");
   assert.equal(response.body.credentialConfigured, false);
   const credentialReference = `instagram-lifecycle-credential-${suffix}`;
+  const wrongCredentialReference = `messenger-lifecycle-credential-${suffix}`;
+  await prisma.metaCredential.create({
+    data: {
+      empresaId: target.empresaId,
+      canalIntegracaoId: channel.id,
+      provider: "META_MESSENGER",
+      reference: wrongCredentialReference,
+      ciphertext: "ciphertext-wrong-provider",
+      status: "ATIVA",
+    },
+  });
+  channel = await prisma.canalIntegracao.update({
+    where: { id: channel.id },
+    data: { accessTokenRef: wrongCredentialReference },
+  });
+  response = await status(target.empresaId, operator.token);
+  assert.equal(response.body.state, "WAITING_META_AUTH");
+  assert.equal(response.body.credentialConfigured, false);
   await prisma.metaCredential.create({
     data: {
       empresaId: target.empresaId,

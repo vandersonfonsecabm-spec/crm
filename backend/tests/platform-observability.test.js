@@ -32,6 +32,10 @@ test("observabilidade de plataforma agrega somente contadores sanitizados", asyn
   assert.equal(result.generatedAt, now.toISOString());
   assert.equal(result.worker.checkpointCount, 1);
   assert.equal(result.worker.health, "HEALTHY");
+  assert.equal(result.worker.healthBySubsystem.automation, "HEALTHY");
+  assert.equal(result.worker.healthBySubsystem.notifications, "UNKNOWN");
+  assert.equal(result.worker.healthBySubsystem.stock, "UNKNOWN");
+  assert.equal(result.worker.healthBySubsystem.email, "UNKNOWN");
   assert.equal(result.worker.staleAfterSeconds, 300);
   assert.equal(result.worker.activeLeases, 0);
   assert.equal(result.jobs.PENDENTE, 2);
@@ -61,5 +65,7 @@ test("saude ignora checkpoint de lock ou subsistema fora do worker operacional",
   };
   const result = await createPlatformObservabilityService({ prisma }).summary({ now });
   assert.equal(result.worker.health, "STALE");
+  assert.equal(result.worker.healthBySubsystem.automation, "STALE");
+  assert.equal(result.worker.healthBySubsystem.notifications, "UNKNOWN");
   assert.equal(result.worker.checkpointCount, 1);
 });

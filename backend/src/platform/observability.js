@@ -4,7 +4,12 @@ const WEBHOOK_STATUSES = ["RECEBIDO", "PROCESSANDO", "PROCESSADO", "FALHOU", "IG
 const EMAIL_OUTBOX_STATUSES = ["PENDING", "PROCESSING", "RETRY_WAIT", "DELIVERED", "FAILED", "BOUNCED", "EXPIRED", "CANCELLED"];
 const STOCK_OUTBOX_STATUSES = ["PENDING", "PROCESSING", "PROCESSED", "FAILED", "QUARANTINED"];
 const DEFAULT_WORKER_STALE_MS = 5 * 60 * 1000;
-const OPERATIONAL_CHECKPOINT_PREFIXES = ["automation:", "notifications:", "stock:"];
+const OPERATIONAL_CHECKPOINT_SUBSYSTEMS = Object.freeze([
+  { key: "automation", prefix: "automation:" },
+  { key: "notifications", prefix: "notifications:" },
+  { key: "stock", prefix: "stock:" },
+  { key: "email", prefix: "email:" },
+]);
 
 function createPlatformObservabilityService({ prisma }) {
   if (!prisma) throw new Error("Prisma obrigatorio para observabilidade da plataforma.");
@@ -26,12 +31,14 @@ function createPlatformObservabilityService({ prisma }) {
     ]);
 
     const operationalCheckpoints = checkpoints.filter((row) => isOperationalCheckpointKey(row.chave));
+    const checkpointHealth = workerHealthBySubsystem(operationalCheckpoints, now);
     return {
       generatedAt: new Date(now).toISOString(),
       worker: {
         checkpointCount: operationalCheckpoints.length,
         lastCheckpointAt: latestTimestamp(operationalCheckpoints.map((row) => row.updatedAt)),
-        health: workerHealth(latestTimestamp(operationalCheckpoints.map((row) => row.updatedAt)), now),
+        health: checkpointHealth.health,
+        healthBySubsystem: checkpointHealth.bySubsystem,
         staleAfterSeconds: DEFAULT_WORKER_STALE_MS / 1000,
         activeLeases,
         expiredLeases,
@@ -94,7 +101,23 @@ function workerHealth(lastCheckpointAt, now) {
 
 function isOperationalCheckpointKey(value) {
   const key = String(value || "");
-  return OPERATIONAL_CHECKPOINT_PREFIXES.some((prefix) => key.startsWith(prefix));
+  return OPERATIONAL_CHECKPOINT_SUBSYSTEMS.some(({ prefix }) => key.startsWith(prefix));
+}
+
+function workerHealthBySubsystem(rows, now) {
+  const bySubsystem = {};
+  for (const subsystem of OPERATIONAL_CHECKPOINT_SUBSYSTEMS) {
+    const matching = rows.filter((row) => String(row.chave || "").startsWith(subsystem.prefix));
+    const last = latestTimestamp(matching.map((row) => row.updatedAt));
+    bySubsystem[subsystem.key] = last ? workerHealth(last, now) : "UNKNOWN";
+  }
+  const observed = Object.values(bySubsystem).filter((value) => value !== "UNKNOWN");
+  const health = observed.length === 0
+    ? "UNKNOWN"
+    : observed.some((value) => value === "STALE")
+      ? "STALE"
+      : observed.every((value) => value === "HEALTHY") ? "HEALTHY" : "UNKNOWN";
+  return { health, bySubsystem };
 }
 
 module.exports = {
@@ -106,4 +129,5 @@ module.exports = {
   STOCK_OUTBOX_STATUSES,
   DEFAULT_WORKER_STALE_MS,
   isOperationalCheckpointKey,
+  workerHealthBySubsystem,
 };

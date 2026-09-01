@@ -24,7 +24,6 @@ import {
   fetchErrosImportacao,
   fetchImportacao,
   fetchImportacoes,
-  fetchCanais,
   fetchIntegracoes,
   fetchQualidadeDados,
   canAccessIntegrations,
@@ -54,7 +53,6 @@ import {
   type WhatsappSimulationCallResult,
 } from "../../services/crmApi";
 import DashboardMetricStrip from "./DashboardMetricStrip";
-import DashboardIntegrationReadinessPanel from "./DashboardIntegrationReadinessPanel";
 import { blingStatePresentation, isApprovedBlingAuthorizationUrl } from "../integrations/blingConnectionState";
 import { EXTERNAL_PROVIDER_ACTIVATION_ENABLED } from "../integrations/integrationActivationPolicy";
 import {
@@ -147,7 +145,7 @@ type BlingSyncCounters = {
   erros?: number;
 };
 
-export default function DashboardIntegrationsPanel({ initialBlingNotice = "", onUnauthorized }: { initialBlingNotice?: string; onUnauthorized: () => void }) {
+export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: { initialBlingNotice?: string }) {
   const [state, setState] = useState<LoadState>("loading");
   const [activeView, setActiveView] = useState<IntegrationView>("overview");
   const [message, setMessage] = useState("");
@@ -180,7 +178,6 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   const [catalogFilters, setCatalogFilters] = useState({ q: "", sku: "", codigoBarras: "", categoria: "", marca: "", local: "", somenteDisponiveis: false });
   const [quality, setQuality] = useState<HubQualidadeDados | null>(null);
   const [blingIntegrations, setBlingIntegrations] = useState<HubIntegracao[]>([]);
-  const [instagramChannelId, setInstagramChannelId] = useState<number | null>(null);
   const [blingBusy, setBlingBusy] = useState<"connect" | "test" | "sync" | "disconnect" | null>(null);
   const [blingMessage, setBlingMessage] = useState("");
   const [lastBlingSync, setLastBlingSync] = useState<HubBlingSyncResponse | null>(null);
@@ -251,10 +248,9 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
       consultarCatalogoComercial({ ...catalogFilters, pagina: catalogPage, limite: CATALOG_LIMIT }),
       fetchQualidadeDados(),
       fetchIntegracoes({ tipo: "BLING", limit: 10 }),
-      fetchCanais(),
     ]);
     if (requestSequence !== loadSequenceRef.current) return;
-    const [importList, catalogList, qualityData, blingList, channelList] = results;
+    const [importList, catalogList, qualityData, blingList] = results;
     const warnings: string[] = [];
     if (importList.status === "fulfilled") {
       setImports(importList.value.data);
@@ -283,13 +279,6 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
     } else {
       setBlingIntegrations([]);
       warnings.push("Status do Bling indisponível");
-    }
-    if (channelList.status === "fulfilled") {
-      const instagramChannel = channelList.value.data.find((channel) => channel.tipo === "INSTAGRAM_META" && channel.ativo && !channel.modoTeste && channel.status === "ATIVO");
-      setInstagramChannelId(instagramChannel?.id ?? null);
-    } else {
-      setInstagramChannelId(null);
-      warnings.push("Canais de comunicação indisponíveis");
     }
     setLoadWarnings(warnings);
     if (warnings.length === 5) {
@@ -603,16 +592,12 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
   }
 
   async function disconnectBling(integrationId: number) {
-    if (!EXTERNAL_PROVIDER_ACTIVATION_ENABLED) {
-      setBlingMessage("Desconexão externa bloqueada nesta missão.");
-      return;
-    }
     if (!window.confirm("Desconectar o Bling? As sincronizações serão interrompidas até uma nova conexão.")) return;
     setBlingBusy("disconnect");
     setBlingMessage("");
     try {
       await desconectarBling(integrationId);
-      setBlingMessage("Bling desconectado.");
+      setBlingMessage(EXTERNAL_PROVIDER_ACTIVATION_ENABLED ? "Bling desconectado." : "Bling desativado localmente; revogação externa não foi iniciada.");
       await loadAll();
     } catch (error) {
       setBlingMessage(errorText(error, "Não foi possível desconectar o Bling."));
@@ -725,7 +710,6 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "", on
         </div>
       )}
 
-      <DashboardIntegrationReadinessPanel canalIntegracaoId={instagramChannelId} onUnauthorized={onUnauthorized} />
         </div>
       )}
 
@@ -1191,7 +1175,7 @@ function BlingSection({
             <>
                 <UiButton disabled={Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<CheckCircle2 size={14} />} loading={busy === "test"} onClick={() => onTest(active.id)} size="sm">Testar conexão</UiButton>
                 <UiButton disabled={Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<RefreshCw size={14} />} loading={busy === "sync"} onClick={() => onSync(active.id)} size="sm" variant="primary">Sincronizar agora</UiButton>
-                <UiButton disabled={Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<Power size={14} />} loading={busy === "disconnect"} onClick={() => onDisconnect(active.id)} size="sm">Desconectar</UiButton>
+                <UiButton disabled={Boolean(busy)} leftIcon={<Power size={14} />} loading={busy === "disconnect"} onClick={() => onDisconnect(active.id)} size="sm">Desconectar</UiButton>
             </>
           )}
           </div>
@@ -1208,7 +1192,7 @@ function BlingSection({
         <Info label="Credenciais" value={latest?.possuiCredenciais ? "Configuradas" : "Não configuradas"} />
       </div>
       {!active && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert id="bling-external-activation-note" tone="info">Conector preparado para configuração. A ativação externa está bloqueada nesta missão; nenhum OAuth ou request ao Bling será iniciado.</Alert></div>}
-      {active && !EXTERNAL_PROVIDER_ACTIVATION_ENABLED && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert id="bling-external-activation-note" tone="info">Conexão existente preservada para leitura. Teste, sincronização e desconexão ficam bloqueados nesta missão.</Alert></div>}
+      {active && !EXTERNAL_PROVIDER_ACTIVATION_ENABLED && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert id="bling-external-activation-note" tone="info">Conexão existente preservada para leitura. Teste e sincronização ficam bloqueados; desconexão local segura permanece disponível.</Alert></div>}
       {message && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert tone={(message.toLowerCase().includes("não foi") || message.toLowerCase().includes("nao foi")) ? "error" : "success"}>{message}</Alert></div>}
       {lastSync && (
         <div className="border-t border-[var(--border-default)] bg-[var(--bg-muted)] px-4 py-3 text-[11px] text-[var(--text-secondary)]">

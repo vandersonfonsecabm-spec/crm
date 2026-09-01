@@ -750,17 +750,18 @@ async function verifyRuntimeFingerprint({ config, fetchImpl = globalThis.fetch }
   const fingerprint = fingerprintResponse.status === 200 && typeof fingerprintResponse.json === "function"
     ? await fingerprintResponse.json().catch(() => null)
     : null;
+  const trackedProviderConnections = fingerprint?.trackedProviderConnections ?? fingerprint?.providersConnected;
   if (!fingerprint || fingerprint.environment !== "staging" || fingerprint.targetVerified !== true || fingerprint.databaseVerified !== true
     || fingerprint.sourceManifestVersion !== config.sourceManifestVersion
     || (config.sourceManifestSha256 && String(fingerprint.sourceManifestSha256 || "").toLowerCase() !== config.sourceManifestSha256)
-    || fingerprint.providersConnected !== false || fingerprint.outboundEnabled !== false) {
+    || trackedProviderConnections !== false || fingerprint.outboundEnabled !== false) {
     throw new SoakError("SOAK_RUNTIME_FINGERPRINT_MISMATCH", "Runtime staging nao corresponde ao candidato seguro.");
   }
   return {
     environment: "staging",
     targetVerified: true,
     databaseVerified: true,
-    providersConnected: false,
+    trackedProviderConnections: false,
     outboundEnabled: false,
     sourceManifestVersion: fingerprint.sourceManifestVersion,
     sourceManifestSha256: String(fingerprint.sourceManifestSha256 || "").toLowerCase(),

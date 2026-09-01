@@ -9,7 +9,7 @@ const STAGING_IDS = Object.freeze({
 });
 const SOURCE_MANIFEST_VERSION = "backend-runtime-v3-lf";
 const TEXT_MANIFEST_EXTENSIONS = new Set([".cjs", ".js", ".json", ".mjs", ".prisma", ".sql", ".toml", ".ts", ".tsx"]);
-const TRACKED_PROVIDER_KEYS = Object.freeze(["WHATSAPP", "INSTAGRAM", "MESSENGER", "BLING", "EMAIL"]);
+const TRACKED_PROVIDER_KEYS = Object.freeze(["WHATSAPP", "INSTAGRAM", "MESSENGER", "BLING", "EMAIL", "GENERIC"]);
 
 function sourceManifestSha256(root = path.resolve(__dirname, "..")) {
   const resolvedRoot = path.resolve(root);
@@ -68,26 +68,30 @@ function outboundDisabled(env) {
 
 async function buildRuntimeFingerprint({ env = process.env, prisma }) {
   const targetVerified = isStagingTarget(env);
-  const [whatsappCredentials, instagramCredentials, messengerCredentials, blingConnections, emailConnections] = prisma ? await Promise.all([
+  const [whatsappCredentials, instagramCredentials, messengerCredentials, blingConnections, emailConnections, genericConnections] = prisma ? await Promise.all([
     prisma.metaCredential.count({ where: { provider: "META_WHATSAPP", status: "ATIVA", removedAt: null } }),
     prisma.metaCredential.count({ where: { provider: "META_INSTAGRAM", status: "ATIVA", removedAt: null } }),
     prisma.metaCredential.count({ where: { provider: "META_MESSENGER", status: "ATIVA", removedAt: null } }),
     prisma.integracao.count({ where: { tipo: "BLING", status: "ATIVA", ativo: true, credenciaisCriptografadas: { not: null } } }),
     prisma.canalIntegracao?.count
-      ? prisma.canalIntegracao.count({ where: { tipo: "EMAIL", status: "ATIVO", ativo: true, modoTeste: false, emailProviderType: { not: null }, emailProviderAccountIdMasked: { not: null } } })
+      ? prisma.canalIntegracao.count({ where: { tipo: "EMAIL", status: "ATIVO", ativo: true, modoTeste: false, emailProviderType: { not: null }, verifiedAt: { not: null } } })
       : null,
-  ]) : [null, null, null, null, null];
+    prisma.integracao?.count
+      ? prisma.integracao.count({ where: { tipo: { not: "BLING" }, status: "ATIVA", ativo: true, credenciaisCriptografadas: { not: null } } })
+      : null,
+  ]) : [null, null, null, null, null, null];
   const providerConnectionEvidence = {
     WHATSAPP: providerEvidence(whatsappCredentials),
     INSTAGRAM: providerEvidence(instagramCredentials),
     MESSENGER: providerEvidence(messengerCredentials),
     BLING: providerEvidence(blingConnections),
     EMAIL: providerEvidence(emailConnections),
+    GENERIC: providerEvidence(genericConnections),
     // AI has no tenant credential registry in this release.  Deliberately do
     // not claim that a false boolean proves anything about it.
     AI: { tracked: false, connected: null, source: "NO_TENANT_PROVIDER_CREDENTIAL_REGISTRY" },
   };
-  const trackedProviderConnections = [whatsappCredentials, instagramCredentials, messengerCredentials, blingConnections, emailConnections]
+  const trackedProviderConnections = [whatsappCredentials, instagramCredentials, messengerCredentials, blingConnections, emailConnections, genericConnections]
     .some((count) => Number(count) > 0);
   return {
     environment: targetVerified ? "staging" : "unknown",
@@ -95,9 +99,6 @@ async function buildRuntimeFingerprint({ env = process.env, prisma }) {
     sourceManifestSha256: sourceManifestSha256(),
     targetVerified,
     databaseVerified: databaseVerified(env),
-    // Backward-compatible field with an explicit scope below.  It is not a
-    // claim about untracked providers such as AI.
-    providersConnected: trackedProviderConnections,
     trackedProviderConnections,
     providerConnectionScope: TRACKED_PROVIDER_KEYS,
     providerConnectionEvidence,

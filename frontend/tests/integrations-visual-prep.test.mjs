@@ -13,7 +13,8 @@ const dashboard = fs.readFileSync(new URL("src/pages/Dashboard.tsx", root), "utf
 const messengerHook = fs.readFileSync(new URL("src/components/integrations/useMessengerConnectionStatus.ts", root), "utf8");
 
 test("preparação visual de integrações usa estados honestos e a superfície existente", () => {
-  assert.match(integrations, /DashboardIntegrationReadinessPanel/);
+  assert.doesNotMatch(integrations, /DashboardIntegrationReadinessPanel/);
+  assert.match(dashboard, /LazyIntegrationStatusBoard/);
   assert.match(panel, /Instagram Direct \/ Meta/);
   assert.match(panel, /Facebook Messenger \/ Meta/);
   assert.match(panel, /Serasa \/ score/);
@@ -24,7 +25,7 @@ test("preparação visual de integrações usa estados honestos e a superfície 
   assert.match(panel, /Aguardando canal Instagram real/);
   assert.match(panel, /Conectar Messenger/);
   assert.match(panel, /Configure primeiro um App\/Página TEST_ONLY/);
-  assert.match(dashboard, /LazyDashboardIntegrationsPanel[\s\S]*onUnauthorized=\{onLogout\}/);
+  assert.match(dashboard, /LazyDashboardIntegrationsPanel[\s\S]*initialBlingNotice=\{blingReturnMessage\}/);
   assert.match(panel, /useMessengerConnectionStatus\(handleMessengerUnauthorized\)/);
   assert.match(messengerHook, /error\.status === 401[\s\S]*onUnauthorized\(\)/);
   assert.doesNotMatch(panel, /graph\.facebook|fetch\(|axios\(/i);

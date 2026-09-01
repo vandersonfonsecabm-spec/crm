@@ -116,6 +116,29 @@ function createBlingService({ prisma }) {
     });
   }
 
+  // Local revocation is deliberately separate from the external disconnect.
+  // It is safe to run while provider activation is paused: no token is
+  // resolved, no network request is attempted, and the encrypted credential is
+  // removed atomically behind the existing integration lease.
+  async function desconectarLocal({ integracao, empresaId, usuarioId }) {
+    integracao = await loadTenantIntegration(prisma, integracao, empresaId);
+    return withIntegrationLease(integracao, (lease) => lease.fencedTransaction((tx) => tx.integracao.update({
+      where: { empresaId_id: { empresaId, id: integracao.id } },
+      data: {
+        status: "INATIVA",
+        ativo: false,
+        credenciaisCriptografadas: null,
+        ultimoErroEm: null,
+        configuracaoJson: JSON.stringify({
+          ...safeJson(integracao.configuracaoJson, {}),
+          disconnectedAt: new Date().toISOString(),
+          disconnectedByUsuarioId: usuarioId,
+          externalRevocation: "PAUSED",
+        }),
+      },
+    })));
+  }
+
   async function testar({ integracao, empresaId }) {
     integracao = await loadTenantIntegration(prisma, integracao, empresaId);
     return withIntegrationLease(integracao, async (lease) => {
@@ -319,7 +342,7 @@ function createBlingService({ prisma }) {
     }, handler);
   }
 
-  return { iniciarOAuth, concluirOAuth, desconectar, testar, sincronizar };
+  return { iniciarOAuth, concluirOAuth, desconectar, desconectarLocal, testar, sincronizar };
 }
 
 async function reconcileInterruptedSyncs(client, empresaId, integracaoId) {

@@ -204,8 +204,10 @@ async function loadContext(client, tenantId, env) {
       where: {
         empresaId: tenantId,
         canalIntegracaoId: channel.id,
+        provider: "META_INSTAGRAM",
         reference: channel.accessTokenRef,
         status: "ATIVA",
+        removedAt: null,
       },
       select: { id: true },
     })

@@ -10,6 +10,7 @@ const { createInstagramInboundLifecycleService } = require("./instagramInboundLi
 const { createEmailInboundLifecycleService } = require("./emailInboundLifecycle");
 const { isEmailError } = require("./emailFoundation");
 const { REAL_MESSENGER_INBOUND_KEY, readGlobalMessengerConfiguration } = require("../platform/messengerInboundProvisioning");
+const { REAL_INSTAGRAM_INBOUND_KEY, readGlobalInstagramConfiguration } = require("../platform/instagramInboundProvisioning");
 const { createMetaCredentialStore } = require("./metaCredentialStore");
 const { createMetaOAuthService } = require("./metaOAuthService");
 const { FEATURE_KEYS, createTenantFeatureMiddleware } = require("../tenant-features/service");
@@ -32,6 +33,8 @@ const FORMATOS_IMPORTACAO = new Set(["CSV", "XLSX", "XML", "JSON"]);
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 const MAX_CONFIG_JSON_BYTES = 32 * 1024;
 const SENSITIVE_CONFIG_KEY = /(?:api.?key|access.?key|client.?secret|app.?secret|private.?key|access.?token|refresh.?token|auth(?:orization)?|password|passwd|senha|cookie|credential|secret|token)/i;
+const SENSITIVE_REDACTION_KEY = new RegExp(`${SENSITIVE_CONFIG_KEY.source}|signature|state|code`, "i");
+const SAFE_PUBLIC_ERROR_CODES = new Set(["PROVIDER_ACTIVATION_PAUSED", "META_EXTERNAL_NETWORK_DISABLED"]);
 
 function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const requireAdmin = [authenticate, requireRole("ADMIN")];
@@ -104,7 +107,8 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.get("/integracoes/instagram/status", ...requireAdmin, async (req, res) => {
     try {
-      return res.json(await instagramInboundLifecycle.getStatus({ tenantId: req.auth.empresaId }));
+      const status = await instagramInboundLifecycle.getStatus({ tenantId: req.auth.empresaId });
+      return res.json(await withCredentialRevision(prisma, req.auth.empresaId, status, "META_INSTAGRAM"));
     } catch (error) {
       return integrationError(res, error, "Não foi possível consultar o estado do Instagram.");
     }
@@ -215,6 +219,21 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     }
   });
 
+  app.delete("/integracoes/instagram/credentials", ...requireAdmin, async (req, res) => {
+    try {
+      const result = await metaCredentialStore.removeLocalCredential({
+        empresaId: req.auth.empresaId,
+        canalIntegracaoId: req.body?.canalIntegracaoId,
+        provider: "META_INSTAGRAM",
+        expectedRevision: req.body?.expectedRevision,
+        validateContext: (tx, input) => validateCredentialContext(tx, input, "INSTAGRAM", { requireRuntime: false }),
+      });
+      return res.json(result);
+    } catch (error) {
+      return integrationError(res, error, "Não foi possível remover a credencial do Instagram com segurança.");
+    }
+  });
+
   app.post("/integracoes/instagram/oauth/iniciar", ...requireAdmin, async (req, res) => {
     try {
       assertExternalProviderActivationEnabled();
@@ -280,6 +299,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
     try {
       const payload = integrationPayload(req.body, { partial: false });
       assertGenericIntegrationLifecycleAllowed(null, payload.data.tipo, req.body);
+      if (payload.credentials) assertExternalProviderActivationEnabled();
       const encrypted = payload.credentials ? encryptCredentials(payload.credentials) : null;
       assertIntegrationStatusTransitionAllowed({ current: null, data: payload.data, encryptedCredentials: encrypted });
       const integracao = await prisma.integracao.create({
@@ -309,6 +329,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       const data = { ...payload.data };
 
       if (payload.credentials) {
+        assertExternalProviderActivationEnabled();
         data.credenciaisCriptografadas = encryptCredentials(payload.credentials);
       }
       assertIntegrationStatusTransitionAllowed({ current: atual, data, encryptedCredentials: data.credenciaisCriptografadas });
@@ -405,10 +426,11 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
 
   app.post("/integracoes/:id/bling/desconectar", ...requireAdmin, async (req, res) => {
     try {
-      assertExternalProviderActivationEnabled();
       const integracao = await findIntegrationOrThrow(prisma, req);
       if (integracao.tipo !== "BLING") throw httpError(400, "Esta ação exige uma integração Bling.", "INTEGRATION_INVALID_TYPE");
-      const updated = await blingService.desconectar({ integracao, empresaId: req.auth.empresaId, usuarioId: req.auth.usuarioId });
+      const updated = externalProviderActivationEnabled()
+        ? await blingService.desconectar({ integracao, empresaId: req.auth.empresaId, usuarioId: req.auth.usuarioId })
+        : await blingService.desconectarLocal({ integracao, empresaId: req.auth.empresaId, usuarioId: req.auth.usuarioId });
       return res.json(integrationResponse(updated));
     } catch (error) {
       return integrationError(res, error, "Não foi possível desconectar o Bling.");
@@ -931,7 +953,7 @@ function integrationError(res, error, fallbackMessage) {
   if (status >= 500) console.error(fallbackMessage, sanitizedError(error));
   return res.status(status).json({
     erro: status >= 500 ? fallbackMessage : error.message || fallbackMessage,
-    codigo: status >= 500 ? "INTEGRATION_ERROR" : code || "INTEGRATION_ERROR",
+    codigo: status >= 500 ? (SAFE_PUBLIC_ERROR_CODES.has(code) ? code : "INTEGRATION_ERROR") : code || "INTEGRATION_ERROR",
   });
 }
 
@@ -962,6 +984,7 @@ function statusFromCode(code) {
 
 async function validateCredentialContext(tx, { empresaId, canalIntegracaoId, channel }, provider, { requireRuntime = true } = {}) {
   const isWhatsapp = provider === "WHATSAPP";
+  const isInstagram = provider === "INSTAGRAM";
   const expected = isWhatsapp
     ? {
         type: "WHATSAPP_META",
@@ -970,7 +993,15 @@ async function validateCredentialContext(tx, { empresaId, canalIntegracaoId, cha
         identity: () => typeof channel.wabaId === "string" && channel.wabaId.length > 0 && typeof channel.phoneNumberId === "string" && channel.phoneNumberId.length > 0,
         configuration: readGlobalWhatsappConfiguration,
       }
-    : {
+    : isInstagram
+      ? {
+        type: "INSTAGRAM_META",
+        key: REAL_INSTAGRAM_INBOUND_KEY,
+        flags: ["INSTAGRAM_INTEGRATION", "INSTAGRAM_INBOUND"],
+        identity: () => typeof channel.instagramBusinessAccountId === "string" && channel.instagramBusinessAccountId.length > 0,
+        configuration: readGlobalInstagramConfiguration,
+      }
+      : {
         type: "MESSENGER_META",
         key: REAL_MESSENGER_INBOUND_KEY,
         flags: ["MESSENGER_INTEGRATION", "MESSENGER_INBOUND"],
@@ -989,10 +1020,10 @@ async function validateCredentialContext(tx, { empresaId, canalIntegracaoId, cha
   if (requireRuntime) {
     let global;
     try { global = expected.configuration(process.env); } catch { throw httpError(503, "A configuracao server-side do provider esta incompleta.", "META_PROVIDER_CONFIGURATION_REQUIRED"); }
-    const integrationFlag = isWhatsapp ? "WHATSAPP_INTEGRATION_ENABLED" : "MESSENGER_INTEGRATION_ENABLED";
-    const inboundFlag = isWhatsapp ? "WHATSAPP_INBOUND_ENABLED" : "MESSENGER_INBOUND_ENABLED";
-    const appSecret = isWhatsapp ? process.env.WHATSAPP_APP_SECRET : process.env.MESSENGER_APP_SECRET;
-    const verifyToken = isWhatsapp ? process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN : process.env.MESSENGER_WEBHOOK_VERIFY_TOKEN;
+    const integrationFlag = isWhatsapp ? "WHATSAPP_INTEGRATION_ENABLED" : isInstagram ? "INSTAGRAM_INTEGRATION_ENABLED" : "MESSENGER_INTEGRATION_ENABLED";
+    const inboundFlag = isWhatsapp ? "WHATSAPP_INBOUND_ENABLED" : isInstagram ? "INSTAGRAM_INBOUND_ENABLED" : "MESSENGER_INBOUND_ENABLED";
+    const appSecret = isWhatsapp ? process.env.WHATSAPP_APP_SECRET : isInstagram ? process.env.INSTAGRAM_APP_SECRET : process.env.MESSENGER_APP_SECRET;
+    const verifyToken = isWhatsapp ? process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN : isInstagram ? process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN : process.env.MESSENGER_WEBHOOK_VERIFY_TOKEN;
     if (process.env[integrationFlag] !== "true" || process.env[inboundFlag] !== "true" || !hasConfiguredSecret(appSecret) || !hasConfiguredSecret(verifyToken)) {
       throw httpError(503, "O provider ainda nao possui configuracao server-side completa.", "META_PROVIDER_CONFIGURATION_REQUIRED");
     }
@@ -1083,19 +1114,21 @@ function stringifySafeConfig(value) {
 }
 
 function assertExternalProviderActivationEnabled(env = process.env) {
-  const configured = env.EXTERNAL_PROVIDER_ACTIVATION_ENABLED;
-  const enabled = String(configured || "").trim().toLowerCase() === "true";
-  const testRuntime = env.NODE_ENV === "test";
-  if (!testRuntime && !enabled) {
+  if (!externalProviderActivationEnabled(env)) {
     throw httpError(503, "A ativação externa está pausada nesta fase.", "PROVIDER_ACTIVATION_PAUSED");
   }
   return true;
 }
 
+function externalProviderActivationEnabled(env = process.env) {
+  const enabled = String(env.EXTERNAL_PROVIDER_ACTIVATION_ENABLED || "").trim().toLowerCase() === "true";
+  return env.NODE_ENV === "test" || enabled;
+}
+
 function assertNoSensitiveConfigValues(value, depth = 0) {
   if (depth > 8) throw httpError(400, "Configuração profunda demais.", "INTEGRATION_CONFIG_INVALID");
   if (typeof value === "string") {
-    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|[?&](?:api_key|client_secret|access_token|refresh_token|token)=[^&\s]+|[a-z][a-z0-9+.-]*:\/\/[^\s/@]+:[^\s/@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
+    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|[?&](?:api_key|client_secret|access_token|refresh_token|password|passwd|senha|pass|token|secret|credential|signature|state|code)=[^&\s]+|[a-z][a-z0-9+.-]*:\/\/[^\s/@]*:[^\s/@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
     if (sensitiveValue.test(value)) {
       throw httpError(400, "Configuração contém valor sensível; use o armazenamento cifrado de credenciais.", "INTEGRATION_CONFIG_SENSITIVE_FIELD");
     }
@@ -1150,7 +1183,7 @@ function redactSensitiveConfig(value, depth = 0) {
   if (Array.isArray(value)) return value.map((item) => redactSensitiveConfig(item, depth + 1));
   return Object.fromEntries(Object.entries(value).map(([key, child]) => [
     key,
-    SENSITIVE_CONFIG_KEY.test(normalizeSensitiveKey(key)) ? "[redacted]" : redactSensitiveConfig(child, depth + 1),
+    SENSITIVE_REDACTION_KEY.test(normalizeSensitiveKey(key)) ? "[redacted]" : redactSensitiveConfig(child, depth + 1),
   ]));
 }
 
@@ -1177,10 +1210,10 @@ function redactSensitiveText(value) {
     // Connection strings for queues/databases are just as sensitive as HTTP
     // URLs.  Redact URI userinfo for every registered URI scheme, not only
     // https, before exposing an adapter error or legacy configuration.
-    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+:[^\s/@]+@/gi, "$1[redacted]@")
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]*:[^\s/@]+@/gi, "$1[redacted]@")
     .replace(/(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "$1[redacted]")
-    .replace(/((?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
-    .replace(/([?#&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token|secret|credential|signature|state|code)=)[^&#\s]+/gi, "$1[redacted]")
+    .replace(/((?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
+    .replace(/([?#&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code)=)[^&#\s]+/gi, "$1[redacted]")
     .replace(/(["']?(?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token|secret|credential|signature)["']?\s*[:=]\s*["']?)[^"'\s,;}]+/gi, "$1[redacted]")
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
     .slice(0, 500);
