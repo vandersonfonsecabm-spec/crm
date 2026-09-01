@@ -81,8 +81,10 @@
     "reviewB": "PASS",
     "finalAdversarialAttempts": [
       "BLOCKED_EXTERNAL_REVIEWER_TIMEOUT",
-      "INTERRUPTED_AFTER_TIMEOUT"
+      "INTERRUPTED_AFTER_TIMEOUT",
+      "RUNTIME_SWITCH_TIMEOUT"
     ],
+    "finalAdversarialReviewerInfra": "UNAVAILABLE",
     "finalAdversarialVerdict": "BLOCKED_EXTERNAL_REVIEWER_TIMEOUT",
     "finalSolReconciliation": "NOT_CLOSED"
   }

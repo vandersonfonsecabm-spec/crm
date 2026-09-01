@@ -318,10 +318,13 @@ outbound.
 ```text
 FINAL_ADVERSARIAL_ATTEMPT_1=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
 FINAL_ADVERSARIAL_ATTEMPT_2=INTERRUPTED_AFTER_TIMEOUT
+FINAL_ADVERSARIAL_ATTEMPT_3=RUNTIME_SWITCH_TIMEOUT
+FINAL_ADVERSARIAL_REVIEWER_INFRA=UNAVAILABLE
 FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
 FINAL_SOL_RECONCILIATION=NOT_CLOSED
 READY_FOR_PRODUCTION=false
 ```
 
-Esse resultado é uma lacuna externa de evidência. Ele não autoriza converter
-o gate em `SHIP` nem reabrir o código sem um finding causal.
+Esse resultado é uma indisponibilidade do mecanismo de revisão adversarial,
+mesmo após a troca de runtime. Ele não autoriza converter o gate em `SHIP` nem
+reabrir o código sem um finding causal.
