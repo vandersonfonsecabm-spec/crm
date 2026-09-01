@@ -55,4 +55,21 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
   assert.equal(redacted.includes("secret"), false);
   assert.equal(redacted.includes("abc.def"), false);
   assert.equal(redacted.includes("[redacted]"), true);
+  const urlRedacted = _private.redactSensitiveText("https://user:pass@provider.test/cb?state=state-secret&code=oauth-code&apiKey=api-secret#access_token=fragment-secret");
+  assert.equal(urlRedacted.includes("pass@"), false);
+  assert.equal(urlRedacted.includes("state-secret"), false);
+  assert.equal(urlRedacted.includes("oauth-code"), false);
+  assert.equal(urlRedacted.includes("api-secret"), false);
+  assert.equal(urlRedacted.includes("fragment-secret"), false);
+});
+
+test("integração genérica não pode declarar ativa sem validação", () => {
+  assert.throws(
+    () => _private.assertIntegrationStatusTransitionAllowed({ current: null, data: { status: "ATIVA", ativo: true }, encryptedCredentials: null }),
+    (error) => error.code === "INTEGRATION_STATUS_REQUIRES_VALIDATION",
+  );
+  assert.equal(
+    _private.assertIntegrationStatusTransitionAllowed({ current: { status: "ATIVA", ativo: true, ultimoSucessoEm: new Date(), credenciaisCriptografadas: "ciphertext" }, data: {}, encryptedCredentials: undefined }),
+    true,
+  );
 });

@@ -3,6 +3,7 @@ const EXECUTION_STATUSES = ["PENDENTE", "PROCESSANDO", "CONCLUIDA", "FALHOU", "F
 const WEBHOOK_STATUSES = ["RECEBIDO", "PROCESSANDO", "PROCESSADO", "FALHOU", "IGNORADO_DUPLICADO"];
 const EMAIL_OUTBOX_STATUSES = ["PENDING", "PROCESSING", "RETRY_WAIT", "DELIVERED", "FAILED", "BOUNCED", "EXPIRED", "CANCELLED"];
 const STOCK_OUTBOX_STATUSES = ["PENDING", "PROCESSING", "PROCESSED", "FAILED", "QUARANTINED"];
+const DEFAULT_WORKER_STALE_MS = 5 * 60 * 1000;
 
 function createPlatformObservabilityService({ prisma }) {
   if (!prisma) throw new Error("Prisma obrigatorio para observabilidade da plataforma.");
@@ -28,6 +29,8 @@ function createPlatformObservabilityService({ prisma }) {
       worker: {
         checkpointCount: checkpoints.length,
         lastCheckpointAt: latestTimestamp(checkpoints.map((row) => row.updatedAt)),
+        health: workerHealth(latestTimestamp(checkpoints.map((row) => row.updatedAt)), now),
+        staleAfterSeconds: DEFAULT_WORKER_STALE_MS / 1000,
         activeLeases,
         expiredLeases,
       },
@@ -80,6 +83,13 @@ function latestTimestamp(values) {
   return new Date(Math.max(...timestamps)).toISOString();
 }
 
+function workerHealth(lastCheckpointAt, now) {
+  if (!lastCheckpointAt) return "UNKNOWN";
+  const age = (now instanceof Date ? now.getTime() : Date.parse(String(now))) - Date.parse(lastCheckpointAt);
+  if (age < 0) return "UNKNOWN";
+  return age <= DEFAULT_WORKER_STALE_MS ? "HEALTHY" : "STALE";
+}
+
 module.exports = {
   createPlatformObservabilityService,
   JOB_STATUSES,
@@ -87,4 +97,5 @@ module.exports = {
   WEBHOOK_STATUSES,
   EMAIL_OUTBOX_STATUSES,
   STOCK_OUTBOX_STATUSES,
+  DEFAULT_WORKER_STALE_MS,
 };

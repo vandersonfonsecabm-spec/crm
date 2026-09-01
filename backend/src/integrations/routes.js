@@ -7,6 +7,8 @@ const { createWhatsAppFoundationService } = require("./whatsappFoundation");
 const { REAL_WHATSAPP_INBOUND_KEY, readGlobalWhatsappConfiguration } = require("../platform/whatsappInboundProvisioning");
 const { createMessengerInboundLifecycleService } = require("./messengerInboundLifecycle");
 const { createInstagramInboundLifecycleService } = require("./instagramInboundLifecycle");
+const { createEmailInboundLifecycleService } = require("./emailInboundLifecycle");
+const { isEmailError } = require("./emailFoundation");
 const { REAL_MESSENGER_INBOUND_KEY, readGlobalMessengerConfiguration } = require("../platform/messengerInboundProvisioning");
 const { createMetaCredentialStore } = require("./metaCredentialStore");
 const { createMetaOAuthService } = require("./metaOAuthService");
@@ -40,6 +42,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
   const whatsappFoundationService = createWhatsAppFoundationService({ prisma });
   const messengerInboundLifecycle = createMessengerInboundLifecycleService({ prisma });
   const instagramInboundLifecycle = createInstagramInboundLifecycleService({ prisma });
+  const emailInboundLifecycle = createEmailInboundLifecycleService({ prisma });
   const metaCredentialStore = createMetaCredentialStore({ prisma });
   const messengerIntegrationGate = createTenantFeatureMiddleware({
     prisma,
@@ -104,6 +107,15 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       return res.json(await instagramInboundLifecycle.getStatus({ tenantId: req.auth.empresaId }));
     } catch (error) {
       return integrationError(res, error, "Não foi possível consultar o estado do Instagram.");
+    }
+  });
+
+  app.get("/integracoes/email/inbound/status", ...requireAdmin, async (req, res) => {
+    try {
+      return res.json(await emailInboundLifecycle.getStatus({ tenantId: req.auth.empresaId }));
+    } catch (error) {
+      if (isEmailError(error)) return integrationError(res, error, "Não foi possível consultar o estado do E-mail.");
+      return integrationError(res, error, "Não foi possível consultar o estado do E-mail.");
     }
   });
 
@@ -269,6 +281,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       const payload = integrationPayload(req.body, { partial: false });
       assertGenericIntegrationLifecycleAllowed(null, payload.data.tipo, req.body);
       const encrypted = payload.credentials ? encryptCredentials(payload.credentials) : null;
+      assertIntegrationStatusTransitionAllowed({ current: null, data: payload.data, encryptedCredentials: encrypted });
       const integracao = await prisma.integracao.create({
         data: {
           empresaId: req.auth.empresaId,
@@ -298,6 +311,7 @@ function mountIntegrationHubRoutes({ app, prisma, authenticate, requireRole }) {
       if (payload.credentials) {
         data.credenciaisCriptografadas = encryptCredentials(payload.credentials);
       }
+      assertIntegrationStatusTransitionAllowed({ current: atual, data, encryptedCredentials: data.credenciaisCriptografadas });
 
       const integracao = await prisma.integracao.update({
         where: { id: atual.id },
@@ -712,6 +726,18 @@ function integrationPayload(body = {}, { partial }) {
   }
 
   return { data, credentials: sanitizeCredentialInput(body.credenciais) };
+}
+
+function assertIntegrationStatusTransitionAllowed({ current, data, encryptedCredentials }) {
+  const nextStatus = data.status ?? current?.status;
+  const nextActive = data.ativo ?? current?.ativo;
+  if (nextStatus !== "ATIVA" || nextActive !== true) return true;
+  const hasCredentials = Boolean(encryptedCredentials ?? current?.credenciaisCriptografadas);
+  const hasValidation = Boolean(current?.ultimoSucessoEm);
+  if (!hasCredentials || !hasValidation) {
+    throw httpError(409, "A integração só pode ficar ativa após uma validação bem-sucedida.", "INTEGRATION_STATUS_REQUIRES_VALIDATION");
+  }
+  return true;
 }
 
 function importMetadataPayload(body = {}) {
@@ -1151,7 +1177,7 @@ function redactSensitiveText(value) {
     .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, "$1[redacted]@")
     .replace(/(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "$1[redacted]")
     .replace(/((?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
-    .replace(/([?&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token|secret|credential|signature)=)[^&\s]+/gi, "$1[redacted]")
+    .replace(/([?#&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token|secret|credential|signature|state|code)=)[^&#\s]+/gi, "$1[redacted]")
     .replace(/(["']?(?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token|secret|credential|signature)["']?\s*[:=]\s*["']?)[^"'\s,;}]+/gi, "$1[redacted]")
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
     .slice(0, 500);
@@ -1221,6 +1247,7 @@ module.exports = {
     safeAdapterErrorMessage,
     redactSensitiveText,
     assertExternalProviderActivationEnabled,
+    assertIntegrationStatusTransitionAllowed,
     assertGenericIntegrationLifecycleAllowed,
     frontendCallbackBase,
   },

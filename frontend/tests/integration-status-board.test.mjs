@@ -16,6 +16,8 @@ test("status board cobre os seis providers com estado honesto", () => {
   assert.match(board, /return \[\s*whatsappCard\(input\),\s*instagramCard\(input\),\s*messengerCard\(input\),\s*blingCard\(input\),\s*emailCard\(input\),\s*aiCard\(input\),/s);
   assert.match(board, /stateCopy\(state, title\)/);
   assert.match(board, /Próximo requisito:/);
+  assert.match(board, /rawState === "UNAVAILABLE"/);
+  assert.match(board, /rawState === "PAUSED"/);
 });
 
 test("ativação externa permanece bloqueada nos três painéis", () => {
@@ -31,6 +33,8 @@ test("falhas de leitura não são convertidas em não configurado", () => {
   assert.match(board, /if \(input\.instagramUnavailable\) return unavailable\("instagram"/);
   assert.match(board, /if \(input\.messengerUnavailable\) return unavailable\("messenger"/);
   assert.match(board, /if \(input\.channelsUnavailable\) return unavailable\("email"/);
+  assert.match(board, /fetchEmailOperationalStatus/);
+  assert.match(board, /WAITING_PROVIDER_AUTH/);
 });
 
 test("hub usa leituras parciais e tabs com relação ARIA explícita", () => {

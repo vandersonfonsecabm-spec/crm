@@ -28,6 +28,8 @@ test("observabilidade de plataforma agrega somente contadores sanitizados", asyn
   const result = await createPlatformObservabilityService({ prisma }).summary({ now });
   assert.equal(result.generatedAt, now.toISOString());
   assert.equal(result.worker.checkpointCount, 1);
+  assert.equal(result.worker.health, "HEALTHY");
+  assert.equal(result.worker.staleAfterSeconds, 300);
   assert.equal(result.worker.activeLeases, 0);
   assert.equal(result.jobs.PENDENTE, 2);
   assert.equal(result.retryingJobs, 1);

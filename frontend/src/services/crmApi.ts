@@ -186,6 +186,8 @@ export type PlatformObservabilitySummary = {
   worker: {
     checkpointCount: number;
     lastCheckpointAt: string | null;
+    health: "HEALTHY" | "STALE" | "UNKNOWN";
+    staleAfterSeconds: number;
     activeLeases: number;
     expiredLeases: number;
   };
@@ -1686,6 +1688,23 @@ export type InstagramOperationalStatusResponse = {
   lastFailureAt?: string | null;
 };
 
+export type EmailOperationalStatusResponse = {
+  state?: "NOT_CONFIGURED" | "CONFIGURED_INACTIVE" | "WAITING_PROVIDER_AUTH" | "CONNECTED" | "PAUSED" | "ERROR" | "UNAVAILABLE";
+  configured?: boolean;
+  ativo?: boolean;
+  status?: string | null;
+  name?: string | null;
+  emailAddressMasked?: string | null;
+  providerType?: string | null;
+  connectedAt?: string | null;
+  verifiedAt?: string | null;
+  lastWebhookAt?: string | null;
+  lastFailureAt?: string | null;
+  lastFailureCode?: string | null;
+  updatedAt?: string | null;
+  nextRequirement?: string | null;
+};
+
 export function getAuthToken() {
   return accessTokenMemory;
 }
@@ -2126,6 +2145,10 @@ export async function fetchMessengerOperationalStatus() {
 
 export async function fetchInstagramOperationalStatus() {
   return requestApiGetAuthenticated<InstagramOperationalStatusResponse>("/integracoes/instagram/status");
+}
+
+export async function fetchEmailOperationalStatus() {
+  return requestApiGetAuthenticated<EmailOperationalStatusResponse>("/integracoes/email/inbound/status");
 }
 
 export type MetaCredentialHandoffResponse = {

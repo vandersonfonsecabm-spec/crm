@@ -12,12 +12,13 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ApiHttpError,
-  fetchCanais,
+  fetchEmailOperationalStatus,
   fetchIntegracoes,
   fetchInstagramOperationalStatus,
   fetchMessengerOperationalStatus,
   fetchWhatsappOperationalStatus,
   type ApiChannelSummary,
+  type EmailOperationalStatusResponse,
   type HubIntegracao,
   type InstagramOperationalStatusResponse,
   type MessengerOperationalStatusResponse,
@@ -74,6 +75,8 @@ type StatusInput = {
   blingUnavailable?: boolean;
   channels?: ApiChannelSummary[];
   channelsUnavailable?: boolean;
+  email?: EmailOperationalStatusResponse | null;
+  emailUnavailable?: boolean;
   ai?: AICommerceConnectionStatus | null;
   aiUnavailable?: boolean;
   aiUnavailableCode?: string;
@@ -96,12 +99,12 @@ export default function IntegrationStatusBoard({ onUnauthorized }: { onUnauthori
       fetchInstagramOperationalStatus(),
       fetchMessengerOperationalStatus(),
       fetchIntegracoes({ tipo: "BLING", limit: 10 }),
-      fetchCanais(),
+      fetchEmailOperationalStatus(),
       fetchAICommerceConnectionStatus(),
     ]);
     if (sequence !== requestSequence.current) return;
 
-    const [whatsapp, instagram, messenger, bling, channels, ai] = results;
+    const [whatsapp, instagram, messenger, bling, email, ai] = results;
     const unauthorized = results.some((result) => result.status === "rejected" && isUnauthorized(result.reason));
     if (unauthorized) {
       onUnauthorized();
@@ -117,8 +120,8 @@ export default function IntegrationStatusBoard({ onUnauthorized }: { onUnauthori
       messengerUnavailable: rejected(messenger),
       bling: fulfilledValue(bling)?.data,
       blingUnavailable: rejected(bling),
-      channels: fulfilledValue(channels)?.data,
-      channelsUnavailable: rejected(channels),
+      email: fulfilledValue(email),
+      emailUnavailable: rejected(email),
       ai: fulfilledValue(ai),
       aiUnavailable: rejected(ai),
       aiUnavailableCode: rejectionCode(ai),
@@ -235,7 +238,15 @@ function mapMetaCard(key: "whatsapp" | "instagram" | "messenger", title: string,
             ? "CONFIGURATION_INCOMPLETE"
             : "NOT_CONFIGURED";
   const copy = stateCopy(state, title);
-  return { key, title, ...copy, icon, lastUpdated: lastUpdated || null, nextRequirement: rawState === "CONNECTED" ? null : nextRequirement };
+  return { key, title, ...copy, icon, lastUpdated: lastUpdated || null, nextRequirement: rawState === "CONNECTED" ? null : metaRequirement(rawState, nextRequirement) };
+}
+
+function metaRequirement(rawState: string, fallback: string | null) {
+  if (rawState === "UNAVAILABLE") return "TENTE_NOVAMENTE";
+  if (rawState === "ERROR") return "REVISE_CONFIGURACAO";
+  if (rawState === "PAUSED") return "REATIVAR_CANAL";
+  if (rawState === "CONFIGURED_INACTIVE") return "ATIVAR_CANAL";
+  return fallback;
 }
 
 function blingCard(input: StatusInput): IntegrationStatusCard {
@@ -259,6 +270,32 @@ function blingCard(input: StatusInput): IntegrationStatusCard {
 
 function emailCard(input: StatusInput): IntegrationStatusCard {
   const icon = <Mail size={16} />;
+  if (input.emailUnavailable) return unavailable("email", "E-mail", "Não foi possível confirmar a caixa deste tenant. Tente atualizar.", icon);
+  if (input.email) {
+    const rawState = String(input.email.state || input.email.status || "UNAVAILABLE").toUpperCase();
+    const state: IntegrationCanonicalState = rawState === "CONNECTED"
+      ? "CONNECTED"
+      : rawState === "ERROR"
+        ? "ERROR"
+        : rawState === "UNAVAILABLE"
+          ? "UNAVAILABLE"
+          : rawState === "PAUSED"
+            ? "DISCONNECTED"
+            : rawState === "CONFIGURED_INACTIVE" || rawState === "WAITING_PROVIDER_AUTH"
+              ? "CONFIGURATION_INCOMPLETE"
+              : rawState === "NOT_CONFIGURED"
+                ? "NOT_CONFIGURED"
+                : "UNAVAILABLE";
+    const copy = stateCopy(state, "E-mail");
+    return {
+      key: "email",
+      title: "E-mail",
+      ...copy,
+      icon,
+      lastUpdated: input.email.updatedAt || input.email.lastFailureAt || null,
+      nextRequirement: state === "CONNECTED" ? null : input.email.nextRequirement || (state === "UNAVAILABLE" ? "TENTE_NOVAMENTE" : state === "ERROR" ? "RECONCILE_EMAIL_CHANNEL" : state === "DISCONNECTED" ? "REACTIVATE_EMAIL_INBOUND" : "CONFIGURE_EMAIL_PROVIDER"),
+    };
+  }
   if (input.channelsUnavailable) return unavailable("email", "E-mail", "Não foi possível confirmar a caixa deste tenant.", icon);
   const channel = (input.channels || []).find((item) => item.tipo === "EMAIL" && item.modoTeste === false);
   const state: IntegrationCanonicalState = !channel

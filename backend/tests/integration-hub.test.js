@@ -49,6 +49,10 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
 
   const adminA = await registerAndLogin("Empresa Hub A", "Admin A", "admin-a@hub.test");
   const adminB = await registerAndLogin("Empresa Hub B", "Admin B", "admin-b@hub.test");
+  const emailStatus = await request("GET", "/integracoes/email/inbound/status", undefined, adminA.token);
+  assert.equal(emailStatus.status, 200);
+  assert.equal(emailStatus.body.state, "NOT_CONFIGURED");
+  assert.equal(emailStatus.body.nextRequirement, "PROVISION_EMAIL_INBOUND");
   const gerente = await createUserAndLogin(adminA.token, "Gerente Hub", "gerente@hub.test", "GERENTE");
   const vendedor = await createUserAndLogin(adminA.token, "Vendedor Hub", "vendedor@hub.test", "VENDEDOR");
 
@@ -84,15 +88,25 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
   const created = await request("POST", "/integracoes", {
     nome: "Hub Custom QA",
     tipo: "CUSTOM",
-    status: "ATIVA",
+    status: "PENDENTE",
     configuracao: { ambiente: "sandbox", endpoint: "nao-utilizado" },
     credenciais: { apiKey: "segredo-nao-retornar", refreshToken: "refresh-nao-retornar" },
   }, adminA.token);
   assert.equal(created.status, 201);
   assert.equal(created.body.modo, "SOMENTE_LEITURA");
+  assert.equal(created.body.status, "PENDENTE");
   assert.equal(created.body.possuiCredenciais, true);
   assert.equal(JSON.stringify(created.body).includes("segredo-nao-retornar"), false);
   assert.equal(created.body.credenciaisCriptografadas, undefined);
+
+  const unvalidatedActive = await request("POST", "/integracoes", {
+    nome: "Ativa sem validacao",
+    tipo: "CUSTOM",
+    status: "ATIVA",
+    credenciais: { apiKey: "segredo-nao-persistir" },
+  }, adminA.token);
+  assert.equal(unvalidatedActive.status, 409);
+  assert.equal(unvalidatedActive.body.codigo, "INTEGRATION_STATUS_REQUIRES_VALIDATION");
 
   const storedIntegration = await prisma.integracao.findUnique({ where: { id: created.body.id } });
   assert.equal(storedIntegration.empresaId, adminA.empresaId);
@@ -105,7 +119,7 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
       empresaId: adminA.empresaId,
       nome: "Config legado",
       tipo: "JSON",
-      configuracaoJson: JSON.stringify({ endpoint: "https://user:legado-userinfo-nao-retornar@provider.test/callback?access_token=legado-url-nao-retornar&secret=legado-secret-nao-retornar&apiKey=legado-api-key-nao-retornar", nested: { accessToken: "legado-nao-retornar" } }),
+      configuracaoJson: JSON.stringify({ endpoint: "https://user:legado-userinfo-nao-retornar@provider.test/callback?access_token=legado-url-nao-retornar&secret=legado-secret-nao-retornar&apiKey=legado-api-key-nao-retornar&state=legado-state-nao-retornar&code=legado-code-nao-retornar#access_token=legado-fragment-nao-retornar", nested: { accessToken: "legado-nao-retornar" } }),
     },
   });
   const legacyRead = await request("GET", `/integracoes/${legacyUnsafe.id}`, undefined, adminA.token);
@@ -115,6 +129,9 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
   assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-userinfo-nao-retornar"), false);
   assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-secret-nao-retornar"), false);
   assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-api-key-nao-retornar"), false);
+  assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-state-nao-retornar"), false);
+  assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-code-nao-retornar"), false);
+  assert.equal(legacyRead.body.configuracao.endpoint.includes("legado-fragment-nao-retornar"), false);
   assert.equal(JSON.stringify(legacyRead.body).includes("legado-nao-retornar"), false);
 
   const listA = await request("GET", "/integracoes", undefined, adminA.token);
