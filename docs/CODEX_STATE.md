@@ -2175,7 +2175,7 @@ integracoes autorizadas.
   `696e2a7`, com suíte backend isolada PASS e hashes dos arquivos causais
   conferidos byte a byte no deployment de staging `63d3924d`; nova revisão
   adversarial limpa permanece obrigatória.
-- O candidato funcional vigente para a próxima revisão é `696e2a7`, tree
+- O candidato intermediário da correção de redaction foi `696e2a7`, tree
   `d416ba96a5817540f70c198617e330286d8607a4`; a branch também contém apenas
   o teste/documentação posterior `ca4127d`. O backend staging está no deploy
   `63d3924d`, com health/ready 200 e paridade dos hashes backend registrada no
@@ -2201,3 +2201,15 @@ integracoes autorizadas.
   `50f1db6fd8dba1d01a53a1cdc496f846e0517965`; os quatro findings estão
   `RETESTED`, mas a nova revisão adversarial limpa e a reconciliação do Sol
   continuam obrigatórias.
+- A revisão subsequente encontrou `INT-ADV-007` e `INT-ADV-008` (HIGH):
+  redaction hierárquica incompleta e troca de tipo/configuração em integração
+  ativa durante o freeze. Também confirmou `INT-ADV-009` (HIGH), falso
+  `CONNECTED` de WhatsApp/Messenger sem `MetaCredential` ativa, e classificou
+  `OBS-003` (MEDIUM) como fora do contrato porque a observabilidade pública é
+  deliberadamente agregada e sanitizada. Os fixes foram aplicados em `fffcb0c`
+  e `7b9251e`, com suíte backend isolada PASS_EXIT_0 e lifecycle/webhook
+  autenticados passando. O API staging está no deployment
+  `cbd75a4e-2f0e-40e6-9e75-815099c667d8`, health/ready 200, e os hashes causais
+  conferem byte a byte. O candidato funcional vigente é `fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026`,
+  tree `e3eb8c0ae2320c5fbbb9727015e9c24969451f78`; a revisão adversarial limpa
+  final e a reconciliação do Sol continuam obrigatórias.

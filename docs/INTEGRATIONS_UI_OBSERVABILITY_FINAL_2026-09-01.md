@@ -21,6 +21,72 @@ REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
 ```
 
+## Addendum — hardening final de status, redaction e observabilidade (2026-09-01)
+
+Uma revisão adversarial independente do candidato intermediário `f7865f7`
+identificou `INT-ADV-007` e `INT-ADV-008` (HIGH), além de confirmar
+`INT-ADV-009` (HIGH): redaction hierárquica incompleta, mutação de tipo/config
+de integração ativa durante o freeze e falso `CONNECTED` de WhatsApp/Messenger
+quando a referência não apontava para uma `MetaCredential` ativa.
+
+Correções aplicadas:
+
+- `fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026`: redaction agora substitui
+  caminho/query/fragmento de URLs hierárquicas desconhecidos e o freeze bloqueia
+  alterações de tipo/configuração em integrações ativas;
+- `7b9251e4d24224ae59351b84ef5d5d8d104f2a25`: WhatsApp e Messenger só
+  declaram `CONNECTED` quando existe credencial Meta ativa, tenant-scoped e
+  ligada à referência atual; fixtures foram alinhadas ao contrato.
+
+O finding histórico `OBS-003` (fonte de credenciais não exibida no painel) foi
+reclassificado como fora do contrato: o painel existente exibe o contador
+agregado sanitizado, e o backend agora agrega `MetaCredential` e credenciais
+cifradas de `Integracao` sem expor origem ou segredo. Não foi criado um novo
+campo visual que exigisse um deployment Vercel adicional.
+
+Retestes finais:
+
+```text
+INTEGRATION_SECURITY_HARDENING=6/6 PASS
+PLATFORM_OBSERVABILITY=2/2 PASS
+INTEGRATION_HUB=PASS
+WHATSAPP_INBOUND_LIFECYCLE=PASS
+MESSENGER_INBOUND_LIFECYCLE=PASS
+WHATSAPP_WEBHOOK_LIFECYCLE=PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+PROTECTED_DEV_DB_UNCHANGED=PASS
+INT_ADV_007=RETESTED
+INT_ADV_008=RETESTED
+INT_ADV_009=RETESTED
+OBS_001=RETESTED
+OBS_002=RETESTED
+OBS_003=CLOSED_BY_CONTRACT_SCOPE
+```
+
+O API foi republicado somente no staging como deployment
+`cbd75a4e-2f0e-40e6-9e75-815099c667d8`, `SUCCESS`, com `/health=200` e
+`/ready=200`. Os hashes locais e do runtime `/app` conferem para as rotas de
+Integrações, observabilidade, WhatsApp, Messenger, provider activation,
+plataforma e redaction. A tentativa de deploy Vercel com o projeto de staging
+explicitamente identificado falhou antes da criação de deployment por
+autenticação ausente do CLI (`Not authorized`); o bundle frontend publicado
+permanece o mesmo artefato já homologado e não houve alteração externa.
+
+Uma nova revisão adversarial limpa ainda é obrigatória para o candidato final.
+Até ela retornar `SHIP` ou `FIX_FIRST`, o estado permanece:
+
+```text
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+```
+
 ## Addendum — freeze genérico e cobertura de observabilidade (2026-09-01)
 
 A revisão adversarial independente do candidato `4a5fb66` retornou `FIX_FIRST`
@@ -41,8 +107,8 @@ e os dois últimos em `f7865f7f85962f5d33148e19031e3b0bb36d221e`, tree
 somente quando há uma ativação real (sem bloquear renomeações ou pausa), e o
 redactor processa primeiro URLs hierárquicas e depois qualquer esquema opaco,
 inclusive quando está prefixado por uma barra. A observabilidade soma leases
-distribuídos, agrega fontes de credenciais sem sobrescrever status e expõe a
-separação `credentialSources` de forma sanitizada.
+ distribuídos e agrega fontes de credenciais sem sobrescrever status; o painel
+ continua deliberadamente agregado e sanitizado, sem expor origem ou segredo.
 
 Retestes causais:
 
@@ -86,12 +152,12 @@ REAL_OUTBOUND=0
 
 ```text
 BRANCH=feature/canonical-sale-v1
-RELEASE_HEAD=f7865f7f85962f5d33148e19031e3b0bb36d221e
-RELEASE_TREE=50f1db6fd8dba1d01a53a1cdc496f846e0517965
+RELEASE_HEAD=fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026
+RELEASE_TREE=e3eb8c0ae2320c5fbbb9727015e9c24969451f78
 BACKEND_CAUSAL_HEAD=e044d5852de15ad52b69f4025db9b80b3fec822b
 BASELINE_FUNCTIONAL=79eed4f
 FRONTEND_SOURCE_FIX=API fallback canônico de staging + teste de regressão
-REMOTE_BRANCH_SHA=f7865f7f85962f5d33148e19031e3b0bb36d221e
+REMOTE_BRANCH_SHA=fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026
 ```
 
 O frontend recebeu uma correção mínima porque o bundle estático publicado
@@ -122,6 +188,7 @@ RAILWAY_DATABASE_SERVICE=f3a2862b-2371-4ab3-b4db-1e91680ee3b7
 RAILWAY_API_DEPLOYMENT_AFTER_CLEANUP=63d3924d-fddb-46b2-bc50-7a2809d46186
 RAILWAY_API_DEPLOYMENT_AFTER_GENERIC_REDACTION_FIX=54d0f59f-fd49-4e4c-9345-40ff9873f7c8
 RAILWAY_API_DEPLOYMENT_AFTER_ACTIVATION_OBSERVABILITY_FIX=79455b2b-c659-4ecf-9394-0988bb88f3a0
+RAILWAY_API_DEPLOYMENT_AFTER_FINAL_HARDENING=cbd75a4e-2f0e-40e6-9e75-815099c667d8
 RAILWAY_WORKER_DEPLOYMENT=ebefe2db-ad83-4446-978f-c495c30a0810
 VERCEL_PROJECT=prj_AJE06pNRGunJoguCNWee0RgZV6t8
 VERCEL_DEPLOYMENT=dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3
@@ -156,8 +223,10 @@ byte a byte com os arquivos no runtime `/app` do deployment
 ```text
 src/integrations/providerActivation.js  f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d
 src/platform/routes.js                  8aa2be8a92d2c2dc3aa61c9078889e26320d50d3d30c98cf14e42a9e2c43d150
-src/integrations/routes.js              8bd0292766722c99cc089000786e3e49b988757b5963a8b889bbdf6db98d99d3
-src/platform/observability.js           df7cdc82a92928e1657ed7e8a753ee68f4b87fae7f4732b17c47ee210793d4f9
+src/integrations/routes.js              b50569eeea8073753ada23c6db6749e0d5644c08f114848e94da5f086070646f
+src/platform/observability.js           574bb2a5767c858bfdb3315848535eef976e82be30716b432c74e3b2fc1f8d5f
+src/integrations/whatsappInboundLifecycle.js 5812742615437b8d227c918f0f4074cab9a9d1f60692286127365bfb1d2faea7
+src/integrations/messengerInboundLifecycle.js ca466788c55fd22220a39a1823e092cc8f41dec662d15d7e6150335c3daf4d3e
 src/security/auditReason.js             f979ff314da0972f58b1c27c7e944e7a5048a6aa48429a7f9441db4770405026
 BACKEND_RUNTIME_HASH_PARITY=PASS
 ```
