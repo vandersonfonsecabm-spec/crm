@@ -281,7 +281,7 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
       warnings.push("Status do Bling indisponível");
     }
     setLoadWarnings(warnings);
-    if (warnings.length === 5) {
+    if (warnings.length === results.length) {
       setState("error");
       setMessage("Não foi possível confirmar os dados das integrações agora.");
     } else {

@@ -42,6 +42,7 @@ test("falhas de leitura não são convertidas em não configurado", () => {
 
 test("hub usa leituras parciais e tabs com relação ARIA explícita", () => {
   assert.match(integrations, /Promise\.allSettled/);
+  assert.match(integrations, /warnings\.length === results\.length/);
   assert.match(integrations, /Algumas áreas continuam indisponíveis/);
   assert.match(integrations, /role="tablist"/);
   assert.match(integrations, /role="tab"/);
