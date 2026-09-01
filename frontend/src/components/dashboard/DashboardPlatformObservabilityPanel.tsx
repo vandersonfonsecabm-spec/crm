@@ -67,7 +67,7 @@ export default function DashboardPlatformObservabilityPanel() {
           </div>
 
           <div className="grid gap-3 xl:grid-cols-2">
-            <QueueCard icon={<ShieldCheck size={14} />} label="Estado de credenciais (sem segredos)" values={summary.credentials} />
+            <QueueCard emptyLabel="Nenhuma credencial configurada." icon={<ShieldCheck size={14} />} label="Estado de credenciais (sem segredos)" values={summary.credentials} />
             <div className="rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-[11px] text-[var(--text-muted)]">
               <p className="font-semibold text-[var(--text-secondary)]">Último erro de integração</p>
               <p className="mt-2">{summary.lastIntegrationErrorAt ? formatDate(summary.lastIntegrationErrorAt) : "Nenhum erro aberto"}</p>
@@ -109,12 +109,12 @@ function Metric({ icon, label, tone = "neutral", value }: { icon: React.ReactNod
   );
 }
 
-function QueueCard({ icon, label, values }: { icon: React.ReactNode; label: string; values: Record<string, number> }) {
+function QueueCard({ emptyLabel = "Nenhuma operação pendente.", icon, label, values }: { emptyLabel?: string; icon: React.ReactNode; label: string; values: Record<string, number> }) {
   const entries = Object.entries(values).filter(([, value]) => value > 0);
   return (
     <div className="rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-3">
       <div className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text-secondary)]"><span className="text-[var(--icon-default)]">{icon}</span>{label}</div>
-      {entries.length ? <dl className="mt-2 space-y-1.5">{entries.map(([key, value]) => <div className="flex items-center justify-between gap-3 text-[11px]" key={key}><dt className="truncate text-[var(--text-muted)]">{key}</dt><dd className="font-semibold tabular-nums text-[var(--text-primary)]">{value}</dd></div>)}</dl> : <p className="mt-2 text-[11px] text-[var(--text-muted)]">Nenhuma operação pendente.</p>}
+      {entries.length ? <dl className="mt-2 space-y-1.5">{entries.map(([key, value]) => <div className="flex items-center justify-between gap-3 text-[11px]" key={key}><dt className="truncate text-[var(--text-muted)]">{key}</dt><dd className="font-semibold tabular-nums text-[var(--text-primary)]">{value}</dd></div>)}</dl> : <p className="mt-2 text-[11px] text-[var(--text-muted)]">{emptyLabel}</p>}
     </div>
   );
 }

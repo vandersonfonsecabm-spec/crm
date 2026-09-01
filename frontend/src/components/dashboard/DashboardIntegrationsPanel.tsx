@@ -1003,7 +1003,7 @@ function ImportsSection(props: {
         <UiInput aria-label="Buscar arquivo" value={props.search} onChange={(event) => props.onSearch(event.target.value)} placeholder="Buscar arquivo" />
         <div className="grid gap-2 sm:grid-cols-2">
           <UiSelect aria-label="Filtrar importações por status" value={props.status} onChange={(event) => props.onStatus(event.target.value)}>
-            {STATUS_OPTIONS.map((status) => <option key={status}>{status}</option>)}
+            {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
           </UiSelect>
           <UiSelect aria-label="Filtrar importações por formato" value={props.format} onChange={(event) => props.onFormat(event.target.value)}>
             {FORMAT_OPTIONS.map((format) => <option key={format}>{format}</option>)}

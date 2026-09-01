@@ -17,6 +17,8 @@ test("status board cobre os seis providers com estado honesto", () => {
   assert.match(board, /return \[\s*whatsappCard\(input\),\s*instagramCard\(input\),\s*messengerCard\(input\),\s*blingCard\(input\),\s*emailCard\(input\),\s*aiCard\(input\),/s);
   assert.match(board, /stateCopy\(state, title\)/);
   assert.match(board, /Próximo requisito:/);
+  assert.match(board, /requirementLabel\(card\.nextRequirement\)/);
+  assert.match(board, /CONFIGURE_WHATSAPP_PROVIDER: "Configurar o provedor do WhatsApp"/);
   assert.match(board, /rawState === "UNAVAILABLE"/);
   assert.match(board, /rawState === "PAUSED"/);
 });

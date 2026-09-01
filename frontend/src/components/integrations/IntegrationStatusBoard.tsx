@@ -180,7 +180,7 @@ function IntegrationStatusCardView({ card }: { card: IntegrationStatusCard }) {
         <StatusBadge label={card.label} status={card.badge} />
       </div>
       <p className="mt-3 min-h-8 text-[11px] leading-4 text-[var(--text-secondary)]">{card.detail}</p>
-      {card.nextRequirement && <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.05em] text-[var(--text-tertiary)]">Próximo requisito: {card.nextRequirement}</p>}
+      {card.nextRequirement && <p className="mt-2 text-[10px] font-medium tracking-[0.02em] text-[var(--text-tertiary)]">Próximo requisito: {requirementLabel(card.nextRequirement)}</p>}
       <div className="mt-3 flex min-w-0 items-center gap-1.5 border-t border-[var(--border-default)] pt-2 text-[10px] text-[var(--text-muted)]">
         <Clock3 aria-hidden="true" size={12} />
         <span className="truncate">{card.lastUpdated ? `Última atualização: ${formatDate(card.lastUpdated)}` : "Última atualização: nunca"}</span>
@@ -348,6 +348,28 @@ function stateCopy(state: IntegrationCanonicalState, title: string) {
   if (state === "EXPIRED") return { description: `${title} precisa de reconexão.`, detail: "A credencial/validação expirou e não será renovada automaticamente nesta fase.", label: "Expirado", badge: "alerta" as const, state };
   if (state === "DISCONNECTED") return { description: `${title} não está ativo.`, detail: "Nenhum request externo é disparado enquanto o canal permanecer desconectado.", label: "Desconectado", badge: "desconectado" as const, state };
   return { description: `${title} ainda não foi configurado.`, detail: "Não há conexão confirmada para esta empresa.", label: "Não conectado", badge: "desconectado" as const, state: "NOT_CONFIGURED" as const };
+}
+
+function requirementLabel(requirement: string) {
+  return ({
+    TENTE_NOVAMENTE: "Atualizar o status",
+    REVISE_CONFIGURACAO: "Revisar a configuração",
+    CONFIGURE_WHATSAPP_PROVIDER: "Configurar o provedor do WhatsApp",
+    CONFIGURE_MESSENGER_PROVIDER: "Configurar o provedor do Messenger",
+    REAL_META_ACCOUNT_REQUIRED_FOR_E2E: "Autorizar uma conta Meta em missão separada",
+    PROVISION_INSTAGRAM_INBOUND: "Provisionar o canal do Instagram",
+    REATIVAR_CANAL: "Reativar o canal",
+    ATIVAR_CANAL: "Ativar o canal",
+    CONFIGURE_BLING_PROVIDER: "Configurar o provedor Bling",
+    PROVISION_EMAIL_INBOUND: "Provisionar o recebimento de E-mail",
+    VALIDATE_EMAIL_PROVIDER: "Validar o provedor de E-mail",
+    RECONCILE_EMAIL_CHANNEL: "Reconciliar o canal de E-mail",
+    REACTIVATE_EMAIL_INBOUND: "Reativar o recebimento de E-mail",
+    CONFIGURE_EMAIL_PROVIDER: "Configurar o provedor de E-mail",
+    ATIVAR_CAPACIDADE_EM_MISSAO_SEPARADA: "Ativar a capacidade em missão separada",
+    ATIVAR_PROVIDER_EM_MISSAO_SEPARADA: "Ativar o provider em missão separada",
+    CONFIGURE_AI_PROVIDER: "Configurar o provedor de IA",
+  } as Record<string, string>)[requirement] ?? "Revisar a configuração da integração";
 }
 
 function formatDate(value: string) {
