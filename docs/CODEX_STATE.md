@@ -1,4 +1,32 @@
 # Estado atual do CRM
+## Integrações visíveis + observabilidade — correções do adversarial final (2026-09-01)
+
+- O adversarial independente encontrou cinco findings reproduzíveis no
+  candidato `fffcb0c`: credenciais Meta ativas sem descriptografia/expiração,
+  E-mail `CONNECTED` sem autorização atual, redaction incompleta de
+  `cookie/state/code` e network-path, contagem de ciphertext inválido na
+  observabilidade e hashes sem vínculo explícito ao deployment final.
+- A correção focal foi aplicada e publicada somente no staging no commit
+  funcional `32c5466ad8f05fb0d631e2816fe53fe0e9e97b25`, tree
+  `c483810ce573aec9ce46e22a3d43babf807d9229`, deployment API
+  `0a0e9aa7-e99f-46ee-9889-7b477dee508b`. O runtime retornou health/readiness
+  200 e manifesto `f8b3ea62ce52475c2fc9fd606e546fb28ac84e2588deb836e14d550b616ccf21`;
+  hashes locais e `/app` conferem para todos os nove arquivos causais.
+- Retestes focados, suíte backend isolada completa, redaction, observabilidade,
+  fingerprint e lifecycle de WhatsApp/Messenger/Instagram/E-mail passaram.
+  `backend/prisma/dev.db` permaneceu com o SHA canônico
+  `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- O fingerprint sanitizado confirma `trackedProviderConnections=false`,
+  `externalProviderActivationEnabled=false`, `outboundEnabled=false` e
+  `EMAIL=NO_EMAIL_PROVIDER_CREDENTIAL_REGISTRY`. Frontend não mudou nem foi
+  republicado; produção, providers reais e outbound permanecem intocados.
+- Nova revisão adversarial independente do commit `32c5466` e reconciliação
+  final do Sol ainda são obrigatórias. Estado: `FINAL_ADVERSARIAL_VERDICT=
+  PENDING_POST_FIX_REVIEW`, `FINAL_SOL_RECONCILIATION=NOT_CLOSED`,
+  `READY_FOR_PRODUCTION=false`, `PRODUCTION_CHANGED=false`.
+- Autoridade documental: `docs/INTEGRATIONS_UI_OBSERVABILITY_FINAL_2026-09-01.md`
+  e `docs/evidence/INTEGRATIONS_UI_OBSERVABILITY_FINAL_2026-09-01.json`.
+
 ## Checkpoint atual — execução final do QA Production Harness em produção (2026-08-31)
 
 - A missão de execução do harness QA-only em produção foi concluída com dados

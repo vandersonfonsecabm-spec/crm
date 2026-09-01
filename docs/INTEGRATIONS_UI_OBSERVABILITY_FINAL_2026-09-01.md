@@ -21,6 +21,91 @@ REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
 ```
 
+## Addendum — correções do adversarial final e novo candidato (2026-09-01)
+
+O reviewer adversarial independente retornou `FIX_FIRST` para o candidato
+`fffcb0c` com cinco findings reproduzíveis. A correção focal foi aplicada no
+commit funcional `32c5466ad8f05fb0d631e2816fe53fe0e9e97b25`, tree
+`c483810ce573aec9ce46e22a3d43babf807d9229`, e publicada somente na API de
+staging no deployment `0a0e9aa7-e99f-46ee-9889-7b477dee508b` (`SUCCESS`).
+
+Findings tratados:
+
+- `ADV-FINAL-001` (HIGH): WhatsApp, Instagram e Messenger agora exigem
+  ciphertext descriptografável com o contexto AAD correto, `accessToken`
+  presente e `expiresAt` válido/futuro antes de anunciar `CONNECTED`.
+- `ADV-FINAL-002` (HIGH): a fundação provider-neutral de E-mail não anuncia
+  `CONNECTED` sem autorização atual de provider; `verifiedAt` histórico não é
+  autorização.
+- `ADV-FINAL-003` (HIGH): configuração e redaction genéricas agora bloqueiam
+  `cookie/state/code` fora de URL e referências network-path (`//host/path`),
+  além dos esquemas já cobertos.
+- `ADV-FINAL-004` (MEDIUM): observabilidade classifica ciphertext ativo
+  indecifrável como `INVALID`, em vez de contá-lo como `ATIVA`.
+- `ADV-FINAL-005` (MEDIUM): o manifesto e os hashes dos arquivos backend foram
+  reconciliados e vinculados ao deployment final `0a0e9aa7`.
+
+Retestes causais do novo candidato:
+
+```text
+META_CREDENTIAL_HEALTH=2/2 PASS
+INTEGRATION_SECURITY_HARDENING=6/6 PASS
+AUDIT_REASON_REDACTION=3/3 PASS
+EMAIL_INBOUND_LIFECYCLE=6 PASS, 1 SKIP PostgreSQL descartável
+WHATSAPP_INBOUND_LIFECYCLE=4/4 PASS
+MESSENGER_INBOUND_LIFECYCLE=6/6 PASS
+INSTAGRAM_INBOUND_LIFECYCLE=5/5 PASS
+PLATFORM_OBSERVABILITY=3/3 PASS
+RUNTIME_FINGERPRINT=3/3 PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+PROTECTED_DEV_DB_UNCHANGED=PASS
+```
+
+Paridade runtime da API foi comprovada byte a byte no deployment `0a0e9aa7`.
+O manifesto `backend-runtime-v3-lf` retornado pelo runtime e pelo worktree é
+`f8b3ea62ce52475c2fc9fd606e546fb28ac84e2588deb836e14d550b616ccf21`.
+`/health=200`, `/ready=200` e o fingerprint protegido confirmaram staging,
+PostgreSQL de staging, providers conectados `false`, ativação externa `false`
+e outbound `false`.
+
+Hashes SHA-256 locais e `/app`:
+
+```text
+src/integrations/metaCredentialHealth.js       7e243d1a5c3f838d8435d632f659238d3a05ad6dc8373720fc23726e074d7371
+src/integrations/whatsappInboundLifecycle.js   2282c886e32b73ca9966362bbfd0190ae5e1bfa52d038ea70290a33cbc9a9ab8
+src/integrations/messengerInboundLifecycle.js  473e5f122f45fc89b583795ff2a1e7cecb9822d43ed5abd4cabe0fed06ce202c
+src/integrations/instagramInboundLifecycle.js  c1a31c03642fccbd7c1f2ba811649c7b0574342750ce657aa1026b100fe9156f
+src/integrations/emailInboundLifecycle.js      739b7432662d50007e5513af14d33e5ae6dc50e06be7040d1713aeeec7d4720c
+src/integrations/routes.js                     9dc1a9dea046ce568c9a314feb43071ef4abc1859daefbef94b4fe1bc93e7dcf
+src/platform/observability.js                  d6a70266ad01cf8b889ca61404b454ecff7de687778b35158f6fd78fec1e12e0
+src/runtime-fingerprint.js                     87dfe03f415340ee1295396d3cae1b06d119279f7ecc0ed15b97011aedb730cc
+src/security/auditReason.js                    89dbd8aa9ac2d60a552f43405d55efed1c15cc1cefa6905d7ad1c96b376f5167
+BACKEND_RUNTIME_HASH_PARITY=PASS
+```
+
+O frontend não mudou; permanece no bundle Vercel previamente homologado. A
+tentativa anterior de deploy Vercel continua registrada como falha de
+autenticação sem deployment criado, portanto não foi repetida.
+
+O novo reviewer adversarial independente e a reconciliação final do Sol ainda
+são obrigatórios. Até ambos retornarem, o estado canônico é:
+
+```text
+RELEASE_FUNCTIONAL_HEAD=32c5466ad8f05fb0d631e2816fe53fe0e9e97b25
+RELEASE_FUNCTIONAL_TREE=c483810ce573aec9ce46e22a3d43babf807d9229
+REMOTE_BRANCH_SHA=32c5466ad8f05fb0d631e2816fe53fe0e9e97b25
+RAILWAY_API_DEPLOYMENT=0a0e9aa7-e99f-46ee-9889-7b477dee508b
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+```
+
 ## Addendum — hardening final de status, redaction e observabilidade (2026-09-01)
 
 Uma revisão adversarial independente do candidato intermediário `f7865f7`
@@ -152,12 +237,12 @@ REAL_OUTBOUND=0
 
 ```text
 BRANCH=feature/canonical-sale-v1
-RELEASE_HEAD=fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026
-RELEASE_TREE=e3eb8c0ae2320c5fbbb9727015e9c24969451f78
+RELEASE_HEAD=32c5466ad8f05fb0d631e2816fe53fe0e9e97b25
+RELEASE_TREE=c483810ce573aec9ce46e22a3d43babf807d9229
 BACKEND_CAUSAL_HEAD=e044d5852de15ad52b69f4025db9b80b3fec822b
 BASELINE_FUNCTIONAL=79eed4f
 FRONTEND_SOURCE_FIX=API fallback canônico de staging + teste de regressão
-REMOTE_BRANCH_SHA=fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026
+REMOTE_BRANCH_SHA=32c5466ad8f05fb0d631e2816fe53fe0e9e97b25
 ```
 
 O frontend recebeu uma correção mínima porque o bundle estático publicado
@@ -217,8 +302,8 @@ SOURCE_RUNTIME_PARITY=PASS_FOR_PUBLISHED_ASSETS_AND_BACKEND_HASHES
 ```
 
 Hashes SHA-256 dos arquivos backend causais do candidato foram comparados
-byte a byte com os arquivos no runtime `/app` do deployment
-`54d0f59f-fd49-4e4c-9345-40ff9873f7c8`:
+byte a byte com os arquivos no runtime `/app` do deployment final
+`cbd75a4e-2f0e-40e6-9e75-815099c667d8`:
 
 ```text
 src/integrations/providerActivation.js  f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d

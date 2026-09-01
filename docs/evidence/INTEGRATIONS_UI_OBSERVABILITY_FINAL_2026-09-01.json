@@ -6,8 +6,8 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026",
-    "tree": "e3eb8c0ae2320c5fbbb9727015e9c24969451f78",
+    "head": "32c5466ad8f05fb0d631e2816fe53fe0e9e97b25",
+    "tree": "c483810ce573aec9ce46e22a3d43babf807d9229",
     "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
     "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531",
@@ -17,7 +17,8 @@
     "genericActivationTransitionFixCommit": "0fa94b044a9b7434b71bab3a992b6f72b2d9ec8f",
     "platformObservabilityCoverageFixCommit": "f7865f7f85962f5d33148e19031e3b0bb36d221e",
     "providerStatusTruthFixCommit": "7b9251e4d24224ae59351b84ef5d5d8d104f2a25",
-    "hierarchicalRedactionFreezeFixCommit": "fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026"
+    "hierarchicalRedactionFreezeFixCommit": "fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026",
+    "credentialTruthAndRedactionFixCommit": "32c5466ad8f05fb0d631e2816fe53fe0e9e97b25"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -31,6 +32,7 @@
     "railwayApiDeploymentAfterGenericRedactionFix": "54d0f59f-fd49-4e4c-9345-40ff9873f7c8",
     "railwayApiDeploymentAfterActivationObservabilityFix": "79455b2b-c659-4ecf-9394-0988bb88f3a0",
     "railwayApiDeploymentAfterFinalHardening": "cbd75a4e-2f0e-40e6-9e75-815099c667d8",
+    "railwayApiDeploymentAfterCredentialTruthFix": "0a0e9aa7-e99f-46ee-9889-7b477dee508b",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -64,13 +66,37 @@
     { "path": "assets/index-DnvstQIY.css", "bytes": 92545, "sha256": "4148c1a6ae931f29534c41e14e11fcf5280afed06fd41e7eae19253a22ecbbf6" }
   ],
   "backendRuntimeHashes": {
-    "src/integrations/providerActivation.js": "f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d",
-    "src/platform/routes.js": "8aa2be8a92d2c2dc3aa61c9078889e26320d50d3d30c98cf14e42a9e2c43d150",
-    "src/integrations/routes.js": "b50569eeea8073753ada23c6db6749e0d5644c08f114848e94da5f086070646f",
-    "src/platform/observability.js": "574bb2a5767c858bfdb3315848535eef976e82be30716b432c74e3b2fc1f8d5f",
-    "src/integrations/whatsappInboundLifecycle.js": "5812742615437b8d227c918f0f4074cab9a9d1f60692286127365bfb1d2faea7",
-    "src/integrations/messengerInboundLifecycle.js": "ca466788c55fd22220a39a1823e092cc8f41dec662d15d7e6150335c3daf4d3e",
-    "src/security/auditReason.js": "f979ff314da0972f58b1c27c7e944e7a5048a6aa48429a7f9441db4770405026"
+    "src/integrations/metaCredentialHealth.js": "7e243d1a5c3f838d8435d632f659238d3a05ad6dc8373720fc23726e074d7371",
+    "src/integrations/whatsappInboundLifecycle.js": "2282c886e32b73ca9966362bbfd0190ae5e1bfa52d038ea70290a33cbc9a9ab8",
+    "src/integrations/messengerInboundLifecycle.js": "473e5f122f45fc89b583795ff2a1e7cecb9822d43ed5abd4cabe0fed06ce202c",
+    "src/integrations/instagramInboundLifecycle.js": "c1a31c03642fccbd7c1f2ba811649c7b0574342750ce657aa1026b100fe9156f",
+    "src/integrations/emailInboundLifecycle.js": "739b7432662d50007e5513af14d33e5ae6dc50e06be7040d1713aeeec7d4720c",
+    "src/integrations/routes.js": "9dc1a9dea046ce568c9a314feb43071ef4abc1859daefbef94b4fe1bc93e7dcf",
+    "src/platform/observability.js": "d6a70266ad01cf8b889ca61404b454ecff7de687778b35158f6fd78fec1e12e0",
+    "src/runtime-fingerprint.js": "87dfe03f415340ee1295396d3cae1b06d119279f7ecc0ed15b97011aedb730cc",
+    "src/security/auditReason.js": "89dbd8aa9ac2d60a552f43405d55efed1c15cc1cefa6905d7ad1c96b376f5167",
+    "deploymentId": "0a0e9aa7-e99f-46ee-9889-7b477dee508b",
+    "sourceManifestSha256": "f8b3ea62ce52475c2fc9fd606e546fb28ac84e2588deb836e14d550b616ccf21"
+  },
+  "runtimeFingerprint": {
+    "deploymentId": "0a0e9aa7-e99f-46ee-9889-7b477dee508b",
+    "environment": "staging",
+    "targetVerified": true,
+    "databaseVerified": true,
+    "sourceManifestVersion": "backend-runtime-v3-lf",
+    "sourceManifestSha256": "f8b3ea62ce52475c2fc9fd606e546fb28ac84e2588deb836e14d550b616ccf21",
+    "trackedProviderConnections": false,
+    "externalProviderActivationEnabled": false,
+    "outboundEnabled": false,
+    "providerConnectionEvidence": {
+      "WHATSAPP": { "tracked": true, "connected": false, "source": "ACTIVE_CREDENTIAL_OR_CHANNEL" },
+      "INSTAGRAM": { "tracked": true, "connected": false, "source": "ACTIVE_CREDENTIAL_OR_CHANNEL" },
+      "MESSENGER": { "tracked": true, "connected": false, "source": "ACTIVE_CREDENTIAL_OR_CHANNEL" },
+      "BLING": { "tracked": true, "connected": false, "source": "ACTIVE_CREDENTIAL_OR_CHANNEL" },
+      "EMAIL": { "tracked": true, "connected": null, "source": "NO_EMAIL_PROVIDER_CREDENTIAL_REGISTRY" },
+      "GENERIC": { "tracked": true, "connected": false, "source": "ACTIVE_CREDENTIAL_OR_CHANNEL" },
+      "AI": { "tracked": false, "connected": null, "source": "NO_TENANT_PROVIDER_CREDENTIAL_REGISTRY" }
+    }
   },
   "apiStateComparison": [
     { "provider": "WHATSAPP", "api": "404 NOT_FOUND", "ui": "UNAVAILABLE" },
@@ -206,6 +232,46 @@
         "status": "CLOSED_BY_CONTRACT_SCOPE",
         "fixCommit": "be12bb4c93791d55cbeb1018284eb31446b30351",
         "causalRetest": "Panel contract remains aggregate sanitized credentials; Meta and Integracao counts are aggregated without secret exposure"
+      },
+      {
+        "id": "ADV-FINAL-001",
+        "severity": "HIGH",
+        "area": "Meta credential usability",
+        "status": "RETESTED",
+        "fixCommit": "32c5466ad8f05fb0d631e2816fe53fe0e9e97b25",
+        "causalRetest": "META_CREDENTIAL_HEALTH=2/2 PASS; WhatsApp/Messenger/Instagram lifecycle PASS"
+      },
+      {
+        "id": "ADV-FINAL-002",
+        "severity": "HIGH",
+        "area": "Email provider authorization truth",
+        "status": "RETESTED",
+        "fixCommit": "32c5466ad8f05fb0d631e2816fe53fe0e9e97b25",
+        "causalRetest": "EMAIL_INBOUND_LIFECYCLE=6 PASS; verifiedAt without authorization remains WAITING_PROVIDER_AUTH"
+      },
+      {
+        "id": "ADV-FINAL-003",
+        "severity": "HIGH",
+        "area": "Generic redaction boundary",
+        "status": "RETESTED",
+        "fixCommit": "32c5466ad8f05fb0d631e2816fe53fe0e9e97b25",
+        "causalRetest": "INTEGRATION_SECURITY_HARDENING=6/6 PASS; AUDIT_REASON_REDACTION=3/3 PASS"
+      },
+      {
+        "id": "ADV-FINAL-004",
+        "severity": "MEDIUM",
+        "area": "Credential observability health",
+        "status": "RETESTED",
+        "fixCommit": "32c5466ad8f05fb0d631e2816fe53fe0e9e97b25",
+        "causalRetest": "PLATFORM_OBSERVABILITY=3/3 PASS; invalid active ciphertext classified as INVALID"
+      },
+      {
+        "id": "ADV-FINAL-005",
+        "severity": "MEDIUM",
+        "area": "Deployment-bound evidence",
+        "status": "RETESTED",
+        "fixCommit": "32c5466ad8f05fb0d631e2816fe53fe0e9e97b25",
+        "causalRetest": "Deployment 0a0e9aa7; source manifest and nine backend hashes match local/runtime byte-for-byte"
       }
     ],
     "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
