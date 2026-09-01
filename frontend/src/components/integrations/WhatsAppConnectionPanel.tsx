@@ -183,7 +183,10 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
   }
 
   async function removeCredential() {
-    if (!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || !status.canalIntegracaoId || !status.credentialRevision || credentialBusy) return;
+    // Revocation is a local safety action and must remain available while
+    // external activation is paused.  The backend DELETE path performs no provider
+    // call and still enforces tenant, role and revision checks.
+    if (!status.canalIntegracaoId || !status.credentialRevision || credentialBusy) return;
     if (!window.confirm("Remover a credencial TEST_ONLY deste canal?")) return;
     setCredentialBusy(true);
     setCredentialError("");
@@ -325,7 +328,7 @@ export function WhatsAppConnectionPanel({ onBack, onUnauthorized }: WhatsAppConn
               <UnavailableAction icon={<PauseCircle size={14} />} label="Pausar recebimento" />
               <UnavailableAction icon={<RefreshCw size={14} />} label="Reativar" />
               <UnavailableAction icon={<CloudCog size={14} />} label="Desconectar" />
-              {status.credentialConfigured && <Button className="col-span-2" disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || credentialBusy || !status.credentialRevision} onClick={() => void removeCredential()} size="sm" variant="secondary">Remover credencial TEST_ONLY</Button>}
+              {status.credentialConfigured && <Button className="col-span-2" disabled={credentialBusy || !status.credentialRevision} onClick={() => void removeCredential()} size="sm" variant="secondary">Remover credencial TEST_ONLY</Button>}
               {credentialError && <p className="col-span-2 text-[11px] font-medium text-[var(--danger)]" role="alert">{credentialError}</p>}
             </div>
           </Surface>

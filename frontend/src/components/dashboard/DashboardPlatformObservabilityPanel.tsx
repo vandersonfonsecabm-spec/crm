@@ -63,7 +63,7 @@ export default function DashboardPlatformObservabilityPanel() {
             <QueueCard icon={<Activity size={14} />} label="Jobs de automação" values={summary.jobs} />
             <QueueCard icon={<Activity size={14} />} label="Execuções" values={summary.executions} />
             <QueueCard icon={<Webhook size={14} />} label="Webhooks" values={summary.webhooks} />
-            <QueueCard icon={<Database size={14} />} label="Outbox" values={{ ...summary.outbox.email, ...summary.outbox.stock }} />
+            <QueueCard icon={<Database size={14} />} label="Outbox" values={mergeCountMaps(summary.outbox.email, summary.outbox.stock)} />
           </div>
 
           <div className="grid gap-3 xl:grid-cols-2">
@@ -112,6 +112,13 @@ function QueueCard({ icon, label, values }: { icon: React.ReactNode; label: stri
       {entries.length ? <dl className="mt-2 space-y-1.5">{entries.map(([key, value]) => <div className="flex items-center justify-between gap-3 text-[11px]" key={key}><dt className="truncate text-[var(--text-muted)]">{key}</dt><dd className="font-semibold tabular-nums text-[var(--text-primary)]">{value}</dd></div>)}</dl> : <p className="mt-2 text-[11px] text-[var(--text-muted)]">Nenhuma operação pendente.</p>}
     </div>
   );
+}
+
+function mergeCountMaps(...maps: Array<Record<string, number>>) {
+  return maps.reduce<Record<string, number>>((merged, map) => {
+    for (const [key, value] of Object.entries(map || {})) merged[key] = (merged[key] || 0) + Number(value || 0);
+    return merged;
+  }, {});
 }
 
 function formatDate(value: string) {

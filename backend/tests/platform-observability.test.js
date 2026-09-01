@@ -10,7 +10,10 @@ test("observabilidade de plataforma agrega somente contadores sanitizados", asyn
     count: async () => rows.length,
   });
   const prisma = {
-    workerCheckpoint: { findMany: async () => [{ updatedAt: new Date("2026-09-01T02:59:00.000Z") }] },
+    workerCheckpoint: { findMany: async () => [
+      { chave: "automation:temporal:tenants", updatedAt: new Date("2026-09-01T02:59:00.000Z") },
+      { chave: "qa:lease", updatedAt: new Date("2026-09-01T02:59:59.000Z") },
+    ] },
     automacaoAcaoJob: {
       groupBy: async () => [{ status: "PENDENTE", _count: { _all: 2 } }, { status: "FALHOU", _count: { _all: 1 } }],
       count: async (args) => args.where.nextAttemptAt ? 1 : 0,
@@ -39,4 +42,24 @@ test("observabilidade de plataforma agrega somente contadores sanitizados", asyn
   assert.equal(result.unresolvedIntegrationErrors, 3);
   assert.equal(result.lastIntegrationErrorAt, "2026-09-01T02:58:00.000Z");
   assert.equal(Object.hasOwn(result.worker, "cursorJson"), false);
+});
+
+test("saude ignora checkpoint de lock ou subsistema fora do worker operacional", async () => {
+  const now = new Date("2026-09-01T03:00:00.000Z");
+  const prisma = {
+    workerCheckpoint: { findMany: async () => [
+      { chave: "automation:temporal:tenants", updatedAt: new Date("2026-09-01T01:00:00.000Z") },
+      { chave: "qa:lease", updatedAt: new Date("2026-09-01T02:59:00.000Z") },
+    ] },
+    automacaoAcaoJob: { groupBy: async () => [], count: async () => 0 },
+    automacaoExecucao: { groupBy: async () => [] },
+    eventoWebhook: { groupBy: async () => [], count: async () => 0 },
+    emailDeliveryOutbox: { groupBy: async () => [], count: async () => 0 },
+    eventoOutboxEstoque: { groupBy: async () => [], count: async () => 0 },
+    erroIntegracao: { count: async () => 0, findFirst: async () => null },
+    metaCredential: { groupBy: async () => [] },
+  };
+  const result = await createPlatformObservabilityService({ prisma }).summary({ now });
+  assert.equal(result.worker.health, "STALE");
+  assert.equal(result.worker.checkpointCount, 1);
 });

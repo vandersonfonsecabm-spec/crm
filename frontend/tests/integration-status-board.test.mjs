@@ -27,6 +27,8 @@ test("ativação externa permanece bloqueada nos três painéis", () => {
   assert.match(readiness, /EXTERNAL_PROVIDER_ACTIVATION_ENABLED/);
   assert.match(whatsapp, /disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED/);
   assert.match(integrations, /disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED/);
+  assert.match(whatsapp, /disabled={credentialBusy \|\| !status\.credentialRevision}/);
+  assert.match(readiness, /disabled={messengerBusy \|\| !messengerStatus\.credentialRevision}/);
 });
 
 test("falhas de leitura não são convertidas em não configurado", () => {

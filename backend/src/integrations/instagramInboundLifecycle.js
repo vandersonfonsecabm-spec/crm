@@ -251,6 +251,12 @@ function deriveState(context) {
   if (channel.ativo !== true || channel.status !== "ATIVO") {
     return INSTAGRAM_OPERATIONAL_STATUS.ERROR;
   }
+  // An active channel without an active credential is not connected.  Keep
+  // the API state aligned with the credential-backed contract so consumers do
+  // not have to repair a false CONNECTED response in the UI.
+  if (!context.credentialConfigured) {
+    return INSTAGRAM_OPERATIONAL_STATUS.WAITING_META_AUTH;
+  }
   if (!capabilities.integration || !capabilities.inbound) {
     return INSTAGRAM_OPERATIONAL_STATUS.ERROR;
   }

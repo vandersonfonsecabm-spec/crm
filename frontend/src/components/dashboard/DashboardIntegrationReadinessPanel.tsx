@@ -214,7 +214,7 @@ export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, 
                   {messengerActionNote}
                 </span>
                 {messengerLoadState === "error" && <button className="text-[10px] font-semibold text-[var(--text-secondary)] underline" onClick={() => void refreshMessengerStatus()} type="button">Tentar novamente</button>}
-                {messengerStatus.credentialConfigured && <button className="text-[10px] font-semibold text-[var(--text-secondary)] underline disabled:cursor-not-allowed disabled:opacity-50" disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED || messengerBusy || !messengerStatus.credentialRevision} onClick={() => void removeMessengerCredentialSafely()} type="button">Remover credencial TEST_ONLY</button>}
+                {messengerStatus.credentialConfigured && <button className="text-[10px] font-semibold text-[var(--text-secondary)] underline disabled:cursor-not-allowed disabled:opacity-50" disabled={messengerBusy || !messengerStatus.credentialRevision} onClick={() => void removeMessengerCredentialSafely()} type="button">Remover credencial TEST_ONLY</button>}
                 {messengerError && <p className="max-w-56 text-[10px] font-medium text-[var(--danger)] md:text-right" role="alert">{messengerError}</p>}
               </div>
             ) : <span className="text-[10px] font-medium text-[var(--text-tertiary)] md:pt-1">Sem ação disponível</span>}

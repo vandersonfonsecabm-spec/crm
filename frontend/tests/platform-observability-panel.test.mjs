@@ -13,6 +13,7 @@ test("observabilidade técnica é restrita ao operador e só exibe contadores sa
   assert.match(panel, /jobs|execuções|webhooks|outbox|leases|credenciais/i);
   assert.match(panel, /workerHealthLabel|saudável|atrasado/);
   assert.doesNotMatch(panel, /Authorization|token completo|JSON\.stringify/);
+  assert.match(panel, /mergeCountMaps\(summary\.outbox\.email, summary\.outbox\.stock\)/);
   assert.match(api, /\/platform\/observability\/summary/);
   assert.match(dashboard, /activePage === "platformTenants" && isPlatformOperator/);
 });

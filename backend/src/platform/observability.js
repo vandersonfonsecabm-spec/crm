@@ -4,13 +4,14 @@ const WEBHOOK_STATUSES = ["RECEBIDO", "PROCESSANDO", "PROCESSADO", "FALHOU", "IG
 const EMAIL_OUTBOX_STATUSES = ["PENDING", "PROCESSING", "RETRY_WAIT", "DELIVERED", "FAILED", "BOUNCED", "EXPIRED", "CANCELLED"];
 const STOCK_OUTBOX_STATUSES = ["PENDING", "PROCESSING", "PROCESSED", "FAILED", "QUARANTINED"];
 const DEFAULT_WORKER_STALE_MS = 5 * 60 * 1000;
+const OPERATIONAL_CHECKPOINT_PREFIXES = ["automation:", "notifications:", "stock:"];
 
 function createPlatformObservabilityService({ prisma }) {
   if (!prisma) throw new Error("Prisma obrigatorio para observabilidade da plataforma.");
 
   async function summary({ now = new Date() } = {}) {
     const [checkpoints, jobs, executions, webhooks, emailOutbox, stockOutbox, integrationErrors, lastIntegrationError, credentials, activeLeases, expiredLeases, retryingJobs] = await Promise.all([
-      prisma.workerCheckpoint.findMany({ select: { updatedAt: true } }),
+      prisma.workerCheckpoint.findMany({ select: { chave: true, updatedAt: true } }),
       prisma.automacaoAcaoJob.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.automacaoExecucao.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.eventoWebhook.groupBy({ by: ["statusProcessamento"], _count: { _all: true } }),
@@ -24,12 +25,13 @@ function createPlatformObservabilityService({ prisma }) {
       prisma.automacaoAcaoJob.count({ where: { status: "FALHOU", nextAttemptAt: { not: null } } }),
     ]);
 
+    const operationalCheckpoints = checkpoints.filter((row) => isOperationalCheckpointKey(row.chave));
     return {
       generatedAt: new Date(now).toISOString(),
       worker: {
-        checkpointCount: checkpoints.length,
-        lastCheckpointAt: latestTimestamp(checkpoints.map((row) => row.updatedAt)),
-        health: workerHealth(latestTimestamp(checkpoints.map((row) => row.updatedAt)), now),
+        checkpointCount: operationalCheckpoints.length,
+        lastCheckpointAt: latestTimestamp(operationalCheckpoints.map((row) => row.updatedAt)),
+        health: workerHealth(latestTimestamp(operationalCheckpoints.map((row) => row.updatedAt)), now),
         staleAfterSeconds: DEFAULT_WORKER_STALE_MS / 1000,
         activeLeases,
         expiredLeases,
@@ -90,6 +92,11 @@ function workerHealth(lastCheckpointAt, now) {
   return age <= DEFAULT_WORKER_STALE_MS ? "HEALTHY" : "STALE";
 }
 
+function isOperationalCheckpointKey(value) {
+  const key = String(value || "");
+  return OPERATIONAL_CHECKPOINT_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
 module.exports = {
   createPlatformObservabilityService,
   JOB_STATUSES,
@@ -98,4 +105,5 @@ module.exports = {
   EMAIL_OUTBOX_STATUSES,
   STOCK_OUTBOX_STATUSES,
   DEFAULT_WORKER_STALE_MS,
+  isOperationalCheckpointKey,
 };

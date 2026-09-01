@@ -1095,7 +1095,7 @@ function assertExternalProviderActivationEnabled(env = process.env) {
 function assertNoSensitiveConfigValues(value, depth = 0) {
   if (depth > 8) throw httpError(400, "Configuração profunda demais.", "INTEGRATION_CONFIG_INVALID");
   if (typeof value === "string") {
-    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|[?&](?:api_key|client_secret|access_token|refresh_token|token)=[^&\s]+|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
+    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|[?&](?:api_key|client_secret|access_token|refresh_token|token)=[^&\s]+|[a-z][a-z0-9+.-]*:\/\/[^\s/@]+:[^\s/@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
     if (sensitiveValue.test(value)) {
       throw httpError(400, "Configuração contém valor sensível; use o armazenamento cifrado de credenciais.", "INTEGRATION_CONFIG_SENSITIVE_FIELD");
     }
@@ -1174,7 +1174,10 @@ function safeAdapterErrorMessage(error) {
 function redactSensitiveText(value) {
   if (value === undefined || value === null || value === "") return value ?? null;
   return String(value)
-    .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, "$1[redacted]@")
+    // Connection strings for queues/databases are just as sensitive as HTTP
+    // URLs.  Redact URI userinfo for every registered URI scheme, not only
+    // https, before exposing an adapter error or legacy configuration.
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+:[^\s/@]+@/gi, "$1[redacted]@")
     .replace(/(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "$1[redacted]")
     .replace(/((?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
     .replace(/([?#&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|senha|token|secret|credential|signature|state|code)=)[^&#\s]+/gi, "$1[redacted]")

@@ -24,6 +24,10 @@ test("configuração rejeita secrets recursivos e redige legado", () => {
     () => _private.stringifySafeConfig({ header: "Bearer abc.def.ghi" }),
     (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
   );
+  assert.throws(
+    () => _private.stringifySafeConfig({ connection: "postgresql://user:password@db.internal/crm" }),
+    (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+  );
 });
 
 test("Bling não pode ser forjado pelo writer genérico", () => {
@@ -61,6 +65,11 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
   assert.equal(urlRedacted.includes("oauth-code"), false);
   assert.equal(urlRedacted.includes("api-secret"), false);
   assert.equal(urlRedacted.includes("fragment-secret"), false);
+  for (const scheme of ["postgresql", "redis", "amqps"]) {
+    const redactedUri = _private.redactSensitiveText(`${scheme}://user:uri-secret@provider.test/queue`);
+    assert.equal(redactedUri.includes("uri-secret"), false, scheme);
+    assert.match(redactedUri, new RegExp(`${scheme}://\\[redacted\\]@`));
+  }
 });
 
 test("integração genérica não pode declarar ativa sem validação", () => {
