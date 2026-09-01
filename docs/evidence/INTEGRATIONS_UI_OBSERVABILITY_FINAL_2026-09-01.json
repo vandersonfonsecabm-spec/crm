@@ -1,6 +1,7 @@
 {
   "schema": "integrations-ui-observability-final.v1",
   "date": "2026-09-01",
+  "documentationCommit": "781c0dd1d337a78c9c270ac093e3ade5253683a9",
   "executorActual": "CODEX_ROOT",
   "modelSelectionPrecondition": "USER_CONFIRMED",
   "runtimeModelAttestation": "NOT_REQUIRED",
@@ -529,7 +530,7 @@
         "severity": "MEDIUM",
         "area": "evidence candidate parity",
         "status": "FIXED_IN_DOCUMENT_UPDATE",
-        "fixCommit": null,
+        "fixCommit": "781c0dd1d337a78c9c270ac093e3ade5253683a9",
         "causalRetest": "Markdown and evidence index updated to candidate 20d8c9e, tree b2b38d05 and runtime deployment 153e615b"
       }
     ],
