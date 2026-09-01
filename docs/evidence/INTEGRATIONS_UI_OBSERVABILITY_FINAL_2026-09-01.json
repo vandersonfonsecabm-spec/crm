@@ -6,9 +6,11 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "a3458c232283f68ca2894b1986ced9f581c8798d",
-    "tree": "8ca0d6fb61e159267ac974f26fd1f83db5d0ff70",
-    "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b"
+    "head": "daef225348f715edf079c0e3f2a051b062318531",
+    "tree": "f1eb9ea120f9f9d58e633853885af5b8ac2ffc93",
+    "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
+    "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
+    "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -17,7 +19,8 @@
     "workerServiceId": "25dab463-52c0-4425-825e-c7dcf6a65332",
     "databaseServiceId": "f3a2862b-2371-4ab3-b4db-1e91680ee3b7",
     "vercelProjectId": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
-    "vercelDeploymentId": "dpl_AksDEPAeM6a6WoesaF3dA1fZp6GK",
+    "vercelDeploymentId": "dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3",
+    "railwayApiDeploymentAfterSecurityFix": "35e96728-ba1e-4bcf-a99d-62785ea90256",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -33,6 +36,7 @@
     "falseConnectedStates": 0,
     "userObservability": "PASS_AUTHENTICATED",
     "platformObservability": "PASS_AUTHENTICATED_OPERATOR",
+    "auditReasonRedaction": "PASS",
     "platformAdminTenantBypass": 0,
     "externalSideEffects": 0,
     "integrationTabs": "PASS",
@@ -43,9 +47,9 @@
     "readyForProduction": false
   },
   "publishedAssetHashes": [
-    { "path": "index.html", "bytes": 479, "sha256": "1ee21f34c9c572eda4167d6554b40d8b1c115ebccefede132dffd7dfd645d660" },
-    { "path": "assets/index-C7jV2jGh.js", "bytes": 287275, "sha256": "2659b0dd2206430156b3ec32825ef75488c0fffe7c0908804019607ea3c9f3ab" },
-    { "path": "assets/index-BEaUgWO8.css", "bytes": 92545, "sha256": "f36904c468185ce582fd7ff0357cc5737c021a20bce6a93fb49da7c8ccdf2072" }
+    { "path": "index.html", "bytes": 479, "sha256": "e35a3ebef6f7ddc9cd0791857f3c48cc4fb106a0901da69b44f5412ab7cd3ead" },
+    { "path": "assets/index-kHoJ1Ly6.js", "bytes": 287275, "sha256": "e9ec5882b7bf241dff7b98aa37741ec7c29ad08e88e866ebbf9ff69428445e0f" },
+    { "path": "assets/index-DnvstQIY.css", "bytes": 92545, "sha256": "4148c1a6ae931f29534c41e14e11fcf5280afed06fd41e7eae19253a22ecbbf6" }
   ],
   "apiStateComparison": [
     { "provider": "WHATSAPP", "api": "404 NOT_FOUND", "ui": "UNAVAILABLE" },
@@ -73,9 +77,9 @@
     "realOutbound": 0
   },
   "review": {
-    "reviewA": "IN_PROGRESS",
-    "reviewB": "IN_PROGRESS",
-    "finalAdversarialVerdict": "NOT_EXECUTED",
+    "reviewA": "PASS_AFTER_RECHECK",
+    "reviewB": "PASS",
+    "finalAdversarialVerdict": "BLOCKED_EXTERNAL_REVIEWER_TIMEOUT",
     "finalSolReconciliation": "NOT_CLOSED"
   }
 }

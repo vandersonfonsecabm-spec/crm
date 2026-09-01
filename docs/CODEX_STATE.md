@@ -2137,8 +2137,25 @@ integracoes autorizadas.
   por isso a matriz live de cinco resoluções e `CONSOLE_ERRORS=0` não são
   declarados como provados. Fixtures locais cobrem 390×844 e 1440×900; Vercel
   não registrou runtime errors nas últimas duas horas.
-- Duas revisões novas, independentes e read-only (UI/UX e segurança/runtime)
-  estão em execução para o SHA `a3458c2`. Até o retorno delas e do adversarial
-  final, manter `FINAL_ADVERSARIAL_VERDICT=NOT_EXECUTED`,
+- O Reviewer B encontrou e o executor corrigiu um vazamento de URI em motivos
+  de auditoria/lifecycle de E-mail; a função compartilhada
+  `backend/src/security/auditReason.js` foi testada e publicada no backend
+  staging `e666eff2-7fa0-452b-b0f4-83c96d3d8ad6`. O commit funcional atual é
+  `35cf6cef70489a4c55f4c4fa257c5c17b982d773`, tree
+  `bf1420363e9bc2e48685927f6613c506454f46ab`.
+- O Reviewer A encontrou e o executor corrigiu códigos internos na UI de
+  requisitos, enums crus no filtro de Importações e vazio semântico errado no
+  card de credenciais. A suíte frontend continua 239/239, lint/build PASS; o
+  candidato é `daef225348f715edf079c0e3f2a051b062318531`, tree
+  `f1eb9ea120f9f9d58e633853885af5b8ac2ffc93`.
+- O frontend final está no Vercel staging `dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3`;
+  o backend final no Railway staging é `35e96728-ba1e-4bcf-a99d-62785ea90256`.
+  Rechecagem autenticada confirmou rótulos humanos, Importações sem enums,
+  observabilidade com vazio de credenciais correto e 403 para ADMIN de tenant.
+- Duas revisões novas, independentes e read-only foram concluídas para o SHA
+  final: `REVIEW_A_FINAL=PASS_AFTER_RECHECK` e `REVIEW_B_FINAL=PASS`. O
+  adversarial final foi iniciado com contexto limpo, mas não retornou dentro da
+  janela operacional e foi interrompido; manter
+  `FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT`,
   `FINAL_SOL_RECONCILIATION=NOT_CLOSED` e `READY_FOR_PRODUCTION=false`.
 - Autoridade documental: `docs/INTEGRATIONS_UI_OBSERVABILITY_FINAL_2026-09-01.md`.

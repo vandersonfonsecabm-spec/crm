@@ -213,3 +213,96 @@ READY_FOR_PRODUCTION=false
 
 Não houve alteração de produção, migration oficial, provider real, credencial
 real de produto ou outbound.
+
+## Addendum — correção do finding de segurança (13:50–13:52 BRT)
+
+O Reviewer B encontrou um vazamento reproduzível em `reason` de auditoria:
+URLs com `userinfo` podiam ser persistidas por `setTenantFeature` e retornadas
+pela auditoria de plataforma; o mesmo limite existia no `sanitizeReason` do
+lifecycle de E-mail. O finding foi classificado como falha funcional de
+segurança, não como falha de navegador.
+
+Correção aplicada em `35cf6cef70489a4c55f4c4fa257c5c17b982d773` (tree
+`bf1420363e9bc2e48685927f6613c506454f46ab`):
+
+- novo `backend/src/security/auditReason.js` compartilhado;
+- redaction de URI com qualquer esquema, inclusive userinfo vazio, query e
+  fragmento;
+- redaction de bearer/JWT e pares sensíveis (`state`, `signature`, `code`,
+  `secret`, `credential`, etc.);
+- sanitização na escrita e na leitura da auditoria de capabilities;
+- `emailFoundation.sanitizeReason` reutiliza a mesma fronteira;
+- testes unitários e teste HTTP de auditoria cobrem o payload malicioso.
+
+Retestes causais:
+
+```text
+AUDIT_REASON_REDACTION_TEST=2/2 PASS
+PLATFORM_OPERATIONS_H7_1=PASS
+EMAIL_INBOUND_LIFECYCLE=5 PASS, 1 SKIP PostgreSQL descartável
+BACKEND_NODE_SUITE=PASS_EXIT_0
+```
+
+O backend foi republicado somente no staging como deployment
+`e666eff2-7fa0-452b-b0f4-83c96d3d8ad6`, `SUCCESS`; `/health=200`, `/ready=200`
+e endpoint protegido sem token continua 401. Um smoke read-only dentro do
+container confirmou que a nova função redige `userinfo` e devolve somente
+`credentialsInOutput=0`. Nenhuma alteração de produção ocorreu.
+
+O allowlist temporário já havia sido removido; tenants, operador, sessões,
+tokens, integrações, outbox, webhooks e leases permanecem revogados/zerados.
+Duas novas revisões independentes foram abertas sobre o SHA `35cf6ce`; o
+adversarial final e a reconciliação do Sol continuam pendentes até seus
+retornos.
+
+## Addendum — correções de produto da revisão A e rechecagem autenticada
+
+O Reviewer A encontrou três problemas de apresentação, corrigidos sem alterar
+contratos de dados:
+
+- códigos internos de `nextRequirement` agora recebem rótulos humanos no quadro
+  dos seis providers;
+- o filtro de Importações mostra “Mapeamento pendente”, “Concluído com erros”
+  etc., mantendo os valores internos somente no atributo de seleção;
+- o vazio do card de credenciais agora diz “Nenhuma credencial configurada.”,
+  em vez de reutilizar “Nenhuma operação pendente.”.
+
+Os testes frontend focal e a suíte completa voltaram a passar (`239/239`), com
+lint e build. O commit funcional corrente é `daef225348f715edf079c0e3f2a051b062318531`,
+tree `f1eb9ea120f9f9d58e633853885af5b8ac2ffc93`, alinhado ao remoto.
+
+O frontend foi republicado no Vercel staging como
+`dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3`; os assets finais conferem byte a byte:
+
+```text
+index.html                 479 bytes   SHA-256 e35a3ebef6f7ddc9cd0791857f3c48cc4fb106a0901da69b44f5412ab7cd3ead
+assets/index-kHoJ1Ly6.js   287275      SHA-256 e9ec5882b7bf241dff7b98aa37741ec7c29ad08e88e866ebbf9ff69428445e0f
+assets/index-DnvstQIY.css  92545       SHA-256 4148c1a6ae931f29534c41e14e11fcf5280afed06fd41e7eae19253a22ecbbf6
+```
+
+O backend com redaction está no Railway staging deployment final
+`35e96728-ba1e-4bcf-a99d-62785ea90256`, `SUCCESS`; `/health=200`,
+`/ready=200` e `/platform/observability/summary` sem token = 401.
+
+Uma segunda sessão autenticada sintética confirmou no alias final: login ADMIN,
+seis estados sem enums crus, Importações sem enums crus, Observabilidade de
+plataforma com vazio de credenciais correto, e 403 para ADMIN tenant-scoped.
+Depois, o segundo run foi revogado e o allowlist temporário removido novamente;
+os três tenants QA terminaram `REVOKED`, zero usuários/sessões/tokens/leases,
+e `PLATFORM_ADMIN_EMAILS` ausente no runtime.
+
+O Reviewer B independente reavaliou o finding de segurança e retornou `PASS`.
+O Reviewer A independente retornou `PASS_AFTER_RECHECK` depois das correções
+de apresentação. Uma instância adversarial final foi aberta com contexto limpo,
+mas não retornou dentro da janela operacional e foi interrompida; isso é uma
+lacuna externa de evidência, não um PASS.
+Até uma nova execução adversarial disponível e a reconciliação final do Sol,
+manter:
+
+```text
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+```
