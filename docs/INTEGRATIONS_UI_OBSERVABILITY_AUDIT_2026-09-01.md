@@ -159,6 +159,10 @@ staging; o alias final serve `index.html` e todos os assets do build final. A
 configuração de API foi corrigida no código para usar o endpoint oficial de
 staging quando informado. O root público responde 200 e aponta para o bundle
 `index-DObC4DLU.js`; o refresh sem sessão retorna o 401 esperado.
+O metadado do deployment Vercel não expôs um SHA Git; a paridade do frontend
+foi verificada pelo build determinístico local, nomes/conteúdo dos assets e
+upload explícito para o projeto/alias de staging. Isso não substitui um smoke
+autenticado.
 
 Não foi possível executar o E2E autenticado sem uma sessão QA segura no
 ambiente do executor. A sessão disponível no Chrome era do ambiente de

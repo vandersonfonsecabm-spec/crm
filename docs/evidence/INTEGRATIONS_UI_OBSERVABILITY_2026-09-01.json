@@ -34,6 +34,7 @@
     "apiReady": 200,
     "databaseReady": true,
     "frontendAliasReady": true,
+    "vercelGitMetadata": "UNAVAILABLE_DEPLOYMENT_META_EMPTY",
     "authenticatedE2E": "NOT_EXECUTED_NO_SAFE_SESSION",
     "browserControl": "BROWSER_CONTROL_FAILURE",
     "providerConnectionsCreated": 0,
