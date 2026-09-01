@@ -21,16 +21,77 @@ REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
 ```
 
+## Addendum — freeze genérico e cobertura de observabilidade (2026-09-01)
+
+A revisão adversarial independente do candidato `4a5fb66` retornou `FIX_FIRST`
+com quatro achados adicionais:
+
+- `INT-ADV-005` (HIGH): `PATCH /integracoes/:id` podia reativar uma integração
+  genérica já validada enquanto `EXTERNAL_PROVIDER_ACTIVATION_ENABLED=false`;
+- `INT-ADV-006` (HIGH): valores opacos prefixados por `/` (por exemplo
+  `/mailto:` e `/data:`) escapavam da fronteira de redaction;
+- `OBS-001` (MEDIUM): `OperacaoDistribuidaLease` não era incluída na contagem
+  de leases ativos/expirados da observabilidade;
+- `OBS-002` (MEDIUM): a contagem de credenciais considerava apenas
+  `MetaCredential`, omitindo credenciais cifradas de `Integracao`/Bling.
+
+Os dois primeiros foram corrigidos em `0fa94b044a9b7434b71bab3a992b6f72b2d9ec8f`
+e os dois últimos em `f7865f7f85962f5d33148e19031e3b0bb36d221e`, tree
+`50f1db6fd8dba1d01a53a1cdc496f846e0517965`. A transição agora aplica o freeze
+somente quando há uma ativação real (sem bloquear renomeações ou pausa), e o
+redactor processa primeiro URLs hierárquicas e depois qualquer esquema opaco,
+inclusive quando está prefixado por uma barra. A observabilidade soma leases
+distribuídos, agrega fontes de credenciais sem sobrescrever status e expõe a
+separação `credentialSources` de forma sanitizada.
+
+Retestes causais:
+
+```text
+INTEGRATION_SECURITY_HARDENING=6/6 PASS
+PLATFORM_OBSERVABILITY=2/2 PASS
+INTEGRATION_HUB=PASS
+PLATFORM_PROVIDER_ACTIVATION_GATE=PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+PROTECTED_DEV_DB_UNCHANGED=PASS
+INT_ADV_005=RETESTED
+INT_ADV_006=RETESTED
+OBS_001=RETESTED
+OBS_002=RETESTED
+```
+
+O API foi republicado somente no staging como deployment
+`79455b2b-c659-4ecf-9394-0988bb88f3a0`, `SUCCESS`, com `/health=200` e
+`/ready=200`. Os hashes locais e do runtime `/app` conferem para
+`integrations/routes.js`, `platform/observability.js`, `providerActivation.js`,
+`platform/routes.js` e `security/auditReason.js`. Não houve migration,
+alteração de produção, provider real, credencial real de produto ou outbound.
+
+Uma revisão adversarial nova, limpa e específica para o candidato
+`f7865f7f85962f5d33148e19031e3b0bb36d221e` ainda é obrigatória. Até seu retorno,
+o estado permanece:
+
+```text
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+```
+
 ## Candidato e paridade
 
 ```text
 BRANCH=feature/canonical-sale-v1
-RELEASE_HEAD=4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7
-RELEASE_TREE=3e80ad611ef489ed6e0f771201f1d319f5258c8b
+RELEASE_HEAD=f7865f7f85962f5d33148e19031e3b0bb36d221e
+RELEASE_TREE=50f1db6fd8dba1d01a53a1cdc496f846e0517965
 BACKEND_CAUSAL_HEAD=e044d5852de15ad52b69f4025db9b80b3fec822b
 BASELINE_FUNCTIONAL=79eed4f
 FRONTEND_SOURCE_FIX=API fallback canônico de staging + teste de regressão
-REMOTE_BRANCH_SHA=4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7
+REMOTE_BRANCH_SHA=f7865f7f85962f5d33148e19031e3b0bb36d221e
 ```
 
 O frontend recebeu uma correção mínima porque o bundle estático publicado
@@ -60,6 +121,7 @@ RAILWAY_WORKER_SERVICE=25dab463-52c0-4425-825e-c7dcf6a65332
 RAILWAY_DATABASE_SERVICE=f3a2862b-2371-4ab3-b4db-1e91680ee3b7
 RAILWAY_API_DEPLOYMENT_AFTER_CLEANUP=63d3924d-fddb-46b2-bc50-7a2809d46186
 RAILWAY_API_DEPLOYMENT_AFTER_GENERIC_REDACTION_FIX=54d0f59f-fd49-4e4c-9345-40ff9873f7c8
+RAILWAY_API_DEPLOYMENT_AFTER_ACTIVATION_OBSERVABILITY_FIX=79455b2b-c659-4ecf-9394-0988bb88f3a0
 RAILWAY_WORKER_DEPLOYMENT=ebefe2db-ad83-4446-978f-c495c30a0810
 VERCEL_PROJECT=prj_AJE06pNRGunJoguCNWee0RgZV6t8
 VERCEL_DEPLOYMENT=dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3
@@ -94,7 +156,8 @@ byte a byte com os arquivos no runtime `/app` do deployment
 ```text
 src/integrations/providerActivation.js  f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d
 src/platform/routes.js                  8aa2be8a92d2c2dc3aa61c9078889e26320d50d3d30c98cf14e42a9e2c43d150
-src/integrations/routes.js              425c7e40c69e5d34339acf8afcb831a0306ff7be3a9c5764cbac7776ca7fa63c
+src/integrations/routes.js              8bd0292766722c99cc089000786e3e49b988757b5963a8b889bbdf6db98d99d3
+src/platform/observability.js           df7cdc82a92928e1657ed7e8a753ee68f4b87fae7f4732b17c47ee210793d4f9
 src/security/auditReason.js             f979ff314da0972f58b1c27c7e944e7a5048a6aa48429a7f9441db4770405026
 BACKEND_RUNTIME_HASH_PARITY=PASS
 ```

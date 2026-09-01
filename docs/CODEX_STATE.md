@@ -2190,3 +2190,14 @@ integracoes autorizadas.
   health/ready 200 e os hashes causais conferem no runtime. `INT-ADV-004` está
   `RETESTED`; nova revisão adversarial limpa e a reconciliação do Sol continuam
   obrigatórias, mantendo `READY_FOR_PRODUCTION=false`.
+- A revisão adversarial do candidato seguinte encontrou `INT-ADV-005` e
+  `INT-ADV-006` (HIGH), além de `OBS-001` e `OBS-002` (MEDIUM): reativação
+  genérica sob freeze, URI opaca prefixada, leases distribuídos e contagem de
+  credenciais de Integração/Bling. Os fixes foram aplicados em `0fa94b0` e
+  `f7865f7`, com testes focados e suíte backend isolada passando. O API foi
+  republicado no staging como `79455b2b-c659-4ecf-9394-0988bb88f3a0`, health/
+  ready 200, e os hashes causais conferem byte a byte. O candidato vigente é
+  `f7865f7f85962f5d33148e19031e3b0bb36d221e`, tree
+  `50f1db6fd8dba1d01a53a1cdc496f846e0517965`; os quatro findings estão
+  `RETESTED`, mas a nova revisão adversarial limpa e a reconciliação do Sol
+  continuam obrigatórias.

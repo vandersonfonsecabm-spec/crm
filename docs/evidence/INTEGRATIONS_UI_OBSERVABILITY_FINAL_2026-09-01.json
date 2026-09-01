@@ -6,14 +6,16 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7",
-    "tree": "3e80ad611ef489ed6e0f771201f1d319f5258c8b",
+    "head": "f7865f7f85962f5d33148e19031e3b0bb36d221e",
+    "tree": "50f1db6fd8dba1d01a53a1cdc496f846e0517965",
     "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
     "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531",
     "providerActivationGateFixCommit": "2214b846585dbb454e1349c1fd7018b848c120e5",
     "redactionCentralizationFixCommit": "696e2a7e0bac6e1e85484a5ad9819e7b36f6c27c",
-    "genericIntegrationRedactionFixCommit": "4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7"
+    "genericIntegrationRedactionFixCommit": "4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7",
+    "genericActivationTransitionFixCommit": "0fa94b044a9b7434b71bab3a992b6f72b2d9ec8f",
+    "platformObservabilityCoverageFixCommit": "f7865f7f85962f5d33148e19031e3b0bb36d221e"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -25,6 +27,7 @@
     "vercelDeploymentId": "dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3",
     "railwayApiDeploymentAfterSecurityFix": "63d3924d-fddb-46b2-bc50-7a2809d46186",
     "railwayApiDeploymentAfterGenericRedactionFix": "54d0f59f-fd49-4e4c-9345-40ff9873f7c8",
+    "railwayApiDeploymentAfterActivationObservabilityFix": "79455b2b-c659-4ecf-9394-0988bb88f3a0",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -60,7 +63,8 @@
   "backendRuntimeHashes": {
     "src/integrations/providerActivation.js": "f055733b498962e729b6d886098585c83a915dce38735c95a318d88ceb24375d",
     "src/platform/routes.js": "8aa2be8a92d2c2dc3aa61c9078889e26320d50d3d30c98cf14e42a9e2c43d150",
-    "src/integrations/routes.js": "425c7e40c69e5d34339acf8afcb831a0306ff7be3a9c5764cbac7776ca7fa63c",
+    "src/integrations/routes.js": "8bd0292766722c99cc089000786e3e49b988757b5963a8b889bbdf6db98d99d3",
+    "src/platform/observability.js": "df7cdc82a92928e1657ed7e8a753ee68f4b87fae7f4732b17c47ee210793d4f9",
     "src/security/auditReason.js": "f979ff314da0972f58b1c27c7e944e7a5048a6aa48429a7f9441db4770405026"
   },
   "apiStateComparison": [
@@ -96,7 +100,8 @@
       "INTERRUPTED_AFTER_TIMEOUT",
       "RUNTIME_SWITCH_TIMEOUT",
       "FIX_FIRST_INT_ADV_001",
-      "FIX_FIRST_INT_ADV_004"
+      "FIX_FIRST_INT_ADV_004",
+      "FIX_FIRST_INT_ADV_005_006_OBS_001_002"
     ],
     "finalAdversarialReviewerInfra": "UNAVAILABLE",
     "findings": [
@@ -131,6 +136,38 @@
         "status": "RETESTED",
         "fixCommit": "4a5fb66b3d8f08d6cdf2b1e1fa9ba3f784b15aa7",
         "causalRetest": "INTEGRATION_SECURITY_HARDENING=6/6 PASS; AUDIT_REASON_REDACTION=3/3 PASS; BACKEND_ISOLATED_SUITE=PASS_EXIT_0"
+      },
+      {
+        "id": "INT-ADV-005",
+        "severity": "HIGH",
+        "area": "generic integration activation freeze",
+        "status": "RETESTED",
+        "fixCommit": "0fa94b044a9b7434b71bab3a992b6f72b2d9ec8f",
+        "causalRetest": "INTEGRATION_SECURITY_HARDENING=6/6 PASS; INTEGRATION_HUB=PASS"
+      },
+      {
+        "id": "INT-ADV-006",
+        "severity": "HIGH",
+        "area": "path-prefixed opaque URI redaction",
+        "status": "RETESTED",
+        "fixCommit": "0fa94b044a9b7434b71bab3a992b6f72b2d9ec8f",
+        "causalRetest": "INTEGRATION_SECURITY_HARDENING=6/6 PASS; BACKEND_ISOLATED_SUITE=PASS_EXIT_0"
+      },
+      {
+        "id": "OBS-001",
+        "severity": "MEDIUM",
+        "area": "distributed lease observability",
+        "status": "RETESTED",
+        "fixCommit": "f7865f7f85962f5d33148e19031e3b0bb36d221e",
+        "causalRetest": "PLATFORM_OBSERVABILITY=2/2 PASS"
+      },
+      {
+        "id": "OBS-002",
+        "severity": "MEDIUM",
+        "area": "credential source observability",
+        "status": "RETESTED",
+        "fixCommit": "f7865f7f85962f5d33148e19031e3b0bb36d221e",
+        "causalRetest": "PLATFORM_OBSERVABILITY=2/2 PASS; credentialSources includes META and INTEGRATION"
       }
     ],
     "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
