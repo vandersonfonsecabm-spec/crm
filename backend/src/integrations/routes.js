@@ -13,6 +13,10 @@ const { REAL_MESSENGER_INBOUND_KEY, readGlobalMessengerConfiguration } = require
 const { REAL_INSTAGRAM_INBOUND_KEY, readGlobalInstagramConfiguration } = require("../platform/instagramInboundProvisioning");
 const { createMetaCredentialStore } = require("./metaCredentialStore");
 const { createMetaOAuthService } = require("./metaOAuthService");
+const {
+  assertExternalProviderActivationEnabled,
+  externalProviderActivationEnabled,
+} = require("./providerActivation");
 const { FEATURE_KEYS, createTenantFeatureMiddleware } = require("../tenant-features/service");
 const {
   createUploadMiddleware,
@@ -1111,18 +1115,6 @@ function stringifySafeConfig(value) {
     throw httpError(400, "Configuração excede o limite permitido.", "INTEGRATION_CONFIG_INVALID");
   }
   return serialized;
-}
-
-function assertExternalProviderActivationEnabled(env = process.env) {
-  if (!externalProviderActivationEnabled(env)) {
-    throw httpError(503, "A ativação externa está pausada nesta fase.", "PROVIDER_ACTIVATION_PAUSED");
-  }
-  return true;
-}
-
-function externalProviderActivationEnabled(env = process.env) {
-  const enabled = String(env.EXTERNAL_PROVIDER_ACTIVATION_ENABLED || "").trim().toLowerCase() === "true";
-  return env.NODE_ENV === "test" || enabled;
 }
 
 function assertNoSensitiveConfigValues(value, depth = 0) {

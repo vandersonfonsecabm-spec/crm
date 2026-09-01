@@ -27,6 +27,7 @@ const {
 } = require("../integrations/emailInboundLifecycle");
 const { isEmailError } = require("../integrations/emailFoundation");
 const { sanitizeAuditReason } = require("../security/auditReason");
+const { assertExternalProviderActivationEnabled } = require("../integrations/providerActivation");
 const { createPlatformObservabilityService } = require("./observability");
 const {
   createAuthRateLimiter,
@@ -41,6 +42,7 @@ const MAX_REASON_LENGTH = 500;
 function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
   const rateLimiter = createPlatformRateLimiter({ prisma, env });
   const guarded = [authenticate, requirePlatformOperator, rateLimiter];
+  const providerGuarded = [...guarded, createProviderActivationGuard({ env })];
   const whatsappInboundProvisioning = createWhatsappInboundProvisioningService({ prisma });
   const whatsappInboundLifecycle = createWhatsappInboundLifecycleService({ prisma });
   const instagramInboundProvisioning = createInstagramInboundProvisioningService({ prisma });
@@ -177,7 +179,7 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
     res.json(presentTenant(tenant));
   }));
 
-  app.put("/platform/tenants/:tenantId/integrations/whatsapp/inbound", ...guarded, route(async (req, res) => {
+  app.put("/platform/tenants/:tenantId/integrations/whatsapp/inbound", ...providerGuarded, route(async (req, res) => {
     const tenantId = parseId(req.params.tenantId);
     if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
 
@@ -197,7 +199,7 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
     }
   }));
 
-  app.put("/platform/tenants/:tenantId/integrations/instagram/inbound", ...guarded, route(async (req, res) => {
+  app.put("/platform/tenants/:tenantId/integrations/instagram/inbound", ...providerGuarded, route(async (req, res) => {
     const tenantId = parseId(req.params.tenantId);
     if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
 
@@ -217,7 +219,7 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
     }
   }));
 
-  app.put("/platform/tenants/:tenantId/integrations/messenger/inbound", ...guarded, route(async (req, res) => {
+  app.put("/platform/tenants/:tenantId/integrations/messenger/inbound", ...providerGuarded, route(async (req, res) => {
     const tenantId = parseId(req.params.tenantId);
     if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
 
@@ -237,7 +239,7 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
     }
   }));
 
-  app.put("/platform/tenants/:tenantId/integrations/email/inbound", ...guarded, route(async (req, res) => {
+  app.put("/platform/tenants/:tenantId/integrations/email/inbound", ...providerGuarded, route(async (req, res) => {
     const tenantId = parseId(req.params.tenantId);
     if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
     try {
@@ -261,7 +263,8 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
   }));
 
   for (const [path, action] of [["activate", "activate"], ["pause", "pause"], ["reactivate", "reactivate"]]) {
-    app.post(`/platform/tenants/:tenantId/integrations/email/inbound/${path}`, ...guarded, route(async (req, res) => {
+    const lifecycleGuard = path === "pause" ? guarded : providerGuarded;
+    app.post(`/platform/tenants/:tenantId/integrations/email/inbound/${path}`, ...lifecycleGuard, route(async (req, res) => {
       const tenantId = parseId(req.params.tenantId);
       if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
       try {
@@ -292,7 +295,8 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
     ["pause", "pause"],
     ["reactivate", "reactivate"],
   ]) {
-    app.post(`/platform/tenants/:tenantId/integrations/messenger/inbound/${path}`, ...guarded, route(async (req, res) => {
+    const lifecycleGuard = path === "pause" ? guarded : providerGuarded;
+    app.post(`/platform/tenants/:tenantId/integrations/messenger/inbound/${path}`, ...lifecycleGuard, route(async (req, res) => {
       const tenantId = parseId(req.params.tenantId);
       if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
 
@@ -331,7 +335,8 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
     ["pause", "pause"],
     ["reactivate", "reactivate"],
   ]) {
-    app.post(`/platform/tenants/:tenantId/integrations/instagram/inbound/${path}`, ...guarded, route(async (req, res) => {
+    const lifecycleGuard = path === "pause" ? guarded : providerGuarded;
+    app.post(`/platform/tenants/:tenantId/integrations/instagram/inbound/${path}`, ...lifecycleGuard, route(async (req, res) => {
       const tenantId = parseId(req.params.tenantId);
       if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
 
@@ -370,7 +375,8 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
     ["pause", "pause"],
     ["reactivate", "reactivate"],
   ]) {
-    app.post(`/platform/tenants/:tenantId/integrations/whatsapp/inbound/${path}`, ...guarded, route(async (req, res) => {
+    const lifecycleGuard = path === "pause" ? guarded : providerGuarded;
+    app.post(`/platform/tenants/:tenantId/integrations/whatsapp/inbound/${path}`, ...lifecycleGuard, route(async (req, res) => {
       const tenantId = parseId(req.params.tenantId);
       if (!tenantId) return platformError(res, 404, "Tenant nao encontrado.", "PLATFORM_TENANT_NOT_FOUND");
 
@@ -482,6 +488,22 @@ function requirePlatformOperator(req, res, next) {
     return platformError(res, 403, "Voce nao possui permissao para operacoes da plataforma.", "PLATFORM_FORBIDDEN");
   }
   return next();
+}
+
+function createProviderActivationGuard({ env = process.env } = {}) {
+  return function providerActivationGuard(req, res, next) {
+    try {
+      assertExternalProviderActivationEnabled(env);
+      return next();
+    } catch (error) {
+      return platformError(
+        res,
+        Number.isInteger(error?.status) ? error.status : 503,
+        error?.message || "A ativacao externa esta pausada nesta fase.",
+        error?.code || "PROVIDER_ACTIVATION_PAUSED",
+      );
+    }
+  };
 }
 
 function createPlatformRateLimiter({ windowMs = 60_000, max = 90, prisma, env = process.env, limiter } = {}) {
@@ -643,5 +665,8 @@ function isMessengerPlatformError(error) {
 module.exports = {
   createPlatformRateLimiter,
   createPlatformRequestLimiter,
+  _private: {
+    createProviderActivationGuard,
+  },
   mountPlatformRoutes,
 };
