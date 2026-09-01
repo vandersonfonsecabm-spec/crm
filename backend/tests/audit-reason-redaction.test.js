@@ -52,6 +52,10 @@ test("audit reasons redact OAuth fields and email lifecycle keeps the same bound
   for (const key of ["password", "access_token", "accessToken", "refresh_token", "state", "code", "signature", "clientKey", "appKey", "private key", "access key", "authorization", "passwd", "pass"]) {
     const quotedJson = `{\"${key}\":\"quoted-${key}-secret\"}`;
     const quotedSanitized = sanitizeAuditReason(quotedJson);
+    const escaped = key + '="prefix\\\"SECRET-' + key + '\\\" tail"';
+    const escapedSanitized = sanitizeAuditReason(escaped);
+    assert.equal(escapedSanitized.includes("SECRET-" + key), false, key);
+    assert.equal(escapedSanitized.includes("tail"), false, key);
     assert.equal(quotedSanitized.includes(`quoted-${key}-secret`), false, key);
   }
 });

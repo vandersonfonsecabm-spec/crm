@@ -1205,7 +1205,15 @@ function safeAdapterErrorMessage(error) {
 
 function redactSensitiveText(value) {
   if (value === undefined || value === null || value === "") return value ?? null;
-  return String(value)
+  // Protect escaped quotes while the legacy regex pipeline runs. Without
+  // this normalization, a quoted secret containing `\\"`/`\\'` is truncated
+  // at the escaped quote and its suffix remains visible.
+  const escapedDoubleQuote = "\uE000";
+  const escapedSingleQuote = "\uE001";
+  const input = String(value)
+    .replace(/\\"/g, escapedDoubleQuote)
+    .replace(/\\'/g, escapedSingleQuote);
+  return input
     // Connection strings for queues/databases are just as sensitive as HTTP
     // URLs.  Redact URI userinfo for every registered URI scheme, not only
     // https, before exposing an adapter error or legacy configuration.
@@ -1231,6 +1239,8 @@ function redactSensitiveText(value) {
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
     .replace(/([?#&](?:api[\s_-]?key|access[\s_-]?key|client[\s_-]?key|app[\s_-]?key|client[\s_-]?secret|app[\s_-]?secret|private[\s_-]?key|access[\s_-]?token|refresh[\s_-]?token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=)[^&#\s]+/gi, "$1[redacted]")
     .replace(/(?<![A-Za-z0-9_])(["']?(?:api[\s_-]?key|access[\s_-]?key|client[\s_-]?key|app[\s_-]?key|client[\s_-]?secret|app[\s_-]?secret|private[\s_-]?key|access[\s_-]?token|refresh[\s_-]?token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi, "$1[redacted]")
+    .replace(/\uE000/g, '\\"')
+    .replace(/\uE001/g, "\\'")
     .slice(0, 500);
 }
 

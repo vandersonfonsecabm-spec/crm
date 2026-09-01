@@ -8,7 +8,13 @@ const NETWORK_PATH_USERINFO_PATTERN = /\/\/[^\s/?#@]+@[^\s/?#]+(?:[/?#][^\s]*)?/
 const NETWORK_PATH_PATTERN = /\/\/[^\s/?#]+[/?#][^\s]*/g;
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+\b/gi;
 const JWT_PATTERN = /\b[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
-const KEY_VALUE_PATTERN = new RegExp(`(?<![A-Za-z0-9_])(["']?${SENSITIVE_REASON_KEY_PATTERN.source}["']?\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|[^\\s,;]+)`, "gi");
+// Keep escaped quote characters inside a quoted value. A naive quoted
+// alternative stops at the first escaped quote and can leave a secret suffix
+// in the audit trail.
+const KEY_VALUE_PATTERN = new RegExp(
+  `(?<![A-Za-z0-9_])(["']?${SENSITIVE_REASON_KEY_PATTERN.source}["']?\\s*[:=]\\s*)(?:"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|[^\\s,;]+)`,
+  "gi",
+);
 
 function sanitizeAuditReason(value, sensitiveValues = [], maxLength = 500) {
   let sanitized = String(value ?? "")

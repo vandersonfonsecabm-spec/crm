@@ -311,6 +311,9 @@ test("sanitizacao cobre headers compostos, credenciais, PII e payload Prisma", (
     assert.ok(sanitized.length <= MAX_ERROR_MESSAGE_LENGTH);
     for (const value of forbidden) assert.equal(sanitized.includes(value), false, `${value} permaneceu em ${sanitized}`);
   }
+  const escaped = sanitizeErrorMessage('password="prefix\\"SECRET-AFTER\\" tail"');
+  assert.equal(escaped.includes("SECRET-AFTER"), false);
+  assert.equal(escaped.includes("tail"), false);
   assert.equal(sanitizeErrorMessage("x".repeat(MAX_ERROR_MESSAGE_LENGTH + 100)).length, MAX_ERROR_MESSAGE_LENGTH);
 });
 

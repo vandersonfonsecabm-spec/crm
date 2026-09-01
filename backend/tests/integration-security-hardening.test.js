@@ -155,6 +155,12 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
     );
   }
   assert.equal(_private.redactSensitiveText('authorization="Bearer synthetic-auth-part-one synthetic-auth-part-two"'), "authorization=[redacted]");
+  for (const key of ["authorization", "password", "clientKey", "appKey"]) {
+    const escaped = key + '="prefix\\\"SECRET-' + key + '\\\" tail"';
+    const escapedRedacted = _private.redactSensitiveText(escaped);
+    assert.equal(escapedRedacted.includes("SECRET-" + key), false, key);
+    assert.equal(escapedRedacted.includes("tail"), false, key);
+  }
   assert.throws(
     () => _private.stringifySafeConfig({ note: 'authorization="Bearer synthetic-auth-part-one synthetic-auth-part-two"' }),
     (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",

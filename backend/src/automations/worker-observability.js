@@ -286,7 +286,11 @@ function createWorkerEventEnvelope(event, fields = {}, error) {
 }
 
 function sanitizeErrorMessage(value, maxLength = MAX_ERROR_MESSAGE_LENGTH) {
-  let text = String(value || DEFAULT_ERROR_MESSAGE);
+  const escapedDoubleQuote = "\uE000";
+  const escapedSingleQuote = "\uE001";
+  let text = String(value || DEFAULT_ERROR_MESSAGE)
+    .replace(/\\"/g, escapedDoubleQuote)
+    .replace(/\\'/g, escapedSingleQuote);
   if (looksLikePrismaPayload(text)) return "Database operation failed.";
   const replacements = [
     [/\b(cookie|set-cookie|authorization)\s*[:=][^\r\n]*/gi, "$1=[REDACTED]"],
@@ -301,7 +305,12 @@ function sanitizeErrorMessage(value, maxLength = MAX_ERROR_MESSAGE_LENGTH) {
     [/(?:\+\d{1,3}[\s().-]*)?(?:\(?\d{2,3}\)?[\s.-]*)?\d{4,5}[\s.-]?\d{4}\b/g, "[REDACTED_PHONE]"],
   ];
   for (const [pattern, replacement] of replacements) text = text.replace(pattern, replacement);
-  const sanitized = text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  const sanitized = text
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\uE000/g, '\\"')
+    .replace(/\uE001/g, "\\'")
+    .trim();
   return (sanitized || DEFAULT_ERROR_MESSAGE).slice(0, maxLength);
 }
 
