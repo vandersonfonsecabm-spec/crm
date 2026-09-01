@@ -1226,7 +1226,6 @@ function redactSensitiveText(value) {
     // redacted.
     .replace(/(?<![A-Za-z0-9_])\b[a-z][a-z0-9+.-]*:(?!\/\/)[^\s]+/gi, "[redacted]")
     .replace(/(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "$1[redacted]")
-    .replace(/((?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
     .replace(/([?#&](?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=)[^&#\s]+/gi, "$1[redacted]")
     .replace(/(?<![A-Za-z0-9_])(["']?(?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi, "$1[redacted]")
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")

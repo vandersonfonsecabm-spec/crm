@@ -120,6 +120,11 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
   const quotedStandalone = _private.redactSensitiveText('cookie="synthetic-secret-part-one synthetic-secret-part-two"');
   assert.equal(quotedStandalone.includes("synthetic-secret"), false);
   assert.equal(quotedStandalone, "cookie=[redacted]");
+  for (const key of ["password", "access_token"]) {
+    const redactedQuoted = _private.redactSensitiveText(`${key}="synthetic-secret-part-one synthetic-secret-part-two"`);
+    assert.equal(redactedQuoted.includes("synthetic-secret"), false, key);
+    assert.equal(redactedQuoted, `${key}=[redacted]`);
+  }
   for (const key of ["cookie", "state", "code"]) {
     assert.throws(
       () => _private.stringifySafeConfig({ note: `${key}=marker-1` }),
