@@ -27,6 +27,7 @@ test("preparação visual de integrações usa estados honestos e a superfície 
   assert.match(panel, /Configure primeiro um App\/Página TEST_ONLY/);
   assert.match(dashboard, /LazyDashboardIntegrationsPanel[\s\S]*initialBlingNotice=\{blingReturnMessage\}/);
   assert.match(panel, /useMessengerConnectionStatus\(handleMessengerUnauthorized\)/);
+  assert.match(panel, /onUnauthorized = \(\) => \{\}/);
   assert.match(messengerHook, /error\.status === 401[\s\S]*onUnauthorized\(\)/);
   assert.doesNotMatch(panel, /graph\.facebook|fetch\(|axios\(/i);
 });

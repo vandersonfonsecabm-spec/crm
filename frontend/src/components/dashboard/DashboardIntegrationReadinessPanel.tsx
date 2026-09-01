@@ -34,7 +34,7 @@ const STATIC_READINESS_ITEMS: ReadinessItem[] = [
   },
 ];
 
-export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, onUnauthorized }: { canalIntegracaoId?: number | null; onUnauthorized: () => void }) {
+export default function DashboardIntegrationReadinessPanel({ canalIntegracaoId, onUnauthorized = () => {} }: { canalIntegracaoId?: number | null; onUnauthorized?: () => void }) {
   const [instagramReadiness, setInstagramReadiness] = useState(localInstagramReadiness);
   const [instagramCredentialRevision, setInstagramCredentialRevision] = useState<number | null>(null);
   const [instagramLoadState, setInstagramLoadState] = useState<"loading" | "ready" | "error">("loading");
