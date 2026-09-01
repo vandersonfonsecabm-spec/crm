@@ -1,5 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const { sanitizeAuditReason } = require("../src/security/auditReason");
 const { sanitizeReason } = require("../src/integrations/emailFoundation");
@@ -16,6 +18,20 @@ test("audit reasons redact opaque URI schemes and provider wrappers share the bo
   const sanitized = sanitizeAuditReason(reason);
   assert.doesNotMatch(sanitized, /opaque-marker|mailto:|urn:|data:|custom\+scheme:/i);
   assert.equal((sanitized.match(/\[REDACTED_URL\]/g) || []).length, 4);
+
+  const providerFiles = [
+    ["platform", "whatsappInboundProvisioning.js"],
+    ["platform", "instagramInboundProvisioning.js"],
+    ["platform", "messengerInboundProvisioning.js"],
+    ["integrations", "whatsappInboundLifecycle.js"],
+    ["integrations", "instagramInboundLifecycle.js"],
+    ["integrations", "messengerInboundLifecycle.js"],
+  ];
+  for (const [folder, file] of providerFiles) {
+    const source = fs.readFileSync(path.join(__dirname, "..", "src", folder, file), "utf8");
+    assert.match(source, /security[\\/]auditReason/);
+    assert.doesNotMatch(source, /SENSITIVE_REASON_KEYS|redactSensitiveReasonPairs/);
+  }
 });
 
 test("audit reasons redact OAuth fields and email lifecycle keeps the same boundary", () => {
