@@ -1,4 +1,28 @@
 # Estado atual do CRM
+## Integrações visíveis + observabilidade — correção dos oito findings e novo candidato (2026-09-01)
+
+- A revisão adversarial independente do candidato `85ed8e2` retornou
+  `FIX_FIRST` com oito findings reproduzíveis: material genérico arbitrário,
+  status por presença de ciphertext, chaves quoted na redaction de auditoria e
+  configuração, Meta removida contada como ativa, lease no instante-limite,
+  whitespace divergente no fingerprint e expiração exata do OAuth Bling.
+- O lote focal foi corrigido no commit funcional
+  `e14f5923b253b1f0bb945c14fcc3c303a99cfd29`, tree
+  `a2c85d6929b2c019b4d4fd752989d4c732798581`; a suíte backend isolada, testes
+  focados, Integration Hub e Bling passaram com cleanup. `dev.db` manteve o
+  SHA canônico `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- A API staging foi republicada no deployment
+  `072cd6cb-2696-4a8c-b1ca-a79ec8b2e3cc` (`SUCCESS`), health/readiness 200,
+  fingerprint com manifesto
+  `27c8294267cd98dd32c8628b8e45d4f243ed79bdd233bb9d1431452b667833ac` e
+  hashes causais locais/runtime byte a byte. Providers, ativação externa e
+  outbound continuam desligados.
+- O adversarial final anterior não é reaproveitado: uma nova instância limpa
+  ainda deve revisar `e14f5923` e retornar `SHIP` ou `FIX_FIRST`. Até lá:
+  `FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW`,
+  `FINAL_SOL_RECONCILIATION=NOT_CLOSED`, `READY_FOR_PRODUCTION=false` e
+  `PRODUCTION_CHANGED=false`.
+
 ## Integrações visíveis + observabilidade — último candidato e revisão adversarial (2026-09-01)
 
 - O candidato funcional atual é `85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068`,

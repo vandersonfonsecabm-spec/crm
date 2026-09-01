@@ -21,6 +21,80 @@ REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
 ```
 
+## Addendum — correção dos oito findings adversariais e novo candidato (2026-09-01)
+
+A revisão adversarial independente do candidato `85ed8e2` retornou
+`FIX_FIRST` com oito findings reproduzíveis (`AUDIT-85ED-001` a
+`AUDIT-85ED-008`). Eles cobriam: material genérico arbitrário contado como
+credencial, status de integração baseado apenas em ciphertext, chaves JSON
+quoted não redigidas na auditoria e na configuração, credencial Meta removida
+contada como ativa, lease no instante-limite perdido, divergência de whitespace
+entre guard e fingerprint e OAuth Bling aceito no instante exato da expiração.
+
+Os fixes foram aplicados em um único lote focal no commit funcional
+`e14f5923b253b1f0bb945c14fcc3c303a99cfd29`, tree
+`a2c85d6929b2c019b4d4fd752989d4c732798581`, e publicados somente na API
+staging no deployment `072cd6cb-2696-4a8c-b1ca-a79ec8b2e3cc` (`SUCCESS`).
+O frontend não mudou. A resposta de integração agora usa somente credenciais
+utilizáveis; a validação de material aceita apenas chaves de credencial
+conhecidas; Meta removida é excluída; leases expirados incluem igualdade;
+fingerprint e guard compartilham a mesma normalização; e state Bling com
+`expiresAt === now` falha fechado. A redaction compartilhada e a fronteira de
+configuração reconhecem chaves quoted.
+
+Retestes causais:
+
+```text
+AUDIT_85ED_001_GENERIC_MATERIAL=PASS
+AUDIT_85ED_002_INTEGRATION_STATUS=PASS
+AUDIT_85ED_003_SHARED_REDACTION=PASS
+AUDIT_85ED_004_CONFIG_REDACTION=PASS
+AUDIT_85ED_005_REMOVED_META=PASS
+AUDIT_85ED_006_LEASE_BOUNDARY=PASS
+AUDIT_85ED_007_FLAG_FINGERPRINT=PASS
+AUDIT_85ED_008_BLING_EXPIRY=PASS
+META_CREDENTIAL_HEALTH=3/3 PASS
+AUDIT_REASON_REDACTION=3/3 PASS
+PLATFORM_OBSERVABILITY=4/4 PASS
+INTEGRATION_SECURITY_HARDENING=6/6 PASS
+INTEGRATION_HUB=PASS
+BLING_INTEGRATION=16/16 PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+PROTECTED_DEV_DB_UNCHANGED=PASS
+STAGING_HEALTH=200
+STAGING_READY=200
+SOURCE_RUNTIME_PARITY=PASS
+```
+
+O runtime protegido confirmou `environment=staging`,
+`deploymentId=072cd6cb-2696-4a8c-b1ca-a79ec8b2e3cc`,
+`deploymentIdentityVerified=true`, `targetVerified=true`,
+`databaseVerified=true`, manifesto `27c8294267cd98dd32c8628b8e45d4f243ed79bdd233bb9d1431452b667833ac`,
+`trackedProviderConnections=false`, `externalProviderActivationEnabled=false`
+e `outboundEnabled=false`. Os seis hashes causais locais e do `/app` conferem
+byte a byte.
+
+Uma nova instância adversarial limpa ainda deve auditar este novo candidato;
+o veredito `FIX_FIRST` anterior não é convertido em aprovação. Até o novo
+veredito e a reconciliação do Sol, o estado é:
+
+```text
+RELEASE_FUNCTIONAL_HEAD=e14f5923b253b1f0bb945c14fcc3c303a99cfd29
+RELEASE_FUNCTIONAL_TREE=a2c85d6929b2c019b4d4fd752989d4c732798581
+REMOTE_BRANCH_SHA=e14f5923b253b1f0bb945c14fcc3c303a99cfd29
+RAILWAY_API_DEPLOYMENT=072cd6cb-2696-4a8c-b1ca-a79ec8b2e3cc
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_REVIEWER_INFRA=AVAILABLE_NEW_PATH
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+```
+
 ## Addendum — último candidato e revisão adversarial independente (2026-09-01)
 
 Durante a análise adversarial anterior do candidato, foram registrados gaps de

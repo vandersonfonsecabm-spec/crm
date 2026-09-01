@@ -6,8 +6,8 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068",
-    "tree": "a24ee77a532230bd9da1f5f5421c9146c345b9f4",
+    "head": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+    "tree": "a2c85d6929b2c019b4d4fd752989d4c732798581",
     "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
     "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531",
@@ -22,7 +22,8 @@
     "deploymentAttestationAndNetworkRedactionFixCommit": "9814cd0e90bea466f86c088dfe6a75ae5d93705a",
     "quotedValueRedactionFixCommit": "98a8cf2428a3b5512565e56d9ed995deb8f75d8d",
     "oauthKeyValidationFixCommit": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab",
-    "emptyCredentialAndNetworkPathRedactionFixCommit": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068"
+    "emptyCredentialAndNetworkPathRedactionFixCommit": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068",
+    "adversarialAudit85edFindingsFixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -41,6 +42,7 @@
     "railwayApiDeploymentAfterQuotedRedactionFix": "9a93dc5b-986b-43df-8cfd-b0fa68878fd2",
     "railwayApiDeploymentAfterOauthKeyValidationFix": "abb7d431-f9bf-46d6-9fcb-3210f24667ac",
     "railwayApiDeploymentAfterEmptyCredentialRedactionFix": "b5078c3f-a738-4984-94da-5b353512a0ae",
+    "railwayApiDeploymentAfterAdversarialAudit85edFix": "072cd6cb-2696-4a8c-b1ca-a79ec8b2e3cc",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -81,25 +83,25 @@
     { "path": "assets/index-DnvstQIY.css", "bytes": 92545, "sha256": "4148c1a6ae931f29534c41e14e11fcf5280afed06fd41e7eae19253a22ecbbf6" }
   ],
   "backendRuntimeHashes": {
-    "src/integrations/metaCredentialHealth.js": "7e243d1a5c3f838d8435d632f659238d3a05ad6dc8373720fc23726e074d7371",
+    "src/integrations/metaCredentialHealth.js": "373dbd8d0337cc2851f2e84528931ea07aa3fceabe6c790d967a3b07ecca3527",
     "src/integrations/whatsappInboundLifecycle.js": "2282c886e32b73ca9966362bbfd0190ae5e1bfa52d038ea70290a33cbc9a9ab8",
     "src/integrations/messengerInboundLifecycle.js": "473e5f122f45fc89b583795ff2a1e7cecb9822d43ed5abd4cabe0fed06ce202c",
     "src/integrations/instagramInboundLifecycle.js": "c1a31c03642fccbd7c1f2ba811649c7b0574342750ce657aa1026b100fe9156f",
     "src/integrations/emailInboundLifecycle.js": "739b7432662d50007e5513af14d33e5ae6dc50e06be7040d1713aeeec7d4720c",
-    "src/integrations/routes.js": "96b86169e0b16f3936b0a5dda8d66bd997a945e92c50f468f4267dc89f86aa2a",
-    "src/platform/observability.js": "d6a70266ad01cf8b889ca61404b454ecff7de687778b35158f6fd78fec1e12e0",
-    "src/runtime-fingerprint.js": "dc075fbe1e5810346daed3f6cfc23c72b6831219968ac7f07ff07870b5fe4f10",
-    "src/security/auditReason.js": "9f05ed445d215460f9f54bac0dae79e92debb0bf92d89fc95096c6d61aeec940",
-    "src/integrations/metaCredentialHealth.js": "4c46f446bf642b2f5194392eacac1db9837f8baed0c939727b84f6f0b12f0485"
+    "src/integrations/routes.js": "232431da2de1ade08332e1c49377ed751df888c7060be28c6d80b04894f43edf",
+    "src/platform/observability.js": "d0423a6f6434cd647e1a47812f4eb8877ea3df0897802f34b34bcfd6279c78a6",
+    "src/runtime-fingerprint.js": "7381b9b9a1d48b645de6134817426a5199414e3e8ea7fbf9f71e23792f1fc8ef",
+    "src/security/auditReason.js": "6431c688a1df2f4650d035485dd97fd61dff0096effd1fe78e30f5d38bd12642",
+    "src/integrations/blingService.js": "368f3a5ce2a5a0b03b1b12747f918efd218ceab8c0c4d71406ac2a7fb70e5bf0"
   },
   "runtimeFingerprint": {
-    "deploymentId": "b5078c3f-a738-4984-94da-5b353512a0ae",
+    "deploymentId": "072cd6cb-2696-4a8c-b1ca-a79ec8b2e3cc",
     "deploymentIdentityVerified": true,
     "environment": "staging",
     "targetVerified": true,
     "databaseVerified": true,
     "sourceManifestVersion": "backend-runtime-v3-lf",
-    "sourceManifestSha256": "e8c518dd46d8489fa105c1ea94c4c5fa0ed63d923f92261ec86783dbd3101d3e",
+    "sourceManifestSha256": "27c8294267cd98dd32c8628b8e45d4f243ed79bdd233bb9d1431452b667833ac",
     "trackedProviderConnections": false,
     "externalProviderActivationEnabled": false,
     "outboundEnabled": false,
@@ -153,7 +155,8 @@
       "FIX_FIRST_ADV_POSTFIX_001_002",
       "FIX_FIRST_ADV_REVIEW_001_002",
       "FIX_FIRST_ADV_NEW_001_002",
-      "FIX_FIRST_ADV_LATEST_EMPTY_GENERIC_AND_NETWORK_PATH"
+      "FIX_FIRST_ADV_LATEST_EMPTY_GENERIC_AND_NETWORK_PATH",
+      "FIX_FIRST_AUDIT_85ED_001_008"
     ],
     "finalAdversarialReviewerInfra": "AVAILABLE_NEW_PATH",
     "findings": [
@@ -356,6 +359,70 @@
         "status": "RETESTED",
         "fixCommit": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068",
         "causalRetest": "AUDIT_REASON_REDACTION=3/3 PASS; network-path userinfo with and without path redacted"
+      },
+      {
+        "id": "AUDIT-85ED-001",
+        "severity": "HIGH",
+        "area": "generic credential material",
+        "status": "RETESTED",
+        "fixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+        "causalRetest": "metadata-only and arbitrary scalar payloads rejected; META_CREDENTIAL_HEALTH=3/3 PASS"
+      },
+      {
+        "id": "AUDIT-85ED-002",
+        "severity": "HIGH",
+        "area": "integration status truth",
+        "status": "RETESTED",
+        "fixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+        "causalRetest": "integration response uses usable encrypted credential health; INTEGRATION_HUB=PASS"
+      },
+      {
+        "id": "AUDIT-85ED-003",
+        "severity": "HIGH",
+        "area": "quoted audit redaction",
+        "status": "RETESTED",
+        "fixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+        "causalRetest": "quoted sensitive keys and values redacted; AUDIT_REASON_REDACTION=3/3 PASS"
+      },
+      {
+        "id": "AUDIT-85ED-004",
+        "severity": "HIGH",
+        "area": "quoted configuration redaction",
+        "status": "RETESTED",
+        "fixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+        "causalRetest": "quoted sensitive key/value strings rejected before persistence; INTEGRATION_SECURITY_HARDENING=6/6 PASS"
+      },
+      {
+        "id": "AUDIT-85ED-005",
+        "severity": "HIGH",
+        "area": "removed Meta credentials",
+        "status": "RETESTED",
+        "fixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+        "causalRetest": "removedAt rows excluded from status query; PLATFORM_OBSERVABILITY=4/4 PASS"
+      },
+      {
+        "id": "AUDIT-85ED-006",
+        "severity": "MEDIUM",
+        "area": "lease expiration boundary",
+        "status": "RETESTED",
+        "fixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+        "causalRetest": "expiresAt equal to now counted as expired; PLATFORM_OBSERVABILITY=4/4 PASS"
+      },
+      {
+        "id": "AUDIT-85ED-007",
+        "severity": "HIGH",
+        "area": "activation/fingerprint parity",
+        "status": "RETESTED",
+        "fixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+        "causalRetest": "trimmed activation flag reflected identically by guard/fingerprint; RUNTIME_FINGERPRINT=3/3 PASS"
+      },
+      {
+        "id": "AUDIT-85ED-008",
+        "severity": "MEDIUM",
+        "area": "Bling OAuth expiry boundary",
+        "status": "RETESTED",
+        "fixCommit": "e14f5923b253b1f0bb945c14fcc3c303a99cfd29",
+        "causalRetest": "expiresAt equal to now rejected by callback; BLING_INTEGRATION=16/16 PASS"
       }
     ],
     "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
