@@ -6,8 +6,8 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "98a8cf2428a3b5512565e56d9ed995deb8f75d8d",
-    "tree": "42014f598424948c0438de7e2d38eb2b4548df83",
+    "head": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab",
+    "tree": "0672bc6ad2e025422f300eb2014657b4dde5c2c0",
     "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
     "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531",
@@ -20,7 +20,8 @@
     "hierarchicalRedactionFreezeFixCommit": "fffcb0c0de0e7f6c7a42b3ab91e8d7f4eb821026",
     "credentialTruthAndRedactionFixCommit": "32c5466ad8f05fb0d631e2816fe53fe0e9e97b25",
     "deploymentAttestationAndNetworkRedactionFixCommit": "9814cd0e90bea466f86c088dfe6a75ae5d93705a",
-    "quotedValueRedactionFixCommit": "98a8cf2428a3b5512565e56d9ed995deb8f75d8d"
+    "quotedValueRedactionFixCommit": "98a8cf2428a3b5512565e56d9ed995deb8f75d8d",
+    "oauthKeyValidationFixCommit": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -37,6 +38,7 @@
     "railwayApiDeploymentAfterCredentialTruthFix": "0a0e9aa7-e99f-46ee-9889-7b477dee508b",
     "railwayApiDeploymentAfterDeploymentAttestationFix": "2d6640f9-7046-4f2d-a7e8-30cdc1f78a59",
     "railwayApiDeploymentAfterQuotedRedactionFix": "9a93dc5b-986b-43df-8cfd-b0fa68878fd2",
+    "railwayApiDeploymentAfterOauthKeyValidationFix": "abb7d431-f9bf-46d6-9fcb-3210f24667ac",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -75,19 +77,19 @@
     "src/integrations/messengerInboundLifecycle.js": "473e5f122f45fc89b583795ff2a1e7cecb9822d43ed5abd4cabe0fed06ce202c",
     "src/integrations/instagramInboundLifecycle.js": "c1a31c03642fccbd7c1f2ba811649c7b0574342750ce657aa1026b100fe9156f",
     "src/integrations/emailInboundLifecycle.js": "739b7432662d50007e5513af14d33e5ae6dc50e06be7040d1713aeeec7d4720c",
-    "src/integrations/routes.js": "00e74faa1b57fc35b3ab10da97901f29e0fc744234058ddef434a8ac99d29a44",
+    "src/integrations/routes.js": "96b86169e0b16f3936b0a5dda8d66bd997a945e92c50f468f4267dc89f86aa2a",
     "src/platform/observability.js": "d6a70266ad01cf8b889ca61404b454ecff7de687778b35158f6fd78fec1e12e0",
     "src/runtime-fingerprint.js": "dc075fbe1e5810346daed3f6cfc23c72b6831219968ac7f07ff07870b5fe4f10",
-    "src/security/auditReason.js": "89f489ec5fdd1105f4aa35493140724fa0d69258bf153778abe2d4d26d3a5d42"
+    "src/security/auditReason.js": "ef85a308b1f00958ac8a9adac16226ecfb24e5d2572c7bbcd746482ee1d51a70"
   },
   "runtimeFingerprint": {
-    "deploymentId": "9a93dc5b-986b-43df-8cfd-b0fa68878fd2",
+    "deploymentId": "abb7d431-f9bf-46d6-9fcb-3210f24667ac",
     "deploymentIdentityVerified": true,
     "environment": "staging",
     "targetVerified": true,
     "databaseVerified": true,
     "sourceManifestVersion": "backend-runtime-v3-lf",
-    "sourceManifestSha256": "fede7d09667d155c3cbd00dffdaa51c200bc5c6585414082d4a8925e11d854a0",
+    "sourceManifestSha256": "58018d56190c7d048cd1ea79dce5d0d28e05a6f24441f2fd9e68ae1e333e5bf5",
     "trackedProviderConnections": false,
     "externalProviderActivationEnabled": false,
     "outboundEnabled": false,
@@ -139,7 +141,8 @@
       "FIX_FIRST_INT_ADV_007_008_009_OBS_003",
       "FIX_FIRST_ADV_FINAL_001_005",
       "FIX_FIRST_ADV_POSTFIX_001_002",
-      "FIX_FIRST_ADV_REVIEW_001_002"
+      "FIX_FIRST_ADV_REVIEW_001_002",
+      "FIX_FIRST_ADV_NEW_001_002"
     ],
     "finalAdversarialReviewerInfra": "AVAILABLE",
     "findings": [
@@ -310,6 +313,22 @@
         "status": "RETESTED",
         "fixCommit": "98a8cf2428a3b5512565e56d9ed995deb8f75d8d",
         "causalRetest": "AUDIT_REASON_REDACTION=3/3 PASS; multiword quoted values fully redacted with canonical key separator"
+      },
+      {
+        "id": "ADV-NEW-001",
+        "severity": "HIGH",
+        "area": "OAuth token alias redaction",
+        "status": "RETESTED",
+        "fixCommit": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab",
+        "causalRetest": "AUDIT_REASON_REDACTION=3/3 PASS; access_token/accessToken/refresh_token standalone values redacted"
+      },
+      {
+        "id": "ADV-NEW-002",
+        "severity": "HIGH",
+        "area": "OAuth configuration key validation",
+        "status": "RETESTED",
+        "fixCommit": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab",
+        "causalRetest": "INTEGRATION_SECURITY_HARDENING=6/6 PASS; state/code/signature keys rejected before persistence"
       }
     ],
     "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",

@@ -21,6 +21,54 @@ REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
 ```
 
+## Addendum — chaves OAuth e redaction de auditoria (2026-09-01)
+
+O reviewer adversarial independente encontrou `ADV-NEW-001` e `ADV-NEW-002`
+(HIGH): `auditReason` não reconhecia `access_token/accessToken` standalone e
+a validação de configuração permitia chaves OAuth `state`, `code` e
+`signature` em JSON claro.
+
+Correção aplicada no commit funcional
+`34c5d5c535f416f541c2d44c8db3efc23d6b94ab`, tree
+`0672bc6ad2e025422f300eb2014657b4dde5c2c0`, e publicada na API staging no
+deployment `abb7d431-f9bf-46d6-9fcb-3210f24667ac` (`SUCCESS`).
+`auditReason` agora redige aliases de tokens e a fronteira de configuração
+rejeita `state/code/signature` antes de persistir qualquer JSON não cifrado.
+
+Retestes:
+
+```text
+AUDIT_REASON_REDACTION=3/3 PASS
+INTEGRATION_SECURITY_HARDENING=6/6 PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+PROTECTED_DEV_DB_UNCHANGED=PASS
+STAGING_HEALTH=200
+STAGING_READY=200
+```
+
+O runtime retornou `deploymentId=abb7d431-f9bf-46d6-9fcb-3210f24667ac`,
+`deploymentIdentityVerified=true`, manifesto
+`58018d56190c7d048cd1ea79dce5d0d28e05a6f24441f2fd9e68ae1e333e5bf5`,
+`trackedProviderConnections=false`, ativação externa `false` e outbound
+`false`. Hashes locais e `/app` conferem para os arquivos causais.
+
+Uma nova revisão adversarial independente e a reconciliação do Sol ainda são
+obrigatórias. Não declarar `SHIP` antes do veredito novo.
+
+```text
+RELEASE_FUNCTIONAL_HEAD=34c5d5c535f416f541c2d44c8db3efc23d6b94ab
+RELEASE_FUNCTIONAL_TREE=0672bc6ad2e025422f300eb2014657b4dde5c2c0
+REMOTE_BRANCH_SHA=34c5d5c535f416f541c2d44c8db3efc23d6b94ab
+RAILWAY_API_DEPLOYMENT=abb7d431-f9bf-46d6-9fcb-3210f24667ac
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+```
+
 ## Addendum — segunda correção da fronteira de redaction (2026-09-01)
 
 O reviewer adversarial independente encontrou `ADV-REVIEW-001` (HIGH): uma

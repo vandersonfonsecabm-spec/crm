@@ -1,4 +1,24 @@
 # Estado atual do CRM
+## Integrações visíveis + observabilidade — chaves OAuth finais (2026-09-01)
+
+- A revisão independente encontrou `ADV-NEW-001` e `ADV-NEW-002` (HIGH):
+  aliases `access_token/accessToken` escapavam do `auditReason`, e chaves
+  OAuth `state/code/signature` podiam ser persistidas na configuração genérica.
+- A correção está no commit funcional
+  `34c5d5c535f416f541c2d44c8db3efc23d6b94ab`, tree
+  `0672bc6ad2e025422f300eb2014657b4dde5c2c0`; a API staging foi publicada em
+  `abb7d431-f9bf-46d6-9fcb-3210f24667ac`.
+- `AUDIT_REASON_REDACTION=3/3`, `INTEGRATION_SECURITY_HARDENING=6/6` e a
+  suíte backend isolada completa passaram. Runtime confirmou
+  `deploymentId=abb7d431-f9bf-46d6-9fcb-3210f24667ac`,
+  `deploymentIdentityVerified=true`, manifesto
+  `58018d56190c7d048cd1ea79dce5d0d28e05a6f24441f2fd9e68ae1e333e5bf5`,
+  health/readiness 200 e providers/outbound desligados.
+- Nova instância adversarial ainda deve auditar este candidato; manter
+  `FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW`,
+  `FINAL_SOL_RECONCILIATION=NOT_CLOSED`, `READY_FOR_PRODUCTION=false` e
+  `PRODUCTION_CHANGED=false`.
+
 ## Integrações visíveis + observabilidade — redaction quoted final (2026-09-01)
 
 - O reviewer independente encontrou `ADV-REVIEW-001` e `ADV-REVIEW-002`
