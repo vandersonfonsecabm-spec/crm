@@ -46,9 +46,6 @@ test("observabilidade de plataforma agrega somente contadores sanitizados", asyn
   assert.equal(result.executions.PROCESSANDO, 1);
   assert.equal(result.credentials.ERRO, 1);
   assert.equal(result.credentials.ATIVA, 5);
-  assert.equal(result.credentialSources.meta.ERRO, 1);
-  assert.equal(result.credentialSources.meta.ATIVA, 3);
-  assert.equal(result.credentialSources.integration.ATIVA, 2);
   assert.equal(result.webhooks.FALHOU, 1);
   assert.equal(result.unresolvedIntegrationErrors, 3);
   assert.equal(result.lastIntegrationErrorAt, "2026-09-01T02:58:00.000Z");

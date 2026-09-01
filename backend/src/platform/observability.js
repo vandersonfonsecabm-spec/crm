@@ -48,10 +48,6 @@ function createPlatformObservabilityService({ prisma }) {
       executions: countMap(executions),
       retryingJobs,
       credentials: countMap([...credentials, ...integrationCredentials]),
-      credentialSources: {
-        meta: countMap(credentials),
-        integration: countMap(integrationCredentials),
-      },
       webhooks: countMap(webhooks),
       outbox: {
         email: countMap(emailOutbox),

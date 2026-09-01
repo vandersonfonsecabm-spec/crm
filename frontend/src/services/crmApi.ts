@@ -196,10 +196,6 @@ export type PlatformObservabilitySummary = {
   executions: Record<string, number>;
   retryingJobs: number;
   credentials: Record<string, number>;
-  credentialSources?: {
-    meta: Record<string, number>;
-    integration: Record<string, number>;
-  };
   webhooks: Record<string, number>;
   outbox: {
     email: Record<string, number>;
