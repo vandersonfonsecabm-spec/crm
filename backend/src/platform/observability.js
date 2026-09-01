@@ -15,7 +15,7 @@ function createPlatformObservabilityService({ prisma }) {
   if (!prisma) throw new Error("Prisma obrigatorio para observabilidade da plataforma.");
 
   async function summary({ now = new Date() } = {}) {
-    const [checkpoints, jobs, executions, webhooks, emailOutbox, stockOutbox, integrationErrors, lastIntegrationError, credentials, activeLeases, expiredLeases, retryingJobs] = await Promise.all([
+    const [checkpoints, jobs, executions, webhooks, emailOutbox, stockOutbox, integrationErrors, lastIntegrationError, credentials, integrationCredentials, activeLeases, expiredLeases, retryingJobs] = await Promise.all([
       prisma.workerCheckpoint.findMany({ select: { chave: true, updatedAt: true } }),
       prisma.automacaoAcaoJob.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.automacaoExecucao.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -25,6 +25,7 @@ function createPlatformObservabilityService({ prisma }) {
       prisma.erroIntegracao.count({ where: { resolvido: false } }),
       prisma.erroIntegracao.findFirst({ where: { resolvido: false }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], select: { createdAt: true } }),
       prisma.metaCredential.groupBy({ by: ["status"], _count: { _all: true } }),
+      prisma.integracao.groupBy({ by: ["status"], where: { credenciaisCriptografadas: { not: null } }, _count: { _all: true } }),
       countLiveLeases(now),
       countExpiredLeases(now),
       prisma.automacaoAcaoJob.count({ where: { status: "FALHOU", nextAttemptAt: { not: null } } }),
@@ -46,7 +47,11 @@ function createPlatformObservabilityService({ prisma }) {
       jobs: countMap(jobs),
       executions: countMap(executions),
       retryingJobs,
-      credentials: countMap(credentials),
+      credentials: countMap([...credentials, ...integrationCredentials]),
+      credentialSources: {
+        meta: countMap(credentials),
+        integration: countMap(integrationCredentials),
+      },
       webhooks: countMap(webhooks),
       outbox: {
         email: countMap(emailOutbox),
@@ -60,6 +65,7 @@ function createPlatformObservabilityService({ prisma }) {
   async function countLiveLeases(now) {
     const where = { leaseOwner: { not: null }, leaseExpiresAt: { gt: now } };
     const counts = await Promise.all([
+      prisma.operacaoDistribuidaLease.count({ where: { expiresAt: { gt: now } } }),
       prisma.automacaoAcaoJob.count({ where }),
       prisma.eventoWebhook.count({ where }),
       prisma.emailDeliveryOutbox.count({ where }),
@@ -71,6 +77,7 @@ function createPlatformObservabilityService({ prisma }) {
   async function countExpiredLeases(now) {
     const where = { leaseOwner: { not: null }, leaseExpiresAt: { lt: now } };
     const counts = await Promise.all([
+      prisma.operacaoDistribuidaLease.count({ where: { expiresAt: { lt: now } } }),
       prisma.automacaoAcaoJob.count({ where }),
       prisma.eventoWebhook.count({ where }),
       prisma.emailDeliveryOutbox.count({ where }),
@@ -83,7 +90,11 @@ function createPlatformObservabilityService({ prisma }) {
 }
 
 function countMap(rows) {
-  return Object.fromEntries(rows.map((row) => [Object.values(row).find((value) => typeof value === "string") || "UNKNOWN", Number(row._count?._all || 0)]));
+  return rows.reduce((result, row) => {
+    const key = Object.values(row).find((value) => typeof value === "string") || "UNKNOWN";
+    result[key] = (result[key] || 0) + Number(row._count?._all || 0);
+    return result;
+  }, {});
 }
 
 function latestTimestamp(values) {

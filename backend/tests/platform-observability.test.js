@@ -26,7 +26,9 @@ test("observabilidade de plataforma agrega somente contadores sanitizados", asyn
     emailDeliveryOutbox: { groupBy: async () => [], count: async () => 0 },
     eventoOutboxEstoque: { groupBy: async () => [], count: async () => 0 },
     erroIntegracao: { count: async () => 3, findFirst: async () => ({ createdAt: new Date("2026-09-01T02:58:00.000Z") }) },
-    metaCredential: { groupBy: async () => [{ status: "ERRO", _count: { _all: 1 } }] },
+    metaCredential: { groupBy: async () => [{ status: "ERRO", _count: { _all: 1 } }, { status: "ATIVA", _count: { _all: 3 } }] },
+    integracao: { groupBy: async () => [{ status: "ATIVA", _count: { _all: 2 } }] },
+    operacaoDistribuidaLease: { count: async ({ where }) => where.expiresAt.gt ? 2 : 1 },
   };
   const result = await createPlatformObservabilityService({ prisma }).summary({ now });
   assert.equal(result.generatedAt, now.toISOString());
@@ -37,11 +39,16 @@ test("observabilidade de plataforma agrega somente contadores sanitizados", asyn
   assert.equal(result.worker.healthBySubsystem.stock, "UNKNOWN");
   assert.equal(result.worker.healthBySubsystem.email, "UNKNOWN");
   assert.equal(result.worker.staleAfterSeconds, 300);
-  assert.equal(result.worker.activeLeases, 0);
+  assert.equal(result.worker.activeLeases, 2);
+  assert.equal(result.worker.expiredLeases, 1);
   assert.equal(result.jobs.PENDENTE, 2);
   assert.equal(result.retryingJobs, 1);
   assert.equal(result.executions.PROCESSANDO, 1);
   assert.equal(result.credentials.ERRO, 1);
+  assert.equal(result.credentials.ATIVA, 5);
+  assert.equal(result.credentialSources.meta.ERRO, 1);
+  assert.equal(result.credentialSources.meta.ATIVA, 3);
+  assert.equal(result.credentialSources.integration.ATIVA, 2);
   assert.equal(result.webhooks.FALHOU, 1);
   assert.equal(result.unresolvedIntegrationErrors, 3);
   assert.equal(result.lastIntegrationErrorAt, "2026-09-01T02:58:00.000Z");
@@ -62,6 +69,8 @@ test("saude ignora checkpoint de lock ou subsistema fora do worker operacional",
     eventoOutboxEstoque: { groupBy: async () => [], count: async () => 0 },
     erroIntegracao: { count: async () => 0, findFirst: async () => null },
     metaCredential: { groupBy: async () => [] },
+    integracao: { groupBy: async () => [] },
+    operacaoDistribuidaLease: { count: async () => 0 },
   };
   const result = await createPlatformObservabilityService({ prisma }).summary({ now });
   assert.equal(result.worker.health, "STALE");
