@@ -53,7 +53,7 @@ test("F1UI-1 reutiliza Integracoes e protege detalhe por permissao administrativ
   assert.match(navigation, /"\/integracoes\/whatsapp".*"integracoes"/s);
   assert.match(dashboard, /resolvedNavigation\.detail === "whatsapp"/);
   assert.match(dashboard, /isWhatsAppIntegrationDetail && canManageIntegrations/);
-  assert.match(dashboard, /WhatsAppIntegrationCard/);
+  assert.match(dashboard, /LazyWhatsAppConnectionPanel/);
   assert.equal((sidebar.match(/label: "Integrações"/g) ?? []).length, 0);
   assert.match(api, /return getSessionRole\(session\) === "ADMIN"/);
 });

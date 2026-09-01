@@ -2932,7 +2932,14 @@ export function resolveApiBaseUrl({
     return isApprovedDevelopmentApi(configuredApiUrl) ? configuredApiUrl : "http://localhost:3001";
   }
   if (isStagingHost(normalizedHostname) && configuredApiUrl && isOfficialStagingApi(configuredApiUrl)) return configuredApiUrl.replace(/\/$/, "");
-  if (normalizedHostname === CANONICAL_PRODUCTION_HOST || isStagingHost(normalizedHostname)) return "/api";
+  // The static staging deployment does not guarantee that Vite's public
+  // environment variables were injected into the prebuilt bundle. Keep the
+  // canonical staging host pinned to its approved API origin so a missing
+  // VITE_API_URL cannot silently resolve to a nonexistent same-origin /api
+  // route. Production remains same-origin and therefore continues to use its
+  // explicit /api proxy.
+  if (isStagingHost(normalizedHostname)) return OFFICIAL_STAGING_API_ORIGIN;
+  if (normalizedHostname === CANONICAL_PRODUCTION_HOST) return "/api";
   if (!configuredApiUrl || isOfficialProductionApi(configuredApiUrl)) return "";
   // Production builds never send credentials to an arbitrary VITE_API_URL.
   // Same-origin /api remains the only approved path for known Vercel projects.
