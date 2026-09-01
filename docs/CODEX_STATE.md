@@ -2078,3 +2078,27 @@ integracoes autorizadas.
   anexadas e o relatório foi colado na conversa fixada do SaaS. O seletor do
   Chrome bloqueou o upload dos documentos locais; eles permanecem disponíveis
   no diretório para recuperação.
+
+## Integrações visíveis + observabilidade (2026-09-01)
+
+- O candidato local final é `e044d5852de15ad52b69f4025db9b80b3fec822b`, tree
+  `8ce464db4e7ad07f285a942eba7b5ae66558ebdf`, com manifesto backend
+  `4b85aa5cfb0e78c0d64dec37365362e5db4651a1bcde80cce3ce683719a32868`.
+- A superfície canônica de integrações exibe seis providers com estados
+  textuais verdadeiros; a observabilidade técnica é somente leitura e restrita
+  ao operador de plataforma. Escritas genéricas de credenciais permanecem
+  bloqueadas fora de ativação externa explícita; revogação local segura não
+  inicia provider.
+- Testes locais: frontend 239/239, ESLint/build PASS, suíte backend isolada
+  exit 0; banco protegido preservou SHA-256
+  `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- Staging Railway API `9934b1a7-8dba-4029-9a27-c16e164cd4e6` e worker
+  `ebefe2db-ad83-4446-978f-c495c30a0810` estão SUCCESS; `/health` e `/ready`
+  responderam HTTP 200. Vercel staging `dpl_8Qcax4sG949hnPDKJqozqdnxpj43`
+  está READY no alias `crm-ga3-bundle-staging.vercel.app`.
+- Nenhuma conta/provider real, credencial de produto ou outbound foi usado.
+  Produção não foi publicada nem alterada por esta missão.
+- E2E autenticado e revisão adversarial autenticada de staging continuam sem
+  sessão QA segura; a tentativa de controle de navegador foi classificada como
+  `BROWSER_CONTROL_FAILURE`. Não declarar promoção para produção até obter essa
+  evidência externa.

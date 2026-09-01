@@ -1,0 +1,83 @@
+{
+  "date": "2026-09-01",
+  "executorActual": "CODEX_ROOT",
+  "executionMode": "USER_SELECTED",
+  "modelProvenance": "USER_CONFIRMED_NOT_RUNTIME_ATTESTED",
+  "missionCommandAudit": "PASS_WITH_CORRECTIONS",
+  "candidate": {
+    "head": "e044d5852de15ad52b69f4025db9b80b3fec822b",
+    "tree": "8ce464db4e7ad07f285a942eba7b5ae66558ebdf",
+    "backendSourceManifestSha256": "4b85aa5cfb0e78c0d64dec37365362e5db4651a1bcde80cce3ce683719a32868"
+  },
+  "local": {
+    "frontendTests": { "passed": 239, "failed": 0 },
+    "frontendLint": "PASS",
+    "frontendBuild": "PASS",
+    "backendSuiteExitCode": 0,
+    "protectedDevDbSha256": "6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533",
+    "visual": {
+      "desktop1440": { "cards": 6, "overflow": false, "consoleErrors": 0 },
+      "mobile390": { "cards": 6, "overflow": false, "consoleErrors": 0 }
+    }
+  },
+  "staging": {
+    "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
+    "railwayEnvironmentId": "d6b6f137-cffd-4647-a102-3619fc54133a",
+    "apiServiceId": "8af12b8e-4f4d-498c-9ceb-3182417905f8",
+    "workerServiceId": "25dab463-52c0-4425-825e-c7dcf6a65332",
+    "databaseServiceId": "f3a2862b-2371-4ab3-b4db-1e91680ee3b7",
+    "apiDeploymentId": "9934b1a7-8dba-4029-9a27-c16e164cd4e6",
+    "workerDeploymentId": "ebefe2db-ad83-4446-978f-c495c30a0810",
+    "vercelProjectId": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
+    "vercelDeploymentId": "dpl_8Qcax4sG949hnPDKJqozqdnxpj43",
+    "apiHealth": 200,
+    "apiReady": 200,
+    "databaseReady": true,
+    "frontendAliasReady": true,
+    "authenticatedE2E": "NOT_EXECUTED_NO_SAFE_SESSION",
+    "browserControl": "BROWSER_CONTROL_FAILURE",
+    "providerConnectionsCreated": 0,
+    "outbound": 0
+  },
+  "production": {
+    "changedByThisMission": false,
+    "deployment": "NOT_EXECUTED",
+    "migration": "NOT_EXECUTED",
+    "providerConnectionsCreated": 0,
+    "outbound": 0
+  },
+  "gates": {
+    "INTEGRATIONS_UI_ONLINE": "STAGING_PUBLISHED",
+    "INTEGRATION_STATUS_TRUTH": "PASS_LOCAL_AND_API_CONTRACT",
+    "USER_OBSERVABILITY": "PASS_LOCAL",
+    "PLATFORM_OBSERVABILITY": "PASS_LOCAL_AND_ENDPOINT_GUARDED",
+    "CROSS_TENANT_PROVIDER_LEAK": 0,
+    "ROLE_BYPASSES": 0,
+    "FALSE_CONNECTED_STATES": 0,
+    "SECRET_FRONTEND_EXPOSURE": 0,
+    "FINAL_ADVERSARIAL_VERDICT": "PENDING_FINAL_INDEPENDENT_REVIEW_AND_AUTHENTICATED_STAGING",
+    "READY_FOR_PRODUCTION": false,
+    "REVIEW_A_LOCAL": "FINAL_REVIEW_REQUESTED_ON_E044D58",
+    "REVIEW_B_LOCAL": "FINAL_REVIEW_REQUESTED_ON_E044D58"
+  },
+  "deploymentIncidents": [
+    {
+      "area": "staging-worker",
+      "classification": "DEPLOYMENT_CONFIGURATION_FAILURE",
+      "resolvedBy": "temporary isolated worker bundle with explicit start command",
+      "finalStatus": "PASS"
+    },
+    {
+      "area": "staging-frontend",
+      "classification": "DEPLOYMENT_CONFIGURATION_FAILURE",
+      "resolvedBy": "full static bundle and official staging API base",
+      "finalStatus": "PASS"
+    }
+  ],
+  "secrets": {
+    "rawEnvDump": false,
+    "credentialsInReport": false,
+    "credentialsInGit": false,
+    "realProviderCredentialsUsed": 0
+  }
+}
