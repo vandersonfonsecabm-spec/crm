@@ -5,8 +5,8 @@
   "modelProvenance": "USER_CONFIRMED_NOT_RUNTIME_ATTESTED",
   "missionCommandAudit": "PASS_WITH_CORRECTIONS",
   "candidate": {
-    "head": "e044d5852de15ad52b69f4025db9b80b3fec822b",
-    "tree": "8ce464db4e7ad07f285a942eba7b5ae66558ebdf",
+    "head": "5586e2ffb4ee18c7df7e663322354b1be89e5a2d",
+    "tree": "bd164d11e2bff5e951d76983743bc449c1ff6a16",
     "backendSourceManifestSha256": "4b85aa5cfb0e78c0d64dec37365362e5db4651a1bcde80cce3ce683719a32868"
   },
   "local": {
@@ -21,6 +21,7 @@
     }
   },
   "staging": {
+    "backendPublishedSubcommit": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
     "railwayEnvironmentId": "d6b6f137-cffd-4647-a102-3619fc54133a",
     "apiServiceId": "8af12b8e-4f4d-498c-9ceb-3182417905f8",
@@ -29,7 +30,7 @@
     "apiDeploymentId": "9934b1a7-8dba-4029-9a27-c16e164cd4e6",
     "workerDeploymentId": "ebefe2db-ad83-4446-978f-c495c30a0810",
     "vercelProjectId": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
-    "vercelDeploymentId": "dpl_8Qcax4sG949hnPDKJqozqdnxpj43",
+    "vercelDeploymentId": "dpl_Ai4q1QdGjCtc4tGAXojNpn1d5RsZ",
     "apiHealth": 200,
     "apiReady": 200,
     "databaseReady": true,

@@ -38,8 +38,8 @@ REAL_OUTBOUND=0
 
 ```text
 BRANCH=feature/canonical-sale-v1
-RELEASE_HEAD=e044d5852de15ad52b69f4025db9b80b3fec822b
-RELEASE_TREE=8ce464db4e7ad07f285a942eba7b5ae66558ebdf
+RELEASE_HEAD=5586e2ffb4ee18c7df7e663322354b1be89e5a2d
+RELEASE_TREE=bd164d11e2bff5e951d76983743bc449c1ff6a16
 BACKEND_SOURCE_MANIFEST_SHA256=4b85aa5cfb0e78c0d64dec37365362e5db4651a1bcde80cce3ce683719a32868
 BASELINE_FUNCTIONAL=79eed4f
 CANONICAL_SALE=preservada
@@ -57,9 +57,14 @@ DATABASE_SERVICE=f3a2862b-2371-4ab3-b4db-1e91680ee3b7
 API_DEPLOYMENT=9934b1a7-8dba-4029-9a27-c16e164cd4e6
 WORKER_DEPLOYMENT=ebefe2db-ad83-4446-978f-c495c30a0810
 VERCEL_PROJECT=prj_AJE06pNRGunJoguCNWee0RgZV6t8
-VERCEL_DEPLOYMENT=dpl_8Qcax4sG949hnPDKJqozqdnxpj43
+VERCEL_DEPLOYMENT=dpl_Ai4q1QdGjCtc4tGAXojNpn1d5RsZ
 STAGING_ALIAS=crm-ga3-bundle-staging.vercel.app
 ```
+
+O backend publicado no deployment `9934b1a7-8dba-4029-9a27-c16e164cd4e6`
+permanece causalmente idêntico ao subcommit backend `e044d58`; o delta até
+`5586e2f` é somente o ajuste do fallback de erro do frontend e seu teste. O
+frontend foi republicado após esse delta.
 
 Produção foi apenas consultada read-only para confirmar o alvo; a API e o banco
 oficiais continuam separados do staging. Nenhum deployment, migration ou
@@ -158,7 +163,7 @@ deployment completo e depois republicada no alvo production do projeto de
 staging; o alias final serve `index.html` e todos os assets do build final. A
 configuração de API foi corrigida no código para usar o endpoint oficial de
 staging quando informado. O root público responde 200 e aponta para o bundle
-`index-DObC4DLU.js`; o refresh sem sessão retorna o 401 esperado.
+`index-CTDf6uOx.js`; o refresh sem sessão retorna o 401 esperado.
 O metadado do deployment Vercel não expôs um SHA Git; a paridade do frontend
 foi verificada pelo build determinístico local, nomes/conteúdo dos assets e
 upload explícito para o projeto/alias de staging. Isso não substitui um smoke
