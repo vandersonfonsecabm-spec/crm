@@ -113,3 +113,40 @@ test("observabilidade classifica ciphertext ativo inválido como INVALID em vez 
   assert.equal(result.credentials.ATIVA, 2);
   assert.equal(result.credentials.INVALID, 3);
 });
+
+test("observabilidade exclui MetaCredential removida e inclui lease no instante de expiração", async () => {
+  process.env.INTEGRATION_ENCRYPTION_KEY = "platform-observability-removed-key-with-more-than-32-bytes";
+  const { encryptCredentialsWithContext } = require("../src/integrations/crypto");
+  const now = new Date("2026-09-01T03:00:00.000Z");
+  const context = { empresaId: 1, canalIntegracaoId: 2, provider: "META_WHATSAPP", reference: "removed-reference", revision: 1 };
+  const removed = {
+    ...context,
+    status: "ATIVA",
+    removedAt: new Date("2026-08-31T23:00:00.000Z"),
+    ciphertext: encryptCredentialsWithContext({ accessToken: "synthetic-removed-token" }, context),
+  };
+  const prisma = {
+    workerCheckpoint: { findMany: async () => [] },
+    automacaoAcaoJob: { groupBy: async () => [], count: async () => 0 },
+    automacaoExecucao: { groupBy: async () => [] },
+    eventoWebhook: { groupBy: async () => [], count: async () => 0 },
+    emailDeliveryOutbox: { groupBy: async () => [], count: async () => 0 },
+    eventoOutboxEstoque: { groupBy: async () => [], count: async () => 0 },
+    erroIntegracao: { count: async () => 0, findFirst: async () => null },
+    metaCredential: {
+      findMany: async ({ where }) => {
+        assert.deepEqual(where, { removedAt: null });
+        return where.removedAt === null ? [] : [removed];
+      },
+    },
+    integracao: { findMany: async () => [] },
+    operacaoDistribuidaLease: {
+      count: async ({ where }) => where.expiresAt?.lte?.getTime() === now.getTime() ? 1 : 0,
+    },
+  };
+  const result = await createPlatformObservabilityService({ prisma }).summary({ now });
+  assert.equal(result.credentials.ATIVA || 0, 0);
+  assert.equal(result.credentials.INVALID || 0, 0);
+  assert.equal(result.worker.activeLeases, 0);
+  assert.equal(result.worker.expiredLeases, 1);
+});

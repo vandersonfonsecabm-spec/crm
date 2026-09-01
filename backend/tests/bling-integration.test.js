@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
@@ -129,6 +130,24 @@ test("Bling OAuth bloqueia perfis, usa state persistente e criptografa tokens", 
     },
   });
   assert.ok(expiredStart.id);
+
+  const exactState = "exact-expiry-state";
+  const exactStateHash = crypto.createHash("sha256").update(exactState, "utf8").digest("hex");
+  const exactExpiry = new Date();
+  const exactExpiryRow = await prisma.integracaoOAuthState.create({
+    data: {
+      empresaId: admin.empresaId,
+      usuarioId: admin.usuarioId,
+      provedor: "BLING",
+      stateHash: exactStateHash,
+      expiresAt: exactExpiry,
+    },
+  });
+  assert.ok(exactExpiryRow.id);
+  const exactExpiryResponse = await request("GET", `/integracoes/bling/callback?code=exact-expiry-code&state=${exactState}`);
+  assert.equal(exactExpiryResponse.status, 302);
+  assert.match(exactExpiryResponse.headers.location, /bling=erro/);
+  assert.match(exactExpiryResponse.headers.location, /motivo=state/);
 });
 
 test("Bling OAuth rejeita callback apos revogacao do ADMIN", async () => {

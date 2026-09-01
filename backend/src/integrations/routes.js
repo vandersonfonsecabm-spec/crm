@@ -1,5 +1,6 @@
-﻿const { encryptCredentials, hasEncryptedCredentials } = require("./crypto");
+﻿const { encryptCredentials } = require("./crypto");
 const { createIntegrationAdapter } = require("./adapters");
+const { isUsableEncryptedCredentials } = require("./metaCredentialHealth");
 const { createBlingService } = require("./blingService");
 const { createCanonicalService } = require("./canonicalService");
 const { createCommercialCatalogService } = require("./commercialCatalogService");
@@ -876,7 +877,7 @@ function integrationResponse(integracao) {
     status: integracao.status,
     modo: integracao.modo,
     configuracao: redactSensitiveConfig(safeJson(integracao.configuracaoJson, {})),
-    possuiCredenciais: hasEncryptedCredentials(integracao.credenciaisCriptografadas),
+    possuiCredenciais: isUsableEncryptedCredentials(integracao.credenciaisCriptografadas),
     ultimaSincronizacaoEm: integracao.ultimaSincronizacaoEm,
     ultimoSucessoEm: integracao.ultimoSucessoEm,
     ultimoErroEm: integracao.ultimoErroEm,
@@ -1126,7 +1127,7 @@ function stringifySafeConfig(value) {
 function assertNoSensitiveConfigValues(value, depth = 0) {
   if (depth > 8) throw httpError(400, "Configuração profunda demais.", "INTEGRATION_CONFIG_INVALID");
   if (typeof value === "string") {
-    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|(?<![A-Za-z0-9_])(?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}]+)|\/\/[^\s/?#]*:[^\s/@?#]+@|\/\/[^\s/?#]+[/?#][^\s]+|[?&](?:api_key|client_secret|access_token|refresh_token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=[^&\s]+|[a-z][a-z0-9+.-]*:\/\/[^\s/@]*:[^\s/@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
+    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|(?<![A-Za-z0-9_])(?:["']?(?:api[_-]?key|client[_-]?secret|app[_-]?secret|access[_-]?token|refresh[_-]?token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)["']?)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}]+)|\/\/[^\s/?#]*:[^\s/@?#]+@|\/\/[^\s/?#]+[/?#][^\s]+|[?&](?:api_key|client_secret|access_token|refresh_token|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=[^&\s]+|[a-z][a-z0-9+.-]*:\/\/[^\s/@]*:[^\s/@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
     if (sensitiveValue.test(value)) {
       throw httpError(400, "Configuração contém valor sensível; use o armazenamento cifrado de credenciais.", "INTEGRATION_CONFIG_SENSITIVE_FIELD");
     }

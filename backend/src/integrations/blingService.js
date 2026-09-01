@@ -734,7 +734,7 @@ async function loadStateCandidate({ prisma, state }) {
   const stateHash = hashState(state);
   const now = new Date();
   const value = await prisma.integracaoOAuthState.findUnique({ where: { stateHash } });
-  if (!value || value.usedAt || value.expiresAt < now || value.provedor !== "BLING") {
+  if (!value || value.usedAt || value.expiresAt <= now || value.provedor !== "BLING") {
     throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
   }
   await assertOAuthActorActive(prisma, value);
@@ -745,7 +745,7 @@ async function consumeStateWithClient(client, state) {
   const stateHash = hashState(state);
   const now = new Date();
   const value = await client.integracaoOAuthState.findUnique({ where: { stateHash } });
-  if (!value || value.usedAt || value.expiresAt < now || value.provedor !== "BLING") {
+  if (!value || value.usedAt || value.expiresAt <= now || value.provedor !== "BLING") {
     throw blingError("BLING_INVALID_STATE", "Autorização Bling expirada ou inválida.");
   }
   await assertOAuthActorActive(client, value);

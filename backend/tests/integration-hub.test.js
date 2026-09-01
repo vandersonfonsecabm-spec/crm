@@ -136,6 +136,23 @@ test("Hub de integracoes isola empresas, criptografa credenciais e consulta dado
   assert.equal(storedIntegration.credenciaisCriptografadas.includes("segredo-nao-retornar"), false);
   assert.equal(storedIntegration.credenciaisCriptografadas.includes("refresh-nao-retornar"), false);
 
+  const invalidCredentialIntegration = await prisma.integracao.create({
+    data: {
+      empresaId: adminA.empresaId,
+      nome: "Credencial inválida",
+      tipo: "CUSTOM",
+      status: "ATIVA",
+      modo: "SOMENTE_LEITURA",
+      ativo: true,
+      credenciaisCriptografadas: "ciphertext-invalid",
+      configuracaoJson: "{}",
+    },
+  });
+  const invalidCredentialRead = await request("GET", `/integracoes/${invalidCredentialIntegration.id}`, undefined, adminA.token);
+  assert.equal(invalidCredentialRead.status, 200);
+  assert.equal(invalidCredentialRead.body.possuiCredenciais, false);
+  await prisma.integracao.delete({ where: { id: invalidCredentialIntegration.id } });
+
   const legacyUnsafe = await prisma.integracao.create({
     data: {
       empresaId: adminA.empresaId,

@@ -72,9 +72,9 @@ function createPlatformObservabilityService({ prisma }) {
   }
 
   async function countExpiredLeases(now) {
-    const where = { leaseOwner: { not: null }, leaseExpiresAt: { lt: now } };
+    const where = { leaseOwner: { not: null }, leaseExpiresAt: { lte: now } };
     const counts = await Promise.all([
-      prisma.operacaoDistribuidaLease.count({ where: { expiresAt: { lt: now } } }),
+      prisma.operacaoDistribuidaLease.count({ where: { expiresAt: { lte: now } } }),
       prisma.automacaoAcaoJob.count({ where }),
       prisma.eventoWebhook.count({ where }),
       prisma.emailDeliveryOutbox.count({ where }),
@@ -88,9 +88,10 @@ function createPlatformObservabilityService({ prisma }) {
 
 async function readMetaCredentialStatuses(model, now) {
   if (typeof model.findMany !== "function") {
-    return model.groupBy({ by: ["status"], _count: { _all: true } });
+    return model.groupBy({ by: ["status"], where: { removedAt: null }, _count: { _all: true } });
   }
   const rows = await model.findMany({
+    where: { removedAt: null },
     select: {
       status: true,
       empresaId: true,
@@ -99,6 +100,7 @@ async function readMetaCredentialStatuses(model, now) {
       reference: true,
       ciphertext: true,
       revision: true,
+      removedAt: true,
     },
   });
   return statusRows(rows.map((row) => ({

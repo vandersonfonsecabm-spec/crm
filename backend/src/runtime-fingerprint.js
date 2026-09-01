@@ -8,6 +8,7 @@ const STAGING_IDS = Object.freeze({
   apiService: "8af12b8e-4f4d-498c-9ceb-3182417905f8",
 });
 const { isUsableEncryptedCredentials, isUsableMetaCredential } = require("./integrations/metaCredentialHealth");
+const { externalProviderActivationEnabled } = require("./integrations/providerActivation");
 const SOURCE_MANIFEST_VERSION = "backend-runtime-v3-lf";
 const TEXT_MANIFEST_EXTENSIONS = new Set([".cjs", ".js", ".json", ".mjs", ".prisma", ".sql", ".toml", ".ts", ".tsx"]);
 const TRACKED_PROVIDER_KEYS = Object.freeze(["WHATSAPP", "INSTAGRAM", "MESSENGER", "BLING", "EMAIL", "GENERIC"]);
@@ -64,7 +65,7 @@ function outboundDisabled(env) {
     "BLING_EXTERNAL_NETWORK_ENABLED",
     "SECURITY_EMAIL_DELIVERY_WORKER_ENABLED",
   ]
-    .every((key) => String(env[key] || "false").toLowerCase() !== "true");
+    .every((key) => String(env[key] || "false").trim().toLowerCase() !== "true");
 }
 
 async function buildRuntimeFingerprint({ env = process.env, prisma }) {
@@ -104,7 +105,7 @@ async function buildRuntimeFingerprint({ env = process.env, prisma }) {
     trackedProviderConnections,
     providerConnectionScope: TRACKED_PROVIDER_KEYS,
     providerConnectionEvidence,
-    externalProviderActivationEnabled: String(env.EXTERNAL_PROVIDER_ACTIVATION_ENABLED || "false").toLowerCase() === "true",
+    externalProviderActivationEnabled: externalProviderActivationEnabled(env),
     outboundEnabled: !outboundDisabled(env),
   };
 }

@@ -37,6 +37,9 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
   assert.equal(databaseVerified({ POSTGRES_DATABASE_URL: "postgresql://x:y@production-db.railway.internal/db" }), false);
   assert.equal(outboundDisabled({ META_EXTERNAL_NETWORK_ENABLED: "true" }), false);
   assert.equal(outboundDisabled({ BLING_EXTERNAL_NETWORK_ENABLED: "true" }), false);
+  const paddedEnabled = await buildRuntimeFingerprint({ env: { ...base, EXTERNAL_PROVIDER_ACTIVATION_ENABLED: " true " }, prisma });
+  assert.equal(paddedEnabled.externalProviderActivationEnabled, true);
+  assert.equal(paddedEnabled.outboundEnabled, true);
   assert.equal((await buildRuntimeFingerprint({ env: base, prisma: { metaCredential: { count: async () => 1 }, integracao: { count: async () => 0 }, canalIntegracao: { count: async () => 0 } } })).trackedProviderConnections, true);
   const evidence = await buildRuntimeFingerprint({
     env: base,

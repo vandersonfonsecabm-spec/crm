@@ -1,5 +1,22 @@
 const { decryptCredentials, decryptCredentialsWithContext } = require("./crypto");
 
+const CREDENTIAL_MATERIAL_KEYS = new Set([
+  "accesstoken",
+  "refreshtoken",
+  "apikey",
+  "accesskey",
+  "clientsecret",
+  "appsecret",
+  "privatekey",
+  "password",
+  "senha",
+  "token",
+  "secret",
+  "credential",
+  "credentials",
+  "authorization",
+]);
+
 /**
  * A row being active is not enough to advertise a Meta channel as connected.
  * The ciphertext must decrypt with the current/previous configured key, the
@@ -9,6 +26,7 @@ const { decryptCredentials, decryptCredentialsWithContext } = require("./crypto"
  */
 function isUsableMetaCredential(row, { now = new Date() } = {}) {
   if (!row || typeof row.ciphertext !== "string" || !row.ciphertext.trim()) return false;
+  if (row.removedAt !== undefined && row.removedAt !== null) return false;
   if (!Number.isSafeInteger(row.empresaId) || row.empresaId < 1) return false;
   if (!Number.isSafeInteger(row.canalIntegracaoId) || row.canalIntegracaoId < 1) return false;
   if (!Number.isSafeInteger(row.revision) || row.revision < 1) return false;
@@ -42,13 +60,7 @@ function isUsableEncryptedCredentials(payload, { now = new Date() } = {}) {
   try {
     const credentials = decryptCredentials(payload);
     if (!credentials || typeof credentials !== "object" || Array.isArray(credentials)) return false;
-    const material = Object.entries(credentials).filter(([key, value]) => (
-      !["expiresAt", "scopes", "tokenType", "userId"].includes(key)
-      && value !== null
-      && value !== undefined
-      && (typeof value !== "string" || value.trim())
-    ));
-    if (!material.length) return false;
+    if (!hasCredentialMaterial(credentials)) return false;
     if (credentials.expiresAt !== undefined && credentials.expiresAt !== null) {
       const expiresAt = new Date(credentials.expiresAt);
       const currentTime = now instanceof Date ? now.getTime() : new Date(now).getTime();
@@ -58,6 +70,20 @@ function isUsableEncryptedCredentials(payload, { now = new Date() } = {}) {
   } catch {
     return false;
   }
+}
+
+function hasCredentialMaterial(value, depth = 0) {
+  if (depth > 4 || value === null || value === undefined) return false;
+  if (Array.isArray(value)) return value.some((item) => hasCredentialMaterial(item, depth + 1));
+  if (typeof value !== "object") return false;
+  return Object.entries(value).some(([key, child]) => {
+    const normalizedKey = String(key).replace(/[^a-z0-9]/gi, "").toLowerCase();
+    if (CREDENTIAL_MATERIAL_KEYS.has(normalizedKey)) {
+      if (typeof child === "string") return child.trim().length > 0;
+      return hasCredentialMaterial(child, depth + 1);
+    }
+    return hasCredentialMaterial(child, depth + 1);
+  });
 }
 
 module.exports = { isUsableEncryptedCredentials, isUsableMetaCredential };
