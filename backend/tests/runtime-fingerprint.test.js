@@ -10,6 +10,7 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
     RAILWAY_PROJECT_ID: "ddfbf66c-e274-47b1-9493-286232d2f426",
     RAILWAY_ENVIRONMENT_ID: "d6b6f137-cffd-4647-a102-3619fc54133a",
     RAILWAY_SERVICE_ID: "8af12b8e-4f4d-498c-9ceb-3182417905f8",
+    RAILWAY_DEPLOYMENT_ID: "deployment-test-1",
     POSTGRES_DATABASE_URL: "postgresql://user:pass@postgres--e25.railway.internal:5432/db",
     STORE1_SOAK_PROBE_TOKEN: "x".repeat(32),
   };
@@ -17,6 +18,8 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
   const ok = await buildRuntimeFingerprint({ env: base, prisma });
   assert.equal(ok.targetVerified, true);
   assert.equal(ok.databaseVerified, true);
+  assert.equal(ok.deploymentId, "deployment-test-1");
+  assert.equal(ok.deploymentIdentityVerified, true);
   assert.equal(ok.trackedProviderConnections, false);
   assert.deepEqual(ok.providerConnectionScope, ["WHATSAPP", "INSTAGRAM", "MESSENGER", "BLING", "EMAIL", "GENERIC"]);
   assert.equal(ok.providerConnectionEvidence.AI.connected, null);
@@ -27,6 +30,7 @@ test("fingerprint usa IDs Railway, banco e flags reais e falha fechado", async (
   assert.equal(ok.sourceManifestVersion, SOURCE_MANIFEST_VERSION);
   assert.match(ok.sourceManifestSha256, /^[a-f0-9]{64}$/);
   assert.equal((await buildRuntimeFingerprint({ env: { ...base, RAILWAY_ENVIRONMENT_ID: "production" }, prisma })).targetVerified, false);
+  assert.equal((await buildRuntimeFingerprint({ env: { ...base, RAILWAY_ENVIRONMENT_ID: "production" }, prisma })).deploymentId, null);
   assert.equal(isStagingTarget({ ...base, RAILWAY_ENVIRONMENT_ID: "production" }), false);
   assert.equal(probeAuthorized(base, "x".repeat(32)), true);
   assert.equal(probeAuthorized(base, "wrong"), false);

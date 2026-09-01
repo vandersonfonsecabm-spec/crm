@@ -114,6 +114,12 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
   assert.equal(networkPath.includes("tenant-42"), false);
   assert.equal(networkPath.includes("marker"), false);
   assert.equal(networkPath, "//provider.test/[redacted]");
+  const networkPathUserinfo = _private.redactSensitiveText("//123:synthetic-secret@example.test/private/tenant-42");
+  assert.equal(networkPathUserinfo.includes("synthetic-secret"), false);
+  assert.equal(networkPathUserinfo, "//[redacted]@example.test/[redacted]");
+  const quotedStandalone = _private.redactSensitiveText('cookie="synthetic-secret-part-one synthetic-secret-part-two"');
+  assert.equal(quotedStandalone.includes("synthetic-secret"), false);
+  assert.equal(quotedStandalone, "cookie=[redacted]");
   for (const key of ["cookie", "state", "code"]) {
     assert.throws(
       () => _private.stringifySafeConfig({ note: `${key}=marker-1` }),
@@ -122,6 +128,10 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
   }
   assert.throws(
     () => _private.stringifySafeConfig({ note: "//provider.test/private/tenant-42?opaque=marker" }),
+    (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+  );
+  assert.throws(
+    () => _private.stringifySafeConfig({ note: "//123:synthetic-secret@example.test/private" }),
     (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
   );
 });

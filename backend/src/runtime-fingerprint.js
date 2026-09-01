@@ -69,6 +69,7 @@ function outboundDisabled(env) {
 
 async function buildRuntimeFingerprint({ env = process.env, prisma }) {
   const targetVerified = isStagingTarget(env);
+  const deploymentId = deploymentIdentity(env);
   const [whatsappCredentials, instagramCredentials, messengerCredentials, blingConnections, genericConnections] = prisma ? await Promise.all([
     readMetaCredentialCount(prisma.metaCredential, "META_WHATSAPP"),
     readMetaCredentialCount(prisma.metaCredential, "META_INSTAGRAM"),
@@ -94,6 +95,8 @@ async function buildRuntimeFingerprint({ env = process.env, prisma }) {
     .some((count) => Number(count) > 0);
   return {
     environment: targetVerified ? "staging" : "unknown",
+    deploymentId: targetVerified ? deploymentId : null,
+    deploymentIdentityVerified: targetVerified && Boolean(deploymentId),
     sourceManifestVersion: SOURCE_MANIFEST_VERSION,
     sourceManifestSha256: sourceManifestSha256(),
     targetVerified,
@@ -104,6 +107,11 @@ async function buildRuntimeFingerprint({ env = process.env, prisma }) {
     externalProviderActivationEnabled: String(env.EXTERNAL_PROVIDER_ACTIVATION_ENABLED || "false").toLowerCase() === "true",
     outboundEnabled: !outboundDisabled(env),
   };
+}
+
+function deploymentIdentity(env) {
+  const value = String(env?.RAILWAY_DEPLOYMENT_ID || "").trim();
+  return /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value) ? value : null;
 }
 
 async function readMetaCredentialCount(model, provider) {
@@ -128,4 +136,4 @@ function providerEvidence(count, unavailableSource = "UNAVAILABLE") {
   return { tracked: true, connected: Number(count) > 0, source: "ACTIVE_CREDENTIAL_OR_CHANNEL" };
 }
 
-module.exports = { SOURCE_MANIFEST_VERSION, STAGING_IDS, TRACKED_PROVIDER_KEYS, buildRuntimeFingerprint, databaseVerified, isStagingTarget, manifestFileBytes, outboundDisabled, probeAuthorized, sourceManifestSha256 };
+module.exports = { SOURCE_MANIFEST_VERSION, STAGING_IDS, TRACKED_PROVIDER_KEYS, buildRuntimeFingerprint, databaseVerified, deploymentIdentity, isStagingTarget, manifestFileBytes, outboundDisabled, probeAuthorized, sourceManifestSha256 };
