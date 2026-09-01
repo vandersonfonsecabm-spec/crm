@@ -125,7 +125,7 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
   const quotedStandalone = _private.redactSensitiveText('cookie="synthetic-secret-part-one synthetic-secret-part-two"');
   assert.equal(quotedStandalone.includes("synthetic-secret"), false);
   assert.equal(quotedStandalone, "cookie=[redacted]");
-  for (const key of ["password", "access_token"]) {
+  for (const key of ["password", "access_token", "authorization", "clientKey", "appKey", "private key", "access key", "passwd", "pass"]) {
     const redactedQuoted = _private.redactSensitiveText(`${key}="synthetic-secret-part-one synthetic-secret-part-two"`);
     assert.equal(redactedQuoted.includes("synthetic-secret"), false, key);
     assert.equal(redactedQuoted, `${key}=[redacted]`);
@@ -142,19 +142,24 @@ test("mensagem de provider nunca persiste segredo bruto", () => {
       (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
     );
   }
-  for (const key of ["state", "code", "signature"]) {
+  for (const key of ["state", "code", "signature", "clientKey", "appKey", "private key", "access key", "passwd", "pass"]) {
     assert.throws(
       () => _private.stringifySafeConfig({ [key]: "synthetic-oauth-value" }),
       (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
     );
   }
-  for (const key of ["password", "access_token", "accessToken", "refresh_token", "state", "code", "signature"]) {
+  for (const key of ["password", "access_token", "accessToken", "refresh_token", "state", "code", "signature", "clientKey", "appKey", "private key", "access key", "authorization", "passwd", "pass"]) {
     assert.throws(
       () => _private.stringifySafeConfig({ note: `{\"${key}\":\"quoted-secret\"}` }),
       (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
     );
   }
-  for (const key of ["privateKey", "accessKey", "authorization", "passwd", "pass"]) {
+  assert.equal(_private.redactSensitiveText('authorization="Bearer synthetic-auth-part-one synthetic-auth-part-two"'), "authorization=[redacted]");
+  assert.throws(
+    () => _private.stringifySafeConfig({ note: 'authorization="Bearer synthetic-auth-part-one synthetic-auth-part-two"' }),
+    (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",
+  );
+  for (const key of ["clientKey", "appKey", "privateKey", "accessKey", "client key", "app key", "private key", "access key", "authorization", "passwd", "pass"]) {
     assert.throws(
       () => _private.stringifySafeConfig({ note: `{\"${key}\":\"quoted-secret\"}` }),
       (error) => error.code === "INTEGRATION_CONFIG_SENSITIVE_FIELD",

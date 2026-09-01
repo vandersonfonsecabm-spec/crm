@@ -5,6 +5,8 @@ const CREDENTIAL_MATERIAL_KEYS = new Set([
   "refreshtoken",
   "apikey",
   "accesskey",
+  "clientkey",
+  "appkey",
   "clientsecret",
   "appsecret",
   "privatekey",

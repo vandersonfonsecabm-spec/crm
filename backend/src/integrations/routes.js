@@ -37,7 +37,7 @@ const STATUS_INTEGRACAO = new Set(["PENDENTE", "ATIVA", "INATIVA", "ERRO"]);
 const FORMATOS_IMPORTACAO = new Set(["CSV", "XLSX", "XML", "JSON"]);
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 const MAX_CONFIG_JSON_BYTES = 32 * 1024;
-const SENSITIVE_CONFIG_KEY = /(?:api.?key|access.?key|client.?secret|app.?secret|private.?key|access.?token|refresh.?token|auth(?:orization)?|password|passwd|pass|senha|cookie|credential|secret|token|state|code|signature)/i;
+const SENSITIVE_CONFIG_KEY = /(?:api.?key|access.?key|client.?key|app.?key|client.?secret|app.?secret|private.?key|access.?token|refresh.?token|auth(?:orization)?|password|passwd|pass|senha|cookie|credential|secret|token|state|code|signature)/i;
 const SENSITIVE_REDACTION_KEY = new RegExp(`${SENSITIVE_CONFIG_KEY.source}|signature|state|code`, "i");
 const SAFE_PUBLIC_ERROR_CODES = new Set(["PROVIDER_ACTIVATION_PAUSED", "META_EXTERNAL_NETWORK_DISABLED"]);
 
@@ -1127,7 +1127,7 @@ function stringifySafeConfig(value) {
 function assertNoSensitiveConfigValues(value, depth = 0) {
   if (depth > 8) throw httpError(400, "Configuração profunda demais.", "INTEGRATION_CONFIG_INVALID");
   if (typeof value === "string") {
-    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|(?<![A-Za-z0-9_])(?:["']?(?:api[_-]?key|access[_-]?key|client[_-]?secret|app[_-]?secret|private[_-]?key|access[_-]?token|refresh[_-]?token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)["']?)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}]+)|\/\/[^\s/?#]+@|[a-z][a-z0-9+.-]*:\/\/[^\s/?#]+@|\/\/[^\s/?#]*:[^\s/@?#]+@|\/\/[^\s/?#]+[/?#][^\s]+|[?&](?:api_key|access_key|client_secret|app_secret|private_key|access_token|refresh_token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=[^&\s]+|[a-z][a-z0-9+.-]*:\/\/[^\s/@]*:[^\s/@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
+    const sensitiveValue = /(?:^|\s)(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+|(?<![A-Za-z0-9_])(?:["']?(?:api[\s_-]?key|access[\s_-]?key|client[\s_-]?key|app[\s_-]?key|client[\s_-]?secret|app[\s_-]?secret|private[\s_-]?key|access[\s_-]?token|refresh[\s_-]?token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)["']?)\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}]+)|\/\/[^\s/?#]+@|[a-z][a-z0-9+.-]*:\/\/[^\s/?#]+@|\/\/[^\s/?#]*:[^\s/@?#]+@|\/\/[^\s/?#]+[/?#][^\s]+|[?&](?:api[\s_-]?key|access[\s_-]?key|client[\s_-]?key|app[\s_-]?key|client[\s_-]?secret|app[\s_-]?secret|private[\s_-]?key|access[\s_-]?token|refresh[\s_-]?token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=[^&\s]+|[a-z][a-z0-9+.-]*:\/\/[^\s/@]*:[^\s/@]+@|-----BEGIN [A-Z ]*PRIVATE KEY-----/i;
     if (sensitiveValue.test(value)) {
       throw httpError(400, "Configuração contém valor sensível; use o armazenamento cifrado de credenciais.", "INTEGRATION_CONFIG_SENSITIVE_FIELD");
     }
@@ -1228,10 +1228,9 @@ function redactSensitiveText(value) {
     // mistaken for an opaque scheme; path-prefixed opaque values are still
     // redacted.
     .replace(/(?<![A-Za-z0-9_])\b[a-z][a-z0-9+.-]*:(?!\/\/)[^\s]+/gi, "[redacted]")
-    .replace(/(authorization\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "$1[redacted]")
-    .replace(/([?#&](?:api[_-]?key|access[_-]?key|client[_-]?secret|app[_-]?secret|private[_-]?key|access[_-]?token|refresh[_-]?token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=)[^&#\s]+/gi, "$1[redacted]")
-    .replace(/(?<![A-Za-z0-9_])(["']?(?:api[_-]?key|access[_-]?key|client[_-]?secret|app[_-]?secret|private[_-]?key|access[_-]?token|refresh[_-]?token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi, "$1[redacted]")
     .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
+    .replace(/([?#&](?:api[\s_-]?key|access[\s_-]?key|client[\s_-]?key|app[\s_-]?key|client[\s_-]?secret|app[\s_-]?secret|private[\s_-]?key|access[\s_-]?token|refresh[\s_-]?token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)=)[^&#\s]+/gi, "$1[redacted]")
+    .replace(/(?<![A-Za-z0-9_])(["']?(?:api[\s_-]?key|access[\s_-]?key|client[\s_-]?key|app[\s_-]?key|client[\s_-]?secret|app[\s_-]?secret|private[\s_-]?key|access[\s_-]?token|refresh[\s_-]?token|authorization|password|passwd|senha|pass|token|secret|credential|signature|state|code|cookie)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi, "$1[redacted]")
     .slice(0, 500);
 }
 

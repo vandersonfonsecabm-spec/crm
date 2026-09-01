@@ -1,6 +1,6 @@
 "use strict";
 
-const SENSITIVE_REASON_KEY_PATTERN = /\b(password|senha|token|secret|authorization|cookie|payload|accessTokenRef|access[_-]?token|refresh[_-]?token|api[_-]?key|access[_-]?key|client[_-]?secret|app[_-]?secret|private[_-]?key|credential|credentials|passwd|pass|signature|state|code|phoneNumberId|wabaId|instagramBusinessAccountId|messengerPageId|pageId|telefone|phone)\b/gi;
+const SENSITIVE_REASON_KEY_PATTERN = /\b(password|senha|token|secret|authorization|cookie|payload|accessTokenRef|api[\s_-]?key|access[\s_-]?key|client[\s_-]?key|app[\s_-]?key|client[\s_-]?secret|app[\s_-]?secret|private[\s_-]?key|access[\s_-]?token|refresh[\s_-]?token|credential|credentials|passwd|pass|signature|state|code|phoneNumberId|wabaId|instagramBusinessAccountId|messengerPageId|pageId|telefone|phone)\b/gi;
 // Every URI scheme is sensitive, including opaque schemes without `//` such
 // as data:, mailto:, urn: and custom provider schemes.
 const URL_PATTERN = /\b[a-z][a-z0-9+.-]*:[^\s]+/gi;
