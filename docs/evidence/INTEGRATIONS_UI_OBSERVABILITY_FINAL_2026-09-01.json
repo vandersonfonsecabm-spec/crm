@@ -6,8 +6,8 @@
   "runtimeModelAttestation": "NOT_REQUIRED",
   "candidate": {
     "branch": "feature/canonical-sale-v1",
-    "head": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab",
-    "tree": "0672bc6ad2e025422f300eb2014657b4dde5c2c0",
+    "head": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068",
+    "tree": "a24ee77a532230bd9da1f5f5421c9146c345b9f4",
     "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b",
     "securityFixCommit": "35cf6cef70489a4c55f4c4fa257c5c17b982d773",
     "uiPresentationFixCommit": "daef225348f715edf079c0e3f2a051b062318531",
@@ -21,7 +21,8 @@
     "credentialTruthAndRedactionFixCommit": "32c5466ad8f05fb0d631e2816fe53fe0e9e97b25",
     "deploymentAttestationAndNetworkRedactionFixCommit": "9814cd0e90bea466f86c088dfe6a75ae5d93705a",
     "quotedValueRedactionFixCommit": "98a8cf2428a3b5512565e56d9ed995deb8f75d8d",
-    "oauthKeyValidationFixCommit": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab"
+    "oauthKeyValidationFixCommit": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab",
+    "emptyCredentialAndNetworkPathRedactionFixCommit": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068"
   },
   "targets": {
     "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
@@ -39,6 +40,7 @@
     "railwayApiDeploymentAfterDeploymentAttestationFix": "2d6640f9-7046-4f2d-a7e8-30cdc1f78a59",
     "railwayApiDeploymentAfterQuotedRedactionFix": "9a93dc5b-986b-43df-8cfd-b0fa68878fd2",
     "railwayApiDeploymentAfterOauthKeyValidationFix": "abb7d431-f9bf-46d6-9fcb-3210f24667ac",
+    "railwayApiDeploymentAfterEmptyCredentialRedactionFix": "b5078c3f-a738-4984-94da-5b353512a0ae",
     "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
   },
   "gates": {
@@ -57,6 +59,10 @@
     "auditReasonRedaction": "PASS",
     "providerActivationGate": "PASS",
     "backendRuntimeHashParity": "PASS",
+    "metaCredentialHealth": "3/3 PASS",
+    "platformObservabilityFocused": "3/3 PASS",
+    "backendIsolatedSuite": "PASS_EXIT_0",
+    "protectedDevDbUnchanged": "PASS",
     "platformAdminTenantBypass": 0,
     "externalSideEffects": 0,
     "integrationTabs": "PASS",
@@ -64,7 +70,10 @@
     "deepLinkRoute": "PASS",
     "viewportControl": "UNAVAILABLE_IN_CHROME_CONNECTOR",
     "consoleErrors": "NOT_OBSERVABLE_BY_CONNECTOR",
-    "readyForProduction": false
+    "readyForProduction": false,
+    "finalAdversarialReviewerInfra": "AVAILABLE_NEW_PATH",
+    "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",
+    "finalSolReconciliation": "NOT_CLOSED"
   },
   "publishedAssetHashes": [
     { "path": "index.html", "bytes": 479, "sha256": "e35a3ebef6f7ddc9cd0791857f3c48cc4fb106a0901da69b44f5412ab7cd3ead" },
@@ -80,16 +89,17 @@
     "src/integrations/routes.js": "96b86169e0b16f3936b0a5dda8d66bd997a945e92c50f468f4267dc89f86aa2a",
     "src/platform/observability.js": "d6a70266ad01cf8b889ca61404b454ecff7de687778b35158f6fd78fec1e12e0",
     "src/runtime-fingerprint.js": "dc075fbe1e5810346daed3f6cfc23c72b6831219968ac7f07ff07870b5fe4f10",
-    "src/security/auditReason.js": "ef85a308b1f00958ac8a9adac16226ecfb24e5d2572c7bbcd746482ee1d51a70"
+    "src/security/auditReason.js": "9f05ed445d215460f9f54bac0dae79e92debb0bf92d89fc95096c6d61aeec940",
+    "src/integrations/metaCredentialHealth.js": "4c46f446bf642b2f5194392eacac1db9837f8baed0c939727b84f6f0b12f0485"
   },
   "runtimeFingerprint": {
-    "deploymentId": "abb7d431-f9bf-46d6-9fcb-3210f24667ac",
+    "deploymentId": "b5078c3f-a738-4984-94da-5b353512a0ae",
     "deploymentIdentityVerified": true,
     "environment": "staging",
     "targetVerified": true,
     "databaseVerified": true,
     "sourceManifestVersion": "backend-runtime-v3-lf",
-    "sourceManifestSha256": "58018d56190c7d048cd1ea79dce5d0d28e05a6f24441f2fd9e68ae1e333e5bf5",
+    "sourceManifestSha256": "e8c518dd46d8489fa105c1ea94c4c5fa0ed63d923f92261ec86783dbd3101d3e",
     "trackedProviderConnections": false,
     "externalProviderActivationEnabled": false,
     "outboundEnabled": false,
@@ -142,9 +152,10 @@
       "FIX_FIRST_ADV_FINAL_001_005",
       "FIX_FIRST_ADV_POSTFIX_001_002",
       "FIX_FIRST_ADV_REVIEW_001_002",
-      "FIX_FIRST_ADV_NEW_001_002"
+      "FIX_FIRST_ADV_NEW_001_002",
+      "FIX_FIRST_ADV_LATEST_EMPTY_GENERIC_AND_NETWORK_PATH"
     ],
-    "finalAdversarialReviewerInfra": "AVAILABLE",
+    "finalAdversarialReviewerInfra": "AVAILABLE_NEW_PATH",
     "findings": [
       {
         "id": "INT-ADV-001",
@@ -329,6 +340,22 @@
         "status": "RETESTED",
         "fixCommit": "34c5d5c535f416f541c2d44c8db3efc23d6b94ab",
         "causalRetest": "INTEGRATION_SECURITY_HARDENING=6/6 PASS; state/code/signature keys rejected before persistence"
+      },
+      {
+        "id": "ADV-34C-003",
+        "severity": "HIGH",
+        "area": "generic encrypted credential usability",
+        "status": "RETESTED",
+        "fixCommit": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068",
+        "causalRetest": "META_CREDENTIAL_HEALTH=3/3 PASS; metadata-only generic payload rejected"
+      },
+      {
+        "id": "ADV-34C-002",
+        "severity": "HIGH",
+        "area": "network-path userinfo audit redaction",
+        "status": "RETESTED",
+        "fixCommit": "85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068",
+        "causalRetest": "AUDIT_REASON_REDACTION=3/3 PASS; network-path userinfo with and without path redacted"
       }
     ],
     "finalAdversarialVerdict": "PENDING_POST_FIX_REVIEW",

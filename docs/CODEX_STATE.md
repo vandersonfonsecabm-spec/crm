@@ -1,4 +1,25 @@
 # Estado atual do CRM
+## Integrações visíveis + observabilidade — último candidato e revisão adversarial (2026-09-01)
+
+- O candidato funcional atual é `85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068`,
+  tree `a24ee77a532230bd9da1f5f5421c9146c345b9f4`, alinhado ao remoto. O fix
+  rejeita payload genérico cifrado vazio/metadata-only e amplia a redaction de
+  userinfo em referências network-path; não há mudança no frontend.
+- A API staging está no deployment
+  `b5078c3f-a738-4984-94da-5b353512a0ae` (`SUCCESS`), com `/health=200`,
+  `/ready=200`, `deploymentIdentityVerified=true`, banco/target verificados e
+  manifesto runtime `e8c518dd46d8489fa105c1ea94c4c5fa0ed63d923f92261ec86783dbd3101d3e`.
+  Providers, ativação externa e outbound permanecem desligados.
+- `META_CREDENTIAL_HEALTH=3/3`, `AUDIT_REASON_REDACTION=3/3`,
+  `PLATFORM_OBSERVABILITY=3/3`, `INTEGRATION_SECURITY_HARDENING=6/6` e a
+  suíte backend isolada completa passaram; `backend/prisma/dev.db` preservou o
+  SHA canônico `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- Os três timeouts do mecanismo adversarial anterior não viram PASS. Uma nova
+  revisão independente deve usar caminho/runtime separado sobre `85ed8e2`;
+  manter `FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW`,
+  `FINAL_SOL_RECONCILIATION=NOT_CLOSED`, `READY_FOR_PRODUCTION=false` e
+  `PRODUCTION_CHANGED=false` até o retorno.
+
 ## Integrações visíveis + observabilidade — chaves OAuth finais (2026-09-01)
 
 - A revisão independente encontrou `ADV-NEW-001` e `ADV-NEW-002` (HIGH):

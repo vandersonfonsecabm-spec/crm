@@ -21,6 +21,70 @@ REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
 ```
 
+## Addendum — último candidato e revisão adversarial independente (2026-09-01)
+
+Durante a análise adversarial anterior do candidato, foram registrados gaps de
+segurança reproduzíveis: payload cifrado genérico vazio era contado como
+credencial utilizável e motivos de auditoria ainda podiam preservar userinfo em
+referências network-path. A correção focal foi aplicada no commit
+funcional `85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068`, tree
+`a24ee77a532230bd9da1f5f5421c9146c345b9f4`, e publicada somente na API de
+staging no deployment `b5078c3f-a738-4984-94da-5b353512a0ae` (`SUCCESS`).
+
+O primeiro caso agora rejeita payloads genéricos vazios/metadata-only antes de
+classificar uma conexão como utilizável. O segundo redige userinfo de
+network-path com e sem caminho, mantendo a sanitização compartilhada de
+auditoria. O frontend não mudou; nenhum provider, credencial de produto,
+OAuth ou outbound foi acionado.
+
+Retestes causais do candidato atual:
+
+```text
+META_CREDENTIAL_HEALTH=3/3 PASS
+AUDIT_REASON_REDACTION=3/3 PASS
+PLATFORM_OBSERVABILITY=3/3 PASS
+INTEGRATION_SECURITY_HARDENING=6/6 PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+PROTECTED_DEV_DB_UNCHANGED=PASS
+STAGING_HEALTH=200
+STAGING_READY=200
+SOURCE_RUNTIME_PARITY=PASS
+```
+
+O runtime protegido confirmou `environment=staging`,
+`deploymentId=b5078c3f-a738-4984-94da-5b353512a0ae`,
+`deploymentIdentityVerified=true`, `targetVerified=true`,
+`databaseVerified=true`, manifesto `e8c518dd46d8489fa105c1ea94c4c5fa0ed63d923f92261ec86783dbd3101d3e`,
+`trackedProviderConnections=false`, `externalProviderActivationEnabled=false`
+e `outboundEnabled=false`. Os hashes dos arquivos causais locais/runtime
+permanecem reconciliados; `auditReason.js` é
+`9f05ed445d215460f9f54bac0dae79e92debb0bf92d89fc95096c6d61aeec940`,
+`metaCredentialHealth.js` é
+`4c46f446bf642b2f5194392eacac1db9837f8baed0c939727b84f6f0b12f0485` e as
+rotas, fingerprint e lifecycles continuam nos hashes do candidato anterior.
+
+O caminho adversarial anterior teve três timeouts. Isso não é convertido em
+PASS. Uma nova instância independente, em mecanismo separado e read-only,
+deve auditar o candidato `85ed8e2` do zero. Até seu veredito e a reconciliação
+final do Sol, o estado canônico é:
+
+```text
+RELEASE_FUNCTIONAL_HEAD=85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068
+RELEASE_FUNCTIONAL_TREE=a24ee77a532230bd9da1f5f5421c9146c345b9f4
+REMOTE_BRANCH_SHA=85ed8e28a6dae1d02d5ce30834ebcf6af4cf4068
+RAILWAY_API_DEPLOYMENT=b5078c3f-a738-4984-94da-5b353512a0ae
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_REVIEWER_INFRA=AVAILABLE_NEW_PATH
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+```
+
 ## Addendum — chaves OAuth e redaction de auditoria (2026-09-01)
 
 O reviewer adversarial independente encontrou `ADV-NEW-001` e `ADV-NEW-002`
