@@ -11,6 +11,8 @@ const FEATURE_KEYS = Object.freeze({
   AI_COMMERCE: "AI_COMMERCE",
 });
 
+const { sanitizeAuditReason } = require("../security/auditReason");
+
 const FEATURE_ENV_KEYS = Object.freeze({
   [FEATURE_KEYS.LEADS_COMMUNICATION]: "LEADS_COMMUNICATION_ENABLED",
   [FEATURE_KEYS.SITE_LEAD_CAPTURE]: "SITE_LEAD_CAPTURE_ENABLED",
@@ -124,6 +126,7 @@ function createTenantFeatureMiddleware({ prisma, featureKey }) {
 
 async function setTenantFeature({ prisma, empresaId, featureKey, enabled, operatedBy, reason, usuarioId = null, allowExternalAuditUser = false }) {
   validateFeatureChange({ empresaId, featureKey, enabled, operatedBy, reason, usuarioId });
+  const sanitizedReason = sanitizeAuditReason(reason);
 
   return prisma.$transaction(async (tx) => {
     const empresa = await tx.empresa.findUnique({ where: { id: empresaId }, select: { id: true } });
@@ -167,7 +170,7 @@ async function setTenantFeature({ prisma, empresaId, featureKey, enabled, operat
         valorNovo: enabled,
         operadoPor: operatedBy.trim(),
         usuarioId,
-        motivo: reason.trim(),
+        motivo: sanitizedReason,
       },
     });
     return { feature, audit };

@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { domainToASCII } = require("node:url");
+const { sanitizeAuditReason } = require("../security/auditReason");
 
 const EMAIL_CHANNEL_TYPE = "EMAIL";
 const REAL_EMAIL_INBOUND_KEY = "email-inbound-real";
@@ -98,20 +99,12 @@ function normalizeExpectedUpdatedAt(value) {
 
 function sanitizeReason(value, sensitiveValues = []) {
   const text = normalizeRequiredText(value, "reason", 500);
-  let sanitized = text.replace(/(password|senha|token|secret|authorization|cookie|payload|accessTokenRef)\s*[:=]\s*[^\s,;]+/gi, "$1=[REDACTED]");
-  for (const secret of sensitiveValues.filter(Boolean)) {
-    sanitized = sanitized.replace(new RegExp(escapeRegExp(String(secret)), "gi"), "[REDACTED]");
-  }
-  return sanitized.slice(0, 500);
+  return sanitizeAuditReason(text, sensitiveValues);
 }
 
 function normalizeCorrelationId(value) {
   const text = String(value ?? "").trim();
   return /^[A-Za-z0-9._:-]{1,120}$/.test(text) ? text : null;
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function emailError(status, code, message) {

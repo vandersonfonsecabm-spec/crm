@@ -243,6 +243,22 @@ test("H7.1 protege operacoes de plataforma por allowlist backend e sem acesso te
   assert.equal(audits.length, 2);
   assert.deepEqual(await automationCounts(control.empresaId), countsBefore);
 
+  const unsafeReason = "probe postgresql://alice:synthetic-secret@db.internal:5432/crm?access_token=query-secret state=STATE123 signature=SIG123";
+  const unsafeEnabled = await request("PATCH", `/platform/tenants/${control.empresaId}/capabilities/automations`, { enabled: true, reason: unsafeReason }, operator.token);
+  assert.equal(unsafeEnabled.status, 200);
+  const unsafeAudit = await prisma.auditoriaFuncionalidade.findFirst({ where: { empresaId: control.empresaId, chave: FEATURE_KEYS.AUTOMATIONS }, orderBy: { id: "desc" } });
+  assert.equal(unsafeAudit.valorNovo, true);
+  assert.doesNotMatch(unsafeAudit.motivo, /synthetic-secret|query-secret|STATE123|SIG123|postgresql:/i);
+  const unsafeAuditResponse = await request("GET", `/platform/tenants/${control.empresaId}/capabilities/automations/audit`, undefined, operator.token);
+  assert.equal(unsafeAuditResponse.status, 200);
+  assert.doesNotMatch(unsafeAuditResponse.body.data[0].reason, /synthetic-secret|query-secret|STATE123|SIG123|postgresql:/i);
+
+  const disabledAgain = await request("PATCH", `/platform/tenants/${control.empresaId}/capabilities/automations`, { enabled: false, reason: "Encerrar segundo piloto" }, operator.token);
+  assert.equal(disabledAgain.status, 200);
+  audits = await prisma.auditoriaFuncionalidade.findMany({ where: { empresaId: control.empresaId, chave: FEATURE_KEYS.AUTOMATIONS } });
+  assert.equal(audits.length, 4);
+  assert.equal(await isFeatureEnabledForTenant({ prisma, empresaId: control.empresaId, featureKey: FEATURE_KEYS.AUTOMATIONS }), false);
+
   const otherCapabilities = await prisma.empresaFuncionalidade.count({
     where: { empresaId: control.empresaId, chave: { not: FEATURE_KEYS.AUTOMATIONS } },
   });

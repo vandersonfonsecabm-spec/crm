@@ -26,6 +26,7 @@ const {
   createEmailInboundLifecycleService,
 } = require("../integrations/emailInboundLifecycle");
 const { isEmailError } = require("../integrations/emailFoundation");
+const { sanitizeAuditReason } = require("../security/auditReason");
 const { createPlatformObservabilityService } = require("./observability");
 const {
   createAuthRateLimiter,
@@ -467,7 +468,7 @@ function mountPlatformRoutes({ app, prisma, authenticate, env = process.env }) {
         capability: row.chave,
         previousEnabled: row.valorAnterior,
         newEnabled: row.valorNovo,
-        reason: row.motivo,
+        reason: sanitizeAuditReason(row.motivo),
         createdAt: row.createdAt,
         actor: row.usuario ? { id: row.usuario.id, nome: row.usuario.nome } : null,
       })),
@@ -556,8 +557,9 @@ function validateAutomationCapabilityPayload(body) {
   const unknown = Object.keys(input).filter((key) => !["enabled", "reason"].includes(key));
   if (unknown.length) return { error: `Campos nao permitidos: ${unknown.join(", ")}.` };
   if (typeof input.enabled !== "boolean") return { error: "enabled deve ser booleano." };
-  const reason = String(input.reason || "").trim().replace(/\s+/g, " ");
-  if (reason.length > MAX_REASON_LENGTH) return { error: "Motivo deve ter ate 500 caracteres." };
+  const rawReason = String(input.reason || "").trim().replace(/\s+/g, " ");
+  if (rawReason.length > MAX_REASON_LENGTH) return { error: "Motivo deve ter ate 500 caracteres." };
+  const reason = sanitizeAuditReason(rawReason);
   return { data: { enabled: input.enabled, reason } };
 }
 
