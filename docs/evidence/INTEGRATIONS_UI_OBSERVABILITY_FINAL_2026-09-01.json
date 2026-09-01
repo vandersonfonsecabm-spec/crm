@@ -1,0 +1,81 @@
+{
+  "schema": "integrations-ui-observability-final.v1",
+  "date": "2026-09-01",
+  "executorActual": "CODEX_ROOT",
+  "modelSelectionPrecondition": "USER_CONFIRMED",
+  "runtimeModelAttestation": "NOT_REQUIRED",
+  "candidate": {
+    "branch": "feature/canonical-sale-v1",
+    "head": "a3458c232283f68ca2894b1986ced9f581c8798d",
+    "tree": "8ca0d6fb61e159267ac974f26fd1f83db5d0ff70",
+    "backendCausalHead": "e044d5852de15ad52b69f4025db9b80b3fec822b"
+  },
+  "targets": {
+    "railwayProjectId": "ddfbf66c-e274-47b1-9493-286232d2f426",
+    "railwayEnvironmentId": "d6b6f137-cffd-4647-a102-3619fc54133a",
+    "apiServiceId": "8af12b8e-4f4d-498c-9ceb-3182417905f8",
+    "workerServiceId": "25dab463-52c0-4425-825e-c7dcf6a65332",
+    "databaseServiceId": "f3a2862b-2371-4ab3-b4db-1e91680ee3b7",
+    "vercelProjectId": "prj_AJE06pNRGunJoguCNWee0RgZV6t8",
+    "vercelDeploymentId": "dpl_AksDEPAeM6a6WoesaF3dA1fZp6GK",
+    "stagingAlias": "crm-ga3-bundle-staging.vercel.app"
+  },
+  "gates": {
+    "missionCommandAudit": "PASS_WITH_CORRECTIONS",
+    "localFrontendTests": "239/239 PASS",
+    "localLint": "PASS",
+    "localBuild": "PASS",
+    "stagingHealth": "PASS",
+    "stagingReady": "PASS",
+    "sourceRuntimeParity": "PASS_FOR_PUBLISHED_ASSETS",
+    "stagingQaAuthenticatedSession": "PASS",
+    "integrationStatusTruth": "PASS_AUTHENTICATED",
+    "falseConnectedStates": 0,
+    "userObservability": "PASS_AUTHENTICATED",
+    "platformObservability": "PASS_AUTHENTICATED_OPERATOR",
+    "platformAdminTenantBypass": 0,
+    "externalSideEffects": 0,
+    "integrationTabs": "PASS",
+    "keyboardTabs": "PASS",
+    "deepLinkRoute": "PASS",
+    "viewportControl": "UNAVAILABLE_IN_CHROME_CONNECTOR",
+    "consoleErrors": "NOT_OBSERVABLE_BY_CONNECTOR",
+    "readyForProduction": false
+  },
+  "publishedAssetHashes": [
+    { "path": "index.html", "bytes": 479, "sha256": "1ee21f34c9c572eda4167d6554b40d8b1c115ebccefede132dffd7dfd645d660" },
+    { "path": "assets/index-C7jV2jGh.js", "bytes": 287275, "sha256": "2659b0dd2206430156b3ec32825ef75488c0fffe7c0908804019607ea3c9f3ab" },
+    { "path": "assets/index-BEaUgWO8.css", "bytes": 92545, "sha256": "f36904c468185ce582fd7ff0357cc5737c021a20bce6a93fb49da7c8ccdf2072" }
+  ],
+  "apiStateComparison": [
+    { "provider": "WHATSAPP", "api": "404 NOT_FOUND", "ui": "UNAVAILABLE" },
+    { "provider": "INSTAGRAM", "api": "200 NOT_CONFIGURED", "ui": "NOT_CONFIGURED" },
+    { "provider": "MESSENGER", "api": "404 NOT_FOUND", "ui": "UNAVAILABLE" },
+    { "provider": "BLING", "api": "200 EMPTY", "ui": "NOT_CONFIGURED" },
+    { "provider": "EMAIL", "api": "200 NOT_CONFIGURED", "ui": "NOT_CONFIGURED" },
+    { "provider": "AI", "api": "404 AI_COMMERCE_DISABLED", "ui": "DISABLED" }
+  ],
+  "cleanup": {
+    "qaTenants": "REVOKED",
+    "platformOperator": "REVOKED",
+    "activeUsers": 0,
+    "activeSessions": 0,
+    "activeRefreshTokens": 0,
+    "activeIntegrations": 0,
+    "activeChannels": 0,
+    "pendingOutbox": 0,
+    "totalWebhooks": 0,
+    "activeLeases": 0,
+    "platformAdminEmailsRuntime": "ABSENT",
+    "productionChanged": false,
+    "realProviderConnections": 0,
+    "realProviderCredentialsUsed": 0,
+    "realOutbound": 0
+  },
+  "review": {
+    "reviewA": "IN_PROGRESS",
+    "reviewB": "IN_PROGRESS",
+    "finalAdversarialVerdict": "NOT_EXECUTED",
+    "finalSolReconciliation": "NOT_CLOSED"
+  }
+}

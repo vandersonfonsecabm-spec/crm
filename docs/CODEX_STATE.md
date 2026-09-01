@@ -2079,7 +2079,7 @@ integracoes autorizadas.
   Chrome bloqueou o upload dos documentos locais; eles permanecem disponíveis
   no diretório para recuperação.
 
-## Integrações visíveis + observabilidade (2026-09-01)
+## Integrações visíveis + observabilidade — checkpoint inicial (superseded) (2026-09-01)
 
 - O candidato local final é `bb9ec6da0587793415b6cd25f030e41611cd8dbc`, tree
   `a520a9aa10f00b84c15bc69ce1ee43261a2ac5bd`, com manifesto backend
@@ -2104,3 +2104,41 @@ integracoes autorizadas.
   final não retornou na janela operacional e foi interrompido, portanto o
   veredito adversarial final permanece `BLOCKED_EXTERNAL`. Não declarar
   promoção para produção até obter essas evidências externas.
+
+## Integrações visíveis + observabilidade — checkpoint pós-QA autenticado (2026-09-01)
+
+- O bloqueio de login foi diagnosticado como configuração do artefato estático:
+  `VITE_API_URL` do Preview continha `/api`, mas não havia rewrite no deploy
+  anterior. O resolver passou a fixar o host oficial de staging quando o
+  hostname canônico é reconhecido; `vercel.json` foi incluído no upload para
+  rewrite/API e deep-link SPA. A correção funcional está em
+  `a3458c232283f68ca2894b1986ced9f581c8798d`, tree
+  `8ca0d6fb61e159267ac974f26fd1f83db5d0ff70`.
+- Frontend 239/239, lint e build passaram; branch remota está alinhada ao
+  mesmo SHA. O Vercel staging está em `dpl_AksDEPAeM6a6WoesaF3dA1fZp6GK`;
+  `index.html`, JS principal e CSS publicados conferem byte a byte com o build
+  local. `/api/health` e `/integracoes` respondem 200; Railway `/health` e
+  `/ready` respondem 200.
+- O ADMIN QA autenticou no staging e validou os seis cards de Integrações. A
+  API e a UI convergiram para `UNAVAILABLE`/`NOT_CONFIGURED`/`DISABLED` sem
+  falso `CONNECTED`; nenhum OAuth, provider request, credencial de provider ou
+  outbound foi iniciado. Tabs, ARIA, ArrowRight/Home/End e retry de leitura
+  foram exercitados.
+- O operador temporário autenticou e abriu Observabilidade técnica somente
+  leitura. O ADMIN QA comum recebeu 403 `PLATFORM_FORBIDDEN`. O painel exibiu
+  alerta honesto de checkpoint ausente, sem chamar isso de worker saudável e
+  sem expor segredo.
+- O run QA foi revogado com atestado fresco. `qa-prod-canonical-a`,
+  `qa-prod-canonical-b` e `qa-platform-operator-staging` estão `REVOKED`, com
+  zero usuários ativos, sessões, refresh tokens, integrações, canais, outbox e
+  leases. `PLATFORM_ADMIN_EMAILS` foi removida do staging e a API foi
+  redeployada; produção permaneceu intocada.
+- A capacidade de viewport do conector Chrome não alterou o viewport efetivo;
+  por isso a matriz live de cinco resoluções e `CONSOLE_ERRORS=0` não são
+  declarados como provados. Fixtures locais cobrem 390×844 e 1440×900; Vercel
+  não registrou runtime errors nas últimas duas horas.
+- Duas revisões novas, independentes e read-only (UI/UX e segurança/runtime)
+  estão em execução para o SHA `a3458c2`. Até o retorno delas e do adversarial
+  final, manter `FINAL_ADVERSARIAL_VERDICT=NOT_EXECUTED`,
+  `FINAL_SOL_RECONCILIATION=NOT_CLOSED` e `READY_FOR_PRODUCTION=false`.
+- Autoridade documental: `docs/INTEGRATIONS_UI_OBSERVABILITY_FINAL_2026-09-01.md`.
