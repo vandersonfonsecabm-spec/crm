@@ -21,6 +21,76 @@ REAL_PROVIDER_CREDENTIALS_USED=0
 REAL_OUTBOUND=0
 ```
 
+## Addendum — correção dos findings C48 e bloqueio externo do Vercel (2026-09-01)
+
+A revisão adversarial independente do candidato `c48bd70` encontrou dois
+findings HIGH adicionais (`ADV-C48-001` e `ADV-C48-002`): as chaves
+`clientKey/appKey` e variantes textuais `private key/access key` não estavam
+uniformes nas três fronteiras de proteção, e a regra especial de
+`authorization=` podia truncar um valor quoted antes da regra completa.
+
+Os fixes foram aplicados no commit funcional
+`f70d1a0af7b3fc8be71f1236ea1309d1ab203faa`, tree
+`2fde08e2144b9a19ae5b567d5d9910b9f7e37404`, e publicados somente na API
+staging no deployment `f7626817-24d1-4dd8-8f60-cdbbee0a04d8` (`SUCCESS`). A
+lista de chaves sensíveis foi unificada, userinfo username-only permanece
+redigido, e a ordem da redaction agora preserva valores quoted completos.
+
+Retestes causais:
+
+```text
+ADV_C48_001_REDACTION_KEYS=PASS
+ADV_C48_002_AUTHORIZATION_QUOTED=PASS
+AUDIT_REASON_REDACTION=3/3 PASS
+INTEGRATION_SECURITY_HARDENING=6/6 PASS
+META_CREDENTIAL_HEALTH=3/3 PASS
+PLATFORM_OBSERVABILITY=4/4 PASS
+BACKEND_ISOLATED_SUITE=PASS_EXIT_0
+PROTECTED_DEV_DB_UNCHANGED=PASS
+STAGING_BACKEND_HEALTH=200
+STAGING_BACKEND_READY=200
+BACKEND_SOURCE_RUNTIME_PARITY=PASS
+```
+
+O fingerprint protegido retornou `environment=staging`,
+`deploymentId=f7626817-24d1-4dd8-8f60-cdbbee0a04d8`,
+`deploymentIdentityVerified=true`, `targetVerified=true`,
+`databaseVerified=true`, manifesto
+`d8ecf0807223c1f50c3c3678b7a8d39cf2f81eeff90b43b5b554666a94b350ee`,
+`trackedProviderConnections=false`, `externalProviderActivationEnabled=false`
+e `outboundEnabled=false`. Os sete hashes backend causais locais/runtime
+conferem byte a byte.
+
+O frontend local correspondente continua com 239/239 testes, build e lint
+passando, mas ainda não pôde ser publicado no Vercel staging: a plataforma
+recusa novas criações por `api-deployments-free-per-day` antes de gerar um
+deployment. O alias continua em `dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3`; logo o
+runtime frontend do candidato e a paridade integral permanecem pendentes.
+Isso é bloqueio externo de release, não PASS nem finding do código local.
+
+Uma nova revisão adversarial limpa pode revisar o candidato `f70d1a0`, mas não
+há autorização para promover enquanto o frontend correspondente não existir no
+staging. Estado canônico:
+
+```text
+RELEASE_FUNCTIONAL_HEAD=f70d1a0af7b3fc8be71f1236ea1309d1ab203faa
+RELEASE_FUNCTIONAL_TREE=2fde08e2144b9a19ae5b567d5d9910b9f7e37404
+REMOTE_BRANCH_SHA=f70d1a0af7b3fc8be71f1236ea1309d1ab203faa
+RAILWAY_API_DEPLOYMENT=f7626817-24d1-4dd8-8f60-cdbbee0a04d8
+VERCEL_STAGING_DEPLOYMENT=dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3
+STAGING_FRONTEND_RUNTIME=BLOCKED_EXTERNAL_VERCEL_QUOTA
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_REVIEWER_INFRA=AVAILABLE_NEW_PATH
+FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+PRODUCTION_CHANGED=false
+REAL_PROVIDER_CONNECTIONS_CREATED=0
+REAL_PROVIDER_CREDENTIALS_USED=0
+REAL_OUTBOUND=0
+```
+
 ## Addendum — correção dos cinco findings E14F e bloqueio externo do Vercel (2026-09-01)
 
 A segunda revisão adversarial independente do candidato `e14f592` retornou

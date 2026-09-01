@@ -1,4 +1,25 @@
 # Estado atual do CRM
+## Integrações visíveis + observabilidade — correção dos findings C48 e bloqueio externo do Vercel (2026-09-01)
+
+- A revisão adversarial do candidato `c48bd70` encontrou `ADV-C48-001/002`
+  (HIGH): chaves `clientKey/appKey` e variantes `private key/access key` não
+  estavam uniformes nos sanitizers, e `authorization=` quoted podia ser
+  truncado. O fix está em `f70d1a0af7b3fc8be71f1236ea1309d1ab203faa`, tree
+  `2fde08e2144b9a19ae5b567d5d9910b9f7e37404`.
+- Backend isolado e focused tests passaram; Railway staging está em
+  `f7626817-24d1-4dd8-8f60-cdbbee0a04d8` (`SUCCESS`), health/readiness 200,
+  manifesto `d8ecf0807223c1f50c3c3678b7a8d39cf2f81eeff90b43b5b554666a94b350ee`
+  e sete hashes backend conferidos byte a byte.
+- O frontend local segue 239/239, build/lint PASS, mas a criação do deployment
+  Vercel staging foi recusada antes de criar artefato por
+  `api-deployments-free-per-day`; o alias continua no deployment anterior
+  `dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3`. Paridade completa e runtime frontend não
+  são PASS; produção permanece intocada.
+- Uma revisão adversarial limpa e a reconciliação do Sol permanecem pendentes;
+  manter `FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW`,
+  `FINAL_SOL_RECONCILIATION=NOT_CLOSED`, `READY_FOR_PRODUCTION=false`,
+  `PRODUCTION_CHANGED=false` e provider/outbound desligados.
+
 ## Integrações visíveis + observabilidade — correção dos cinco findings E14F e bloqueio externo do Vercel (2026-09-01)
 
 - A revisão adversarial do candidato `e14f592` retornou `FIX_FIRST` com quatro
