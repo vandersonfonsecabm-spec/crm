@@ -25,12 +25,12 @@ REAL_OUTBOUND=0
 
 ```text
 BRANCH=feature/canonical-sale-v1
-RELEASE_HEAD=a3458c232283f68ca2894b1986ced9f581c8798d
-RELEASE_TREE=8ca0d6fb61e159267ac974f26fd1f83db5d0ff70
+RELEASE_HEAD=daef225348f715edf079c0e3f2a051b062318531
+RELEASE_TREE=f1eb9ea120f9f9d58e633853885af5b8ac2ffc93
 BACKEND_CAUSAL_HEAD=e044d5852de15ad52b69f4025db9b80b3fec822b
 BASELINE_FUNCTIONAL=79eed4f
 FRONTEND_SOURCE_FIX=API fallback canônico de staging + teste de regressão
-REMOTE_BRANCH_SHA=a3458c232283f68ca2894b1986ced9f581c8798d
+REMOTE_BRANCH_SHA=951b35bbd7a4d3474e8f848e746aa00b57b90a0f
 ```
 
 O frontend recebeu uma correção mínima porque o bundle estático publicado
@@ -58,10 +58,10 @@ RAILWAY_ENVIRONMENT=d6b6f137-cffd-4647-a102-3619fc54133a
 RAILWAY_API_SERVICE=8af12b8e-4f4d-498c-9ceb-3182417905f8
 RAILWAY_WORKER_SERVICE=25dab463-52c0-4425-825e-c7dcf6a65332
 RAILWAY_DATABASE_SERVICE=f3a2862b-2371-4ab3-b4db-1e91680ee3b7
-RAILWAY_API_DEPLOYMENT_AFTER_CLEANUP=460b39a2-629b-43e6-accc-affb7b182010
+RAILWAY_API_DEPLOYMENT_AFTER_CLEANUP=35e96728-ba1e-4bcf-a99d-62785ea90256
 RAILWAY_WORKER_DEPLOYMENT=ebefe2db-ad83-4446-978f-c495c30a0810
 VERCEL_PROJECT=prj_AJE06pNRGunJoguCNWee0RgZV6t8
-VERCEL_DEPLOYMENT=dpl_AksDEPAeM6a6WoesaF3dA1fZp6GK
+VERCEL_DEPLOYMENT=dpl_5mG6xZWnTDszcmG7TMRv1wQYMFx3
 STAGING_ALIAS=crm-ga3-bundle-staging.vercel.app
 ```
 
@@ -80,9 +80,9 @@ O HTML, o JavaScript principal e o CSS publicados foram comparados byte a
 byte com o build local:
 
 ```text
-index.html                 479/479 bytes  SHA-256 1ee21f34c9c572eda4167d6554b40d8b1c115ebccefede132dffd7dfd645d660
-assets/index-C7jV2jGh.js   287275/287275  SHA-256 2659b0dd2206430156b3ec32825ef75488c0fffe7c0908804019607ea3c9f3ab
-assets/index-BEaUgWO8.css  92545/92545    SHA-256 f36904c468185ce582fd7ff0357cc5737c021a20bce6a93fb49da7c8ccdf2072
+index.html                 479/479 bytes  SHA-256 e35a3ebef6f7ddc9cd0791857f3c48cc4fb106a0901da69b44f5412ab7cd3ead
+assets/index-kHoJ1Ly6.js   287275/287275  SHA-256 e9ec5882b7bf241dff7b98aa37741ec7c29ad08e88e866ebbf9ff69428445e0f
+assets/index-DnvstQIY.css  92545/92545    SHA-256 4148c1a6ae931f29534c41e14e11fcf5280afed06fd41e7eae19253a22ecbbf6
 SOURCE_RUNTIME_PARITY=PASS_FOR_PUBLISHED_ASSETS
 ```
 
@@ -195,18 +195,17 @@ encerramento do lote.
 
 As revisões históricas corrigiram os findings conhecidos (redaction, estado
 Instagram, fingerprint, outbox, revogação local, gate genérico e card
-duplicado). Duas revisões novas e independentes foram abertas para o SHA
-`a3458c2`: Reviewer A (UI/UX) e Reviewer B (segurança/runtime). Elas devem
-retornar `PASS` ou `FIX_FIRST`; nenhum agente executor pode autocertificar a
-própria mudança.
+duplicado). Reviewer A (UI/UX) e Reviewer B (segurança/runtime) concluíram a
+rechecagem independente do candidato funcional `daef225`; nenhum agente
+executor pode autocertificar a própria mudança.
 
-Enquanto os reviewers novos não retornarem e a limitação de console/viewport
-não tiver evidência equivalente, o estado honesto é:
+O snapshot inicial abaixo foi supersedido pelos addenda de segurança e UI. O
+estado canônico após as rechecagens é:
 
 ```text
-REVIEW_A_FINAL=IN_PROGRESS
-REVIEW_B_FINAL=IN_PROGRESS
-FINAL_ADVERSARIAL_VERDICT=NOT_EXECUTED
+REVIEW_A_FINAL=PASS_AFTER_RECHECK
+REVIEW_B_FINAL=PASS
+FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
 FINAL_SOL_RECONCILIATION=NOT_CLOSED
 READY_FOR_PRODUCTION=false
 ```
@@ -306,3 +305,23 @@ FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
 FINAL_SOL_RECONCILIATION=NOT_CLOSED
 READY_FOR_PRODUCTION=false
 ```
+
+## Addendum — nova tentativa adversarial independente (2026-09-01)
+
+Uma nova instância read-only recebeu contexto limpo, o contrato, o candidato
+`daef225348f715edf079c0e3f2a051b062318531`, a árvore
+`f1eb9ea120f9f9d58e633853885af5b8ac2ffc93` e o índice de evidências. A instância
+foi aguardada por uma janela operacional e não retornou; foi interrompida após
+o timeout. Não houve alteração de código, ambiente, banco, provider ou
+outbound.
+
+```text
+FINAL_ADVERSARIAL_ATTEMPT_1=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
+FINAL_ADVERSARIAL_ATTEMPT_2=INTERRUPTED_AFTER_TIMEOUT
+FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT
+FINAL_SOL_RECONCILIATION=NOT_CLOSED
+READY_FOR_PRODUCTION=false
+```
+
+Esse resultado é uma lacuna externa de evidência. Ele não autoriza converter
+o gate em `SHIP` nem reabrir o código sem um finding causal.

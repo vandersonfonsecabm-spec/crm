@@ -2154,8 +2154,9 @@ integracoes autorizadas.
   observabilidade com vazio de credenciais correto e 403 para ADMIN de tenant.
 - Duas revisões novas, independentes e read-only foram concluídas para o SHA
   final: `REVIEW_A_FINAL=PASS_AFTER_RECHECK` e `REVIEW_B_FINAL=PASS`. O
-  adversarial final foi iniciado com contexto limpo, mas não retornou dentro da
-  janela operacional e foi interrompido; manter
+  adversarial final foi tentado novamente em uma instância limpa, mas as duas
+  tentativas não retornaram dentro da janela operacional e foram interrompidas;
+  manter
   `FINAL_ADVERSARIAL_VERDICT=BLOCKED_EXTERNAL_REVIEWER_TIMEOUT`,
   `FINAL_SOL_RECONCILIATION=NOT_CLOSED` e `READY_FOR_PRODUCTION=false`.
 - Autoridade documental: `docs/INTEGRATIONS_UI_OBSERVABILITY_FINAL_2026-09-01.md`.
