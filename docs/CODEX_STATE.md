@@ -1,4 +1,28 @@
 # Estado atual do CRM
+## Integrações visíveis + observabilidade — pós-fix adversarial (2026-09-01)
+
+- A revisão independente posterior encontrou `ADV-POSTFIX-001` (HIGH): a
+  redaction ainda preservava userinfo em referências network-path e parte de
+  valores sensíveis entre aspas; e `ADV-POSTFIX-002` (HIGH): o fingerprint não
+  vinculava a resposta ao deployment exato.
+- Ambos foram corrigidos no commit funcional
+  `9814cd0e90bea466f86c088dfe6a75ae5d93705a`, tree
+  `137012ed4534c0bba14d910b84c8555dba559e06`, e publicados somente no
+  deployment staging `2d6640f9-7046-4f2d-a7e8-30cdc1f78a59`.
+- O runtime retornou `deploymentId` igual ao deployment consultado,
+  `deploymentIdentityVerified=true`, manifesto
+  `df4755d2900e0a61e98b68d98253c59523e6373341ae34ef03af1aeb7d738927`,
+  `/health=200`, `/ready=200`, providers conectados `false` e outbound `false`.
+  Os hashes dos nove arquivos causais conferem byte a byte com `/app`.
+- Retestes de redaction, fingerprint, observabilidade, lifecycle e a suíte
+  backend isolada completa passaram; `backend/prisma/dev.db` permanece com o
+  SHA canônico `6116ca72110d8c4a6b5bc214a476993afdc155ec32b3b2431e4ce54254a42533`.
+- Um novo reviewer adversarial independente precisa auditar o candidato
+  `9814cd0` do zero. Até seu veredito e a reconciliação do Sol, manter
+  `FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW`,
+  `FINAL_SOL_RECONCILIATION=NOT_CLOSED`, `READY_FOR_PRODUCTION=false` e
+  `PRODUCTION_CHANGED=false`.
+
 ## Integrações visíveis + observabilidade — correções do adversarial final (2026-09-01)
 
 - O adversarial independente encontrou cinco findings reproduzíveis no

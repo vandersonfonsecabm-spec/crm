@@ -29,6 +29,12 @@ commit funcional `32c5466ad8f05fb0d631e2816fe53fe0e9e97b25`, tree
 `c483810ce573aec9ce46e22a3d43babf807d9229`, e publicada somente na API de
 staging no deployment `0a0e9aa7-e99f-46ee-9889-7b477dee508b` (`SUCCESS`).
 
+Uma revisão independente posterior encontrou dois casos-limite adicionais no
+mesmo candidato. Eles foram corrigidos no commit funcional
+`9814cd0e90bea466f86c088dfe6a75ae5d93705a`, tree
+`137012ed4534c0bba14d910b84c8555dba559e06`, e publicados na API staging no
+deployment `2d6640f9-7046-4f2d-a7e8-30cdc1f78a59` (`SUCCESS`).
+
 Findings tratados:
 
 - `ADV-FINAL-001` (HIGH): WhatsApp, Instagram e Messenger agora exigem
@@ -44,6 +50,10 @@ Findings tratados:
   indecifrável como `INVALID`, em vez de contá-lo como `ATIVA`.
 - `ADV-FINAL-005` (MEDIUM): o manifesto e os hashes dos arquivos backend foram
   reconciliados e vinculados ao deployment final `0a0e9aa7`.
+- `ADV-POSTFIX-001` (HIGH): redaction remove userinfo de referências
+  network-path e valores sensíveis inteiros entre aspas, inclusive espaços.
+- `ADV-POSTFIX-002` (HIGH): o fingerprint retorna e valida
+  `RAILWAY_DEPLOYMENT_ID`, vinculando a evidência à instância exata.
 
 Retestes causais do novo candidato:
 
@@ -57,13 +67,18 @@ MESSENGER_INBOUND_LIFECYCLE=6/6 PASS
 INSTAGRAM_INBOUND_LIFECYCLE=5/5 PASS
 PLATFORM_OBSERVABILITY=3/3 PASS
 RUNTIME_FINGERPRINT=3/3 PASS
+POSTFIX_REDACTION_NETWORK_USERINFO=PASS
+POSTFIX_REDACTION_QUOTED_VALUES=PASS
+POSTFIX_DEPLOYMENT_ID_ATTESTATION=PASS
 BACKEND_ISOLATED_SUITE=PASS_EXIT_0
 PROTECTED_DEV_DB_UNCHANGED=PASS
 ```
 
-Paridade runtime da API foi comprovada byte a byte no deployment `0a0e9aa7`.
+Paridade runtime da API foi comprovada byte a byte no deployment `2d6640f9`.
 O manifesto `backend-runtime-v3-lf` retornado pelo runtime e pelo worktree é
-`f8b3ea62ce52475c2fc9fd606e546fb28ac84e2588deb836e14d550b616ccf21`.
+`df4755d2900e0a61e98b68d98253c59523e6373341ae34ef03af1aeb7d738927`.
+O runtime retornou `deploymentId=2d6640f9-7046-4f2d-a7e8-30cdc1f78a59` e
+`deploymentIdentityVerified=true`.
 `/health=200`, `/ready=200` e o fingerprint protegido confirmaram staging,
 PostgreSQL de staging, providers conectados `false`, ativação externa `false`
 e outbound `false`.
@@ -76,9 +91,9 @@ src/integrations/whatsappInboundLifecycle.js   2282c886e32b73ca9966362bbfd0190ae
 src/integrations/messengerInboundLifecycle.js  473e5f122f45fc89b583795ff2a1e7cecb9822d43ed5abd4cabe0fed06ce202c
 src/integrations/instagramInboundLifecycle.js  c1a31c03642fccbd7c1f2ba811649c7b0574342750ce657aa1026b100fe9156f
 src/integrations/emailInboundLifecycle.js      739b7432662d50007e5513af14d33e5ae6dc50e06be7040d1713aeeec7d4720c
-src/integrations/routes.js                     9dc1a9dea046ce568c9a314feb43071ef4abc1859daefbef94b4fe1bc93e7dcf
+src/integrations/routes.js                     0e11f7a052cdbdca01a179da4fcaff1a91260e694ef7b036c8f85ac8b371873d
 src/platform/observability.js                  d6a70266ad01cf8b889ca61404b454ecff7de687778b35158f6fd78fec1e12e0
-src/runtime-fingerprint.js                     87dfe03f415340ee1295396d3cae1b06d119279f7ecc0ed15b97011aedb730cc
+src/runtime-fingerprint.js                     dc075fbe1e5810346daed3f6cfc23c72b6831219968ac7f07ff07870b5fe4f10
 src/security/auditReason.js                    89dbd8aa9ac2d60a552f43405d55efed1c15cc1cefa6905d7ad1c96b376f5167
 BACKEND_RUNTIME_HASH_PARITY=PASS
 ```
@@ -91,10 +106,10 @@ O novo reviewer adversarial independente e a reconciliação final do Sol ainda
 são obrigatórios. Até ambos retornarem, o estado canônico é:
 
 ```text
-RELEASE_FUNCTIONAL_HEAD=32c5466ad8f05fb0d631e2816fe53fe0e9e97b25
-RELEASE_FUNCTIONAL_TREE=c483810ce573aec9ce46e22a3d43babf807d9229
-REMOTE_BRANCH_SHA=32c5466ad8f05fb0d631e2816fe53fe0e9e97b25
-RAILWAY_API_DEPLOYMENT=0a0e9aa7-e99f-46ee-9889-7b477dee508b
+RELEASE_FUNCTIONAL_HEAD=9814cd0e90bea466f86c088dfe6a75ae5d93705a
+RELEASE_FUNCTIONAL_TREE=137012ed4534c0bba14d910b84c8555dba559e06
+REMOTE_BRANCH_SHA=9814cd0e90bea466f86c088dfe6a75ae5d93705a
+RAILWAY_API_DEPLOYMENT=2d6640f9-7046-4f2d-a7e8-30cdc1f78a59
 REVIEW_A_FINAL=PASS_AFTER_RECHECK
 REVIEW_B_FINAL=PASS
 FINAL_ADVERSARIAL_VERDICT=PENDING_POST_FIX_REVIEW
