@@ -77,6 +77,14 @@ const EXTERNAL_FEATURE_KEYS = Object.freeze([
   "AI_COMMERCE",
 ]);
 
+function qaTransactionOptions(env = process.env) {
+  const configuredTimeout = Number(env.QA_PROD_TRANSACTION_TIMEOUT_MS);
+  const timeout = Number.isSafeInteger(configuredTimeout) && configuredTimeout >= 30000 && configuredTimeout <= 120000
+    ? configuredTimeout
+    : 30000;
+  return { isolationLevel: "Serializable", maxWait: 10000, timeout };
+}
+
 class QaProvisioningError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -724,7 +732,7 @@ async function provisionSyntheticQa({ prisma, env = process.env, passwordHashes,
       output.push({ key: item.spec.key, tenant: { id: tenant.id, slug: tenant.slug, name: tenant.nome, active: true }, users: users.map((user) => ({ id: user.id, empresaId: user.empresaId, email: user.email, papel: user.papel, ativo: user.ativo })) });
     }
     return output;
-  }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
+  }, qaTransactionOptions(env));
   const after = await inspectQaState({ prisma, env, expectedReleaseHead, target: targetInfo.target, requireOperationalAttestation: !allowTestAttestation, requireHarnessParity: !allowTestAttestation, allowTestAttestation, attestation });
   if (after.status !== "READY") throw new QaProvisioningError("QA_PROD_POST_APPLY_VERIFY_FAILED", "Apply terminou sem estado READY verificavel.", { status: after.status });
   return { status: "READY", mode: "apply", target: targetInfo.target, tenants: result, runId: resolvedRunId, credentialsInOutput: 0 };
@@ -809,7 +817,7 @@ async function revokeSyntheticQa({ prisma, env = process.env, confirmation, expe
       output.push({ key: spec.key, tenantId: tenant.id, usersDeactivated: userIds.length, invitesRevoked: invites.count, passwordResetsRevoked: resets.count, emailOutboxCancelled: outbox.count, metaCredentialsRevoked: metaCredentials.count, integrationsDisabled: integrations.count, channelsDisabled: channels.count, oauthStatesClosed: oauthStates.count, webhookEventsQuarantined: webhookEvents.count, externalFeaturesDisabled: externalFeatures.count, aiSettingsDisabled: aiSettings.count, notificationSettingsDisabled: notificationSettings.count, emailMailboxesRemoved: mailboxes.count, leasesRemoved: leases.count, automationRulesDisabled: rules.count, automationRunsCancelled: runs.count, automationJobsCancelled: jobs.count, canonicalFeatureDisabled: feature.changed, tenantActive: false, retainedData: inspection.dataInventory });
     }
     return output;
-  }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
+  }, qaTransactionOptions(env));
   const after = await inspectQaState({ prisma, env, expectedReleaseHead, target: targetInfo.target, requireOperationalAttestation: !allowTestAttestation, requireHarnessParity: !allowTestAttestation, allowTestAttestation, attestation });
   if (after.status !== "REVOKED" && after.status !== "ABSENT_SAFE") throw new QaProvisioningError("QA_PROD_POST_REVOKE_VERIFY_FAILED", "Revoke terminou sem estado REVOKED verificavel.", { status: after.status });
   return { status: after.status, mode: "revoke", target: targetInfo.target, tenants: result, runId: resolvedRunId, credentialsInOutput: 0 };
@@ -844,6 +852,7 @@ module.exports = {
   provisionSyntheticQa,
   providerIsolationSafe,
   providerIsolationState,
+  qaTransactionOptions,
   releaseQaDatabaseLease,
   assertPrewriteSafety,
   revokeSyntheticQa,

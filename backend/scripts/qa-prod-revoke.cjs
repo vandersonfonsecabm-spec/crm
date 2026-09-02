@@ -108,6 +108,10 @@ function listCredentialBundles(expectedTarget) {
   const matches = [];
   for (const entry of fs.readdirSync(path.resolve(os.tmpdir()), { withFileTypes: true })) {
     if (entry.name.toLowerCase().startsWith("qa-") && entry.isSymbolicLink()) throw new Error("QA_CREDENTIAL_PATH_REPARSE_POINT");
+    // Bundles do operador de plataforma possuem contrato próprio e são
+    // removidos pelo qa-staging-platform-operator.cjs; nunca tratá-los como
+    // bundles de credenciais dos tenants QA.
+    if (entry.name.toLowerCase().startsWith("qa-platform-")) continue;
     if (!entry.isDirectory() || !entry.name.toLowerCase().startsWith("qa-")) continue;
     const candidate = path.join(os.tmpdir(), entry.name, "credentials.json");
     const manifestPath = path.join(os.tmpdir(), entry.name, "manifest.json");
