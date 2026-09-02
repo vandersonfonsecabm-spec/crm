@@ -2,6 +2,9 @@
 
 const assert = require("node:assert/strict");
 const bcrypt = require("bcryptjs");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 const { PrismaClient } = require("@prisma/client");
 const {
@@ -13,6 +16,11 @@ const {
   provisionStagingPlatformOperator,
   revokeStagingPlatformOperator,
 } = require("../src/security/qa-platform-operator.cjs");
+const {
+  cleanupOperatorCredentialBundle,
+  writeOperatorCredentialBundle,
+} = require("../scripts/qa-staging-platform-operator.cjs");
+const { defaultCredentialsPath } = require("../scripts/qa-prod-bootstrap.cjs");
 
 const RELEASE = "a".repeat(40);
 const prisma = new PrismaClient();
@@ -147,4 +155,29 @@ test("operator apply rejects a non-bcrypt hash before any write", async () => {
     (error) => error?.code === "QA_PLATFORM_OPERATOR_PASSWORD_HASH_INVALID",
   );
   assert.equal(await prisma.empresa.count({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug } }), 0);
+});
+
+test("operator credential bundle is temporary, restricted and removable", () => {
+  const runId = "qa-platform-credential-0001";
+  const credentialsFile = defaultCredentialsPath(runId);
+  const password = "synthetic-operator-password-".padEnd(40, "x");
+  let bundle;
+  try {
+    bundle = writeOperatorCredentialBundle(credentialsFile, { runId, password });
+    assert.equal(bundle.filePath, credentialsFile);
+    assert.equal(fs.existsSync(bundle.filePath), true);
+    assert.equal(fs.existsSync(bundle.manifestPath), true);
+    const stored = JSON.parse(fs.readFileSync(bundle.filePath, "utf8"));
+    assert.deepEqual(stored, {
+      runId,
+      target: "staging",
+      operator: { email: QA_PLATFORM_OPERATOR.email, papel: QA_PLATFORM_OPERATOR.role, password },
+    });
+    const manifest = JSON.parse(fs.readFileSync(bundle.manifestPath, "utf8"));
+    assert.deepEqual(manifest, { runId, target: "staging", credentialsFileName: "credentials.json", status: "READY" });
+    assert.equal(path.resolve(bundle.filePath).startsWith(path.resolve(os.tmpdir()) + path.sep), true);
+  } finally {
+    cleanupOperatorCredentialBundle(bundle || { filePath: credentialsFile, manifestPath: path.join(path.dirname(credentialsFile), "manifest.json"), directoryPath: path.dirname(credentialsFile) });
+  }
+  assert.equal(fs.existsSync(credentialsFile), false);
 });
