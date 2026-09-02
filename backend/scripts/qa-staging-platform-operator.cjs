@@ -5,13 +5,13 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { PrismaClient } = require("@prisma/client");
 const {
   assertCredentialPath,
   defaultCredentialsPath,
   hardenCredentialDirectory,
   hardenCredentialFile,
 } = require("./qa-prod-bootstrap.cjs");
+const { createQaPrismaClient } = require("./qa-runtime-prisma.cjs");
 const {
   QA_PLATFORM_OPERATOR,
   QA_PLATFORM_OPERATOR_APPLY_CONFIRMATION,
@@ -100,7 +100,8 @@ function runtimeEnv(options) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const env = runtimeEnv(options);
-  const prisma = new PrismaClient();
+  const prismaRuntime = createQaPrismaClient({ env });
+  const prisma = prismaRuntime.prisma;
   try {
     if (options.mode === "status") {
       const result = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead: options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD, runId: options.runId, requireAttestation: true });
@@ -136,7 +137,7 @@ async function main() {
       cleanupOperatorCredentialBundle(activeCredentialBundle);
       activeCredentialBundle = null;
     }
-    await prisma.$disconnect();
+    await prismaRuntime.cleanup();
   }
 }
 

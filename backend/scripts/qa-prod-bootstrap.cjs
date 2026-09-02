@@ -5,7 +5,6 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { PrismaClient } = require("@prisma/client");
 const {
   APPLY_CONFIRMATION,
   QA_TENANTS,
@@ -17,6 +16,7 @@ const {
   provisionSyntheticQa,
   releaseQaDatabaseLease,
 } = require("../src/security/qa-provisioning.cjs");
+const { createQaPrismaClient } = require("./qa-runtime-prisma.cjs");
 
 const REPOSITORY_ROOT = path.resolve(__dirname, "../..");
 let activeLock = null;
@@ -139,12 +139,14 @@ async function main() {
   if (options.mode === "apply") assertPrewriteSafety({ env, target: targetInfo.target, runId: options.runId, attestation: targetInfo.attestation });
   const lock = acquireLock();
   activeLock = lock;
+  let prismaRuntime = null;
   let prisma = null;
   let databaseLease = null;
   let credentialsFile = null;
   const runId = options.runId;
   try {
-    prisma = new PrismaClient();
+    prismaRuntime = createQaPrismaClient({ env });
+    prisma = prismaRuntime.prisma;
     if (options.mode === "dry-run") {
       const result = await provisionSyntheticQa({ prisma, env, apply: false, expectedReleaseHead, target: options.target });
       console.log(JSON.stringify({ ...result, runId, credentialsInOutput: 0 }, null, 2));
@@ -206,7 +208,7 @@ async function main() {
       } catch { process.exitCode = 1; }
       databaseLease = null;
     }
-    if (prisma) await prisma.$disconnect();
+    if (prismaRuntime) await prismaRuntime.cleanup();
     if (!releaseLock(lock)) process.exitCode = 1;
     activeLock = null;
   }

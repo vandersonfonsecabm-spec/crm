@@ -1,8 +1,8 @@
 "use strict";
 
 const fs = require("node:fs");
-const { PrismaClient } = require("@prisma/client");
 const { assertCredentialPath } = require("./qa-prod-bootstrap.cjs");
+const { createQaPrismaClient } = require("./qa-runtime-prisma.cjs");
 const {
   EMERGENCY_REVOKE_CONFIRMATION,
   QA_TENANTS,
@@ -49,10 +49,12 @@ async function main() {
   const targetInfo = assertTarget(env, { expectedReleaseHead, target: options.target, runId: options.runId, requireExplicitTarget: true, requireOperationalAttestation: true, requireHarnessParity: true, requirePrewriteSafety: options.target === "production" });
   assertPrewriteSafety({ env, target: targetInfo.target, runId: options.runId, attestation: targetInfo.attestation });
   const lock = acquireLock();
+  let prismaRuntime = null;
   let prisma = null;
   let databaseLease = null;
   try {
-    prisma = new PrismaClient();
+    prismaRuntime = createQaPrismaClient({ env });
+    prisma = prismaRuntime.prisma;
     databaseLease = await acquireQaDatabaseLease(prisma, { runId: options.runId });
     const targetBundles = listCredentialBundles(options.target);
     const credentialBundle = options.credentialsFile
@@ -72,7 +74,7 @@ async function main() {
       } catch { process.exitCode = 1; }
       databaseLease = null;
     }
-    if (prisma) await prisma.$disconnect();
+    if (prismaRuntime) await prismaRuntime.cleanup();
     if (!releaseLock(lock)) process.exitCode = 1;
   }
 }

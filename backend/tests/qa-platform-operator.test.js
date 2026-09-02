@@ -21,6 +21,7 @@ const {
   writeOperatorCredentialBundle,
 } = require("../scripts/qa-staging-platform-operator.cjs");
 const { defaultCredentialsPath } = require("../scripts/qa-prod-bootstrap.cjs");
+const { createQaPrismaClient } = require("../scripts/qa-runtime-prisma.cjs");
 
 const RELEASE = "a".repeat(40);
 const prisma = new PrismaClient();
@@ -180,4 +181,20 @@ test("operator credential bundle is temporary, restricted and removable", () => 
     cleanupOperatorCredentialBundle(bundle || { filePath: credentialsFile, manifestPath: path.join(path.dirname(credentialsFile), "manifest.json"), directoryPath: path.dirname(credentialsFile) });
   }
   assert.equal(fs.existsSync(credentialsFile), false);
+});
+
+test("QA runtime selects a generated PostgreSQL Prisma client for staging", async () => {
+  const runtime = createQaPrismaClient({
+    env: {
+      CRM_DATABASE_PROVIDER: "postgresql",
+      QA_PROD_TARGET_ENV: "staging",
+      DATABASE_URL: "postgresql://synthetic:synthetic@127.0.0.1:5432/qa",
+    },
+  });
+  try {
+    assert.equal(runtime.provider, "postgresql");
+    assert.equal(typeof runtime.prisma?.empresa?.findUnique, "function");
+  } finally {
+    await runtime.cleanup();
+  }
 });
