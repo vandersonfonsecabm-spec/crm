@@ -133,6 +133,20 @@ test("staging platform operator is isolated, idempotent and revocable", async ()
   assert.equal(releasedLease?.cursorJson, null);
 });
 
+test("concurrent operator apply serializes before changing the credential", async () => {
+  const firstHash = await bcrypt.hash("synthetic-concurrent-password-one", 4);
+  const secondHash = await bcrypt.hash("synthetic-concurrent-password-two", 4);
+  const results = await Promise.allSettled([
+    provisionStagingPlatformOperator({ prisma, env, passwordHash: firstHash, confirmation: QA_PLATFORM_OPERATOR_APPLY_CONFIRMATION, expectedReleaseHead: RELEASE, runId: "qa-platform-concurrent-0001", ...options }),
+    provisionStagingPlatformOperator({ prisma, env, passwordHash: secondHash, confirmation: QA_PLATFORM_OPERATOR_APPLY_CONFIRMATION, expectedReleaseHead: RELEASE, runId: "qa-platform-concurrent-0002", ...options }),
+  ]);
+  const fulfilled = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  assert.ok(fulfilled.length >= 1);
+  assert.ok(fulfilled.filter((result) => result.mode === "apply" || result.mode === "reactivate").length <= 1);
+  const stored = await prisma.usuario.findFirst({ where: { email: QA_PLATFORM_OPERATOR.email }, select: { senhaHash: true } });
+  assert.ok(stored && (await bcrypt.compare("synthetic-concurrent-password-one", stored.senhaHash) || await bcrypt.compare("synthetic-concurrent-password-two", stored.senhaHash)));
+});
+
 test("operator preflight fails closed for an unexpected staging allowlist", async () => {
   const unsafeEnv = { ...env, PLATFORM_ADMIN_EMAILS: "unexpected@example.invalid" };
   await assert.rejects(

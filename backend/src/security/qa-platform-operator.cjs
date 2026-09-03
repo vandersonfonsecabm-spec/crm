@@ -159,10 +159,13 @@ async function provisionStagingPlatformOperator({ prisma, env = process.env, pas
   const targetInfo = assertOperatorTarget({ env, expectedReleaseHead, runId, attestation, requireAttestation: !allowTestAttestation });
   assertOperatorConfirmation(confirmation, "apply");
   if (!/^\$2[aby]\$\d{2}\$[.\/A-Za-z0-9]{53}$/.test(String(passwordHash || ""))) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_PASSWORD_HASH_INVALID", "Hash de senha do operador invalido.");
-  const before = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead, runId: targetInfo.runId, attestation, requireAttestation: !allowTestAttestation });
-  if (before.status === "READY") return { ...before, mode: "noop", runId: targetInfo.runId, credentialsInOutput: 0 };
-  if (before.status === "INVALID") throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_STATE_INVALID", "Estado do tenant do operador de staging não permite reutilização segura.");
-  const result = await withOperatorLease(prisma, targetInfo.runId, () => prisma.$transaction(async (tx) => {
+  const result = await withOperatorLease(prisma, targetInfo.runId, async () => {
+    // Re-read the state only after acquiring the distributed lease. This
+    // closes the check-then-act race between concurrent apply invocations.
+    const before = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead, runId: targetInfo.runId, attestation, requireAttestation: !allowTestAttestation });
+    if (before.status === "READY") return { ...before, mode: "noop", runId: targetInfo.runId, credentialsInOutput: 0 };
+    if (before.status === "INVALID") throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_STATE_INVALID", "Estado do tenant do operador de staging não permite reutilização segura.");
+    return prisma.$transaction(async (tx) => {
     const existingTenant = await tx.empresa.findUnique({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug }, select: { id: true, nome: true, slug: true, ativo: true } });
     const emailMatches = await tx.usuario.findMany({ where: { email: normalizeEmail(QA_PLATFORM_OPERATOR.email) }, select: { id: true, empresaId: true } });
     if (emailMatches.some((user) => !existingTenant || user.empresaId !== existingTenant.id)) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_EMAIL_COLLISION", "E-mail reservado do operador pertence a outro tenant.");
@@ -187,7 +190,8 @@ async function provisionStagingPlatformOperator({ prisma, env = process.env, pas
     await tx.platformTenantAudit.create({ data: { actorUserId: operator.id, tenantId: tenant.id, action: existing ? "QA_PLATFORM_OPERATOR_REACTIVATED" : "QA_PLATFORM_OPERATOR_PROVISIONED", tenantName: tenant.nome, tenantSlug: tenant.slug, adminUserId: operator.id } });
     await tx.auditoriaSeguranca.create({ data: { empresaId: tenant.id, actorUsuarioId: operator.id, targetUsuarioId: operator.id, acao: existing ? "QA_PLATFORM_OPERATOR_REACTIVATED" : "QA_PLATFORM_OPERATOR_PROVISIONED", resultado: "SUCCESS", correlationId: targetInfo.runId, motivo: "Operador exclusivo do staging QA." } });
     return { tenant: { id: tenant.id, nome: tenant.nome, slug: tenant.slug, ativo: true }, operator: { id: operator.id, empresaId: operator.empresaId, nome: operator.nome, email: operator.email, papel: operator.papel, ativo: true }, mode: existing ? "reactivate" : "apply" };
-  }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 }));
+    }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
+  });
   const after = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead, runId: targetInfo.runId, attestation, requireAttestation: !allowTestAttestation });
   return { ...after, ...result, runId: targetInfo.runId, credentialsInOutput: 0 };
 }
