@@ -17,6 +17,8 @@ const QA_HARNESS_SOURCE_FILES = Object.freeze([
   "scripts/qa-prod-revoke.cjs",
   "scripts/qa-staging-platform-operator.cjs",
   "scripts/qa-staging-env-sanitized.cjs",
+  "scripts/qa-runtime-prisma.cjs",
+  "scripts/postgres-prisma.cjs",
   "src/user-security.js",
 ]);
 

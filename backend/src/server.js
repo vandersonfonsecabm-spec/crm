@@ -55,6 +55,7 @@ const { mountMessengerWebhookRoutes } = require("./integrations/messengerWebhook
 const { createMessengerWebhookIntake } = require("./integrations/messengerWebhookIntake");
 const { CANONICAL_CLIENT_STATUSES: CLIENT_LIFECYCLE_STATUSES, isPostgresRuntime, lockClienteRow } = require("./shared/clientLifecycleLock");
 const { parseNonNegativePrismaInt } = require("./shared/commercial-money");
+const { canonicalClientStatus, clientStatusFilter, mergeClientStatusRows } = require("./shared/client-status");
 const { getAllowedOrigins } = require("./security/origin-policy");
 
 const prisma = createPrismaClient();
@@ -317,13 +318,15 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         _sum: { valor: true },
       }),
     ]);
-    const statusMap = new Map(porStatus.map((item) => [item.status, item]));
-    const informedStatusMap = new Map(porStatusComValorInformado.map((item) => [item.status, item]));
+    const statusRows = mergeClientStatusRows(porStatus);
+    const informedStatusRows = mergeClientStatusRows(porStatusComValorInformado);
+    const statusMap = new Map(statusRows.map((item) => [item.status, item]));
+    const informedStatusMap = new Map(informedStatusRows.map((item) => [item.status, item]));
     const statusValue = (status) => {
-      const total = Number(statusMap.get(status)?._count?._all || 0);
+      const total = Number(statusMap.get(status)?.total || 0);
       const informed = informedStatusMap.get(status);
-      if (!informed || Number(informed._count?._all || 0) !== total) return null;
-      return informed._sum?.valor === null || informed._sum?.valor === undefined ? 0 : Number(informed._sum.valor);
+      if (!informed || Number(informed.informed || 0) !== total) return null;
+      return Number(informed.sum || 0);
     };
     const groupedBusinessValue = (row) => {
       if (!row) return 0;
@@ -372,9 +375,9 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         conversionRateAvailable: pipeline !== null && pipeline > 0,
         monetaryDataAvailable: pipeline !== null && forecastValue !== null,
       },
-      status: porStatus.map((item) => ({
+      status: statusRows.map((item) => ({
         status: item.status,
-        total: item._count._all,
+        total: item.total,
         valor: statusValue(item.status),
       })),
       estoqueBaixo: [],
@@ -2400,6 +2403,7 @@ function clienteResponse(cliente) {
   const valorInformado = cliente.valorInformado === true;
   return {
     ...cliente,
+    status: canonicalClientStatus(cliente.status),
     // Legacy storage is non-null for compatibility. API consumers must not
     // receive a stale numeric fallback when the provenance says unknown.
     valor: valorInformado ? cliente.valor : null,
@@ -2504,7 +2508,7 @@ function clienteListWhere(empresaId, query) {
   const status = cleanOptionalString(query.status);
   const statuses = new Set(["Lead", "Novo", "Contato", "Proposta", "Fechado", "Perdido", "Arquivado"]);
   if (status && !statuses.has(status)) return validationError("Status invalido.", 422);
-  if (status) where.status = status;
+  if (status) where.status = clientStatusFilter(status);
   const archived = parseBooleanFilter(query, "arquivado");
   if (!archived.valid) return validationError("Filtro arquivado deve ser verdadeiro ou falso.", 422);
   if (archived.provided) {

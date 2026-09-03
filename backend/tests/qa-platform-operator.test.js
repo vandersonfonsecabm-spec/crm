@@ -183,6 +183,44 @@ test("operator credential bundle is temporary, restricted and removable", () => 
   assert.equal(fs.existsSync(credentialsFile), false);
 });
 
+test("operator cleanup rejects paths outside the reserved temporary directory", () => {
+  const outside = path.join(os.homedir(), "qa-platform-not-allowed", "credentials.json");
+  assert.throws(
+    () => cleanupOperatorCredentialBundle({ filePath: outside, manifestPath: path.join(path.dirname(outside), "manifest.json"), directoryPath: path.dirname(outside) }),
+    /QA_CREDENTIAL_FILE_MUST_BE_IN_TEMP/,
+  );
+});
+
+test("operator bundle removes partial files when a write fails", () => {
+  const runId = "qa-platform-partial-write-0001";
+  const credentialsFile = defaultCredentialsPath(runId);
+  const originalWriteFileSync = fs.writeFileSync;
+  let writes = 0;
+  fs.writeFileSync = (...args) => {
+    writes += 1;
+    if (writes === 2) throw new Error("synthetic credential write failure");
+    return originalWriteFileSync(...args);
+  };
+  try {
+    assert.throws(
+      () => writeOperatorCredentialBundle(credentialsFile, { runId, password: "synthetic-operator-password-".padEnd(40, "x") }),
+      /synthetic credential write failure/,
+    );
+  } finally {
+    fs.writeFileSync = originalWriteFileSync;
+    cleanupOperatorCredentialBundle({ filePath: credentialsFile, manifestPath: path.join(path.dirname(credentialsFile), "manifest.json"), directoryPath: path.dirname(credentialsFile) });
+  }
+  assert.equal(fs.existsSync(credentialsFile), false);
+  assert.equal(fs.existsSync(path.join(path.dirname(credentialsFile), "manifest.json")), false);
+  assert.equal(fs.existsSync(path.dirname(credentialsFile)), false);
+});
+
+test("operator apply does not need a credential bundle when status is already READY", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../scripts/qa-staging-platform-operator.cjs"), "utf8");
+  assert.match(source, /before\.status === "READY"/);
+  assert.match(source, /credentialsFileCreated: false/);
+});
+
 test("QA runtime selects a generated PostgreSQL Prisma client for staging", async () => {
   const runtime = createQaPrismaClient({
     env: {

@@ -434,6 +434,28 @@ test("cliente distingue valor desconhecido de zero informado sem projetar receit
   assert.equal(dashboard.body.receita.fonte, "CANONICAL_SALE");
 });
 
+test("status legado Lead converge para Novo na API, filtro e dashboard", async () => {
+  const company = await registerCompany("Empresa Status Canonico", "admin-status-canonico@comercial.test");
+  const legacy = await prisma.cliente.create({
+    data: {
+      empresaId: company.empresa.id,
+      nome: "Cliente legado Lead",
+      status: "Lead",
+      valor: 300,
+      valorInformado: true,
+      origem: "Teste",
+    },
+  });
+  const list = await request("GET", "/clientes?status=Novo", undefined, company.token);
+  assert.equal(list.status, 200);
+  assert.equal(list.body.data.some((client) => client.id === legacy.id && client.status === "Novo"), true);
+  const dashboard = await request("GET", "/dashboard", undefined, company.token);
+  assert.equal(dashboard.status, 200);
+  const novo = dashboard.body.status.find((item) => item.status === "Novo");
+  assert.deepEqual(novo, { status: "Novo", total: 1, valor: 300 });
+  assert.equal(dashboard.body.status.some((item) => item.status === "Lead"), false);
+});
+
 test("clientes usam paginação global, detalhe sob demanda e exclusão protegida", async () => {
   const company = await registerCompany("Empresa Escala Audit", "admin-escala@comercial.test");
   const empresaId = company.empresa.id;

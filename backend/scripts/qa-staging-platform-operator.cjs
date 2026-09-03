@@ -40,29 +40,41 @@ function writeOperatorCredentialBundle(filePath, { runId, password } = {}) {
   if (typeof password !== "string" || password.length < 32 || /[\r\n]/.test(password)) throw new Error("QA_PLATFORM_CREDENTIAL_INVALID");
   const resolved = assertOperatorCredentialPath(filePath || defaultCredentialsPath(runId));
   const directoryPath = path.dirname(resolved);
-  if (!fs.existsSync(directoryPath)) fs.mkdirSync(directoryPath, { recursive: false, mode: 0o700 });
-  hardenCredentialDirectory(directoryPath);
   const manifestPath = path.join(directoryPath, "manifest.json");
-  fs.writeFileSync(manifestPath, JSON.stringify({ runId, target: "staging", credentialsFileName: "credentials.json", status: "PENDING" }) + "\n", { encoding: "utf8", flag: "wx", mode: 0o600 });
-  hardenCredentialFile(manifestPath);
-  fs.writeFileSync(resolved, JSON.stringify({ runId, target: "staging", operator: { email: QA_PLATFORM_OPERATOR.email, papel: QA_PLATFORM_OPERATOR.role, password } }, null, 2) + "\n", { encoding: "utf8", flag: "wx", mode: 0o600 });
-  hardenCredentialFile(resolved);
-  fs.writeFileSync(manifestPath, JSON.stringify({ runId, target: "staging", credentialsFileName: "credentials.json", status: "READY" }) + "\n", { encoding: "utf8", flag: "w", mode: 0o600 });
-  hardenCredentialFile(manifestPath);
-  return { filePath: resolved, manifestPath, directoryPath };
+  const bundle = { filePath: resolved, manifestPath, directoryPath };
+  try {
+    if (!fs.existsSync(directoryPath)) fs.mkdirSync(directoryPath, { recursive: false, mode: 0o700 });
+    hardenCredentialDirectory(directoryPath);
+    fs.writeFileSync(manifestPath, JSON.stringify({ runId, target: "staging", credentialsFileName: "credentials.json", status: "PENDING" }) + "\n", { encoding: "utf8", flag: "wx", mode: 0o600 });
+    hardenCredentialFile(manifestPath);
+    fs.writeFileSync(resolved, JSON.stringify({ runId, target: "staging", operator: { email: QA_PLATFORM_OPERATOR.email, papel: QA_PLATFORM_OPERATOR.role, password } }, null, 2) + "\n", { encoding: "utf8", flag: "wx", mode: 0o600 });
+    hardenCredentialFile(resolved);
+    fs.writeFileSync(manifestPath, JSON.stringify({ runId, target: "staging", credentialsFileName: "credentials.json", status: "READY" }) + "\n", { encoding: "utf8", flag: "w", mode: 0o600 });
+    hardenCredentialFile(manifestPath);
+    return bundle;
+  } catch (error) {
+    try { cleanupOperatorCredentialBundle(bundle); } catch (cleanupError) {
+      error.cleanupCode = cleanupError.code || "QA_PLATFORM_CREDENTIAL_CLEANUP_FAILED";
+    }
+    throw error;
+  }
 }
 
 function cleanupOperatorCredentialBundle(bundle) {
   if (!bundle) return true;
+  const filePath = assertOperatorCredentialPath(bundle.filePath, { allowExisting: true });
+  const expectedDirectoryPath = path.dirname(filePath);
+  const expectedManifestPath = path.join(expectedDirectoryPath, "manifest.json");
+  if (bundle.manifestPath && path.resolve(bundle.manifestPath) !== expectedManifestPath) throw new Error("QA_PLATFORM_CREDENTIAL_MANIFEST_PATH_INVALID");
+  if (bundle.directoryPath && path.resolve(bundle.directoryPath) !== expectedDirectoryPath) throw new Error("QA_PLATFORM_CREDENTIAL_DIRECTORY_PATH_INVALID");
   let ok = true;
-  for (const filePath of [bundle.filePath, bundle.manifestPath]) {
-    if (!filePath) continue;
-    try { fs.rmSync(filePath, { force: true }); } catch { ok = false; }
-    if (fs.existsSync(filePath)) ok = false;
+  for (const candidate of [filePath, expectedManifestPath]) {
+    try { fs.rmSync(candidate, { force: true }); } catch { ok = false; }
+    if (fs.existsSync(candidate)) ok = false;
   }
-  if (bundle.directoryPath && fs.existsSync(bundle.directoryPath)) {
-    try { fs.rmdirSync(bundle.directoryPath); } catch { ok = false; }
-    if (fs.existsSync(bundle.directoryPath)) ok = false;
+  if (fs.existsSync(expectedDirectoryPath)) {
+    try { fs.rmdirSync(expectedDirectoryPath); } catch { ok = false; }
+    if (fs.existsSync(expectedDirectoryPath)) ok = false;
   }
   if (!ok) throw new Error("QA_PLATFORM_CREDENTIAL_CLEANUP_FAILED");
   return true;
@@ -112,17 +124,28 @@ async function main() {
     let result;
     if (options.mode === "apply") {
       assertNotShutdown();
+      const before = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead: options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD, runId: options.runId, requireAttestation: true });
+      if (before.status === "READY") {
+        console.log(JSON.stringify({ ...before, mode: "noop", runId: options.runId, credentialsFileCreated: false, credentialsInOutput: 0 }, null, 2));
+        return;
+      }
       const password = crypto.randomBytes(32).toString("base64url");
       const passwordHash = await bcrypt.hash(password, 12);
       activeCredentialBundle = writeOperatorCredentialBundle(options.credentialsFile || defaultCredentialsPath(options.runId), { runId: options.runId, password });
       assertNotShutdown();
       result = await provisionStagingPlatformOperator({ prisma, env, passwordHash, confirmation: options.confirmation, expectedReleaseHead: options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD, runId: options.runId, allowTestAttestation: false });
+      if (result.mode === "noop") {
+        cleanupOperatorCredentialBundle(activeCredentialBundle);
+        activeCredentialBundle = null;
+        console.log(JSON.stringify({ ...result, runId: options.runId, credentialsFileCreated: false, credentialsInOutput: 0 }, null, 2));
+        return;
+      }
       const credentialsFile = activeCredentialBundle.filePath;
       activeCredentialBundle = null;
       console.log(JSON.stringify({ ...result, runId: options.runId, credentialsFile, credentialsFileCreated: true, credentialsInOutput: 0 }, null, 2));
       return;
     }
-    const bundlePath = options.credentialsFile || defaultCredentialsPath(options.runId);
+    const bundlePath = assertOperatorCredentialPath(options.credentialsFile || defaultCredentialsPath(options.runId), { allowExisting: true });
     if (fs.existsSync(bundlePath) || fs.existsSync(path.join(path.dirname(bundlePath), "manifest.json"))) {
       activeCredentialBundle = { filePath: bundlePath, manifestPath: path.join(path.dirname(bundlePath), "manifest.json"), directoryPath: path.dirname(bundlePath) };
     }
