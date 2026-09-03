@@ -322,6 +322,8 @@ test("revoke and operator CLIs install signal-safe credential cleanup", () => {
   assert.match(revokeSource, /activeCredentialBundles/);
   assert.match(operatorSource, /handedOffCredentialBundle/);
   assert.match(operatorSource, /process\.once\(signal/);
+  assert.match(revokeSource, /delete env\.QA_PROD_CONTROL_PLANE_ATTESTATION/);
+  assert.match(operatorSource, /delete env\.QA_PROD_CONTROL_PLANE_ATTESTATION/);
 });
 
 test("QA runtime selects a generated PostgreSQL Prisma client for staging", async () => {

@@ -106,7 +106,10 @@ function parseArgs(argv) {
 
 function runtimeEnv(options) {
   const env = { ...process.env, QA_PROD_TARGET_ENV: "staging", QA_PROD_RUN_ID: options.runId };
-  if (options.attestationFile) env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = require("node:path").resolve(options.attestationFile);
+  if (options.attestationFile) {
+    env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = require("node:path").resolve(options.attestationFile);
+    delete env.QA_PROD_CONTROL_PLANE_ATTESTATION;
+  }
   return env;
 }
 
