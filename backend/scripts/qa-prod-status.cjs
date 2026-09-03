@@ -1,6 +1,6 @@
 "use strict";
 
-const { inspectQaState } = require("../src/security/qa-provisioning.cjs");
+const { assertTarget, inspectQaState } = require("../src/security/qa-provisioning.cjs");
 const { createQaPrismaClient } = require("./qa-runtime-prisma.cjs");
 
 function parseArgs(argv) {
@@ -22,10 +22,12 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const env = { ...process.env, QA_PROD_TARGET_ENV: options.target, QA_PROD_RUN_ID: options.runId };
   if (options.attestationFile) env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = require("node:path").resolve(options.attestationFile);
-  const prismaRuntime = createQaPrismaClient({ env });
+  const expectedReleaseHead = options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD;
+  const targetInfo = assertTarget(env, { expectedReleaseHead, target: options.target, runId: options.runId, requireExplicitTarget: true, requireOperationalAttestation: true, requireHarnessParity: true });
+  const prismaRuntime = createQaPrismaClient({ env, allowProduction: targetInfo.target === "production" });
   const prisma = prismaRuntime.prisma;
   try {
-    const result = await inspectQaState({ prisma, env, expectedReleaseHead: options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD, target: options.target, requireOperationalAttestation: true, requireHarnessParity: true });
+    const result = await inspectQaState({ prisma, env, expectedReleaseHead, target: options.target, requireOperationalAttestation: true, requireHarnessParity: true });
     console.log(JSON.stringify({ ...result, credentialsInOutput: 0 }, null, 2));
     if (!["ABSENT_SAFE", "READY", "REVOKED"].includes(result.status)) {
       process.exitCode = 2;

@@ -53,7 +53,7 @@ async function main() {
   let prisma = null;
   let databaseLease = null;
   try {
-    prismaRuntime = createQaPrismaClient({ env });
+    prismaRuntime = createQaPrismaClient({ env, allowProduction: targetInfo.target === "production" });
     prisma = prismaRuntime.prisma;
     databaseLease = await acquireQaDatabaseLease(prisma, { runId: options.runId });
     const targetBundles = listCredentialBundles(options.target);

@@ -32,14 +32,15 @@ function generatePostgresClient(workspace) {
   return generated.PrismaClient;
 }
 
-function createQaPrismaClient({ env = process.env } = {}) {
+function createQaPrismaClient({ env = process.env, allowProduction = false } = {}) {
   const provider = String(env.CRM_DATABASE_PROVIDER || "").trim().toLowerCase();
   if (provider !== "postgresql") {
     const { PrismaClient } = require("@prisma/client");
     const prisma = new PrismaClient();
     return { prisma, cleanup: async () => prisma.$disconnect(), provider: "sqlite" };
   }
-  if (String(env.QA_PROD_TARGET_ENV || "").trim().toLowerCase() !== "staging") throw new Error("QA_POSTGRES_STAGING_ONLY");
+  const target = String(env.QA_PROD_TARGET_ENV || "").trim().toLowerCase();
+  if (target !== "staging" && !(allowProduction === true && target === "production")) throw new Error("QA_POSTGRES_STAGING_ONLY");
   const databaseUrl = assertPostgresDatabaseUrl(env);
   fs.mkdirSync(TEST_WORKSPACE_ROOT, { recursive: true });
   let workspace = null;
