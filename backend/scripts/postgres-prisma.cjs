@@ -209,7 +209,7 @@ function ensureWorkspaceProjectRoot(root) {
   if (!fs.existsSync(packagePath)) fs.writeFileSync(packagePath, '{"private":true}\n', { encoding: "utf8", flag: "wx", mode: 0o600 });
   const configPath = path.join(root, "prisma.config.cjs");
   if (!fs.existsSync(configPath)) fs.writeFileSync(configPath, [
-    'const { defineConfig } = require("prisma/config");',
+    `const { createRequire } = require("node:module"); const { defineConfig } = createRequire(${JSON.stringify(path.join(path.resolve(__dirname, ".."), "package.json"))})("prisma/config");`,
     "module.exports = defineConfig({",
     '  schema: "./prisma/schema.prisma",',
     '  datasource: { url: "postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder" },',
