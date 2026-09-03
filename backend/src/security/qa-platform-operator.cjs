@@ -54,11 +54,14 @@ function assertOperatorTarget({ env = process.env, expectedReleaseHead, runId, a
   return { ...targetInfo, runId: resolvedRunId };
 }
 
-function assertOperatorEmailNotReserved(env = process.env) {
+function assertOperatorEmailNotReserved(env = process.env, { requireExact = false } = {}) {
   const allowlist = parsePlatformAdminEmails(env.PLATFORM_ADMIN_EMAILS);
   const operatorEmail = normalizeEmail(QA_PLATFORM_OPERATOR.email);
   if (allowlist.size > 0 && (allowlist.size !== 1 || !allowlist.has(operatorEmail))) {
     throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_ALLOWLIST_UNEXPECTED", "A allowlist de plataforma do staging contém identidades inesperadas.");
+  }
+  if (requireExact && (allowlist.size !== 1 || !allowlist.has(operatorEmail))) {
+    throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_ALLOWLIST_REQUIRED", "A allowlist de plataforma do staging deve conter somente o operador QA antes de qualquer escrita.");
   }
 }
 
@@ -78,6 +81,22 @@ async function withOperatorLease(prisma, runId, operation) {
       if (!operationError) throw cleanupError;
     }
   }
+}
+
+async function compensateOperatorProvisionFailure(prisma, runId) {
+  return withOperatorLease(prisma, runId, () => prisma.$transaction(async (tx) => {
+    const tenant = await tx.empresa.findUnique({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug }, select: { id: true, nome: true, slug: true, ativo: true } });
+    if (!tenant || tenant.nome !== QA_PLATFORM_OPERATOR_TENANT.name) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_COMPENSATION_IDENTITY_INVALID", "Tenant reservado do operador não pôde ser validado para compensação.");
+    const operator = await tx.usuario.findFirst({ where: { empresaId: tenant.id, email: normalizeEmail(QA_PLATFORM_OPERATOR.email) }, select: { id: true, empresaId: true, nome: true, papel: true } });
+    if (!operator || operator.empresaId !== tenant.id || operator.nome !== QA_PLATFORM_OPERATOR.name || operator.papel !== QA_PLATFORM_OPERATOR.role) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_COMPENSATION_IDENTITY_INVALID", "Usuário reservado do operador não pôde ser validado para compensação.");
+    const sessions = await tx.sessaoUsuario.findMany({ where: { empresaId: tenant.id, usuarioId: operator.id }, select: { id: true } });
+    const sessionIds = sessions.map((session) => session.id);
+    if (sessionIds.length) await tx.sessaoRefreshToken.updateMany({ where: { empresaId: tenant.id, sessaoId: { in: sessionIds }, revogadoEm: null }, data: { revogadoEm: new Date() } });
+    await tx.sessaoUsuario.updateMany({ where: { empresaId: tenant.id, usuarioId: operator.id, revogadoEm: null }, data: { revogadoEm: new Date(), motivoRevogacao: "QA_PLATFORM_OPERATOR_APPLY_COMPENSATION" } });
+    await tx.usuario.update({ where: { id: operator.id }, data: { ativo: false } });
+    await tx.empresa.update({ where: { id: tenant.id }, data: { ativo: false } });
+    return { tenantId: tenant.id, operatorId: operator.id, compensated: true };
+  }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 }));
 }
 
 async function strictBusinessInventory(client, empresaId) {
@@ -158,6 +177,7 @@ function assertOperatorConfirmation(value, action) {
 async function provisionStagingPlatformOperator({ prisma, env = process.env, passwordHash, confirmation, expectedReleaseHead, runId, attestation, allowTestAttestation = false } = {}) {
   const targetInfo = assertOperatorTarget({ env, expectedReleaseHead, runId, attestation, requireAttestation: !allowTestAttestation });
   assertOperatorConfirmation(confirmation, "apply");
+  assertOperatorEmailNotReserved(env, { requireExact: true });
   if (!/^\$2[aby]\$\d{2}\$[.\/A-Za-z0-9]{53}$/.test(String(passwordHash || ""))) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_PASSWORD_HASH_INVALID", "Hash de senha do operador invalido.");
   const result = await withOperatorLease(prisma, targetInfo.runId, async () => {
     // Re-read the state only after acquiring the distributed lease. This
@@ -192,7 +212,17 @@ async function provisionStagingPlatformOperator({ prisma, env = process.env, pas
     return { tenant: { id: tenant.id, nome: tenant.nome, slug: tenant.slug, ativo: true }, operator: { id: operator.id, empresaId: operator.empresaId, nome: operator.nome, email: operator.email, papel: operator.papel, ativo: true }, mode: existing ? "reactivate" : "apply" };
     }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
   });
-  const after = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead, runId: targetInfo.runId, attestation, requireAttestation: !allowTestAttestation });
+  let after;
+  try {
+    after = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead, runId: targetInfo.runId, attestation, requireAttestation: !allowTestAttestation });
+  } catch (error) {
+    try { await compensateOperatorProvisionFailure(prisma, targetInfo.runId); } catch (compensationError) { compensationError.code = "QA_PLATFORM_OPERATOR_COMPENSATION_FAILED"; throw compensationError; }
+    throw error;
+  }
+  if (result.mode !== "noop" && after.status !== "READY") {
+    try { await compensateOperatorProvisionFailure(prisma, targetInfo.runId); } catch (compensationError) { compensationError.code = "QA_PLATFORM_OPERATOR_COMPENSATION_FAILED"; throw compensationError; }
+    throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_POST_APPLY_VERIFY_FAILED", "Provisionamento do operador não terminou em estado READY; a conta foi desativada por compensação.", { status: after.status });
+  }
   return { ...after, ...result, runId: targetInfo.runId, credentialsInOutput: 0 };
 }
 
@@ -227,6 +257,7 @@ module.exports = {
   QA_PLATFORM_OPERATOR_RUN_ID,
   QA_PLATFORM_OPERATOR_TENANT,
   QaPlatformOperatorError,
+  compensateOperatorProvisionFailure,
   inspectStagingPlatformOperator,
   provisionStagingPlatformOperator,
   revokeStagingPlatformOperator,

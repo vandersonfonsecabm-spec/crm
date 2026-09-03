@@ -156,6 +156,24 @@ test("operator preflight fails closed for an unexpected staging allowlist", asyn
   assert.equal(await prisma.empresa.count({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug } }), 0);
 });
 
+test("operator apply requires an exact allowlist before any write", async () => {
+  const unsafeEnv = { ...env, PLATFORM_ADMIN_EMAILS: "" };
+  const passwordHash = await bcrypt.hash("synthetic-password-never-reported", 4);
+  await assert.rejects(
+    () => provisionStagingPlatformOperator({
+      prisma,
+      env: unsafeEnv,
+      passwordHash,
+      confirmation: QA_PLATFORM_OPERATOR_APPLY_CONFIRMATION,
+      expectedReleaseHead: RELEASE,
+      runId: "qa-platform-apply-no-allowlist",
+      ...options,
+    }),
+    (error) => error?.code === "QA_PLATFORM_OPERATOR_ALLOWLIST_REQUIRED",
+  );
+  assert.equal(await prisma.empresa.count({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug } }), 0);
+});
+
 test("operator apply rejects a non-bcrypt hash before any write", async () => {
   await assert.rejects(
     () => provisionStagingPlatformOperator({
