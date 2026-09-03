@@ -23,6 +23,7 @@ model Cliente {
   arquivadoEm     DateTime?
   statusAntesDeArquivar String?
   valor           Int              @default(0)
+  valorInformado  Boolean          @default(false)
   origem          String           @default("Manual")
   favorito        Boolean          @default(false)
   quente          Boolean          @default(false)

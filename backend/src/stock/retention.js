@@ -8,8 +8,9 @@ function retentionConfig(env = process.env) {
 
 const MAX_BATCHES_PER_MODEL = 5;
 
-async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun = true, env = process.env, logger = console } = {}) {
+async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun = true, env = process.env, logger = console, signal = null } = {}) {
   const config = retentionConfig(env);
+  if (isAbortRequested(signal)) return { enabled: config.enabled, dryRun: Boolean(dryRun), deleted: 0, cancelled: true };
   if (!config.enabled || !config.days || dryRun) return { enabled: config.enabled, dryRun: true, deleted: 0 };
   const cutoff = new Date(now.getTime() - config.days * 86400000);
   const expired = { lt: now };
@@ -23,6 +24,7 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
     ["runs", "execucaoSincronizacaoEstoque", { retentionUntil: expired, estado: { in: ["SUCCEEDED", "PARTIAL", "FAILED", "CANCELLED", "QUARANTINED", "SUPERSEDED"] } }],
   ];
   const purge = async (tx) => {
+    throwIfAborted(signal);
     const counts = {};
     const protectedVersions = new Map();
     const protect = (occurrenceKey, materialVersion = null) => {
@@ -34,7 +36,9 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
     if (typeof tx.notificacao?.findMany === "function") {
       let cursor = null;
       for (;;) {
+        throwIfAborted(signal);
         const open = await tx.notificacao.findMany({ where: { empresaId, resolvidaEm: null, stockTargetType: { not: null }, ...(cursor ? { id: { gt: cursor } } : {}) }, select: { id: true, occurrenceKey: true, stockMaterialVersion: true }, orderBy: { id: "asc" }, take: 500 });
+        throwIfAborted(signal);
         for (const row of open) protect(row.occurrenceKey, row.stockMaterialVersion);
         if (open.length < 500) break;
         cursor = open.at(-1)?.id;
@@ -44,7 +48,9 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
     if (typeof tx.eventoOutboxEstoque?.findMany === "function") {
       let cursor = null;
       for (;;) {
+        throwIfAborted(signal);
         const pending = await tx.eventoOutboxEstoque.findMany({ where: { empresaId, status: { in: ["PENDING", "PROCESSING"] }, ...(cursor ? { id: { gt: cursor } } : {}) }, select: { id: true, payloadStructuredJson: true }, orderBy: { id: "asc" }, take: 500 });
+        throwIfAborted(signal);
         for (const row of pending) { try { const event = JSON.parse(row.payloadStructuredJson || "{}"); protect(event.payload?.occurrenceKey, event.materialVersion); } catch {} }
         if (pending.length < 500) break;
         cursor = pending.at(-1)?.id;
@@ -52,6 +58,7 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
       }
     }
     for (const [key, model, condition] of targets) {
+      throwIfAborted(signal);
       const delegate = tx[model];
       if (!delegate || typeof delegate.findMany !== "function" || typeof delegate.deleteMany !== "function") continue;
       const protectedPairs = key === "evaluations" ? [...protectedVersions].flatMap(([occurrenceKey, versions]) => [...versions].filter((version) => version !== null).map((materialVersion) => ({ occurrenceKey, materialVersion }))) : [];
@@ -61,9 +68,12 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
         : condition;
       let deleted = 0;
       for (let batch = 0; batch < MAX_BATCHES_PER_MODEL; batch += 1) {
+        throwIfAborted(signal);
         const rows = await delegate.findMany({ where: { empresaId, ...effectiveCondition }, select: { id: true }, orderBy: { id: "asc" }, take: 100 });
+        throwIfAborted(signal);
         if (!rows.length) break;
         const result = await delegate.deleteMany({ where: { empresaId, id: { in: rows.map((row) => row.id) } } });
+        throwIfAborted(signal);
         deleted += Number(result?.count || 0);
         if (rows.length < 100 || result?.count === 0) break;
       }
@@ -71,10 +81,28 @@ async function runStockRetention({ prisma, empresaId, now = new Date(), dryRun =
     }
     return counts;
   };
-  const counts = prisma.$transaction ? await prisma.$transaction(purge) : await purge(prisma);
+  let counts;
+  try {
+    counts = prisma.$transaction ? await prisma.$transaction(purge) : await purge(prisma);
+  } catch (error) {
+    if (error?.code === "STOCK_RETENTION_ABORTED") return { enabled: true, dryRun: false, deleted: 0, cancelled: true };
+    throw error;
+  }
+  if (isAbortRequested(signal)) return { enabled: true, dryRun: false, deleted: 0, cancelled: true };
   const deleted = Object.values(counts).reduce((sum, value) => sum + Number(value || 0), 0);
   logger.info?.("stock_retention_completed", { empresaId, cutoff: cutoff.toISOString(), counts, deleted });
   return { enabled: true, dryRun: false, counts, deleted };
+}
+
+function isAbortRequested(signal) {
+  return signal?.aborted === true;
+}
+
+function throwIfAborted(signal) {
+  if (!isAbortRequested(signal)) return;
+  const error = new Error("STOCK_RETENTION_ABORTED");
+  error.code = "STOCK_RETENTION_ABORTED";
+  throw error;
 }
 
 module.exports = { retentionConfig, runStockRetention };

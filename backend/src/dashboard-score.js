@@ -14,7 +14,7 @@ function dashboardScoreQuery(empresaId) {
         45
         + CASE WHEN "quente" THEN 20 ELSE 0 END
         + CASE WHEN "favorito" THEN 10 ELSE 0 END
-        + CASE WHEN "valor" >= 12000 THEN 15 ELSE 0 END
+        + CASE WHEN "valorInformado" AND "valor" >= 12000 THEN 15 ELSE 0 END
         + CASE WHEN "status" = 'Proposta' THEN 10 ELSE 0 END
         + CASE WHEN "status" = 'Fechado' THEN 20 ELSE 0 END
         - CASE WHEN "status" = 'Perdido' THEN 25 ELSE 0 END

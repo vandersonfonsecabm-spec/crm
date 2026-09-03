@@ -27,6 +27,229 @@ test("stock worker respeita cancelamento antes de tocar tenant ou outbox", async
   assert.equal(touched, false);
 });
 
+test("stock worker stops after an aborted rule evaluation before outbox, retention, or checkpoint work", async () => {
+  const controller = new AbortController();
+  let checkpointWritten = false;
+  let evaluationSignal = null;
+  const result = await runStockWorkerCycle({
+    prisma: new Proxy({}, { get(_target, property) {
+      if (property === "linhaImportacaoEstoque") throw new Error("retention must not start after evaluation abort");
+      return undefined;
+    } }),
+    rules: {
+      async evaluateTenant(_tenantId, options) {
+        evaluationSignal = options.signal;
+        controller.abort();
+        return { evaluated: 1, matched: 1, resolved: 0, nextCursor: 8 };
+      },
+    },
+    env: {
+      STOCK_DOMAIN_ENABLED: "true",
+      STOCK_SYNC_WORKER_ENABLED: "true",
+      STOCK_RULE_ENGINE_ENABLED: "true",
+      STOCK_H8_PROJECTION_ENABLED: "false",
+      STOCK_RETENTION_ENABLED: "true",
+      STOCK_RETENTION_WORKER_ENABLED: "true",
+      STOCK_TENANT_ALLOWLIST: "1",
+    },
+    signal: controller.signal,
+    checkpointStore: {
+      async read() { return null; },
+      async write() { checkpointWritten = true; },
+      async clear() { checkpointWritten = true; },
+    },
+    logger: { error() {}, info() {} },
+  });
+  assert.equal(evaluationSignal, controller.signal);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.evaluated, 0);
+  assert.equal(checkpointWritten, false);
+});
+
+test("stock worker reports cancellation when an evaluator aborts and throws", async () => {
+  const controller = new AbortController();
+  const result = await runStockWorkerCycle({
+    prisma: new Proxy({}, { get() { throw new Error("outbox must not start after an evaluator abort"); } }),
+    rules: {
+      async evaluateTenant() {
+        controller.abort();
+        throw Object.assign(new Error("aborted"), { code: "ABORT_ERR" });
+      },
+    },
+    env: {
+      STOCK_DOMAIN_ENABLED: "true",
+      STOCK_SYNC_WORKER_ENABLED: "true",
+      STOCK_RULE_ENGINE_ENABLED: "true",
+      STOCK_H8_PROJECTION_ENABLED: "false",
+      STOCK_TENANT_ALLOWLIST: "1,2",
+    },
+    signal: controller.signal,
+    checkpointStore: { async read() { return null; }, async write() {}, async clear() {} },
+    logger: { error() {}, info() {} },
+  });
+  assert.equal(result.cancelled, true);
+  assert.deepEqual(result.failedTenants, []);
+});
+
+test("stock worker stops after outbox observes abort and does not begin retention or checkpoint work", async () => {
+  const controller = new AbortController();
+  let outboxUpdates = 0;
+  let checkpointWritten = false;
+  const prisma = {
+    eventoOutboxEstoque: {
+      async findMany() {
+        controller.abort();
+        return [{ id: 41, empresaId: 1, attempts: 0, payloadStructuredJson: "{}" }];
+      },
+      async updateMany() { outboxUpdates += 1; return { count: 1 }; },
+    },
+    linhaImportacaoEstoque: {
+      async findMany() { throw new Error("retention must not start after outbox abort"); },
+      async deleteMany() { throw new Error("retention must not delete after outbox abort"); },
+    },
+  };
+  const result = await runStockWorkerCycle({
+    prisma,
+    rules: { async evaluateTenant() { return { evaluated: 0, matched: 0, resolved: 0, nextCursor: 7 }; } },
+    env: {
+      STOCK_DOMAIN_ENABLED: "true",
+      STOCK_SYNC_WORKER_ENABLED: "true",
+      STOCK_RULE_ENGINE_ENABLED: "true",
+      STOCK_H8_PROJECTION_ENABLED: "true",
+      STOCK_RETENTION_ENABLED: "true",
+      STOCK_RETENTION_WORKER_ENABLED: "true",
+      STOCK_TENANT_ALLOWLIST: "1",
+    },
+    signal: controller.signal,
+    checkpointStore: {
+      async read() { return null; },
+      async write() { checkpointWritten = true; },
+      async clear() { checkpointWritten = true; },
+    },
+    logger: { error() {}, info() {}, warn() {} },
+  });
+  assert.equal(result.cancelled, true);
+  assert.equal(outboxUpdates, 0);
+  assert.equal(checkpointWritten, false);
+});
+
+test("stock worker stops when retention observes abort before any deletion", async () => {
+  const controller = new AbortController();
+  let deleted = false;
+  const prisma = {
+    notificacao: {
+      async findMany() {
+        controller.abort();
+        return [];
+      },
+    },
+    linhaImportacaoEstoque: {
+      async findMany() { return [{ id: 1 }]; },
+      async deleteMany() { deleted = true; return { count: 1 }; },
+    },
+  };
+  prisma.$transaction = async (callback) => callback(prisma);
+  const result = await runStockWorkerCycle({
+    prisma,
+    env: {
+      STOCK_DOMAIN_ENABLED: "true",
+      STOCK_SYNC_WORKER_ENABLED: "true",
+      STOCK_H8_PROJECTION_ENABLED: "false",
+      STOCK_RETENTION_ENABLED: "true",
+      STOCK_RETENTION_WORKER_ENABLED: "true",
+      STOCK_RETENTION_DAYS: "30",
+      STOCK_TENANT_ALLOWLIST: "1",
+    },
+    signal: controller.signal,
+    logger: { error() {}, info() {} },
+  });
+  assert.equal(result.cancelled, true);
+  assert.equal(deleted, false);
+});
+
+test("outbox releases an unstarted claim with the original lease CAS after abort", async () => {
+  const controller = new AbortController();
+  const updates = [];
+  const prisma = {
+    eventoOutboxEstoque: {
+      async findMany() {
+        return [{ id: 42, empresaId: 1, attempts: 0, payloadStructuredJson: JSON.stringify({ schemaVersion: "stock-event.v1", eventType: "StockRecordObserved.v1", empresaId: 1, aggregateType: "FonteEstoque", aggregateId: "source-1", materialVersion: 1, occurredAt: "2026-09-03T00:00:00.000Z", payload: {} }) }];
+      },
+      async updateMany(args) {
+        updates.push(args);
+        if (updates.length === 1) controller.abort();
+        return { count: 1 };
+      },
+    },
+  };
+  const result = await processStockOutboxBatch({
+    prisma,
+    empresaId: 1,
+    owner: "stock-abort-test",
+    now: new Date("2026-09-03T00:00:00.000Z"),
+    h8ProjectionEnabled: true,
+    consumer: async () => { throw new Error("consumer must not start after abort"); },
+    signal: controller.signal,
+  });
+  assert.equal(result.cancelled, true);
+  assert.equal(result.released, 1);
+  assert.equal(updates.length, 2);
+  assert.equal(updates[1].where.id, 42);
+  assert.equal(updates[1].where.leaseOwner, "stock-abort-test");
+  assert.ok(updates[1].where.leaseExpiresAt instanceof Date);
+  assert.equal(updates[1].data.status, "PENDING");
+  assert.deepEqual(updates[1].data.attempts, { decrement: 1 });
+});
+
+test("outbox finishes an already-started consumer then releases later claims after abort", async () => {
+  const controller = new AbortController();
+  const updates = [];
+  const seen = [];
+  const event = (id) => ({
+    schemaVersion: "stock-event.v1",
+    eventType: "StockRecordObserved.v1",
+    empresaId: 1,
+    aggregateType: "FonteEstoque",
+    aggregateId: `source-${id}`,
+    materialVersion: 1,
+    occurredAt: "2026-09-03T00:00:00.000Z",
+    payload: {},
+  });
+  const prisma = {
+    eventoOutboxEstoque: {
+      async findMany() {
+        return [
+          { id: 51, empresaId: 1, attempts: 0, payloadStructuredJson: JSON.stringify(event(51)) },
+          { id: 52, empresaId: 1, attempts: 0, payloadStructuredJson: JSON.stringify(event(52)) },
+        ];
+      },
+      async updateMany(args) { updates.push(args); return { count: 1 }; },
+    },
+  };
+  const result = await processStockOutboxBatch({
+    prisma,
+    empresaId: 1,
+    owner: "stock-abort-test",
+    limit: 2,
+    now: new Date("2026-09-03T00:00:00.000Z"),
+    h8ProjectionEnabled: true,
+    consumer: async (eventRow, _row, options) => {
+      seen.push({ id: eventRow.aggregateId, signal: options.signal });
+      controller.abort();
+      return { handled: true };
+    },
+    signal: controller.signal,
+  });
+  assert.equal(result.cancelled, true);
+  assert.equal(result.processed, 1);
+  assert.equal(result.released, 1);
+  assert.deepEqual(seen, [{ id: "source-51", signal: controller.signal }]);
+  const releasedRow = updates.at(-1);
+  assert.equal(releasedRow.where.id, 52);
+  assert.equal(releasedRow.where.leaseOwner, "stock-abort-test");
+  assert.equal(releasedRow.data.status, "PENDING");
+});
+
 test("outbox rejects malformed/future envelopes into quarantine without H8 calls", async () => {
   const rows = [{ id: 1, empresaId: 1, payloadStructuredJson: JSON.stringify({ schemaVersion: "stock-event.v999", eventType: "StockRecordObserved.v1" }), status: "PROCESSING", leaseOwner: "w" }];
   const updates = [];

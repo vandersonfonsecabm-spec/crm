@@ -588,8 +588,87 @@ async function assertCrossTabSingleRefresh({ locks }) {
   }
 }
 
+async function assertThreeTabRefreshSerialization({ locks }) {
+  const coordinator = await importIsolatedRefreshCoordinator();
+  const storage = new MemoryStorage();
+  const bus = createSignalBus();
+  const tabs = ["tab_family_a", "tab_family_b", "tab_family_c"].map((ownerId) => coordinator.createAuthRefreshCoordinator({
+    storage,
+    locks,
+    BroadcastChannel: bus.BroadcastChannel,
+    ownerId,
+    leaseMs: 500,
+    waitTimeoutMs: 3_000,
+  }));
+
+  let releaseLeader;
+  let markLeaderStarted;
+  const leaderStarted = new Promise((resolve) => {
+    markLeaderStarted = resolve;
+  });
+  const leaderReleased = new Promise((resolve) => {
+    releaseLeader = resolve;
+  });
+  const family = { revision: 0, revoked: false };
+  let activeRotations = 0;
+  let maximumConcurrentRotations = 0;
+  let rotations = 0;
+
+  const rotate = (tab) => async () => {
+    const revisionAtStart = family.revision;
+    activeRotations += 1;
+    maximumConcurrentRotations = Math.max(maximumConcurrentRotations, activeRotations);
+    if (activeRotations > 1) family.revoked = true;
+    try {
+      if (tab === "tab_family_a") {
+        markLeaderStarted();
+        await leaderReleased;
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 12));
+      }
+      if (family.revision !== revisionAtStart) family.revoked = true;
+      if (family.revoked) throw Object.assign(new Error("refresh token replay"), { status: 401 });
+      family.revision += 1;
+      rotations += 1;
+      return { access_token: `access-token-${tab}-${family.revision}` };
+    } finally {
+      activeRotations -= 1;
+    }
+  };
+
+  const first = tabs[0].runAuthRefreshSingleFlight(rotate("tab_family_a"));
+  await leaderStarted;
+  const second = tabs[1].runAuthRefreshSingleFlight(rotate("tab_family_b"));
+  const third = tabs[2].runAuthRefreshSingleFlight(rotate("tab_family_c"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(rotations, 0, "somente o lider pode concluir antes da liberacao controlada");
+  assert.equal(activeRotations, 1, "seguidores devem aguardar o mesmo lock ou lease");
+
+  releaseLeader();
+  const results = await Promise.all([first, second, third]);
+
+  assert.equal(family.revoked, false);
+  assert.equal(rotations, 3, "cada aba recupera somente seu token em memoria apos uma rotacao serializada");
+  assert.equal(maximumConcurrentRotations, 1);
+  assert.deepEqual(results.map((result) => result.access_token), [
+    "access-token-tab_family_a-1",
+    "access-token-tab_family_b-2",
+    "access-token-tab_family_c-3",
+  ]);
+  const sent = bus.messages.join("\n");
+  assert.doesNotMatch(sent, /access-token-tab_family_[abc]|refresh-token|cookie|usuario|empresa/i);
+}
+
 test("Web Locks coordena abas e BroadcastChannel transmite apenas sinais", async () => {
   await assertCrossTabSingleRefresh({ locks: createExclusiveWebLocks() });
+});
+
+test("tres abas serializam rotacoes da mesma familia sem transmitir tokens", async () => {
+  await assertThreeTabRefreshSerialization({ locks: createExclusiveWebLocks() });
+});
+
+test("lease localStorage serializa tres abas sem replay da familia", async () => {
+  await assertThreeTabRefreshSerialization({ locks: null });
 });
 
 test("Web Locks permite que uma aba tardia renove sua propria memoria de token apos sucesso de outra aba", async () => {

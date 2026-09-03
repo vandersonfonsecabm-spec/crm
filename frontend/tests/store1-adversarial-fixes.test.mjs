@@ -12,6 +12,7 @@ test("cliente não recebe valor estimado e Agenda preserva acompanhamentoId", ()
   const dashboard = read("src/pages/Dashboard.tsx");
   assert.doesNotMatch(api, /estimateValue/);
   assert.match(api, /valueKnown/);
+  assert.match(api, /valorInformado: client\.valueKnown !== false/);
   assert.match(api, /client\.valueKnown === false \? \{\} : \{ valor: client\.value \}/);
   assert.match(dashboard, /acompanhamentoId=\$\{encodeURIComponent\(id\)\}/);
   assert.doesNotMatch(dashboard, /setTimeout\(\(\) => setIsBooting\(false\), 650\)/);

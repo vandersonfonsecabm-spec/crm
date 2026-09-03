@@ -343,6 +343,81 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   assert.equal((await coreCounts()).cliente, beforeCounts.cliente + 3);
 });
 
+test("cliente distingue valor desconhecido de zero informado sem projetar receita legada", async () => {
+  const company = await registerCompany("Empresa Valor Conhecido", "admin-valor-conhecido@comercial.test");
+  const token = company.token;
+
+  const unknown = await request("POST", "/clientes", {
+    nome: "Cliente sem valor informado",
+    status: "Proposta",
+  }, token);
+  assert.equal(unknown.status, 200);
+  assert.equal(unknown.body.valor, null);
+  assert.equal(unknown.body.valorInformado, false);
+
+  const zero = await request("POST", "/clientes", {
+    nome: "Cliente zero informado",
+    status: "Proposta",
+    valor: 0,
+  }, token);
+  assert.equal(zero.status, 200);
+  assert.equal(zero.body.valor, 0);
+  assert.equal(zero.body.valorInformado, true);
+
+  const known = await request("POST", "/clientes", {
+    nome: "Cliente valor informado",
+    status: "Proposta",
+    valor: 7500,
+  }, token);
+  assert.equal(known.status, 200);
+  assert.equal(known.body.valor, 7500);
+  assert.equal(known.body.valorInformado, true);
+
+  const invalidKnownWithoutValue = await request("PATCH", `/clientes/${unknown.body.id}`, {
+    valorInformado: true,
+    revisao: unknown.body.revisao,
+  }, token);
+  assert.equal(invalidKnownWithoutValue.status, 400);
+  assert.ok(invalidKnownWithoutValue.body.campos.valor);
+
+  const invalidUnknownWithValue = await request("PATCH", `/clientes/${zero.body.id}`, {
+    valorInformado: false,
+    valor: 0,
+    revisao: zero.body.revisao,
+  }, token);
+  assert.equal(invalidUnknownWithValue.status, 400);
+  assert.ok(invalidUnknownWithValue.body.campos.valor);
+
+  const missingRevision = await request("PATCH", `/clientes/${zero.body.id}`, { valorInformado: false }, token);
+  assert.equal(missingRevision.status, 422);
+  assert.ok(missingRevision.body.campos.revisao);
+
+  const cleared = await request("PATCH", `/clientes/${known.body.id}`, {
+    valorInformado: false,
+    revisao: known.body.revisao,
+  }, token);
+  assert.equal(cleared.status, 200);
+  assert.equal(cleared.body.valor, null);
+  assert.equal(cleared.body.valorInformado, false);
+
+  const storedCleared = await prisma.cliente.findUnique({ where: { id: known.body.id } });
+  assert.equal(storedCleared.valor, 7500, "limpar a proveniencia nao inventa zero nem apaga o historico legado");
+  assert.equal(storedCleared.valorInformado, false);
+
+  const list = await request("GET", "/clientes?sortBy=value", undefined, token);
+  assert.equal(list.status, 200);
+  const knownIndex = list.body.data.findIndex((cliente) => cliente.id === zero.body.id);
+  const unknownIndex = list.body.data.findIndex((cliente) => cliente.id === unknown.body.id);
+  assert.ok(knownIndex >= 0 && unknownIndex >= 0 && knownIndex < unknownIndex);
+
+  const dashboard = await request("GET", "/dashboard", undefined, token);
+  assert.equal(dashboard.status, 200);
+  const proposal = dashboard.body.status.find((item) => item.status === "Proposta");
+  assert.equal(proposal.valor, null);
+  assert.equal(dashboard.body.receita.totalCentavos, 0);
+  assert.equal(dashboard.body.receita.fonte, "CANONICAL_SALE");
+});
+
 test("clientes usam paginação global, detalhe sob demanda e exclusão protegida", async () => {
   const company = await registerCompany("Empresa Escala Audit", "admin-escala@comercial.test");
   const empresaId = company.empresa.id;

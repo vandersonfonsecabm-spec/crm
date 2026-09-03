@@ -42,8 +42,9 @@ async function appendStockOutbox({ tx, event, retentionUntil, allowReserved = fa
   }
 }
 
-async function claimStockOutbox({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date(), eventTypes = null }) {
+async function claimStockOutbox({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date(), eventTypes = null, signal = null }) {
   if (!Number.isSafeInteger(Number(empresaId)) || Number(empresaId) <= 0) throw new StockError("STOCK_TENANT_CONTEXT_INVALID", "Tenant do outbox invalido.", undefined, 401);
+  if (isAbortRequested(signal)) return [];
   const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
   const boundedOwner = String(owner || "stock-worker").slice(0, 128);
   const leaseUntil = new Date(now.getTime() + Math.max(5000, Math.min(10 * 60 * 1000, Number(leaseMs) || 30000)));
@@ -58,8 +59,10 @@ async function claimStockOutbox({ prisma, empresaId, owner, limit = 20, leaseMs 
     orderBy: [{ empresaId: "asc" }, { availableAt: "asc" }, { id: "asc" }],
     take: safeLimit * 4,
   });
+  if (isAbortRequested(signal)) return [];
   const claimed = [];
   for (const row of rows) {
+    if (isAbortRequested(signal)) break;
     if (claimed.length >= safeLimit) break;
     const result = await prisma.eventoOutboxEstoque.updateMany({
       where: { id: row.id, empresaId: Number(empresaId), status: { in: ["PENDING", "PROCESSING"] }, OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }] },
@@ -71,23 +74,35 @@ async function claimStockOutbox({ prisma, empresaId, owner, limit = 20, leaseMs 
       // quarantining a row reclaimed by another worker.
       claimed.push({ ...row, status: "PROCESSING", leaseOwner: boundedOwner, leaseExpiresAt: leaseUntil, attempts: Number(row.attempts || 0) + 1 });
     }
+    if (isAbortRequested(signal)) break;
   }
   return claimed;
 }
 
-async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date(), logger = console, h8ProjectionEnabled = false, consumer = null, allowReserved = false, eventTypes = null }) {
+async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, leaseMs = 30000, now = new Date(), logger = console, h8ProjectionEnabled = false, consumer = null, allowReserved = false, eventTypes = null, signal = null }) {
+  if (isAbortRequested(signal)) return cancelledBatchResult();
   if (!h8ProjectionEnabled) return { claimed: 0, processed: 0, quarantined: 0, disabled: true };
   if (typeof consumer !== "function") throw new StockError("STOCK_UNAVAILABLE", "Consumer de outbox nao esta ativo.", undefined, 503);
   const effectiveOwner = String(owner || "stock-worker").slice(0, 128);
-  const claimed = await claimStockOutbox({ prisma, empresaId, owner: effectiveOwner, limit, leaseMs, now, eventTypes });
+  const claimed = await claimStockOutbox({ prisma, empresaId, owner: effectiveOwner, limit, leaseMs, now, eventTypes, signal });
   let processed = 0;
   let quarantined = 0;
-  for (const row of claimed) {
+  let released = 0;
+  if (isAbortRequested(signal)) {
+    released += await releaseClaimedRows({ prisma, empresaId, owner: effectiveOwner, rows: claimed, now });
+    return { claimed: claimed.length, processed, quarantined, cancelled: true, released };
+  }
+  for (let index = 0; index < claimed.length; index += 1) {
+    const row = claimed[index];
+    if (isAbortRequested(signal)) {
+      released += await releaseClaimedRows({ prisma, empresaId, owner: effectiveOwner, rows: claimed.slice(index), now });
+      return { claimed: claimed.length, processed, quarantined, cancelled: true, released };
+    }
     try {
       const event = JSON.parse(row.payloadStructuredJson || "{}");
       validateStockEvent(event, { activeOnly: !allowReserved });
       if (!allowReserved && !ACTIVE_EVENT_TYPES.includes(event.eventType)) throw new StockError("STOCK_SCHEMA_UNSUPPORTED", "Evento reservado.");
-      const outcome = await consumer(event, row);
+      const outcome = await consumer(event, row, { signal });
       if (outcome?.waitingForRecipient === true) {
         await prisma.eventoOutboxEstoque.updateMany({
           where: { id: row.id, empresaId: Number(empresaId), status: "PROCESSING", leaseOwner: effectiveOwner, leaseExpiresAt: row.leaseExpiresAt },
@@ -138,8 +153,40 @@ async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, l
       });
       if (quarantinedRow.count === 1) quarantined += 1;
     }
+    if (isAbortRequested(signal)) {
+      // The current event has already reached a terminal CAS transition above.
+      // Release only untouched claims so a retry cannot duplicate its projection.
+      released += await releaseClaimedRows({ prisma, empresaId, owner: effectiveOwner, rows: claimed.slice(index + 1), now });
+      return { claimed: claimed.length, processed, quarantined, cancelled: true, released };
+    }
   }
   return { claimed: claimed.length, processed, quarantined };
+}
+
+async function releaseClaimedRows({ prisma, empresaId, owner, rows, now }) {
+  let released = 0;
+  for (const row of rows) {
+    const result = await prisma.eventoOutboxEstoque.updateMany({
+      where: {
+        id: row.id,
+        empresaId: Number(empresaId),
+        status: "PROCESSING",
+        leaseOwner: owner,
+        leaseExpiresAt: row.leaseExpiresAt,
+      },
+      data: { status: "PENDING", availableAt: now, leaseOwner: null, leaseExpiresAt: null, attempts: { decrement: 1 } },
+    });
+    released += Number(result?.count || 0);
+  }
+  return released;
+}
+
+function cancelledBatchResult() {
+  return { claimed: 0, processed: 0, quarantined: 0, cancelled: true, released: 0 };
+}
+
+function isAbortRequested(signal) {
+  return signal?.aborted === true;
 }
 
 function isTransientOutboxError(error) {

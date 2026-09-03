@@ -21,7 +21,7 @@ const OFFICIAL_DATABASE_SERVICE_ID = "e9d8a6b8-507b-45fb-92a8-3ab016f865a2";
 const OFFICIAL_WORKER_SERVICE_ID = "4eef3b96-e33f-42ea-9fb8-86c17b077ab8";
 const TEST_ATTESTATION_KEY = "test-only-attestation-key-at-least-thirty-two-bytes";
 
-test("fingerprint do target PostgreSQL nao depende de senha e muda para outro banco", () => {
+test("fingerprint do target PostgreSQL nao depende de senha, normaliza schema e preserva parametros seguros", () => {
   assert.equal(
     databaseTargetFingerprint(PRODUCTION_POSTGRES_URL),
     databaseTargetFingerprint("postgresql://different-user:rotated-password@postgres.internal:5432/crm_target_pin"),
@@ -29,6 +29,18 @@ test("fingerprint do target PostgreSQL nao depende de senha e muda para outro ba
   assert.notEqual(
     databaseTargetFingerprint(PRODUCTION_POSTGRES_URL),
     databaseTargetFingerprint("postgresql://pin-test:pin-test@postgres.internal:5432/other_database"),
+  );
+  assert.equal(
+    databaseTargetFingerprint(`${PRODUCTION_POSTGRES_URL}?schema=%70ublic&sslmode=REQUIRE&connect_timeout=5`),
+    databaseTargetFingerprint("postgresql://different-user:rotated-password@postgres.internal:5432/crm_target_pin?connect_timeout=5&sslmode=require&schema=public"),
+  );
+  assert.notEqual(
+    databaseTargetFingerprint(`${PRODUCTION_POSTGRES_URL}?schema=public`),
+    databaseTargetFingerprint(`${PRODUCTION_POSTGRES_URL}?schema=other_schema`),
+  );
+  assert.equal(
+    databaseTargetFingerprint(`${PRODUCTION_POSTGRES_URL}?schema=public&password=rotated-query-secret`),
+    databaseTargetFingerprint(`${PRODUCTION_POSTGRES_URL}?schema=public&password=another-query-secret`),
   );
 });
 
@@ -86,6 +98,20 @@ function withPostgresImportAttestation(env) {
   };
 }
 
+function localPostgresMigrationEnv() {
+  const targetUrl = "postgresql://local-test:rotated@qa-target.invalid:5432/qa_target?schema=qa_schema";
+  return withManualMigrationAttestation({
+    NODE_ENV: "test",
+    CRM_DATABASE_PROVIDER: "postgresql",
+    POSTGRES_DATABASE_URL: targetUrl,
+    CRM_DATABASE_TARGET_FINGERPRINT: databaseTargetFingerprint(targetUrl),
+    CRM_MANUAL_MIGRATION_TARGET: "local",
+    CRM_MANUAL_MIGRATION_CONFIRM: MANUAL_MIGRATION_CONFIRMATION,
+    CRM_MANUAL_MIGRATION_RUN_ID: "manual-local-postgres-20260903",
+    CRM_MANUAL_MIGRATION_BACKUP_REF: "backup:local-postgres-20260903",
+  }, { provider: "postgresql", target: "local" });
+}
+
 test("migration manual exige confirmacao, backup e atestacao fora de testes", () => {
   assert.throws(
     () => assertManualMigrationAuthorization({ NODE_ENV: "development" }),
@@ -113,6 +139,43 @@ test("migration manual exige confirmacao, backup e atestacao fora de testes", ()
   );
 });
 
+test("migration manual local/test PostgreSQL exige fingerprint ligado a URL e schema efetivos", () => {
+  const env = localPostgresMigrationEnv();
+  assert.doesNotThrow(() => assertManualMigrationAuthorization(env));
+  assert.throws(
+    () => assertManualMigrationAuthorization(withManualMigrationAttestation({
+      ...env,
+      CRM_DATABASE_TARGET_FINGERPRINT: "",
+    }, { provider: "postgresql", target: "local" })),
+    { code: "MANUAL_MIGRATION_DATABASE_TARGET_FINGERPRINT_REQUIRED" },
+  );
+  assert.throws(
+    () => assertManualMigrationAuthorization(withManualMigrationAttestation({
+      ...env,
+      CRM_DATABASE_TARGET_FINGERPRINT: "0".repeat(64),
+    }, { provider: "postgresql", target: "local" })),
+    { code: "MANUAL_MIGRATION_DATABASE_TARGET_MISMATCH" },
+  );
+  assert.throws(
+    () => assertManualMigrationAuthorization(withManualMigrationAttestation({
+      ...env,
+      POSTGRES_DATABASE_URL: "postgresql://local-test:rotated@qa-target.invalid:5432/qa_target?schema=other_schema",
+    }, { provider: "postgresql", target: "local" })),
+    { code: "MANUAL_MIGRATION_DATABASE_TARGET_MISMATCH" },
+  );
+  assert.throws(
+    () => assertManualMigrationAuthorization(withManualMigrationAttestation({
+      ...env,
+      POSTGRES_TEST_DATABASE_URL: "postgresql://local-test:rotated@qa-target.invalid:5432/qa_target?schema=other_schema",
+    }, { provider: "postgresql", target: "local" })),
+    { code: "MANUAL_MIGRATION_DATABASE_TARGET_ALIAS_MISMATCH" },
+  );
+  assert.throws(
+    () => assertManualMigrationAuthorization({ ...env, CRM_MANUAL_MIGRATION_ATTESTATION: "" }),
+    { code: "MANUAL_MIGRATION_ATTESTATION_REQUIRED" },
+  );
+});
+
 test("worker de producao rejeita servico e URL PostgreSQL divergentes", () => {
   const env = {
     ...productionTargetEnv(),
@@ -125,6 +188,10 @@ test("worker de producao rejeita servico e URL PostgreSQL divergentes", () => {
   );
   assert.throws(
     () => validateWorkerRuntimeTarget({ ...env, POSTGRES_DATABASE_URL: "postgresql://pin-test:pin-test@postgres.internal:5432/other_database" }),
+    /RAILWAY_DATABASE_TARGET_MISMATCH/,
+  );
+  assert.throws(
+    () => validateWorkerRuntimeTarget({ ...env, POSTGRES_DATABASE_URL: `${PRODUCTION_POSTGRES_URL}?schema=other_schema` }),
     /RAILWAY_DATABASE_TARGET_MISMATCH/,
   );
 });
@@ -144,6 +211,10 @@ test("migration manual de producao rejeita servico ou banco divergentes", () => 
   );
   assert.throws(
     () => assertManualMigrationAuthorization(withManualMigrationAttestation({ ...env, POSTGRES_DATABASE_URL: "postgresql://pin-test:pin-test@postgres.internal:5432/other_database" }, { provider: "postgresql", target: "production" })),
+    { code: "RAILWAY_DATABASE_TARGET_MISMATCH" },
+  );
+  assert.throws(
+    () => assertManualMigrationAuthorization(withManualMigrationAttestation({ ...env, POSTGRES_DATABASE_URL: `${PRODUCTION_POSTGRES_URL}?schema=other_schema` }, { provider: "postgresql", target: "production" })),
     { code: "RAILWAY_DATABASE_TARGET_MISMATCH" },
   );
 });
@@ -186,6 +257,15 @@ test("import de producao exige que URL de import e URL runtime apontem ao mesmo 
       ...env,
       POSTGRES_TARGET_URL: divergentTarget,
       CRM_POSTGRES_IMPORT_TARGET_FINGERPRINT: databaseTargetFingerprint(divergentTarget),
+    })),
+    { code: "POSTGRES_IMPORT_DATABASE_URL_TARGET_MISMATCH" },
+  );
+  const divergentSchema = `${PRODUCTION_POSTGRES_URL}?schema=other_schema`;
+  assert.throws(
+    () => assertImportApplyAuthorization(withPostgresImportAttestation({
+      ...env,
+      POSTGRES_TARGET_URL: divergentSchema,
+      CRM_POSTGRES_IMPORT_TARGET_FINGERPRINT: databaseTargetFingerprint(divergentSchema),
     })),
     { code: "POSTGRES_IMPORT_DATABASE_URL_TARGET_MISMATCH" },
   );

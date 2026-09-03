@@ -60,6 +60,15 @@ test("cards comerciais não convertem valor desconhecido em zero ou ticket", asy
   assert.match(executiveRadar, /proposalValueKnown/);
 });
 
+test("mapper preserva a proveniencia explicita e payload distingue zero de desconhecido", async () => {
+  const api = await readFile(path.join(frontendDir, "src/services/crmApi.ts"), "utf8");
+  assert.match(api, /valorInformado\?: boolean \| null/);
+  assert.match(api, /cliente\.valorInformado === true && hasAuthoritativeValue/);
+  assert.match(api, /hasAuthoritativeValue && fallback\?\.valueKnown !== false/);
+  assert.match(api, /valorInformado: client\.valueKnown !== false/);
+  assert.match(api, /client\.valueKnown === false \? \{\} : \{ valor: client\.value \}/);
+});
+
 test("catalogo e oferta exibem preco somente quando o status e explicitamente AVAILABLE", async () => {
   const [offerCard, catalogPanel] = await Promise.all([
     readFile(path.join(frontendDir, "src/components/ai-commerce/ProductOfferCard.tsx"), "utf8"),

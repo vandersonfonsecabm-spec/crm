@@ -31,7 +31,7 @@ const {
 const backendDir = path.resolve(__dirname, "..");
 const migrationDir = path.join(backendDir, "prisma", "migrations");
 const currentMigration = "20260801123000_enforce_tenant_safe_relations";
-const latestMigration = "20260830133500_harden_canonical_sale_delete_guard";
+const latestMigration = "20260903050000_add_cliente_value_provenance";
 const runDir = requiredEnv("CRM_PRISMA_TEST_RUN_DIR");
 const sourceDatabase = requiredEnv("CRM_TEST_BASE_DATABASE_PATH");
 const historicalSourceDatabase = requiredEnv("CRM_TEST_SOURCE_DATABASE_PATH");
@@ -188,7 +188,7 @@ test("pre-migration aceita somente tabelas novas da migration registrada", () =>
   );
 });
 
-test("pre-migration preserva o upgrade canonico SQLite de 9 para 42 migrations", async () => {
+test("pre-migration preserva o upgrade canonico SQLite de 9 para 44 migrations", async () => {
   const databasePath = path.join(runDir, `tenant-gate-historical-upgrade-${process.pid}.db`);
   fs.copyFileSync(historicalSourceDatabase, databasePath);
   try {

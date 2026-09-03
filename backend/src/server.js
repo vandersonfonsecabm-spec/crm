@@ -239,6 +239,7 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
     const [
       carteira,
       porStatus,
+      porStatusComValorInformado,
       quentes,
       altoRisco,
       semContato,
@@ -260,6 +261,12 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         by: ["status"],
         where: { empresaId, arquivadoEm: null },
         _count: { _all: true, valor: true },
+        _sum: { valor: true },
+      }),
+      prisma.cliente.groupBy({
+        by: ["status"],
+        where: { empresaId, arquivadoEm: null, valorInformado: true },
+        _count: { _all: true },
         _sum: { valor: true },
       }),
       prisma.cliente.count({ where: { empresaId, arquivadoEm: null, quente: true } }),
@@ -311,16 +318,22 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
       }),
     ]);
     const statusMap = new Map(porStatus.map((item) => [item.status, item]));
-    const groupedValue = (row) => {
+    const informedStatusMap = new Map(porStatusComValorInformado.map((item) => [item.status, item]));
+    const statusValue = (status) => {
+      const total = Number(statusMap.get(status)?._count?._all || 0);
+      const informed = informedStatusMap.get(status);
+      if (!informed || Number(informed._count?._all || 0) !== total) return null;
+      return informed._sum?.valor === null || informed._sum?.valor === undefined ? 0 : Number(informed._sum.valor);
+    };
+    const groupedBusinessValue = (row) => {
       if (!row) return 0;
       const total = Number(row._count?._all || 0);
       const known = Number(row._count?.valor || 0);
       if (total > known) return null;
       return row._sum?.valor === null || row._sum?.valor === undefined ? 0 : Number(row._sum.valor);
     };
-    const statusValue = (status) => groupedValue(statusMap.get(status));
     const businessStageMap = new Map(negociosAbertos.map((item) => [item.etapa, item]));
-    const businessStageValue = (stage) => groupedValue(businessStageMap.get(stage));
+    const businessStageValue = (stage) => groupedBusinessValue(businessStageMap.get(stage));
     const businessStageCount = (stage) => businessStageMap.get(stage)?._count?._all || 0;
     const pipelineValues = ["NOVO", "CONTATO", "PROPOSTA"].map((stage) => businessStageValue(stage));
     const pipeline = pipelineValues.some((value) => value === null) ? null : pipelineValues.reduce((total, value) => total + value, 0);
@@ -386,7 +399,7 @@ app.get("/dashboard", ...commercialAuth, async (req, res) => {
         totalCentavos: faturamentoCentavos,
         vendas: vendasCanonicas._count._all,
       },
-      contasVencidas,
+      contasVencidas: contasVencidas.map(clienteResponse),
       produtosMaisVendidos: [],
       atividadesRecentes: atividadesRecentes.map((nota) => ({
         id: nota.id,
@@ -424,7 +437,7 @@ app.get("/clientes", ...commercialAuth, async (req, res) => {
       }),
     ]);
 
-    res.json(paginatedResponse(clientes, total, page, limit));
+    res.json(paginatedResponse(clientes.map(clienteResponse), total, page, limit));
   } catch (error) {
     console.error("Falha ao listar clientes.", { name: error?.name, code: error?.code });
     res.status(500).json({
@@ -450,7 +463,7 @@ app.get("/clientes/:id", ...commercialAuth, async (req, res) => {
       },
     });
     if (!cliente) return res.status(404).json({ erro: "Cliente nao encontrado.", codigo: "CLIENT_NOT_FOUND" });
-    return res.json(cliente);
+    return res.json(clienteResponse(cliente));
   } catch (error) {
     console.error("Falha ao buscar cliente.", { name: error?.name, code: error?.code });
     return res.status(500).json({ erro: "Erro ao buscar cliente", codigo: "CLIENT_GET_ERROR" });
@@ -472,7 +485,7 @@ app.post("/clientes", ...commercialAuth, async (req, res) => {
       },
     });
 
-    res.json(cliente);
+    res.json(clienteResponse(cliente));
   } catch (error) {
     console.error("Falha ao criar cliente.", { name: error?.name, code: error?.code });
 
@@ -529,12 +542,16 @@ async function updateCliente(req, res) {
         where: { id: clienteId, empresaId },
         include: { notas: { where: { empresaId }, orderBy: { createdAt: "desc" } } },
       });
-      return res.json(unchanged);
+      return res.json(clienteResponse(unchanged));
     }
     const hasRevision = Object.prototype.hasOwnProperty.call(req.body || {}, "revisao");
     const revisao = hasRevision ? Number(req.body.revisao) : null;
     if (hasRevision && (!Number.isInteger(revisao) || revisao < 1)) return clienteValidationError(res, { revisao: "Revisao invalida." }, 422);
-    if (Object.prototype.hasOwnProperty.call(req.body || {}, "valor") && !hasRevision) {
+    if (
+      (Object.prototype.hasOwnProperty.call(req.body || {}, "valor")
+        || Object.prototype.hasOwnProperty.call(req.body || {}, "valorInformado"))
+      && !hasRevision
+    ) {
       return clienteValidationError(res, { revisao: "Informe a revisao atual para alterar o valor comercial." }, 422);
     }
     const lifecycleResult = await prisma.$transaction(async (tx) => {
@@ -557,7 +574,7 @@ async function updateCliente(req, res) {
       include: { notas: { where: { empresaId }, orderBy: { createdAt: "desc" } } },
     });
 
-    res.json(clienteAtualizado);
+    res.json(clienteResponse(clienteAtualizado));
   } catch (error) {
     console.error("Falha ao atualizar cliente.", { name: error?.name, code: error?.code });
 
@@ -690,7 +707,7 @@ async function archiveCliente(req, res) {
       return tx.cliente.findFirst({ where: { id: clienteId, empresaId }, include: { notas: { where: { empresaId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] } } });
     };
     const transactionOptions = isPostgresRuntime() ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined;
-    return res.json(await prisma.$transaction(archiveOperation, transactionOptions));
+    return res.json(clienteResponse(await prisma.$transaction(archiveOperation, transactionOptions)));
   } catch (error) {
     if (error?.status && error?.codigo) return res.status(error.status).json({ erro: error.message, codigo: error.codigo });
     console.error("Falha ao arquivar cliente.", { name: error?.name, code: error?.code });
@@ -739,7 +756,7 @@ async function restoreCliente(req, res) {
       return tx.cliente.findFirst({ where: { id: clienteId, empresaId }, include: { notas: { where: { empresaId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] } } });
     };
     const transactionOptions = isPostgresRuntime() ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined;
-    return res.json(await prisma.$transaction(restoreOperation, transactionOptions));
+    return res.json(clienteResponse(await prisma.$transaction(restoreOperation, transactionOptions)));
   } catch (error) {
     if (error?.status && error?.codigo) return res.status(error.status).json({ erro: error.message, codigo: error.codigo });
     console.error("Falha ao restaurar cliente.", { name: error?.name, code: error?.code });
@@ -2378,9 +2395,22 @@ function tenantInputError(res) {
   return res.status(400).json({ erro: "empresaId nao pode ser informado pelo cliente.", codigo: "TENANT_INPUT_FORBIDDEN" });
 }
 
+function clienteResponse(cliente) {
+  if (!cliente) return cliente;
+  const valorInformado = cliente.valorInformado === true;
+  return {
+    ...cliente,
+    // Legacy storage is non-null for compatibility. API consumers must not
+    // receive a stale numeric fallback when the provenance says unknown.
+    valor: valorInformado ? cliente.valor : null,
+    valorInformado,
+  };
+}
+
 function clientePayload(body, { partial = false } = {}) {
   const has = (field) => Object.prototype.hasOwnProperty.call(body || {}, field);
   const tags = Array.isArray(body.tags) ? body.tags.map((tag) => String(tag).trim()) : [];
+  const valorInformado = has("valorInformado") ? body.valorInformado : has("valor");
 
   const data = {};
   if (!partial || has("nome")) data.nome = String(body.nome || "").trim();
@@ -2393,6 +2423,7 @@ function clientePayload(body, { partial = false } = {}) {
   if (!partial || has("interesse")) data.interesse = String(body.interesse || "").trim();
   if (!partial || has("status")) data.status = String(body.status || "Lead").trim();
   if (!partial || has("valor")) data.valor = has("valor") ? parseNonNegativePrismaInt(body.valor) : 0;
+  if (!partial || has("valor") || has("valorInformado")) data.valorInformado = valorInformado;
   if (!partial || has("origem")) data.origem = String(body.origem || "Manual").trim();
   if (!partial || has("favorito")) data.favorito = has("favorito") ? body.favorito : false;
   if (!partial || has("quente")) data.quente = has("quente") ? body.quente : false;
@@ -2435,6 +2466,15 @@ function clienteValidationErrors(body, { partial = false } = {}) {
   if (has("cpfCnpj") && cpfCnpj && !isValidCpfCnpj(cpfCnpj)) errors.cpfCnpj = "CPF ou CNPJ invalido.";
   if (has("valor") && parseNonNegativePrismaInt(source.valor) === null) {
     errors.valor = "Valor deve ser um inteiro nao negativo dentro do limite permitido.";
+  }
+  if (has("valorInformado") && typeof source.valorInformado !== "boolean") {
+    errors.valorInformado = "Valor informado deve ser verdadeiro ou falso.";
+  }
+  if (source.valorInformado === false && has("valor")) {
+    errors.valor = "Valor nao pode ser enviado quando marcado como desconhecido.";
+  }
+  if (source.valorInformado === true && !has("valor")) {
+    errors.valor = "Informe o valor comercial, inclusive quando for zero.";
   }
   for (const field of ["favorito", "quente"]) {
     if (has(field) && typeof source[field] !== "boolean") errors[field] = "O valor deve ser booleano.";
@@ -2507,13 +2547,14 @@ function clienteListWhere(empresaId, query) {
 
 function clienteOrderBy(query) {
   const sortBy = cleanOptionalString(query.sortBy || query.ordenarPor);
-  if (sortBy === "value") return [{ valor: "desc" }, { id: "desc" }];
+  if (sortBy === "value") return [{ valorInformado: "desc" }, { valor: "desc" }, { id: "desc" }];
   if (sortBy === "name") return [{ nome: "asc" }, { id: "desc" }];
   if (sortBy === "status") return [{ status: "asc" }, { id: "desc" }];
   if (sortBy && sortBy !== "score") return [{ id: "desc" }];
   return [
     { quente: "desc" },
     { favorito: "desc" },
+    { valorInformado: "desc" },
     { valor: "desc" },
     { ultimoContato: "asc" },
     { id: "desc" },

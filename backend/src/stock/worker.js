@@ -20,10 +20,7 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
   const cycleStartedAt = Date.now();
   const results = { enabled: true, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, matched: 0, resolved: 0, tenants: 0, failedTenants: [] };
   for (const empresaId of flags.tenantAllowlist) {
-    if (isAbortRequested(signal)) {
-      results.cancelled = true;
-      break;
-    }
+    if (markCancelledIfRequested(results, signal)) break;
     if (!stockEnabledForTenant(empresaId, env, { worker: true })) continue;
     results.tenants += 1;
     try {
@@ -31,14 +28,17 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
       if (flags.ruleEngineEnabled && typeof rules?.evaluateTenant === "function") {
         const checkpointKey = WORKER_CHECKPOINT_KEYS.stockRules(empresaId);
         const storedCursor = await effectiveCheckpointStore.read(checkpointKey);
+        if (markCancelledIfRequested(results, signal)) break;
         const cursor = positiveCursor(storedCursor?.id);
-        const evaluation = await rules.evaluateTenant(empresaId, { now, limit, cursor });
+        const evaluation = await rules.evaluateTenant(empresaId, { now, limit, cursor, signal });
+        if (markCancelledIfRequested(results, signal)) break;
         const nextCursor = positiveCursor(evaluation.nextCursor);
         checkpointUpdate = { key: checkpointKey, nextCursor };
         results.evaluated += Number(evaluation.evaluated || 0);
         results.matched += Number(evaluation.matched || 0);
         results.resolved += Number(evaluation.resolved || 0);
       }
+      if (markCancelledIfRequested(results, signal)) break;
       const effectiveOwner = String(owner || leaseOwner || `stock-worker-${process.pid}`);
       const result = await processStockOutboxBatch({
         prisma,
@@ -52,12 +52,34 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
         allowReserved: flags.h8ProjectionEnabled && flags.ruleEngineEnabled,
         eventTypes: flags.h8ProjectionEnabled && flags.ruleEngineEnabled ? ["StockProjectionRequested.v1", "StockRuleMatched.v1", "StockRuleResolved.v1", "StockSyncStarted.v1", "StockSyncCompleted.v1", "StockSyncFailed.v1", "StockRecordObserved.v1", "StockCanonicalStateChanged.v1"] : null,
         consumer: flags.h8ProjectionEnabled && flags.ruleEngineEnabled ? createProjectionConsumer({ prisma, empresaId, env, now }) : null,
+        signal,
       });
       results.claimed += result.claimed; results.processed += result.processed; results.quarantined += result.quarantined;
-      if (parseBoolean(env.STOCK_RETENTION_ENABLED) && parseBoolean(env.STOCK_RETENTION_WORKER_ENABLED)) await runStockRetention({ prisma, empresaId, now, dryRun: false, env, logger });
-      if (checkpointUpdate?.nextCursor) await effectiveCheckpointStore.write(checkpointUpdate.key, { id: checkpointUpdate.nextCursor });
-      else if (checkpointUpdate) await effectiveCheckpointStore.clear(checkpointUpdate.key);
+      if (result.cancelled || markCancelledIfRequested(results, signal)) {
+        results.cancelled = true;
+        break;
+      }
+      if (parseBoolean(env.STOCK_RETENTION_ENABLED) && parseBoolean(env.STOCK_RETENTION_WORKER_ENABLED)) {
+        const retention = await runStockRetention({ prisma, empresaId, now, dryRun: false, env, logger, signal });
+        if (retention?.cancelled || markCancelledIfRequested(results, signal)) {
+          results.cancelled = true;
+          break;
+        }
+      }
+      if (checkpointUpdate?.nextCursor) {
+        if (markCancelledIfRequested(results, signal)) break;
+        await effectiveCheckpointStore.write(checkpointUpdate.key, { id: checkpointUpdate.nextCursor });
+        if (markCancelledIfRequested(results, signal)) break;
+      } else if (checkpointUpdate) {
+        if (markCancelledIfRequested(results, signal)) break;
+        await effectiveCheckpointStore.clear(checkpointUpdate.key);
+        if (markCancelledIfRequested(results, signal)) break;
+      }
     } catch (error) {
+      if (isAbortRequested(signal)) {
+        results.cancelled = true;
+        break;
+      }
       logger.error?.("stock_tenant_cycle_failed", { empresaId, code: error?.code || "STOCK_CYCLE_FAILED" });
       results.failedTenants.push(empresaId);
     }
@@ -77,6 +99,12 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
 
 function isAbortRequested(signal) {
   return signal?.aborted === true;
+}
+
+function markCancelledIfRequested(results, signal) {
+  if (!isAbortRequested(signal)) return false;
+  results.cancelled = true;
+  return true;
 }
 
 function positiveCursor(value) {

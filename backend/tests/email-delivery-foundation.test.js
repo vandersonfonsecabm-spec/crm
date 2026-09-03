@@ -154,8 +154,12 @@ test("timeout de envio fica terminal e fail-closed para nao duplicar uma entrega
     expiresAt: new Date(now.getTime() + 60_000),
   });
 
-  const first = await service.processDue({ now, leaseOwner: "worker-timeout", timeoutMs: 1_000, maxAttempts: 5 });
-  const second = await service.processDue({ now: new Date(now.getTime() + 60_000), leaseOwner: "worker-timeout-retry", timeoutMs: 1_000, maxAttempts: 5 });
+  // The enqueue path timestamps availability with its own clock.  Advance the
+  // claim clock explicitly so this test remains deterministic under suite
+  // load instead of racing the same-millisecond boundary.
+  const claimNow = new Date(now.getTime() + 1_000);
+  const first = await service.processDue({ now: claimNow, leaseOwner: "worker-timeout", timeoutMs: 1_000, maxAttempts: 5 });
+  const second = await service.processDue({ now: new Date(claimNow.getTime() + 60_000), leaseOwner: "worker-timeout-retry", timeoutMs: 1_000, maxAttempts: 5 });
 
   assert.equal(first.failed, 1);
   assert.equal(first.retried, 0);

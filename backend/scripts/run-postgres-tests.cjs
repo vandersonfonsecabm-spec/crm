@@ -1,10 +1,14 @@
+const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const {
+  canonicalPostgresMigrateAttestationPayload,
   cleanupPostgresTestWorkspace,
   createPostgresTestWorkspace,
   sanitize,
+  signPostgresMigrateAttestation,
 } = require("./postgres-prisma.cjs");
+const { databaseTargetFingerprint } = require("./prisma-runtime.cjs");
 const { createPrismaFailure, sanitizeFailure: sanitizeVerifierFailure } = require("./tenant-isolation-log-utils.cjs");
 
 const backendDir = path.resolve(__dirname, "..");
@@ -44,10 +48,7 @@ function main(options = {}) {
       runCommand("node", ["--test", "tests/tenant-isolation-pending-migrations-postgres.test.js"], testEnv);
     }
     if (boundaryFocus) return;
-    runCommand("node", prismaArgs("migrate-empty"), {
-      ...testEnv,
-      CRM_POSTGRES_MIGRATE_CONFIRM: "apply-empty-postgres",
-    });
+    runCommand("node", prismaArgs("migrate-empty"), postgresMigrateEmptyAuthorityEnv(testEnv, databaseUrl));
     const testFiles = [
       "tests/postgres-migration-prep.test.js",
       "tests/auth-admin-concurrency-postgres.test.js",
@@ -89,6 +90,31 @@ function main(options = {}) {
   }
 }
 
+function postgresMigrateEmptyAuthorityEnv(env, databaseUrl) {
+  const targetFingerprint = databaseTargetFingerprint(databaseUrl);
+  const hmacKey = crypto.randomBytes(32).toString("hex");
+  const runId = `postgres-test-${process.pid}-${crypto.randomBytes(6).toString("hex")}`;
+  const signed = {
+    ...env,
+    CRM_POSTGRES_MIGRATE_ATTESTATION_HMAC_KEY: hmacKey,
+    CRM_POSTGRES_MIGRATE_CONFIRM: "apply-empty-postgres",
+    CRM_POSTGRES_MIGRATE_RUN_ID: runId,
+    CRM_POSTGRES_MIGRATE_TARGET: "isolated",
+    CRM_POSTGRES_MIGRATE_TARGET_FINGERPRINT: targetFingerprint,
+  };
+  return {
+    ...signed,
+    CRM_POSTGRES_MIGRATE_ATTESTATION: signPostgresMigrateAttestation(
+      hmacKey,
+      canonicalPostgresMigrateAttestationPayload({
+        runId,
+        target: signed.CRM_POSTGRES_MIGRATE_TARGET,
+        targetFingerprint,
+      }),
+    ),
+  };
+}
+
 function appendNodeRequire(nodeOptions, loaderPath) {
   const normalizedPath = path.resolve(loaderPath).replace(/\\/g, "/");
   const escapedPath = /\s/.test(normalizedPath) ? `"${normalizedPath.replace(/"/g, '\\"')}"` : normalizedPath;
@@ -124,4 +150,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { appendNodeRequire, main };
+module.exports = { appendNodeRequire, main, postgresMigrateEmptyAuthorityEnv };

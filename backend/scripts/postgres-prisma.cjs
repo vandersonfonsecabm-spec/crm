@@ -25,6 +25,7 @@ const workspaceRoot = path.join(
 );
 const postgresTestWorkspaceRoot = path.join(os.tmpdir(), "crm-prisma-tests");
 const migrationName = "20260728090000_postgres_baseline";
+const POSTGRES_MIGRATE_CONFIRMATION = "apply-empty-postgres";
 
 function preparePostgresWorkspace(options = {}) {
   const root = path.resolve(options.root || path.join(workspaceRoot, stableWorkspaceId()));
@@ -192,9 +193,77 @@ function postgresUrlFromEnv(env = process.env) {
 }
 
 function assertWriteConfirmation(env = process.env) {
-  if (env.CRM_POSTGRES_MIGRATE_CONFIRM !== "apply-empty-postgres") {
-    throw new Error("CRM_POSTGRES_MIGRATE_CONFIRM=apply-empty-postgres e obrigatorio para aplicar migration PostgreSQL.");
+  if (env.CRM_POSTGRES_MIGRATE_CONFIRM !== POSTGRES_MIGRATE_CONFIRMATION) {
+    throw postgresMigrationError("POSTGRES_MIGRATE_CONFIRMATION_REQUIRED");
   }
+}
+
+function assertPostgresMigrateEmptyAuthorization(env = process.env) {
+  assertWriteConfirmation(env);
+  if (isRailwayEnvironment(env)) throw postgresMigrationError("POSTGRES_MIGRATE_ISOLATED_TARGET_REQUIRED");
+
+  const target = String(env.CRM_POSTGRES_MIGRATE_TARGET || "").trim().toLowerCase();
+  if (target !== "isolated") throw postgresMigrationError("POSTGRES_MIGRATE_TARGET_CONFIRMATION_REQUIRED");
+
+  const databaseUrl = postgresUrlFromEnv(env);
+  const targetFingerprint = postgresTargetFingerprint(databaseUrl);
+  const expectedFingerprint = String(env.CRM_POSTGRES_MIGRATE_TARGET_FINGERPRINT || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(expectedFingerprint)) {
+    throw postgresMigrationError("POSTGRES_MIGRATE_TARGET_FINGERPRINT_REQUIRED");
+  }
+  if (!crypto.timingSafeEqual(Buffer.from(expectedFingerprint, "hex"), Buffer.from(targetFingerprint, "hex"))) {
+    throw postgresMigrationError("POSTGRES_MIGRATE_TARGET_MISMATCH");
+  }
+
+  const runId = String(env.CRM_POSTGRES_MIGRATE_RUN_ID || "").trim();
+  const attestation = String(env.CRM_POSTGRES_MIGRATE_ATTESTATION || "").trim().toLowerCase();
+  const hmacKey = String(env.CRM_POSTGRES_MIGRATE_ATTESTATION_HMAC_KEY || "");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$/.test(runId)) {
+    throw postgresMigrationError("POSTGRES_MIGRATE_RUN_ID_REQUIRED");
+  }
+  if (!/^[a-f0-9]{64}$/.test(attestation)) {
+    throw postgresMigrationError("POSTGRES_MIGRATE_ATTESTATION_REQUIRED");
+  }
+  if (Buffer.byteLength(hmacKey, "utf8") < 32) {
+    throw postgresMigrationError("POSTGRES_MIGRATE_ATTESTATION_KEY_REQUIRED");
+  }
+  const expectedAttestation = signPostgresMigrateAttestation(hmacKey, canonicalPostgresMigrateAttestationPayload({
+    runId,
+    target,
+    targetFingerprint,
+  }));
+  if (!crypto.timingSafeEqual(Buffer.from(attestation, "hex"), Buffer.from(expectedAttestation, "hex"))) {
+    throw postgresMigrationError("POSTGRES_MIGRATE_ATTESTATION_INVALID");
+  }
+  return { databaseUrl, target, targetFingerprint };
+}
+
+function canonicalPostgresMigrateAttestationPayload({ runId, target, targetFingerprint }) {
+  return JSON.stringify({
+    runId: String(runId || ""),
+    target: String(target || ""),
+    targetFingerprint: String(targetFingerprint || ""),
+  });
+}
+
+function signPostgresMigrateAttestation(hmacKey, payload) {
+  return crypto.createHmac("sha256", hmacKey).update(payload).digest("hex");
+}
+
+function postgresTargetFingerprint(rawUrl) {
+  // Lazily loaded to avoid a module-initialization cycle: prisma-runtime
+  // derives its PostgreSQL workspace from this module.
+  return require("./prisma-runtime.cjs").databaseTargetFingerprint(rawUrl);
+}
+
+function isRailwayEnvironment(env = process.env) {
+  return Boolean(env.RAILWAY_SERVICE_ID || env.RAILWAY_DEPLOYMENT_ID || env.RAILWAY_PROJECT_ID || env.RAILWAY_ENVIRONMENT_ID);
+}
+
+function postgresMigrationError(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
 }
 
 function stableWorkspaceId() {
@@ -257,8 +326,7 @@ async function main() {
     });
     return;
   }
-  assertWriteConfirmation(process.env);
-  const databaseUrl = postgresUrlFromEnv(process.env);
+  const { databaseUrl } = assertPostgresMigrateEmptyAuthorization(process.env);
   const migrationEnv = { ...process.env, DATABASE_URL: databaseUrl };
   const migrationOptions = {
     env: migrationEnv,
@@ -282,7 +350,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  POSTGRES_MIGRATE_CONFIRMATION,
+  assertPostgresMigrateEmptyAuthorization,
   cleanupPostgresTestWorkspace,
+  canonicalPostgresMigrateAttestationPayload,
   createPostgresTestWorkspace,
   generatePostgresMigrationSql,
   latestMigrationName,
@@ -294,5 +365,6 @@ module.exports = {
   preparePostgresWorkspace,
   resolvePrismaCli,
   sanitize,
+  signPostgresMigrateAttestation,
   writePostgresClientLoader,
 };

@@ -11,6 +11,8 @@ const { createPrismaFailure } = require("./tenant-isolation-log-utils.cjs");
 const {
   OFFICIAL_DATABASE_SERVICE_ID,
   assertPinnedPostgresTarget,
+  assertPostgresAliasTargetConsistency,
+  assertPostgresTargetFingerprint,
   assertProviderMatchesDatabaseUrl,
 } = require("./prisma-runtime.cjs");
 
@@ -81,6 +83,7 @@ function assertManualMigrationAuthorization(env, { provider = providerFromEnv(en
   if (String(env.CRM_MANUAL_MIGRATION_CONFIRM || "") !== MANUAL_MIGRATION_CONFIRMATION) {
     throw migrationError("MANUAL_MIGRATION_CONFIRMATION_REQUIRED");
   }
+  if (provider === "postgresql" && !railway) assertLocalPostgresMigrationTarget(env, { provider });
   assertOperationEvidence(env, "CRM_MANUAL_MIGRATION", { provider, target: expected.target });
 
   if (!railway) return { target: expected.target };
@@ -98,6 +101,37 @@ function assertManualMigrationAuthorization(env, { provider = providerFromEnv(en
     throw migrationError(error?.code || "MANUAL_MIGRATION_DATABASE_TARGET_INVALID");
   }
   return { target: expected.target };
+}
+
+function assertLocalPostgresMigrationTarget(env, { provider }) {
+  const databaseUrl = databaseUrlForProvider(env, provider);
+  try {
+    assertProviderMatchesDatabaseUrl(provider, databaseUrl);
+    assertPostgresAliasTargetConsistency(env, databaseUrl);
+    // A local/test PostgreSQL migration is still a write operation.  Bind its
+    // signed attestation to the *actual* selected URL before Prisma can run;
+    // POSTGRES_TARGET_URL / POSTGRES_TEST_DATABASE_URL may only be aliases of
+    // that same normalized host/database/schema target.
+    assertPostgresTargetFingerprint({
+      env,
+      databaseUrl,
+      missingCode: "MANUAL_MIGRATION_DATABASE_TARGET_FINGERPRINT_REQUIRED",
+      mismatchCode: "MANUAL_MIGRATION_DATABASE_TARGET_MISMATCH",
+    });
+    for (const key of ["POSTGRES_TARGET_URL", "POSTGRES_TEST_DATABASE_URL"]) {
+      const alias = String(env[key] || "").trim();
+      if (!alias) continue;
+      assertProviderMatchesDatabaseUrl(provider, alias);
+      assertPostgresTargetFingerprint({
+        env,
+        databaseUrl: alias,
+        missingCode: "MANUAL_MIGRATION_DATABASE_TARGET_FINGERPRINT_REQUIRED",
+        mismatchCode: "MANUAL_MIGRATION_DATABASE_TARGET_ALIAS_MISMATCH",
+      });
+    }
+  } catch (error) {
+    throw migrationError(error?.code || "MANUAL_MIGRATION_DATABASE_TARGET_INVALID");
+  }
 }
 
 function assertOperationEvidence(env, prefix, { provider, target } = {}) {
@@ -194,6 +228,7 @@ if (require.main === module) {
 module.exports = {
   MANUAL_MIGRATION_CONFIRMATION,
   assertManualMigrationAuthorization,
+  assertLocalPostgresMigrationTarget,
   canonicalManualMigrationAttestationPayload,
   expectedRailwayTarget,
   main,

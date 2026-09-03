@@ -19,6 +19,26 @@ test("agenda usa rotas e parâmetros canônicos para vínculos comerciais", asyn
   assert.doesNotMatch(agenda, /href=\{`\/inbox\?/);
 });
 
+test("deep-link de proposta abre o Negócio e seleciona a proposta indicada", async () => {
+  const [agenda, dashboard, kanban, proposals] = await Promise.all([
+    source("src/components/dashboard/DashboardAgendaPanel.tsx"),
+    source("src/pages/Dashboard.tsx"),
+    source("src/components/negocios/DashboardNegociosKanbanPanel.tsx"),
+    source("src/components/negocios/CommercialProposalsPanel.tsx"),
+  ]);
+
+  assert.match(agenda, /propostaId=\$\{item\.propostaComercialId\}/);
+  assert.match(dashboard, /const proposalId = Number\(params\.get\("propostaId"\)\)/);
+  assert.match(dashboard, /initialProposalId=\{kanbanProposalId\}/);
+  assert.match(kanban, /fetchCommercialProposal/);
+  assert.match(kanban, /setSelectedProposalId\((?:initialProposalId|targetProposalId) \?\? null\)/);
+  assert.match(kanban, /initialProposalId=\{selectedProposalId\}/);
+  assert.match(proposals, /initialProposalId\?: number \| null/);
+  assert.match(proposals, /handledInitialProposalId/);
+  assert.match(proposals, /void selectProposal\(targetProposalId\)/);
+  assert.match(proposals, /proposalDetailRequestSequence/);
+});
+
 test("drawer de Leads invalida respostas antigas antes de atualizar o estado", async () => {
   const leads = await source("src/components/leads-communication/DashboardLeadsPanel.tsx");
   assert.match(leads, /const drawerRequestSequence = useRef\(0\)/);
@@ -28,11 +48,13 @@ test("drawer de Leads invalida respostas antigas antes de atualizar o estado", a
   assert.match(leads, /onClose=\{closeLead\}/);
 });
 
-test("refresh entre abas não transmite token e a aba seguidora recupera sua própria memória", async () => {
+test("refresh entre abas não transmite token nem deixa seguidora renovar fora da coordenação", async () => {
   const coordinator = await source("src/services/auth-refresh-coordinator.ts");
-  assert.match(coordinator, /async function resolvePeerTerminal/);
-  assert.match(coordinator, /return refresh\(\);/);
-  assert.match(coordinator, /Access tokens stay in each tab's memory/);
+  assert.match(coordinator, /async function tryWithWebLock/);
+  assert.match(coordinator, /currentTerminal && currentTerminal\.type !== "refresh-success"/);
+  assert.match(coordinator, /Re-enter the same lock before refreshing locally/);
+  assert.match(coordinator, /if \(terminal\.type !== "refresh-success"\) return resolveTerminal/);
+  assert.doesNotMatch(coordinator, /async function resolvePeerTerminal/);
   assert.doesNotMatch(coordinator, /access_token.*postMessage|postMessage.*access_token/s);
 });
 

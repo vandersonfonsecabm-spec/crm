@@ -5,6 +5,7 @@ import {
   closeDealAsWon,
   fetchCanonicalCommercialState,
   fetchCanonicalSales,
+  fetchCommercialProposal,
   fetchNegocioKanban,
   fetchNegociosKanban,
   markDealAsLost,
@@ -41,24 +42,27 @@ export type NegociosKanbanAdapter = {
   fetchNegocioKanban: typeof fetchNegocioKanban;
   fetchNegociosKanban: typeof fetchNegociosKanban;
   updateNegocioKanbanStage: typeof updateNegocioKanbanStage;
+  fetchCommercialProposal?: typeof fetchCommercialProposal;
 };
 
 const defaultNegociosKanbanAdapter: NegociosKanbanAdapter = {
   fetchNegocioKanban,
   fetchNegociosKanban,
   updateNegocioKanbanStage,
+  fetchCommercialProposal,
 };
 
 type Props = {
   authSession: AuthSession | null;
   initialBusinessId?: number | null;
+  initialProposalId?: number | null;
   adapter?: NegociosKanbanAdapter;
   onInitialBusinessHandled?: () => void;
   onOpenAgenda: () => void;
   onToast: (message: string) => void;
 };
 
-export default function DashboardNegociosKanbanPanel({ adapter = defaultNegociosKanbanAdapter, authSession, initialBusinessId, onInitialBusinessHandled, onOpenAgenda, onToast }: Props) {
+export default function DashboardNegociosKanbanPanel({ adapter = defaultNegociosKanbanAdapter, authSession, initialBusinessId, initialProposalId, onInitialBusinessHandled, onOpenAgenda, onToast }: Props) {
   const [businesses, setBusinesses] = useState<CommunicationBusiness[]>([]);
   const [summary, setSummary] = useState<NegociosKanbanResponse["resumo"] | null>(null);
   const [page, setPage] = useState(1);
@@ -72,6 +76,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
   const [error, setError] = useState("");
   const [dragOverStage, setDragOverStage] = useState<BusinessStage | null>(null);
   const [selected, setSelected] = useState<CommunicationBusiness | null>(null);
+  const [selectedProposalId, setSelectedProposalId] = useState<number | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const requestSequence = useRef(0);
   const detailRequestSequence = useRef(0);
@@ -133,33 +138,48 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
   }, [query]);
 
   useEffect(() => {
-    if (!initialBusinessId) return;
+    if (!initialBusinessId && !initialProposalId) {
+      return;
+    }
     let active = true;
     const sequence = ++detailRequestSequence.current;
+    const targetProposalId = initialProposalId;
     const timer = window.setTimeout(() => {
-      setDetailLoading(true);
-      adapter.fetchNegocioKanban(initialBusinessId)
-        .then((business) => {
+      async function openInitialTarget() {
+        setDetailLoading(true);
+        try {
+          let business: CommunicationBusiness;
+          if (initialBusinessId) {
+            business = await adapter.fetchNegocioKanban(initialBusinessId);
+          } else {
+            if (!targetProposalId) throw new Error("PROPOSAL_TARGET_MISSING");
+            const proposalFetcher = adapter.fetchCommercialProposal ?? fetchCommercialProposal;
+            const proposal = await proposalFetcher(targetProposalId);
+            if (!active || sequence !== detailRequestSequence.current) return;
+            business = await adapter.fetchNegocioKanban(proposal.negocioId);
+          }
           if (!active || sequence !== detailRequestSequence.current) return;
           drawerSessionSequence.current += 1;
           currentDrawerBusinessId.current = business.id;
+          setSelectedProposalId(targetProposalId ?? null);
           setSelected(business);
           setDetailLoading(false);
           onInitialBusinessHandled?.();
-        })
-        .catch(() => {
+        } catch {
           if (!active || sequence !== detailRequestSequence.current) return;
           onToast("Não foi possível abrir o Negócio selecionado.");
           setDetailLoading(false);
           onInitialBusinessHandled?.();
-        });
+        }
+      }
+      void openInitialTarget();
     }, 0);
     return () => {
       active = false;
       window.clearTimeout(timer);
       if (sequence === detailRequestSequence.current) detailRequestSequence.current += 1;
     };
-  }, [adapter, initialBusinessId, onInitialBusinessHandled, onToast]);
+  }, [adapter, initialBusinessId, initialProposalId, onInitialBusinessHandled, onToast]);
 
   async function openBusiness(business: CommunicationBusiness, trigger: HTMLElement) {
     const sequence = ++detailRequestSequence.current;
@@ -167,6 +187,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
     currentDrawerBusinessId.current = business.id;
     detailTrigger.current = trigger;
     detailTriggerBusinessId.current = business.id;
+    setSelectedProposalId(null);
     setSelected(business);
     setDetailLoading(true);
     try {
@@ -183,6 +204,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
     detailRequestSequence.current += 1;
     drawerSessionSequence.current += 1;
     currentDrawerBusinessId.current = null;
+    setSelectedProposalId(null);
     setDetailLoading(false);
     const businessId = detailTriggerBusinessId.current;
     const originalTrigger = detailTrigger.current;
@@ -214,6 +236,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
         drawerSessionSequence.current += 1;
         currentDrawerBusinessId.current = id;
       }
+      setSelectedProposalId(null);
       setSelected(current);
       setDetailLoading(true);
       try {
@@ -318,7 +341,7 @@ export default function DashboardNegociosKanbanPanel({ adapter = defaultNegocios
         <Pagination disabled={refreshing} itemLabel="Negócios" onPageChange={setPage} page={page} total={pagination.total} totalPages={pagination.totalPages} visibleCount={businesses.length} />
       </Surface>
 
-      {selected && <BusinessDrawer authSession={authSession} business={selected} isMoving={movingBusinessId === selected.id} key={selected.id} loading={detailLoading} onCanonicalChanged={(id, message) => refreshCanonicalBusiness(id, message, activeDrawerSession)} onClose={closeBusiness} onMoveBusiness={moveBusiness} onOpenAgenda={onOpenAgenda} />}
+      {selected && <BusinessDrawer authSession={authSession} business={selected} initialProposalId={selectedProposalId} isMoving={movingBusinessId === selected.id} key={selected.id} loading={detailLoading} onCanonicalChanged={(id, message) => refreshCanonicalBusiness(id, message, activeDrawerSession)} onClose={closeBusiness} onMoveBusiness={moveBusiness} onOpenAgenda={onOpenAgenda} />}
     </section>
   );
 }
@@ -500,7 +523,7 @@ export function BusinessCard({ business, onOpen }: { business: CommunicationBusi
   );
 }
 
-export function BusinessDrawer({ authSession, business, isMoving, loading, onCanonicalChanged, onClose, onMoveBusiness, onOpenAgenda }: { authSession: AuthSession | null; business: CommunicationBusiness; isMoving: boolean; loading: boolean; onCanonicalChanged: (id: number, message: string) => Promise<void>; onClose: () => void; onMoveBusiness: (id: number, stage: BusinessStage) => Promise<boolean>; onOpenAgenda: () => void }) {
+export function BusinessDrawer({ authSession, business, initialProposalId = null, isMoving, loading, onCanonicalChanged, onClose, onMoveBusiness, onOpenAgenda }: { authSession: AuthSession | null; business: CommunicationBusiness; initialProposalId?: number | null; isMoving: boolean; loading: boolean; onCanonicalChanged: (id: number, message: string) => Promise<void>; onClose: () => void; onMoveBusiness: (id: number, stage: BusinessStage) => Promise<boolean>; onOpenAgenda: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const stageSelectRef = useRef<HTMLSelectElement>(null);
@@ -739,7 +762,7 @@ export function BusinessDrawer({ authSession, business, isMoving, loading, onCan
             <BusinessStageTimingPanel business={business} key={business.id} onOpenAgenda={onOpenAgenda} />
           </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
-            <CommercialProposalsPanel businessId={business.id} canCreate={business.permissoes?.movimentar === true && ["NOVO", "CONTATO", "PROPOSTA"].includes(business.etapa)} onChanged={() => void onCanonicalChanged(business.id, "Contrato comercial atualizado.")} />
+            <CommercialProposalsPanel businessId={business.id} canCreate={business.permissoes?.movimentar === true && ["NOVO", "CONTATO", "PROPOSTA"].includes(business.etapa)} initialProposalId={initialProposalId} onChanged={() => void onCanonicalChanged(business.id, "Contrato comercial atualizado.")} />
           </section>
           <section className="mt-5 border-t border-[var(--border-default)] pt-4">
             <h3 className="text-xs font-semibold text-[var(--text-primary)]">Conversas relacionadas</h3>

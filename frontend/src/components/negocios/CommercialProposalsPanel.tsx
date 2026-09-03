@@ -1,5 +1,5 @@
 import { CopyPlus, Download, FileText, History, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiHttpError,
   acceptCommercialProposal,
@@ -30,7 +30,7 @@ import {
 } from "../../utils/commercialMoney.js";
 import { Badge, Button, EmptyState, ErrorState, Input, LoadingState, Select, Textarea } from "../ui";
 
-type Props = { businessId: number; canCreate?: boolean; onChanged?: () => void };
+type Props = { businessId: number; canCreate?: boolean; initialProposalId?: number | null; onChanged?: () => void };
 type FormItem = {
   key: string;
   itemType: "LEGACY_ITEM" | "CATALOG_ITEM";
@@ -72,7 +72,7 @@ const nextStatuses: Record<CommercialProposalStatus, CommercialProposalStatus[]>
   SUBSTITUIDA: [],
 };
 
-export default function CommercialProposalsPanel({ businessId, canCreate = true, onChanged }: Props) {
+export default function CommercialProposalsPanel({ businessId, canCreate = true, initialProposalId = null, onChanged }: Props) {
   const [proposals, setProposals] = useState<CommercialProposal[]>([]);
   const [selected, setSelected] = useState<CommercialProposal | null>(null);
   const [history, setHistory] = useState<CommercialProposalHistory[]>([]);
@@ -86,6 +86,8 @@ export default function CommercialProposalsPanel({ businessId, canCreate = true,
   const [showHistory, setShowHistory] = useState(false);
   const [winnerAction, setWinnerAction] = useState<"replace" | "reconcile" | "remove" | null>(null);
   const [winnerReason, setWinnerReason] = useState("");
+  const proposalDetailRequestSequence = useRef(0);
+  const handledInitialProposalId = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,12 +111,14 @@ export default function CommercialProposalsPanel({ businessId, canCreate = true,
   const currentWinner = useMemo(() => proposals.find((proposal) => proposal.contratoComercial.vencedora) ?? null, [proposals]);
   const acceptedProposalCount = useMemo(() => proposals.filter((proposal) => proposal.status === "ACEITA").length, [proposals]);
 
-  async function selectProposal(id: number) {
+  const selectProposal = useCallback(async (id: number) => {
+    const requestSequence = ++proposalDetailRequestSequence.current;
     setBusy(true);
     setError("");
     setFeedback("");
     try {
       const proposal = await fetchCommercialProposal(id);
+      if (requestSequence !== proposalDetailRequestSequence.current) return;
       setSelected(proposal);
       setHistory(proposal.historico ?? []);
       setEditing(false);
@@ -123,11 +127,38 @@ export default function CommercialProposalsPanel({ businessId, canCreate = true,
       setWinnerAction(null);
       setWinnerReason("");
     } catch (nextError) {
-      setError(proposalErrorMessage(nextError));
+      if (requestSequence === proposalDetailRequestSequence.current) setError(proposalErrorMessage(nextError));
     } finally {
-      setBusy(false);
+      if (requestSequence === proposalDetailRequestSequence.current) setBusy(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!initialProposalId) {
+      if (handledInitialProposalId.current !== null) proposalDetailRequestSequence.current += 1;
+      handledInitialProposalId.current = null;
+      return;
+    }
+    if (handledInitialProposalId.current === initialProposalId || loading || (error && proposals.length === 0)) return;
+    if (!proposals.some((proposal) => proposal.id === initialProposalId)) {
+      handledInitialProposalId.current = initialProposalId;
+      proposalDetailRequestSequence.current += 1;
+      return;
+    }
+    handledInitialProposalId.current = initialProposalId;
+    const targetProposalId = initialProposalId;
+    const timer = window.setTimeout(() => {
+      if (handledInitialProposalId.current === targetProposalId) void selectProposal(targetProposalId);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [error, initialProposalId, loading, proposals, selectProposal]);
+
+  const initialProposalUnavailable = Boolean(
+    initialProposalId
+      && !loading
+      && !error
+      && !proposals.some((proposal) => proposal.id === initialProposalId),
+  );
 
   function beginCreate() {
     setSelected(null);
@@ -331,6 +362,7 @@ export default function CommercialProposalsPanel({ businessId, canCreate = true,
 
       {feedback && <div aria-live="polite" className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">{feedback}</div>}
       {error && <div aria-live="assertive" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800">{error}</div>}
+      {initialProposalUnavailable && <div aria-live="assertive" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">A proposta vinculada não pertence a este Negócio.</div>}
 
       {!editing && proposals.length === 0 && <EmptyState description="Crie um rascunho somente quando houver uma oportunidade comercial confirmada." icon={<FileText size={18} />} title="Nenhuma proposta neste Negócio" />}
 
@@ -351,7 +383,7 @@ export default function CommercialProposalsPanel({ businessId, canCreate = true,
         <ProposalEditor busy={busy} form={form} onCancel={() => { setEditing(false); setError(""); }} onChange={setForm} onSave={() => void save()} totals={previewTotals} />
       )}
 
-      {!editing && selected && (
+      {!editing && selected && !initialProposalUnavailable && (
         <div className="space-y-3 border-t border-[var(--border-default)] pt-3">
           <div aria-label="Proveniência comercial" className="grid grid-cols-4 gap-px overflow-hidden rounded-md border border-[var(--border-default)] bg-[var(--border-default)] text-[9px] max-[640px]:grid-cols-2">
             <ProvenanceStep active={selected.negocio.etapa !== "PERDIDO"} label="Negócio" value={proposalBusinessStageLabel(selected.negocio.etapa)} />

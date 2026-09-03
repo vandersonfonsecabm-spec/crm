@@ -58,6 +58,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260827200000_add_store1_provider_readiness": "6aa6ee3e3097df108765da05ecd1ea303f719473afd51402db916789a3fffa4c",
     "20260828130000_add_canonical_sale_v1": "00d7064d74e167503280b625f6a5a076efedf1824c4c9bf8f284b8b0430b8d37",
     "20260830133500_harden_canonical_sale_delete_guard": "69aa03b4cd09c5e3f232a9d56e146ec8623c342bb42e451ee35a9274cc83b4dd",
+    "20260903050000_add_cliente_value_provenance": "c97d22a48afeb3a5abc669ca23d7cccd0003aa5fa1cadf271786de54c7c9463b",
   }),
   postgresql: Object.freeze({
     "20260728090000_postgres_baseline": "e07a9fd6240acec419d0d2994ffed69897bdc2b87cd7d4cc15e28cb104ce8975",
@@ -80,6 +81,7 @@ const CANONICAL_MIGRATION_HASHES = Object.freeze({
     "20260827200000_add_store1_provider_readiness": "caad5bb24aac5943e5a6f9f36e3ad8d35598ef22914714f9177c17c690246e2e",
     "20260828130000_add_canonical_sale_v1": "b9d6e0f3f56181f1a1fde44a7c454a2f525a8733eb9c065c1e900fdfa65971e1",
     "20260830133500_harden_canonical_sale_delete_guard": "14349f98eda3b066c0abc8ce236387f90b2fe8c77f816601d3533932b9492be4",
+    "20260903050000_add_cliente_value_provenance": "47db23dc70aa227f30848493402264519899ae94eaf9ea20c758a3ebbab03881",
   }),
 });
 
@@ -360,6 +362,12 @@ const MIGRATION_REGISTRY = Object.freeze({
     relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
     sqliteSha256: "69aa03b4cd09c5e3f232a9d56e146ec8623c342bb42e451ee35a9274cc83b4dd",
     postgresSha256: "14349f98eda3b066c0abc8ce236387f90b2fe8c77f816601d3533932b9492be4",
+  }),
+  "20260903050000_add_cliente_value_provenance": Object.freeze({
+    relationCount: EXPECTED_RELATION_COUNT,
+    relationManifestSha256: EXPECTED_TENANT_RELATION_MANIFEST_SHA256,
+    sqliteSha256: "c97d22a48afeb3a5abc669ca23d7cccd0003aa5fa1cadf271786de54c7c9463b",
+    postgresSha256: "47db23dc70aa227f30848493402264519899ae94eaf9ea20c758a3ebbab03881",
   }),
 });
 

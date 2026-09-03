@@ -253,6 +253,7 @@ type ApiCliente = {
   observacoes?: string | null;
   status?: string | null;
   valor?: number | null;
+  valorInformado?: boolean | null;
   origem?: string | null;
   favorito?: boolean | null;
   quente?: boolean | null;
@@ -286,6 +287,7 @@ type ClientePayload = {
   interesse?: string;
   status?: string;
   valor?: number;
+  valorInformado?: boolean;
   origem?: string;
   favorito?: boolean;
   quente?: boolean;
@@ -3290,8 +3292,12 @@ function mapApiClienteToClient(cliente: ApiCliente, fallback?: Client): Client {
     ? mapClienteStatus(cliente.status)
     : fallback?.status ?? mapClienteStatus(cliente.statusAntesDeArquivar ?? cliente.status);
   const hasAuthoritativeValue = cliente.valor !== undefined && cliente.valor !== null && Number.isFinite(Number(cliente.valor));
-  const valueKnown = hasAuthoritativeValue ? true : fallback?.valueKnown === true;
-  const value = hasAuthoritativeValue ? Number(cliente.valor) : valueKnown ? fallback?.value ?? 0 : 0;
+  // Newer API responses carry explicit provenance. Keep a finite legacy value
+  // compatible only when the field is absent; a false provenance flag wins.
+  const valueKnown = typeof cliente.valorInformado === "boolean"
+    ? cliente.valorInformado === true && hasAuthoritativeValue
+    : hasAuthoritativeValue && fallback?.valueKnown !== false;
+  const value = valueKnown && hasAuthoritativeValue ? Number(cliente.valor) : 0;
   const company =
     fallback?.company || cliente.empresa || cliente.fazenda || cliente.cidade || extractCompany(cliente) || "Cliente agro";
 
@@ -3334,6 +3340,7 @@ function clientToPayload(client: Client): ClientePayload {
     revisao: client.revision,
     interesse: client.company.trim() || undefined,
     status: client.status,
+    valorInformado: client.valueKnown !== false,
     ...(client.valueKnown === false ? {} : { valor: client.value }),
     origem: client.source,
     favorito: client.favorite,

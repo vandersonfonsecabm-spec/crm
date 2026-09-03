@@ -92,13 +92,17 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
       if (locks) {
         while (now() < deadline) {
           const currentTerminal = readRelevantPeerTerminal(startedAt);
-          if (currentTerminal) return await resolvePeerTerminal<T>(currentTerminal, refresh);
+          if (currentTerminal) {
+            if (currentTerminal.type !== "refresh-success") return resolveTerminal<T>(currentTerminal);
+          }
 
           const lockResult = await tryWithWebLock(refresh, startedAt, transport);
           if (lockResult.acquired) return lockResult.value as T;
 
           const terminal = await waitForPeer(startedAt, deadline, transport);
-          if (terminal) return await resolvePeerTerminal<T>(terminal, refresh);
+          if (terminal) {
+            if (terminal.type !== "refresh-success") return resolveTerminal<T>(terminal);
+          }
         }
         throw new AuthRefreshCoordinationError(0);
       }
@@ -110,7 +114,11 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
     }
   }
 
-  async function tryWithWebLock<T>(refresh: () => Promise<T>, startedAt: number, transport: SignalTransport): Promise<{ acquired: boolean; value?: T }> {
+  async function tryWithWebLock<T>(
+    refresh: () => Promise<T>,
+    startedAt: number,
+    transport: SignalTransport,
+  ): Promise<{ acquired: boolean; value?: T }> {
     if (!locks) return { acquired: false };
     let callbackStarted = false;
     let acquired = false;
@@ -121,10 +129,13 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
         if (!lock) return;
         acquired = true;
         const currentTerminal = readRelevantPeerTerminal(startedAt);
-        if (currentTerminal) {
-          value = await resolvePeerTerminal<T>(currentTerminal, refresh);
+        if (currentTerminal && currentTerminal.type !== "refresh-success") {
+          value = resolveTerminal<T>(currentTerminal);
           return;
         }
+        // A successful peer refresh does not make this tab's in-memory access
+        // token usable. Re-enter the same lock before refreshing locally so
+        // followers cannot rotate the shared cookie family concurrently.
         value = await runLeader(refresh, createStartSignal(), transport);
       });
     } catch (error) {
@@ -137,11 +148,15 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
   async function runWithLease<T>(refresh: () => Promise<T>, startedAt: number, deadline: number, transport: SignalTransport): Promise<T> {
     while (now() < deadline) {
       const current = readState();
-      if (current && isRelevantPeerTerminal(current, startedAt)) return await resolvePeerTerminal<T>(current, refresh);
+      if (current && isRelevantPeerTerminal(current, startedAt)) {
+        if (current.type !== "refresh-success") return resolveTerminal<T>(current);
+      }
 
       if (current && current.type === "refresh-start" && current.expiresAt > now()) {
         const terminal = await waitForPeer(startedAt, deadline, transport);
-        if (terminal) return await resolvePeerTerminal<T>(terminal, refresh);
+        if (terminal) {
+          if (terminal.type !== "refresh-success") return resolveTerminal<T>(terminal);
+        }
         continue;
       }
 
@@ -155,7 +170,9 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
       }
 
       const terminal = await waitForPeer(startedAt, deadline, transport);
-      if (terminal) return await resolvePeerTerminal<T>(terminal, refresh);
+      if (terminal) {
+        if (terminal.type !== "refresh-success") return resolveTerminal<T>(terminal);
+      }
     }
     throw new AuthRefreshCoordinationError(0);
   }
@@ -266,15 +283,6 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
     } catch {
       return false;
     }
-  }
-
-  async function resolvePeerTerminal<T>(signal: RefreshSignal, refresh: () => Promise<T>): Promise<T> {
-    if (signal.type === "refresh-success") {
-      // Access tokens stay in each tab's memory. A peer success proves the cookie
-      // session is current, but never supplies a token to this tab.
-      return refresh();
-    }
-    return resolveTerminal<T>(signal);
   }
 
   return { runAuthRefreshSingleFlight };

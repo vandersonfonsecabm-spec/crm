@@ -59,7 +59,7 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
       { code: "TENANT_GATE_MIGRATION_PENDING" },
     );
 
-    const finalMigrations = migrationNames.slice(-4);
+    const finalMigrations = migrationNames.slice(-5);
     for (const migrationName of finalMigrations) {
       fs.rmSync(path.join(workspace.migrationsDir, migrationName), { recursive: true, force: true });
     }
@@ -73,8 +73,9 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
     }
     const preSeven = await runGate({ mode: "pre-migration", ...gateOptions });
     assert.equal(preSeven.safe, true);
-    // Catalog, readiness, canonical-sale and its PostgreSQL-only hardening are
-    // pending: four proposal-item relations, delivery-outbox and sale relations.
+    // Catalog, readiness, canonical-sale, its PostgreSQL-only hardening and
+    // value provenance are pending: the final value migration has no relation
+    // delta but must remain in the same verified chain.
     assert.equal(preSeven.checkedRelationCount, 157);
 
     await seedLegacyProposalItem(client);
@@ -101,6 +102,13 @@ test("PostgreSQL migration boundary preserva prefixes historicos e o conjunto fi
       catalogProductId: null,
       stockProductId: null,
     });
+    const valueProvenance = (await client.query(
+      'SELECT "id", "valor", "valorInformado" FROM "Cliente" WHERE "id" IN (9001, 9002) ORDER BY "id"',
+    )).rows;
+    assert.deepEqual(valueProvenance, [
+      { id: 9001, valor: 0, valorInformado: false },
+      { id: 9002, valor: 7500, valorInformado: true },
+    ]);
   } finally {
     try {
       if (ownsEmptyTarget) {
@@ -128,6 +136,10 @@ async function seedLegacyProposalItem(client) {
     `
     INSERT INTO "Cliente" ("id", "empresaId", "nome", "createdAt")
     VALUES (9001, 9001, 'Rehearsal Customer', $1)
+    `,
+    `
+    INSERT INTO "Cliente" ("id", "empresaId", "nome", "valor", "createdAt")
+    VALUES (9002, 9001, 'Rehearsal Customer Informed', 7500, $1)
     `,
     `
     INSERT INTO "Negocio" ("id", "empresaId", "clienteId", "etapa", "createdAt", "updatedAt")

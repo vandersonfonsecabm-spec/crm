@@ -118,8 +118,11 @@ async function seedRepresentativeFixture(prisma, crossTenant) {
   const tenantA = await prisma.empresa.create({ data: { nome: "Tenant migration A", slug: `tenant-migration-a-${process.pid}-${Date.now()}` } });
   const tenantB = await prisma.empresa.create({ data: { nome: "Tenant migration B", slug: `tenant-migration-b-${process.pid}-${Date.now()}` } });
   const userA = await prisma.usuario.create({ data: { empresaId: tenantA.id, nome: "User A", email: `migration-a-${Date.now()}@test.local`, senhaHash: "test" } });
-  const clientA = await prisma.cliente.create({ data: { empresaId: tenantA.id, nome: "Client A" }, select: clientBaseSelect });
-  const clientB = await prisma.cliente.create({ data: { empresaId: tenantB.id, nome: "Client B" }, select: clientBaseSelect });
+  // This fixture intentionally stops before the later value-provenance
+  // migration.  Seed the legacy Client rows without asking the current
+  // generated Prisma client to select the not-yet-existing column.
+  const clientA = await createLegacyClient(prisma, tenantA.id, "Client A");
+  const clientB = await createLegacyClient(prisma, tenantB.id, "Client B");
   const lead = await prisma.lead.create({ data: { empresaId: tenantA.id, clienteId: crossTenant ? clientB.id : clientA.id, responsavelId: userA.id } });
   if (crossTenant) return { tenantA, tenantB, userA, clientA, clientB, lead };
 
@@ -131,6 +134,14 @@ async function seedRepresentativeFixture(prisma, crossTenant) {
   const conversation = await prisma.conversaCanal.create({ data: { empresaId: tenantA.id, canalIntegracaoId: channel.id, contatoCanalId: contact.id, leadId: lead.id, responsavelId: userA.id } });
   const message = await prisma.mensagemCanal.create({ data: { empresaId: tenantA.id, canalIntegracaoId: channel.id, conversaCanalId: conversation.id, autorUsuarioId: userA.id, externalId: `message-a-${process.pid}-${Date.now()}`, direcao: "ENTRADA" } });
   return { tenantA, tenantB, userA, clientA, clientB, lead, business, integration, sync, channel, contact, conversation, message };
+}
+
+async function createLegacyClient(prisma, empresaId, nome) {
+  await prisma.$executeRawUnsafe('INSERT INTO "Cliente" ("empresaId", "nome") VALUES (?, ?)', empresaId, nome);
+  const rows = await prisma.$queryRawUnsafe('SELECT "id", "empresaId", "nome" FROM "Cliente" WHERE "empresaId" = ? AND "nome" = ? ORDER BY "id" DESC LIMIT 1', empresaId, nome);
+  const row = rows[0];
+  if (!row) throw new Error("Cliente legado não foi criado no sandbox.");
+  return { id: Number(row.id), empresaId: Number(row.empresaId), nome: row.nome };
 }
 
 async function fixtureFingerprint(prisma, fixture) {

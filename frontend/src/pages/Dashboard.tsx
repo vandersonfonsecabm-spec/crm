@@ -158,6 +158,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
   const [inboxConversationId, setInboxConversationId] = useState<number | null>(null);
   const [pendingSearchClientId, setPendingSearchClientId] = useState<number | null>(null);
   const [kanbanBusinessId, setKanbanBusinessId] = useState<number | null>(null);
+  const [kanbanProposalId, setKanbanProposalId] = useState<number | null>(null);
   const canManageIntegrations = canAccessIntegrations(authSession);
   const canManageUsers = (authSession?.papel ?? authSession?.usuario.papel) === "ADMIN";
   const isPlatformOperator = authSession?.isPlatformOperator === true;
@@ -198,9 +199,11 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
     const conversationId = Number(params.get("conversationId"));
     const followUpId = Number(params.get("acompanhamentoId"));
     const businessId = Number(params.get("negocioId"));
+    const proposalId = Number(params.get("propostaId"));
     setInboxConversationId(activePage === "inbox" && Number.isInteger(conversationId) && conversationId > 0 ? conversationId : null);
     setAgendaFollowUpId(activePage === "agenda" && Number.isInteger(followUpId) && followUpId > 0 ? followUpId : null);
     setKanbanBusinessId(activePage === "kanban" && Number.isInteger(businessId) && businessId > 0 ? businessId : null);
+    setKanbanProposalId(activePage === "kanban" && Number.isInteger(proposalId) && proposalId > 0 ? proposalId : null);
   }, [activePage, location.search]);
   const isInboxPage = activePage === "inbox";
   const isWhatsAppIntegrationDetail = activePage === "integracoes" && resolvedNavigation.detail === "whatsapp";
@@ -609,11 +612,13 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
 
   const openKanbanBusiness = useCallback((businessId: number) => {
     setKanbanBusinessId(businessId);
+    setKanbanProposalId(null);
     handleSetActivePage("kanban");
   }, [handleSetActivePage]);
 
   const consumeKanbanBusinessTarget = useCallback(() => {
     setKanbanBusinessId(null);
+    setKanbanProposalId(null);
   }, []);
 
   const openTodayAgenda = useCallback(() => {
@@ -1150,6 +1155,7 @@ export default function Dashboard({ initialAuthSession, onLogout }: DashboardPro
                 <DashboardNegociosKanbanPanel
                   authSession={authSession}
                   initialBusinessId={kanbanBusinessId}
+                  initialProposalId={kanbanProposalId}
                   onInitialBusinessHandled={consumeKanbanBusinessTarget}
                   onOpenAgenda={() => handleSetActivePage("agenda")}
                   onToast={setToast}

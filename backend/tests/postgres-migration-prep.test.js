@@ -13,6 +13,9 @@ const { postgresUrlFromEnv } = require("../scripts/check-postgres-connection.cjs
 const { resolveSqliteDatabasePath } = require("../scripts/start-production.cjs");
 const { copyWithinTransaction, convertValue, orderedTables, sanitizeError } = require("../scripts/migrate-sqlite-to-postgres.cjs");
 const {
+  POSTGRES_MIGRATE_CONFIRMATION,
+  assertPostgresMigrateEmptyAuthorization,
+  canonicalPostgresMigrateAttestationPayload,
   cleanupPostgresTestWorkspace,
   createPostgresTestWorkspace,
   latestMigrationSqlPath,
@@ -21,15 +24,17 @@ const {
   preparePostgresWorkspace,
   parsePostgresCliArguments,
   sanitize,
+  signPostgresMigrateAttestation,
 } = require("../scripts/postgres-prisma.cjs");
 const {
+  databaseTargetFingerprint,
   databaseEngineFromUrl,
   databaseUrlForProvider,
   databaseProviderFromEnv,
   runPrismaForProvider,
   runtimePrismaConfig,
 } = require("../scripts/prisma-runtime.cjs");
-const { main: runPostgresTests } = require("../scripts/run-postgres-tests.cjs");
+const { main: runPostgresTests, postgresMigrateEmptyAuthorityEnv } = require("../scripts/run-postgres-tests.cjs");
 
 test("preparacao PostgreSQL deriva provider sem alterar o schema canonico SQLite", () => {
   const sqliteSchema = [
@@ -105,12 +110,13 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
       "20260827200000_add_store1_provider_readiness",
       "20260828130000_add_canonical_sale_v1",
       "20260830133500_harden_canonical_sale_delete_guard",
+      "20260903050000_add_cliente_value_provenance",
     ]);
     assert.equal(
       latestMigrationSqlPath(workspace.migrationsDir),
       path.join(
       workspace.migrationsDir,
-        "20260830133500_harden_canonical_sale_delete_guard",
+        "20260903050000_add_cliente_value_provenance",
         "migration.sql",
       ),
     );
@@ -245,6 +251,16 @@ test("workspace PostgreSQL preserva baseline congelada e inclui migrations incre
     assert.match(canonicalSaleDeleteHardening, /NegocioContratoVenda_no_delete_v1/);
     assert.match(canonicalSaleDeleteHardening, /NegocioContratoVenda_no_truncate_v1/);
     assert.doesNotMatch(canonicalSaleDeleteHardening, /allow_canonical_sale_delete|test-cleanup/);
+    const customerValueProvenance = fs.readFileSync(path.join(
+      workspace.migrationsDir,
+      "20260903050000_add_cliente_value_provenance",
+      "migration.sql",
+    ), "utf8");
+    assert.match(customerValueProvenance, /^BEGIN;\s*$/m);
+    assert.match(customerValueProvenance, /ADD COLUMN "valorInformado" BOOLEAN NOT NULL DEFAULT false/);
+    assert.match(customerValueProvenance, /UPDATE "Cliente" SET "valorInformado" = true WHERE "valor" <> 0/);
+    assert.match(customerValueProvenance, /COMMIT;\s*$/m);
+    assert.doesNotMatch(customerValueProvenance, /^\s*(?:DELETE|TRUNCATE|DROP)\b/im);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -268,7 +284,70 @@ test("runner PostgreSQL usa workspace e client isolados sem regenerar SQLite", (
   const pgTestCall = calls.find((call) => call.args.some((arg) => String(arg).includes("tenant-isolation-pending-migrations-postgres.test.js")));
   assert.ok(pgTestCall);
   assert.match(pgTestCall.env.NODE_OPTIONS, /loader\.cjs/);
+  const migrateCall = calls.find((call) => call.args.includes("migrate-empty"));
+  assert.equal(migrateCall.env.CRM_POSTGRES_MIGRATE_TARGET, "isolated");
+  assert.match(migrateCall.env.CRM_POSTGRES_MIGRATE_TARGET_FINGERPRINT, /^[a-f0-9]{64}$/);
+  assert.match(migrateCall.env.CRM_POSTGRES_MIGRATE_ATTESTATION, /^[a-f0-9]{64}$/);
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+function isolatedPostgresMigrateEnv(url = "postgresql://test-user:test-password@qa-runner.invalid:5432/qa_runner?schema=qa") {
+  const targetFingerprint = databaseTargetFingerprint(url);
+  const hmacKey = "postgres-migrate-test-key-with-at-least-thirty-two-bytes";
+  const runId = "postgres-migrate-local-20260903";
+  const signed = {
+    NODE_ENV: "test",
+    POSTGRES_TEST_DATABASE_URL: url,
+    CRM_POSTGRES_MIGRATE_CONFIRM: POSTGRES_MIGRATE_CONFIRMATION,
+    CRM_POSTGRES_MIGRATE_TARGET: "isolated",
+    CRM_POSTGRES_MIGRATE_RUN_ID: runId,
+    CRM_POSTGRES_MIGRATE_TARGET_FINGERPRINT: targetFingerprint,
+    CRM_POSTGRES_MIGRATE_ATTESTATION_HMAC_KEY: hmacKey,
+  };
+  return {
+    ...signed,
+    CRM_POSTGRES_MIGRATE_ATTESTATION: signPostgresMigrateAttestation(
+      hmacKey,
+      canonicalPostgresMigrateAttestationPayload({ runId, target: "isolated", targetFingerprint }),
+    ),
+  };
+}
+
+test("migrate-empty PostgreSQL local/test exige target fingerprint e atestacao vinculados a URL/schema", () => {
+  const env = isolatedPostgresMigrateEnv();
+  assert.doesNotThrow(() => assertPostgresMigrateEmptyAuthorization(env));
+  assert.throws(
+    () => assertPostgresMigrateEmptyAuthorization({ ...env, CRM_POSTGRES_MIGRATE_TARGET_FINGERPRINT: "" }),
+    { code: "POSTGRES_MIGRATE_TARGET_FINGERPRINT_REQUIRED" },
+  );
+  assert.throws(
+    () => assertPostgresMigrateEmptyAuthorization({ ...env, CRM_POSTGRES_MIGRATE_TARGET_FINGERPRINT: "0".repeat(64) }),
+    { code: "POSTGRES_MIGRATE_TARGET_MISMATCH" },
+  );
+  assert.throws(
+    () => assertPostgresMigrateEmptyAuthorization({ ...env, POSTGRES_TEST_DATABASE_URL: "postgresql://test-user:test-password@qa-runner.invalid:5432/qa_runner?schema=other" }),
+    { code: "POSTGRES_MIGRATE_TARGET_MISMATCH" },
+  );
+  assert.throws(
+    () => assertPostgresMigrateEmptyAuthorization({ ...env, CRM_POSTGRES_MIGRATE_ATTESTATION: "0".repeat(64) }),
+    { code: "POSTGRES_MIGRATE_ATTESTATION_INVALID" },
+  );
+  assert.throws(
+    () => assertPostgresMigrateEmptyAuthorization({ ...env, CRM_POSTGRES_MIGRATE_ATTESTATION: "" }),
+    { code: "POSTGRES_MIGRATE_ATTESTATION_REQUIRED" },
+  );
+  assert.throws(
+    () => assertPostgresMigrateEmptyAuthorization({ ...env, RAILWAY_SERVICE_ID: "service-not-allowed" }),
+    { code: "POSTGRES_MIGRATE_ISOLATED_TARGET_REQUIRED" },
+  );
+});
+
+test("runner gera atestacao efemera para migrate-empty sem reutilizar URL sem pin", () => {
+  const url = "postgresql://runner:password@qa-runner.invalid:5432/qa_runner?schema=qa";
+  const env = postgresMigrateEmptyAuthorityEnv({ NODE_ENV: "test" }, url);
+  assert.equal(env.CRM_POSTGRES_MIGRATE_TARGET, "isolated");
+  assert.equal(env.CRM_POSTGRES_MIGRATE_TARGET_FINGERPRINT, databaseTargetFingerprint(url));
+  assert.doesNotThrow(() => assertPostgresMigrateEmptyAuthorization({ ...env, POSTGRES_TEST_DATABASE_URL: url }));
 });
 
 test("runner PostgreSQL permite provar somente a fronteira de migrations", () => {
@@ -525,6 +604,7 @@ test("score do dashboard usa SQL equivalente em SQLite e PostgreSQL", async () =
           quente: true,
           favorito: true,
           valor: 12000,
+          valorInformado: true,
           status: "Proposta",
         },
         {
