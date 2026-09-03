@@ -121,6 +121,15 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
   assert.equal(await prisma.mensagemCanal.count({ where: { empresaId: adminA.empresaId, externalId: "msg-preco-sku:prepared-response" } }), 1);
   assert.equal(await prisma.nota.count({ where: { empresaId: adminA.empresaId, texto: { contains: "msg-preco-sku" } } }), 1);
 
+  const divergentReplay = await request("POST", "/whatsapp/simular-mensagem", {
+    externalId: "msg-preco-sku",
+    telefone: "+55 (11) 98888-0001",
+    nome: "Cliente Simulado",
+    mensagem: "Mensagem adulterada para o mesmo identificador",
+  }, adminA.token);
+  assert.equal(divergentReplay.status, 409);
+  assert.equal(await prisma.mensagemCanal.count({ where: { empresaId: adminA.empresaId, externalId: "msg-preco-sku" } }), 1);
+
   const greeting = await request("POST", "/whatsapp/simular-mensagem", {
     externalId: "msg-saudacao",
     telefone: "+55 (11) 98888-0002",
@@ -222,6 +231,11 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
     data: { empresaId: adminA.empresaId, tipo: "WHATSAPP_META", nome: "Canal Real Simulado", chaveInterna: "real-simulado", status: "MODO_TESTE", modoTeste: false, ativo: true },
   });
   assert.equal((await request("POST", "/whatsapp/simular-mensagem", { ...validPayload("real-channel"), canalIntegracaoId: realChannel.id }, adminA.token)).status, 400);
+
+  await prisma.canalIntegracao.update({ where: { id: channelA.id }, data: { ativo: false, status: "INATIVO" } });
+  const beforeInactive = await prisma.mensagemCanal.count({ where: { empresaId: adminA.empresaId } });
+  assert.equal((await request("POST", "/whatsapp/simular-mensagem", validPayload("inactive-default"), adminA.token)).status, 400);
+  assert.equal(await prisma.mensagemCanal.count({ where: { empresaId: adminA.empresaId } }), beforeInactive);
 
   assert.equal(await prisma.integracao.count({ where: { tipo: "BLING" } }), 0);
 });

@@ -237,13 +237,19 @@ test("Release B1 protege tenant, RBAC, fila, atribuicoes, mensagens e idempotenc
     direcao: "ENTRADA",
     texto: "Texto repetido nao deve sobrescrever",
   }, sellerA.token);
+  assert.equal(duplicateIncoming.status, 409);
+  const equivalentIncoming = await request("POST", `/conversas/${conversationA.id}/mensagens/simuladas`, {
+    externalId: "msg-b1-in-1",
+    direcao: "ENTRADA",
+    texto: "Mensagem recebida simulada",
+  }, sellerA.token);
   const outgoing = await request("POST", `/conversas/${conversationA.id}/mensagens/simuladas`, {
     externalId: "msg-b1-out-1",
     direcao: "SAIDA",
     texto: "Resposta manual simulada",
   }, sellerA.token);
   assert.equal(incoming.status, 201);
-  assert.equal(duplicateIncoming.body.id, incoming.body.id);
+  assert.equal(equivalentIncoming.body.id, incoming.body.id);
   assert.equal(outgoing.body.statusEntrega, "PENDENTE_ENVIO");
   const messages = await request("GET", `/conversas/${conversationA.id}/mensagens`, undefined, sellerA.token);
   assert.equal(messages.body.pagination.total, 2);

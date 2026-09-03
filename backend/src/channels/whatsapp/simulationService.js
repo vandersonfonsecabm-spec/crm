@@ -1,4 +1,5 @@
 const { createCommercialCatalogService } = require("../../integrations/commercialCatalogService");
+const crypto = require("node:crypto");
 const { NO_FOLLOW_UP_PROJECTION } = require("../../follow-up-projection");
 const { TEST_CHANNEL_KEY, TEST_CHANNEL_NAME } = require("../channelService");
 const { parseSimulationPayload } = require("./messageParser");
@@ -26,7 +27,7 @@ function createWhatsappSimulationService({ prisma }) {
     const channel = payload.canalIntegracaoId
       ? await getTestChannel({ empresaId, id: payload.canalIntegracaoId })
       : await findOrCreateTestChannel({ empresaId });
-    const existing = await findExistingResult({ empresaId, canalIntegracaoId: channel.id, externalId: payload.externalId });
+    const existing = await findExistingResult({ empresaId, canalIntegracaoId: channel.id, externalId: payload.externalId, payload });
     if (existing) return existing;
 
     const catalog = await searchCatalog({ empresaId, intent });
@@ -36,7 +37,7 @@ function createWhatsappSimulationService({ prisma }) {
 
     try {
       return await prisma.$transaction(async (tx) => {
-        const duplicateInsideTx = await findExistingResult({ empresaId, canalIntegracaoId: channel.id, externalId: payload.externalId, prismaClient: tx });
+        const duplicateInsideTx = await findExistingResult({ empresaId, canalIntegracaoId: channel.id, externalId: payload.externalId, payload, prismaClient: tx });
         if (duplicateInsideTx) return duplicateInsideTx;
 
         const contact = await createOrFindContact({ tx, empresaId, channel, payload });
@@ -94,7 +95,7 @@ function createWhatsappSimulationService({ prisma }) {
       });
     } catch (error) {
       if (error && error.code === "P2002") {
-        const duplicate = await findExistingResult({ empresaId, canalIntegracaoId: channel.id, externalId: payload.externalId });
+        const duplicate = await findExistingResult({ empresaId, canalIntegracaoId: channel.id, externalId: payload.externalId, payload });
         if (duplicate) return duplicate;
       }
       throw error;
@@ -121,12 +122,13 @@ function createWhatsappSimulationService({ prisma }) {
     return { products: [], product: null, pagination: result.pagination };
   }
 
-  async function findExistingResult({ empresaId, canalIntegracaoId, externalId, prismaClient = prisma }) {
+  async function findExistingResult({ empresaId, canalIntegracaoId, externalId, payload = null, prismaClient = prisma }) {
     const incoming = await prismaClient.mensagemCanal.findFirst({
       where: { empresaId, canalIntegracaoId, externalId, direcao: "ENTRADA" },
       include: { conversaCanal: { include: { contatoCanal: true, canalIntegracao: true } } },
     });
     if (!incoming) return null;
+    if (payload) assertSimulationReplayMatches(incoming, payload);
     const outgoing = await prismaClient.mensagemCanal.findFirst({
       where: { empresaId, canalIntegracaoId, externalId: responseExternalId(externalId), direcao: "SAIDA" },
       orderBy: { id: "asc" },
@@ -154,17 +156,16 @@ function createWhatsappSimulationService({ prisma }) {
   return { simulateMessage };
 }
 
-async function getTestChannel({ empresaId, id }) {
+  async function getTestChannel({ empresaId, id }) {
   const channel = await globalPrisma().canalIntegracao.findFirst({ where: { id, empresaId } });
   if (!channel) throw notFound("Canal nao encontrado.", "CHANNEL_NOT_FOUND");
-  if (!channel.modoTeste || channel.tipo !== "WHATSAPP_META") throw validationError("Esta simulacao exige um canal WhatsApp em modo de teste.");
-  if (!channel.ativo || channel.status !== "MODO_TESTE") throw validationError("Canal de teste inativo ou indisponivel.");
+  assertAvailableTestChannel(channel);
   return channel;
 }
 
 async function findOrCreateTestChannel({ empresaId }) {
   const prisma = globalPrisma();
-  return prisma.canalIntegracao.upsert({
+  const channel = await prisma.canalIntegracao.upsert({
     where: { empresaId_chaveInterna: { empresaId, chaveInterna: TEST_CHANNEL_KEY } },
     create: {
       empresaId,
@@ -177,6 +178,37 @@ async function findOrCreateTestChannel({ empresaId }) {
     },
     update: {},
   });
+  assertAvailableTestChannel(channel);
+  return channel;
+}
+
+function assertAvailableTestChannel(channel) {
+  if (!channel?.modoTeste || channel.tipo !== "WHATSAPP_META") throw validationError("Esta simulacao exige um canal WhatsApp em modo de teste.");
+  if (!channel.ativo || channel.status !== "MODO_TESTE") throw validationError("Canal de teste inativo ou indisponivel.");
+}
+
+function simulationReplayFingerprint({ mensagem, telefoneNormalizado, nome }) {
+  return crypto.createHash("sha256").update(JSON.stringify({
+    mensagem: String(mensagem || ""),
+    telefoneNormalizado: String(telefoneNormalizado || ""),
+    nome: String(nome || ""),
+  })).digest("hex");
+}
+
+function assertSimulationReplayMatches(incoming, payload) {
+  const contact = incoming.conversaCanal?.contatoCanal;
+  const stored = simulationReplayFingerprint({
+    mensagem: incoming.texto,
+    telefoneNormalizado: contact?.telefoneNormalizado,
+    nome: contact?.nome,
+  });
+  const received = simulationReplayFingerprint(payload);
+  if (stored !== received) {
+    const error = new Error("Identificador de mensagem ja utilizado com conteudo divergente.");
+    error.status = 409;
+    error.codigo = "MESSAGE_IDEMPOTENCY_CONFLICT";
+    throw error;
+  }
 }
 
 let prismaRef;

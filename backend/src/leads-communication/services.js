@@ -834,6 +834,7 @@ function createLeadsCommunicationServices({ prisma }) {
           if (existing.conversaCanalId !== conversation.id) {
             throw domainError(409, "MESSAGE_IDEMPOTENCY_CONFLICT", "Identificador de mensagem ja utilizado.");
           }
+          assertSimulatedMessageReplayMatches(existing, { direcao, texto });
           return existing;
         }
         const now = new Date();
@@ -886,6 +887,7 @@ function createLeadsCommunicationServices({ prisma }) {
         include: messageIncludes(),
       });
       if (!existing || existing.conversaCanalId !== conversation.id) throw error;
+      assertSimulatedMessageReplayMatches(existing, { direcao, texto });
       return presentMessage(existing);
     }
   }
@@ -1186,6 +1188,12 @@ function createLeadsCommunicationServices({ prisma }) {
     validateAssignmentContext: validateAssignmentContext,
     waitForCustomer,
   };
+}
+
+function assertSimulatedMessageReplayMatches(existing, { direcao, texto }) {
+  if (existing.direcao !== direcao || String(existing.texto || "") !== String(texto || "")) {
+    throw domainError(409, "MESSAGE_IDEMPOTENCY_CONFLICT", "Identificador de mensagem ja utilizado com conteudo divergente.");
+  }
 }
 
 function actionForState(next) {
