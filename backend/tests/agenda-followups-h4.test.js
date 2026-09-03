@@ -88,6 +88,8 @@ test("H4 opera agenda por tenant, permissao, historico e concorrencia", async ()
   assert.equal(linked.body.negocioId, fixtureA.business.id);
   assert.equal(linked.body.propostaComercialId, fixtureA.proposal.id);
   assert.equal(linked.body.conversaCanalId, fixtureA.conversation.id);
+  assert.equal(linked.body.cliente.valor, null);
+  assert.equal(linked.body.cliente.valorInformado, false);
   assert.equal(
     (await prisma.cliente.findUniqueOrThrow({ where: { id: fixtureA.client.id } })).proximoFollowUp,
     new Date(linked.body.dataHora).toISOString(),

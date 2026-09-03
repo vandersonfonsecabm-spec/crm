@@ -16,6 +16,21 @@ function parseNonNegativePrismaInt(value) {
   }
 }
 
+function presentClientValue(cliente) {
+  if (!cliente) return cliente;
+  const hasAuthoritativeValue = cliente.valor !== undefined
+    && cliente.valor !== null
+    && Number.isFinite(Number(cliente.valor));
+  const valorInformado = cliente.valorInformado === true && hasAuthoritativeValue;
+  return {
+    ...cliente,
+    // Cliente.valor remains non-null in legacy storage. Never expose that
+    // fallback when the persisted provenance says the value is unknown.
+    valor: valorInformado ? cliente.valor : null,
+    valorInformado,
+  };
+}
+
 function decimalToCentsRoundHalfUp(value) {
   const parts = decimalParts(value);
   if (!parts) return null;
@@ -51,4 +66,5 @@ module.exports = {
   decimalToCentsRoundHalfUp,
   normalizeMoneyDecimal,
   parseNonNegativePrismaInt,
+  presentClientValue,
 };

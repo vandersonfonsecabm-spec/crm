@@ -250,6 +250,80 @@ test("outbox finishes an already-started consumer then releases later claims aft
   assert.equal(releasedRow.data.status, "PENDING");
 });
 
+test("outbox releases a consumer AbortError without quarantining or duplicating the event", async () => {
+  const controller = new AbortController();
+  const updates = [];
+  const row = {
+    id: 53,
+    empresaId: 1,
+    attempts: 0,
+    status: "PENDING",
+    leaseOwner: null,
+    leaseExpiresAt: null,
+    payloadStructuredJson: JSON.stringify({
+      schemaVersion: "stock-event.v1",
+      eventType: "StockRecordObserved.v1",
+      empresaId: 1,
+      aggregateType: "FonteEstoque",
+      aggregateId: "source-53",
+      materialVersion: 1,
+      occurredAt: "2026-09-03T00:00:00.000Z",
+      payload: {},
+    }),
+  };
+  const prisma = {
+    eventoOutboxEstoque: {
+      async findMany() { return [row]; },
+      async updateMany({ where, data }) {
+        updates.push({ where, data });
+        const ownerMatches = where.leaseOwner === undefined || row.leaseOwner === where.leaseOwner;
+        const expiresMatches = where.leaseExpiresAt === undefined || row.leaseExpiresAt?.getTime() === where.leaseExpiresAt?.getTime();
+        if (where.status?.in && row.status === "PENDING") {
+          row.status = data.status;
+          row.leaseOwner = data.leaseOwner;
+          row.leaseExpiresAt = data.leaseExpiresAt;
+          row.attempts += data.attempts.increment;
+          return { count: 1 };
+        }
+        if (where.status === "PROCESSING" && ownerMatches && expiresMatches && row.status === "PROCESSING") {
+          row.status = data.status;
+          row.availableAt = data.availableAt;
+          row.leaseOwner = data.leaseOwner;
+          row.leaseExpiresAt = data.leaseExpiresAt;
+          row.attempts -= data.attempts.decrement;
+          return { count: 1 };
+        }
+        return { count: 0 };
+      },
+    },
+  };
+  const result = await processStockOutboxBatch({
+    prisma,
+    empresaId: 1,
+    owner: "stock-consumer-abort",
+    now: new Date("2026-09-03T00:00:00.000Z"),
+    h8ProjectionEnabled: true,
+    signal: controller.signal,
+    consumer: async (_event, claimedRow, options) => {
+      assert.equal(options.signal, controller.signal);
+      assert.equal(claimedRow.leaseOwner, "stock-consumer-abort");
+      assert.ok(claimedRow.leaseExpiresAt instanceof Date);
+      controller.abort();
+      throw Object.assign(new Error("consumer observed abort"), { name: "AbortError" });
+    },
+  });
+
+  assert.deepEqual(result, { claimed: 1, processed: 0, quarantined: 0, cancelled: true, released: 1 });
+  assert.equal(row.status, "PENDING");
+  assert.equal(row.leaseOwner, null);
+  assert.equal(row.leaseExpiresAt, null);
+  assert.equal(row.attempts, 0);
+  assert.equal(updates.length, 2);
+  assert.equal(updates[1].data.status, "PENDING");
+  assert.equal(updates[1].where.leaseOwner, "stock-consumer-abort");
+  assert.equal(updates[1].where.leaseExpiresAt.getTime(), updates[0].data.leaseExpiresAt.getTime());
+});
+
 test("outbox rejects malformed/future envelopes into quarantine without H8 calls", async () => {
   const rows = [{ id: 1, empresaId: 1, payloadStructuredJson: JSON.stringify({ schemaVersion: "stock-event.v999", eventType: "StockRecordObserved.v1" }), status: "PROCESSING", leaseOwner: "w" }];
   const updates = [];

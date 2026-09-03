@@ -6,6 +6,7 @@ const {
   decimalToCentsRoundHalfUp,
   normalizeMoneyDecimal,
   parseNonNegativePrismaInt,
+  presentClientValue,
 } = require("../src/shared/commercial-money");
 const { calculateTotals, proposalMoneyIntegrityFindings } = require("../src/commercial-proposals/service");
 const { _private: importPrivate } = require("../src/integrations/importService");
@@ -17,6 +18,21 @@ test("parser monetario e estrito e respeita o INTEGER do PostgreSQL", () => {
   for (const value of [null, undefined, "", " ", true, false, [], [1], {}, -1, 1.5, "1e3", MAX_PRISMA_INT + 1]) {
     assert.equal(parseNonNegativePrismaInt(value), null, String(value));
   }
+});
+
+test("mapper de Cliente preserva zero informado e oculta fallback legado desconhecido", () => {
+  assert.deepEqual(
+    presentClientValue({ id: 1, valor: 7500, valorInformado: false }),
+    { id: 1, valor: null, valorInformado: false },
+  );
+  assert.deepEqual(
+    presentClientValue({ id: 2, valor: 0, valorInformado: true }),
+    { id: 2, valor: 0, valorInformado: true },
+  );
+  assert.deepEqual(
+    presentClientValue({ id: 3, valor: 7500, valorInformado: true }),
+    { id: 3, valor: 7500, valorInformado: true },
+  );
 });
 
 test("Decimal monetario usa ROUND_HALF_UP sem passar por ponto flutuante", () => {

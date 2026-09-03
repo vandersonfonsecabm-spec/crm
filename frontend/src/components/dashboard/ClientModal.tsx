@@ -225,6 +225,20 @@ export default function ClientModal({
     }
   }
 
+  function updateValueField(rawValue: string) {
+    const hasExplicitValue = rawValue.trim() !== "";
+    const parsedValue = Number(rawValue);
+    const valueIsValid = hasExplicitValue && Number.isFinite(parsedValue);
+    setClient((current) => (current
+      ? {
+        ...current,
+        value: valueIsValid ? parsedValue : 0,
+        valueKnown: valueIsValid,
+      }
+      : current));
+    setFormError("");
+  }
+
   function focusFirstInvalid(nextErrors: ClientValidationErrors) {
     if (nextErrors.name) {
       nameRef.current?.focus();
@@ -472,8 +486,8 @@ export default function ClientModal({
               min="0"
               step="1"
               type="number"
-              value={client.value}
-              onChange={(event) => updateField("value", Number(event.target.value))}
+              value={client.valueKnown === false ? "" : client.value}
+              onChange={(event) => updateValueField(event.target.value)}
               placeholder="Ex: 12000"
               disabled={formDisabled}
               className={`${fieldBaseClass} select-text disabled:cursor-not-allowed disabled:opacity-70`}

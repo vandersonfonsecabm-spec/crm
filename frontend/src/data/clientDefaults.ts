@@ -12,6 +12,7 @@ export const emptyClient: Client = {
   phone: "",
   email: "",
   value: 0,
+  valueKnown: false,
   status: "Novo",
   source: "Manual",
   favorite: false,

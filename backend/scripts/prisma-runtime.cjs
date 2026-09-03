@@ -70,8 +70,37 @@ function databaseUrlForProvider(env = process.env, provider = databaseProviderFr
 }
 
 function databaseTargetFingerprint(rawUrl) {
+  return fingerprintCanonicalPostgresTarget(canonicalPostgresTarget(rawUrl));
+}
+
+function legacyPublicDatabaseTargetFingerprint(rawUrl) {
   const canonical = canonicalPostgresTarget(rawUrl);
+
+  // Before target parameters were added to the attestation, a public-schema
+  // URL was fingerprinted only by host, port and database.  Honor that legacy
+  // form exclusively when the effective namespace is still public.  This
+  // keeps the established public target available during the fingerprint
+  // upgrade, while a legacy fingerprint can never authorize a non-public
+  // schema.
+  if (canonical.parameters.schema !== "public") {
+    return null;
+  }
+
+  return fingerprintCanonicalPostgresTarget({
+    database: canonical.database,
+    host: canonical.host,
+    port: canonical.port,
+    protocol: canonical.protocol,
+  });
+}
+
+function fingerprintCanonicalPostgresTarget(canonical) {
   return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
+function fingerprintsMatch(expectedFingerprint, actualFingerprint) {
+  return Boolean(actualFingerprint)
+    && crypto.timingSafeEqual(Buffer.from(expectedFingerprint, "hex"), Buffer.from(actualFingerprint, "hex"));
 }
 
 function canonicalPostgresTarget(rawUrl) {
@@ -133,7 +162,11 @@ function assertPostgresTargetFingerprint({
   if (!/^[a-f0-9]{64}$/.test(expectedFingerprint)) throw targetError(missingCode);
 
   const actualFingerprint = databaseTargetFingerprint(databaseUrl);
-  if (!crypto.timingSafeEqual(Buffer.from(expectedFingerprint, "hex"), Buffer.from(actualFingerprint, "hex"))) {
+  const legacyFingerprint = legacyPublicDatabaseTargetFingerprint(databaseUrl);
+  if (
+    !fingerprintsMatch(expectedFingerprint, actualFingerprint)
+      && !fingerprintsMatch(expectedFingerprint, legacyFingerprint)
+  ) {
     throw targetError(mismatchCode);
   }
   return actualFingerprint;

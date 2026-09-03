@@ -373,6 +373,22 @@ test("cliente distingue valor desconhecido de zero informado sem projetar receit
   assert.equal(known.body.valor, 7500);
   assert.equal(known.body.valorInformado, true);
 
+  const editableUnknown = await request("POST", "/clientes", {
+    nome: "Cliente desconhecido editavel",
+    status: "Proposta",
+  }, token);
+  assert.equal(editableUnknown.body.valor, null);
+  assert.equal(editableUnknown.body.valorInformado, false);
+  const editedUnknown = await request("PATCH", `/clientes/${editableUnknown.body.id}`, {
+    valorInformado: true,
+    valor: 1250,
+    revisao: editableUnknown.body.revisao,
+  }, token);
+  assert.equal(editedUnknown.status, 200);
+  assert.equal(editedUnknown.body.valor, 1250);
+  assert.equal(editedUnknown.body.valorInformado, true);
+  assert.equal((await prisma.cliente.findUnique({ where: { id: editableUnknown.body.id } })).valorInformado, true);
+
   const invalidKnownWithoutValue = await request("PATCH", `/clientes/${unknown.body.id}`, {
     valorInformado: true,
     revisao: unknown.body.revisao,

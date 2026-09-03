@@ -78,6 +78,9 @@ test("H2 qualifica, cria ou vincula Negocio com tenant, permissao e concorrencia
   assert.equal(qualified.body.qualificacao.interesse, "Pulverizador de barras");
   assert.equal(qualified.body.qualificacao.prioridade, "ALTA");
   assert.equal(qualified.body.qualificacao.valorEstimado, 45000);
+  assert.equal(qualified.body.qualificacao.valorInformado, true);
+  assert.equal(qualified.body.cliente.valor, 45000);
+  assert.equal(qualified.body.cliente.valorInformado, true);
   assert.equal(await prisma.negocio.count({ where: { leadId: primary.lead.id } }), 0);
   const leadAfterQualification = await prisma.lead.findUnique({ where: { id: primary.lead.id } });
   const clientAfterQualification = await prisma.cliente.findUnique({ where: { id: primary.client.id } });
@@ -85,6 +88,7 @@ test("H2 qualifica, cria ou vincula Negocio com tenant, permissao e concorrencia
   assert.equal(leadAfterQualification.interesse, "Pulverizador de barras");
   assert.equal(clientAfterQualification.interesse, "Pulverizador de barras");
   assert.equal(clientAfterQualification.valor, 45000);
+  assert.equal(clientAfterQualification.valorInformado, true);
   assert.equal(clientAfterQualification.proximoFollowUp, "2026-08-05T12:00:00.000Z");
   const qualificationHistory = await prisma.historicoQualificacaoConversa.findFirst({ where: { conversaCanalId: primary.conversation.id, acao: "QUALIFICAR" } });
   assert.equal(qualificationHistory.observacao, "Produtor pediu simulacao");
@@ -124,9 +128,13 @@ test("H2 qualifica, cria ou vincula Negocio com tenant, permissao e concorrencia
     key: "linked",
   });
   await request("POST", `/conversas/${linkedFixture.conversation.id}/assumir`, {}, sellerA.token);
-  const linkedQualification = await request("PATCH", `/conversas/${linkedFixture.conversation.id}/qualificacao-comercial`, validQualification({ interesse: "Plantadeira", dataRetorno: null }), sellerA.token);
+  const linkedQualification = await request("PATCH", `/conversas/${linkedFixture.conversation.id}/qualificacao-comercial`, validQualification({ interesse: "Plantadeira", valorEstimado: 0, dataRetorno: null }), sellerA.token);
   assert.equal(linkedQualification.status, 200);
   assert.equal(linkedQualification.body.qualificacao.dataRetorno, null);
+  assert.equal(linkedQualification.body.qualificacao.valorEstimado, 0);
+  assert.equal(linkedQualification.body.qualificacao.valorInformado, true);
+  assert.equal(linkedQualification.body.cliente.valor, 0);
+  assert.equal(linkedQualification.body.cliente.valorInformado, true);
   await request("POST", `/conversas/${linkedFixture.conversation.id}/mensagens/simuladas`, { externalId: "h2-human-linked", direcao: "SAIDA", texto: "Contato para vinculo" }, sellerA.token);
   const existingBusiness = await prisma.negocio.create({
     data: { empresaId: adminA.empresaId, clienteId: linkedFixture.client.id, titulo: "Negocio existente elegivel", etapa: "PROPOSTA" },

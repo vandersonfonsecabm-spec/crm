@@ -126,6 +126,15 @@ async function processStockOutboxBatch({ prisma, empresaId, owner, limit = 20, l
       if (marked.count !== 1) throw leaseLostError();
       processed += 1;
     } catch (error) {
+      if (isAbortError(error, signal)) {
+        // A consumer may observe the shared signal while it is running and
+        // reject with the standard abort error.  This is cooperative
+        // cancellation, not a poison event: release this row and any later
+        // claims through the original owner/lease CAS so another worker can
+        // retry them.  A row already completed or reclaimed is left alone.
+        released += await releaseClaimedRows({ prisma, empresaId, owner: effectiveOwner, rows: claimed.slice(index), now });
+        return { claimed: claimed.length, processed, quarantined, cancelled: true, released };
+      }
       if (error?.outboxLeaseLost === true) {
         logger.warn?.("stock_outbox_lease_lost", { outboxId: row.id });
         continue;
@@ -187,6 +196,12 @@ function cancelledBatchResult() {
 
 function isAbortRequested(signal) {
   return signal?.aborted === true;
+}
+
+function isAbortError(error, signal) {
+  if (!isAbortRequested(signal)) return false;
+  return String(error?.code || "").toUpperCase() === "ABORT_ERR"
+    || String(error?.name || "") === "AbortError";
 }
 
 function isTransientOutboxError(error) {

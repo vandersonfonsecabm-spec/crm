@@ -5,6 +5,7 @@ const {
   withProjectionRetry,
 } = require("../follow-up-projection");
 const { lockActiveClienteRows } = require("../shared/clientLifecycleLock");
+const { presentClientValue } = require("../shared/commercial-money");
 const { SYSTEM_ACTOR_EMAIL } = require("../system-actor");
 
 const ACTIVE_STATUSES = ACTIVE_FOLLOW_UP_STATUSES;
@@ -331,7 +332,7 @@ function createAgendaService({ prisma, clock = () => new Date() }) {
 
 function itemInclude() {
   return {
-    cliente: { select: { id: true, nome: true, empresa: true, telefone: true, email: true, status: true, valor: true } },
+    cliente: { select: { id: true, nome: true, empresa: true, telefone: true, email: true, status: true, valor: true, valorInformado: true } },
     lead: { select: { id: true, interesse: true, status: true, responsavelId: true } },
     negocio: { select: { id: true, titulo: true, etapa: true, responsavelId: true } },
     conversaCanal: { select: { id: true, status: true, responsavelId: true, contatoCanal: { select: { clienteId: true, nome: true } } } },
@@ -346,6 +347,7 @@ function itemInclude() {
 function present(context, row, now) {
   return {
     ...row,
+    cliente: presentClientValue(row.cliente),
     atrasado: ACTIVE_STATUSES.includes(row.status) && row.dataHora < now,
     responsavelUsuario: row.responsavelUsuario || (row.responsavel ? { id: null, nome: row.responsavel, papel: null } : null),
     permissoes: {

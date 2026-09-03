@@ -69,6 +69,17 @@ test("mapper preserva a proveniencia explicita e payload distingue zero de desco
   assert.match(api, /client\.valueKnown === false \? \{\} : \{ valor: client\.value \}/);
 });
 
+test("editor de cliente diferencia campo vazio de zero explicito", async () => {
+  const [defaults, modal] = await Promise.all([
+    readFile(path.join(frontendDir, "src/data/clientDefaults.ts"), "utf8"),
+    readFile(path.join(frontendDir, "src/components/dashboard/ClientModal.tsx"), "utf8"),
+  ]);
+  assert.match(defaults, /valueKnown: false/);
+  assert.match(modal, /value=\{client\.valueKnown === false \? "" : client\.value\}/);
+  assert.match(modal, /value: valueIsValid \? parsedValue : 0/);
+  assert.match(modal, /valueKnown: valueIsValid/);
+});
+
 test("catalogo e oferta exibem preco somente quando o status e explicitamente AVAILABLE", async () => {
   const [offerCard, catalogPanel] = await Promise.all([
     readFile(path.join(frontendDir, "src/components/ai-commerce/ProductOfferCard.tsx"), "utf8"),

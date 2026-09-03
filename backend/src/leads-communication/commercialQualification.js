@@ -4,7 +4,7 @@ const {
   withProjectionRetry,
 } = require("../follow-up-projection");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
-const { parseNonNegativePrismaInt } = require("../shared/commercial-money");
+const { parseNonNegativePrismaInt, presentClientValue } = require("../shared/commercial-money");
 
 const PRIORITIES = ["BAIXA", "MEDIA", "ALTA", "CRITICA"];
 const ACTIVE_BUSINESS_STAGES = ["NOVO", "CONTATO", "PROPOSTA"];
@@ -51,7 +51,10 @@ function createInboxCommercialQualificationService({ prisma, convertLeadToBusine
         where: { id: cliente.id, empresaId: context.empresaId, arquivadoEm: null },
         data: {
           interesse: qualification.interesse,
-          ...(qualification.valorEstimado === null ? {} : { valor: qualification.valorEstimado }),
+          ...(qualification.valorEstimado === null ? {} : {
+            valor: qualification.valorEstimado,
+            valorInformado: true,
+          }),
           revisao: { increment: 1 },
         },
       });
@@ -347,11 +350,14 @@ function presentContext(conversation, context) {
   return {
     estado: !cliente || !lead ? "SEM_CONTEXTO" : negocio ? "NEGOCIO_VINCULADO" : qualified ? "QUALIFICADO" : "NAO_QUALIFICADO",
     cliente: cliente ? {
-      id: cliente.id,
-      nome: cliente.nome,
-      interesse: cliente.interesse,
-      valor: cliente.valor,
-      origem: cliente.origem,
+      ...presentClientValue({
+        id: cliente.id,
+        nome: cliente.nome,
+        interesse: cliente.interesse,
+        valor: cliente.valor,
+        valorInformado: cliente.valorInformado,
+        origem: cliente.origem,
+      }),
     } : null,
     lead: lead ? {
       id: lead.id,
@@ -364,6 +370,7 @@ function presentContext(conversation, context) {
       interesse: latestQualification.interesse ?? lead?.interesse ?? null,
       prioridade: latestQualification.prioridade ?? followUp.prioridade,
       valorEstimado: latestQualification.valorEstimado,
+      valorInformado: latestQualification.valorEstimado !== null && latestQualification.valorEstimado !== undefined,
       proximaAcao: latestQualification.proximaAcao ?? followUp.titulo,
       dataRetorno: latestQualification.dataRetorno,
       observacao: latestQualification.observacao,

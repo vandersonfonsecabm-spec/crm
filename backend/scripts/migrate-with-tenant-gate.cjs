@@ -1,3 +1,5 @@
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
@@ -19,6 +21,12 @@ const {
 const backendDir = path.resolve(__dirname, "..");
 const sqliteSchemaPath = path.join(backendDir, "prisma", "schema.prisma");
 const sqliteMigrationDir = path.join(backendDir, "prisma", "migrations");
+const TEST_SQLITE_ROOT = path.resolve(os.tmpdir(), "crm-prisma-tests");
+const REPOSITORY_ROOT = path.resolve(backendDir, "..");
+const PROTECTED_SQLITE_DATABASES = [
+  path.join(backendDir, "prisma", "dev.db"),
+  path.join(backendDir, "dev.db"),
+];
 const OFFICIAL_API_SERVICE_ID = "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92";
 const OFFICIAL_PROJECT_ID = "ddfbf66c-e274-47b1-9493-286232d2f426";
 const OFFICIAL_ENVIRONMENT_ID = "e18f76b1-e38f-468e-91fe-1eff6db9a5f8";
@@ -73,8 +81,10 @@ function expectedRailwayTarget(env) {
 function assertManualMigrationAuthorization(env, { provider = providerFromEnv(env) } = {}) {
   const railway = isRailwayEnvironment(env);
   const hasPostgresTarget = Boolean(String(env.POSTGRES_TARGET_URL || env.POSTGRES_TEST_DATABASE_URL || "").trim());
-  if (String(env.NODE_ENV || "").trim().toLowerCase() === "test" && !railway && provider === "sqlite" && !hasPostgresTarget) {
-    return { bypassedForTest: true, target: "test" };
+  const testSqlite = String(env.NODE_ENV || "").trim().toLowerCase() === "test" && !railway && provider === "sqlite";
+  const testDatabaseUrl = testSqlite ? assertIsolatedTestSqliteMigrationTarget(env) : null;
+  if (testSqlite && !hasPostgresTarget) {
+    return { bypassedForTest: true, target: "test", testDatabaseUrl };
   }
 
   const expected = railway ? expectedRailwayTarget(env) : { target: "local" };
@@ -86,7 +96,7 @@ function assertManualMigrationAuthorization(env, { provider = providerFromEnv(en
   if (provider === "postgresql" && !railway) assertLocalPostgresMigrationTarget(env, { provider });
   assertOperationEvidence(env, "CRM_MANUAL_MIGRATION", { provider, target: expected.target });
 
-  if (!railway) return { target: expected.target };
+  if (!railway) return { target: expected.target, testDatabaseUrl };
   if (String(env.NODE_ENV || "").trim() !== "production") throw migrationError("NODE_ENV_PRODUCTION_REQUIRED");
   if (env.RAILWAY_PROJECT_ID !== expected.projectId) throw migrationError("RAILWAY_PROJECT_MISMATCH");
   if (env.RAILWAY_ENVIRONMENT_ID !== expected.environmentId) throw migrationError("RAILWAY_ENVIRONMENT_MISMATCH");
@@ -100,7 +110,112 @@ function assertManualMigrationAuthorization(env, { provider = providerFromEnv(en
   } catch (error) {
     throw migrationError(error?.code || "MANUAL_MIGRATION_DATABASE_TARGET_INVALID");
   }
-  return { target: expected.target };
+  return { target: expected.target, testDatabaseUrl };
+}
+
+function assertIsolatedTestSqliteMigrationTarget(env) {
+  const testDatabaseUrl = canonicalTestSqliteDatabaseUrl(env.CRM_TEST_DATABASE_URL);
+  const selectedDatabaseUrl = String(env.DATABASE_URL || "").trim();
+  if (!selectedDatabaseUrl) throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_MISMATCH");
+
+  const canonicalSelectedDatabaseUrl = canonicalTestSqliteDatabaseUrl(selectedDatabaseUrl);
+  if (canonicalSelectedDatabaseUrl !== testDatabaseUrl) {
+    throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_MISMATCH");
+  }
+  return testDatabaseUrl;
+}
+
+function canonicalTestSqliteDatabaseUrl(rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_REQUIRED");
+  if (!value.startsWith("file:")) throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID");
+
+  const encodedPath = value.slice("file:".length);
+  if (!encodedPath || encodedPath.includes("?") || encodedPath.includes("#")) {
+    throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID");
+  }
+
+  let databasePath;
+  try {
+    databasePath = decodeURIComponent(encodedPath);
+  } catch {
+    throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID");
+  }
+  if (databasePath.startsWith("///") && /^[A-Za-z]:/.test(databasePath.slice(3))) databasePath = databasePath.slice(3);
+  if (databasePath.startsWith("/") && /^[A-Za-z]:/.test(databasePath.slice(1))) databasePath = databasePath.slice(1);
+  if (!databasePath || databasePath.includes("\u0000") || !path.isAbsolute(databasePath)) {
+    throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID");
+  }
+
+  const resolvedPath = path.resolve(databasePath);
+  if (
+    !isPathInside(resolvedPath, TEST_SQLITE_ROOT)
+      || isPathInside(resolvedPath, REPOSITORY_ROOT)
+  ) {
+    throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID");
+  }
+  assertCanonicalTestSqlitePath(resolvedPath);
+  return `file:${resolvedPath.replace(/\\/g, "/")}`;
+}
+
+function assertCanonicalTestSqlitePath(resolvedPath) {
+  let current = resolvedPath;
+  while (true) {
+    try {
+      const stat = fs.lstatSync(current);
+      if (stat.isSymbolicLink() || !samePath(path.resolve(fs.realpathSync.native(current)), current)) {
+        throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID");
+      }
+      if (samePath(current, resolvedPath) && stat.isFile()) {
+        assertNotProtectedSqliteDatabaseAlias(stat);
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+
+    if (samePath(current, TEST_SQLITE_ROOT)) return;
+    const parent = path.dirname(current);
+    if (samePath(parent, current)) throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID");
+    current = parent;
+  }
+}
+
+function assertNotProtectedSqliteDatabaseAlias(candidateStat) {
+  for (const protectedPath of PROTECTED_SQLITE_DATABASES) {
+    let protectedStat;
+    try {
+      protectedStat = fs.statSync(protectedPath);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID");
+    }
+    if (sameExistingFile(candidateStat, protectedStat)) {
+      throw migrationError("MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID");
+    }
+  }
+}
+
+function sameExistingFile(left, right) {
+  return left.isFile()
+    && right.isFile()
+    && Number.isInteger(left.ino)
+    && Number.isInteger(right.ino)
+    && left.ino > 0
+    && left.ino === right.ino
+    && left.dev === right.dev;
+}
+
+function isPathInside(candidate, parent) {
+  const relative = path.relative(parent, candidate);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function samePath(left, right) {
+  const normalizedLeft = path.resolve(left);
+  const normalizedRight = path.resolve(right);
+  return process.platform === "win32"
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight;
 }
 
 function assertLocalPostgresMigrationTarget(env, { provider }) {
@@ -187,7 +302,11 @@ function runPrisma(args, env) {
 async function main({ env: suppliedEnv = process.env } = {}) {
   const env = { ...suppliedEnv };
   const provider = providerFromEnv(env);
-  assertManualMigrationAuthorization(env, { provider });
+  const authorization = assertManualMigrationAuthorization(env, { provider });
+  if (authorization.testDatabaseUrl) {
+    env.DATABASE_URL = authorization.testDatabaseUrl;
+    env.CRM_TEST_DATABASE_URL = authorization.testDatabaseUrl;
+  }
   let schemaPath = sqliteSchemaPath;
   let migrationDir = sqliteMigrationDir;
   let migrationName = latestMigrationName(migrationDir);
@@ -228,6 +347,7 @@ if (require.main === module) {
 module.exports = {
   MANUAL_MIGRATION_CONFIRMATION,
   assertManualMigrationAuthorization,
+  assertIsolatedTestSqliteMigrationTarget,
   assertLocalPostgresMigrationTarget,
   canonicalManualMigrationAttestationPayload,
   expectedRailwayTarget,
