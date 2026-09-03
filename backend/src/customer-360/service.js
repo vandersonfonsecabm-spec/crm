@@ -1,5 +1,6 @@
 const { domainError, notFound } = require("../leads-communication/policy");
 const { lockActiveClienteRow } = require("../shared/clientLifecycleLock");
+const { canonicalClientStatus } = require("../shared/client-status");
 
 const TIMELINE_TYPES = new Set([
   "TODOS",
@@ -298,7 +299,7 @@ function presentClient(cliente) {
     estado: cliente.estado,
     cpfCnpj: cliente.cpfCnpj,
     interesse: cliente.interesse,
-    status: cliente.status,
+    status: canonicalClientStatus(cliente.status),
     origem: cliente.origem,
     revisao: cliente.revisao,
     createdAt: cliente.createdAt,

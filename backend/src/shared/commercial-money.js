@@ -2,6 +2,7 @@
 
 const MAX_PRISMA_INT = 2_147_483_647;
 const MAX_PRISMA_INT_BIGINT = BigInt(MAX_PRISMA_INT);
+const { canonicalClientStatus } = require("./client-status");
 
 function parseNonNegativePrismaInt(value) {
   if (!["string", "number", "bigint"].includes(typeof value)) return null;
@@ -24,6 +25,7 @@ function presentClientValue(cliente) {
   const valorInformado = cliente.valorInformado === true && hasAuthoritativeValue;
   return {
     ...cliente,
+    ...(cliente.status === undefined ? {} : { status: canonicalClientStatus(cliente.status) }),
     // Cliente.valor remains non-null in legacy storage. Never expose that
     // fallback when the persisted provenance says the value is unknown.
     valor: valorInformado ? cliente.valor : null,

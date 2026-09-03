@@ -5,6 +5,7 @@ const { FEATURE_KEYS, isFeatureEnabledForTenant } = require("../tenant-features/
 const { MODES, normalizeMode } = require("./policy");
 const { MockCommerceAIConnection, UnconfiguredCommerceAIConnection } = require("./connection");
 const { TOOL_NAMES } = require("./tools");
+const { canonicalClientStatus } = require("../shared/client-status");
 
 function mountAICommerceRoutes({
   app,
@@ -335,7 +336,7 @@ async function resolveRunContext({ prisma, body = {}, empresaId } = {}) {
       text: String(item.texto || "").slice(0, 4000),
       createdAt: item.createdAt || null,
     })),
-    customer: contact?.cliente ? { id: contact.cliente.id, name: contact.cliente.nome, status: contact.cliente.status } : null,
+    customer: contact?.cliente ? { id: contact.cliente.id, name: contact.cliente.nome, status: canonicalClientStatus(contact.cliente.status) } : null,
     channel: channel ? String(channel.tipo || "") : null,
     conversationState: String(conversation.status || ""),
     sellerAssignment: assigned ? { usuarioId: assigned.id, name: assigned.nome } : null,
