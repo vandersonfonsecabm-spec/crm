@@ -66,6 +66,7 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
   const [closedCreateRequestKey, setClosedCreateRequestKey] = useState(0);
   const [createForm, setCreateForm] = useState({ clienteId: "", interesse: "", origem: "", campanha: "", responsavelId: "" });
   const requestSequence = useRef(0);
+  const drawerRequestSequence = useRef(0);
   const conversionInFlight = useRef(false);
   const hasLoaded = useRef(false);
   const manager = ["ADMIN", "GERENTE"].includes(authSession.papel ?? authSession.usuario.papel ?? "");
@@ -80,6 +81,10 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
       .catch(() => { if (active) setTeamUsers([]); });
     return () => { active = false; };
   }, [manager]);
+
+  useEffect(() => () => {
+    drawerRequestSequence.current += 1;
+  }, []);
 
   useEffect(() => {
     const sequence = ++requestSequence.current;
@@ -140,6 +145,7 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
   const origins = useMemo(() => [...new Set(result?.data.map((lead) => lead.origem).filter((value): value is string => Boolean(value)) ?? [])].sort(), [result]);
 
   async function openLead(lead: CommunicationLead) {
+    const sequence = ++drawerRequestSequence.current;
     setSelected(lead);
     setDrawerLoading(true);
     try {
@@ -148,14 +154,23 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
         fetchCommunicationLeadHistory(lead.id),
         fetchCommunicationConversations({ leadId: lead.id, limit: 20 }),
       ]);
+      if (sequence !== drawerRequestSequence.current) return;
       setSelected(detail);
       setSelectedHistory(history);
       setSelectedConversations(conversations.data);
     } catch (nextError) {
-      setFeedback(errorMessage(nextError));
+      if (sequence === drawerRequestSequence.current) setFeedback(errorMessage(nextError));
     } finally {
-      setDrawerLoading(false);
+      if (sequence === drawerRequestSequence.current) setDrawerLoading(false);
     }
+  }
+
+  function closeLead() {
+    drawerRequestSequence.current += 1;
+    setSelected(null);
+    setSelectedHistory([]);
+    setSelectedConversations([]);
+    setDrawerLoading(false);
   }
 
   async function runAssume(lead: CommunicationLead) {
@@ -327,7 +342,7 @@ export default function DashboardLeadsPanel({ authSession, clients, createReques
         <Pagination disabled={loading || refreshing} itemLabel="Leads" onPageChange={setPage} page={page} total={result?.pagination.total ?? 0} totalPages={totalPages} visibleCount={result?.data.length ?? 0} />
       </Surface>
 
-      <CommunicationDrawer description="Contexto comercial, conversas e histórico de responsabilidade." onClose={() => setSelected(null)} open={Boolean(selected)} title={selected?.cliente?.nome ?? "Detalhes do Lead"}>
+      <CommunicationDrawer description="Contexto comercial, conversas e histórico de responsabilidade." onClose={closeLead} open={Boolean(selected)} title={selected?.cliente?.nome ?? "Detalhes do Lead"}>
         {drawerLoading || !selected ? <LoadingState rows={5} /> : <div className="space-y-4">
           <section><h3 className="mb-1 text-xs font-semibold text-[var(--text-primary)]">Resumo</h3><dl><DetailRow label="Status" value={<LeadStatusBadge status={selected.status} />} /><DetailRow label="Responsável" value={selected.responsavel?.nome ?? "Sem responsável"} /><DetailRow label="Interesse" value={selected.interesse ?? "Não informado"} /></dl></section>
           <section><h3 className="mb-1 text-xs font-semibold text-[var(--text-primary)]">Origem comercial</h3><dl><DetailRow label="Origem" value={selected.origem ?? "Não informado"} /><DetailRow label="Campanha" value={selected.campanha ?? "Não informado"} /></dl></section>

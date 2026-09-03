@@ -92,13 +92,13 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
       if (locks) {
         while (now() < deadline) {
           const currentTerminal = readRelevantPeerTerminal(startedAt);
-          if (currentTerminal) return resolveTerminal<T>(currentTerminal);
+          if (currentTerminal) return await resolvePeerTerminal<T>(currentTerminal, refresh);
 
           const lockResult = await tryWithWebLock(refresh, startedAt, transport);
           if (lockResult.acquired) return lockResult.value as T;
 
           const terminal = await waitForPeer(startedAt, deadline, transport);
-          if (terminal) return resolveTerminal<T>(terminal);
+          if (terminal) return await resolvePeerTerminal<T>(terminal, refresh);
         }
         throw new AuthRefreshCoordinationError(0);
       }
@@ -122,7 +122,7 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
         acquired = true;
         const currentTerminal = readRelevantPeerTerminal(startedAt);
         if (currentTerminal) {
-          value = resolveTerminal<T>(currentTerminal);
+          value = await resolvePeerTerminal<T>(currentTerminal, refresh);
           return;
         }
         value = await runLeader(refresh, createStartSignal(), transport);
@@ -137,11 +137,11 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
   async function runWithLease<T>(refresh: () => Promise<T>, startedAt: number, deadline: number, transport: SignalTransport): Promise<T> {
     while (now() < deadline) {
       const current = readState();
-      if (current && isRelevantPeerTerminal(current, startedAt)) return resolveTerminal<T>(current);
+      if (current && isRelevantPeerTerminal(current, startedAt)) return await resolvePeerTerminal<T>(current, refresh);
 
       if (current && current.type === "refresh-start" && current.expiresAt > now()) {
         const terminal = await waitForPeer(startedAt, deadline, transport);
-        if (terminal) return resolveTerminal<T>(terminal);
+        if (terminal) return await resolvePeerTerminal<T>(terminal, refresh);
         continue;
       }
 
@@ -155,7 +155,7 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
       }
 
       const terminal = await waitForPeer(startedAt, deadline, transport);
-      if (terminal) return resolveTerminal<T>(terminal);
+      if (terminal) return await resolvePeerTerminal<T>(terminal, refresh);
     }
     throw new AuthRefreshCoordinationError(0);
   }
@@ -266,6 +266,15 @@ export function createAuthRefreshCoordinator(options: AuthRefreshCoordinatorOpti
     } catch {
       return false;
     }
+  }
+
+  async function resolvePeerTerminal<T>(signal: RefreshSignal, refresh: () => Promise<T>): Promise<T> {
+    if (signal.type === "refresh-success") {
+      // Access tokens stay in each tab's memory. A peer success proves the cookie
+      // session is current, but never supplies a token to this tab.
+      return refresh();
+    }
+    return resolveTerminal<T>(signal);
   }
 
   return { runAuthRefreshSingleFlight };

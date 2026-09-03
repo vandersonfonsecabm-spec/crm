@@ -805,7 +805,7 @@ app.post("/clientes/:id/notas", ...commercialAuth, async (req, res) => {
         error.codigo = "CLIENT_ARCHIVED_READ_ONLY";
         throw error;
       }
-      return tx.nota.create({
+      const nota = await tx.nota.create({
         data: {
           empresaId,
           clienteId,
@@ -813,6 +813,14 @@ app.post("/clientes/:id/notas", ...commercialAuth, async (req, res) => {
           tipo: tipo || "nota",
         },
       });
+      // A note and the contact recency it represents are one domain command.
+      // Keeping both writes in this transaction prevents a persisted note from
+      // being left behind when the client update fails (or a retry is issued).
+      await tx.cliente.update({
+        where: { id: cliente.id },
+        data: { ultimoContato: 0 },
+      });
+      return nota;
     }, isPostgresRuntime() ? { isolationLevel: Prisma.TransactionIsolationLevel.Serializable } : undefined);
 
     res.json(nota);

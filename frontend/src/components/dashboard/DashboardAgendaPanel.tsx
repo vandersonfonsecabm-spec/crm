@@ -26,6 +26,7 @@ import {
   type AcompanhamentoQueryParams,
 } from "../../services/crmApi";
 import type { Client } from "../../types/dashboard";
+import { getDashboardPath } from "../../navigation/dashboardNavigation";
 import { Button, EmptyState, ErrorState, IconButton, Input, LoadingState, Pagination, Select, Surface, Textarea, Toolbar } from "../ui";
 import DashboardActionOverflow from "./DashboardActionOverflow";
 import type { PageAction } from "./DashboardActionOverflow";
@@ -847,9 +848,9 @@ function AgendaRow({
             {item.descricao && <p className="agenda-row-observation">{item.descricao}</p>}
             <div className="agenda-row-context-links">
               {item.clienteId && <ActionButton onClick={() => onSelectClient(item.clienteId as number)}>Cliente</ActionButton>}
-              {item.negocioId && <EntityLink href={`/kanban?negocioId=${item.negocioId}`} icon={<BriefcaseBusiness size={12} />}>Negócio</EntityLink>}
-              {item.conversaCanalId && <EntityLink href={`/inbox?conversaId=${item.conversaCanalId}`} icon={<Link2 size={12} />}>Conversa</EntityLink>}
-              {item.propostaComercialId && <EntityLink href={`/kanban?negocioId=${item.negocioId || ""}&propostaId=${item.propostaComercialId}`} icon={<StickyNote size={12} />}>Proposta</EntityLink>}
+              {item.negocioId && <EntityLink href={`${getDashboardPath("kanban")}?negocioId=${item.negocioId}`} icon={<BriefcaseBusiness size={12} />}>Negócio</EntityLink>}
+              {item.conversaCanalId && <EntityLink href={`${getDashboardPath("inbox")}?conversationId=${item.conversaCanalId}`} icon={<Link2 size={12} />}>Conversa</EntityLink>}
+              {item.propostaComercialId && <EntityLink href={`${getDashboardPath("kanban")}?negocioId=${item.negocioId || ""}&propostaId=${item.propostaComercialId}`} icon={<StickyNote size={12} />}>Proposta</EntityLink>}
             </div>
             <DashboardActionOverflow actions={overflowActions} pageTitle={`acompanhamento ${item.titulo}`} triggerLabel="Mais" />
           </div>

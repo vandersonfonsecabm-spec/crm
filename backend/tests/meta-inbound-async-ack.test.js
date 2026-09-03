@@ -113,6 +113,29 @@ test("bounded worker dispatches due provider events without touching future retr
   assert.equal(query.take, 3);
 });
 
+test("Meta inbound worker respeita cancelamento antes de consultar eventos", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let queried = false;
+  const prisma = {
+    eventoWebhook: {
+      async findMany() {
+        queried = true;
+        throw new Error("worker cancelled before query");
+      },
+    },
+  };
+  const storedProcessors = Object.fromEntries(
+    ["WHATSAPP", "INSTAGRAM", "MESSENGER"].map((provider) => [provider, async () => ({ state: "PROCESSED" })]),
+  );
+  const worker = createMetaInboundWebhookWorker({ prisma, storedProcessors });
+
+  const result = await worker.processDue({ leaseOwner: "worker-meta-cancel", signal: controller.signal });
+
+  assert.equal(result.cancelled, true);
+  assert.equal(queried, false);
+});
+
 test("durable claim writes explicit owner, expiry and clears retry schedule", async () => {
   const now = new Date("2026-08-27T12:00:00.000Z");
   const event = {

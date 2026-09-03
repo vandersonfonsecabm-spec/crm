@@ -5,6 +5,7 @@ const { PrismaClient } = require("@prisma/client");
 const { PILOT_ACTION_TYPES, WORKER_ACTION_TYPES } = require("../src/automations/actions");
 const { createAutomationService } = require("../src/automations/service");
 const { readAutomationWorkerConfig, shouldStartAutomationWorker, shouldStartNotificationWorker, shouldStartTemporalScanWorker, startAutomationWorker, validateWorkerRuntimeTarget } = require("../src/automations/worker");
+const { databaseTargetFingerprint } = require("../scripts/prisma-runtime.cjs");
 
 process.env.NODE_ENV = "test";
 
@@ -939,6 +940,8 @@ test("H8.1 interpreta gate e configuracao do worker com defaults seguros", async
     RAILWAY_ENVIRONMENT_ID: "e18f76b1-e38f-468e-91fe-1eff6db9a5f8",
     CRM_DATABASE_PROVIDER: "postgresql",
     POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/crm",
+    CRM_DATABASE_SERVICE_ID: "e9d8a6b8-507b-45fb-92a8-3ab016f865a2",
+    CRM_DATABASE_TARGET_FINGERPRINT: databaseTargetFingerprint("postgresql://user:pass@localhost:5432/crm"),
   };
   assert.equal(validateWorkerRuntimeTarget(officialWorkerEnv), "postgresql");
   assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, NODE_ENV: "development" }), /NODE_ENV_PRODUCTION_REQUIRED/);
@@ -946,6 +949,8 @@ test("H8.1 interpreta gate e configuracao do worker com defaults seguros", async
   assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, RAILWAY_PROJECT_ID: "wrong" }), /RAILWAY_PROJECT_MISMATCH/);
   assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, RAILWAY_ENVIRONMENT_ID: "wrong" }), /RAILWAY_ENVIRONMENT_MISMATCH/);
   assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, CRM_DATABASE_PROVIDER: "sqlite", DATABASE_URL: "file:/app/data/crm.db" }), /RAILWAY_WORKER_POSTGRES_REQUIRED/);
+  assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, CRM_DATABASE_SERVICE_ID: "wrong" }), /RAILWAY_DATABASE_SERVICE_MISMATCH/);
+  assert.throws(() => validateWorkerRuntimeTarget({ ...officialWorkerEnv, POSTGRES_DATABASE_URL: "postgresql://user:pass@localhost:5432/wrong" }), /RAILWAY_DATABASE_TARGET_MISMATCH/);
 
   const config = readAutomationWorkerConfig({
     AUTOMATION_WORKER_BATCH_SIZE: "999",
@@ -1415,6 +1420,42 @@ test("H8.1 shutdown aguarda ciclo ativo e nao agenda novo polling", async () => 
   assert.equal(scheduled.length, 1);
 });
 
+test("H8.1 cancelamento apos claim libera lease sem gastar tentativa ou executar acao", async () => {
+  const tenant = await seedTenant("h8-worker-cancel-after-claim");
+  const context = adminContext(tenant);
+  const rule = await internalEventRule(context, "Cancelar apos claim");
+  await service.activateRule(context, rule.id);
+  const lead = await seedLead(tenant);
+  await service.enqueueLeadCreated({
+    tx: prisma,
+    empresaId: tenant.empresa.id,
+    leadId: lead.id,
+    originalEventId: "h8-worker-cancel-after-claim",
+    occurredAt: lead.createdAt,
+  });
+  const controller = new AbortController();
+  const cancellationService = createAutomationService({ prisma: prismaAbortAfterFirstClaim(controller), env });
+
+  const result = await cancellationService.processDueJobs({
+    now: new Date(),
+    limit: 1,
+    leaseOwner: "cancel-after-claim-worker",
+    signal: controller.signal,
+  });
+
+  assert.equal(result.cancelled, true);
+  assert.equal(result.processed, 0);
+  assert.equal(result.results[0].status, "CANCELLED");
+  const job = await prisma.automacaoAcaoJob.findFirstOrThrow({ where: { empresaId: tenant.empresa.id } });
+  const execution = await prisma.automacaoExecucao.findUniqueOrThrow({ where: { id: job.execucaoId } });
+  assert.equal(job.status, "PENDENTE");
+  assert.equal(job.tentativas, 0);
+  assert.equal(job.leaseOwner, null);
+  assert.equal(job.leaseExpiresAt, null);
+  assert.equal(execution.status, "PENDENTE");
+  assert.equal(await prisma.automacaoEventoInterno.count({ where: { empresaId: tenant.empresa.id } }), 0);
+});
+
 test("H8.2 produtor controlado cria jobs idempotentes sem entidade comercial", async () => {
   const tenant = await seedTenant("h8-producer");
   const context = adminContext(tenant);
@@ -1755,6 +1796,30 @@ function prismaWithCancellationInterference(jobId) {
           return callback(wrappedTx);
         }, options);
       }
+      const value = Reflect.get(target, property);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function prismaAbortAfterFirstClaim(controller) {
+  const jobDelegate = prisma.automacaoAcaoJob;
+  const wrappedJobDelegate = new Proxy(jobDelegate, {
+    get(target, property) {
+      const value = Reflect.get(target, property);
+      if (property === "updateMany") {
+        return async (args) => {
+          const result = await value.call(target, args);
+          if (args?.data?.status === "PROCESSANDO" && result.count === 1) controller.abort();
+          return result;
+        };
+      }
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return new Proxy(prisma, {
+    get(target, property) {
+      if (property === "automacaoAcaoJob") return wrappedJobDelegate;
       const value = Reflect.get(target, property);
       return typeof value === "function" ? value.bind(target) : value;
     },

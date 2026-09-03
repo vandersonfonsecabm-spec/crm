@@ -195,6 +195,32 @@ test("worker H8 processa somente tenants presentes na allowlist", async () => {
   assert.equal(await prisma.notificacao.count({ where: { empresaId: other.empresa.id } }), 0);
 });
 
+test("worker H8 respeita cancelamento antes de projetar notificacoes", async () => {
+  const tenant = await seedTenant("worker-cancelled", { enabled: true });
+  await prisma.acompanhamento.create({
+    data: {
+      empresaId: tenant.empresa.id,
+      responsavelId: tenant.admin.id,
+      autorId: tenant.admin.id,
+      titulo: "Nao projetar apos shutdown",
+      descricao: "Acompanhamento sintetico.",
+      dataHora: new Date(now.getTime() - 5 * 60000),
+      prioridade: "ALTA",
+      status: "PENDENTE",
+      tipo: "RETORNO",
+    },
+  });
+  const controller = new AbortController();
+  controller.abort();
+  const workerService = createNotificationService({ prisma, env: { ...env, NOTIFICATIONS_WORKER_ENABLED: "true" }, clock: () => now });
+
+  const result = await workerService.processDue({ limit: 20, signal: controller.signal });
+
+  assert.equal(result.cancelled, true);
+  assert.equal(result.tenants, 0);
+  assert.equal(await prisma.notificacao.count({ where: { empresaId: tenant.empresa.id } }), 0);
+});
+
 test("worker H8 retoma cursor persistido depois de reiniciar o service", async () => {
   const first = await seedTenant("worker-restart-a", { enabled: true });
   const second = await seedTenant("worker-restart-b", { enabled: true });

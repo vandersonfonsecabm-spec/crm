@@ -244,7 +244,8 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
     };
   }
 
-  async function scanTemporalTriggers({ now = new Date(), limit = 50 } = {}) {
+  async function scanTemporalTriggers({ now = new Date(), limit = 50, signal = null } = {}) {
+    if (isAbortRequested(signal)) return { created: 0, scanErrors: 0, cancelled: true };
     const pageSize = Math.max(1, Math.min(Number.isInteger(limit) ? limit : 50, 100));
     const tenantCheckpointKey = WORKER_CHECKPOINT_KEYS.automationTenants();
     const tenantCheckpoint = await checkpointStore.read(tenantCheckpointKey);
@@ -259,21 +260,32 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
     });
     let created = 0;
     let scanErrors = 0;
+    let cancelled = false;
     for (const tenant of tenants) {
+      if (isAbortRequested(signal)) {
+        cancelled = true;
+        break;
+      }
       try {
         if (!(await isFeatureEnabledForTenant({ prisma, empresaId: tenant.empresaId, featureKey: FEATURE_KEYS.AUTOMATIONS, env }))) continue;
         try {
-          const leadScan = await scanLeadWithoutFollowUp(tenant.empresaId, now, pageSize);
+          const leadScan = await scanLeadWithoutFollowUp(tenant.empresaId, now, pageSize, signal);
           created += leadScan.created;
           scanErrors += leadScan.errors;
+          cancelled ||= leadScan.cancelled === true;
         } catch (error) {
           scanErrors += 1;
           logTemporalScanFailure("LEAD_WITHOUT_FOLLOW_UP", tenant.empresaId, error);
         }
         try {
-          const dealScan = await scanDealStalled(tenant.empresaId, now, pageSize);
+          if (isAbortRequested(signal)) {
+            cancelled = true;
+            break;
+          }
+          const dealScan = await scanDealStalled(tenant.empresaId, now, pageSize, signal);
           created += dealScan.created;
           scanErrors += dealScan.errors;
+          cancelled ||= dealScan.cancelled === true;
         } catch (error) {
           scanErrors += 1;
           logTemporalScanFailure("DEAL_STALLED", tenant.empresaId, error);
@@ -282,19 +294,25 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
         scanErrors += 1;
         logTemporalScanFailure("TENANT", tenant.empresaId, error);
       }
+      if (cancelled) break;
     }
-    if (scanErrors === 0) {
+    if (!cancelled && scanErrors === 0) {
       if (tenants.length === pageSize) await checkpointStore.write(tenantCheckpointKey, { tenantId: tenants.at(-1).empresaId });
       else await checkpointStore.clear(tenantCheckpointKey);
     }
-    return { created, scanErrors };
+    return { created, scanErrors, cancelled };
   }
 
-  async function scanLeadWithoutFollowUp(empresaId, now, limit) {
+  async function scanLeadWithoutFollowUp(empresaId, now, limit, signal = null) {
     const rules = await activeRules(empresaId, "LEAD_WITHOUT_FOLLOW_UP");
     let count = 0;
     let errors = 0;
+    let cancelled = false;
     for (const rule of rules) {
+      if (isAbortRequested(signal)) {
+        cancelled = true;
+        break;
+      }
       const errorsBeforeRule = errors;
       let leads = null;
       let cursorKey = null;
@@ -308,6 +326,10 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
         if (cursor) where.OR = [{ createdAt: { gt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { gt: cursor.id } }];
         leads = await prisma.lead.findMany({ where, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: limit });
         for (const lead of leads) {
+          if (isAbortRequested(signal)) {
+            cancelled = true;
+            break;
+          }
           try {
             count += await prisma.$transaction(async (tx) => {
               const currentLeadRef = await tx.lead.findFirst({
@@ -340,6 +362,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
             logTemporalScanFailure("LEAD_WITHOUT_FOLLOW_UP_ITEM", empresaId, error, rule.id);
           }
         }
+        if (cancelled) break;
         if (errors === errorsBeforeRule) {
           if (leads.length === limit) await checkpointStore.write(cursorKey, { createdAt: leads.at(-1).createdAt, id: leads.at(-1).id });
           else await checkpointStore.clear(cursorKey);
@@ -349,14 +372,19 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
         logTemporalScanFailure("LEAD_WITHOUT_FOLLOW_UP", empresaId, error, rule.id);
       }
     }
-    return { created: count, errors };
+    return { created: count, errors, cancelled };
   }
 
-  async function scanDealStalled(empresaId, now, limit) {
+  async function scanDealStalled(empresaId, now, limit, signal = null) {
     const rules = await activeRules(empresaId, "DEAL_STALLED");
     let count = 0;
     let errors = 0;
+    let cancelled = false;
     for (const rule of rules) {
+      if (isAbortRequested(signal)) {
+        cancelled = true;
+        break;
+      }
       const errorsBeforeRule = errors;
       let negocios = null;
       let cursorKey = null;
@@ -370,6 +398,10 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
         if (cursor) where.OR = [{ etapaEntrouEm: { gt: cursor.etapaEntrouEm } }, { etapaEntrouEm: cursor.etapaEntrouEm, id: { gt: cursor.id } }];
         negocios = await prisma.negocio.findMany({ where, orderBy: [{ etapaEntrouEm: "asc" }, { id: "asc" }], take: limit });
         for (const negocio of negocios) {
+          if (isAbortRequested(signal)) {
+            cancelled = true;
+            break;
+          }
           try {
             count += await prisma.$transaction(async (tx) => {
               const currentBusinessRef = await tx.negocio.findFirst({
@@ -400,6 +432,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
             logTemporalScanFailure("DEAL_STALLED_ITEM", empresaId, error, rule.id);
           }
         }
+        if (cancelled) break;
         if (errors === errorsBeforeRule) {
           if (negocios.length === limit) await checkpointStore.write(cursorKey, { etapaEntrouEm: negocios.at(-1).etapaEntrouEm, id: negocios.at(-1).id });
           else await checkpointStore.clear(cursorKey);
@@ -409,7 +442,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
         logTemporalScanFailure("DEAL_STALLED", empresaId, error, rule.id);
       }
     }
-    return { created: count, errors };
+    return { created: count, errors, cancelled };
   }
 
   function logTemporalScanFailure(source, empresaId, error, ruleId = null) {
@@ -666,21 +699,32 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
     retryDelayMs = DEFAULT_RETRY_DELAY_MS,
     supportedActions = WORKER_ACTION_TYPES,
     onEvent = null,
+    signal = null,
   } = {}) {
     const config = workerConfig({ limit, leaseMs, executionTimeoutMs, maxAttempts, retryDelayMs, supportedActions });
     const results = [];
+    if (isAbortRequested(signal)) return { processed: 0, results, cancelled: true };
     const batchStartedAt = Date.now();
     for (let index = 0; index < config.limit; index += 1) {
+      if (isAbortRequested(signal)) return { processed: processedJobCount(results), results, cancelled: true };
       const jobNow = new Date(now.getTime() + Math.max(0, Date.now() - batchStartedAt));
-      const job = await claimDueJob({ now: jobNow, leaseOwner, config, onEvent });
+      const job = await claimDueJob({ now: jobNow, leaseOwner, config, onEvent, signal });
       if (!job) break;
-      results.push(await processJob(job, { now: jobNow, leaseOwner, config, onEvent }));
+      if (isAbortRequested(signal)) {
+        results.push(await releaseClaimedJobOnCancellation(job, { now: jobNow, leaseOwner }));
+        return { processed: processedJobCount(results), results, cancelled: true };
+      }
+      const result = await processJob(job, { now: jobNow, leaseOwner, config, onEvent, signal });
+      results.push(result);
+      if (result.status === "CANCELLED") return { processed: processedJobCount(results), results, cancelled: true };
     }
-    return { processed: results.length, results };
+    return { processed: processedJobCount(results), results, cancelled: isAbortRequested(signal) };
   }
 
-  async function claimDueJob({ now, leaseOwner, config, onEvent }) {
-    await reconcileExhaustedJobs(now, config.maxAttempts, onEvent);
+  async function claimDueJob({ now, leaseOwner, config, onEvent, signal = null }) {
+    if (isAbortRequested(signal)) return null;
+    await reconcileExhaustedJobs(now, config.maxAttempts, onEvent, signal);
+    if (isAbortRequested(signal)) return null;
     const candidates = await prisma.automacaoAcaoJob.findMany({
       where: dueJobWhere(now, config.maxAttempts),
       orderBy: [{ nextAttemptAt: "asc" }, { id: "asc" }],
@@ -698,6 +742,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
       },
     });
     for (const candidate of candidates) {
+      if (isAbortRequested(signal)) return null;
       const leaseUntil = new Date(now.getTime() + config.leaseMs);
       const claimStartedAt = Date.now();
       const claimed = await prisma.automacaoAcaoJob.updateMany({
@@ -727,7 +772,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
     return null;
   }
 
-  async function reconcileExhaustedJobs(now, maxAttempts, onEvent) {
+  async function reconcileExhaustedJobs(now, maxAttempts, onEvent, signal = null) {
     const reconciliationStartedAt = Date.now();
     const stuckJobs = await prisma.automacaoAcaoJob.findMany({
       where: {
@@ -741,6 +786,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
       take: 100,
     });
     for (const stuckJob of stuckJobs) {
+      if (isAbortRequested(signal)) return;
       const updated = await prisma.automacaoAcaoJob.updateMany({
         where: {
           id: stuckJob.id,
@@ -782,7 +828,8 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
     }
   }
 
-  async function processJob(job, { now, leaseOwner, config, onEvent }) {
+  async function processJob(job, { now, leaseOwner, config, onEvent, signal = null }) {
+    if (isAbortRequested(signal)) return releaseClaimedJobOnCancellation(job, { now, leaseOwner });
     const attempt = job.tentativas;
     const snapshot = safeJson(job.execucao.regraSnapshotJson, null);
     const baseFields = jobLogFields(job, { attempt, maxAttempts: config.maxAttempts });
@@ -836,6 +883,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
     }
     let actionStartedAt = null;
     try {
+      throwIfAbortRequested(signal);
       const executionStarted = await prisma.automacaoExecucao.updateMany({
         where: { id: job.execucaoId, empresaId: job.empresaId, status: { in: ["PENDENTE", "PROCESSANDO", "FALHOU"] } },
         data: { status: "PROCESSANDO", iniciadaEm: job.execucao.iniciadaEm || now, tentativas: { increment: 1 } },
@@ -869,6 +917,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
           status: "PROCESSANDO",
         });
       }
+      throwIfAbortRequested(signal);
       actionStartedAt = Date.now();
       notifyWorkerEvent(onEvent, "action_started", {
         ...baseFields,
@@ -878,6 +927,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
       const actionResult = await executeAction(job, {
         supportedActions: config.supportedActions,
         transactionTimeoutMs: config.executionTimeoutMs,
+        signal,
       });
       const eventId = baseFields.actionType === "CREATE_INTERNAL_EVENT" ? actionResult?.id : undefined;
       notifyWorkerEvent(onEvent, "action_succeeded", {
@@ -902,6 +952,9 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
       });
       return { id: job.id, status: "CONCLUIDO" };
     } catch (error) {
+      if (isWorkerCancellation(error)) {
+        return releaseClaimedJobOnCancellation(job, { now, leaseOwner });
+      }
       const safeError = sanitizeError(error);
       const permanent = error.permanent === true;
       const attemptsExhausted = attempt >= config.maxAttempts;
@@ -959,7 +1012,8 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
     }
   }
 
-  async function executeAction(job, { supportedActions = WORKER_ACTION_TYPES, transactionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS } = {}) {
+  async function executeAction(job, { supportedActions = WORKER_ACTION_TYPES, transactionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS, signal = null } = {}) {
+    throwIfAbortRequested(signal);
     if (job.execucao.empresaId !== job.empresaId || job.execucao.regra.empresaId !== job.empresaId) {
       throw domainError(409, "AUTOMATION_TENANT_CONFLICT", "Contexto da automacao inconsistente.", { permanent: true });
     }
@@ -975,6 +1029,7 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
     for (let transactionAttempt = 1; transactionAttempt <= transactionAttempts; transactionAttempt += 1) {
       try {
         return await prisma.$transaction(async (tx) => {
+          throwIfAbortRequested(signal);
           const entity = await loadExecutionEntity(tx, job);
           if (!entity) throw notFound("Entidade da automacao nao encontrada.", { permanent: true });
           if (Number.isSafeInteger(Number(entity.clienteId)) && entity.clienteId > 0) {
@@ -999,6 +1054,27 @@ function createAutomationService({ prisma, env = process.env, logger = console, 
       }
     }
     throw domainError(409, "ROUND_ROBIN_STATE_CONFLICT", "Conflito ao atualizar o estado do round-robin.");
+  }
+
+  async function releaseClaimedJobOnCancellation(job, { now, leaseOwner }) {
+    const released = await prisma.automacaoAcaoJob.updateMany({
+      where: {
+        id: job.id,
+        empresaId: job.empresaId,
+        leaseOwner,
+        status: "PROCESSANDO",
+        tentativas: { gt: 0 },
+      },
+      data: {
+        status: "PENDENTE",
+        tentativas: { decrement: 1 },
+        nextAttemptAt: now,
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      },
+    });
+    if (released.count === 1) await refreshExecutionStatus(prisma, job.empresaId, job.execucaoId);
+    return { id: job.id, status: released.count === 1 ? "CANCELLED" : "LEASE_LOST" };
   }
 
   async function assignOwner(tx, job, entity, usuarioId) {
@@ -1537,6 +1613,26 @@ function isRoundRobinTransactionConflict(actionType, error) {
   if (actionType !== "ASSIGN_ROUND_ROBIN") return false;
   if (error?.codigo === "ROUND_ROBIN_STATE_CONFLICT") return true;
   return ["P1008", "P2002", "P2028", "P2034"].includes(error?.code);
+}
+
+function isAbortRequested(signal) {
+  return signal?.aborted === true;
+}
+
+function throwIfAbortRequested(signal) {
+  if (!isAbortRequested(signal)) return;
+  const error = new Error("WORKER_STOPPED");
+  error.code = "WORKER_STOPPED";
+  error.name = "WorkerCancellationError";
+  throw error;
+}
+
+function isWorkerCancellation(error) {
+  return error?.code === "WORKER_STOPPED" && error?.name === "WorkerCancellationError";
+}
+
+function processedJobCount(results) {
+  return results.filter((result) => result?.status !== "CANCELLED" && result?.status !== "LEASE_LOST").length;
 }
 
 function wait(delayMs) {

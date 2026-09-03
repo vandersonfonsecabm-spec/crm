@@ -9,6 +9,7 @@ import {
   restoreClienteOnBackend,
   updateClienteOnBackend,
 } from "../services/crmApi";
+import { toCsvCell } from "../utils/canonicalSalesCsv.js";
 import { getLeadScore, getPriority, getRisk } from "../utils/dashboardHelpers";
 import type { Client, Note, SortBy, Status } from "../types/dashboard";
 
@@ -65,6 +66,7 @@ export default function useDashboardActions({
 }: UseDashboardActionsParams) {
   const [toast, setToast] = useState("");
   const statusUpdatesInFlight = useRef(new Set<number>());
+  const noteWritesInFlight = useRef(new Set<number>());
 
   function showToast(message: string) {
     setToast(message);
@@ -277,6 +279,8 @@ export default function useDashboardActions({
 
   async function addNote() {
     if (!selectedClient || !noteText.trim()) return;
+    if (noteWritesInFlight.current.has(selectedClient.id)) return;
+    noteWritesInFlight.current.add(selectedClient.id);
 
     const note: Note = {
       id: Date.now(),
@@ -285,24 +289,17 @@ export default function useDashboardActions({
       createdAt: Date.now(),
     };
 
-    const updatedClient = { ...selectedClient, notes: [note, ...selectedClient.notes], lastContactDays: 0 };
-
     try {
       const syncedNote = await createNotaOnBackend(selectedClient, note.text);
-      const syncedClient = await updateClienteOnBackend(updatedClient);
-      const nextClient = { ...syncedClient, notes: [syncedNote, ...selectedClient.notes], lastContactDays: 0 };
-      setClients((current) =>
-        current.map((client) =>
-          client.id === selectedClient.id
-            ? nextClient
-            : client
-        )
-      );
+      const nextClient = { ...selectedClient, notes: [syncedNote, ...selectedClient.notes], lastContactDays: 0 };
+      setClients((current) => current.map((client) => (client.id === selectedClient.id ? nextClient : client)));
       syncSelected(nextClient);
       setNoteText("");
       showToast("Nota sincronizada.");
     } catch {
       showToast("Não foi possível adicionar a nota.");
+    } finally {
+      noteWritesInFlight.current.delete(selectedClient.id);
     }
   }
 
@@ -364,7 +361,7 @@ export default function useDashboardActions({
       String(getLeadScore(client)),
     ]);
 
-    const csv = [header, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+    const csv = [header, ...rows].map((row) => row.map(toCsvCell).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -372,7 +369,7 @@ export default function useDashboardActions({
     link.href = url;
     link.download = "clientes-crm.csv";
     link.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     showToast("CSV exportado.");
   }
 

@@ -3,6 +3,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const {
+  OFFICIAL_DATABASE_SERVICE_ID,
+  assertPinnedPostgresTarget,
   databaseEngineFromUrl,
   databaseProviderFromEnv,
   databaseUrlForProvider,
@@ -46,6 +48,7 @@ async function runStartup(options = {}) {
         backendDirectory: runtime.backendDirectory,
         schemaPath: runtime.schemaPath,
         expectedServiceId: options.expectedServiceId || resolveExpectedServiceId(env),
+        expectedDatabaseServiceId: options.expectedDatabaseServiceId || resolveExpectedDatabaseServiceId(env),
         expectedMountPath: options.expectedMountPath || OFFICIAL_MOUNT_PATH,
         preparePrismaRuntime: options.preparePrismaRuntime || runtimePrismaConfig,
         prismaCliPath: options.prismaCliPath,
@@ -97,6 +100,7 @@ function validateRailwayEnvironment({
   backendDirectory = BACKEND_DIRECTORY,
   schemaPath = SCHEMA_PATH,
   expectedServiceId = OFFICIAL_SERVICE_ID,
+  expectedDatabaseServiceId = resolveExpectedDatabaseServiceId(env),
   expectedMountPath = OFFICIAL_MOUNT_PATH,
   preparePrismaRuntime = runtimePrismaConfig,
   prismaCliPath,
@@ -122,6 +126,9 @@ function validateRailwayEnvironment({
   }
   if (expectedServiceId === OFFICIAL_SERVICE_ID && provider !== "postgresql") {
     throw startupError("RAILWAY_PRODUCTION_POSTGRES_REQUIRED");
+  }
+  if (env.NODE_ENV === "production" && provider === "postgresql") {
+    assertPinnedPostgresTarget({ env, expectedDatabaseServiceId, provider });
   }
 
   let databasePath = null;
@@ -208,6 +215,17 @@ function resolveExpectedServiceId(env = process.env) {
     throw startupError("RAILWAY_HOMOLOG_SERVICE_ID_MISSING");
   }
   return homologServiceId;
+}
+
+function resolveExpectedDatabaseServiceId(env = process.env) {
+  const environment = String(env.CRM_RAILWAY_ENVIRONMENT || "").trim().toLowerCase();
+  if (environment !== HOMOLOGATION_ENVIRONMENT) return OFFICIAL_DATABASE_SERVICE_ID;
+
+  const homologDatabaseServiceId = String(env.CRM_RAILWAY_HOMOLOG_DATABASE_SERVICE_ID || "").trim();
+  if (!homologDatabaseServiceId || !/^[A-Za-z0-9_-]+$/.test(homologDatabaseServiceId)) {
+    throw startupError("RAILWAY_HOMOLOG_DATABASE_SERVICE_ID_MISSING");
+  }
+  return homologDatabaseServiceId;
 }
 
 async function runPrismaMigration(runtime, { spawnImpl = spawn } = {}) {
@@ -397,6 +415,7 @@ if (require.main === module) {
 
 module.exports = {
   OFFICIAL_MOUNT_PATH,
+  OFFICIAL_DATABASE_SERVICE_ID,
   OFFICIAL_SERVICE_ID,
   HOMOLOGATION_ENVIRONMENT,
   isRailwayEnvironment,
@@ -412,4 +431,5 @@ module.exports = {
   validateRailwayEnvironment,
   assertRailwayTargetIdentity,
   resolveExpectedServiceId,
+  resolveExpectedDatabaseServiceId,
 };

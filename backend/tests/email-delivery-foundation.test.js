@@ -125,6 +125,80 @@ test("falha transitória agenda retry e a segunda tentativa converge sem duplica
   assert.deepEqual(keys, [keys[0], keys[0]]);
 });
 
+test("timeout de envio fica terminal e fail-closed para nao duplicar uma entrega ambigua", async () => {
+  const db = fakePrisma();
+  db.state.invites.push(inviteRow());
+  let calls = 0;
+  const service = createEmailDeliveryService({
+    prisma: db,
+    env: ENV,
+    port: {
+      configured: true,
+      async send({ signal }) {
+        calls += 1;
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(Object.assign(new Error("provider aborted"), { code: "ABORT_ERR", transient: true })), { once: true });
+        });
+      },
+    },
+    logger: silentLogger(),
+  });
+  const now = new Date();
+  await service.enqueue({
+    empresaId: 1,
+    kind: "USER_INVITE",
+    sourceId: "invite-1",
+    expectedRevision: 0,
+    recipient: "invite@example.test",
+    token: "timeout-token",
+    expiresAt: new Date(now.getTime() + 60_000),
+  });
+
+  const first = await service.processDue({ now, leaseOwner: "worker-timeout", timeoutMs: 1_000, maxAttempts: 5 });
+  const second = await service.processDue({ now: new Date(now.getTime() + 60_000), leaseOwner: "worker-timeout-retry", timeoutMs: 1_000, maxAttempts: 5 });
+
+  assert.equal(first.failed, 1);
+  assert.equal(first.retried, 0);
+  assert.equal(second.claimed, 0);
+  assert.equal(calls, 1);
+  assert.equal(db.state.outbox[0].status, "FAILED");
+  assert.equal(db.state.outbox[0].lastErrorCode, "EMAIL_DELIVERY_TIMEOUT_AMBIGUOUS");
+  assert.equal(db.state.outbox[0].payloadCiphertext, null);
+  assert.equal(db.state.events.filter((event) => event.type === "FAILED").length, 1);
+});
+
+test("cancelamento antes do envio devolve a claim sem gastar tentativa", async () => {
+  const db = fakePrisma();
+  db.state.invites.push(inviteRow());
+  let calls = 0;
+  const service = createEmailDeliveryService({
+    prisma: db,
+    env: ENV,
+    port: { configured: true, async send() { calls += 1; return { providerMessageId: "must-not-send" }; } },
+    logger: silentLogger(),
+  });
+  const now = new Date();
+  await service.enqueue({
+    empresaId: 1,
+    kind: "USER_INVITE",
+    sourceId: "invite-1",
+    expectedRevision: 0,
+    recipient: "invite@example.test",
+    token: "cancel-token",
+    expiresAt: new Date(now.getTime() + 60_000),
+  });
+  const controller = new AbortController();
+  controller.abort();
+
+  const result = await service.processDue({ now, leaseOwner: "worker-cancel", signal: controller.signal });
+
+  assert.equal(result.stopped, true);
+  assert.equal(result.claimed, 0);
+  assert.equal(calls, 0);
+  assert.equal(db.state.outbox[0].status, "PENDING");
+  assert.equal(db.state.outbox[0].attempts, 0);
+});
+
 test("falha permanente e expiração são terminais, sanitizadas e sem retenção do token", async () => {
   const db = fakePrisma();
   db.state.resets.push(resetRow());
@@ -278,6 +352,7 @@ function matchesEvent(row, where = {}) {
 function applyData(row, data) {
   for (const [key, value] of Object.entries(data)) {
     if (value && typeof value === "object" && Object.hasOwn(value, "increment")) row[key] = Number(row[key] || 0) + value.increment;
+    else if (value && typeof value === "object" && Object.hasOwn(value, "decrement")) row[key] = Number(row[key] || 0) - value.decrement;
     else row[key] = value;
   }
 }

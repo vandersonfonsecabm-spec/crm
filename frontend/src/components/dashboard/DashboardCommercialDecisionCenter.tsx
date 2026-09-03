@@ -38,10 +38,10 @@ export default function DashboardCommercialDecisionCenter({
   mode,
 }: DashboardCommercialDecisionCenterProps) {
   const highRiskClients = clients.filter((client) => getRisk(client) === "Alto");
-  const hotOpportunities = clients.filter((client) => client.hot || client.value >= 12000);
-  const proposalValue = clients
-    .filter((client) => client.status === "Proposta")
-    .reduce((sum, client) => sum + client.value, 0);
+  const hotOpportunities = clients.filter((client) => client.hot || (client.valueKnown !== false && client.value >= 12000));
+  const proposalClients = clients.filter((client) => client.status === "Proposta");
+  const proposalValueKnown = proposalClients.every((client) => client.valueKnown !== false);
+  const proposalValue = proposalClients.reduce((sum, client) => sum + client.value, 0);
 
   const leadScore = selectedClient ? getLeadScore(selectedClient) : 0;
 
@@ -81,7 +81,7 @@ export default function DashboardCommercialDecisionCenter({
             <div className="mt-3 grid grid-cols-[minmax(0,1fr)_78px] gap-2">
               <div className="metric-card metric-pipeline rounded-xl p-2.5">
                 <p className="text-[9px] uppercase tracking-[0.14em] text-teal-700">Ticket em foco</p>
-                <p className="mt-1 truncate text-sm font-semibold text-teal-800">{money(selectedClient.value)}</p>
+                <p className="mt-1 truncate text-sm font-semibold text-teal-800">{selectedClient.valueKnown === false ? "Não informado" : money(selectedClient.value)}</p>
               </div>
 
               <div className="metric-card rounded-xl p-2.5 text-center">
@@ -151,7 +151,7 @@ export default function DashboardCommercialDecisionCenter({
             <RadarMetric label="Risco alto" value={`${highRiskClients.length} oportunidades`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-700" />} />
             <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-700" />} />
             <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-700" />} />
-            <RadarMetric label="Valor em clientes na etapa Proposta" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-violet-700" />} />
+            <RadarMetric label="Valor em clientes na etapa Proposta" value={proposalValueKnown ? money(proposalValue) : "Não informado"} tone="violet" icon={<Sparkles size={12} className="text-violet-700" />} />
           </div>
         )}
 

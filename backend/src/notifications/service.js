@@ -44,7 +44,8 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     return settings;
   }
 
-  async function projectForTenant(empresaId, { now = clock(), limit = MAX_SOURCE_ROWS } = {}) {
+  async function projectForTenant(empresaId, { now = clock(), limit = MAX_SOURCE_ROWS, signal = null } = {}) {
+    if (isAbortRequested(signal)) return { created: 0, updated: 0, resolved: 0, cancelled: true };
     if (!globallyEnabled() || !tenantAllowlisted(empresaId)) return { created: 0, updated: 0, resolved: 0, disabled: true };
     const settings = await prisma.configuracaoNotificacaoEmpresa.findUnique({ where: { empresaId } });
     if (!settings?.habilitada) return { created: 0, updated: 0, resolved: 0, disabled: true };
@@ -87,8 +88,10 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     const result = { created: 0, updated: 0, resolved: 0 };
 
     for (const item of followUps) {
+      if (isAbortRequested(signal)) return { ...result, cancelled: true };
       const recipients = recipientIdsForFollowUp(item, userById, managers);
       for (const recipientId of recipients) {
+        if (isAbortRequested(signal)) return { ...result, cancelled: true };
         const pref = prefByUser.get(recipientId);
         if (pref?.habilitada === false) continue;
         const leadMinutes = Number.isInteger(item.notificacaoAntecedenciaMinutos) && item.notificacaoAntecedenciaMinutos >= 0
@@ -122,8 +125,10 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     }
 
     for (const item of conversations) {
+      if (isAbortRequested(signal)) return { ...result, cancelled: true };
       const recipients = recipientIdsForConversation(item, userById, managers);
       for (const recipientId of recipients) {
+        if (isAbortRequested(signal)) return { ...result, cancelled: true };
         const waitingSince = item.aguardandoDesde || item.ultimaMensagemEm || now;
         const attention = now.getTime() - new Date(waitingSince).getTime() >= 30 * 60000;
         const name = item.contatoCanal?.cliente?.nome || item.contatoCanal?.nome || "um contato";
@@ -161,7 +166,8 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     return result;
   }
 
-  async function processDue({ now = clock(), limit = 20 } = {}) {
+  async function processDue({ now = clock(), limit = 20, signal = null } = {}) {
+    if (isAbortRequested(signal)) return { tenants: 0, created: 0, updated: 0, resolved: 0, cancelled: true };
     const allowedTenantIds = parseTenantAllowlist(env[TENANT_ALLOWLIST_ENV]);
     if (!globallyEnabled() || !workerEnabled() || !allowedTenantIds.length) return { tenants: 0, created: 0, updated: 0, resolved: 0 };
     const batchLimit = Math.min(Math.max(Number(limit) || 20, 1), 100);
@@ -180,11 +186,13 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
     }
     const total = { tenants: tenants.length, created: 0, updated: 0, resolved: 0 };
     for (const tenant of tenants) {
+      if (isAbortRequested(signal)) return { ...total, cancelled: true };
       try {
-        const result = await projectForTenant(tenant.empresaId, { now, limit: MAX_SOURCE_ROWS });
+        const result = await projectForTenant(tenant.empresaId, { now, limit: MAX_SOURCE_ROWS, signal });
         total.created += result.created || 0;
         total.updated += result.updated || 0;
         total.resolved += result.resolved || 0;
+        if (result.cancelled) return { ...total, cancelled: true };
       } catch (error) {
         // One tenant must not prevent the bounded cursor from advancing to
         // the remaining tenants in the same worker cycle.
@@ -330,6 +338,10 @@ function createNotificationService({ prisma, env = process.env, clock = () => ne
   }
 
   return { getById, getPreferences, getSettings, list, markAllRead, markRead, processDue, projectForTenant, resolve, snooze, summary, unsnooze, updatePreferences, updateSettings };
+}
+
+function isAbortRequested(signal) {
+  return signal?.aborted === true;
 }
 
 async function upsertProjection({ prisma, empresaId, destinatarioId, tipo, prioridade, origemTipo, origemId, occurrenceKey, dedupeKey, titulo, corpo, alvoTipo, alvoId, ocorridoEm, venceEm = null, now }) {

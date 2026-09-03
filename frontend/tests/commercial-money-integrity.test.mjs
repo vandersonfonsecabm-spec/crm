@@ -43,6 +43,21 @@ test("exportacao distingue valor desconhecido de zero informado", async () => {
   assert.match(actions, /Valor informado \(BRL\)/);
   assert.match(actions, /client\.valueKnown === false \? "" : String\(client\.value\)/);
   assert.match(actions, /client\.valueKnown === false \? "Não" : "Sim"/);
+  assert.match(actions, /row\.map\(toCsvCell\)/);
+  assert.match(actions, /window\.setTimeout\(\(\) => URL\.revokeObjectURL\(url\), 1_000\)/);
+});
+
+test("cards comerciais não convertem valor desconhecido em zero ou ticket", async () => {
+  const [kanban, decisionCenter, executiveRadar] = await Promise.all([
+    readFile(path.join(frontendDir, "src/components/kanban/KanbanLeadCard.tsx"), "utf8"),
+    readFile(path.join(frontendDir, "src/components/dashboard/DashboardCommercialDecisionCenter.tsx"), "utf8"),
+    readFile(path.join(frontendDir, "src/components/dashboard/DashboardExecutiveRadar.tsx"), "utf8"),
+  ]);
+  assert.match(kanban, /client\.valueKnown === false \? "Valor não informado" : money\(client\.value\)/);
+  assert.match(decisionCenter, /proposalValueKnown/);
+  assert.match(decisionCenter, /selectedClient\.valueKnown === false \? "Não informado"/);
+  assert.match(executiveRadar, /filter\(\(client\) => client\.valueKnown !== false\)/);
+  assert.match(executiveRadar, /proposalValueKnown/);
 });
 
 test("catalogo e oferta exibem preco somente quando o status e explicitamente AVAILABLE", async () => {

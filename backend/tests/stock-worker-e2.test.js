@@ -13,6 +13,20 @@ test("stock worker stays dormant when flags are absent and does not query schema
   assert.equal(touched, false);
 });
 
+test("stock worker respeita cancelamento antes de tocar tenant ou outbox", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let touched = false;
+  const prisma = new Proxy({}, { get() { touched = true; throw new Error("worker cancelled before query"); } });
+  const result = await runStockWorkerCycle({
+    prisma,
+    env: { STOCK_DOMAIN_ENABLED: "true", STOCK_SYNC_WORKER_ENABLED: "true", STOCK_TENANT_ALLOWLIST: "1" },
+    signal: controller.signal,
+  });
+  assert.equal(result.cancelled, true);
+  assert.equal(touched, false);
+});
+
 test("outbox rejects malformed/future envelopes into quarantine without H8 calls", async () => {
   const rows = [{ id: 1, empresaId: 1, payloadStructuredJson: JSON.stringify({ schemaVersion: "stock-event.v999", eventType: "StockRecordObserved.v1" }), status: "PROCESSING", leaseOwner: "w" }];
   const updates = [];

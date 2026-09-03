@@ -117,6 +117,7 @@ type StepKey = "arquivo" | "mapeamento" | "validacao" | "importacao" | "resultad
 type LoadState = "loading" | "success" | "error";
 type IntegrationView = "overview" | "imports" | "catalog" | "simulator";
 type ImportErrors = { data: HubErroImportacao[]; page: number; total: number; totalPages: number };
+type IntegrationResourceState = "loading" | "ready" | "error";
 type WhatsappSmokeCall = WhatsappSimulationCallResult;
 type WhatsappScenarioId = "saudacao" | "produto" | "preco" | "estoque" | "inexistente" | "vendedor";
 type WhatsappScenario = {
@@ -150,6 +151,12 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
   const [activeView, setActiveView] = useState<IntegrationView>("overview");
   const [message, setMessage] = useState("");
   const [loadWarnings, setLoadWarnings] = useState<string[]>([]);
+  const [resourceState, setResourceState] = useState<Record<"imports" | "catalog" | "quality" | "bling", IntegrationResourceState>>({
+    imports: "loading",
+    catalog: "loading",
+    quality: "loading",
+    bling: "loading",
+  });
   const [toast, setToast] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
@@ -192,7 +199,10 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
 
   const importPages = Math.max(1, Math.ceil(importsTotal / IMPORT_LIMIT));
   const catalogPages = Math.max(1, Math.ceil(catalogTotal / CATALOG_LIMIT));
-  const whatsappProduct = useMemo(() => selectWhatsappProduct(catalog), [catalog]);
+  const whatsappProduct = useMemo(
+    () => resourceState.catalog === "ready" ? selectWhatsappProduct(catalog) : null,
+    [catalog, resourceState.catalog],
+  );
   const whatsappScenarios = useMemo(() => buildWhatsappScenarios(whatsappProduct), [whatsappProduct]);
   const whatsappScenario = whatsappScenarios.find((scenario) => scenario.id === whatsappScenarioId) ?? whatsappScenarios[0];
   const invalidLines = validation?.resumo.linhasComErro ?? mappingResult?.linhasInvalidasEstimadas ?? 0;
@@ -252,32 +262,32 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
     if (requestSequence !== loadSequenceRef.current) return;
     const [importList, catalogList, qualityData, blingList] = results;
     const warnings: string[] = [];
+    setResourceState({
+      imports: importList.status === "fulfilled" ? "ready" : "error",
+      catalog: catalogList.status === "fulfilled" ? "ready" : "error",
+      quality: qualityData.status === "fulfilled" ? "ready" : "error",
+      bling: blingList.status === "fulfilled" ? "ready" : "error",
+    });
     if (importList.status === "fulfilled") {
       setImports(importList.value.data);
       setImportsTotal(importList.value.pagination.total);
     } else {
-      setImports([]);
-      setImportsTotal(0);
       warnings.push("Importações indisponíveis");
     }
     if (catalogList.status === "fulfilled") {
       setCatalog(catalogList.value.data);
       setCatalogTotal(catalogList.value.pagination.total);
     } else {
-      setCatalog([]);
-      setCatalogTotal(0);
       warnings.push("Catálogo indisponível");
     }
     if (qualityData.status === "fulfilled") {
       setQuality(qualityData.value);
     } else {
-      setQuality(null);
       warnings.push("Qualidade dos dados indisponível");
     }
     if (blingList.status === "fulfilled") {
       setBlingIntegrations(blingList.value.data);
     } else {
-      setBlingIntegrations([]);
       warnings.push("Status do Bling indisponível");
     }
     setLoadWarnings(warnings);
@@ -688,10 +698,10 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
       {state === "success" && activeView === "overview" && (
         <div aria-labelledby="integrations-tab-overview" className="space-y-3" id="integrations-panel-overview" role="tabpanel" tabIndex={0}>
         <DashboardMetricStrip metrics={[
-          { label: "Produtos no Hub", value: String(quality?.totalProdutos ?? 0), context: "Catálogo consolidado", icon: <Database size={15} /> },
-          { label: "Produtos ativos", value: String(quality?.produtosAtivos ?? 0), context: "Disponíveis para consulta", icon: <CheckCircle2 size={15} />, tone: (quality?.produtosAtivos ?? 0) > 0 ? "success" : "default" },
-          { label: "Sem estoque", value: String(quality?.produtosSemEstoque ?? 0), context: "Saldo indisponível", icon: <PackageSearch size={15} />, tone: (quality?.produtosSemEstoque ?? 0) > 0 ? "warning" : "default" },
-          { label: "Dados desatualizados", value: String(quality?.produtosComDadosDesatualizados ?? 0), context: "Pedem revisão", icon: <AlertTriangle size={15} />, tone: (quality?.produtosComDadosDesatualizados ?? 0) > 0 ? "warning" : "default" },
+          { label: "Produtos no Hub", value: resourceState.quality === "ready" ? String(quality?.totalProdutos ?? 0) : "Indisponível", context: resourceState.quality === "ready" ? "Catálogo consolidado" : "Qualidade não confirmada", icon: <Database size={15} /> },
+          { label: "Produtos ativos", value: resourceState.quality === "ready" ? String(quality?.produtosAtivos ?? 0) : "Indisponível", context: resourceState.quality === "ready" ? "Disponíveis para consulta" : "Qualidade não confirmada", icon: <CheckCircle2 size={15} />, tone: resourceState.quality === "ready" && (quality?.produtosAtivos ?? 0) > 0 ? "success" : "default" },
+          { label: "Sem estoque", value: resourceState.quality === "ready" ? String(quality?.produtosSemEstoque ?? 0) : "Indisponível", context: resourceState.quality === "ready" ? "Saldo indisponível" : "Qualidade não confirmada", icon: <PackageSearch size={15} />, tone: resourceState.quality === "ready" && (quality?.produtosSemEstoque ?? 0) > 0 ? "warning" : "default" },
+          { label: "Dados desatualizados", value: resourceState.quality === "ready" ? String(quality?.produtosComDadosDesatualizados ?? 0) : "Indisponível", context: resourceState.quality === "ready" ? "Pedem revisão" : "Qualidade não confirmada", icon: <AlertTriangle size={15} />, tone: resourceState.quality === "ready" && (quality?.produtosComDadosDesatualizados ?? 0) > 0 ? "warning" : "default" },
         ]} />
 
       {state === "success" && activeView === "overview" && (
@@ -705,8 +715,9 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
             onTest={(id) => void testBling(id)}
             onSync={(id) => void syncBling(id)}
             onDisconnect={(id) => void disconnectBling(id)}
+            unavailable={resourceState.bling === "error"}
           />
-          <QualitySection quality={quality} />
+          <QualitySection quality={quality} unavailable={resourceState.quality === "error"} />
         </div>
       )}
 
@@ -890,6 +901,8 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
             onCancel={(id) => void cancelImport(id)}
             onClose={() => setSelectedImport(null)}
             onErrorsPage={(id, page) => void loadErrors(id, page)}
+            unavailable={resourceState.imports === "error"}
+            onRetry={() => void loadAll()}
           />
         </aside>
       </section>
@@ -912,8 +925,10 @@ export default function DashboardIntegrationsPanel({ initialBlingNotice = "" }: 
               window.setTimeout(() => void reloadCatalog(1), 0);
             }}
             onPage={setCatalogPage}
+            unavailable={resourceState.catalog === "error"}
+            onRetry={() => void loadAll()}
           />
-          <QualitySection quality={quality} />
+          <QualitySection quality={quality} unavailable={resourceState.quality === "error"} />
         </section>
       )}
     </div>
@@ -995,6 +1010,8 @@ function ImportsSection(props: {
   onCancel: (id: number) => void;
   onClose: () => void;
   onErrorsPage: (id: number, page: number) => void;
+  unavailable: boolean;
+  onRetry: () => void;
 }) {
   return (
     <UiSurface className="p-4">
@@ -1011,6 +1028,7 @@ function ImportsSection(props: {
         </div>
       </div>
       <div className="mt-3 space-y-2">
+        {props.unavailable ? <UnavailableResourceState title="Importações indisponíveis" text="A lista de importações não foi confirmada. Atualize os dados antes de concluir que não há arquivos." onRetry={props.onRetry} /> : <>
         {props.imports.length === 0 && <EmptyState title="Nenhuma importação encontrada" text="As importações enviadas pelo ADMIN aparecerão aqui." />}
         {props.imports.map((item) => (
           <div key={item.id} className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3">
@@ -1044,8 +1062,9 @@ function ImportsSection(props: {
             </div>
           </div>
         ))}
+        </>}
       </div>
-      <Pagination page={props.page} totalPages={props.totalPages} total={props.total} onPage={props.onPage} />
+      {!props.unavailable && <Pagination page={props.page} totalPages={props.totalPages} total={props.total} onPage={props.onPage} />}
       {props.selectedImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 shadow-[var(--shadow-md)]">
@@ -1084,6 +1103,8 @@ function CatalogSection(props: {
   onApply: () => void;
   onClear: () => void;
   onPage: (page: number) => void;
+  unavailable: boolean;
+  onRetry: () => void;
 }) {
   function setFilter<K extends keyof typeof props.filters>(key: K, value: (typeof props.filters)[K]) {
     props.onFiltersChange({ ...props.filters, [key]: value });
@@ -1095,7 +1116,7 @@ function CatalogSection(props: {
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">Produtos importados</h3>
           <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">Consulta comercial unificada para atendimento.</p>
         </div>
-        <span className="text-[11px] tabular-nums text-[var(--text-muted)]">{props.total} produtos</span>
+        <span className="text-[11px] tabular-nums text-[var(--text-muted)]">{props.unavailable ? "Indisponível" : `${props.total} produtos`}</span>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
         <Input icon={<Search size={13} />} value={props.filters.q} placeholder="Nome, SKU, código ou marca" onChange={(value) => setFilter("q", value)} />
@@ -1114,6 +1135,7 @@ function CatalogSection(props: {
         <button type="button" onClick={props.onClear} className="rounded-md px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-muted)]">Limpar filtros</button>
       </div>
       <div className="mt-4 space-y-2">
+        {props.unavailable ? <UnavailableResourceState title="Catálogo indisponível" text="Nenhum produto ou preço foi confirmado nesta consulta. Atualize os dados antes de usar o catálogo." onRetry={props.onRetry} /> : <>
         {props.loading && <div className="h-28 animate-pulse rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)]" />}
         {!props.loading && props.products.length === 0 && <EmptyState title="Nenhum produto importado" text="Produtos externos importados por CSV ou XLSX aparecerão aqui." />}
         {props.products.map((product) => (
@@ -1134,8 +1156,9 @@ function CatalogSection(props: {
             {product.avisos.length > 0 && <p className="mt-2 text-[11px] text-amber-200">{product.avisos.join(" · ")}</p>}
           </div>
         ))}
+        </>}
       </div>
-      <Pagination page={props.page} totalPages={props.totalPages} total={props.total} onPage={props.onPage} />
+      {!props.unavailable && <Pagination page={props.page} totalPages={props.totalPages} total={props.total} onPage={props.onPage} />}
     </UiSurface>
   );
 }
@@ -1149,6 +1172,7 @@ function BlingSection({
   onTest,
   onSync,
   onDisconnect,
+  unavailable,
 }: {
   integrations: HubIntegracao[];
   busy: "connect" | "test" | "sync" | "disconnect" | null;
@@ -1158,6 +1182,7 @@ function BlingSection({
   onTest: (id: number) => void;
   onSync: (id: number) => void;
   onDisconnect: (id: number) => void;
+  unavailable: boolean;
 }) {
   const active = integrations.find((item) => item.tipo === "BLING" && item.ativo && item.possuiCredenciais && item.status === "ATIVA");
   const latest = active ?? integrations.find((item) => item.tipo === "BLING");
@@ -1169,29 +1194,29 @@ function BlingSection({
         actions={(
           <div className="flex flex-wrap items-center gap-2">
           {!active && (
-              <UiButton aria-describedby="bling-external-activation-note" disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<PlugZap size={14} />} loading={busy === "connect"} onClick={onConnect} size="sm" variant="primary">Conectar Bling</UiButton>
+              <UiButton aria-describedby="bling-external-activation-note" disabled={unavailable || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<PlugZap size={14} />} loading={busy === "connect"} onClick={onConnect} size="sm" variant="primary">Conectar Bling</UiButton>
           )}
           {active && (
             <>
-                <UiButton disabled={Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<CheckCircle2 size={14} />} loading={busy === "test"} onClick={() => onTest(active.id)} size="sm">Testar conexão</UiButton>
-                <UiButton disabled={Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<RefreshCw size={14} />} loading={busy === "sync"} onClick={() => onSync(active.id)} size="sm" variant="primary">Sincronizar agora</UiButton>
-                <UiButton disabled={Boolean(busy)} leftIcon={<Power size={14} />} loading={busy === "disconnect"} onClick={() => onDisconnect(active.id)} size="sm">Desconectar</UiButton>
+                <UiButton disabled={unavailable || Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<CheckCircle2 size={14} />} loading={busy === "test"} onClick={() => onTest(active.id)} size="sm">Testar conexão</UiButton>
+                <UiButton disabled={unavailable || Boolean(busy) || !EXTERNAL_PROVIDER_ACTIVATION_ENABLED} leftIcon={<RefreshCw size={14} />} loading={busy === "sync"} onClick={() => onSync(active.id)} size="sm" variant="primary">Sincronizar agora</UiButton>
+                <UiButton disabled={unavailable || Boolean(busy)} leftIcon={<Power size={14} />} loading={busy === "disconnect"} onClick={() => onDisconnect(active.id)} size="sm">Desconectar</UiButton>
             </>
           )}
           </div>
         )}
         description="Produtos e estoque em modo de leitura. A ativação externa fica bloqueada até uma missão de conexão autorizada."
         icon={<PlugZap size={15} />}
-        status={<UiStatusBadge label={presentation.label} status={presentation.status} />}
+        status={<UiStatusBadge label={unavailable ? "Indisponível" : presentation.label} status={unavailable ? "erro" : presentation.status} />}
         title="Bling"
       />
-      <div className="grid gap-2 px-4 py-3 md:grid-cols-4">
+      {unavailable ? <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert tone="warning">O status do Bling não foi confirmado nesta consulta. Nenhuma conexão foi inferida ou alterada.</Alert></div> : <div className="grid gap-2 px-4 py-3 md:grid-cols-4">
         <Info label="Última sincronização" value={latest?.ultimaSincronizacaoEm ? dateTime(latest.ultimaSincronizacaoEm) : "-"} />
         <Info label="Último sucesso" value={latest?.ultimoSucessoEm ? dateTime(latest.ultimoSucessoEm) : "-"} />
         <Info label="Último erro" value={latest?.ultimoErroEm ? dateTime(latest.ultimoErroEm) : "-"} />
         <Info label="Credenciais" value={latest?.possuiCredenciais ? "Configuradas" : "Não configuradas"} />
-      </div>
-      {!active && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert id="bling-external-activation-note" tone="info">Conector preparado para configuração. A ativação externa está bloqueada nesta missão; nenhum OAuth ou request ao Bling será iniciado.</Alert></div>}
+      </div>}
+      {!unavailable && !active && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert id="bling-external-activation-note" tone="info">Conector preparado para configuração. A ativação externa está bloqueada nesta missão; nenhum OAuth ou request ao Bling será iniciado.</Alert></div>}
       {active && !EXTERNAL_PROVIDER_ACTIVATION_ENABLED && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert id="bling-external-activation-note" tone="info">Conexão existente preservada para leitura. Teste e sincronização ficam bloqueados; desconexão local segura permanece disponível.</Alert></div>}
       {message && <div className="border-t border-[var(--border-default)] px-4 py-3"><Alert tone={(message.toLowerCase().includes("não foi") || message.toLowerCase().includes("nao foi")) ? "error" : "success"}>{message}</Alert></div>}
       {lastSync && (
@@ -1359,7 +1384,10 @@ function WhatsappSimulationResult({ title, result, scenario, original }: { title
   );
 }
 
-function QualitySection({ quality }: { quality: HubQualidadeDados | null }) {
+function QualitySection({ quality, unavailable }: { quality: HubQualidadeDados | null; unavailable: boolean }) {
+  if (unavailable) {
+    return <UiSurface className="min-w-0 overflow-hidden"><UiSectionHeader description="A leitura de qualidade não foi confirmada nesta consulta." icon={<AlertTriangle size={15} />} title="Qualidade dos dados" /><EmptyState title="Qualidade indisponível" text="Atualize os dados antes de interpretar contagens ou pendências do catálogo." /></UiSurface>;
+  }
   const checks = [
     { label: "Total de produtos", value: quality?.totalProdutos ?? 0, attention: false },
     { label: "Ativos", value: quality?.produtosAtivos ?? 0, attention: false },
@@ -1445,6 +1473,10 @@ function Metric({ title, value, icon }: { title: string; value: ReactNode; icon:
       <p className="mt-2 text-base font-semibold text-[var(--text-primary)]">{value}</p>
     </div>
   );
+}
+
+function UnavailableResourceState({ title, text, onRetry }: { title: string; text: string; onRetry: () => void }) {
+  return <div className="rounded-md border border-[var(--border-default)] bg-[var(--bg-muted)] p-3"><EmptyState title={title} text={text} /><div className="mt-3 flex justify-end"><UiButton leftIcon={<RefreshCw size={13} />} onClick={onRetry} size="sm" variant="secondary">Atualizar dados</UiButton></div></div>;
 }
 
 function Info({ label, value }: { label: string; value: ReactNode }) {

@@ -163,12 +163,14 @@ test("nucleo comercial isola clientes, notas, acompanhamentos e funil por empres
   assert.equal(clientAfterAmbiguousPatch.favorito, clientAfterInvalidPatch.favorito);
   assert.equal(clientAfterAmbiguousPatch.tags, tagsBeforeInvalidPatch);
 
+  await prisma.cliente.update({ where: { id: clientA.body.id }, data: { ultimoContato: 9 } });
   const noteA = await request("POST", `/clientes/${clientA.body.id}/notas`, {
     texto: "Nota isolada da empresa A",
     tipo: "nota",
   }, tokenA);
   assert.equal(noteA.status, 200);
   assert.equal(noteA.body.empresaId, companyA.empresa.id);
+  assert.equal((await prisma.cliente.findUnique({ where: { id: clientA.body.id }, select: { ultimoContato: true } })).ultimoContato, 0);
 
   const noteTenant = await request("POST", `/clientes/${clientA.body.id}/notas`, {
     empresaId: companyB.empresa.id,

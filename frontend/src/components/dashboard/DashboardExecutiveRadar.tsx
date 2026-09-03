@@ -17,14 +17,14 @@ export default function DashboardExecutiveRadar({
   getRisk,
   onApplySmartFilter,
 }: DashboardExecutiveRadarProps) {
-  const hotOpportunities = clients.filter((client) => client.hot || client.value >= 12000);
+  const hotOpportunities = clients.filter((client) => client.hot || (client.valueKnown !== false && client.value >= 12000));
   const silentClients = clients.filter((client) => client.lastContactDays >= 7);
   const highRiskClients = clients.filter((client) => getRisk(client) === "Alto");
-  const proposalValue = clients
-    .filter((client) => client.status === "Proposta")
-    .reduce((sum, client) => sum + client.value, 0);
+  const proposalClients = clients.filter((client) => client.status === "Proposta");
+  const proposalValueKnown = proposalClients.every((client) => client.valueKnown !== false);
+  const proposalValue = proposalClients.reduce((sum, client) => sum + client.value, 0);
 
-  const topOpportunity = [...clients].sort((a, b) => b.value - a.value)[0];
+  const topOpportunity = [...clients].filter((client) => client.valueKnown !== false).sort((a, b) => b.value - a.value)[0];
   const suggestedAction =
     highRiskClients.length > 0
       ? "Reativar clientes em risco antes de criar novas oportunidades."
@@ -52,7 +52,7 @@ export default function DashboardExecutiveRadar({
         <RadarMetric label="Risco alto" value={`${highRiskClients.length} oportunidades`} tone="rose" icon={<AlertTriangle size={12} className="text-rose-200" />} />
         <RadarMetric label="Quentes" value={`${hotOpportunities.length} oportunidades`} tone="amber" icon={<Target size={12} className="text-amber-200" />} />
         <RadarMetric label="Hoje" value={`${analytics.todayFollowUps} ações`} tone="sky" icon={<Activity size={12} className="text-sky-200" />} />
-        <RadarMetric label="Valor em clientes na etapa Proposta" value={money(proposalValue)} tone="violet" icon={<Sparkles size={12} className="text-slate-300" />} />
+        <RadarMetric label="Valor em clientes na etapa Proposta" value={proposalValueKnown ? money(proposalValue) : "Não informado"} tone="violet" icon={<Sparkles size={12} className="text-slate-300" />} />
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2">

@@ -1,9 +1,25 @@
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const {
+  OFFICIAL_DATABASE_SERVICE_ID,
+  assertPinnedPostgresTarget,
+  databaseTargetFingerprint,
+  databaseUrlForProvider,
+} = require("./prisma-runtime.cjs");
 
 const DEFAULT_BATCH_SIZE = 500;
 const SENSITIVE_COLUMN_PATTERN = /(senha|password|token|secret|authorization|cookie|hash)/i;
+const OFFICIAL_API_SERVICE_ID = "16de1b91-7dcb-46b4-9231-1c3e2c3e5a92";
+const OFFICIAL_PROJECT_ID = "ddfbf66c-e274-47b1-9493-286232d2f426";
+const OFFICIAL_ENVIRONMENT_ID = "e18f76b1-e38f-468e-91fe-1eff6db9a5f8";
+
+function importError(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
+}
 
 function sqlitePathFromEnv(env = process.env) {
   const direct = String(env.SQLITE_SOURCE_PATH || "").trim();
@@ -23,6 +39,83 @@ function assertApplyConfirmation(env = process.env) {
   if (env.CRM_POSTGRES_IMPORT_CONFIRM !== "copy-sqlite-to-postgres") {
     throw new Error("CRM_POSTGRES_IMPORT_CONFIRM=copy-sqlite-to-postgres e obrigatorio para gravar no PostgreSQL.");
   }
+}
+
+function isRailwayEnvironment(env = process.env) {
+  return Boolean(env.RAILWAY_SERVICE_ID || env.RAILWAY_DEPLOYMENT_ID || env.RAILWAY_PROJECT_ID || env.RAILWAY_ENVIRONMENT_ID);
+}
+
+function assertImportApplyAuthorization(env = process.env) {
+  assertApplyConfirmation(env);
+  const target = String(env.CRM_POSTGRES_IMPORT_TARGET || "").trim().toLowerCase();
+  const targetUrl = postgresUrlFromEnv(env);
+  assertImportEvidence(env, targetUrl, target);
+
+  if (target === "isolated") {
+    if (isRailwayEnvironment(env)) throw importError("POSTGRES_IMPORT_ISOLATED_TARGET_REQUIRED");
+    return { target };
+  }
+  if (target !== "production") throw importError("POSTGRES_IMPORT_TARGET_CONFIRMATION_REQUIRED");
+  assertProductionImportTarget(env);
+  if (databaseTargetFingerprint(targetUrl) !== databaseTargetFingerprint(databaseUrlForProvider(env, "postgresql"))) {
+    throw importError("POSTGRES_IMPORT_DATABASE_URL_TARGET_MISMATCH");
+  }
+  try {
+    assertPinnedPostgresTarget({
+      env,
+      expectedDatabaseServiceId: OFFICIAL_DATABASE_SERVICE_ID,
+      provider: "postgresql",
+    });
+  } catch (error) {
+    throw importError(error?.code || "POSTGRES_IMPORT_DATABASE_TARGET_INVALID");
+  }
+  return { target };
+}
+
+function assertImportEvidence(env, targetUrl, target) {
+  const runId = String(env.CRM_POSTGRES_IMPORT_RUN_ID || "").trim();
+  const backupRef = String(env.CRM_POSTGRES_IMPORT_BACKUP_REF || "").trim();
+  const attestation = String(env.CRM_POSTGRES_IMPORT_ATTESTATION || "").trim().toLowerCase();
+  const hmacKey = String(env.CRM_POSTGRES_IMPORT_ATTESTATION_HMAC_KEY || "");
+  const expectedFingerprint = String(env.CRM_POSTGRES_IMPORT_TARGET_FINGERPRINT || "").trim().toLowerCase();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$/.test(runId)) throw importError("POSTGRES_IMPORT_RUN_ID_REQUIRED");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:/=-]{7,255}$/.test(backupRef)) throw importError("POSTGRES_IMPORT_BACKUP_REQUIRED");
+  if (!/^[a-f0-9]{64}$/.test(attestation)) throw importError("POSTGRES_IMPORT_ATTESTATION_REQUIRED");
+  if (Buffer.byteLength(hmacKey, "utf8") < 32) throw importError("POSTGRES_IMPORT_ATTESTATION_KEY_REQUIRED");
+  if (!/^[a-f0-9]{64}$/.test(expectedFingerprint)) throw importError("POSTGRES_IMPORT_TARGET_FINGERPRINT_REQUIRED");
+  if (databaseTargetFingerprint(targetUrl) !== expectedFingerprint) {
+    throw importError("POSTGRES_IMPORT_TARGET_MISMATCH");
+  }
+  const expectedAttestation = signPostgresImportAttestation(hmacKey, canonicalPostgresImportAttestationPayload({
+    backupRef,
+    runId,
+    target,
+    targetFingerprint: expectedFingerprint,
+  }));
+  if (!crypto.timingSafeEqual(Buffer.from(attestation, "hex"), Buffer.from(expectedAttestation, "hex"))) {
+    throw importError("POSTGRES_IMPORT_ATTESTATION_INVALID");
+  }
+}
+
+function canonicalPostgresImportAttestationPayload({ backupRef, runId, target, targetFingerprint }) {
+  return JSON.stringify({
+    backupRef: String(backupRef || ""),
+    runId: String(runId || ""),
+    target: String(target || ""),
+    targetFingerprint: String(targetFingerprint || ""),
+  });
+}
+
+function signPostgresImportAttestation(hmacKey, payload) {
+  return crypto.createHmac("sha256", hmacKey).update(payload).digest("hex");
+}
+
+function assertProductionImportTarget(env) {
+  if (!isRailwayEnvironment(env)) throw importError("POSTGRES_IMPORT_PRODUCTION_RAILWAY_REQUIRED");
+  if (String(env.NODE_ENV || "").trim() !== "production") throw importError("NODE_ENV_PRODUCTION_REQUIRED");
+  if (env.RAILWAY_PROJECT_ID !== OFFICIAL_PROJECT_ID) throw importError("RAILWAY_PROJECT_MISMATCH");
+  if (env.RAILWAY_ENVIRONMENT_ID !== OFFICIAL_ENVIRONMENT_ID) throw importError("RAILWAY_ENVIRONMENT_MISMATCH");
+  if (env.RAILWAY_SERVICE_ID !== OFFICIAL_API_SERVICE_ID) throw importError("RAILWAY_SERVICE_MISMATCH");
 }
 
 function openSqliteReadOnly(filePath) {
@@ -210,7 +303,7 @@ function sanitizeError(error) {
 async function runMigration(env = process.env) {
   const mode = String(env.POSTGRES_IMPORT_MODE || "dry-run").trim().toLowerCase();
   if (!["dry-run", "apply", "validate"].includes(mode)) throw new Error("POSTGRES_IMPORT_MODE deve ser dry-run, apply ou validate.");
-  if (mode === "apply") assertApplyConfirmation(env);
+  if (mode === "apply") assertImportApplyAuthorization(env);
   const sqlitePath = sqlitePathFromEnv(env);
   const sqlite = openSqliteReadOnly(sqlitePath);
   let Client;
@@ -255,10 +348,15 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertImportApplyAuthorization,
+  assertImportEvidence,
+  assertProductionImportTarget,
+  canonicalPostgresImportAttestationPayload,
   copyWithinTransaction,
   convertValue,
   orderedTables,
   sanitizeError,
+  signPostgresImportAttestation,
   sqlitePathFromEnv,
   validateCounts,
 };

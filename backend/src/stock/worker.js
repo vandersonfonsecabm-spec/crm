@@ -9,9 +9,10 @@ const { KEYS: WORKER_CHECKPOINT_KEYS, createWorkerCheckpointStore } = require(".
 const MAX_CYCLE_TELEMETRY_DURATION_MS = 10 * 60 * 1000;
 const MAX_FAILED_TENANTS_TELEMETRY = 100;
 
-async function runStockWorkerCycle({ prisma, rules = null, env = process.env, owner = null, leaseOwner = null, leaseMs = 30000, logger = console, now = new Date(), limit = 20, checkpointStore = null } = {}) {
+async function runStockWorkerCycle({ prisma, rules = null, env = process.env, owner = null, leaseOwner = null, leaseMs = 30000, logger = console, now = new Date(), limit = 20, checkpointStore = null, signal = null } = {}) {
   const flags = stockFlags(env);
   assertStockFlagsOffForProduction(env);
+  if (isAbortRequested(signal)) return { enabled: false, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, tenants: 0, cancelled: true };
   if (!flags.domainEnabled || !flags.syncWorkerEnabled || flags.tenantAllowlist.size === 0) return { enabled: false, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, tenants: 0 };
   const effectiveCheckpointStore = flags.ruleEngineEnabled && typeof rules?.evaluateTenant === "function"
     ? checkpointStore || createWorkerCheckpointStore({ prisma })
@@ -19,6 +20,10 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
   const cycleStartedAt = Date.now();
   const results = { enabled: true, claimed: 0, processed: 0, quarantined: 0, evaluated: 0, matched: 0, resolved: 0, tenants: 0, failedTenants: [] };
   for (const empresaId of flags.tenantAllowlist) {
+    if (isAbortRequested(signal)) {
+      results.cancelled = true;
+      break;
+    }
     if (!stockEnabledForTenant(empresaId, env, { worker: true })) continue;
     results.tenants += 1;
     try {
@@ -68,6 +73,10 @@ async function runStockWorkerCycle({ prisma, rules = null, env = process.env, ow
     // Observability must not change worker cadence or turn a completed cycle into a failure.
   }
   return results;
+}
+
+function isAbortRequested(signal) {
+  return signal?.aborted === true;
 }
 
 function positiveCursor(value) {

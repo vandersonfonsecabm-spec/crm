@@ -99,7 +99,7 @@ export default function KanbanLeadCard({
 
       <div className="mt-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-xs font-semibold tabular-nums text-[var(--text-primary)]">{money(client.value)}</p>
+          <p className="truncate text-xs font-semibold tabular-nums text-[var(--text-primary)]">{client.valueKnown === false ? "Valor não informado" : money(client.value)}</p>
           <p className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{forecastLabel(client)}</p>
         </div>
         <div className="shrink-0 text-right">

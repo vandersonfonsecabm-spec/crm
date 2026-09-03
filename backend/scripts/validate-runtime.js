@@ -1,5 +1,7 @@
 const path = require("node:path");
 const {
+  OFFICIAL_DATABASE_SERVICE_ID,
+  assertPinnedPostgresTarget,
   databaseEngineFromUrl,
   databaseUrlForProvider,
   databaseProviderFromEnv,
@@ -43,6 +45,22 @@ if (!engine) {
 
 if (engine !== provider) {
   fail("CRM_DATABASE_PROVIDER inconsistente com a URL do banco selecionada.");
+}
+
+if (railwayEnvironment && process.env.NODE_ENV === "production" && provider === "postgresql") {
+  try {
+    const environment = String(process.env.CRM_RAILWAY_ENVIRONMENT || "").trim().toLowerCase();
+    const expectedDatabaseServiceId = environment === "homolog"
+      ? String(process.env.CRM_RAILWAY_HOMOLOG_DATABASE_SERVICE_ID || "").trim()
+      : OFFICIAL_DATABASE_SERVICE_ID;
+    assertPinnedPostgresTarget({
+      env: process.env,
+      expectedDatabaseServiceId,
+      provider,
+    });
+  } catch (error) {
+    fail(error?.code || "RAILWAY_DATABASE_TARGET_INVALID");
+  }
 }
 
 if (engine === "sqlite") {

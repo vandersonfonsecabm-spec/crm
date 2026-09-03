@@ -3,7 +3,13 @@ const { maintenanceReadOnlyEnabled } = require("../database/maintenance-read-onl
 const { queryDatabaseWithServerTimeout } = require("../database/readiness-probe");
 const { WORKER_ACTION_TYPES } = require("./actions");
 const { createAutomationWorkerLogger } = require("./worker-observability");
-const { databaseProviderFromEnv } = require("../../scripts/prisma-runtime.cjs");
+const {
+  OFFICIAL_DATABASE_SERVICE_ID,
+  assertPinnedPostgresTarget,
+  assertProviderMatchesDatabaseUrl,
+  databaseProviderFromEnv,
+  databaseUrlForProvider,
+} = require("../../scripts/prisma-runtime.cjs");
 const { runGate } = require("../../scripts/tenant-isolation-gate.cjs");
 const { assertStockFlagsOffForProduction, stockFlags } = require("../stock/flags");
 const { assertPersistentWorkerCheckpoints } = require("../shared/workerCheckpoint");
@@ -127,6 +133,8 @@ function startAutomationWorker({
   let stopping = false;
   let timer = null;
   let activeCycle = Promise.resolve();
+  let activeController = null;
+  let activeCycleDrain = Promise.resolve();
   let stopped = false;
   let fatal = false;
   let resolveStopped;
@@ -168,7 +176,7 @@ function startAutomationWorker({
     let stockFailed = false;
     let metaInboundFailed = false;
     let emailDeliveryFailed = false;
-    if (automationEnabled && service) {
+    if (automationEnabled && service && !isAbortRequested(signal)) {
       try {
         if (temporalScanEnabled && typeof service.scanTemporalTriggers === "function") {
           const temporalResult = await service.scanTemporalTriggers({ now, limit: config.batchSize, signal });
@@ -184,6 +192,7 @@ function startAutomationWorker({
         eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "automation_temporal" });
       }
       try {
+        if (isAbortRequested(signal)) return;
         await service.processDueJobs({
           now,
           limit: config.batchSize,
@@ -200,7 +209,7 @@ function startAutomationWorker({
         eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "automation_jobs" });
       }
     }
-    if (notificationsEnabled && notificationService?.processDue) {
+    if (notificationsEnabled && notificationService?.processDue && !isAbortRequested(signal)) {
       try {
         const notificationResult = await notificationService.processDue({ now, limit: config.batchSize, signal });
         if (Number(notificationResult?.failed || 0) > 0) {
@@ -218,7 +227,7 @@ function startAutomationWorker({
         eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "notifications" });
       }
     }
-    if (stockEnabled) {
+    if (stockEnabled && !isAbortRequested(signal)) {
       try {
         const stockResult = await stockWorker.processDue({ now, limit: config.batchSize, leaseOwner: workerId, leaseMs: config.leaseMs, signal });
         if (Array.isArray(stockResult?.failedTenants) && stockResult.failedTenants.length) {
@@ -231,7 +240,7 @@ function startAutomationWorker({
         eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "stock_core" });
       }
     }
-    if (metaInboundEnabled) {
+    if (metaInboundEnabled && !isAbortRequested(signal)) {
       try {
         const metaResult = await metaInboundWorker.processDue({
           now,
@@ -252,7 +261,7 @@ function startAutomationWorker({
         eventLogger.error("worker_poll_error", error, { durationMs: elapsedMs(startedAt), subsystem: "meta_inbound" });
       }
     }
-    if (emailDeliveryEnabled) {
+    if (emailDeliveryEnabled && !isAbortRequested(signal)) {
       try {
         await emailDeliveryService.processDue({
           now,
@@ -305,8 +314,11 @@ function startAutomationWorker({
     if (running || stopping) return;
     running = true;
     const controller = new AbortController();
+    activeController = controller;
+    const cycleWork = cycleBody(controller.signal);
+    activeCycleDrain = settleCooperativeCycle(cycleWork);
     try {
-      await withDeadline(cycleBody(controller.signal), config.cycleTimeoutMs, {
+      await withDeadline(cycleWork, config.cycleTimeoutMs, {
         setTimeoutImpl: setWatchdogTimeoutImpl,
         clearTimeoutImpl: clearWatchdogTimeoutImpl,
         code: "WORKER_CYCLE_TIMEOUT",
@@ -320,6 +332,7 @@ function startAutomationWorker({
         subsystem: "worker_cycle",
       });
     } finally {
+      if (activeController === controller) activeController = null;
       running = false;
     }
     if (!stopping) timer = setTimeoutImpl(() => {
@@ -339,14 +352,17 @@ function startAutomationWorker({
     async stop() {
       if (stopping) {
         await activeCycle;
+        await activeCycleDrain;
         if (!running) markStopped();
         return;
       }
       stopping = true;
+      activeController?.abort(new Error("WORKER_STOP_REQUESTED"));
       eventLogger.info("worker_stopping", { status: "stopping" });
       if (timer) clearTimeoutImpl(timer);
       timer = null;
       await activeCycle;
+      await activeCycleDrain;
       markStopped();
       eventLogger.info("worker_stopped", { status: "stopped" });
     },
@@ -422,6 +438,16 @@ function resolveExpectedWorkerServiceId(env = process.env) {
   return homologServiceId;
 }
 
+function resolveExpectedWorkerDatabaseServiceId(env = process.env) {
+  const environment = String(env.CRM_RAILWAY_ENVIRONMENT || "").trim().toLowerCase();
+  if (environment !== "homolog") return OFFICIAL_DATABASE_SERVICE_ID;
+  const homologDatabaseServiceId = String(env.CRM_RAILWAY_HOMOLOG_DATABASE_SERVICE_ID || "").trim();
+  if (!homologDatabaseServiceId || !/^[A-Za-z0-9_-]+$/.test(homologDatabaseServiceId)) {
+    throw new Error("RAILWAY_HOMOLOG_DATABASE_SERVICE_ID_MISSING");
+  }
+  return homologDatabaseServiceId;
+}
+
 function assertWorkerTargetIdentity(env = process.env) {
   const homolog = String(env.CRM_RAILWAY_ENVIRONMENT || "").trim().toLowerCase() === "homolog";
   const expectedProjectId = homolog ? String(env.CRM_RAILWAY_HOMOLOG_PROJECT_ID || "").trim() : OFFICIAL_RAILWAY_PROJECT_ID;
@@ -437,6 +463,13 @@ function validateWorkerRuntimeTarget(env = process.env) {
   assertWorkerTargetIdentity(env);
   const provider = databaseProviderFromEnv(env);
   if (provider !== "postgresql") throw new Error("RAILWAY_WORKER_POSTGRES_REQUIRED");
+  const databaseUrl = databaseUrlForProvider(env, provider);
+  assertProviderMatchesDatabaseUrl(provider, databaseUrl);
+  assertPinnedPostgresTarget({
+    env,
+    expectedDatabaseServiceId: resolveExpectedWorkerDatabaseServiceId(env),
+    provider,
+  });
   return provider;
 }
 
@@ -514,6 +547,18 @@ function withDeadline(promise, timeoutMs, {
   });
 }
 
+async function settleCooperativeCycle(promise) {
+  try {
+    await Promise.resolve(promise);
+  } catch {
+    // The watchdog failure was already emitted with a sanitized envelope.
+  }
+}
+
+function isAbortRequested(signal) {
+  return signal?.aborted === true;
+}
+
 function boundedInteger(raw, fallback, min, max) {
   const parsed = Number(raw);
   return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
@@ -557,6 +602,7 @@ module.exports = {
   shouldStartTemporalScanWorker,
   shouldStartEmailDeliveryWorker,
   validateWorkerRuntimeTarget,
+  resolveExpectedWorkerDatabaseServiceId,
   startAutomationWorker,
   waitForShutdown,
   withDeadline,

@@ -54,7 +54,8 @@ function createMetaInboundWebhookWorker({
     throw new Error("Processadores invalidos para o worker Meta inbound.");
   }
 
-  async function processDue({ now = clock(), limit = config.batchSize, leaseOwner } = {}) {
+  async function processDue({ now = clock(), limit = config.batchSize, leaseOwner, signal = null } = {}) {
+    if (isAbortRequested(signal)) return { found: 0, processed: 0, deferred: 0, failed: 0, cancelled: true };
     const effectiveNow = validDate(now) ? now : clock();
     if (!validDate(effectiveNow)) throw new Error("Relogio invalido para o worker Meta inbound.");
     if (!safeLeaseOwner(leaseOwner)) throw new Error("Owner invalido para o worker Meta inbound.");
@@ -85,6 +86,7 @@ function createMetaInboundWebhookWorker({
 
     const result = { found: events.length, processed: 0, deferred: 0, failed: 0 };
     for (const event of events) {
+      if (isAbortRequested(signal)) return { ...result, cancelled: true };
       const processor = processors[event.provedor];
       if (!processor) {
         result.failed += 1;
@@ -104,6 +106,10 @@ function createMetaInboundWebhookWorker({
   }
 
   return { config, processDue };
+}
+
+function isAbortRequested(signal) {
+  return signal?.aborted === true;
 }
 
 function boundedInteger(raw, fallback, min, max) {

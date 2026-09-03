@@ -1,4 +1,5 @@
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const {
   preparePostgresWorkspace,
@@ -13,6 +14,13 @@ const backendDir = path.resolve(__dirname, "..");
 const sqliteSchemaPath = path.join(backendDir, "prisma", "schema.prisma");
 const SQLITE_FALLBACK_URL = "file:./prisma/dev.db";
 const POSTGRES_PLACEHOLDER_URL = "postgresql://placeholder:placeholder@localhost:5432/placeholder";
+const OFFICIAL_DATABASE_SERVICE_ID = "e9d8a6b8-507b-45fb-92a8-3ab016f865a2";
+
+function targetError(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
+}
 
 function databaseProviderFromEnv(env = process.env) {
   const value = String(env.CRM_DATABASE_PROVIDER || "").trim().toLowerCase();
@@ -40,6 +48,71 @@ function databaseUrlForProvider(env = process.env, provider = databaseProviderFr
     return String(env.POSTGRES_DATABASE_URL || env.DATABASE_URL || "").trim();
   }
   return String(env.DATABASE_URL || "").trim();
+}
+
+function databaseTargetFingerprint(rawUrl) {
+  const canonical = canonicalPostgresTarget(rawUrl);
+  return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
+function canonicalPostgresTarget(rawUrl) {
+  if (databaseEngineFromUrl(rawUrl) !== "postgresql") throw targetError("DATABASE_URL_INVALID");
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl).trim());
+  } catch {
+    throw targetError("DATABASE_URL_INVALID");
+  }
+  const host = String(parsed.hostname || "").trim().toLowerCase();
+  const database = decodeURIComponent(String(parsed.pathname || "").replace(/^\/+/, "")).trim();
+  if (!host || !database) throw targetError("DATABASE_URL_INVALID");
+  return {
+    database,
+    host,
+    port: String(parsed.port || "5432"),
+    protocol: "postgresql",
+  };
+}
+
+function assertPinnedPostgresTarget({
+  env = process.env,
+  expectedDatabaseServiceId = OFFICIAL_DATABASE_SERVICE_ID,
+  provider = databaseProviderFromEnv(env),
+} = {}) {
+  if (provider !== "postgresql") throw targetError("RAILWAY_PRODUCTION_POSTGRES_REQUIRED");
+
+  const expectedServiceId = String(expectedDatabaseServiceId || "").trim();
+  const actualServiceId = String(env.CRM_DATABASE_SERVICE_ID || "").trim();
+  if (!expectedServiceId || !/^[A-Za-z0-9_-]+$/.test(expectedServiceId)) {
+    throw targetError("RAILWAY_DATABASE_SERVICE_EXPECTATION_INVALID");
+  }
+  if (actualServiceId !== expectedServiceId) throw targetError("RAILWAY_DATABASE_SERVICE_MISMATCH");
+
+  const databaseUrl = databaseUrlForProvider(env, provider);
+  assertProviderMatchesDatabaseUrl(provider, databaseUrl);
+  assertPostgresAliasTargetConsistency(env, databaseUrl);
+
+  const expectedFingerprint = String(env.CRM_DATABASE_TARGET_FINGERPRINT || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(expectedFingerprint)) {
+    throw targetError("RAILWAY_DATABASE_TARGET_FINGERPRINT_MISSING");
+  }
+  const actualFingerprint = databaseTargetFingerprint(databaseUrl);
+  if (!crypto.timingSafeEqual(Buffer.from(expectedFingerprint, "hex"), Buffer.from(actualFingerprint, "hex"))) {
+    throw targetError("RAILWAY_DATABASE_TARGET_MISMATCH");
+  }
+
+  return {
+    databaseServiceId: actualServiceId,
+    targetFingerprint: actualFingerprint,
+  };
+}
+
+function assertPostgresAliasTargetConsistency(env, primaryUrl) {
+  const legacyUrl = String(env.DATABASE_URL || "").trim();
+  if (!legacyUrl || databaseEngineFromUrl(legacyUrl) !== "postgresql") return;
+  if (databaseTargetFingerprint(legacyUrl) !== databaseTargetFingerprint(primaryUrl)) {
+    throw targetError("RAILWAY_DATABASE_URL_TARGET_MISMATCH");
+  }
 }
 
 function runtimePrismaConfig(options = {}) {
@@ -114,9 +187,14 @@ if (require.main === module) {
 }
 
 module.exports = {
+  OFFICIAL_DATABASE_SERVICE_ID,
   POSTGRES_PLACEHOLDER_URL,
   SQLITE_FALLBACK_URL,
+  assertPinnedPostgresTarget,
+  assertPostgresAliasTargetConsistency,
   assertProviderMatchesDatabaseUrl,
+  canonicalPostgresTarget,
+  databaseTargetFingerprint,
   databaseUrlForProvider,
   databaseEngineFromUrl,
   databaseProviderFromEnv,

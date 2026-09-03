@@ -31,7 +31,7 @@ test("ativação externa permanece bloqueada nos três painéis", () => {
   assert.match(board, /Ativação externa bloqueada nesta fase/);
   assert.match(readiness, /EXTERNAL_PROVIDER_ACTIVATION_ENABLED/);
   assert.match(whatsapp, /disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED/);
-  assert.match(integrations, /disabled={!EXTERNAL_PROVIDER_ACTIVATION_ENABLED/);
+  assert.match(integrations, /disabled={unavailable \|\| !EXTERNAL_PROVIDER_ACTIVATION_ENABLED/);
   assert.match(whatsapp, /disabled={credentialBusy \|\| !status\.credentialRevision}/);
   assert.match(readiness, /disabled={messengerBusy \|\| !messengerStatus\.credentialRevision}/);
 });
@@ -48,6 +48,16 @@ test("hub usa leituras parciais e tabs com relação ARIA explícita", () => {
   assert.match(integrations, /Promise\.allSettled/);
   assert.match(integrations, /warnings\.length === results\.length/);
   assert.match(integrations, /Algumas áreas continuam indisponíveis/);
+  assert.match(integrations, /IntegrationResourceState/);
+  assert.match(integrations, /Qualidade não confirmada/);
+  assert.match(integrations, /O status do Bling não foi confirmado nesta consulta/);
+  assert.match(integrations, /unavailable={resourceState\.imports === "error"}/);
+  assert.match(integrations, /unavailable={resourceState\.catalog === "error"}/);
+  assert.match(integrations, /title="Importações indisponíveis"/);
+  assert.match(integrations, /title="Catálogo indisponível"/);
+  assert.match(integrations, /function UnavailableResourceState/);
+  assert.doesNotMatch(integrations, /setBlingIntegrations\(\[\]\);/);
+  assert.doesNotMatch(integrations, /setCatalog\(\[\]\);/);
   assert.match(integrations, /role="tablist"/);
   assert.match(integrations, /role="tab"/);
   assert.match(integrations, /aria-controls=\{panelId\}/);

@@ -99,7 +99,8 @@ function createEmailDeliveryService({ prisma, port = createUnconfiguredEmailDeli
     return { count };
   }
 
-  async function claimDue({ now = new Date(), limit = 20, leaseOwner, leaseMs = 30_000 }) {
+  async function claimDue({ now = new Date(), limit = 20, leaseOwner, leaseMs = 30_000, signal = null }) {
+    if (isAbortRequested(signal)) return [];
     const owner = String(leaseOwner || "email-delivery-worker").slice(0, 128);
     const safeLimit = Math.min(100, Math.max(1, Number(limit) || 20));
     const leaseDuration = Math.min(10 * 60_000, Math.max(5_000, Number(leaseMs) || 30_000));
@@ -114,6 +115,7 @@ function createEmailDeliveryService({ prisma, port = createUnconfiguredEmailDeli
     });
     const claimed = [];
     for (const row of candidates) {
+      if (isAbortRequested(signal)) break;
       if (claimed.length >= safeLimit) break;
       const leaseToken = crypto.randomUUID();
       const leaseExpiresAt = new Date(now.getTime() + leaseDuration);
@@ -133,18 +135,32 @@ function createEmailDeliveryService({ prisma, port = createUnconfiguredEmailDeli
         await appendEvent(tx, row, { type: "CLAIMED", status: "PROCESSING", attempt });
         return { ...row, status: "PROCESSING", leaseOwner: owner, leaseToken, leaseExpiresAt, attempts: attempt };
       });
-      if (result) claimed.push(result);
+      if (result) {
+        if (isAbortRequested(signal)) {
+          await releaseClaim(result, { now });
+          break;
+        }
+        claimed.push(result);
+      }
     }
     return claimed;
   }
 
-  async function processDue({ now = new Date(), limit = 20, leaseOwner, leaseMs = 30_000, timeoutMs = 15_000, maxAttempts = 5 } = {}) {
-    if (port?.configured !== true || typeof port.send !== "function") return { disabled: true, claimed: 0, delivered: 0, retried: 0, failed: 0, expired: 0 };
-    const rows = await claimDue({ now, limit, leaseOwner, leaseMs });
-    const result = { disabled: false, claimed: rows.length, delivered: 0, retried: 0, failed: 0, expired: 0 };
+  async function processDue({ now = new Date(), limit = 20, leaseOwner, leaseMs = 30_000, timeoutMs = 15_000, maxAttempts = 5, signal = null } = {}) {
+    if (isAbortRequested(signal)) return { disabled: false, claimed: 0, delivered: 0, retried: 0, failed: 0, expired: 0, cancelled: 0, stopped: true };
+    if (port?.configured !== true || typeof port.send !== "function") return { disabled: true, claimed: 0, delivered: 0, retried: 0, failed: 0, expired: 0, cancelled: 0 };
+    const rows = await claimDue({ now, limit, leaseOwner, leaseMs, signal });
+    const result = { disabled: false, claimed: rows.length, delivered: 0, retried: 0, failed: 0, expired: 0, cancelled: 0, stopped: false };
     for (const row of rows) {
-      const outcome = await processClaimed(row, { now, timeoutMs, maxAttempts });
+      if (isAbortRequested(signal)) {
+        await releaseClaim(row, { now });
+        result.cancelled += 1;
+        result.stopped = true;
+        continue;
+      }
+      const outcome = await processClaimed(row, { now, timeoutMs, maxAttempts, signal });
       result[outcome] += 1;
+      if (isAbortRequested(signal)) result.stopped = true;
     }
     return result;
   }
@@ -210,8 +226,9 @@ function createEmailDeliveryService({ prisma, port = createUnconfiguredEmailDeli
     }
   }
 
-  async function processClaimed(row, { now, timeoutMs, maxAttempts }) {
+  async function processClaimed(row, { now, timeoutMs, maxAttempts, signal = null }) {
     try {
+      throwIfAbortRequested(signal);
       const source = await readEligibleSource(row, now);
       if (!source || row.expiresAt <= now) {
         await completeClaim(row, "EXPIRED", { now, errorCode: "EMAIL_DELIVERY_EXPIRED" });
@@ -221,19 +238,30 @@ function createEmailDeliveryService({ prisma, port = createUnconfiguredEmailDeli
       const token = openDeliveryToken(row.payloadCiphertext, context, { env });
       const actionUrl = buildSecurityActionUrl({ kind: row.kind, token, env });
       const providerResult = await withTimeout(
-        port.send({
+        (deliverySignal) => port.send({
           deliveryId: row.id,
           idempotencyKey: row.idempotencyKey,
           kind: row.kind,
           to: row.recipientNormalized,
           actionUrl,
           expiresAt: row.expiresAt,
+          signal: deliverySignal,
         }),
         timeoutMs,
+        { signal },
       );
       await completeClaim(row, "DELIVERED", { now: new Date(), providerMessageId: providerResult?.providerMessageId });
       return "delivered";
     } catch (error) {
+      if (isWorkerStopBeforeDelivery(error)) {
+        await releaseClaim(row, { now });
+        return "cancelled";
+      }
+      if (isAmbiguousDeliveryOutcome(error)) {
+        await completeClaim(row, "FAILED", { now: new Date(), errorCode: "EMAIL_DELIVERY_TIMEOUT_AMBIGUOUS" });
+        logger.warn?.("security_email_delivery_ambiguous", { deliveryId: row.id, code: "EMAIL_DELIVERY_TIMEOUT_AMBIGUOUS", attempt: row.attempts });
+        return "failed";
+      }
       const classified = classifyDeliveryError(error);
       if (classified.transient && Number(row.attempts || 0) < Math.max(1, Number(maxAttempts) || 5)) {
         const availableAt = new Date(now.getTime() + retryDelayMs(row.attempts));
@@ -280,6 +308,25 @@ function createEmailDeliveryService({ prisma, port = createUnconfiguredEmailDeli
       if (changed.count !== 1) throw Object.assign(deliveryError("EMAIL_DELIVERY_LEASE_LOST", 409), { transient: true });
       await projectInviteStatus(tx, row, "RETRY_WAIT");
       await appendEvent(tx, row, { type: "RETRY_SCHEDULED", status: "RETRY_WAIT", attempt: row.attempts, errorCode });
+    });
+  }
+
+  async function releaseClaim(row, { now }) {
+    await prisma.$transaction(async (tx) => {
+      const changed = await tx.emailDeliveryOutbox.updateMany({
+        where: claimWhere(row),
+        data: {
+          status: "PENDING",
+          attempts: { decrement: 1 },
+          availableAt: now,
+          leaseOwner: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (changed.count !== 1) return;
+      await projectInviteStatus(tx, row, "PENDING");
+      await appendEvent(tx, row, { type: "RELEASED_FOR_SHUTDOWN", status: "PENDING", attempt: Math.max(0, Number(row.attempts || 0) - 1) });
     });
   }
 
@@ -377,15 +424,56 @@ function retryDelayMs(attempt) {
   return Math.min(15 * 60_000, Math.max(1_000, 2 ** Math.max(0, Number(attempt) || 1) * 1_000));
 }
 
-function withTimeout(promise, timeoutMs) {
+function withTimeout(operation, timeoutMs, { signal = null } = {}) {
   const duration = Math.min(120_000, Math.max(1_000, Number(timeoutMs) || 15_000));
   let timer;
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise((_resolve, reject) => {
-      timer = setTimeout(() => reject(Object.assign(new Error("EMAIL_DELIVERY_TIMEOUT"), { code: "EMAIL_DELIVERY_TIMEOUT", transient: true })), duration);
-    }),
-  ]).finally(() => clearTimeout(timer));
+  const controller = new AbortController();
+  throwIfAbortRequested(signal);
+  let removeAbortListener = null;
+  const abort = new Promise((_resolve, reject) => {
+    const onAbort = () => {
+      const error = Object.assign(new Error("EMAIL_DELIVERY_ABORTED_AMBIGUOUS"), {
+        code: "EMAIL_DELIVERY_ABORTED_AMBIGUOUS",
+        ambiguous: true,
+      });
+      reject(error);
+      controller.abort(error);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    removeAbortListener = () => signal?.removeEventListener("abort", onAbort);
+  });
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = Object.assign(new Error("EMAIL_DELIVERY_TIMEOUT"), {
+        code: "EMAIL_DELIVERY_TIMEOUT",
+        ambiguous: true,
+      });
+      reject(error);
+      controller.abort(error);
+    }, duration);
+  });
+  const delivery = Promise.resolve().then(() => operation(controller.signal));
+  return Promise.race([delivery, timeout, abort]).finally(() => {
+    if (timer) clearTimeout(timer);
+    removeAbortListener?.();
+  });
+}
+
+function isAbortRequested(signal) {
+  return signal?.aborted === true;
+}
+
+function throwIfAbortRequested(signal) {
+  if (!isAbortRequested(signal)) return;
+  throw Object.assign(new Error("WORKER_STOPPED"), { code: "WORKER_STOPPED" });
+}
+
+function isWorkerStopBeforeDelivery(error) {
+  return error?.code === "WORKER_STOPPED";
+}
+
+function isAmbiguousDeliveryOutcome(error) {
+  return error?.ambiguous === true || ["EMAIL_DELIVERY_TIMEOUT", "EMAIL_DELIVERY_ABORTED_AMBIGUOUS"].includes(error?.code);
 }
 
 function publicDelivery(row) {

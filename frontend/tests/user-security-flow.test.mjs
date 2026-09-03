@@ -574,8 +574,8 @@ async function assertCrossTabSingleRefresh({ locks }) {
 
   const [leaderResult, followerResult] = await Promise.all([first, second]);
   assert.equal(leaderResult.access_token, "access-token-never-broadcast");
-  assert.equal(followerResult, undefined);
-  assert.equal(calls, 1);
+  assert.equal(followerResult.access_token, "access-token-never-broadcast");
+  assert.equal(calls, 2);
   assert.ok(bus.messages.length >= 2);
   const sent = bus.messages.join("\n");
   assert.doesNotMatch(sent, /access-token-never-broadcast|refresh-token|cookie|usuario|empresa/i);
@@ -592,7 +592,7 @@ test("Web Locks coordena abas e BroadcastChannel transmite apenas sinais", async
   await assertCrossTabSingleRefresh({ locks: createExclusiveWebLocks() });
 });
 
-test("Web Locks nao executa refresh tardio apos sucesso recente de outra aba", async () => {
+test("Web Locks permite que uma aba tardia renove sua propria memoria de token apos sucesso de outra aba", async () => {
   const coordinator = await importIsolatedRefreshCoordinator();
   const storage = new MemoryStorage();
   const locks = createExclusiveWebLocks();
@@ -623,9 +623,9 @@ test("Web Locks nao executa refresh tardio apos sucesso recente de outra aba", a
   const retryToken = sharedAccessToken;
 
   assert.equal(leaderResult.access_token, "access-token-renovado-em-outra-aba");
-  assert.equal(followerResult, undefined);
+  assert.equal(followerResult.access_token, "access-token-renovado-em-outra-aba");
   assert.notEqual(retryToken, staleRequestToken);
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
 });
 
 test("lease localStorage coordena sem Web Locks e recupera lease abandonado", async () => {

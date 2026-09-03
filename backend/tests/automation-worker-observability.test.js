@@ -216,6 +216,43 @@ test("worker torna notificacoes unhealthy somente quando todos os tenants falham
   assert.equal(capture.entries().filter((entry) => entry.event === "worker_unhealthy").length, 1);
 });
 
+test("shutdown aborta o ciclo cooperativo e nao inicia subsistema posterior", async () => {
+  const capture = logCapture({ workerInstanceId: "worker-cooperative-stop" });
+  const scheduled = [];
+  let automationSignal = null;
+  let notificationCalls = 0;
+  const worker = startAutomationWorker({
+    service: {
+      async processDueJobs({ signal }) {
+        automationSignal = signal;
+        await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
+        return { processed: 0, cancelled: true };
+      },
+    },
+    notificationService: {
+      async processDue() { notificationCalls += 1; return { tenants: 0 }; },
+    },
+    env: {
+      NODE_ENV: "production",
+      AUTOMATION_WORKER_ENABLED: "true",
+      NOTIFICATIONS_WORKER_ENABLED: "true",
+      AUTOMATION_WORKER_POLL_INTERVAL_MS: "1000",
+    },
+    workerId: "worker-cooperative-stop",
+    logger: capture.logger,
+    setTimeoutImpl: (callback) => { scheduled.push(callback); return callback; },
+    clearTimeoutImpl() {},
+  });
+
+  scheduled.shift()();
+  await flushTasks();
+  await worker.stop();
+
+  assert.equal(automationSignal?.aborted, true);
+  assert.equal(notificationCalls, 0);
+  assert.equal(scheduled.length, 0);
+});
+
 test("watchdog encerra ciclo travado sem agendar polling sobreposto", async () => {
   const capture = logCapture();
   const scheduled = [];
