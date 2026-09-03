@@ -24,7 +24,7 @@ async function main() {
   if (options.attestationFile) env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = require("node:path").resolve(options.attestationFile);
   const expectedReleaseHead = options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD;
   const targetInfo = assertTarget(env, { expectedReleaseHead, target: options.target, runId: options.runId, requireExplicitTarget: true, requireOperationalAttestation: true, requireHarnessParity: true });
-  const prismaRuntime = createQaPrismaClient({ env, allowProduction: targetInfo.target === "production" });
+  const prismaRuntime = createQaPrismaClient({ env, allowProduction: options.target === "production" });
   const prisma = prismaRuntime.prisma;
   try {
     const result = await inspectQaState({ prisma, env, expectedReleaseHead, target: options.target, requireOperationalAttestation: true, requireHarnessParity: true });

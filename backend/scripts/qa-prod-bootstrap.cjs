@@ -145,7 +145,7 @@ async function main() {
   let credentialsFile = null;
   const runId = options.runId;
   try {
-    prismaRuntime = createQaPrismaClient({ env, allowProduction: targetInfo.target === "production" });
+    prismaRuntime = createQaPrismaClient({ env, allowProduction: options.target === "production" });
     prisma = prismaRuntime.prisma;
     if (options.mode === "dry-run") {
       const result = await provisionSyntheticQa({ prisma, env, apply: false, expectedReleaseHead, target: options.target });
