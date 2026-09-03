@@ -263,6 +263,23 @@ test("migration manual exige confirmacao, backup e atestacao fora de testes", ()
   );
 });
 
+test("migration manual rejeita dev.db protegido mesmo fora do bypass de testes", () => {
+  const protectedDatabaseUrl = `file:${path.join(REPOSITORY_ROOT, "backend", "prisma", "dev.db").replace(/\\/g, "/")}`;
+  const env = withManualMigrationAttestation({
+    NODE_ENV: "development",
+    CRM_DATABASE_PROVIDER: "sqlite",
+    DATABASE_URL: protectedDatabaseUrl,
+    CRM_MANUAL_MIGRATION_TARGET: "local",
+    CRM_MANUAL_MIGRATION_CONFIRM: MANUAL_MIGRATION_CONFIRMATION,
+    CRM_MANUAL_MIGRATION_RUN_ID: "manual-protected-db-20260903",
+    CRM_MANUAL_MIGRATION_BACKUP_REF: "backup:protected-db-20260903",
+  }, { provider: "sqlite", target: "local" });
+  assert.throws(
+    () => assertManualMigrationAuthorization(env),
+    { code: "MANUAL_MIGRATION_PROTECTED_DATABASE" },
+  );
+});
+
 test("migration manual local/test PostgreSQL exige fingerprint ligado a URL e schema efetivos", () => {
   const env = localPostgresMigrationEnv();
   assert.doesNotThrow(() => assertManualMigrationAuthorization(env));

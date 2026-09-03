@@ -187,11 +187,10 @@ function assertAvailableTestChannel(channel) {
   if (!channel.ativo || channel.status !== "MODO_TESTE") throw validationError("Canal de teste inativo ou indisponivel.");
 }
 
-function simulationReplayFingerprint({ mensagem, telefoneNormalizado, nome }) {
+function simulationReplayFingerprint({ mensagem, telefoneNormalizado }) {
   return crypto.createHash("sha256").update(JSON.stringify({
     mensagem: String(mensagem || ""),
     telefoneNormalizado: String(telefoneNormalizado || ""),
-    nome: String(nome || ""),
   })).digest("hex");
 }
 
@@ -199,8 +198,10 @@ function assertSimulationReplayMatches(incoming, payload) {
   const contact = incoming.conversaCanal?.contatoCanal;
   const stored = simulationReplayFingerprint({
     mensagem: incoming.texto,
-    telefoneNormalizado: contact?.telefoneNormalizado,
-    nome: contact?.nome,
+    // externalId is the immutable provider identity assigned when the
+    // contact was first created.  telefoneNormalizado may be edited later
+    // by a contact-sync operation, so it is only a fallback for legacy rows.
+    telefoneNormalizado: contact?.externalId || contact?.telefoneNormalizado,
   });
   const received = simulationReplayFingerprint(payload);
   if (stored !== received) {

@@ -158,20 +158,25 @@ function readBuildIdentityManifest(env, hmacKey) {
 
 function readControlPlaneAttestation(env = process.env, options = {}) {
   if (options.attestation) return parseAttestationValue(options.attestation);
+  // An explicitly selected file is the freshest, operator-controlled source.
+  // Resolve it before the legacy inline value so a stale environment secret
+  // can never silently win over the attestation named by the command.
+  const filePath = String(env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE || "").trim();
+  if (filePath) {
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const repositoryRoot = path.resolve(__dirname, "../..");
+    const resolvedPath = path.resolve(filePath);
+    if (resolvedPath.toLowerCase().startsWith(repositoryRoot.toLowerCase() + path.sep)) throw new QaProvisioningError("QA_PROD_ATTESTATION_REPOSITORY_PATH", "Atestado operacional nao pode ser lido do repositorio.");
+    try {
+      return parseAttestationValue(fs.readFileSync(resolvedPath, "utf8"));
+    } catch (error) {
+      throw new QaProvisioningError("QA_PROD_ATTESTATION_UNREADABLE", "Atestado operacional nao pode ser lido.", { cause: String(error?.code || "READ_FAILED") });
+    }
+  }
   const inline = String(env.QA_PROD_CONTROL_PLANE_ATTESTATION || "").trim();
   if (inline) return parseAttestationValue(inline);
-  const filePath = String(env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE || "").trim();
-  if (!filePath) return null;
-  const fs = require("node:fs");
-  const path = require("node:path");
-  const repositoryRoot = path.resolve(__dirname, "../..");
-  const resolvedPath = path.resolve(filePath);
-  if (resolvedPath.toLowerCase().startsWith(repositoryRoot.toLowerCase() + path.sep)) throw new QaProvisioningError("QA_PROD_ATTESTATION_REPOSITORY_PATH", "Atestado operacional nao pode ser lido do repositorio.");
-  try {
-    return parseAttestationValue(fs.readFileSync(resolvedPath, "utf8"));
-  } catch (error) {
-    throw new QaProvisioningError("QA_PROD_ATTESTATION_UNREADABLE", "Atestado operacional nao pode ser lido.", { cause: String(error?.code || "READ_FAILED") });
-  }
+  return null;
 }
 
 function assertOperationalAttestation({ env, target, expectedReleaseHead, attestation, requireHarnessParity = false, requirePrewriteSafety = false, runId }) {
@@ -838,6 +843,7 @@ module.exports = {
   providerIsolationSafe,
   providerIsolationState,
   qaTransactionOptions,
+  readControlPlaneAttestation,
   releaseQaDatabaseLease,
   assertPrewriteSafety,
   revokeSyntheticQa,

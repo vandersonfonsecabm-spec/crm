@@ -45,15 +45,7 @@ function parseArgs(argv) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const env = { ...process.env, QA_PROD_TARGET_ENV: options.target, QA_PROD_RUN_ID: options.runId };
-  if (options.operatorUserId) env.QA_PROD_OPERATOR_USER_ID = options.operatorUserId;
-  if (options.attestationFile) {
-    // An explicit file is an operator-selected override.  Do not let a
-    // stale inline value win merely because it is still present in the
-    // service environment.
-    env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = path.resolve(options.attestationFile);
-    delete env.QA_PROD_CONTROL_PLANE_ATTESTATION;
-  }
+  const env = runtimeEnv(options);
   const expectedReleaseHead = options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD;
   const targetInfo = assertTarget(env, { expectedReleaseHead, target: options.target, runId: options.runId, requireExplicitTarget: true, requireOperationalAttestation: true, requireHarnessParity: true, requirePrewriteSafety: options.target === "production" });
   assertPrewriteSafety({ env, target: targetInfo.target, runId: options.runId, attestation: targetInfo.attestation });
@@ -101,6 +93,19 @@ async function main() {
     if (prismaRuntime) await prismaRuntime.cleanup();
     if (!releaseLock(lock)) process.exitCode = 1;
   }
+}
+
+function runtimeEnv(options) {
+  const env = { ...process.env, QA_PROD_TARGET_ENV: options.target, QA_PROD_RUN_ID: options.runId };
+  if (options.operatorUserId) env.QA_PROD_OPERATOR_USER_ID = options.operatorUserId;
+  if (options.attestationFile) {
+    // An explicit file is an operator-selected override.  Do not let a
+    // stale inline value win merely because it is still present in the
+    // service environment.
+    env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = path.resolve(options.attestationFile);
+    delete env.QA_PROD_CONTROL_PLANE_ATTESTATION;
+  }
+  return env;
 }
 
 function validateCredentialBundle(fileName, runId, expectedTarget = "") {
@@ -213,4 +218,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { listCredentialBundles, parseArgs, removeCredentialBundle, validateCredentialBundle };
+module.exports = { listCredentialBundles, parseArgs, removeCredentialBundle, runtimeEnv, validateCredentialBundle };

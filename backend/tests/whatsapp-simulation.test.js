@@ -121,6 +121,22 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
   assert.equal(await prisma.mensagemCanal.count({ where: { empresaId: adminA.empresaId, externalId: "msg-preco-sku:prepared-response" } }), 1);
   assert.equal(await prisma.nota.count({ where: { empresaId: adminA.empresaId, texto: { contains: "msg-preco-sku" } } }), 1);
 
+  // A contact name is mutable metadata, not part of the immutable message
+  // identity.  Renaming the contact after the first delivery must not turn an
+  // equivalent replay into a false idempotency conflict.
+  const simulatedContact = await prisma.contatoCanal.findFirstOrThrow({
+    where: { empresaId: adminA.empresaId, externalId: "+5511988880001" },
+  });
+  await prisma.contatoCanal.update({ where: { id: simulatedContact.id }, data: { nome: "Cliente Renomeado" } });
+  const replayAfterContactRename = await request("POST", "/whatsapp/simular-mensagem", {
+    externalId: "msg-preco-sku",
+    telefone: "+55 (11) 98888-0001",
+    nome: "Cliente Simulado",
+    mensagem: "Qual o preco da SKU-HID-20?",
+  }, adminA.token);
+  assert.equal(replayAfterContactRename.status, 200);
+  assert.equal(replayAfterContactRename.body.duplicada, true);
+
   const divergentReplay = await request("POST", "/whatsapp/simular-mensagem", {
     externalId: "msg-preco-sku",
     telefone: "+55 (11) 98888-0001",

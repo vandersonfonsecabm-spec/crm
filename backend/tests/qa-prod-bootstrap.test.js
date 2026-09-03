@@ -8,8 +8,10 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const bcrypt = require("bcryptjs");
-const { assertCredentialPath, defaultCredentialsPath, parseArgs: parseBootstrapArgs } = require("../scripts/qa-prod-bootstrap.cjs");
-const { listCredentialBundles, parseArgs: parseRevokeArgs, validateCredentialBundle } = require("../scripts/qa-prod-revoke.cjs");
+const { assertCredentialPath, defaultCredentialsPath, parseArgs: parseBootstrapArgs, runtimeEnv: bootstrapRuntimeEnv } = require("../scripts/qa-prod-bootstrap.cjs");
+const { listCredentialBundles, parseArgs: parseRevokeArgs, runtimeEnv: revokeRuntimeEnv, validateCredentialBundle } = require("../scripts/qa-prod-revoke.cjs");
+const { parseArgs: parseStatusArgs, runtimeEnv: statusRuntimeEnv } = require("../scripts/qa-prod-status.cjs");
+const { parseArgs: parseOperatorArgs, runtimeEnv: operatorRuntimeEnv } = require("../scripts/qa-staging-platform-operator.cjs");
 const {
   APPLY_CONFIRMATION,
   EMERGENCY_REVOKE_CONFIRMATION,
@@ -29,6 +31,7 @@ const {
   providerIsolationSafe,
   providerIsolationState,
   releaseQaDatabaseLease,
+  readControlPlaneAttestation,
   revokeSyntheticQa,
 } = require("../src/security/qa-provisioning.cjs");
 
@@ -244,6 +247,42 @@ test("bootstrap requires an explicit run id when attestation is mandatory", () =
   assert.throws(() => parseBootstrapArgs(["--dry-run", "--target=staging"]), /QA_PROD_RUN_ID_REQUIRED/);
   const parsed = parseBootstrapArgs(["--dry-run", "--target=staging", "--run-id=qa-run-explicit-0001"]);
   assert.equal(parsed.runId, "qa-run-explicit-0001");
+});
+
+test("attestation file override wins over stale inline value in every QA CLI", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "qa-attestation-override-"));
+  const attestationFile = path.join(tempDir, "attestation.json");
+  const fileAttestation = { source: "file", runId: "qa-file-override-0001" };
+  fs.writeFileSync(attestationFile, JSON.stringify(fileAttestation) + "\n", { encoding: "utf8", mode: 0o600 });
+  const inlineAttestation = JSON.stringify({ source: "inline", runId: "qa-inline-stale-0001" });
+  try {
+    const env = {
+      QA_PROD_CONTROL_PLANE_ATTESTATION: inlineAttestation,
+      QA_PROD_CONTROL_PLANE_ATTESTATION_FILE: attestationFile,
+    };
+    assert.deepEqual(readControlPlaneAttestation(env), fileAttestation);
+
+    const bootstrap = bootstrapRuntimeEnv({ target: "staging", runId: "qa-file-override-0001", attestationFile });
+    const status = statusRuntimeEnv({ target: "staging", runId: "qa-file-override-0001", attestationFile });
+    const revoke = revokeRuntimeEnv({ target: "staging", runId: "qa-file-override-0001", attestationFile, operatorUserId: "1" });
+    const operator = operatorRuntimeEnv({ runId: "qa-file-override-0001", attestationFile });
+    for (const runtime of [bootstrap, status, revoke, operator]) {
+      runtime.QA_PROD_CONTROL_PLANE_ATTESTATION = inlineAttestation;
+      assert.equal(runtime.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE, path.resolve(attestationFile));
+      // Simulate a caller that merges a stale environment after construction:
+      // the central reader must still prefer the explicit file.
+      assert.deepEqual(readControlPlaneAttestation(runtime), fileAttestation);
+    }
+    const bootstrapWithExplicitFile = bootstrapRuntimeEnv({ target: "staging", runId: "qa-file-override-0001", attestationFile });
+    assert.equal(Object.hasOwn(bootstrapWithExplicitFile, "QA_PROD_CONTROL_PLANE_ATTESTATION"), false);
+    assert.equal(Object.hasOwn(statusRuntimeEnv({ target: "staging", runId: "qa-file-override-0001", attestationFile }), "QA_PROD_CONTROL_PLANE_ATTESTATION"), false);
+    assert.equal(Object.hasOwn(revokeRuntimeEnv({ target: "staging", runId: "qa-file-override-0001", attestationFile }), "QA_PROD_CONTROL_PLANE_ATTESTATION"), false);
+    assert.equal(Object.hasOwn(operatorRuntimeEnv({ runId: "qa-file-override-0001", attestationFile }), "QA_PROD_CONTROL_PLANE_ATTESTATION"), false);
+    assert.equal(parseStatusArgs(["--target=staging", "--run-id=qa-file-override-0001", "--attestation-file=" + attestationFile]).attestationFile, attestationFile);
+    assert.equal(parseOperatorArgs(["--status", "--run-id=qa-file-override-0001", "--attestation-file=" + attestationFile]).attestationFile, attestationFile);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("external attestation binds effective database, worker and harness source", () => {

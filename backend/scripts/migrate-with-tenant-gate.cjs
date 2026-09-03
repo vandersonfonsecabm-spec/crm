@@ -51,6 +51,64 @@ function databaseUrlForProvider(env, provider) {
   return String(value).trim();
 }
 
+function sqliteDatabasePathFromUrl(rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!/^file:/i.test(value)) return null;
+  let encodedPath = value.slice("file:".length);
+  const queryIndex = encodedPath.search(/[?#]/);
+  if (queryIndex >= 0) encodedPath = encodedPath.slice(0, queryIndex);
+  if (!encodedPath) return null;
+  let databasePath;
+  try {
+    databasePath = decodeURIComponent(encodedPath);
+  } catch {
+    return null;
+  }
+  if (databasePath.startsWith("///") && /^[A-Za-z]:/.test(databasePath.slice(3))) databasePath = databasePath.slice(3);
+  if (databasePath.startsWith("/") && /^[A-Za-z]:/.test(databasePath.slice(1))) databasePath = databasePath.slice(1);
+  if (!databasePath) return null;
+  return path.isAbsolute(databasePath) ? path.resolve(databasePath) : path.resolve(backendDir, databasePath);
+}
+
+function existingRealPath(candidatePath) {
+  let current = path.resolve(candidatePath);
+  const suffix = [];
+  while (!fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (samePath(parent, current)) return null;
+    suffix.unshift(path.basename(current));
+    current = parent;
+  }
+  try {
+    return path.resolve(fs.realpathSync.native(current), ...suffix);
+  } catch {
+    return null;
+  }
+}
+
+function assertNotProtectedSqliteDatabaseTarget(env) {
+  const selectedPath = sqliteDatabasePathFromUrl(env.DATABASE_URL);
+  if (!selectedPath) return;
+  const invalidCode = String(env.NODE_ENV || "").trim().toLowerCase() === "test"
+    ? "MANUAL_MIGRATION_TEST_DATABASE_URL_INVALID"
+    : "MANUAL_MIGRATION_PROTECTED_DATABASE";
+  const selectedRealPath = existingRealPath(selectedPath);
+  for (const protectedPath of PROTECTED_SQLITE_DATABASES) {
+    const resolvedProtectedPath = path.resolve(protectedPath);
+    if (samePath(selectedPath, resolvedProtectedPath)) throw migrationError(invalidCode);
+    const protectedRealPath = existingRealPath(resolvedProtectedPath);
+    if (selectedRealPath && protectedRealPath && samePath(selectedRealPath, protectedRealPath)) throw migrationError(invalidCode);
+    try {
+      const selectedStat = fs.statSync(selectedPath);
+      const protectedStat = fs.statSync(resolvedProtectedPath);
+      if (sameExistingFile(selectedStat, protectedStat)) throw migrationError(invalidCode);
+    } catch (error) {
+      if (error?.code === invalidCode) throw error;
+      if (!['ENOENT', 'ENOTDIR'].includes(error?.code)) throw migrationError(invalidCode);
+    }
+  }
+}
+
 function isRailwayEnvironment(env) {
   return Boolean(env.RAILWAY_SERVICE_ID || env.RAILWAY_DEPLOYMENT_ID || env.RAILWAY_PROJECT_ID || env.RAILWAY_ENVIRONMENT_ID);
 }
@@ -79,6 +137,7 @@ function expectedRailwayTarget(env) {
 }
 
 function assertManualMigrationAuthorization(env, { provider = providerFromEnv(env) } = {}) {
+  if (provider === "sqlite") assertNotProtectedSqliteDatabaseTarget(env);
   const railway = isRailwayEnvironment(env);
   const hasPostgresTarget = Boolean(String(env.POSTGRES_TARGET_URL || env.POSTGRES_TEST_DATABASE_URL || "").trim());
   const testSqlite = String(env.NODE_ENV || "").trim().toLowerCase() === "test" && !railway && provider === "sqlite";
@@ -350,8 +409,10 @@ module.exports = {
   assertIsolatedTestSqliteMigrationTarget,
   assertLocalPostgresMigrationTarget,
   canonicalManualMigrationAttestationPayload,
+  assertNotProtectedSqliteDatabaseTarget,
   expectedRailwayTarget,
   main,
   providerFromEnv,
+  sqliteDatabasePathFromUrl,
   signManualMigrationAttestation,
 };

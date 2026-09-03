@@ -20,8 +20,7 @@ function parseArgs(argv) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const env = { ...process.env, QA_PROD_TARGET_ENV: options.target, QA_PROD_RUN_ID: options.runId };
-  if (options.attestationFile) env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = require("node:path").resolve(options.attestationFile);
+  const env = runtimeEnv(options);
   const expectedReleaseHead = options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD;
   const targetInfo = assertTarget(env, { expectedReleaseHead, target: options.target, runId: options.runId, requireExplicitTarget: true, requireOperationalAttestation: true, requireHarnessParity: true });
   const prismaRuntime = createQaPrismaClient({ env, allowProduction: options.target === "production" });
@@ -44,4 +43,13 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseArgs };
+function runtimeEnv(options) {
+  const env = { ...process.env, QA_PROD_TARGET_ENV: options.target, QA_PROD_RUN_ID: options.runId };
+  if (options.attestationFile) {
+    env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = require("node:path").resolve(options.attestationFile);
+    delete env.QA_PROD_CONTROL_PLANE_ATTESTATION;
+  }
+  return env;
+}
+
+module.exports = { parseArgs, runtimeEnv };

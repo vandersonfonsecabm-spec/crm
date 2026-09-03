@@ -56,7 +56,10 @@ function runtimeEnv(options) {
   if (options.target) env.QA_PROD_TARGET_ENV = options.target;
   env.QA_PROD_RUN_ID = options.runId;
   if (options.operatorUserId) env.QA_PROD_OPERATOR_USER_ID = options.operatorUserId;
-  if (options.attestationFile) env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = path.resolve(options.attestationFile);
+  if (options.attestationFile) {
+    env.QA_PROD_CONTROL_PLANE_ATTESTATION_FILE = path.resolve(options.attestationFile);
+    delete env.QA_PROD_CONTROL_PLANE_ATTESTATION;
+  }
   return env;
 }
 
