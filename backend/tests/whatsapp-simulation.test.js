@@ -88,6 +88,8 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
   assert.equal(first.body.nota.criada, true);
   assert.equal(first.body.acompanhamento.criado, false);
   assert.equal(first.body.respostaPreparada.status, "PREPARADA");
+  const createdClientWithCatalogPrice = await prisma.cliente.findFirstOrThrow({ where: { empresaId: adminA.empresaId, telefone: "+5511988880001" } });
+  assert.equal(createdClientWithCatalogPrice.valor, 0, "simulador nao deve copiar preco em centavos para Cliente.valor legado");
 
   const replay = await request("POST", "/whatsapp/simular-mensagem", {
     externalId: "msg-preco-sku",
@@ -166,6 +168,8 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
   }, adminA.token);
   assert.equal(unknownStock.body.produtoPrincipal.disponibilidade, "DESCONHECIDO");
   assert.equal(unknownStock.body.acompanhamento.criado, true);
+  const createdClientWithoutCatalogPrice = await prisma.cliente.findFirstOrThrow({ where: { empresaId: adminA.empresaId, telefone: "+5511988880006" } });
+  assert.equal(createdClientWithoutCatalogPrice.valor, 0, "simulador nao deve transformar preco desconhecido em valor comercial");
 
   const promo = await request("POST", "/whatsapp/simular-mensagem", {
     externalId: "msg-promocao",

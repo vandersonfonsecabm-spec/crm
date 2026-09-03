@@ -235,7 +235,6 @@ async function createOrFindClient({ tx, empresaId, payload, intent, product }) {
       empresa: "",
       interesse: product?.nome || intent.termoBusca || "",
       status: commercial ? "Lead" : "Lead",
-      valor: product?.precoAtualCentavos || 0,
       origem: "WhatsApp Simulado",
       quente: commercial,
       ultimoContato: 0,
