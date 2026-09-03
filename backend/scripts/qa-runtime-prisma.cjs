@@ -20,6 +20,7 @@ function createProductionWorkspace() {
   fs.mkdirSync(PRODUCTION_WORKSPACE_ROOT, { recursive: true });
   const root = fs.mkdtempSync(path.join(PRODUCTION_WORKSPACE_ROOT, "postgres-prisma-"));
   try {
+    ensureWorkspaceProjectRoot(root);
     return { ...preparePostgresWorkspace({ root, clientOutput: path.join(root, "client"), writeClientLoader: true }), production: true };
   } catch (error) {
     try { cleanupProductionWorkspace(root); } catch {}
@@ -32,6 +33,16 @@ function cleanupProductionWorkspace(root) {
   const parent = path.resolve(PRODUCTION_WORKSPACE_ROOT);
   if (resolved === parent || !resolved.startsWith(parent + path.sep)) throw new Error("Workspace PostgreSQL de producao fora do cache permitido.");
   fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+}
+
+function ensureWorkspaceProjectRoot(root) {
+  // Prisma 6 infers the project root from the temporary schema path. Without
+  // a package boundary it walks to `/` and attempts a network auto-install of
+  // Prisma during `generate`, which makes the QA runner fail even when the
+  // application database and target are healthy. A minimal private manifest
+  // keeps generation local and contains no dependency or secret.
+  const packagePath = path.join(root, "package.json");
+  if (!fs.existsSync(packagePath)) fs.writeFileSync(packagePath, '{"private":true}\n', { encoding: "utf8", flag: "wx", mode: 0o600 });
 }
 
 function generatePostgresClient(workspace) {

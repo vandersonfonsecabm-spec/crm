@@ -53,6 +53,7 @@ function createPostgresTestWorkspace() {
   fs.mkdirSync(postgresTestWorkspaceRoot, { recursive: true });
   const root = fs.mkdtempSync(path.join(postgresTestWorkspaceRoot, "postgres-prisma-"));
   try {
+    ensureWorkspaceProjectRoot(root);
     return preparePostgresWorkspace({ root, clientOutput: path.join(root, "client"), writeClientLoader: true });
   } catch (error) {
     cleanupPostgresTestWorkspace(root);
@@ -196,6 +197,16 @@ function assertWriteConfirmation(env = process.env) {
   if (env.CRM_POSTGRES_MIGRATE_CONFIRM !== POSTGRES_MIGRATE_CONFIRMATION) {
     throw postgresMigrationError("POSTGRES_MIGRATE_CONFIRMATION_REQUIRED");
   }
+}
+
+function ensureWorkspaceProjectRoot(root) {
+  // Prisma 6 infers the project root from the temporary schema path. Without
+  // a package boundary it walks to `/` and attempts a network auto-install of
+  // Prisma during `generate`, which makes the QA runner fail even when the
+  // application database and target are healthy. A minimal private manifest
+  // keeps generation local and contains no dependency or secret.
+  const packagePath = path.join(root, "package.json");
+  if (!fs.existsSync(packagePath)) fs.writeFileSync(packagePath, '{"private":true}\n', { encoding: "utf8", flag: "wx", mode: 0o600 });
 }
 
 function assertPostgresMigrateEmptyAuthorization(env = process.env) {
