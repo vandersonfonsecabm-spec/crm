@@ -65,6 +65,24 @@ test("simulador WhatsApp processa atendimento, isola catalogo e preserva idempot
     { externalId: "prod-b", sku: "SKU-HID-20", codigoBarras: "7890000000099", nome: "Produto de Outra Empresa", preco: 99999, quantidade: 1, disponivel: 1 },
   ]);
 
+  const explicitNovo = await prisma.cliente.create({
+    data: {
+      empresaId: adminA.empresaId,
+      nome: "Cliente com status Novo",
+      telefone: "+5511988880010",
+      status: "Novo",
+      origem: "Teste",
+    },
+  });
+  const novoFunnel = await request("POST", "/whatsapp/simular-mensagem", {
+    externalId: "msg-status-novo",
+    telefone: "+55 (11) 98888-0010",
+    mensagem: "Qual o preco da SKU-HID-20?",
+  }, adminA.token);
+  assert.equal(novoFunnel.status, 201);
+  assert.deepEqual(novoFunnel.body.funil, { etapaAnterior: "Novo", etapaAtual: "Contato", alterado: true });
+  assert.equal((await prisma.cliente.findUnique({ where: { id: explicitNovo.id } })).status, "Contato");
+
   assert.equal((await request("POST", "/whatsapp/simular-mensagem")).status, 401);
   assert.equal((await request("POST", "/whatsapp/simular-mensagem", {}, "token-invalido")).status, 401);
   assert.equal((await request("POST", "/whatsapp/simular-mensagem", validPayload("gerente"), gerente.token)).status, 403);

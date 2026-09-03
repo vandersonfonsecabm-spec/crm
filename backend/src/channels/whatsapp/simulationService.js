@@ -5,6 +5,7 @@ const { parseSimulationPayload } = require("./messageParser");
 const { detectIntent } = require("./intentService");
 const { buildPreparedResponse, summarizeProduct } = require("./responseService");
 const { lockActiveClienteRow } = require("../../shared/clientLifecycleLock");
+const { canonicalClientStatus } = require("../../shared/client-status");
 
 const OPEN_STATUSES = new Set(["Lead", "Novo", "Contato", "Proposta"]);
 const COMMERCIAL_INTENTS = new Set([
@@ -144,7 +145,7 @@ function createWhatsappSimulationService({ prisma }) {
       catalog: { products: [], product: null },
       clienteResult: { cliente: client, criado: false },
       notaResult: { nota: null, criada: false },
-      funilResult: { etapaAnterior: client?.status || null, etapaAtual: client?.status || null, alterado: false },
+      funilResult: { etapaAnterior: canonicalClientStatus(client?.status) || null, etapaAtual: canonicalClientStatus(client?.status) || null, alterado: false },
       followUpResult: { acompanhamento: null, criado: false, reutilizado: false },
       preparedText: outgoing?.texto || null,
     });
@@ -257,18 +258,19 @@ async function createNoteIfNeeded({ tx, empresaId, cliente, intent, product, ext
 
 async function updateFunnelIfNeeded({ tx, cliente, intent }) {
   const previous = cliente.status;
+  const canonicalPrevious = canonicalClientStatus(previous);
   if (!COMMERCIAL_INTENTS.has(intent.intencao) || !OPEN_STATUSES.has(previous)) {
-    return { etapaAnterior: previous, etapaAtual: previous, alterado: false };
+    return { etapaAnterior: canonicalPrevious, etapaAtual: canonicalPrevious, alterado: false };
   }
-  if (previous !== "Lead") return { etapaAnterior: previous, etapaAtual: previous, alterado: false };
-  const updated = await tx.cliente.updateMany({ where: { id: cliente.id, empresaId: cliente.empresaId, arquivadoEm: null, status: "Lead" }, data: { status: "Contato", ultimoContato: 0, revisao: { increment: 1 } } });
+  if (!["Lead", "Novo"].includes(previous)) return { etapaAnterior: canonicalPrevious, etapaAtual: canonicalPrevious, alterado: false };
+  const updated = await tx.cliente.updateMany({ where: { id: cliente.id, empresaId: cliente.empresaId, arquivadoEm: null, status: { in: ["Lead", "Novo"] } }, data: { status: "Contato", ultimoContato: 0, revisao: { increment: 1 } } });
   if (updated.count !== 1) {
     const error = new Error("O cliente precisa ser restaurado antes de atualizar o funil.");
     error.status = 409;
     error.codigo = "WHATSAPP_CLIENT_ARCHIVED_READ_ONLY";
     throw error;
   }
-  return { etapaAnterior: previous, etapaAtual: "Contato", alterado: true };
+  return { etapaAnterior: canonicalPrevious, etapaAtual: "Contato", alterado: true };
 }
 
 async function createOrReuseFollowUp({ tx, empresaId, cliente, reason, externalId }) {

@@ -252,7 +252,8 @@ function createCustomer360Service({ prisma }) {
       if (current.arquivadoEm) throw domainError(409, "CLIENT_ARCHIVED_READ_ONLY", "Restaure o cliente antes de alterar o cadastro.");
       throw domainError(409, "CUSTOMER_REGISTRATION_CONFLICT", "O cadastro foi alterado por outra pessoa. Atualize os dados e tente novamente.", { revisaoAtual: current.revisao });
     }
-    return prisma.cliente.findFirst({ where: { id: existing.id, empresaId: context.empresaId }, include: { notas: { orderBy: { createdAt: "desc" } } } });
+    const updated = await prisma.cliente.findFirst({ where: { id: existing.id, empresaId: context.empresaId }, include: { notas: { orderBy: { createdAt: "desc" } } } });
+    return presentClient(updated);
   }
 
   async function assertClient(context, clienteId) {
@@ -289,6 +290,7 @@ async function timelineCount({ prisma, context, clienteId, conversaIds, tipo }) 
 }
 
 function presentClient(cliente) {
+  const valorInformado = cliente.valorInformado === true && cliente.valor !== null && cliente.valor !== undefined;
   return {
     id: cliente.id,
     nome: cliente.nome,
@@ -300,6 +302,8 @@ function presentClient(cliente) {
     cpfCnpj: cliente.cpfCnpj,
     interesse: cliente.interesse,
     status: canonicalClientStatus(cliente.status),
+    valor: valorInformado ? cliente.valor : null,
+    valorInformado,
     origem: cliente.origem,
     revisao: cliente.revisao,
     createdAt: cliente.createdAt,

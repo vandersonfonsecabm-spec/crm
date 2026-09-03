@@ -97,6 +97,10 @@ test("H5 entrega cadastro, resumo, compras e timeline reais por tenant", async (
   assert.equal((await request("PATCH", `/clientes/${fixture.client.id}/cadastro`, { estado: "S", revisao: updated.revisao }, adminA.token)).status, 422);
   assert.equal((await request("PATCH", `/clientes/${fixture.client.id}/cadastro`, { cpfCnpj: "11111111111", revisao: updated.revisao }, adminA.token)).status, 422);
   assert.equal((await request("PATCH", `/clientes/${fixture.client.id}/cadastro`, { empresaId: adminB.empresaId, revisao: updated.revisao }, adminA.token)).status, 422);
+  const updatedResponse = concurrent.find((response) => response.status === 200);
+  assert.equal(updatedResponse.body.status, "Novo");
+  assert.equal(updatedResponse.body.valor, null);
+  assert.equal(updatedResponse.body.valorInformado, false);
 
   assert.equal(await prisma.negocio.count({ where: { empresaId: adminA.empresaId } }), 2);
   assert.equal(await prisma.lead.count({ where: { empresaId: adminA.empresaId } }), 1);
