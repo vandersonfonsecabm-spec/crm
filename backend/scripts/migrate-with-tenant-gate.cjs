@@ -70,7 +70,8 @@ function expectedRailwayTarget(env) {
 
 function assertManualMigrationAuthorization(env, { provider = providerFromEnv(env) } = {}) {
   const railway = isRailwayEnvironment(env);
-  if (String(env.NODE_ENV || "").trim().toLowerCase() === "test" && !railway) {
+  const hasPostgresTarget = Boolean(String(env.POSTGRES_TARGET_URL || env.POSTGRES_TEST_DATABASE_URL || "").trim());
+  if (String(env.NODE_ENV || "").trim().toLowerCase() === "test" && !railway && provider === "sqlite" && !hasPostgresTarget) {
     return { bypassedForTest: true, target: "test" };
   }
 

@@ -107,6 +107,10 @@ test("migration manual exige confirmacao, backup e atestacao fora de testes", ()
     () => assertManualMigrationAuthorization({ NODE_ENV: "test", RAILWAY_SERVICE_ID: OFFICIAL_API_SERVICE_ID }),
     { code: "MANUAL_MIGRATION_TARGET_CONFIRMATION_REQUIRED" },
   );
+  assert.throws(
+    () => assertManualMigrationAuthorization({ NODE_ENV: "test", CRM_DATABASE_PROVIDER: "postgresql", POSTGRES_TARGET_URL: PRODUCTION_POSTGRES_URL }),
+    { code: "MANUAL_MIGRATION_TARGET_CONFIRMATION_REQUIRED" },
+  );
 });
 
 test("worker de producao rejeita servico e URL PostgreSQL divergentes", () => {
