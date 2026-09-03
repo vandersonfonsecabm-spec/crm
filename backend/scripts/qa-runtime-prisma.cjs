@@ -2,9 +2,10 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
-const { createPostgresTestWorkspace, cleanupPostgresTestWorkspace, resolvePrismaCli } = require("./postgres-prisma.cjs");
+const { createPostgresTestWorkspace, cleanupPostgresTestWorkspace, preparePostgresWorkspace, resolvePrismaCli } = require("./postgres-prisma.cjs");
 
 const TEST_WORKSPACE_ROOT = path.join(os.tmpdir(), "crm-prisma-tests");
+const PRODUCTION_WORKSPACE_ROOT = path.join(path.resolve(__dirname, ".."), "node_modules", ".cache", "crm-qa-production");
 const CLEANUP_SCRIPT = path.join(__dirname, "qa-runtime-prisma-cleanup.cjs");
 
 function assertPostgresDatabaseUrl(env = process.env) {
@@ -13,6 +14,24 @@ function assertPostgresDatabaseUrl(env = process.env) {
   if (!primary || !/^postgres(?:ql)?:\/\//i.test(primary)) throw new Error("QA_POSTGRES_DATABASE_URL_REQUIRED");
   if (secondary && secondary !== primary) throw new Error("QA_POSTGRES_DATABASE_URL_DIVERGENCE");
   return primary;
+}
+
+function createProductionWorkspace() {
+  fs.mkdirSync(PRODUCTION_WORKSPACE_ROOT, { recursive: true });
+  const root = fs.mkdtempSync(path.join(PRODUCTION_WORKSPACE_ROOT, "postgres-prisma-"));
+  try {
+    return { ...preparePostgresWorkspace({ root, clientOutput: path.join(root, "client"), writeClientLoader: true }), production: true };
+  } catch (error) {
+    try { cleanupProductionWorkspace(root); } catch {}
+    throw error;
+  }
+}
+
+function cleanupProductionWorkspace(root) {
+  const resolved = path.resolve(String(root || ""));
+  const parent = path.resolve(PRODUCTION_WORKSPACE_ROOT);
+  if (resolved === parent || !resolved.startsWith(parent + path.sep)) throw new Error("Workspace PostgreSQL de producao fora do cache permitido.");
+  fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }
 
 function generatePostgresClient(workspace) {
@@ -46,12 +65,12 @@ function createQaPrismaClient({ env = process.env, allowProduction = false } = {
   let workspace = null;
   let prisma = null;
   try {
-    workspace = createPostgresTestWorkspace();
+    workspace = target === "production" ? createProductionWorkspace() : createPostgresTestWorkspace();
     const PostgresPrismaClient = generatePostgresClient(workspace);
     prisma = new PostgresPrismaClient({ datasourceUrl: databaseUrl });
   } catch (error) {
     if (workspace) {
-      try { cleanupPostgresTestWorkspace(workspace.root); } catch {}
+      try { (workspace.production ? cleanupProductionWorkspace : cleanupPostgresTestWorkspace)(workspace.root); } catch {}
     }
     throw error;
   }
@@ -66,7 +85,7 @@ function createQaPrismaClient({ env = process.env, allowProduction = false } = {
       let cleanupError = null;
       try { await prisma.$disconnect(); } catch (error) { cleanupError = error; }
       try {
-        cleanupPostgresTestWorkspace(workspace.root);
+        (workspace.production ? cleanupProductionWorkspace : cleanupPostgresTestWorkspace)(workspace.root);
       } catch (error) {
         if (isWorkspaceCleanupDeferrable(error, workspace.root)) {
           scheduleWorkspaceCleanup(workspace.root);
