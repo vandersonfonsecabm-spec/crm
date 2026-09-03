@@ -20,8 +20,8 @@ function createProductionWorkspace() {
   fs.mkdirSync(PRODUCTION_WORKSPACE_ROOT, { recursive: true });
   const root = fs.mkdtempSync(path.join(PRODUCTION_WORKSPACE_ROOT, "postgres-prisma-"));
   try {
-    ensureWorkspaceProjectRoot(root);
-    return { ...preparePostgresWorkspace({ root, clientOutput: path.join(root, "client"), writeClientLoader: true }), production: true };
+    const configPath = ensureWorkspaceProjectRoot(root);
+    return { ...preparePostgresWorkspace({ root, clientOutput: path.join(root, "client"), writeClientLoader: true }), configPath, production: true };
   } catch (error) {
     try { cleanupProductionWorkspace(root); } catch {}
     throw error;
@@ -43,11 +43,23 @@ function ensureWorkspaceProjectRoot(root) {
   // keeps generation local and contains no dependency or secret.
   const packagePath = path.join(root, "package.json");
   if (!fs.existsSync(packagePath)) fs.writeFileSync(packagePath, '{"private":true}\n', { encoding: "utf8", flag: "wx", mode: 0o600 });
+  const configPath = path.join(root, "prisma.config.cjs");
+  if (!fs.existsSync(configPath)) fs.writeFileSync(configPath, [
+    'const { defineConfig } = require("prisma/config");',
+    "module.exports = defineConfig({",
+    '  schema: "./prisma/schema.prisma",',
+    '  datasource: { url: "postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder" },',
+    "});",
+    "",
+  ].join("\n"), { encoding: "utf8", flag: "wx", mode: 0o600 });
+  return configPath;
 }
 
 function generatePostgresClient(workspace) {
-  const result = spawnSync(process.execPath, [resolvePrismaCli(), "generate", "--schema", workspace.schemaPath], {
-    cwd: path.resolve(__dirname, ".."),
+  const args = [resolvePrismaCli(), "generate", "--schema", workspace.schemaPath];
+  if (workspace.configPath) args.push("--config", workspace.configPath);
+  const result = spawnSync(process.execPath, args, {
+    cwd: workspace.root,
     env: { ...process.env, DATABASE_URL: "postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder" },
     encoding: "utf8",
     windowsHide: true,

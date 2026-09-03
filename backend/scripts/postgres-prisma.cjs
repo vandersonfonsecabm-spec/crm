@@ -53,8 +53,8 @@ function createPostgresTestWorkspace() {
   fs.mkdirSync(postgresTestWorkspaceRoot, { recursive: true });
   const root = fs.mkdtempSync(path.join(postgresTestWorkspaceRoot, "postgres-prisma-"));
   try {
-    ensureWorkspaceProjectRoot(root);
-    return preparePostgresWorkspace({ root, clientOutput: path.join(root, "client"), writeClientLoader: true });
+    const configPath = ensureWorkspaceProjectRoot(root);
+    return { ...preparePostgresWorkspace({ root, clientOutput: path.join(root, "client"), writeClientLoader: true }), configPath };
   } catch (error) {
     cleanupPostgresTestWorkspace(root);
     throw error;
@@ -207,6 +207,16 @@ function ensureWorkspaceProjectRoot(root) {
   // keeps generation local and contains no dependency or secret.
   const packagePath = path.join(root, "package.json");
   if (!fs.existsSync(packagePath)) fs.writeFileSync(packagePath, '{"private":true}\n', { encoding: "utf8", flag: "wx", mode: 0o600 });
+  const configPath = path.join(root, "prisma.config.cjs");
+  if (!fs.existsSync(configPath)) fs.writeFileSync(configPath, [
+    'const { defineConfig } = require("prisma/config");',
+    "module.exports = defineConfig({",
+    '  schema: "./prisma/schema.prisma",',
+    '  datasource: { url: "postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder" },',
+    "});",
+    "",
+  ].join("\n"), { encoding: "utf8", flag: "wx", mode: 0o600 });
+  return configPath;
 }
 
 function assertPostgresMigrateEmptyAuthorization(env = process.env) {
