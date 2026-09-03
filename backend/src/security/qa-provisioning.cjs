@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { sourceManifestSha256 } = require("../runtime-fingerprint");
 
 const HEX_40 = /^[a-f0-9]{40}$/;
 const HEX_64 = /^[a-f0-9]{64}$/;
@@ -9,19 +10,6 @@ const QA_ATTESTATION_VERSION = "qa-prod-control-plane-attestation.v1";
 const QA_DATABASE_URL_SHA256_ENV = "QA_PROD_DATABASE_URL_SHA256";
 const QA_CANONICAL_FEATURE = "NEGOCIOS_KANBAN";
 const QA_DATABASE_LOCK_KEY = "qa-prod-bootstrap-v1-lock";
-const QA_HARNESS_SOURCE_FILES = Object.freeze([
-  "src/security/qa-provisioning.cjs",
-  "src/security/qa-platform-operator.cjs",
-  "scripts/qa-prod-bootstrap.cjs",
-  "scripts/qa-prod-status.cjs",
-  "scripts/qa-prod-revoke.cjs",
-  "scripts/qa-staging-platform-operator.cjs",
-  "scripts/qa-staging-env-sanitized.cjs",
-  "scripts/qa-runtime-prisma.cjs",
-  "scripts/postgres-prisma.cjs",
-  "src/user-security.js",
-]);
-
 const QA_PRODUCTION_TARGET = Object.freeze({
   projectId: "ddfbf66c-e274-47b1-9493-286232d2f426",
   environmentId: "e18f76b1-e38f-468e-91fe-1eff6db9a5f8",
@@ -135,17 +123,12 @@ function canonicalAttestationPayload(attestation) {
 }
 
 function computeQaHarnessSourceManifest() {
-  const fs = require("node:fs");
   const path = require("node:path");
-  const hash = crypto.createHash("sha256");
   const root = path.resolve(__dirname, "../..");
-  for (const relativePath of QA_HARNESS_SOURCE_FILES) {
-    const absolutePath = path.join(root, relativePath);
-    if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isFile()) throw new QaProvisioningError("QA_PROD_HARNESS_SOURCE_MISSING", "Arquivo causal do harness QA ausente.", { file: relativePath });
-    hash.update(`${relativePath}\0`, "utf8");
-    hash.update(fs.readFileSync(absolutePath));
-  }
-  return hash.digest("hex");
+  // Use the same complete runtime manifest as the deployed API. This covers
+  // every source/script/schema/migration/package input that can affect the
+  // QA harness, instead of a hand-maintained partial allowlist.
+  return sourceManifestSha256(root);
 }
 
 function computeLocalGitIdentity() {

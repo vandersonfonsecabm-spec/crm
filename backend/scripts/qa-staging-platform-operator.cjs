@@ -54,7 +54,7 @@ function writeOperatorCredentialBundle(filePath, { runId, password } = {}) {
     return bundle;
   } catch (error) {
     try { cleanupOperatorCredentialBundle(bundle); } catch (cleanupError) {
-      error.cleanupCode = cleanupError.code || "QA_PLATFORM_CREDENTIAL_CLEANUP_FAILED";
+      error.code = cleanupError.code || "QA_PLATFORM_CREDENTIAL_CLEANUP_FAILED";
     }
     throw error;
   }
@@ -131,9 +131,12 @@ async function main() {
       }
       const password = crypto.randomBytes(32).toString("base64url");
       const passwordHash = await bcrypt.hash(password, 12);
-      activeCredentialBundle = writeOperatorCredentialBundle(options.credentialsFile || defaultCredentialsPath(options.runId), { runId: options.runId, password });
+      const credentialsPath = assertOperatorCredentialPath(options.credentialsFile || defaultCredentialsPath(options.runId));
+      activeCredentialBundle = { filePath: credentialsPath, manifestPath: path.join(path.dirname(credentialsPath), "manifest.json"), directoryPath: path.dirname(credentialsPath) };
+      activeCredentialBundle = writeOperatorCredentialBundle(credentialsPath, { runId: options.runId, password });
       assertNotShutdown();
       result = await provisionStagingPlatformOperator({ prisma, env, passwordHash, confirmation: options.confirmation, expectedReleaseHead: options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD, runId: options.runId, allowTestAttestation: false });
+      assertNotShutdown();
       if (result.mode === "noop") {
         cleanupOperatorCredentialBundle(activeCredentialBundle);
         activeCredentialBundle = null;
@@ -156,6 +159,20 @@ async function main() {
     activeCredentialBundle = null;
     console.log(JSON.stringify({ ...result, runId: options.runId, credentialsFileRemoved: true, credentialsInOutput: 0 }, null, 2));
   } finally {
+    if (shutdownRequested && options.mode === "apply") {
+      try {
+        await revokeStagingPlatformOperator({
+          prisma,
+          env,
+          confirmation: QA_PLATFORM_OPERATOR_REVOKE_CONFIRMATION,
+          expectedReleaseHead: options.expectedReleaseHead || env.QA_PROD_EXPECTED_RELEASE_HEAD,
+          runId: options.runId,
+          allowTestAttestation: false,
+        });
+      } catch {
+        process.exitCode = 1;
+      }
+    }
     if (activeCredentialBundle) {
       cleanupOperatorCredentialBundle(activeCredentialBundle);
       activeCredentialBundle = null;

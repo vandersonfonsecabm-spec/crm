@@ -215,6 +215,30 @@ test("operator bundle removes partial files when a write fails", () => {
   assert.equal(fs.existsSync(path.dirname(credentialsFile)), false);
 });
 
+test("operator bundle reports cleanup failure instead of masking a leaked artifact", () => {
+  const runId = "qa-platform-cleanup-failure-0001";
+  const credentialsFile = defaultCredentialsPath(runId);
+  const originalWriteFileSync = fs.writeFileSync;
+  const originalRmSync = fs.rmSync;
+  let writes = 0;
+  fs.writeFileSync = (...args) => {
+    writes += 1;
+    if (writes === 2) throw new Error("synthetic credential write failure");
+    return originalWriteFileSync(...args);
+  };
+  fs.rmSync = () => { throw new Error("synthetic cleanup failure"); };
+  try {
+    assert.throws(
+      () => writeOperatorCredentialBundle(credentialsFile, { runId, password: "synthetic-operator-password-".padEnd(40, "x") }),
+      (error) => error?.code === "QA_PLATFORM_CREDENTIAL_CLEANUP_FAILED",
+    );
+  } finally {
+    fs.writeFileSync = originalWriteFileSync;
+    fs.rmSync = originalRmSync;
+    cleanupOperatorCredentialBundle({ filePath: credentialsFile, manifestPath: path.join(path.dirname(credentialsFile), "manifest.json"), directoryPath: path.dirname(credentialsFile) });
+  }
+});
+
 test("operator apply does not need a credential bundle when status is already READY", () => {
   const source = fs.readFileSync(path.join(__dirname, "../scripts/qa-staging-platform-operator.cjs"), "utf8");
   assert.match(source, /before\.status === "READY"/);
