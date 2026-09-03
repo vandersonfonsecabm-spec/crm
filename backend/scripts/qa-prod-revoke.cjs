@@ -17,6 +17,9 @@ const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
 
+let shutdownRequested = false;
+let activeCredentialBundles = [];
+
 function parseArgs(argv) {
   const options = { confirmation: "", expectedReleaseHead: "", target: "", credentialsFile: "", runId: "", operatorUserId: "", attestationFile: "", emergency: false };
   for (const value of argv) {
@@ -57,17 +60,32 @@ async function main() {
     prisma = prismaRuntime.prisma;
     databaseLease = await acquireQaDatabaseLease(prisma, { runId: options.runId });
     const targetBundles = listCredentialBundles(options.target);
+    // Register every validated target bundle before any revoke work.  If a
+    // signal interrupts validation, the finally block still has ownership of
+    // the temporary files and can remove them without printing their values.
+    activeCredentialBundles = targetBundles.slice();
     const credentialBundle = options.credentialsFile
       ? validateCredentialBundle(options.credentialsFile, options.runId, options.target)
       : options.emergency ? targetBundles.find((bundle) => bundle.runId === options.runId) || null : null;
     if (!options.emergency && !targetBundles.some((bundle) => credentialBundle && bundle.filePath === credentialBundle.filePath)) throw new Error("QA_CREDENTIAL_BUNDLE_NOT_FOUND");
     const result = await revokeSyntheticQa({ prisma, env, confirmation: options.confirmation, expectedReleaseHead, target: options.target, operatorUsuarioId: options.operatorUserId, runId: options.runId, emergency: options.emergency });
     const bundlesAfterRevoke = listCredentialBundles(options.target);
+    activeCredentialBundles = bundlesAfterRevoke;
     for (const bundle of bundlesAfterRevoke) removeCredentialBundle(bundle);
+    activeCredentialBundles = [];
     const credentialsBundleAbsent = listCredentialBundles(options.target).length === 0;
     if (!credentialsBundleAbsent) throw new Error("QA_CREDENTIAL_BUNDLE_REMAINS");
+    if (shutdownRequested) throw new Error("QA_PROD_REVOKE_INTERRUPTED");
     console.log(JSON.stringify({ ...result, credentialsFileRemoved: bundlesAfterRevoke.length > 0, credentialsBundleAbsent, credentialsBundlesRemoved: bundlesAfterRevoke.length, credentialsInOutput: 0 }, null, 2));
   } finally {
+    // Signal handlers only set shutdownRequested; cleanup stays in this
+    // finally block so the lease and every validated bundle are released even
+    // when SIGINT/SIGTERM arrives during the revoke transaction.
+    if (shutdownRequested) process.exitCode = process.exitCode || 1;
+    for (const bundle of activeCredentialBundles) {
+      try { removeCredentialBundle(bundle); } catch { process.exitCode = 1; }
+    }
+    activeCredentialBundles = [];
     if (databaseLease && prisma) {
       try {
         if (!await releaseQaDatabaseLease(prisma, { runId: options.runId, ownerToken: databaseLease.ownerToken })) process.exitCode = 1;
@@ -175,6 +193,14 @@ function releaseLock(lock) {
 }
 
 if (require.main === module) {
+  const handleSignal = (signal) => {
+    shutdownRequested = true;
+    process.exitCode = signal === "SIGINT" ? 130 : 143;
+    // Do not call process.exit here.  Let main unwind through its finally
+    // block, which owns the database lease and credential-bundle cleanup.
+  };
+  process.once("SIGINT", () => handleSignal("SIGINT"));
+  process.once("SIGTERM", () => handleSignal("SIGTERM"));
   main().catch((error) => {
     console.error(JSON.stringify({ status: "failed", code: error.code || "QA_PROD_REVOKE_FAILED", message: String(error.message || "revoke failed").slice(0, 200), credentialsInOutput: 0 }));
     process.exitCode = 1;

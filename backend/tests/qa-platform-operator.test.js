@@ -46,6 +46,8 @@ const options = { allowTestAttestation: true, requireAttestation: false };
 async function cleanupOperatorFixture() {
   const tenant = await prisma.empresa.findUnique({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug }, select: { id: true } });
   if (tenant) {
+    await prisma.lead.deleteMany({ where: { empresaId: tenant.id } });
+    await prisma.cliente.deleteMany({ where: { empresaId: tenant.id } });
     await prisma.platformTenantAudit.deleteMany({ where: { tenantId: tenant.id } });
     await prisma.auditoriaSeguranca.deleteMany({ where: { empresaId: tenant.id } });
     await prisma.usuario.deleteMany({ where: { empresaId: tenant.id } });
@@ -154,6 +156,42 @@ test("operator preflight fails closed for an unexpected staging allowlist", asyn
     (error) => error?.code === "QA_PLATFORM_OPERATOR_ALLOWLIST_UNEXPECTED",
   );
   assert.equal(await prisma.empresa.count({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug } }), 0);
+});
+
+test("operator READY requires the reserved tenant identity", async () => {
+  const passwordHash = await bcrypt.hash("synthetic-password-never-reported", 4);
+  const applied = await provisionStagingPlatformOperator({
+    prisma,
+    env,
+    passwordHash,
+    confirmation: QA_PLATFORM_OPERATOR_APPLY_CONFIRMATION,
+    expectedReleaseHead: RELEASE,
+    runId: "qa-platform-identity-0001",
+    ...options,
+  });
+  assert.equal(applied.status, "READY");
+  await prisma.empresa.update({ where: { id: applied.tenant.id }, data: { nome: "[QA PLATFORM] adulterado" } });
+  const inspected = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead: RELEASE, runId: "qa-platform-identity-0002", ...options });
+  assert.equal(inspected.status, "INVALID");
+});
+
+test("operator inventory rejects CRM and Inbox records in the platform tenant", async () => {
+  const passwordHash = await bcrypt.hash("synthetic-password-never-reported", 4);
+  const applied = await provisionStagingPlatformOperator({
+    prisma,
+    env,
+    passwordHash,
+    confirmation: QA_PLATFORM_OPERATOR_APPLY_CONFIRMATION,
+    expectedReleaseHead: RELEASE,
+    runId: "qa-platform-inventory-0001",
+    ...options,
+  });
+  const client = await prisma.cliente.create({ data: { empresaId: applied.tenant.id, nome: "Synthetic inventory probe" } });
+  await prisma.lead.create({ data: { empresaId: applied.tenant.id, clienteId: client.id } });
+  const inspected = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead: RELEASE, runId: "qa-platform-inventory-0002", ...options });
+  assert.equal(inspected.status, "INVALID");
+  assert.equal(inspected.businessInventory.lead, 1);
+  assert.equal(inspected.businessInventory.cliente, 1);
 });
 
 test("operator apply requires an exact allowlist before any write", async () => {
@@ -275,6 +313,15 @@ test("operator apply does not need a credential bundle when status is already RE
   const source = fs.readFileSync(path.join(__dirname, "../scripts/qa-staging-platform-operator.cjs"), "utf8");
   assert.match(source, /before\.status === "READY"/);
   assert.match(source, /credentialsFileCreated: false/);
+});
+
+test("revoke and operator CLIs install signal-safe credential cleanup", () => {
+  const revokeSource = fs.readFileSync(path.join(__dirname, "../scripts/qa-prod-revoke.cjs"), "utf8");
+  const operatorSource = fs.readFileSync(path.join(__dirname, "../scripts/qa-staging-platform-operator.cjs"), "utf8");
+  assert.match(revokeSource, /process\.once\("SIGINT"/);
+  assert.match(revokeSource, /activeCredentialBundles/);
+  assert.match(operatorSource, /handedOffCredentialBundle/);
+  assert.match(operatorSource, /process\.once\(signal/);
 });
 
 test("QA runtime selects a generated PostgreSQL Prisma client for staging", async () => {

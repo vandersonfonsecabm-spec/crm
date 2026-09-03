@@ -102,6 +102,18 @@ async function compensateOperatorProvisionFailure(prisma, runId) {
 async function strictBusinessInventory(client, empresaId) {
   const models = [
     ["cliente", { empresaId }],
+    // The operator tenant must remain a sterile platform-only identity.  Keep
+    // the inventory explicit for every CRM/Inbox projection that can create
+    // business data, rather than relying only on the canonical-sale tables.
+    ["lead", { empresaId }],
+    ["nota", { empresaId }],
+    ["acompanhamento", { empresaId }],
+    ["contatoCanal", { empresaId }],
+    ["conversaCanal", { empresaId }],
+    ["mensagemCanal", { empresaId }],
+    ["notaInternaConversa", { empresaId }],
+    ["historicoAtribuicao", { empresaId }],
+    ["historicoQualificacaoConversa", { empresaId }],
     ["negocio", { empresaId }],
     ["propostaComercial", { empresaId }],
     ["negocioContratoVenda", { empresaId }],
@@ -152,8 +164,9 @@ async function inspectStagingPlatformOperator({ prisma, env = process.env, expec
   const sessions = operator ? await operatorSessionState(prisma, tenant.id, operator.id) : null;
   const exactUserSet = users.length === 1 && operator && operator.nome === QA_PLATFORM_OPERATOR.name && operator.papel === QA_PLATFORM_OPERATOR.role;
   const allowlistExact = allowlist.size === 1 && allowlist.has(operatorEmail);
-  const ready = tenant.ativo === true && exactUserSet && operator.ativo === true && globalEmailCount === 1 && allowlistExact && providerIsolationSafe(providerIsolation) && businessInventorySafe(businessInventory);
-  const revoked = tenant.ativo === false && exactUserSet && operator.ativo === false && providerIsolationSafe(providerIsolation) && businessInventorySafe(businessInventory) && sessions?.activeSessions === 0 && sessions?.activeRefreshTokens === 0;
+  const tenantIdentity = tenant.nome === QA_PLATFORM_OPERATOR_TENANT.name && tenant.slug === QA_PLATFORM_OPERATOR_TENANT.slug;
+  const ready = tenant.ativo === true && tenantIdentity && exactUserSet && operator.ativo === true && globalEmailCount === 1 && allowlistExact && providerIsolationSafe(providerIsolation) && businessInventorySafe(businessInventory);
+  const revoked = tenant.ativo === false && tenantIdentity && exactUserSet && operator.ativo === false && providerIsolationSafe(providerIsolation) && businessInventorySafe(businessInventory) && sessions?.activeSessions === 0 && sessions?.activeRefreshTokens === 0;
   const status = ready ? "READY" : revoked ? "REVOKED" : "INVALID";
   return {
     status,
@@ -229,25 +242,42 @@ async function provisionStagingPlatformOperator({ prisma, env = process.env, pas
 async function revokeStagingPlatformOperator({ prisma, env = process.env, confirmation, expectedReleaseHead, runId, attestation, allowTestAttestation = false } = {}) {
   const targetInfo = assertOperatorTarget({ env, expectedReleaseHead, runId, attestation, requireAttestation: !allowTestAttestation });
   assertOperatorConfirmation(confirmation, "revoke");
-  const before = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead, runId: targetInfo.runId, attestation, requireAttestation: !allowTestAttestation });
-  if (before.status === "ABSENT_SAFE" || before.status === "REVOKED") return { ...before, mode: "noop", runId: targetInfo.runId, credentialsInOutput: 0 };
-  if (before.status !== "READY") throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_STATE_INVALID", "Estado do operador não permite revoke seguro.");
-  await withOperatorLease(prisma, targetInfo.runId, () => prisma.$transaction(async (tx) => {
-    const tenant = await tx.empresa.findUnique({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug }, select: { id: true, nome: true, slug: true } });
-    const operator = await tx.usuario.findFirst({ where: { empresaId: tenant.id, email: normalizeEmail(QA_PLATFORM_OPERATOR.email) }, select: { id: true, empresaId: true, papel: true } });
-    if (!tenant || !operator) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_STATE_INVALID", "Operador reservado ausente durante revoke.");
-    const sessions = await tx.sessaoUsuario.findMany({ where: { empresaId: tenant.id, usuarioId: operator.id }, select: { id: true } });
-    const sessionIds = sessions.map((session) => session.id);
-    if (sessionIds.length) {
-      await tx.sessaoRefreshToken.updateMany({ where: { empresaId: tenant.id, sessaoId: { in: sessionIds }, revogadoEm: null }, data: { revogadoEm: new Date() } });
-      await tx.sessaoUsuario.updateMany({ where: { empresaId: tenant.id, usuarioId: operator.id, revogadoEm: null }, data: { revogadoEm: new Date(), motivoRevogacao: "QA_PLATFORM_OPERATOR_REVOKE" } });
-    }
-    await tx.platformTenantAudit.create({ data: { actorUserId: operator.id, tenantId: tenant.id, action: "QA_PLATFORM_OPERATOR_REVOKED", tenantName: tenant.nome, tenantSlug: tenant.slug, adminUserId: operator.id } });
-    await tx.auditoriaSeguranca.create({ data: { empresaId: tenant.id, actorUsuarioId: operator.id, targetUsuarioId: operator.id, acao: "QA_PLATFORM_OPERATOR_REVOKED", resultado: "SUCCESS", correlationId: targetInfo.runId, motivo: "Revogação do operador exclusivo do staging QA." } });
-    await tx.usuario.update({ where: { id: operator.id }, data: { ativo: false } });
-    await tx.empresa.update({ where: { id: tenant.id }, data: { ativo: false } });
-  }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 }));
-  return { ...(await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead, runId: targetInfo.runId, attestation, requireAttestation: !allowTestAttestation })), mode: "revoke", runId: targetInfo.runId, credentialsInOutput: 0 };
+  // Acquire the distributed lease before the first mutable preflight.  A
+  // preflight outside the lease can observe a safe state, race an apply, and
+  // then incorrectly return a successful noop while leaving the operator
+  // active.
+  const result = await withOperatorLease(prisma, targetInfo.runId, async () => {
+    const before = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead, runId: targetInfo.runId, attestation, requireAttestation: !allowTestAttestation });
+    if (before.status === "ABSENT_SAFE" || before.status === "REVOKED") return { before, mode: "noop" };
+    if (before.status !== "READY") throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_STATE_INVALID", "Estado do operador não permite revoke seguro.");
+    await prisma.$transaction(async (tx) => {
+      const tenant = await tx.empresa.findUnique({ where: { slug: QA_PLATFORM_OPERATOR_TENANT.slug }, select: { id: true, nome: true, slug: true } });
+      if (!tenant || tenant.nome !== QA_PLATFORM_OPERATOR_TENANT.name || tenant.slug !== QA_PLATFORM_OPERATOR_TENANT.slug) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_STATE_INVALID", "Tenant reservado do operador divergiu durante revoke.");
+      const operator = await tx.usuario.findFirst({ where: { empresaId: tenant.id, email: normalizeEmail(QA_PLATFORM_OPERATOR.email) }, select: { id: true, empresaId: true, nome: true, email: true, papel: true, ativo: true } });
+      if (!operator || operator.empresaId !== tenant.id || operator.nome !== QA_PLATFORM_OPERATOR.name || normalizeEmail(operator.email) !== normalizeEmail(QA_PLATFORM_OPERATOR.email) || operator.papel !== QA_PLATFORM_OPERATOR.role) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_STATE_INVALID", "Operador reservado divergiu durante revoke.");
+      const users = await tx.usuario.findMany({ where: { empresaId: tenant.id, email: { not: "sistema@crm.internal" } }, select: { id: true, empresaId: true, nome: true, email: true, papel: true, ativo: true } });
+      if (users.length !== 1 || users[0].id !== operator.id) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_UNEXPECTED_USER", "Tenant do operador possui identidade inesperada durante revoke.");
+      const inventory = await strictBusinessInventory(tx, tenant.id);
+      if (!businessInventorySafe(inventory)) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_BUSINESS_DATA_PRESENT", "Tenant do operador possui dados comerciais durante revoke.", { inventory });
+      const isolation = await providerIsolationState(tx, tenant.id);
+      if (!providerIsolationSafe(isolation)) throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_PROVIDER_STATE_NOT_ISOLATED", "Tenant do operador possui integração ou resíduo externo durante revoke.");
+      const sessions = await tx.sessaoUsuario.findMany({ where: { empresaId: tenant.id, usuarioId: operator.id }, select: { id: true } });
+      const sessionIds = sessions.map((session) => session.id);
+      if (sessionIds.length) {
+        await tx.sessaoRefreshToken.updateMany({ where: { empresaId: tenant.id, sessaoId: { in: sessionIds }, revogadoEm: null }, data: { revogadoEm: new Date() } });
+        await tx.sessaoUsuario.updateMany({ where: { empresaId: tenant.id, usuarioId: operator.id, revogadoEm: null }, data: { revogadoEm: new Date(), motivoRevogacao: "QA_PLATFORM_OPERATOR_REVOKE" } });
+      }
+      await tx.platformTenantAudit.create({ data: { actorUserId: operator.id, tenantId: tenant.id, action: "QA_PLATFORM_OPERATOR_REVOKED", tenantName: tenant.nome, tenantSlug: tenant.slug, adminUserId: operator.id } });
+      await tx.auditoriaSeguranca.create({ data: { empresaId: tenant.id, actorUsuarioId: operator.id, targetUsuarioId: operator.id, acao: "QA_PLATFORM_OPERATOR_REVOKED", resultado: "SUCCESS", correlationId: targetInfo.runId, motivo: "Revogação do operador exclusivo do staging QA." } });
+      await tx.usuario.update({ where: { id: operator.id }, data: { ativo: false } });
+      await tx.empresa.update({ where: { id: tenant.id }, data: { ativo: false } });
+    }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
+    const after = await inspectStagingPlatformOperator({ prisma, env, expectedReleaseHead, runId: targetInfo.runId, attestation, requireAttestation: !allowTestAttestation });
+    if (after.status !== "REVOKED") throw new QaPlatformOperatorError("QA_PLATFORM_OPERATOR_POST_REVOKE_VERIFY_FAILED", "Revoke terminou sem estado REVOKED verificavel.", { status: after.status });
+    return { after, mode: "revoke" };
+  });
+  const state = result.mode === "noop" ? result.before : result.after;
+  return { ...state, mode: result.mode, runId: targetInfo.runId, credentialsInOutput: 0 };
 }
 
 module.exports = {

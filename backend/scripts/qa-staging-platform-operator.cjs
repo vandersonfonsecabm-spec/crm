@@ -22,6 +22,7 @@ const {
 } = require("../src/security/qa-platform-operator.cjs");
 
 let activeCredentialBundle = null;
+let handedOffCredentialBundle = null;
 let shutdownRequested = false;
 
 function generatedRunId() {
@@ -144,6 +145,11 @@ async function main() {
         return;
       }
       const credentialsFile = activeCredentialBundle.filePath;
+      // Keep a reference until the process has fully unwound.  The bundle is
+      // intentionally handed to the browser-QA caller on normal success, but
+      // a signal arriving in that hand-off window must still be able to clean
+      // it up before exit.
+      handedOffCredentialBundle = activeCredentialBundle;
       activeCredentialBundle = null;
       console.log(JSON.stringify({ ...result, runId: options.runId, credentialsFile, credentialsFileCreated: true, credentialsInOutput: 0 }, null, 2));
       return;
@@ -174,8 +180,12 @@ async function main() {
       }
     }
     if (activeCredentialBundle) {
-      cleanupOperatorCredentialBundle(activeCredentialBundle);
+      try { cleanupOperatorCredentialBundle(activeCredentialBundle); } catch { process.exitCode = 1; }
       activeCredentialBundle = null;
+    }
+    if (shutdownRequested && handedOffCredentialBundle) {
+      try { cleanupOperatorCredentialBundle(handedOffCredentialBundle); } catch { process.exitCode = 1; }
+      handedOffCredentialBundle = null;
     }
     await prismaRuntime.cleanup();
   }
@@ -189,7 +199,6 @@ if (require.main === module) {
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.once(signal, () => {
       shutdownRequested = true;
-      try { if (activeCredentialBundle) cleanupOperatorCredentialBundle(activeCredentialBundle); } catch { process.exitCode = 1; }
       process.exitCode = signal === "SIGINT" ? 130 : 143;
     });
   }
